@@ -71,7 +71,7 @@ function buildStore() {
         ...okfModule,
         // The module exports `state: initialState()` (an object, not a
         // factory) — clone per store so tests don't share mutations.
-        state: () => JSON.parse(JSON.stringify(okfModule.state))
+        state: () => JSON.parse(JSON.stringify(okfModule.state()))
       }
     }
   });
@@ -107,6 +107,45 @@ describe('okf store — editor actions (Story #978)', () => {
       const result = await store.dispatch('okf/fetchConcepts', 'r-1');
       expect(result.ok).toBe(false);
       expect(store.getters['okf/conceptsByRepo']('r-1')).toEqual([]);
+    });
+
+    // Round 20 (#80803): one transient failure (gateway 502, a failed page N)
+    // must NOT blank the rail — the already-loaded rows are known-good data,
+    // and the empty-list commit is only for repos that never loaded at all.
+    it('a failed REFRESH keeps the last known list (#80803)', async () => {
+      mockListForRepo.mockResolvedValueOnce(CONCEPTS);
+      const store = buildStore();
+      await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
+      mockListForRepo.mockRejectedValue(new Error('gateway 502'));
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('FETCH_FAILED');
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2); // NOT wiped to []
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+      expect(store.state.okf.editor.loading).toBe(false);
+    });
+
+    // Round 20: the stale guard runs BEFORE the first commit too — the repo
+    // could switch while page 1 is in flight, and committing then would
+    // plant the OLD repo's rows over the NEW repo's editor.
+    it('a repo switch DURING page 1 commits nothing for the old repo', async () => {
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (_repoId, _opts) => {
+        // Page 1 in flight: the editor moved to another repo WITHOUT a new
+        // fetch (raw mutation — openEditor would start one).
+        store.commit('okf/setEditorRepo', 'r-2');
+        return { concepts: CONCEPTS, total: 2 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      expect(result.concepts).toEqual([]);
+      // Raw state (the getter coerces absent to []): NOTHING was committed
+      // for the dead repo, and the new repo's editor was not touched.
+      expect(store.state.okf.editor.conceptsByRepo['r-1']).toBeUndefined();
+      expect(store.state.okf.editor.conceptsByRepo['r-2']).toBeUndefined();
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
     });
 
     // NON-BLOCKING LOAD (David, 2026-09-12): a large repository streams in
@@ -145,6 +184,76 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
       expect(store.getters['okf/editorLoadProgress']).toBeNull();
     });
+
+    // Round 11 (!622): the stale exit used to return WITHOUT clearing
+    // loading/progress, and the finally deliberately skipped the reset for
+    // the stale path — an abandoned load left loading=true + a frozen
+    // {done,total} bar for the dead repo until some later action cleared it.
+    it('a repo switch mid-load (no newer fetch) clears loading + progress on exit', async () => {
+      const rows = Array.from({ length: 350 }, (_, i) => ({
+        concept_id: 'c' + i,
+        title: 'T',
+        index_status: 'indexed'
+      }));
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (_repoId, opts) => {
+        const off = (opts && opts.offset) || 0;
+        if (off === 0) return { concepts: rows.slice(0, 200), total: 350 };
+        // Page 2 in flight: the editor moved to another repo WITHOUT a new
+        // fetch (raw mutation — openEditor would start one).
+        store.commit('okf/setEditorRepo', 'r-2');
+        return { concepts: rows.slice(200), total: 350 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+    });
+
+    it('a fetch superseded by a NEWER fetch leaves the flags to it (never clobbers mid-flight)', async () => {
+      const rows = Array.from({ length: 350 }, (_, i) => ({
+        concept_id: 'c' + i,
+        title: 'T',
+        index_status: 'indexed'
+      }));
+      let releaseR2;
+      const r2Gate = new Promise((resolve) => {
+        releaseR2 = resolve;
+      });
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (repoId, opts) => {
+        const off = (opts && opts.offset) || 0;
+        if (repoId === 'r-2') {
+          await r2Gate; // r-2's load stays in flight while r-1 exits
+          return { concepts: [{ concept_id: 'x1', title: 'X', index_status: 'indexed' }], total: 1 };
+        }
+        if (off === 0) return { concepts: rows.slice(0, 200), total: 350 };
+        // Page 2 in flight: a NEWER fetch takes over (generation moves).
+        store.commit('okf/setEditorRepo', 'r-2');
+        store.dispatch('okf/fetchConcepts', 'r-2');
+        await new Promise((r) => setTimeout(r, 10));
+        return { concepts: rows.slice(200), total: 350 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      // The abandoned r-1 exit did NOT clear the in-flight r-2 load's flags.
+      expect(store.state.okf.editor.loading).toBe(true);
+      releaseR2();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+    });
+
+    // Round 20b (#80862): the natural-completion tail now carries the same
+    // stale predicate as the in-loop guard. NOTE ON TESTABILITY: with the
+    // round-11 guard RETURNING at every page boundary and no await between
+    // the last boundary and the tail, no interleaving JS can schedule puts
+    // the tail in a stale state today — the sibling tests above (superseded
+    // mid-loop, repo-switch mid-loop) pin the reachable arms, and the tail
+    // predicate is defense-in-depth for a future await inserted before it.
+    // The construction that would prove it (supersede lands between the
+    // last in-loop check and the tail) is synchronous code — verified
+    // unreachable while writing this.
   });
 
   describe('getConcept', () => {

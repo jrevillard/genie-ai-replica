@@ -133,17 +133,23 @@ import OkfStepAutocorrect from './steps/Autocorrect.vue';
 import OkfStepReview from './steps/Review.vue';
 import OkfStepPublish from './steps/Publish.vue';
 
-const STEP_LABELS = [
-  'Entry',
-  'Choose workflow',
-  'Input',
-  'Produce',
-  'Label onboard',
-  'Curate',
-  'Validate',
-  'Auto-correct',
-  'Review',
-  'Secure and Finish'
+// ROUND 23 (review 81258): slug + English fallback live in ONE array — the
+// two index-aligned arrays had to be edited in lockstep (four call sites
+// zipping them by index; one slip mislabeled a step silently).
+// Round 22 (David, live screenshot — the stepper rendered English in every
+// locale): the names are i18n leaves (okf.stepNames.<slug>); the label here
+// is the English fallback path.
+const STEPS = [
+  { slug: 'entry', label: 'Entry' },
+  { slug: 'choose', label: 'Choose workflow' },
+  { slug: 'input', label: 'Input' },
+  { slug: 'produce', label: 'Produce' },
+  { slug: 'labelOnboard', label: 'Label onboard' },
+  { slug: 'curate', label: 'Curate' },
+  { slug: 'validate', label: 'Validate' },
+  { slug: 'autocorrect', label: 'Auto-correct' },
+  { slug: 'review', label: 'Review' },
+  { slug: 'secureFinish', label: 'Secure and Finish' }
 ];
 
 export default {
@@ -176,15 +182,20 @@ export default {
       // A2 gate contract: the ACTIVE step owns the Continue. A step that
       // emits no gate event (the not-yet-wired panels) defaults to open.
       gateOpen: true,
-      advancing: false,
-      stepConfig: STEP_LABELS.map((label, idx) => ({
-        value: String(idx),
-        label: `${idx + 1}. ${label}`
-      }))
+      advancing: false
     };
   },
   computed: {
     ...mapGetters('okf', ['isExpert', 'repoById']),
+    // Round 22: translated step names — this was data built from the
+    // hardcoded English STEP_LABELS, so the stepper rendered English in
+    // every locale (the live screenshot).
+    stepConfig() {
+      return STEPS.map((step, idx) => ({
+        value: String(idx),
+        label: `${idx + 1}. ${this.translate(`okf.stepNames.${step.slug}`, step.label)}`
+      }));
+    },
     // A5 context rail: the REAL repo doc is the source of truth — never a
     // phantom draft shape. Falls back to the draft while the repo is not yet
     // created (Entry's create-on-advance).
@@ -217,7 +228,13 @@ export default {
       // repo_id stays as the fallback when the source was deleted.
       const src = this.repoById(cf.repo_id);
       const name = (src && src.name) || cf.name || cf.repo_id;
-      return cf.version != null ? `Cloned from ${name} · v${cf.version}` : `Cloned from ${name}`;
+      // i18n (#80805): RAW-lookup keys — the locale leaves carry the PLAIN
+      // {name}/{version} tokens and the .replace() chain fills them.
+      return cf.version != null
+        ? this.translate('okf.wizard.clonedFrom', 'Cloned from {name} · v{version}')
+            .replace('{name}', name)
+            .replace('{version}', String(cf.version))
+        : this.translate('okf.wizard.clonedFromNoVersion', 'Cloned from {name}').replace('{name}', name);
     },
     // REAL lifecycle state, not the step counter. Missing locale keys fall
     // back to the raw state string (honest over pretty — i18n pass later).
@@ -278,7 +295,8 @@ export default {
   },
   methods: {
     stepLabel(i) {
-      return `${i + 1}. ${STEP_LABELS[i]}`;
+      const step = STEPS[i];
+      return `${i + 1}. ${this.translate(`okf.stepNames.${step.slug}`, step.label)}`;
     },
     onStepClick(idx) {
       if (idx === this.activeStep) return;
@@ -359,14 +377,28 @@ export default {
     },
     persistMerged(merged) {
       const step = this.activeStep;
-      this.$store.dispatch('okf/saveDraft', {
-        repoId: merged.repo_id || 'pending',
-        draft: {
-          ...merged,
-          studio_step: step,
-          updated_at: Date.now()
-        }
-      });
+      // PRE-CREATE DRAFTS ARE IN-MEMORY ONLY (round 17, #80359): the server
+      // has no repo to attach a draft to, and the old `repoId: 'pending'`
+      // alias PUT /okf/repos/pending/draft on every keystroke — which 404s,
+      // maps to NOT_READY, and armed draftsUnavailable against a perfectly
+      // healthy backend. The store still keeps the draft under 'pending'
+      // (same alias saveDraft uses), so resume works; only the server write
+      // waits for a real repo_id.
+      if (merged.repo_id) {
+        this.$store.dispatch('okf/saveDraft', {
+          repoId: merged.repo_id,
+          draft: {
+            ...merged,
+            studio_step: step,
+            updated_at: Date.now()
+          }
+        });
+      } else {
+        this.$store.dispatch('okf/setDraftLocal', {
+          repoId: 'pending',
+          draft: { ...merged, studio_step: step, updated_at: Date.now() }
+        });
+      }
       // A4 server resume: the cheap okf_repositories.studio_step pointer.
       // Best-effort + silent; skipped for frozen repos (R-C parity — the
       // backend 409s serving repos anyway). G4 (max-review): ONLY when the

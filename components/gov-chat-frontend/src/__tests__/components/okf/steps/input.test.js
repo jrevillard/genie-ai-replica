@@ -292,11 +292,16 @@ it('FS import: the patch SPREADS draft.input (conversion_kicked survives) and th
   const last = wrapper.emitted('update').pop()[0].input;
   expect(last.conversion_kicked).toBe(true); // not clobbered
   // F13: 'Water Points' AND 'Water Points 2' already exist in the mock tree
-  // → the slug builder walks to water-points-3. The import payload's path is
-  // the bare concept_id (this lineage's /import convention — the caller
-  // overrides buildConceptPayload's .md-suffixed path).
+  // → the slug builder walks to water-points-3. The payload is sent AS
+  // BUILT (round 17, #80363): .md-suffixed path + explicit concept_id — the
+  // SAME shape addConcept sends, so both callers mint ONE identity per slug
+  // (the bare-slug form drifted and silently defeated the slug-merge).
   expect(mockImportConcepts).toHaveBeenCalledWith('r1', [
-    expect.objectContaining({ path: 'water-points-3', frontmatter: expect.objectContaining({ title: 'Water Points' }) })
+    expect.objectContaining({
+      path: 'water-points-3.md',
+      concept_id: 'water-points-3',
+      frontmatter: expect.objectContaining({ title: 'Water Points' })
+    })
   ]);
   expect(mockListConcepts).toHaveBeenCalledWith('r1');
 });
@@ -376,6 +381,25 @@ describe('Input workbench — bulk PII actions (#1040)', () => {
     await wrapper.vm.onPiiBulkAction('confirm');
     await settled(wrapper);
     expect(wrapper.vm.inputError).toBeTruthy();
+    expect(mockListConcepts).toHaveBeenCalledTimes(1); // no refresh on failure
+  });
+
+  // Round 19, #80773: httpService REJECTS on HTTP errors (409 drain freeze,
+  // 5xx) — pre-fix, try/finally without a catch let the rejection escape:
+  // busy reset, dialog closed, no inputError, flags kept as if the action
+  // had run. The rejection must surface exactly like the {ok:false} shape.
+  it('a REJECTED bulk action (409/5xx) surfaces the error, not an unhandled rejection', async () => {
+    mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
+    mockBulkPiiAction.mockRejectedValue(Object.assign(new Error('drain freeze'), { code: 'PUBLISH_DRAIN_ACTIVE' }));
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAsk('accept');
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAction('confirm');
+    await settled(wrapper);
+    expect(wrapper.vm.inputError).toBeTruthy(); // surfaced
+    expect(wrapper.vm.piiBulkBusy).toBe(false); // released by finally
+    expect(wrapper.vm.piiBulkAsk).toBeNull(); // dialog closed
     expect(mockListConcepts).toHaveBeenCalledTimes(1); // no refresh on failure
   });
 

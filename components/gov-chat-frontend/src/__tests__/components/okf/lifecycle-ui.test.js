@@ -77,7 +77,7 @@ function buildStore() {
   const okfModule = require('@/store/modules/okf').default;
   return new Vuex.Store({
     modules: {
-      okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) }
+      okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) }
     }
   });
 }
@@ -177,6 +177,41 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     await ingestBtn.trigger('click');
     expect(mockOpsLifecycle).toHaveBeenCalledWith('pb', 'ingest', {});
   });
+
+  // Round 18, #80473: the bulk-publish busy guard, exercised with a
+  // PENDING promise — the pre-fix code re-entered on the second click and
+  // ran a second interleaved publish loop against the same repos.
+  it('bulk publish is single-flight: a second click while running is a no-op', async () => {
+    const store = buildStore();
+    const realDispatch = store.dispatch.bind(store);
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    let transitions = 0;
+    store.dispatch = jest.fn((type, payload) => {
+      if (type === 'okf/lifecycleTransition') {
+        transitions += 1;
+        return gate.then(() => ({ ok: true }));
+      }
+      return realDispatch(type, payload);
+    });
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, REPOS);
+    await flush();
+    wrapper.vm.selectedIds = ['pb'];
+    wrapper.vm.runBulkPublish();
+    expect(wrapper.vm.bulkBusy).toBe(true);
+    wrapper.vm.runBulkPublish(); // the double-click the guard must absorb
+    await flush();
+    await flush();
+    expect(transitions).toBe(1); // one loop, not two
+    release();
+    await flush();
+    await flush();
+    expect(wrapper.vm.bulkBusy).toBe(false);
+    expect(wrapper.vm.bulkResults).toHaveLength(1);
+  }, 20000);
 
   // #1043 (David, 2026-10-06): an Ingested repo MUST be retracted before
   // unpublish — unpublishing while ingested would orphan live RAG chunks.

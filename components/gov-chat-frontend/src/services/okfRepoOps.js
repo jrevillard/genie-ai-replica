@@ -56,11 +56,16 @@ export async function loadSubjectAreaOptions(repoDomains = []) {
     const name = cat && (cat.name || cat.nameEN);
     if (name) opts.push({ value: String(name), label: String(name) });
   }
-  if (!opts.length) return [{ value: 'general', label: 'General' }];
+  // Legacy-domain append runs BEFORE the empty-hierarchy early return
+  // (round 16, #80129): the docstring above promises that a repo whose
+  // domain is missing from the KH list is still offered, so an unreachable
+  // hierarchy (the exact case that produced the empty list) must not leave
+  // a 'water-supply' repo forced to 'general'.
   const known = new Set(opts.map((o) => o.value));
   for (const d of new Set((repoDomains || []).filter(Boolean).map((d) => String(d)))) {
     if (!known.has(d)) opts.push({ value: d, label: d + ' (legacy)' });
   }
+  if (!opts.length) return [{ value: 'general', label: 'General' }];
   return opts;
 }
 
@@ -149,13 +154,23 @@ export async function createRepo({ name, domain }) {
     err.code = 'CREATE_FAILED';
     throw err;
   }
-  await repoOkfService.importConcepts(repo.repo_id, [
-    {
-      path: 'index.md',
-      frontmatter: { type: 'index', title: name.trim(), sources: [] },
-      body: `# ${name.trim()}\n\n## Contents\n\n`
-    }
-  ]);
+  try {
+    await repoOkfService.importConcepts(repo.repo_id, [
+      {
+        path: 'index.md',
+        frontmatter: { type: 'index', title: name.trim(), sources: [] },
+        body: `# ${name.trim()}\n\n## Contents\n\n`
+      }
+    ]);
+  } catch (err) {
+    // The repo EXISTS server-side (round 16, #80123) — a bare CREATE_FAILED
+    // here reads as "nothing happened", the user retries, and the first
+    // repo lingers as an orphan draft card with no index concept. Attach
+    // the created repo exactly like importRepoZip does, so the wizard can
+    // offer "open it" instead of a blind retry.
+    err.repo = repo;
+    throw err;
+  }
   return repo;
 }
 
@@ -204,9 +219,37 @@ export async function appendToIndexToc(repoId, indexRow, conceptTitle, conceptSl
     if (!row) return false;
     const bodyText = row.body || '';
     const line = `- [${conceptTitle}](concepts/${conceptSlug}.md)`;
-    const nextBody = /(^|\n)## Contents\s*\n/.test(bodyText)
-      ? `${bodyText.replace(/\s*$/, '')}\n${line}\n`
-      : `${bodyText.replace(/\s*$/, '')}\n\n## Contents\n\n${line}\n`;
+    // Round 11 (!622): the line goes AFTER the Contents block — the old
+    // form appended it to the END of the whole body, so once a curator
+    // put real content below the TOC every later '+ Add concept' link
+    // landed detached after the body text and the index drifted from the
+    // concept set with each add. Insert after the heading's existing
+    // contiguous list block (or right under the heading when it is empty).
+    const headingRe = /(^|\n)(## Contents)[ \t]*\n/;
+    const match = bodyText.match(headingRe);
+    let nextBody;
+    if (!match) {
+      nextBody = `${bodyText.replace(/\s*$/, '')}\n\n## Contents\n\n${line}\n`;
+    } else {
+      const headEnd = match.index + match[0].length;
+      const rest = bodyText.slice(headEnd);
+      // The list block the heading already owns: the blank line(s) under the
+      // heading, then contiguous list items (and blank lines between them) —
+      // nothing else. Stops at the first non-list line, so the body content
+      // after the TOC is never swallowed.
+      const listBlock = rest.match(/^((?:[ \t]*\n)*(?:[ \t]*(?:[-*+]|\d+\.)[ \t]+[^\n]*\n(?:[ \t]*\n)*)*)/);
+      const insertAt = headEnd + (listBlock ? listBlock[0].length : 0);
+      // BLANK LINE AFTER THE BULLET (round 20, #80799): CommonMark reads a
+      // paragraph on the line right after a list item as a LAZY CONTINUATION
+      // of that item — the round-11 insert joined the following text
+      // directly, so content below the TOC was absorbed INTO the last bullet
+      // and vanished from the rendered body, on every '+ Add concept'.
+      // The rest never starts with a newline (the list-block regex consumes
+      // the trailing blanks); strip only indentation, never blank lines.
+      nextBody = `${bodyText.slice(0, insertAt).replace(/\s*$/, '')}\n${line}\n\n${bodyText
+        .slice(insertAt)
+        .replace(/^[ \t]+/, '')}`;
+    }
     await repoOkfService.patchConceptBody(repoId, indexRow.concept_id, nextBody);
     return true;
   } catch {
@@ -285,40 +328,11 @@ export function isRedraining(repo) {
 }
 
 // ─── Lifecycle (David, 2026-08-28) ───────────────────────────────────────────
-// The full publish lifecycle is shared by BOTH UI approaches (wizard Step 9
-// and the editor shell / dashboard cards) via these thin wrappers — one
-// implementation, equal features.
-
-/** draft/register/validate → review. */
-export function submitForReview(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'submit', actor);
-}
-
-/** review → approve. */
-export function approve(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'approve', actor);
-}
-
-/**
- * approve|publish → publish: mints the next version (the server's publish
- * gates run: PII-complete, all-indexed, conformance-clean) and exports the
- * bundle zip `<name>-v<N>.zip` to the document repository. The previous
- * version's zip is superseded (deleted); history stays in the version ledger.
- * The new version is NOT serving until ingest() is called.
- */
-export function publish(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'publish', actor);
-}
-
-/** publish → serving: declares the current version ingested (the Ingested lane). */
-export function ingest(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'ingest', actor);
-}
-
-/** publish → not serving: retract the ingested version (Ingested → Published). */
-export function retract(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'retract', actor);
-}
+// Lifecycle transitions go through the store's okfRepoOps.lifecycle()
+// (store/modules/okf.js) — the single transition surface. Six thin wrappers
+// that duplicated it per-action were removed as dead code (review !622
+// wave 2, #78695: zero non-test callers, and the publish wrapper's docstring
+// still described the retired supersede model).
 
 /** Delete the whole repository (refused while an ingested version serves). */
 export function deleteRepo(repoId) {
@@ -359,7 +373,10 @@ export async function exportRepoZip(repo) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Revoke on the NEXT task (round 16, #80128): revoking in the same task
+  // as the click can cancel the browser's asynchronous blob snapshot — the
+  // download arrives empty/partial on some paths.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
   return headerName || fallback;
 }
 
@@ -411,39 +428,87 @@ export async function importZipIntoRepo({ repoId, file, classification }) {
   });
 }
 
-/** Mint the next version WITHOUT publishing (manual trigger). */
-export function createVersion(repoId, actor = {}) {
-  return repoOkfService.mintVersion(repoId, { trigger: 'manual' }, actor);
-}
-
 /**
  * Human-readable, ACTIONABLE text for lifecycle gate failures (David,
  * 2026-08-30: "retry after the worker drains" is not a user-facing sentence).
- * The raw server message stays available for the generic case.
+ *
+ * I18N (round 17, #80361): this is a plain ES module — no Vue context, no
+ * translate(). It returns the i18n KEY (okf.lifecycle.*) and the callers
+ * translate it; the server's own `message` still wins when present for the
+ * codes where it is user-meaningful (PUBLISH_GATE_BLOCKED lists the actual
+ * blockers). Callers that cannot translate (none today) see a readable
+ * English default through the key's fallback.
  */
+export const LIFECYCLE_ERROR_KEYS = {
+  DRAIN_IN_PROGRESS: 'okf.lifecycleErrors.drainInProgress',
+  PUBLISH_GATE_BLOCKED: 'okf.lifecycleErrors.publishGateBlocked',
+  PUBLISH_EMPTY: 'okf.lifecycleErrors.publishEmpty',
+  INVALID_TRANSITION: 'okf.lifecycleErrors.invalidTransition',
+  REPO_READ_ONLY: 'okf.lifecycleErrors.repoReadOnly',
+  GRAPH_NAME_CONFLICT: 'okf.lifecycleErrors.graphNameConflict'
+};
+
 export function friendlyLifecycleError(code, message, fallback) {
   if (code === 'DRAIN_IN_PROGRESS') {
-    return 'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.';
+    return 'okf.lifecycleErrors.drainInProgress';
   }
   if (code === 'PUBLISH_GATE_BLOCKED') {
-    return (
-      message ||
-      'The repository is not ready to publish — all files must be indexed, conformance-clean and PII-scanned.'
-    );
+    // The server message names the ACTUAL blockers (which concept, which
+    // gate) — more actionable than the generic sentence.
+    return message || 'okf.lifecycleErrors.publishGateBlocked';
   }
   if (code === 'PUBLISH_EMPTY') {
-    return 'This repository has no content yet — add concepts before publishing.';
+    return 'okf.lifecycleErrors.publishEmpty';
   }
   if (code === 'INVALID_TRANSITION') {
-    return message || 'That action is not allowed from the current state.';
+    return message || 'okf.lifecycleErrors.invalidTransition';
   }
   if (code === 'REPO_READ_ONLY') {
-    return 'This repository is currently serving (ingested) and is READ ONLY — retract it if you want to change it.';
+    return 'okf.lifecycleErrors.repoReadOnly';
   }
   if (code === 'GRAPH_NAME_CONFLICT') {
-    return 'Another repository with the same name and version already owns the serving graph name — rename one of them and retry.';
+    return 'okf.lifecycleErrors.graphNameConflict';
   }
-  return message || fallback || 'Action failed';
+  return message || fallback || 'okf.lifecycleErrors.generic';
+}
+
+/**
+ * Render friendlyLifecycleError's output for the USER (round 18, #80462/#80463).
+ * The producer returns either an i18n KEY (okf.lifecycleErrors.*) or an
+ * already-human string (the server's own message). Keys pass through
+ * `translate(key, key)` — the fallback is the key itself only against a
+ * locale that lacks it, which localeConsistency's deep-key parity already
+ * prevents; anything else returns verbatim.
+ *
+ * THE ONE translate decision lives HERE, next to the key producer — the
+ * round-17 shape (a local helper per component) is how three call sites
+ * shipped rendering the raw key. `translate` is the component's translate
+ * (mixin method or component-local): translate(key, fallback).
+ */
+export function translateLifecycleError(text, translate) {
+  if (typeof text === 'string' && text.startsWith('okf.lifecycleErrors.')) {
+    return typeof translate === 'function' ? translate(text, text) : text;
+  }
+  return text;
+}
+
+/**
+ * Render the Testing-Lab/RAGAS POLL-ENVELOPE messages for the USER (#80805).
+ * The store's poll actions author their abort/timeout/failed-fallback
+ * messages as okf.labErrors.* KEYS (same producer-returns-key shape as
+ * translateLifecycleError above — the store has no translate context), while
+ * anything the SERVER said (doc.error.message, err.message) passes through
+ * verbatim: actionable server detail must not be swapped for a generic
+ * translated sentence. `translate` is the component's translate mixin
+ * method: translate(key, fallback). Keys exist in every locale
+ * (localeConsistency deep-key parity), so the key-as-fallback only shows
+ * against a locale that lacks it — which that guard already prevents.
+ */
+export function translateLabError(text, translate) {
+  if (typeof text === 'string' && text.startsWith('okf.labErrors.')) {
+    return typeof translate === 'function' ? translate(text, text) : text;
+  }
+  return text;
 }
 
 /** Steward PII acknowledgement (audited server-side; waives the PII hit gate). */
@@ -471,18 +536,14 @@ export default {
   applyLabel,
   deleteConcept,
   createRepo,
-  submitForReview,
-  approve,
-  publish,
-  ingest,
-  retract,
   deleteRepo,
   listVersions,
-  createVersion,
   lifecycle,
   exportRepoZip,
   importRepoZip,
   importZipIntoRepo,
   friendlyLifecycleError,
+  translateLifecycleError,
+  translateLabError,
   acknowledgePii
 };

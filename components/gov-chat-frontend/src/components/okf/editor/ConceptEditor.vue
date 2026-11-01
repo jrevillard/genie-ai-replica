@@ -627,12 +627,21 @@ export default {
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => this.saveNow(), AUTOSAVE_DEBOUNCE_MS);
     },
+    // Returns the in-flight (or just-started) saveNow() promise so callers
+    // can AWAIT the flush (round 18, #80479: a fire-and-forget flush lets
+    // the panel's own two-write save race the autosave PATCH and write a
+    // stale body). Round 21c (#80942): an ALREADY IN-FLIGHT save resolves
+    // immediately no more — the flush means "the autosave has COMMITTED",
+    // so the in-flight save promise is held and returned too (the panel's
+    // GET /index.md then reads the post-PATCH body, not the pre-PATCH one).
     flushPendingSave() {
       if (this.saveTimer) {
         clearTimeout(this.saveTimer);
         this.saveTimer = null;
       }
-      if (this.dirty && !this.saving) this.saveNow();
+      if (this.saving && this._savePromise) return this._savePromise;
+      if (this.dirty && !this.saving) return this.saveNow();
+      return Promise.resolve();
     },
     async saveNow() {
       if (this.saveTimer) {
@@ -644,52 +653,59 @@ export default {
       const savedText = this.markdown;
       if (!this.dirty || this.saving || !conceptId || !this.repoId) return;
       this.saving = true;
-      this.saveError = false;
-      try {
-        // Labels write-through (2026-09-05): when the edited frontmatter is
-        // unchanged from what was loaded, save BODY-ONLY — the server keeps
-        // the stored fm, so a label written from the rail/tree while the
-        // steward was typing is not erased by a stale fm snapshot. An fm
-        // edit in the textarea still sends full markdown (it owns fm).
-        let payload = { repoId: this.repoId, conceptId, markdown: this.markdown };
-        const parsed = this.parseMarkdown(this.markdown);
-        if (parsed && this.fmEqual(parsed.data || {}, this.loadedFm)) {
-          payload = { repoId: this.repoId, conceptId, body: parsed.content };
-        }
-        const result = await this.$store.dispatch('okf/patchConcept', payload);
-        if (result && result.ok) {
-          // STALE-SAVE GUARD: the user may have switched concepts while the
-          // save was in flight — never stamp the OLD text onto the NEW one.
-          if (this.loadedConceptId === conceptId) {
-            this.savedMarkdown = savedText;
-            this.lastSavedAt = Date.now();
-            // PII REVIEW: the save re-scanned server-side and the response
-            // CARRIES the fresh occurrences — adopt directly (no second
-            // pii-inspect round-trip; that redundancy saturated the scanner).
-            if (result.pii_state) {
-              this.piiState = result.pii_state;
-              this.updatePiiCache(conceptId, {
-                pii_state: result.pii_state,
-                occurrences: Array.isArray(result.pii_occurrences) ? result.pii_occurrences : []
-              });
-              if (this.$refs.piiPanel) {
-                this.$refs.piiPanel.adopt({ occurrences: result.pii_occurrences || [] });
-              } else {
-                this.piiRevision += 1; // panel not mounted — fallback
+      // Held AND RETURNED for flushPendingSave (#80942; round 23: the
+      // assignment alone made the 'just started' arm resolve before the
+      // PATCH committed — the flush must mean "the autosave has COMMITTED"
+      // on every path). Cleared with `saving` below.
+      return (this._savePromise = (async () => {
+        this.saveError = false;
+        try {
+          // Labels write-through (2026-09-05): when the edited frontmatter is
+          // unchanged from what was loaded, save BODY-ONLY — the server keeps
+          // the stored fm, so a label written from the rail/tree while the
+          // steward was typing is not erased by a stale fm snapshot. An fm
+          // edit in the textarea still sends full markdown (it owns fm).
+          let payload = { repoId: this.repoId, conceptId, markdown: this.markdown };
+          const parsed = this.parseMarkdown(this.markdown);
+          if (parsed && this.fmEqual(parsed.data || {}, this.loadedFm)) {
+            payload = { repoId: this.repoId, conceptId, body: parsed.content };
+          }
+          const result = await this.$store.dispatch('okf/patchConcept', payload);
+          if (result && result.ok) {
+            // STALE-SAVE GUARD: the user may have switched concepts while the
+            // save was in flight — never stamp the OLD text onto the NEW one.
+            if (this.loadedConceptId === conceptId) {
+              this.savedMarkdown = savedText;
+              this.lastSavedAt = Date.now();
+              // PII REVIEW: the save re-scanned server-side and the response
+              // CARRIES the fresh occurrences — adopt directly (no second
+              // pii-inspect round-trip; that redundancy saturated the scanner).
+              if (result.pii_state) {
+                this.piiState = result.pii_state;
+                this.updatePiiCache(conceptId, {
+                  pii_state: result.pii_state,
+                  occurrences: Array.isArray(result.pii_occurrences) ? result.pii_occurrences : []
+                });
+                if (this.$refs.piiPanel) {
+                  this.$refs.piiPanel.adopt({ occurrences: result.pii_occurrences || [] });
+                } else {
+                  this.piiRevision += 1; // panel not mounted — fallback
+                }
               }
             }
+            this.$emit('saved', { conceptId, result });
+          } else {
+            this.saveError = true;
           }
-          this.$emit('saved', { conceptId, result });
-        } else {
+        } catch {
+          // Timeout/network failure — surface it; the dirty state stays so the
+          // user can retry (the old silent failure re-armed autosave forever).
           this.saveError = true;
+        } finally {
+          this.saving = false;
+          this._savePromise = null;
         }
-      } catch {
-        // Timeout/network failure — surface it; the dirty state stays so the
-        // user can retry (the old silent failure re-armed autosave forever).
-        this.saveError = true;
-      } finally {
-        this.saving = false;
-      }
+      })());
     },
     // ── PII CACHE helpers (2026-09-09 lockup fix) ──────────────────────────
     updatePiiCache(conceptId, patch) {
@@ -821,9 +837,12 @@ export default {
           } catch {
             return; // match spans styled nodes — skip rather than corrupt
           }
-          span.style.background = 'var(--warning, #f59e0b)';
+          // Round 18, #80491: tokenized — the paired --warning-ink (darkened
+          // warning in light mode, the badge token itself in dark) instead of
+          // a hardcoded near-black that was unreadable on the dark theme.
+          span.style.background = 'var(--warning)';
           span.style.borderRadius = '3px';
-          span.style.color = '#111';
+          span.style.color = 'var(--warning-ink)';
           span.scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }

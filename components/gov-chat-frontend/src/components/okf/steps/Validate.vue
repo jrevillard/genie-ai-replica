@@ -383,6 +383,11 @@ const PREVIEW_CHARS = 1500;
 // round-trip per concept), so the panel polls. Same cadence as the topic-link
 // run: fast enough that the bar moves, slow enough not to hammer the API.
 const PII_RESCAN_POLL_MS = 3000;
+// CEILING (round 19, #80774): a run wedged at status 'running' (worker
+// crash without reaping) re-arms the 3s timer forever otherwise — the same
+// dead-end class the store's pollJob ceilings exist to remove. Same 15-min
+// horizon as the editor's rescan control and pollJob's PII actions.
+const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
 
 // Per-type explanation tips (#1039): what the check looks at and why it
 // matters for RAG accuracy — one sentence a steward can act on.
@@ -516,7 +521,10 @@ export default {
       return Math.max(0, Math.min(100, Math.round(100 * (1 - total / Math.max(concepts, 5)))));
     },
     healthAria() {
-      return `Health: ${this.healthScore} percent, ${this.validationIssues.length} issue(s)`;
+      // Translated (round 18, #80492) — aria labels are user-facing text.
+      return this.translate('okf.validation.healthAria', 'Health: {pct} percent, {n} issue(s)')
+        .replace('{pct}', String(this.healthScore))
+        .replace('{n}', String(this.validationIssues.length));
     },
     headline() {
       const blockers = this.validationIssues.filter((i) => i.severity === 'blocker').length;
@@ -800,6 +808,7 @@ export default {
         return;
       }
       this.piiRescanKey = scanKey;
+      this._piiRescanDeadline = Date.now() + PII_RESCAN_MAX_MS;
       this._pollPiiRescan(epoch, repoId, scanKey);
     },
     _stopPiiRescanPolling() {
@@ -818,6 +827,17 @@ export default {
       }
       const run = res.result || {};
       if (run.status === 'running') {
+        // Horizon (#80774 — see PII_RESCAN_MAX_MS): stop following a wedged
+        // run with a readable timeout; the server-side run is untouched.
+        if (this._piiRescanDeadline && Date.now() > this._piiRescanDeadline) {
+          this.piiRescanBusy = false;
+          this._piiRescanTimer = null;
+          this.piiRescanError = this.translate(
+            'okf.validation.piiRescanTimeout',
+            'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.'
+          );
+          return;
+        }
         const p = run.progress || {};
         const done = Number(p.done || 0);
         const total = Number(p.total || 0);
@@ -921,6 +941,8 @@ export default {
     // assistant time), so we arm it, then poll until the run reports done or
     // failed. Re-running is safe: existing links are kept, only new ones added.
     _stopTopicLinkPolling() {
+      // Invalidate any in-flight poll (see the epoch check in _pollTopicLinks).
+      this._topicLinkEpoch = (this._topicLinkEpoch || 0) + 1;
       if (this._topicLinkTimer) {
         clearTimeout(this._topicLinkTimer);
         this._topicLinkTimer = null;
@@ -939,7 +961,13 @@ export default {
       this._pollTopicLinks();
     },
     async _pollTopicLinks() {
+      // Epoch guard (review !622 round 10, #78746 — mirrors the PII-rescan
+      // poll's fix): an in-flight poll resolving after beforeUnmount must not
+      // re-arm the 3s tick or refresh() the dead component.
+      this._topicLinkEpoch = (this._topicLinkEpoch || 0) + 1;
+      const epoch = this._topicLinkEpoch;
       const res = await this.$store.dispatch('okf/getTopicLinkRun', { repoId: this.repoId });
+      if (epoch !== this._topicLinkEpoch) return;
       const run = res && res.ok ? res.result : null;
       if (!run) {
         this.topicLinksBusy = false;

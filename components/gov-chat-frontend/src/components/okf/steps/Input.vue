@@ -215,7 +215,13 @@ import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import { mapGetters } from 'vuex';
 import repoOkfService from '../../../services/repoOkfService';
 import serviceTreeService from '../../../services/serviceTreeService';
-import { buildConceptPayload, labelOptionsForDomain, applyLabel } from '../../../services/okfRepoOps';
+import {
+  buildConceptPayload,
+  labelOptionsForDomain,
+  applyLabel,
+  friendlyLifecycleError,
+  translateLifecycleError
+} from '../../../services/okfRepoOps';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
@@ -456,6 +462,21 @@ export default {
           remove: 'Done — the flagged content on {n} concept(s) is removed.'
         }[action];
         this.piiBulkNote = this.translate('okf.editor.piiBulk.done_' + action, doneFallback).replace('{n}', affected);
+      } catch (err) {
+        // REJECTED bulkPiiAction (round 19, #80773): httpService rejects on
+        // HTTP errors (409 drain freeze, 5xx), and without this catch the
+        // rejection escaped try/finally — busy reset, dialog closed, no
+        // inputError, flags kept as if the action had run. Mirrors the
+        // RepoEditor handler (#80480).
+        const code = (err && (err.code || (err.data && err.data.error))) || '';
+        this.inputError = translateLifecycleError(
+          friendlyLifecycleError(
+            code,
+            err && err.message,
+            this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.')
+          ),
+          this.translate
+        );
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;
@@ -559,7 +580,12 @@ export default {
           const title = file.name.replace(/\.(md|markdown|txt)$/i, '');
           const payload = buildConceptPayload({ title, type: 'topic', body: raw, existingIds: [...taken] });
           taken.add(payload.concept_id);
-          concepts.push({ path: payload.concept_id, frontmatter: payload.frontmatter, body: payload.body });
+          // Send the payload AS BUILT (round 17, #80363): path carries the
+          // `.md` suffix and concept_id rides explicitly — the SAME shape
+          // addConcept sends to this /import upsert. The old bare-slug,
+          // no-concept_id form minted a different identity per shape for the
+          // same slug, silently defeating the documented slug-merge (A3/F13).
+          concepts.push(payload);
         }
         if (concepts.length) await repoOkfService.importConcepts(this.repoId, concepts);
         await this.refreshConcepts();

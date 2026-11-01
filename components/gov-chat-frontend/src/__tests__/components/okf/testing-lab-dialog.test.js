@@ -597,7 +597,11 @@ it('1-8c: batch advice — Explain failures renders add-all chips and saves them
   });
   await w.vm.onExplainFailures();
   await w.vm.$nextTick();
-  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', { repoId: 'r-1', suiteKey: 's1' });
+  // objectContaining: the payload also carries the poll cancel token (#80124).
+  expect(dispatch).toHaveBeenCalledWith(
+    'okf/headSuiteExplainFailures',
+    expect.objectContaining({ repoId: 'r-1', suiteKey: 's1' })
+  );
   expect(w.vm.batchTags).toEqual(['communicable-disease', 'hiv']);
   expect(w.element.textContent).toContain('both failures share the communicable-disease subject');
   expect(w.element.textContent).toContain('hiv prevention guideline');
@@ -647,7 +651,10 @@ it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it'
   dispatch.mockImplementation((action) => {
     if (action === 'okf/headSuiteRun')
       return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
-    if (action === 'okf/headSuiteGetRun')
+    // Round 18 (#80465): the run wait is the store's pollHeadSuiteRun now —
+    // the finished run doc arrives through it (the raw headSuiteGetRun
+    // service call is that action's internal detail).
+    if (action === 'okf/pollHeadSuiteRun')
       return Promise.resolve({
         ok: true,
         result: {
@@ -1185,20 +1192,49 @@ it('1-8f2: generation is 202+poll — the UI polls and adopts the suite when it 
   expect(w.vm.error).toBe('');
 });
 
-it('1-8f2: pollForSuite keeps waiting on the {status:"generating"} envelope and adopts the real suite', async () => {
+it('1-8f2: pollForSuite delegates to the pollJob-backed store action and adopts its suite', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
   const landed = { suite_key: 's-x', payload: { positive: [], negative: [] } };
-  const results = [
-    { ok: true, result: { suite_key: 's-x', status: 'generating' } }, // poll 1: keep waiting
-    { ok: true, result: landed } // poll 2: adopt
-  ];
-  dispatch.mockImplementation((action) => {
-    if (action === 'okf/headSuiteGet') return Promise.resolve(results.shift() || { ok: true, result: landed });
+  // Round 18 (#80465): the wait moved into okf/pollHeadSuite (pollJob
+  // tolerance + first-fetch fast path — the generating-envelope patience is
+  // asserted at the store level in okf-head-suite-poll.test.js). Here the
+  // component seam is: dispatch it with the cancel signal, adopt its result.
+  dispatch.mockImplementation((action, payload) => {
+    if (action === 'okf/pollHeadSuite') {
+      expect(payload).toMatchObject({ repoId: 'r-1', suiteKey: 's-x' });
+      expect(payload.signal).toBe(w.vm.pollSignal);
+      return Promise.resolve({ ok: true, result: landed });
+    }
     return Promise.resolve({ ok: true });
   });
   const suite = await w.vm.pollForSuite('s-x');
   expect(suite).toBe(landed); // NOT the generating envelope
+});
+
+// Round 20 (#80778): pollForSuite used to collapse a FAILED envelope to
+// null, so onGenerate fell through to the generic "taking unusually long"
+// timeout branch and the real server error never reached the steward — the
+// exact defect pollForRun's mapping fixed for runs.
+it('1-8f2: a FAILED suite envelope maps to a failed doc (not the timeout branch)', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/pollHeadSuite') {
+      return Promise.resolve({ ok: false, code: 'SUITE_GEN_FAILED', message: 'okf.labErrors.suiteGenFailed' });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  const suite = await w.vm.pollForSuite('s-bad');
+  expect(suite).toEqual({ status: 'failed', error: { message: 'okf.labErrors.suiteGenFailed' } });
+  // The timeout family still maps to null (the friendly server-side branch).
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/pollHeadSuite') {
+      return Promise.resolve({ ok: false, code: 'SUITE_GEN_TIMEOUT', message: 'still generating' });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  await expect(w.vm.pollForSuite('s-slow')).resolves.toBeNull();
 });
 
 it('1-8g: onProbeRow runs the click-test and patches matching rows with the probe result', async () => {
@@ -1389,6 +1425,77 @@ it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm
  * then rendered a confident empty state for a request that never ran.
  * ---------------------------------------------------------------------- */
 
+describe('poll cancel token (round 16, #80124)', () => {
+  it('unmounting the Lab aborts the signal the explain poll carries', async () => {
+    const w = await mountDialog(); // the suite's own factory
+    expect(w.vm.pollSignal.aborted).toBe(false);
+    w.unmount();
+    expect(w.vm.pollSignal.aborted).toBe(true);
+  });
+
+  // Round 17, #80355: the component-LOCAL polls must honor the signal too.
+  // Round 18 (#80465): the loops live in the store actions now — the
+  // component's job is to PASS the signal and translate POLL_ABORTED to
+  // null (the dialog's discard-on-close contract).
+  it('pollForSuite/pollForRun pass the signal and translate POLL_ABORTED to null', async () => {
+    const w = await mountDialog();
+    dispatch.mockClear();
+    w.vm.pollSignal.aborted = true;
+    dispatch.mockImplementation((action, payload) => {
+      if (action === 'okf/pollHeadSuite' || action === 'okf/pollHeadSuiteRun') {
+        expect(payload.signal.aborted).toBe(true); // the signal rides along
+        return Promise.resolve({ ok: false, code: 'POLL_ABORTED', message: 'Tracking stopped.' });
+      }
+      return Promise.resolve({ ok: true });
+    });
+    await expect(w.vm.pollForSuite('s1')).resolves.toBeNull();
+    await expect(w.vm.pollForRun('s1', 'rk1')).resolves.toBeNull();
+    w.unmount();
+  });
+
+  // Round 17, #80355(2): a suite switch mid-run must discard the result.
+  it('onRunSuite discards the run result when the suite moved while it ran', async () => {
+    const w = await mountDialog();
+    w.vm.suite = { suite_key: 's-old' };
+    w.vm.lastRunSummary = null;
+    dispatch.mockImplementationOnce(async () => {
+      // the suite switches WHILE the run request is in flight
+      w.vm.suite = { suite_key: 's-new' };
+      return {
+        ok: true,
+        result: { status: 'done', suite_key: 's-old', payload: { summary: { positive_passed: 1 }, results: [] } }
+      };
+    });
+    await w.vm.onRunSuite();
+    // the old run's verdict was NOT adopted into the new suite
+    expect(w.vm.lastRunSummary).toBeNull();
+    w.unmount();
+  });
+});
+
+describe('headStatus — parsed instants, never raw string compare (round 17, #80358)', () => {
+  const withTimes = (updated_at, computed_at) => {
+    const repo = { ...REPO, frontmatter: { updated_at }, head: { vector: {}, computed_at } };
+    return { repo };
+  };
+  const epochSeconds = Math.floor(Date.parse('2026-10-13T09:00:00.000Z') / 1000);
+
+  it('an epoch-SECONDS computed_at compares correctly against an ISO updated_at', async () => {
+    const w1 = await mountDialog(withTimes('2026-10-13T10:00:00.000Z', epochSeconds));
+    expect(w1.vm.headStatus).toBe('stale'); // frontmatter AFTER the head
+    w1.unmount();
+    const w2 = await mountDialog(withTimes('2026-10-13T08:00:00.000Z', epochSeconds));
+    expect(w2.vm.headStatus).toBe('present'); // head is fresh
+    w2.unmount();
+  });
+
+  it('unparseable stamps degrade to present, never throw', async () => {
+    const w = await mountDialog(withTimes('garbage', epochSeconds));
+    expect(w.vm.headStatus).toBe('present');
+    w.unmount();
+  });
+});
+
 describe('contended shared-busy slot: reads still dispatch', () => {
   // An UNRELATED token, deliberately not the read's own. The bug was that a
   // tag save ('save-tag') could swallow a history fetch; any token reproduces
@@ -1437,10 +1544,11 @@ describe('contended shared-busy slot: reads still dispatch', () => {
     w.vm.busy = CONTEND;
     dispatch.mockResolvedValueOnce({ ok: true, result: { suggested_tags: ['x'], failing_count: 1 } });
     await w.vm.onExplainFailures();
-    expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', {
-      repoId: 'r-1',
-      suiteKey: 's1'
-    });
+    // objectContaining: the payload also carries the poll cancel token (#80124).
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/headSuiteExplainFailures',
+      expect.objectContaining({ repoId: 'r-1', suiteKey: 's1' })
+    );
     expect(w.vm.batchAdvice.suggested_tags).toEqual(['x']);
     expect(w.vm.busy).toBe(CONTEND);
     expect(w.vm.explainFailuresLoading).toBe(false);
@@ -1775,5 +1883,150 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
 
     expect(w.vm.batchAdvice.suggested_tags).toEqual(['keep-me']);
     expect(w.vm.batchAdviceLoaded).toBe(true);
+  });
+});
+
+describe('#80805 — poll-envelope messages render translated, server detail verbatim', () => {
+  const ADVISOR_EN =
+    'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.';
+
+  it('onRecommend maps ADVISOR_TIMEOUT to the translated sentence (no $i18n → the fallback carries it)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'ADVISOR_TIMEOUT', message: ADVISOR_EN });
+    await w.vm.onRecommend();
+    // No $i18n in tests: translate() returns the fallback — the English
+    // sentence this test pins as the key’s fallback text.
+    expect(w.vm.error).toBe(ADVISOR_EN);
+    expect(w.vm.advisorLoaded).toBe(false);
+  });
+
+  it('onRecommend maps RECOMMEND_FAILED by code, not by the raw message', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RECOMMEND_FAILED', message: 'Advisor failed' });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('Advisor failed');
+  });
+
+  it('onRecommend still shows a server message verbatim for unmapped codes', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'E_ADVICE', message: 'llm down' });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('llm down');
+  });
+
+  it('a failed run whose envelope carries the labErrors key routes it through the translator', async () => {
+    // Round 21 (#80911): this test used to mount with NO $i18n and assert the
+    // RAW KEY — translateLabError was a no-op under that mock (the key passed
+    // through untranslated and satisfied the assertion), so unwiring ALL TEN
+    // call sites left the suite green while users saw 'okf.labErrors.…'. The
+    // honest wiring test installs the REAL i18n plugin and asserts the
+    // TRANSLATED sentence: it dies on every unwired mutation.
+    const { createI18n } = require('vue-i18n');
+    const i18n = createI18n({
+      legacy: true,
+      locale: 'en',
+      fallbackLocale: 'en',
+      messages: { en: { okf: { labErrors: { suiteRunFailed: 'The suite run blew up (translated).' } } } }
+    });
+    const w = mount(OkfTestingLabDialog, {
+      global: {
+        plugins: [i18n],
+        mocks: { $store: fakeStore() },
+        stubs: {
+          DsDialog: { template: '<div><slot /></div>' },
+          DsTabs: { template: '<div><slot /></div>' },
+          DsInfoTip: true,
+          DsSpinner: true
+        }
+      },
+      props: { visible: true, repo: REPO, initialTab: 'suites' }
+    });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    // headSuiteRun starts the async run; pollHeadSuiteRun answers the
+    // store's failed envelope whose message is an okf.labErrors.* KEY.
+    dispatch.mockResolvedValueOnce({ ok: true, result: { status: 'running', run_key: 'rk-1' } });
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' });
+    await w.vm.onRunSuite();
+    expect(w.vm.error).toBe('The suite run blew up (translated).');
+  });
+
+  it('a failed run with a SERVER message keeps it verbatim', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: { status: 'running', run_key: 'rk-1' } });
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'SCORING_FAILED', message: 'reranker down' });
+    await w.vm.onRunSuite();
+    expect(w.vm.error).toBe('reranker down');
+  });
+
+  // Round 21 (#80880): the RECOMMEND_FAILED arm keeps the SERVER's reason
+  // ('vLLM 503: model not ready', 'no head tags yet', …) — the generic
+  // sentence is only the fallback when the message is absent.
+  it('a failed advisor whose envelope carries the server reason keeps it verbatim (#80880)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'RECOMMEND_FAILED',
+      message: 'vLLM 503: model not ready'
+    });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('vLLM 503: model not ready');
+  });
+
+  it('a failed advisor with NO message falls back to the generic sentence', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RECOMMEND_FAILED', message: '' });
+    await w.vm.onRecommend();
+    // No $i18n: translate() returns the fallback verbatim — assert it
+    // EXACTLY. A typeof/length assertion also passes on the RAW KEY
+    // 'okf.testingLab.error.advisor' (review 81334/81349: the mutant that
+    // drops the English default leaked the key and stayed green).
+    expect(w.vm.error).toBe('Advisor failed');
+  });
+
+  it('an okf.labErrors.* advisor message is TRANSLATED, not rendered raw (round 23, 82705)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    // The store authors keys into `message` (27 sites) — the folded
+    // fall-through routes it through translateLabError, which hands the key
+    // to translate. No $i18n here: translate returns the KEY-AS-FALLBACK —
+    // the pin is that translateLabError was CONSULTED (a raw `res.message`
+    // passthrough would skip it entirely and we assert the key survives the
+    // translate hop, not the raw envelope hop).
+    const spy = jest.spyOn(w.vm, 'translate');
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'RECOMMEND_FAILED',
+      message: 'okf.labErrors.noHeadTags'
+    });
+    await w.vm.onRecommend();
+    expect(spy).toHaveBeenCalledWith('okf.labErrors.noHeadTags', 'okf.labErrors.noHeadTags');
+    spy.mockRestore();
+  });
+
+  it('ADVISOR_TIMEOUT keeps the timeout sentence even when a server message rides the envelope (81274)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'ADVISOR_TIMEOUT',
+      message: 'server-side detail the timeout arm must not surface'
+    });
+    await w.vm.onRecommend();
+    // No $i18n: the fallback IS the timeout sentence — a swapped arm (or a
+    // res.message leak into it) fails this.
+    expect(w.vm.error).toBe(
+      'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+    );
   });
 });

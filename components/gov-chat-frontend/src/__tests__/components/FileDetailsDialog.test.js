@@ -351,6 +351,17 @@ describe('FileDetailsDialog', () => {
   // 2026-09-01 — OKF crawl split footer + Dashboard-first tab after a crawl
   // -------------------------------------------------------------------------
   describe('OKF crawl split footer + Dashboard-first tab', () => {
+    // The footer is flag-gated (okfFlag fails CLOSED when a config exists
+    // without okfEnabled — jest setup.js always provides an APP_CONFIG), so
+    // this suite pins the flag ON explicitly: these tests exercise OKF
+    // surfaces that a flag-parked deployment legitimately hides.
+    beforeEach(() => {
+      window.APP_CONFIG = { ...window.APP_CONFIG, okfEnabled: '1' };
+    });
+    afterEach(() => {
+      delete window.APP_CONFIG.okfEnabled;
+    });
+
     async function mountCrawlFile({ crawlStatus = 'Succeeded' } = {}) {
       mockGetFileMetadata.mockResolvedValue(
         createMockFile({ source_url: 'https://example.com/x', dataprep: { status: 'Pending' } })
@@ -1893,5 +1904,52 @@ describe('metadata editability on a degraded document', () => {
 
   it('still allows editing while a document is only pending', () => {
     expect(withStatus('Pending').vm.isMetadataEditable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 16, #80126 — the crawl-conversions strip must filter for THIS file
+// and for well-formed conversion envelopes, and sort by repo id. The store
+// map carries every crawl's conversion; an unfiltered (or shape-blind) read
+// rendered other files' conversions and crashed on conversion-less rows.
+// ---------------------------------------------------------------------------
+describe('FileDetailsDialog — fileConversions filter (#80126)', () => {
+  const withStoreConversions = (crawlConversions) =>
+    createFileDetailsDialogWrapper({
+      global: {
+        mocks: {
+          $store: {
+            getters: { accessToken: 'mock-token-123' },
+            dispatch: mockStoreDispatch,
+            state: { okf: { crawlConversions } }
+          }
+        }
+      }
+    });
+
+  it('keeps only THIS file’s conversions with a well-formed status', () => {
+    const wrapper = withStoreConversions({
+      a: { file_id: 'test-file-123', repo_id: 'repo-b', conversion: { status: 'done', pages_done: 3 } },
+      b: { file_id: 'OTHER-file', repo_id: 'repo-a', conversion: { status: 'done' } },
+      c: { file_id: 'test-file-123', repo_id: 'repo-c' }, // no conversion envelope
+      d: { file_id: 'test-file-123', repo_id: 'repo-d', conversion: { status: 7 } }, // non-string status
+      e: null // the worker's null placeholder rows
+    });
+    const rows = wrapper.vm.fileConversions;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ repo_id: 'repo-b', conversion: { status: 'done' } });
+  });
+
+  it('sorts multiple rows by repo id regardless of map insertion order', () => {
+    const wrapper = withStoreConversions({
+      x: { file_id: 'test-file-123', repo_id: 'zulu', conversion: { status: 'done' } },
+      y: { file_id: 'test-file-123', repo_id: 'alpha', conversion: { status: 'running' } }
+    });
+    expect(wrapper.vm.fileConversions.map((r) => r.repo_id)).toEqual(['alpha', 'zulu']);
+  });
+
+  it('an empty/missing store map degrades to an empty strip, never a crash', () => {
+    expect(withStoreConversions(undefined).vm.fileConversions).toEqual([]);
+    expect(withStoreConversions({}).vm.fileConversions).toEqual([]);
   });
 });

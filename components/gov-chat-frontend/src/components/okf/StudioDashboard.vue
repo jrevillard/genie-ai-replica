@@ -304,6 +304,7 @@
         { key: 'cancel', label: translate('common.cancel', 'Cancel'), variant: 'secondary' },
         {
           key: 'publish',
+          disabled: bulkBusy,
           label: translate('okf.dashboard.bulk.publishConfirm', 'Publish {n}').replace(
             '{n}',
             String(selectedIds.length)
@@ -438,6 +439,7 @@ export default {
       lanes: LANES,
       selectedIds: [],
       bulkOpen: false,
+      bulkBusy: false,
       bulkResults: [],
       filters: { domain: '', search: '' },
       domainFilterOptions: DOMAIN_FILTER_DEFAULT,
@@ -816,7 +818,11 @@ export default {
       this.actionError = '';
       const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: r.repo_id, action });
       this.actionBusy = false;
-      if (!res.ok) this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+      if (!res.ok)
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
     },
     onVersions(r) {
       this.versionsRepo = r;
@@ -930,7 +936,10 @@ export default {
       this.reingestAsk = null;
       this.reingestCount = null;
       if (!res.ok) {
-        this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
       }
     },
     async onUnpublishAction(key) {
@@ -947,7 +956,11 @@ export default {
       });
       this.actionBusy = false;
       this.unpublishAsk = null;
-      if (!res.ok) this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+      if (!res.ok)
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
     },
     onPublishDialogClose() {
       // While the bundle transfer is in flight the dialog stays visible with
@@ -972,7 +985,10 @@ export default {
           action: 'publish'
         });
         if (!res.ok) {
-          this.publishError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+          this.publishError = okfRepoOps.translateLifecycleError(
+            okfRepoOps.friendlyLifecycleError(res.code, res.message),
+            this.translate
+          );
           if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
           return; // keep the dialog open — the steward decides on the ack
         }
@@ -1004,18 +1020,33 @@ export default {
       return Math.max(0, Math.min(100, Math.round(100 * (1 - ratio))));
     },
     healthAria(r) {
+      // Screen-reader text IS user-facing (round 18, #80492): a French
+      // screen-reader user heard hardcoded English on a translated
+      // dashboard. Same translate().replace() idiom as the visible strings.
       const pct = this.healthScore(r);
       const m = r.metrics;
-      if (!m) return 'No metrics';
-      return 'Health: ' + pct + ' percent, ' + (m.concept_count || 0) + ' concepts';
+      if (!m) return this.translate('okf.dashboard.health.ariaNone', 'No metrics');
+      return this.translate('okf.dashboard.health.aria', 'Health: {pct} percent, {n} concepts')
+        .replace('{pct}', String(pct))
+        .replace('{n}', String(m.concept_count || 0));
     },
     async runBulkPublish() {
-      const repoIds = this.selectedRows.map((r) => r.repo_id);
-      this.bulkResults = [];
-      for (const repoId of repoIds) {
-        const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId, action: 'publish' });
-        const r = this.$store.getters['okf/repoById'](repoId);
-        this.bulkResults.push({ repo_id: repoId, name: r ? r.name : repoId, ok: !!res.ok, code: res.code });
+      // BUSY GUARD (round 17, #80360): two interleaved sequential publish
+      // loops against the same repos — duplicated lifecycleTransition calls,
+      // interleaved 409s, duplicated bulkResults rows — was one double-click
+      // away. Mirrors the single-repo actions' guard.
+      if (this.bulkBusy) return;
+      this.bulkBusy = true;
+      try {
+        const repoIds = this.selectedRows.map((r) => r.repo_id);
+        this.bulkResults = [];
+        for (const repoId of repoIds) {
+          const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId, action: 'publish' });
+          const r = this.$store.getters['okf/repoById'](repoId);
+          this.bulkResults.push({ repo_id: repoId, name: r ? r.name : repoId, ok: !!res.ok, code: res.code });
+        }
+      } finally {
+        this.bulkBusy = false;
       }
       this.refreshAll();
     },

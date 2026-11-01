@@ -22,7 +22,7 @@ jest.mock('@/services/httpService', () => ({
 }));
 
 const crawlerToOkfService = require('@/services/crawlerToOkfService').default;
-const { slugify, MAX_NAME_ATTEMPTS } = require('@/services/crawlerToOkfService');
+const { slugify } = require('@/services/crawlerToOkfService');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -53,12 +53,6 @@ describe('crawlerToOkfService — slug derivation', () => {
       expect(slugify('My Article.md')).toBe('my-article');
       expect(slugify('My Article.html')).toBe('my-article');
     });
-  });
-
-  it('exposes the name-collision attempt budget fed to the server', () => {
-    // The server owns the authoritative retry loop; MAX_NAME_ATTEMPTS only
-    // documents the budget. Keep it aligned with the server's own constant.
-    expect(MAX_NAME_ATTEMPTS).toBe(10);
   });
 });
 

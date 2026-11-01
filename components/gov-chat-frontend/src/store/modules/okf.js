@@ -7,7 +7,6 @@
  *   reposByStage         bucketed repo_ids { draft: [], in_review: [], published: [] }
  *   selection            { documents: [], crawlSeeds: [], clonedFrom: null } — preloaded wizard inputs
  *   gates[okfRepoButton] { visible, reasonKey, reasonParams } — gates the doc-mgmt entry button
- *   bulkPublish          { inFlight, results: [{ repo_id, ok, code?, message? }] }
  *   ui                   { expertMode } — global Basic/Expert toggle (persisted to localStorage)
  *
  * NOT_READY semantics:
@@ -17,6 +16,14 @@
  *   this as a translated toast — never as a hard error.
  *   Studio drafts are the exception since Story 10.5: the endpoint is live,
  *   so NOT_READY only surfaces against an older backend, and it is silent.
+ *
+ * POLL-ENVELOPE i18n (#80805): every message THIS module authors for a poll
+ *   envelope (pollJob's abort/timeout arms and each action's `timeout`/
+ *   `failed` fallbacks) is an okf.labErrors.* KEY, not English — the store
+ *   has no translate context, so the consumer renders it through
+ *   okfRepoOps.translateLabError(). A message that came from the SERVER
+ *   (doc.error.message, err.message) stays verbatim and that helper passes
+ *   it through untouched.
  */
 
 const initialState = () => ({
@@ -41,7 +48,6 @@ const initialState = () => ({
   gates: {
     okfRepoButton: { visible: false, reasonKey: null, reasonParams: {} }
   },
-  bulkPublish: { inFlight: false, results: [] },
   versionsByRepo: {},
   // Story #978 — Studio editor state: which sub-tab (Wizard | Editor), which
   // repo is open, per-repo concept lists (left rail), the selected concept.
@@ -74,6 +80,17 @@ const initialState = () => ({
  * "In progress" lane regardless of its lifecycle_state — the UI mirror of
  * the server's buildingBlocker (it refuses every transition while building).
  */
+/** Append a repo_id to the DRAFT lane (round 23, review 81261: the identical
+ * 4-line block was pasted in createFromCrawl and createRepo — and the
+ * per-lane Array.isArray guard was dead by #80913's own reasoning, since
+ * initialState() declares all five lanes as arrays). One paste, one place. */
+function pushRepoToDraft(context, commit, repoId) {
+  const byStage = context.state.okf.reposByStage;
+  const draftLane = byStage.draft.slice();
+  if (!draftLane.includes(repoId)) draftLane.push(repoId);
+  commit('setReposByStage', { ...byStage, draft: draftLane });
+}
+
 function laneFor(repos) {
   // P0-UI: no isBuilding consult here anymore — lifecycle truth alone
   // buckets the lanes (the building state renders on the card, never as a
@@ -114,13 +131,88 @@ function writeExpertModeToStorage(value) {
 /** NON-BLOCKING LOAD generation counter (see fetchConcepts). */
 let fetchGeneration = 0;
 
+/**
+ * THE bounded poll loop behind every Testing-Lab async action (round 16,
+ * #80124 — this replaces seven near-identical for(;;)+setTimeout copies).
+ *
+ * Contract, distilled from those seven loops (do not "simplify" any arm away):
+ *  - deadline: a UI horizon only. The server NEVER kills a healthy long job;
+ *    the timeout envelope says so and the job keeps running server-side.
+ *  - transient tolerance: a gateway blip (kong restart = 502) must not end
+ *    tracking — the server-side job completes regardless (live 2026-10-18
+ *    incident). Solid failure for 60 consecutive polls rethrows.
+ *  - signal: the component's cancel token ({aborted}). Checked before every
+ *    tick AND after every sleep, so an unmount stops the loop within one
+ *    cadence — the loop the old copies never had: a closed Lab kept polling
+ *    the API every 2s for up to the 24h horizon.
+ *
+ * @param {object} p
+ * @param {() => Promise<object>} p.fetchDoc     one poll attempt → job doc
+ * @param {number} [p.pollMs]                    cadence (default 2000)
+ * @param {number} [p.deadlineMs]                UI horizon (default 24h)
+ * @param {(doc: object) => boolean} [p.isRunning] keep-polling predicate
+ * @param {(progress: object) => void} [p.onProgress] live progress tap
+ * @param {{code: string, message: string}} p.timeout  horizon-exceeded envelope
+ * @param {{code: string, message: string}} p.failed   failed-status envelope
+ * @param {(doc: object) => object} p.done       terminal mapping (cancelled
+ *        branches and result-vs-payload differences live HERE, per action)
+ * @param {{aborted?: boolean}} [p.signal]       component cancel token
+ * @returns {Promise<{ok: boolean, code?: string, message?: string, result?: *}>}
+ */
+async function pollJob({
+  fetchDoc,
+  pollMs = 2000,
+  deadlineMs = 24 * 60 * 60 * 1000,
+  isRunning = (doc) => !doc || doc.status === 'running',
+  onProgress = null,
+  timeout,
+  failed,
+  done,
+  signal = null
+}) {
+  const deadline = Date.now() + deadlineMs;
+  let misses = 0;
+  for (;;) {
+    if (signal && signal.aborted) {
+      // The component went away — stop hammering the gateway. The job itself
+      // is untouched server-side; reopening the Lab re-adopts it.
+      return {
+        ok: false,
+        code: 'POLL_ABORTED',
+        message: 'okf.labErrors.pollAborted'
+      };
+    }
+    if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: 'okf.labErrors.trackingStopped' };
+    let doc;
+    try {
+      doc = await fetchDoc();
+      misses = 0;
+    } catch (err) {
+      if (++misses >= 60) throw err;
+      continue;
+    }
+    if (isRunning(doc)) {
+      if (onProgress && doc && doc.progress) onProgress(doc.progress);
+      continue;
+    }
+    if (doc && doc.status === 'failed') {
+      return {
+        ok: false,
+        code: (doc.error && doc.error.code) || failed.code,
+        message: (doc.error && doc.error.message) || failed.message
+      };
+    }
+    return done(doc);
+  }
+}
+
 const getters = {
   activeDraft: (state) => (repoId) => state.drafts[repoId] || null,
   repoById: (state) => (repoId) => state.reposById[repoId] || null,
   reposByStage: (state) => state.reposByStage,
   gate: (state) => (name) => state.gates[name] || { visible: false, reasonKey: null },
-  bulkPublishResults: (state) => state.bulkPublish.results,
-  bulkPublishInFlight: (state) => state.bulkPublish.inFlight,
   // Story #978 — editor getters.
   editorSubTab: (state) => state.editor.subTab,
   editorRepoId: (state) => state.editor.repoId,
@@ -196,18 +288,6 @@ const mutations = {
   setGate(state, { name, value }) {
     state.gates = { ...state.gates, [name]: value };
   },
-  startBulkPublish(state) {
-    state.bulkPublish = { inFlight: true, results: [] };
-  },
-  addBulkPublishResult(state, result) {
-    state.bulkPublish = {
-      ...state.bulkPublish,
-      results: [...state.bulkPublish.results, result]
-    };
-  },
-  endBulkPublish(state) {
-    state.bulkPublish = { ...state.bulkPublish, inFlight: false };
-  },
   // Story #978 — editor mutations.
   setEditorSubTab(state, subTab) {
     state.editor = { ...state.editor, subTab: subTab === 'wizard' ? 'wizard' : 'editor' };
@@ -243,21 +323,20 @@ const mutations = {
 };
 
 const actions = {
-  // NON-BLOCKING LOAD: bumped on every fetchConcepts call — a superseded
-  // loop (repo switched, newer refetch) stops committing stale pages.
-  // Module-scope on purpose: single store instance, not serialized state.
-  /**
-   * Load (or return-cached) draft for a repo. NO-OP if a cached draft exists —
-   * avoids server round-trip when resuming in-process.
-   *
-   * PURE CACHE LOOKUP: the server-backed hydration lives in `fetchDraft`.
-   */
-  loadDraft({ state }, { repoId, force = false } = {}) {
-    if (!repoId) return null;
-    if (!force && state.drafts[repoId]) return state.drafts[repoId];
-    return null;
+  /** In-memory-only draft write (round 17, #80359): the pre-create wizard
+   *  has no server repo to attach a draft to. Going through saveDraft with a
+   *  'pending' alias PUT a route that 404s on every keystroke and armed
+   *  draftsUnavailable against a healthy backend; this writes ONLY the
+   *  local cache (same mutation saveDraft uses). */
+  setDraftLocal({ commit }, { repoId, draft } = {}) {
+    if (!repoId || !draft) return { ok: false, code: 'VALIDATION_ERROR' };
+    // This action OWNS the updated_at stamp (round 18, #80468): leaving it to
+    // the caller was one forgotten field away from silently breaking resume
+    // ordering — and saveDraft's unavailable branch now delegates here rather
+    // than inlining a second stamping site.
+    commit('setDraft', { repoId, draft: { ...draft, updated_at: draft.updated_at ?? Date.now() } });
+    return { ok: true, local: true };
   },
-
   /**
    * STORY 10.5 — hydrate the draft from the SERVER (this is what makes the
    * wizard survive a browser refresh: before it, `drafts` lived only in the
@@ -314,9 +393,18 @@ const actions = {
    * still committed FIRST (Vuex-first), so the wizard renders regardless of
    * the network outcome.
    */
-  async saveDraft({ commit, state }, { repoId, draft }) {
+  async saveDraft({ commit, state, dispatch }, { repoId, draft }) {
     if (!repoId || !draft) {
       return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId and draft required' };
+    }
+    // draftsUnavailable IS consumed (round 17, #80359): once the endpoint has
+    // proven absent, later saves keep the local cache but stop re-hammering
+    // the missing route — the "session stops writing it" the state flag
+    // always promised.
+    if (state.draftsUnavailable) {
+      // delegate to the ONE local-write owner (#80468) — no second stamping site
+      await dispatch('setDraftLocal', { repoId, draft });
+      return { ok: true, skipped: 'unavailable' };
     }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
     // has nothing to draft — the server write is SKIPPED entirely (it would
@@ -372,10 +460,17 @@ const actions = {
       const metrics = await repoOkfService.getMetrics(repoId);
       commit('setRepoMetrics', { repoId, metrics });
       return { ok: true, metrics };
-    } catch {
-      // 404 → no concepts yet; render placeholder
-      commit('setRepoMetrics', { repoId, metrics: null });
-      return { ok: true, metrics: null };
+    } catch (err) {
+      // ONLY a 404 means 'no concepts yet' — every other failure (5xx,
+      // network) must surface, not masquerade as empty placeholders
+      // (review !622 round 10, #78748).
+      const status = err && (err.status || (err.response && err.response.status));
+      if (status === 404) {
+        commit('setRepoMetrics', { repoId, metrics: null });
+        return { ok: true, metrics: null };
+      }
+      commit('setError', err.message || 'fetchRepoMetrics failed');
+      return { ok: false, code: 'METRICS_FAILED', message: err.message };
     }
   },
 
@@ -401,23 +496,6 @@ const actions = {
    * Bulk publish: iterate mintVersion per repo; collect per-row results.
    * NEVER force-publishes past a gate — a single failure does not abort the loop.
    */
-  async bulkPublish({ commit, dispatch }, { repoIds, actor, trigger = 'publish' } = {}) {
-    if (!Array.isArray(repoIds) || repoIds.length === 0) {
-      return { ok: false, code: 'VALIDATION_ERROR', message: 'repoIds required' };
-    }
-    commit('startBulkPublish');
-    for (const repoId of repoIds) {
-      const result = await dispatch('mintVersion', { repoId, body: { trigger }, actor });
-      commit('addBulkPublishResult', {
-        repo_id: repoId,
-        ok: !!result.ok,
-        code: result.code,
-        message: result.message
-      });
-    }
-    commit('endBulkPublish');
-    return { ok: true };
-  },
 
   async updateLabels({ commit }, { repoId, labels }) {
     try {
@@ -427,10 +505,18 @@ const actions = {
         commit('upsertRepo', { ...existing, labels });
       }
       return { ok: true };
-    } catch {
-      // Server endpoint may not exist yet — labels persist locally in the Vuex state
-      // via the upsertRepo call above (committed optimistically).
-      return { ok: false, code: 'NOT_READY', message: 'okf.curator.labels.notReady' };
+    } catch (err) {
+      // Nothing persisted locally on failure — the optimistic upsertRepo above
+      // runs only AFTER a successful PUT (the old comment claimed otherwise,
+      // review !622 round 10, #78749). Pass the real status through so the UI
+      // can tell 'endpoint missing' from 'labels rejected'.
+      const status = err && (err.status || (err.response && err.response.status));
+      return {
+        ok: false,
+        code: status === 404 ? 'NOT_READY' : 'LABELS_FAILED',
+        message: err.message || 'okf.curator.labels.notReady',
+        status
+      };
     }
   },
 
@@ -472,10 +558,9 @@ const actions = {
       const repo = await crawlerToOkfService.convertCrawlToOkf(payload);
       if (repo && repo.repo_id) {
         commit('upsertRepo', repo);
-        const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
-        const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
-        if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
-        commit('setReposByStage', { ...byStage, draft: draftLane });
+        // No fallback (#80913) — see createRepo: the 5-lane state always exists.
+        // The append itself is shared with createRepo (pushRepoToDraft, below).
+        pushRepoToDraft(this, commit, repo.repo_id);
         // Register for live progress tracking (the conversion is a
         // SERVER-SIDE job now — the repo doc's `conversion` field is the
         // source of truth; the poller keeps it fresh until terminal).
@@ -559,17 +644,21 @@ const actions = {
     try {
       const repo = await okfRepoOps.createRepo({ name, domain });
       commit('upsertRepo', repo);
-      const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
-      const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
-      if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
-      commit('setReposByStage', { ...byStage, draft: draftLane });
+      // Round 21 audit (#80913): no fallback — initialState() declares the
+      // full 5-lane reposByStage, so it is never nullish here; the round-20
+      // `|| laneFor()` arm (and the 3-lane literal before it) was dead code.
+      pushRepoToDraft(this, commit, repo.repo_id);
       return { ok: true, repo };
     } catch (err) {
       commit('setError', err.message || 'createRepo failed');
       // Preserve the server's code (DUPLICATE_REPO etc.) — Entry's curated
       // refusal copy keys off it; a hardcoded CREATE_FAILED made the branch
       // unreachable (max-review F11, 2026-09-27).
-      return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message };
+      // Round 20 (#80123): when the repo was created but its index-skeleton
+      // import failed, okfRepoOps attaches it on the error — pass it through
+      // so the UI can say "open it from the dashboard" instead of a blind
+      // "failed" that invites a retry (which mints a SECOND repo).
+      return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message, repo: err.repo };
     }
   },
 
@@ -674,6 +763,17 @@ const actions = {
     const stale = () => myGen !== fetchGeneration || (state.editor.repoId && state.editor.repoId !== repoId);
     try {
       const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0 });
+      // STALE GUARD BEFORE THE FIRST COMMIT (round 20): the repo could have
+      // switched while page 1 was in flight — committing then would plant
+      // the OLD repo's rows over the NEW repo's editor. Same cleanup rule
+      // as the in-loop guard below.
+      if (stale()) {
+        if (myGen === fetchGeneration) {
+          commit('setConceptsLoading', false);
+          commit('setConceptsLoadProgress', null);
+        }
+        return { ok: true, concepts: [], stale: true };
+      }
       // Legacy contract: a plain array (mocked tests / older servers) — one commit.
       if (Array.isArray(first)) {
         commit('setConcepts', { repoId, concepts: first });
@@ -687,17 +787,49 @@ const actions = {
       while (acc.length < total) {
         // Pages are SEQUENTIAL by design — each offset needs the previous count.
         const page = await conceptService.listForRepo(repoId, { limit: PAGE, offset: acc.length });
-        if (stale()) return { ok: true, concepts: acc, stale: true };
+        if (stale()) {
+          // Round 11 (!622): the abandoned fetch must clean up after itself
+          // — EXCEPT when a NEWER fetch superseded it (generation moved):
+          // that fetch owns the loading/progress flags now and clearing
+          // them here would flash its bar off. Repo-switched with no newer
+          // fetch: nobody else clears them, so this exit does (it used to
+          // leave loading=true + a frozen {done,total} for the dead repo).
+          if (myGen === fetchGeneration) {
+            commit('setConceptsLoading', false);
+            commit('setConceptsLoadProgress', null);
+          }
+          return { ok: true, concepts: acc, stale: true };
+        }
         const rows = page && Array.isArray(page.concepts) ? page.concepts : Array.isArray(page) ? page : [];
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
       }
+      // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
+      // same predicate as the in-loop guard — a fetch superseded while its
+      // LAST page was in flight must not clear the NEWER fetch's live
+      // progress bar on its way out. Repo-switched with no newer fetch:
+      // nobody else owns the flags, so this exit clears them. (Defense-in-
+      // depth: the round-11 guard RETURNS at every page boundary and there
+      // is no await between the last boundary and here, so this arm is not
+      // reachable stale today — it holds the line if one is ever added.)
+      if (stale()) {
+        if (myGen === fetchGeneration) {
+          commit('setConceptsLoading', false);
+          commit('setConceptsLoadProgress', null);
+        }
+        return { ok: true, concepts: acc, stale: true };
+      }
       commit('setConceptsLoadProgress', null);
       return { ok: true, concepts: acc };
     } catch (err) {
       commit('setError', err.message || 'fetchConcepts failed');
-      commit('setConcepts', { repoId, concepts: [] });
+      // KEEP THE LAST KNOWN LIST (round 20, #80803): the already-loaded rows
+      // are known-good data — one gateway 502 (or a failed page N of the
+      // paging loop) must not blank the rail to "0 concepts" and destroy
+      // the curator's context; the editor re-fetches on the next concept
+      // click anyway. Empty the list only when none was ever loaded here.
+      if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
       commit('setConceptsLoadProgress', null);
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     } finally {
@@ -1016,7 +1148,20 @@ const actions = {
   async rescanConceptPii(_ctx, { repoId, conceptId } = {}) {
     if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR', error: 'repoId + conceptId required' };
     try {
-      const result = await repoOkfService.scanConceptPii(repoId, conceptId, { rescan: true });
+      // FETCH THE CONTENT FIRST (round 16, #80119): scanConceptPii's own
+      // contract requires frontmatter+body — the server scans what it is
+      // given, so an empty body would write a meaningless verdict onto the
+      // meta row, and a 'clean' from an empty scan is a FALSE all-clear the
+      // publish gate then trusts. No content → no scan (fail closed).
+      const concept = await conceptService.get(repoId, conceptId);
+      if (!concept || typeof concept.body !== 'string') {
+        return { ok: false, code: 'CONCEPT_UNAVAILABLE', error: 'concept content could not be loaded — scan refused' };
+      }
+      const result = await repoOkfService.scanConceptPii(repoId, conceptId, {
+        rescan: true,
+        frontmatter: concept.frontmatter || {},
+        body: concept.body
+      });
       return { ok: true, result };
     } catch (err) {
       return {
@@ -1230,6 +1375,60 @@ const actions = {
     }
   },
 
+  /** Round 18 (#80465) — the Lab's suite-generation wait, on pollJob instead
+   * of the dialog's hand-rolled loop: transient gateway failures (one 502
+   * mid-generation) now tolerate up to 60 consecutive misses instead of
+   * rejecting the whole wait. FIRST-FETCH FAST PATH: pollJob sleeps before
+   * its first fetch, but a fast generation lands on attempt 0 — fetch once
+   * up front and only enter the loop while still generating. */
+  async pollHeadSuite({ dispatch }, { repoId, suiteKey, signal } = {}) {
+    const fetchDoc = () => dispatch('headSuiteGet', { repoId, suiteKey }).then((r) => (r && r.ok ? r.result : null));
+    const first = await fetchDoc();
+    if (first && first.suite_key && first.status !== 'generating') return { ok: true, result: first };
+    return pollJob({
+      fetchDoc,
+      pollMs: 2500,
+      deadlineMs: 4 * 60 * 1000,
+      // The server answers 200 {suite_key, status:'generating'} while the
+      // async worker runs (never a 404) — keep waiting on that envelope.
+      isRunning: (doc) => !doc || !doc.suite_key || doc.status === 'generating',
+      timeout: { code: 'SUITE_GEN_TIMEOUT', message: 'okf.labErrors.suiteGenTimeout' },
+      failed: { code: 'SUITE_GEN_FAILED', message: 'okf.labErrors.suiteGenFailed' },
+      done: (doc) => ({ ok: true, result: doc }),
+      signal
+    });
+  },
+
+  /** Round 18 (#80465) — the Lab's async-run wait, same treatment: pollJob
+   * tolerance + first-fetch fast path; onProgress keeps the live bar fed
+   * ({phase, done, total} straight off the run envelope). */
+  async pollHeadSuiteRun({ dispatch }, { repoId, suiteKey, runKey, signal, onProgress } = {}) {
+    const fetchDoc = () =>
+      dispatch('headSuiteGetRun', { repoId, suiteKey, runKey }).then((r) => (r && r.ok ? r.result : null));
+    const failedEnvelope = (doc) => ({
+      ok: false,
+      code: (doc.error && doc.error.code) || 'RUN_FAILED',
+      message: (doc.error && doc.error.message) || 'okf.labErrors.suiteRunFailed'
+    });
+    const first = await fetchDoc();
+    if (onProgress && first && first.progress && first.progress.total) onProgress(first.progress);
+    // Fast path keeps the SAME contract as the slow path: a failed run maps
+    // to the failed envelope (not ok:true), a finished run to its doc.
+    if (first && first.status === 'failed') return failedEnvelope(first);
+    if (first && !first.status) return { ok: true, result: first };
+    return pollJob({
+      fetchDoc,
+      pollMs: 2500,
+      deadlineMs: 6 * 60 * 1000,
+      isRunning: (doc) => !doc || doc.status === 'running',
+      onProgress,
+      timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runUnusuallyLong' },
+      failed: { code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' },
+      done: (doc) => (doc.status === 'failed' ? failedEnvelope(doc) : { ok: true, result: doc }),
+      signal
+    });
+  },
+
   /** Story 1-8c — explain ONE query's gate outcome; the result carries
    * suggestion {tags, source, reason} when the head (wrongly) claims it.
    * The teaching half of the Lab loop. */
@@ -1256,39 +1455,26 @@ const actions = {
    * Polling lives here rather than in the component so the dialog's existing
    * spinner and error handling stay untouched.
    */
-  async headSuiteExplainFailures(_ctx, { repoId, suiteKey } = {}) {
+  async headSuiteExplainFailures(_ctx, { repoId, suiteKey, signal } = {}) {
     try {
       const started = await headTestService.explainSuiteFailures(repoId, suiteKey);
       // Tolerate a synchronous server that answers 200 with the advice inline
       // (no run_key), so the frontend is not coupled to deploy order.
       if (!started || !started.run_key) return { ok: true, result: started };
-      const POLL_MS = 2000;
-      // A ceiling, so a wedged job surfaces as a readable error instead of an
-      // endless spinner. The doc keeps its state server-side regardless — this
-      // only stops the client waiting forever.
-      const DEADLINE_MS = 15 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'EXPLAIN_TIMEOUT',
-            message:
-              'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await headTestService.getExplainFailures(repoId, suiteKey, started.run_key);
-        if (!doc || doc.status === 'running') continue;
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
-            message: (doc.error && doc.error.message) || 'Explain failed'
-          };
-        }
-        return { ok: true, result: doc.payload };
-      }
+      // 15-min ceiling: a wedged job surfaces as a readable error instead of
+      // an endless spinner; the doc keeps its state server-side regardless.
+      return await pollJob({
+        fetchDoc: () => headTestService.getExplainFailures(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        deadlineMs: 15 * 60 * 1000,
+        signal,
+        timeout: {
+          code: 'EXPLAIN_TIMEOUT',
+          message: 'okf.labErrors.explainStillRunning'
+        },
+        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
+        done: (doc) => ({ ok: true, result: doc.payload })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1368,54 +1554,28 @@ const actions = {
   /** Generate a benchmark suite (202 + store-side poll until the doc lands).
    * onStarted(suite_key) fires when the 202 returns so the UI can offer
    * Cancel mid-generation (David 2026-10-18 requirement). */
-  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress } = {}) {
+  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
       if (typeof onStarted === 'function') onStarted(started.suite_key);
-      const POLL_MS = 2500;
       // The server NEVER kills a healthy long job (David 2026-10-18: never
-      // trash running work) — OKF_RAGAS_LONG_TIMEOUT_MS is only the
-      // unreachable-sidecar horizon. This UI horizon (24h) just bounds a
-      // left-open dialog; the job keeps running server-side and the
-      // timeout message says so.
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // A transient gateway failure (kong restart = 502) must not kill the
-      // tracking loop — the server-side job keeps running regardless (live
-      // incident 2026-10-18). Give up only after ~2.5 min of solid failure.
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'GENERATION_TIMEOUT',
-            message: 'The generation is still running — reopen the Lab later; nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getSuite(repoId, started.suite_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'generating') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
-            message: (doc.error && doc.error.message) || 'Generation failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      // trash running work) — the 24h UI horizon only bounds a left-open
+      // dialog; the job keeps running server-side and the timeout says so.
+      return await pollJob({
+        fetchDoc: () => ragasService.getSuite(repoId, started.suite_key),
+        pollMs: 2500,
+        signal,
+        isRunning: (doc) => !doc || doc.status === 'generating',
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'GENERATION_TIMEOUT',
+          message: 'okf.labErrors.generationStillRunning'
+        },
+        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
+        done: (doc) => ({ ok: true, result: doc })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1482,7 +1642,7 @@ const actions = {
    * tracked and does not connect to the UI with a progress bar… I cannot stop
    * the re-scoring"). opts.onStarted receives the NEW run key — that is the
    * cancel target, not the source run's key. */
-  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload, onProgress, onStarted } = {}) {
+  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload, onProgress, onStarted, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
@@ -1493,48 +1653,25 @@ const actions = {
         return {
           ok: false,
           code: 'RESCORE_NOT_STARTED',
-          message: 'The re-score did not start — the server accepted the request but returned no run to track.'
+          message: 'okf.labErrors.rescoreNotStarted'
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as the run poll (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'RUN_TIMEOUT',
-            message: 'The re-score is still executing on the server — reopen the Lab later to see its result.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RESCORE_FAILED',
-            message: (doc.error && doc.error.message) || 'Re-score failed'
-          };
-        }
-        if (doc.status === 'cancelled') {
-          return { ok: false, code: 'RUN_CANCELLED', message: 'Re-score cancelled by user', result: doc };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'RUN_TIMEOUT',
+          message: 'okf.labErrors.rescoreStillRunning'
+        },
+        failed: { code: 'RESCORE_FAILED', message: 'okf.labErrors.rescoreFailed' },
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.rescoreCancelled', result: doc }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1616,7 +1753,10 @@ const actions = {
 
   /** Run the suite (202 + store-side poll with live progress). opts.onProgress
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
-  async ragasRun(_ctx, { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted } = {}) {
+  async ragasRun(
+    _ctx,
+    { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted, signal } = {}
+  ) {
     try {
       ensureServices();
       const body = { ...(metrics ? { metrics } : {}) };
@@ -1632,53 +1772,28 @@ const actions = {
         return {
           ok: false,
           code: 'RUN_NOT_STARTED',
-          message: 'The run did not start — the server accepted the request but returned no run to track.'
+          message: 'okf.labErrors.runNotStarted'
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
-      const POLL_MS = 2000;
-      // Judge-bound run — the server never times out a live job (see
-      // generateRagasSuite above); 24h bounds only this open dialog.
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'RUN_TIMEOUT',
-            message: 'The run is still executing on the server — reopen the Lab later to see its result.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RUN_FAILED',
-            message: (doc.error && doc.error.message) || 'Run failed'
-          };
-        }
-        // A cancelled run is NOT a result (2026-10-21 review F4): the poll's
-        // own twin ragasAdoptRun handles this — without the branch a cancelled
-        // run resolved ok:true and rendered an empty results section.
-        if (doc.status === 'cancelled') {
-          return { ok: false, code: 'RUN_CANCELLED', message: 'Run cancelled by user', result: doc };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'RUN_TIMEOUT',
+          message: 'okf.labErrors.runStillRunning'
+        },
+        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
+        // A cancelled run is NOT a result (2026-10-21 review F4) — without
+        // this branch a cancelled run resolved ok:true and rendered an empty
+        // results section.
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled', result: doc }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1692,40 +1807,26 @@ const actions = {
    * reopen (David 2026-10-18: refreshing must never orphan the UI from an
    * in-flight run — the run doc is the source of truth). Same poll loop and
    * envelope as ragasRun, minus the start call. */
-  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress, signal } = {}) {
     try {
       ensureServices();
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return { ok: false, code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, runKey);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed' || doc.status === 'cancelled') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RUN_FAILED',
-            message: (doc.error && doc.error.message) || 'Run failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, runKey),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runStillExecuting' },
+        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
+        // Cancelled is its OWN arm (round 20, #79900): folding it into
+        // RUN_FAILED rendered "Run failed" for a run someone deliberately
+        // stopped — the operator retries a run that intentionally never
+        // happened, and telemetry counts a phantom RUN_FAILED. The sibling
+        // polls answer RUN_CANCELLED; the Lab translates this key.
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled' }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1737,40 +1838,19 @@ const actions = {
 
   /** Adopt an ALREADY-GENERATING suite after a refresh/reopen — same poll
    * as ragasGenerate's tail; the generating envelope carries live progress. */
-  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress } = {}) {
+  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress, signal } = {}) {
     try {
       ensureServices();
-      const POLL_MS = 2500;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2.5 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return { ok: false, code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getSuite(repoId, suiteKey);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'generating') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
-            message: (doc.error && doc.error.message) || 'Generation failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getSuite(repoId, suiteKey),
+        pollMs: 2500,
+        signal,
+        isRunning: (doc) => !doc || doc.status === 'generating',
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: { code: 'GENERATION_TIMEOUT', message: 'okf.labErrors.generationStillServerSide' },
+        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
+        done: (doc) => ({ ok: true, result: doc })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1825,7 +1905,8 @@ const actions = {
 
   /** Quiet fetch of the PERSISTED explain for a run — the advisor auto-load.
    * A 404 (the run was never explained) is a normal state, not an error —
-   * silent: true keeps the shared httpService from logging [OKF-ERR] for it. */
+   * silent: true keeps the shared httpService from toasting/console-logging
+   * it; the caller owns the outcome. */
   async ragasGetExplainQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
     try {
       ensureServices();
@@ -1938,40 +2019,24 @@ const actions = {
   },
 
   /** Explain failures (202 + store-side poll). */
-  async ragasExplain(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+  async ragasExplain(_ctx, { repoId, suiteKey, runKey, onProgress, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.explainFailures(repoId, suiteKey, runKey ? { run_key: runKey } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 15 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'EXPLAIN_TIMEOUT',
-            message: 'The explain is still running — reopen the Lab later; nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
-        if (!doc || doc.status === 'running') {
-          // Phase + elapsed from the server's explain-progress map — the
-          // advisor is ONE reasoning-judge call that can legitimately think
-          // for minutes; a dead button reads as broken (2026-10-21).
-          if (doc && doc.progress && typeof onProgress === 'function') onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
-            message: (doc.error && doc.error.message) || 'Explain failed'
-          };
-        }
-        return { ok: true, result: doc.payload };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getExplain(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        deadlineMs: 15 * 60 * 1000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'EXPLAIN_TIMEOUT',
+          message: 'okf.labErrors.explainStillRunningShort'
+        },
+        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
+        done: (doc) => ({ ok: true, result: doc.payload })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -2060,7 +2125,12 @@ Object.keys(actions).forEach((key) => {
 
 export default {
   namespaced: true,
-  state: initialState(),
+  // Round 21: `initialState()` (INVOKED at import) created ONE object shared
+  // by every store that registers this module — the jest suites' buildStore()
+  // instances mutated each other's state through it. Vuex's module contract
+  // takes the FACTORY here and calls it per store, so each store gets its
+  // own deep-fresh state.
+  state: initialState,
   getters,
   mutations,
   actions: actionsWithServices

@@ -35,7 +35,7 @@ window.APP_CONFIG = {
   proxyHost: "${VUE_PROXY_HOST:-localhost}",
   cspConnectSrc: "${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}",
   availableLocales: "${VUE_APP_AVAILABLE_LOCALES:-}",
-  okfEnabled: "${VUE_APP_OKF_ENABLED:-1}",
+  okfEnabled: "${VUE_APP_OKF_ENABLED:-0}",
   streamIdleTimeoutMs: "${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}",
   keycloak: {
     url: "${KEYCLOAK_URL}",

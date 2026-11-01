@@ -898,6 +898,7 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import RagasGuideDialog from './RagasGuideDialog.vue';
 import translateMixin from '../../../mixins/translateMixin';
+import { translateLabError } from '../../../services/okfRepoOps';
 import { useChartTheme } from '@/composables/useChartTheme';
 
 const DEFAULT_METRICS = ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'];
@@ -965,6 +966,12 @@ export default {
   },
   data() {
     return {
+      // Cancel token for every Testing-Lab poll this panel starts (round 16,
+      // #80124): the store's pollJob checks it each tick, so unmounting the
+      // panel stops the client loop within one cadence. The SERVER job is
+      // untouched — reopening the Lab re-adopts it (ragasAdoptRun /
+      // ragasAdoptGeneration).
+      pollSignal: { aborted: false },
       showHelp: false,
       showGuide: false,
       repoChoices: [],
@@ -1604,6 +1611,12 @@ export default {
     if (this.initialSuiteKey) this.loadSuite(this.initialSuiteKey);
     else this.loadLatest();
   },
+  beforeUnmount() {
+    // Stop every poll this panel owns (round 16, #80124) — without this, a
+    // closed Lab kept polling the gateway every 2s for up to the 24h UI
+    // horizon. The jobs keep running server-side; the Lab re-adopts them.
+    this.pollSignal.aborted = true;
+  },
   methods: {
     /** Coarse human duration for ETAs and elapsed clocks. Type-safe: the
      * progress payload is server JSON that evolves — a malformed eta must
@@ -2034,6 +2047,7 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey,
           runKey: running._key,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.runProgress = p;
           }
@@ -2043,8 +2057,10 @@ export default {
             this.runDoc = res.result;
             this.refreshHistory();
             this.$emit('changed');
-          } else {
-            this.error = res.message;
+          } else if (res.code !== 'POLL_ABORTED') {
+            // POLL_ABORTED means this panel went away — nothing to show.
+            // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+            this.error = translateLabError(res.message, this.translate);
           }
         })
         .finally(() => {
@@ -2064,6 +2080,7 @@ export default {
         .dispatch('okf/ragasAdoptGeneration', {
           repoId: this.repo && this.repo.repo_id,
           suiteKey,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.genProgress = p;
           }
@@ -2072,8 +2089,9 @@ export default {
           if (res.ok) {
             this.suite = res.result;
             this.$emit('changed');
-          } else {
-            this.error = res.message;
+          } else if (res.code !== 'POLL_ABORTED') {
+            // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+            this.error = translateLabError(res.message, this.translate);
           }
         })
         .finally(() => {
@@ -2109,6 +2127,7 @@ export default {
             judge_config_key: this.genConfigKey || undefined,
             judge_model: this.genConfigKey ? this.genModel || undefined : undefined
           },
+          signal: this.pollSignal,
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
           },
@@ -2121,8 +2140,9 @@ export default {
           this.$emit('changed');
         } else if (res.code === 'GENERATION_IN_FLIGHT') {
           adopted = await this.adoptRunningGeneration();
-        } else {
-          this.error = res.message;
+        } else if (res.code !== 'POLL_ABORTED') {
+          // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+          this.error = translateLabError(res.message, this.translate);
         }
       } finally {
         if (!adopted) {
@@ -2193,33 +2213,28 @@ export default {
       if (res.ok) this.suite = res.result;
       else this.error = res.message;
     },
+    // One dispatch-and-apply for every row mutation (review !622 wave 2,
+    // #78697 — onEditEntry/onFlipEntry/onRemoveEntry were three copies of
+    // this envelope and tail).
+    async patchSuite(payload) {
+      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        payload
+      });
+      if (res.ok) this.suite = res.result;
+      else this.error = res.message;
+      return res;
+    },
     async onEditEntry(entry, field, value) {
       if (value === entry[field]) return;
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { modifications: [{ id: entry.id, [field]: value }] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ modifications: [{ id: entry.id, [field]: value }] });
     },
     async onFlipEntry(entry) {
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { modifications: [{ id: entry.id, flip_oos: !entry.oos }] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ modifications: [{ id: entry.id, flip_oos: !entry.oos }] });
     },
     async onRemoveEntry(entry) {
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { remove_ids: [entry.id] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ remove_ids: [entry.id] });
     },
     async onAddQuery() {
       const query = window.prompt(this.translate('okf.ragas.suite.addPrompt', 'Question to add:'));
@@ -2265,6 +2280,7 @@ export default {
           // 8-7: explicit judge pick ('' fields simply omit the override)
           judge_config_key: this.judgeConfigKey || undefined,
           judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined,
+          signal: this.pollSignal,
           onStarted: (runKey) => {
             this.runningRunKey = runKey;
           },
@@ -2283,8 +2299,9 @@ export default {
           // The user stopped it — not a failure, and it must not read as one.
           // The finally block refreshes the history, so the row turns
           // 'cancelled' on its own.
-        } else {
-          this.error = res.message;
+        } else if (res.code !== 'POLL_ABORTED') {
+          // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+          this.error = translateLabError(res.message, this.translate);
         }
       } finally {
         this.runBusy = false;
@@ -2434,6 +2451,7 @@ export default {
             judge_config_key: this.rescoreConfigKey || undefined,
             judge_model: this.rescoreConfigKey && this.rescoreModel ? this.rescoreModel : undefined
           },
+          signal: this.pollSignal,
           onStarted: (newKey) => {
             this.runningRunKey = newKey;
             // The new row shows up in the history as a running re-score, so
@@ -2449,8 +2467,15 @@ export default {
             // The user stopped it — that is not a failure and must not read
             // as one. The history refresh in the finally block shows the row
             // as cancelled.
+          } else if (res.code === 'POLL_ABORTED') {
+            // The panel went away mid-poll — nothing to show, nothing to retry.
+            return;
           } else {
-            this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
+            // #80805: RESCORE_NOT_STARTED/RUN_TIMEOUT/RESCORE_FAILED messages
+            // are okf.labErrors.* keys; a server message passes through.
+            this.error =
+              translateLabError(res.message, this.translate) ||
+              this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
             this.rescoreAsk = source; // back for a retry, with the same pick
           }
           return;
@@ -2515,12 +2540,14 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           runKey: this.runDoc && this.runDoc._key,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.explainProgress = p || null;
           }
         });
         if (res.ok) this.explainDoc = res.result;
-        else this.error = res.message;
+        // #80805: EXPLAIN_TIMEOUT/EXPLAIN_FAILED messages are okf.labErrors.* keys.
+        else if (res.code !== 'POLL_ABORTED') this.error = translateLabError(res.message, this.translate);
       } finally {
         this.explainBusy = false;
         this.explainProgress = null;

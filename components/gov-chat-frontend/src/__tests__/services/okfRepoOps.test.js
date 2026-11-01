@@ -177,6 +177,98 @@ describe('okfRepoOps.addConcept + appendToIndexToc', () => {
     expect(res2.index_updated).toBe(false); // best-effort, never fails the create
     expect(mockImport).toHaveBeenCalledTimes(2);
   });
+
+  // Round 11 (!622): the line must land AFTER the Contents block, never at
+  // the end of the body — once a curator puts content below the TOC, an
+  // end-append lands detached and the index drifts from the concept set.
+  it('inserts the TOC line after the Contents LIST when body content follows it', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\n- [Existing](concepts/existing.md)\n\nReal content follows here.\n\nMore body.'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'Wildlife',
+      type: 'topic',
+      body: '# Wildlife',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+
+    const patched = mockPatchBody.mock.calls[0][2];
+    // The new line is ADJACENT to the existing list entry (same block)...
+    expect(patched).toContain('- [Existing](concepts/existing.md)\n- [Wildlife](concepts/wildlife.md)');
+    // ...and the body content stays AFTER the list, not before the new line.
+    const lineAt = patched.indexOf('- [Wildlife](concepts/wildlife.md)');
+    const contentAt = patched.indexOf('Real content follows here.');
+    expect(contentAt).toBeGreaterThan(lineAt);
+    expect(patched).toContain('More body.');
+  });
+
+  it('inserts directly under an EMPTY Contents heading', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\nBody already below.'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'Wildlife',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched = mockPatchBody.mock.calls[0][2];
+    const headAt = patched.indexOf('## Contents');
+    const lineAt = patched.indexOf('- [Wildlife](concepts/wildlife.md)');
+    const bodyAt = patched.indexOf('Body already below.');
+    expect(headAt).toBeLessThan(lineAt);
+    expect(lineAt).toBeLessThan(bodyAt);
+  });
+
+  // Round 20, #80799: a paragraph on the line right after the inserted
+  // bullet is a LAZY CONTINUATION of that item in CommonMark — the content
+  // rendered INSIDE the TOC and vanished from the body. A blank line must
+  // separate the bullet from whatever follows, on every insert.
+  it('keeps a BLANK LINE between the inserted bullet and the content below', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\n- [A](concepts/a.md)\n\nSome real content below the TOC.\n'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'B',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched = mockPatchBody.mock.calls[0][2];
+    expect(patched).toContain('- [B](concepts/b.md)\n\nSome real content below the TOC.');
+    // and under an empty heading too
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\nContent under an empty TOC.\n'
+    });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'C',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched2 = mockPatchBody.mock.calls[1][2];
+    expect(patched2).toContain('- [C](concepts/c.md)\n\nContent under an empty TOC.');
+  });
 });
 
 describe('okfRepoOps.applyLabel / deleteConcept', () => {
@@ -225,31 +317,6 @@ describe('okfRepoOps lifecycle', () => {
     expect(mockLifecycle).toHaveBeenCalledWith('r-1', 'submit', { sub: 'u1' });
     expect(res.lifecycle_state).toBe('review');
   });
-
-  it('publish / ingest / retract route the right action strings', async () => {
-    mockLifecycle.mockResolvedValue({ ok: true });
-    await ops.publish('r-1');
-    await ops.ingest('r-1');
-    await ops.retract('r-1');
-    expect(mockLifecycle).toHaveBeenNthCalledWith(1, 'r-1', 'publish', {});
-    expect(mockLifecycle).toHaveBeenNthCalledWith(2, 'r-1', 'ingest', {});
-    expect(mockLifecycle).toHaveBeenNthCalledWith(3, 'r-1', 'retract', {});
-  });
-
-  it('deleteRepo and listVersions pass through', async () => {
-    mockDeleteRepo.mockResolvedValue({ status: 'deleted' });
-    mockListVersions.mockResolvedValue([{ bundle_version: 1 }]);
-    await ops.deleteRepo('r-1');
-    const versions = await ops.listVersions('r-1');
-    expect(mockDeleteRepo).toHaveBeenCalledWith('r-1');
-    expect(versions).toHaveLength(1);
-  });
-
-  it('createVersion mints with the manual trigger', async () => {
-    mockMintVersion.mockResolvedValue({ bundle_version: 2 });
-    await ops.createVersion('r-1', { sub: 'u' });
-    expect(mockMintVersion).toHaveBeenCalledWith('r-1', { trigger: 'manual' }, { sub: 'u' });
-  });
 });
 
 describe('okfRepoOps zip export / import', () => {
@@ -274,7 +341,14 @@ describe('okfRepoOps zip export / import', () => {
     );
     expect(name).toBe('demo-v3.zip');
     expect(URL.createObjectURL).toHaveBeenCalled();
-    expect(URL.revokeObjectURL).toHaveBeenCalled();
+    // Round 16, #80128: revocation is DEFERRED to the next task — revoking
+    // in the same task as the click can cancel the browser's asynchronous
+    // blob snapshot (empty/partial download). Not yet revoked here…
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    // …revoked exactly once, one macrotask later.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
   });
 
   it('exportRepoZip falls back to a name-derived file name without the header', async () => {

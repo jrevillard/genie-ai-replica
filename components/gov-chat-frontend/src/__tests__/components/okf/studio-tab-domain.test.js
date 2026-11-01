@@ -55,7 +55,7 @@ const OkfStudioTab = require('@/components/okf/StudioTab.vue').default;
 // module; dispatch is spied so assertions see the exact payloads.
 function buildStore() {
   const store = new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
   const dispatch = jest.spyOn(store, 'dispatch');
   return { store, dispatch };
@@ -104,6 +104,36 @@ it('the create action is disabled until a Subject Area is explicitly picked', as
   wrapper.unmount();
 });
 
+// Round 21 audit (#80912): the dashboard's "+ New repository" dialog is the
+// TESTED twin of Entry.vue's index-import-failure branch — deleting the
+// result.repo block left this suite green while stewards got a blind
+// "failed" for a repo that WAS created (a retry then mints a second one).
+it('a created repo whose index import failed says open-it, not retry (#80123 consumer)', async () => {
+  const { store, dispatch } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  wrapper.vm.createOpen = true;
+  wrapper.vm.createName = 'Permits';
+  wrapper.vm.createDomain = 'Water Supply';
+  dispatch.mockImplementation((action) =>
+    action === 'okf/createRepo'
+      ? Promise.resolve({
+          ok: false,
+          code: 'CREATE_FAILED',
+          message: 'import failed',
+          repo: { repo_id: 'r-half', name: 'Permits', domain: 'Water Supply' }
+        })
+      : Promise.resolve({})
+  );
+  await wrapper.vm.onCreateAction('create');
+  expect(wrapper.vm.createError).toMatch(/created, but its starter index could not be imported/i);
+  expect(wrapper.vm.createOpen).toBe(true); // the dialog stays with the message
+  // Exactly ONE create dispatch ran — the envelope must not invite a retry.
+  const createCalls = dispatch.mock.calls.filter(([action]) => action === 'okf/createRepo');
+  expect(createCalls).toHaveLength(1);
+  wrapper.unmount();
+});
+
 it('a zip import without a Subject Area is refused and never dispatched', async () => {
   const { store, dispatch } = buildStore();
   const wrapper = mountTab(store);
@@ -134,5 +164,32 @@ it('zip import: selection STAGES, the Create click creates → navigates → imp
   );
   expect(mockImportZip).toHaveBeenCalledWith(expect.objectContaining({ repoId: 'r1', classification: 'llm' }));
   expect(wrapper.vm.view).toBe('dashboard'); // the card is the progress surface
+  wrapper.unmount();
+});
+
+// Round 18, #80489: the view switch sat OUTSIDE the repoId guard — a
+// repo-less 'okf:okf-repo-created' dispatch flipped to the repo shell with
+// a null activeRepoId and the v-if rendered NOTHING (blank pane).
+it('a repo-less okf-repo-created event is ignored (no blank repo shell)', async () => {
+  const { store } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  const before = wrapper.vm.view;
+  wrapper.vm.onOkfRepoCreated({ detail: {} }); // no repo_id
+  await wrapper.vm.$nextTick();
+  expect(wrapper.vm.view).toBe(before); // still dashboard, not a blank 'repo'
+  expect(wrapper.vm.activeRepoId).toBeNull();
+  wrapper.unmount();
+});
+
+// Round 18, #80478: StudioTab signals readiness from mounted() AFTER its
+// entry-point listeners are registered — the AdminDashboard defers its
+// hand-off dispatches on this emit while the async chunk loads.
+it('emits studio-ready on mount (the async-chunk hand-off handshake)', async () => {
+  const { store } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  expect(wrapper.emitted('studio-ready')).toBeTruthy();
+  expect(wrapper.emitted('studio-ready')).toHaveLength(1);
   wrapper.unmount();
 });

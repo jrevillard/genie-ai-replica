@@ -139,6 +139,33 @@ describe('Amendment A — A1 write-back / A2 gate / A3 create-on-advance', () =>
     expect(wrapper.text()).toMatch(/already exists/i);
   });
 
+  // Round 20 (#80123): the repo EXISTS server-side but its index skeleton
+  // failed to import — the envelope carries it. The copy must say "open it
+  // from the dashboard", never a blind "failed" that invites a retry (which
+  // mints a SECOND repo while the first lingers as an orphan draft card).
+  it('A3: a created repo whose index import failed says open-it, not retry', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper } = mountWithStore(null, () =>
+      Promise.resolve({
+        ok: false,
+        code: 'CREATE_FAILED',
+        message: 'import failed',
+        repo: { repo_id: 'r-half', name: 'Permits', domain: 'Water Supply' }
+      })
+    );
+    await wrapper.vm.$nextTick();
+    wrapper.vm.local.name = 'Permits';
+    wrapper.vm.local.domain = 'Water Supply';
+    await wrapper.vm.$nextTick();
+    const ok = await wrapper.vm.beforeAdvance();
+    expect(ok).toBe(false);
+    expect(wrapper.text()).toMatch(/created, but its starter index could not be imported/i);
+    // No minted identity was written back — the advance did NOT happen.
+    const updates = wrapper.emitted('update') || [];
+    const last = updates.length ? updates[updates.length - 1][0] : {};
+    expect(last.repo_id).toBeUndefined();
+  });
+
   it('A3 idempotency: a draft with a repo_id never creates again', async () => {
     mockLoad.mockResolvedValue(KH);
     const { wrapper, dispatch } = mountWithStore({ repo_id: 'r-exists', name: 'X', domain: 'Water Supply' });

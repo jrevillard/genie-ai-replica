@@ -183,7 +183,16 @@ export default {
     repoId: { type: String, required: true },
     readOnly: { type: Boolean, default: false },
     showTitle: { type: Boolean, default: true },
-    compact: { type: Boolean, default: false }
+    compact: { type: Boolean, default: false },
+    // Awaitable pre-save flush (round 18, #80479): the host passes a function
+    // returning the embedded concept editor's autosave promise; onSave awaits
+    // it before reading /index.md. $emit CANNOT carry this — Vue 3's emit
+    // discards the handler's return value, which is exactly why the old
+    // `flush-before-save` event was a fire-and-forget notification and the
+    // flushed PATCH could commit after the panel's own save had already read
+    // a stale body. Hosts without a concept editor omit the prop and the
+    // notification event still fires.
+    flusher: { type: Function, default: null }
   },
   emits: ['saved', 'error', 'flush-before-save'],
   data() {
@@ -356,11 +365,13 @@ export default {
     },
     async onSave() {
       if (!this.canSave) return;
-      // Race-condition guard: ask the parent to flush any debounced
-      // autosave before the two-write save. The parent forwards to
-      // the embedded concept editor's flushPendingSave(). If no
-      // parent listens, the emit is a no-op.
-      this.$emit('flush-before-save');
+      // Race-condition guard: flush any debounced autosave BEFORE the
+      // two-write save reads /index.md. With the `flusher` prop the host
+      // returns the editor's autosave promise and we AWAIT it (round 18,
+      // #80479) — the flushed PATCH commits first. Without a flusher the
+      // legacy notification event still fires (best-effort, no ordering).
+      if (this.flusher) await this.flusher();
+      else this.$emit('flush-before-save');
       this.saving = true;
       this.error = null;
       try {

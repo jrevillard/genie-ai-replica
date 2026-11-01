@@ -658,7 +658,7 @@ export default {
 
 <style scoped>
 .okf-pii {
-  border: 1px solid var(--warning, #b45309);
+  border: 1px solid var(--warning);
   border-left-width: 3px;
   border-radius: var(--radius-md);
   padding: var(--space-md);
@@ -680,7 +680,7 @@ export default {
 .okf-pii__error {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--danger, #b91c1c);
+  color: var(--danger);
 }
 /* PERSISTED 'error' VERDICT (2026-10-12): a failed scan is not a clean scan.
    It gets its own block, in the danger tone, above the findings — the gate is
@@ -743,8 +743,12 @@ export default {
   outline: 2px solid var(--accent);
 }
 .okf-pii__mark {
-  background: var(--warning, #f59e0b);
-  color: #111;
+  /* Round 18, #80491: the paired --warning-ink token (darkened warning on
+     light ground, the badge token itself on dark) replaces the hardcoded
+     near-black — the old #111 rendered near-black text on the amber token
+     in dark theme. */
+  background: var(--warning);
+  color: var(--warning-ink);
   border-radius: 3px;
   padding: 0 2px;
   font-weight: 600;
@@ -799,16 +803,16 @@ export default {
 .okf-pii__diff {
   font-size: var(--text-sm);
   font-family: var(--font-mono, monospace);
-  background: color-mix(in srgb, var(--success, #16a34a) 8%, transparent);
+  background: color-mix(in srgb, var(--success) 8%, transparent);
   border-radius: var(--radius-sm);
   padding: 2px var(--space-sm);
   overflow-wrap: anywhere;
 }
 .okf-pii__before {
-  color: var(--danger, #b91c1c);
+  color: var(--danger);
 }
 .okf-pii__after {
-  color: var(--success, #16a34a);
+  color: var(--success);
   text-decoration: none;
   font-weight: 600;
 }

@@ -212,14 +212,33 @@ const headTestService = {
     // endless spinner. The job doc keeps its state server-side regardless.
     const DEADLINE_MS = 15 * 60 * 1000;
     const deadline = Date.now() + DEADLINE_MS;
+    // TRANSIENT TOLERANCE (round 18, #80482): a single failed GET (one 502
+    // during a 12-minute advisor run — the 2026-10-18 gateway-restart class)
+    // used to reject out of the loop and map to ADVISE_FAILED while the
+    // server-side job completed fine. Same cap as the store's pollJob: up to
+    // 60 consecutive misses (~2 min at this cadence) before giving up.
+    let misses = 0;
     for (;;) {
       if (Date.now() > deadline) {
-        throw new Error(
+        // ADVISOR_TIMEOUT (#80805): the code lets the Lab's error path pick
+        // the translated sentence; the English message stays as the fallback
+        // for callers that render it verbatim. Same shape as the failed-doc
+        // throw below (RECOMMEND_FAILED).
+        const e = new Error(
           'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
         );
+        e.code = 'ADVISOR_TIMEOUT';
+        throw e;
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-      const doc = await this.getRecommendJob(repoId, started.job_key);
+      let doc;
+      try {
+        doc = await this.getRecommendJob(repoId, started.job_key);
+        misses = 0;
+      } catch (err) {
+        if (++misses >= 60) throw err;
+        continue;
+      }
       if (!doc || doc.status === 'running') continue;
       if (doc.status === 'failed') {
         const e = new Error((doc.error && doc.error.message) || 'Advisor failed');

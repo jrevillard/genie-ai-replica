@@ -74,6 +74,25 @@ export function tallyPiiStates(concepts) {
 }
 
 /**
+ * Parse a timestamp into epoch MILLISECONDS — the ONE normalizer for the
+ * mixed-writer stamp class (ISO strings vs numeric epochs; round 17 #80357,
+ * consolidated round 18 #80464 — hand-rolled copies in three files were how
+ * the third stale-compare stayed broken).
+ *
+ * - numeric epochs: seconds-scale values (< 1e11 ms ≈ 1973-5138) are
+ *   normalized ×1000; millis stamps pass through
+ * - anything else: Date.parse; unparseable → null (callers fail CLOSED)
+ *
+ * @param {string|number} v
+ * @returns {number|null}
+ */
+export function toEpochMs(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
  * Does `ack` (the repository's pii_ack) cover the findings on screen NOW?
  *
  * A stewardship acknowledgement is a claim about a specific scan: "I reviewed
@@ -95,7 +114,17 @@ export function isAckCurrent(ack, hitCount, scannedAt) {
   // the scan found now describes a different set of pages.
   if (flagged !== Number(hitCount)) return false;
   // An acknowledgement older than the scan is a review of a previous scan.
-  if (scannedAt && ack.at && String(ack.at) < String(scannedAt)) return false;
+  // Compare PARSED instants, never the raw strings (round 16, #80121): the
+  // two sides come from different writers (an ISO stamp vs a numeric epoch
+  // serializes to '2026…' vs '1729…', whose lexicographic order is
+  // meaningless) — and a meaningless comparison here fails OPEN on the PII
+  // gate. Anything unparseable also fails CLOSED (not current).
+  if (scannedAt && ack.at) {
+    const ackMs = toEpochMs(ack.at);
+    const scanMs = toEpochMs(scannedAt);
+    if (ackMs === null || scanMs === null) return false;
+    if (ackMs < scanMs) return false;
+  }
   return true;
 }
 

@@ -145,27 +145,6 @@ class HttpService {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // [DIAG 2026-09-15] Publish/lifecycle 502 — David: trace EVERY outgoing
-    // /api/okf request so we can see whether the request left the browser
-    // (CORS pre-flight, baseUrl, URL string, method, payload shape) and what
-    // headers/method actually went on the wire. Side-effect on globalThis so
-    // it CANNOT be tree-shaken away and a global probe stays available.
-    try {
-      if (config && config.url && String(config.url).indexOf('/api/okf') !== -1) {
-        const m = config.method ? config.method.toUpperCase() : 'GET';
-        const u = String(config.url);
-        const auth =
-          config.headers && config.headers.Authorization ? String(config.headers.Authorization).slice(0, 30) : '(none)';
-        const t0 = Date.now();
-        config.__okfT0 = t0;
-        console.warn('[OKF-OUT]', m, u, 'baseURL=' + this.baseUrl, 'auth=' + auth, 't0=' + t0);
-        if (typeof window !== 'undefined') {
-          window.__okfLog = (window.__okfLog || []).concat(['OUT ' + m + ' ' + u + ' t0=' + t0]);
-        }
-      }
-    } catch {
-      /* never throw from a logger */
-    }
     return config;
   }
 
@@ -185,29 +164,6 @@ class HttpService {
    * @returns {Object} Response object
    */
   handleResponse(response) {
-    // [DIAG 2026-09-15] Companion to the request-side log — captures the FULL
-    // response (status, headers, body) for any /api/okf call. globalThis side
-    // effect so the log survives minification + we can recover it later.
-    try {
-      if (
-        response &&
-        response.config &&
-        response.config.url &&
-        String(response.config.url).indexOf('/api/okf') !== -1
-      ) {
-        console.warn(
-          '[OKF-IN]',
-          response.status,
-          response.config.url,
-          'ct=' + (response.headers && response.headers['content-type'])
-        );
-        if (typeof window !== 'undefined') {
-          window.__okfLog = (window.__okfLog || []).concat(['IN ' + response.status + ' ' + response.config.url]);
-        }
-      }
-    } catch {
-      /* never throw from a logger */
-    }
     return response;
   }
 
@@ -239,7 +195,14 @@ class HttpService {
             try {
               return await this.axios(originalRequest);
             } catch (retryError) {
-              const retryStatus = retryError.response ? retryError.response.status : null;
+              // The retried request re-enters THIS interceptor: a second 401
+              // skips the refresh branch (._retryCount is set) and is
+              // normalized to the {status, ...} envelope — which carries NO
+              // .response. Read the status from both shapes, or the 401-on-
+              // retry case (the one the escalation below exists for) was
+              // unreachable and every retried 401 looked like a server-side
+              // problem (round 23, review 81378).
+              const retryStatus = retryError.response ? retryError.response.status : (retryError.status ?? null);
               if (retryStatus !== 401) {
                 // Server-side problem: surface it verbatim. Redirecting here is
                 // how a gateway blip used to look like an expired session.
@@ -252,13 +215,21 @@ class HttpService {
         }
 
         // The refresh yielded no usable token, or the retry came back 401 —
-        // the only two cases where the session may genuinely be gone. Check the
-        // STORED user before discarding it.
-        const user = await keycloakAuthService.getUser();
-        if (!user || user.expired) {
-          if (typeof window !== 'undefined') {
-            await keycloakAuthService.login();
+        // the only two cases where the session may genuinely be gone. Check
+        // the STORED user before discarding it. The WHOLE escalation is
+        // guarded (round 16, #80131): a storage/session failure inside
+        // getUser()/login() must not replace the intended 401 rejection
+        // with an unrelated error shape — the caller always gets the
+        // {status, statusText, data, message} envelope below.
+        try {
+          const user = await keycloakAuthService.getUser();
+          if (!user || user.expired) {
+            if (typeof window !== 'undefined') {
+              await keycloakAuthService.login();
+            }
           }
+        } catch (escalationError) {
+          console.error('[HttpService] Session escalation failed:', escalationError.message);
         }
 
         return Promise.reject({
@@ -276,60 +247,6 @@ class HttpService {
         data: error.response.data,
         message: error.response.data?.message || 'An error occurred'
       };
-      // [DIAG 2026-09-15] Full error trace — print the exact upstream response
-      // so we can see whether 502 came from nginx/Kong/upstream and what body
-      // came back. Never throw from a logger. globalThis side effect so we can
-      // inspect from the browser DevTools even if console is muted.
-      try {
-        if (
-          originalRequest &&
-          originalRequest.url &&
-          String(originalRequest.url).indexOf('/api/okf') !== -1 &&
-          // silent callers (probe-style lookups, the deferred 10.5 drafts
-          // endpoint) already handle their own errors — a console.error per
-          // expected 404 is noise, not diagnostics (field report 2026-09-29).
-          !originalRequest.silent
-        ) {
-          const headers = error.response && error.response.headers;
-          const data = error.response && error.response.data;
-          const t0 = originalRequest.__okfT0;
-          const dt = t0 ? Date.now() - t0 : -1;
-          console.error(
-            '[OKF-ERR]',
-            status,
-            originalRequest.method && originalRequest.method.toUpperCase(),
-            originalRequest.url,
-            {
-              statusText,
-              responseHeaders: headers,
-              responseData: data,
-              message: error.message,
-              code: error.code,
-              durationMs: dt,
-              aborted: !error.response
-            }
-          );
-          if (typeof window !== 'undefined') {
-            window.__okfLog = (window.__okfLog || []).concat([
-              'ERR ' +
-                status +
-                ' ' +
-                originalRequest.url +
-                ' dt=' +
-                dt +
-                'ms' +
-                ' aborted=' +
-                !error.response +
-                ' msg=' +
-                (error.message || 'n/a') +
-                ' code=' +
-                (error.code || 'n/a')
-            ]);
-          }
-        }
-      } catch {
-        /* never throw from a logger */
-      }
 
       // Parse error for structured handling
       const parsedError = parseAuthError(error.response.data);

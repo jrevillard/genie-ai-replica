@@ -173,6 +173,7 @@ import DsSelect from './Select.vue';
 import DsFormGroup from './FormGroup.vue';
 import DsTable from './Table.vue';
 import DsDialog from './Dialog.vue';
+import translateMixin from '@/mixins/translateMixin';
 
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('bash', bash);
@@ -287,6 +288,14 @@ const STATUS_OPTIONS = [
 export default {
   name: 'DsOkfMarkdownEditor',
   components: { DsInput, DsSelect, DsFormGroup, DsTable, DsDialog, DsProgress },
+  // ROUND 23 (review 81280/81282): every `this.$t(key, 'English default')`
+  // below passed the default as vue-i18n 9 legacy's LOCALE-OVERRIDE
+  // argument — a string second argument to t() is the target LOCALE, so
+  // each lookup ran under a locale literally named 'Rendering…', missed,
+  // and fell back to English on EVERY call in EVERY locale. The mixin's
+  // translate(key, fallback) is the repo's raw-lookup form and is what
+  // these calls always meant.
+  mixins: [translateMixin],
   props: {
     value: { type: String, default: '' },
     mode: { type: String, default: 'split', validator: (v) => MODES.includes(v) },
@@ -343,7 +352,7 @@ export default {
       return this.enableFrontmatter && Object.keys(this.parsedData).length > 0;
     },
     renderLabel() {
-      const base = this.$t ? this.$t('okf.md.rendering', 'Rendering…') : 'Rendering…';
+      const base = this.translate('okf.md.rendering', 'Rendering…');
       const pct = Math.round((this.renderDone / (this.renderTotal || 1)) * 100);
       return base + ' ' + pct + '%';
     },
@@ -357,12 +366,12 @@ export default {
       return this.currentMode === 'split' || this.currentMode === 'source';
     },
     formatToolbarLabel() {
-      return this.$t ? this.$t('okf.md.toolbar', 'Formatting') : 'Formatting';
+      return this.translate('okf.md.toolbar', 'Formatting');
     },
     formatActions() {
       return FORMAT_ACTIONS.map((a) => ({
         ...a,
-        title: this.$t ? this.$t(a.titleKey, a.titleDefault) : a.titleDefault
+        title: this.translate(a.titleKey, a.titleDefault)
       }));
     },
     attestationPreview() {
@@ -378,34 +387,34 @@ export default {
       ];
     },
     sourcesLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.sources', 'provenance.sources') : 'provenance.sources';
+      return this.translate('okf.curator.frontmatter.sources', 'provenance.sources');
     },
     attestationLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.attestation', 'attestation') : 'attestation';
+      return this.translate('okf.curator.frontmatter.attestation', 'attestation');
     },
     statusLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.status', 'lifecycle.status') : 'lifecycle.status';
+      return this.translate('okf.curator.frontmatter.status', 'lifecycle.status');
     },
     staleAfterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after') : 'lifecycle.stale_after';
+      return this.translate('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after');
     },
     trustTierLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.trustTier', 'trust_tier') : 'trust_tier';
+      return this.translate('okf.curator.frontmatter.trustTier', 'trust_tier');
     },
     okfVersionLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.okfVersion', 'okf_version') : 'okf_version';
+      return this.translate('okf.curator.frontmatter.okfVersion', 'okf_version');
     },
     editFrontmatterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.edit', 'Edit frontmatter') : 'Edit frontmatter';
+      return this.translate('okf.curator.frontmatter.edit', 'Edit frontmatter');
     },
     editFrontmatterTitle() {
-      return this.$t ? this.$t('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter') : 'Edit frontmatter';
+      return this.translate('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter');
     },
     frontmatterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.label', 'Frontmatter') : 'Frontmatter';
+      return this.translate('okf.curator.frontmatter.label', 'Frontmatter');
     },
     showSourceLabel() {
-      return this.$t ? this.$t('okf.curator.showSource', 'Show source') : 'Show source';
+      return this.translate('okf.curator.showSource', 'Show source');
     },
     sourceAriaLabel() {
       return this.ariaLabel + ' — source';
@@ -472,22 +481,37 @@ export default {
   },
   methods: {
     // ── ASYNC CHUNKED RENDER (2026-09-13 "Page Unresponsive" fix) ─────────
-    // Fence-aware splitter: chunks break ONLY at line boundaries outside a
-    // ``` / ~~~ fence, so no code block is ever split across renders.
+    // Fence- and BLOCK-aware splitter. Fences never split (no code block
+    // across renders). Block boundaries (round 20, #79192): once the size
+    // threshold is crossed the cut WAITS for the next blank line, so a
+    // 60KB ordered list, table or blockquote is not severed mid-structure
+    // (each chunk renders independently — a mid-list seam restarted the
+    // numbering and duplicated table headers). A second hard window bounds
+    // the wait: a runaway block with no blank line still cuts at a line
+    // boundary, never mid-line, so the freeze fix keeps its guarantee.
     splitRenderChunks(body) {
       if (body.length <= 48000) return [body];
       const chunks = [];
       let start = 0;
       let fence = false;
       let i = 0;
+      let wantedAt = -1; // past this index, the next blank line is the cut
       while (i < body.length) {
         const nl = body.indexOf('\n', i);
         const lineEnd = nl === -1 ? body.length : nl + 1;
         const line = body.slice(i, lineEnd);
         if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-        if (!fence && lineEnd - start >= 48000) {
+        if (!fence && lineEnd - start >= 48000 && wantedAt < 0) wantedAt = lineEnd;
+        const blank = /^\s*\n?$/.test(line);
+        if (!fence && wantedAt > 0 && lineEnd > wantedAt && blank) {
           chunks.push(body.slice(start, lineEnd));
           start = lineEnd;
+          wantedAt = -1;
+        } else if (!fence && wantedAt > 0 && lineEnd - start >= 48000 * 2) {
+          // hard cap — no blank line within a second window; cut here.
+          chunks.push(body.slice(start, lineEnd));
+          start = lineEnd;
+          wantedAt = -1;
         }
         i = lineEnd;
       }
@@ -638,7 +662,14 @@ export default {
             ? { stale_after: this.draftFrontmatter.lifecycle.stale_after }
             : {})
         },
-        provenance: { sources: this.draftFrontmatter.provenance.sources }
+        // PRESERVE UNKNOWN KEYS under provenance (round 20, #79191): the
+        // import pipeline writes provenance.crawled_at / source_ids — a
+        // wholesale { sources } replacement silently dropped them on save.
+        // Same spread-and-override shape as the lifecycle block above.
+        provenance: {
+          ...(this.parsedData.provenance || {}),
+          sources: this.draftFrontmatter.provenance.sources
+        }
       };
       const body = this.contentBody;
       const next = matter.stringify(body, fm);

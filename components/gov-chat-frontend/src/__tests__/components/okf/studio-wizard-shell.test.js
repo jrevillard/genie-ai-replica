@@ -29,7 +29,7 @@ const StudioWizard = require('@/components/okf/StudioWizard.vue').default;
 
 function buildStore() {
   return new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
 }
 
@@ -174,6 +174,45 @@ describe('Amendment A slice 1 — the wizard shell contract', () => {
     const wrapper = mountWizard({ domain: 'Water Supply', studio_step: 0 }, buildStore());
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('Untitled repository');
+    wrapper.unmount();
+  });
+
+  it('#80805: the cloned-from rail renders through translate with {name}/{version} filled', async () => {
+    const store = buildStore();
+    store.commit('okf/upsertRepo', {
+      repo_id: 'r0',
+      name: 'Source Repo',
+      domain: 'Water Supply',
+      lifecycle_state: 'publish',
+      version: 7
+    });
+    store.commit('okf/upsertRepo', {
+      repo_id: 'r1',
+      name: 'Clone Repo',
+      domain: 'Water Supply',
+      lifecycle_state: 'draft',
+      cloned_from: { repo_id: 'r0', version: 2 }
+    });
+    const wrapper = mountWizard({ ...DRAFT, cloned_from: { repo_id: 'r0', version: 2 } }, store);
+    await wrapper.vm.$nextTick();
+    // The wizard test $i18n mock has no messages tree, so translate()
+    // returns the fallback — asserting the {name}/{version} placeholders
+    // were .replace()d, never rendered raw.
+    expect(wrapper.vm.clonedFromLabel).toBe('Cloned from Source Repo · v2');
+    wrapper.unmount();
+  });
+
+  it('#80805: an unpublished source (version null) drops the version leg', async () => {
+    const store = buildStore();
+    store.commit('okf/upsertRepo', {
+      repo_id: 'r0',
+      name: 'Source Repo',
+      domain: 'Water Supply',
+      lifecycle_state: 'draft'
+    });
+    const wrapper = mountWizard({ ...DRAFT, cloned_from: { repo_id: 'r0', version: null } }, store);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.clonedFromLabel).toBe('Cloned from Source Repo');
     wrapper.unmount();
   });
 });

@@ -122,6 +122,18 @@ export default {
       });
       this.creating = false;
       if (!result || !result.ok) {
+        // Round 20 (#80123): the repo EXISTS server-side but its index
+        // skeleton failed to import (okfRepoOps attaches it) — say THAT,
+        // not a blind "failed", or the steward retries and mints a second
+        // repo while the first lingers as an orphan draft card.
+        if (result && result.repo) {
+          this.createError = this.translate(
+            'okf.create.indexImportFailed',
+            'The repository was created, but its starter index could not be imported. Open it from the dashboard to continue.'
+          );
+          this.emitGate();
+          return false; // no auto-advance: the repo has no index yet
+        }
         this.createError =
           result && result.code === 'DUPLICATE_REPO'
             ? this.translate(

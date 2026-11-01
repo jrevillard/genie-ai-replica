@@ -1355,6 +1355,8 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
+import { translateLabError } from '../../../services/okfRepoOps';
+import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
 import OkfRagasPanel from './RagasPanel.vue';
@@ -1408,6 +1410,10 @@ export default {
     return {
       tab: this.initialTab,
       busy: null,
+      // Cancel token for the explain-failures poll (round 16, #80124): the
+      // store's pollJob checks it each tick, so closing the Lab stops the
+      // client loop within one cadence. The server job is untouched.
+      pollSignal: { aborted: false },
       // 1-8g-x: live {phase, done, total} for the run progress bar.
       runProgress: null,
       error: '',
@@ -1535,7 +1541,14 @@ export default {
     headStatus() {
       if (!this.head) return 'missing';
       const fm = this.repo.frontmatter;
-      if (fm && fm.updated_at && this.head.computed_at && fm.updated_at > this.head.computed_at) return 'stale';
+      if (fm && fm.updated_at && this.head.computed_at) {
+        // Compare PARSED instants via the SHARED normalizer (round 18,
+        // #80464 — toEpochMs in piiReview.js; the hand-rolled copy here was
+        // the second of three, and the third stayed broken).
+        const fmMs = toEpochMs(fm.updated_at);
+        const headMs = toEpochMs(this.head.computed_at);
+        if (fmMs !== null && headMs !== null && fmMs > headMs) return 'stale';
+      }
       return 'present';
     },
     tabDefs() {
@@ -2049,6 +2062,9 @@ export default {
       immediate: true,
       async handler(open) {
         if (open && this.repo) {
+          // Fresh cancel signal for this session — the close branch (below)
+          // aborted the previous one. New polls capture this object.
+          this.pollSignal = { aborted: false };
           this.tab = this.initialTab;
           this.error = '';
           // 1-8c: teach state is per-open — isTaught still cross-checks the
@@ -2071,9 +2087,23 @@ export default {
           this.refreshRuns();
           this.refreshRagasSuites();
           if (!this.readOnly) this.loadFrontmatterHistory();
+        } else if (!open) {
+          // DIALOG CLOSE = stop the polls (round 18, #2101): every host
+          // mounts this dialog with :visible, so it NEVER unmounts while the
+          // parent lives and beforeUnmount never fires on close — the
+          // run/suite/explain polls would keep ticking against the closed
+          // dialog. Abort the CURRENT signal object (the loops read
+          // this.pollSignal each tick); the open branch re-arms a fresh one.
+          this.pollSignal.aborted = true;
         }
       }
     }
+  },
+  beforeUnmount() {
+    // Stop the explain-failures poll when the Lab goes away (round 16,
+    // #80124) — the old loop kept polling every 2s for up to 15 min after
+    // the dialog closed. The server job is untouched.
+    this.pollSignal.aborted = true;
   },
   methods: {
     /** 1-8b: translated label for a head_claim token (floor | veto |
@@ -2402,7 +2432,22 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.testingLab.error.advisor', 'Advisor failed');
+        // #80805: the advisor's poll (headTestService.recommendTags) throws
+        // with CODES — map them to translated sentences here. ROUND 23
+        // (review 81339/82705): the RECOMMEND_FAILED special case is folded
+        // into the generic fall-through — translateLabError passes a plain
+        // server reason verbatim, TRANSLATES an okf.labErrors.* key (the
+        // special arm rendered such keys RAW), and the generic sentence is
+        // the fallback when the message is absent. The tests own this
+        // contract (verbatim reason kept, empty falls back, key translated).
+        this.error =
+          res.code === 'ADVISOR_TIMEOUT'
+            ? this.translate(
+                'okf.testingLab.error.advisorTimeout',
+                'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+              )
+            : translateLabError(res.message, this.translate) ||
+              this.translate('okf.testingLab.error.advisor', 'Advisor failed');
         return;
       }
       this.advisor = res.result;
@@ -2602,8 +2647,11 @@ export default {
         // 1-8g-u: a recorded generation failure surfaces the REAL error.
         if (suite && suite.status === 'failed') {
           this.busy = null;
+          // #80805 parity: the failed envelope's message is an
+          // okf.labErrors.* key when the store authored it; a server
+          // doc.error.message passes through translateLabError verbatim.
           this.error =
-            (suite.error && suite.error.message) ||
+            translateLabError(suite.error && suite.error.message, this.translate) ||
             this.translate('okf.testingLab.error.generate', 'Suite generation failed');
           this.refreshRuns();
           return;
@@ -2636,19 +2684,25 @@ export default {
       // the columns honest either way (no-op when none exist).
       await this.loadLatestRunForSuite(this.suite.suite_key);
     },
-    /** 1-8f2: poll GET /:suite_key until the async generation lands the
-     * doc (2.5s interval, ~4min budget), or give up with null. */
+    /** 1-8f2: wait for the async generation to land the suite doc, via the
+     * store's pollJob-backed action (round 18, #80465 — same cancel semantics
+     * as the round-17 hand-rolled loop, PLUS 60-miss tolerance for transient
+     * gateway failures and a first-fetch fast path so a fast generation
+     * lands on attempt 0). Returns the suite or null (aborted/timed out). */
     async pollForSuite(suiteKey) {
-      const attempts = 96; // 96 × 2.5s ≈ 4 min
-      for (let i = 0; i < attempts; i += 1) {
-        // GET first, sleep after — a fast generation lands on attempt 0.
-        // The server answers 200 {suite_key, status:'generating'} while the
-        // async worker runs (never a 404) — keep waiting on that envelope;
-        // only a real suite doc (no status) is adopted.
-        const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
-        const suite = res && res.ok ? res.result : null;
-        if (suite && suite.suite_key && suite.status !== 'generating') return suite;
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+      const res = await this.$store.dispatch('okf/pollHeadSuite', {
+        repoId: this.repo.repo_id,
+        suiteKey,
+        signal: this.pollSignal
+      });
+      if (res && res.ok) return res.result;
+      // A failed generation keeps onGenerate's contract (round 20, #80778):
+      // a doc with status 'failed' whose message is surfaced — NOT the
+      // generic "taking unusually long" timeout branch. POLL_ABORTED /
+      // SUITE_GEN_TIMEOUT fall through to null → the dialog's friendly
+      // "still running server-side" branch, exactly like pollForRun.
+      if (res && res.code && res.code !== 'POLL_ABORTED' && res.code !== 'SUITE_GEN_TIMEOUT') {
+        return { status: 'failed', error: { message: res.message } };
       }
       return null;
     },
@@ -2658,15 +2712,23 @@ export default {
       // 1-8g-x: never show the previous run's counts while the new one starts.
       this.runProgress = null;
       this.error = '';
+      // STALE-ANSWER GUARD (round 17, #80355): capture the epoch the run
+      // STARTED under. A suite loaded while this run polls must not receive
+      // the OLD run's verdicts — merging them corrupted the outcome column
+      // and the tripwire baseline of the newly loaded suite.
+      const epoch = this.suiteEpoch;
+      const suiteKey = this.suite.suite_key;
       // 1-8d: tripwire baseline — the run being REPLACED, only when it
-      // belongs to the SAME suite (never compare across suites).
+      // belongs to the SAME suite (never compare across suites). The suite
+      // key lives in lastRunSuiteKey (the summary payload has no suite_key
+      // of its own — round 17, #80355).
       const baseline =
-        this.lastRunSummary && this.lastRunSuiteKey === this.suite.suite_key
+        this.lastRunSummary && this.lastRunSuiteKey === suiteKey
           ? { passed: this.lastRunSummary.positive_passed, total: this.lastRunSummary.positive_total }
           : null;
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
-        suiteKey: this.suite.suite_key
+        suiteKey
       });
       if (!res.ok) {
         this.busy = null;
@@ -2679,11 +2741,15 @@ export default {
       const started = res.result;
       let runDoc = null;
       if (started && started.status === 'running' && started.run_key) {
-        runDoc = await this.pollForRun(this.suite.suite_key, started.run_key);
+        runDoc = await this.pollForRun(suiteKey, started.run_key);
         if (runDoc && runDoc.status === 'failed') {
           this.busy = null;
+          // #80805: the failed envelope's message is an okf.labErrors.* key
+          // when the store authored it; a server doc.error.message passes
+          // through translateLabError verbatim.
           this.error =
-            (runDoc.error && runDoc.error.message) || this.translate('okf.testingLab.error.run', 'Suite run failed');
+            translateLabError(runDoc.error && runDoc.error.message, this.translate) ||
+            this.translate('okf.testingLab.error.run', 'Suite run failed');
           this.refreshRuns();
           return;
         }
@@ -2691,6 +2757,9 @@ export default {
         runDoc = started; // legacy synchronous response
       }
       this.busy = null;
+      // The suite moved while the run was in flight — discard the result
+      // rather than merge it into a different suite's rows.
+      if (epoch !== this.suiteEpoch || !this.suite || this.suite.suite_key !== suiteKey) return;
       if (!runDoc || !runDoc.payload || !runDoc.payload.summary) {
         this.error = this.translate(
           'okf.testingLab.error.runTimeout',
@@ -2703,20 +2772,31 @@ export default {
       this.checkTripwire(baseline, this.lastRunSummary);
       this.refreshRuns();
     },
-    /** 1-8g-v: poll the run doc (2.5s interval, ~6min budget) until it
-     * leaves 'running'; returns the envelope (running/failed/full doc). */
+    /** 1-8g-v: wait for the async run to leave 'running', via the store's
+     * pollJob-backed action (round 18, #80465 — cancel token, 60-miss
+     * transient tolerance, live progress tap). Returns the terminal doc, a
+     * {status:'failed'} envelope, or null (aborted/timed out). */
     async pollForRun(suiteKey, runKey) {
-      const attempts = 144; // 144 × 2.5s ≈ 6 min
-      for (let i = 0; i < attempts; i += 1) {
-        const res = await this.$store.dispatch('okf/headSuiteGetRun', { repoId: this.repo.repo_id, suiteKey, runKey });
-        const doc = res && res.ok ? res.result : null;
+      const res = await this.$store.dispatch('okf/pollHeadSuiteRun', {
+        repoId: this.repo.repo_id,
+        suiteKey,
+        runKey,
+        signal: this.pollSignal,
         // 1-8g-x: keep the LIVE progress while waiting — the run envelope
-        // carries {phase, done, total} (server half of this story), so the bar
-        // reflects queries actually scored rather than a spinner that tells the
-        // user nothing about a 100+100 run that takes minutes.
-        if (doc && doc.progress && doc.progress.total) this.runProgress = doc.progress;
-        if (doc && (!doc.status || doc.status === 'failed')) return doc;
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        // carries {phase, done, total}, so the bar reflects queries actually
+        // scored rather than a spinner that tells the user nothing about a
+        // 100+100 run that takes minutes.
+        onProgress: (p) => {
+          if (p && p.total) this.runProgress = p;
+        }
+      });
+      if (res && res.ok) return res.result;
+      // A failed run keeps onRunSuite's contract: a doc with status 'failed'
+      // whose error message is surfaced — not the generic timeout branch.
+      // POLL_ABORTED / RUN_TIMEOUT fall through to null → the dialog's
+      // friendly "still running server-side" timeout branch.
+      if (res && res.code && res.code !== 'POLL_ABORTED' && res.code !== 'RUN_TIMEOUT') {
+        return { status: 'failed', error: { message: res.message } };
       }
       return null;
     },
@@ -2796,7 +2876,8 @@ export default {
       const suiteKey = this.suite.suite_key;
       const res = await this.$store.dispatch('okf/headSuiteExplainFailures', {
         repoId: this.repo.repo_id,
-        suiteKey
+        suiteKey,
+        signal: this.pollSignal
       });
       this.explainFailuresLoading = false;
       if (epoch !== this.suiteEpoch || !this.suite || this.suite.suite_key !== suiteKey) {
@@ -2807,7 +2888,12 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.testingLab.error.explain', 'Explain failed');
+        if (res.code === 'POLL_ABORTED') return; // the Lab closed — nothing to show
+        // #80805: EXPLAIN_TIMEOUT/EXPLAIN_FAILED messages are okf.labErrors.*
+        // keys; a server message passes through translateLabError verbatim.
+        this.error =
+          translateLabError(res.message, this.translate) ||
+          this.translate('okf.testingLab.error.explain', 'Explain failed');
         return;
       }
       this.batchAdvice = res.result;
@@ -2904,7 +2990,10 @@ export default {
     },
     async refreshRuns() {
       const res = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'run' });
-      if (res.ok) this.runs = res.runs;
+      // Guard (round 18): an ok envelope without a runs array (a mocked or
+      // partial response) must not blank the table — the template reads
+      // runs.length unguarded.
+      if (res.ok) this.runs = Array.isArray(res.runs) ? res.runs : [];
       // 1-8f: the SAVED SUITES list (kind 'suite') — the load targets for
       // "saved, modified and rerun". Cheap read; kept beside the runs
       // refresh so both stay current after generate/run/edit.

@@ -143,3 +143,61 @@ it('frontmatter is split cheaply: fm block parsed, body preserved verbatim', asy
   expect(wrapper.vm.contentBody).toContain('# Body heading');
   expect(wrapper.vm.renderedHtml).toContain('<h1>'); // body still renders
 });
+
+// Round 20, #79191: the frontmatter dialog's save rebuilt `provenance` as
+// `{ sources }` — wholesale — silently dropping the keys the import pipeline
+// writes under it (crawled_at, source_ids). The spread must preserve them.
+it('frontmatter save PRESERVES unknown provenance keys (crawled_at, source_ids)', async () => {
+  const wrapper = mountEditor({
+    value:
+      '---\nokf_version: 0.2\nprovenance:\n  crawled_at: 2026-10-01\n  source_ids:\n    - s1\n  sources: []\n---\n\nBody.',
+    mode: 'source',
+    enableFrontmatter: true
+  });
+  await wrapper.vm.$nextTick();
+  // (gray-matter's YAML coerces the date — assert the round-trip, not the
+  // in-memory type: what matters is the SAVE preserving the key.)
+  // the dialog's draft then edits only sources; the save round-trips:
+  wrapper.vm.draftFrontmatter.provenance.sources = [{ author: 'a', type: 'url', uri: 'https://x' }];
+  wrapper.vm.onFrontmatterAction('save');
+  const out = wrapper.emitted('update:value').pop()[0];
+  expect(out).toContain('crawled_at: 2026-10-01'); // survived the save
+  expect(out).toContain('https://x'); // the new source is in
+});
+
+// Round 20, #79192: each chunk renders through an independent markdown-it
+// pass — a mid-structure seam restarted list numbering and duplicated table
+// headers. The cut must wait for a blank line once the size threshold is
+// crossed (with a bounded fallback, pinned by the hard-cap case below).
+it('splitRenderChunks cuts at a BLOCK boundary (blank line), not mid-list', () => {
+  const item = '1. a sufficiently long list item to consume real column width\n';
+  // ~55k of ONE ordered list, then a blank line and a closing paragraph —
+  // the list exceeds the 48k window, so the cut must land on the blank.
+  const list = item.repeat(900); // ~63k
+  const body = list + '\nTail paragraph after the list.\n';
+  const chunks = wrapper_chunks(body);
+  expect(chunks.length).toBe(2);
+  expect(chunks[0].trimEnd().endsWith('width')).toBe(true); // whole list items
+  expect(chunks[0]).not.toContain('Tail paragraph'); // the tail is NOT absorbed
+  expect(chunks[1].trim()).toBe('Tail paragraph after the list.');
+  // no item is severed: every chunk boundary line is blank or ends a block
+  for (const c of chunks.slice(0, -1)) expect(/\n\s*\n$/.test(c)).toBe(true);
+  function wrapper_chunks(b) {
+    const w = mountEditor({ value: b });
+    return w.vm.splitRenderChunks(b);
+  }
+});
+
+it('splitRenderChunks still bounds a runaway block (hard cap at a line boundary)', () => {
+  // No blank line for 100k+ — the fallback cuts at a LINE boundary (never
+  // mid-line), preserving the Page-Unresponsive guarantee.
+  const line = 'x'.repeat(120) + '\n';
+  const body = line.repeat(1200); // ~145k, zero blank lines
+  const w = mountEditor({ value: body });
+  const chunks = w.vm.splitRenderChunks(body);
+  expect(chunks.length).toBeGreaterThan(1);
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  expect(total).toBe(body.length); // lossless
+  for (const c of chunks) expect(c.endsWith('\n')).toBe(true); // line-aligned
+  expect(Math.max(...chunks.map((c) => c.length))).toBeLessThanOrEqual(48000 * 2 + 200);
+});

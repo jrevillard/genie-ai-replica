@@ -95,6 +95,30 @@ it('a full page offers Load more and appends the next page (F8)', async () => {
   expect(wrapper.findAll('.okf-src__row').length).toBe(53);
 });
 
+// Round 18, #80487: `rows` is bundle-filtered but the server total INCLUDES
+// bundle zips — comparing rows.length against total meant the button never
+// disabled once any bundle existed, and every further click loaded a page
+// whose rows were all stripped. The RAW fetched count must be the horizon.
+it('Load more DISABLES once the RAW fetched count reaches a bundle-inclusive total', async () => {
+  // Page 1: 49 real docs + 1 bundle (raw 50, kept 49). Total says 51
+  // (50 raw + 1 bundle on page 2? no — total 51 overall). Page 2: 1 real doc.
+  mockGetFiles.mockImplementation(async ({ page: p }) =>
+    p === 1
+      ? { data: [...page(49, 'p1'), { file_id: 'b1', file_name: 'repo-v1.zip', is_bundle: true }], total: 51 }
+      : { data: page(1, 'p2'), total: 51 }
+  );
+  const wrapper = mountDialog({});
+  await settled(wrapper);
+  expect(wrapper.findAll('.okf-src__row').length).toBe(49); // bundle stripped
+  expect(wrapper.vm.canLoadMore).toBe(true); // raw 50 < total 51
+  await wrapper.find('.okf-src__more').trigger('click');
+  await settled(wrapper);
+  // Old code: rows.length (50) < total (51) → STILL enabled forever. New:
+  // raw fetched (51) reached the total → disabled.
+  expect(wrapper.vm.canLoadMore).toBe(false);
+  expect(wrapper.find('.okf-src__more').exists()).toBe(false);
+});
+
 it('typing a search debounces and sends the search param from page 1 (D1)', async () => {
   jest.useFakeTimers();
   const wrapper = mountDialog({});

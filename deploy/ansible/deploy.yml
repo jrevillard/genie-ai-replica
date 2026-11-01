@@ -283,6 +283,12 @@
       loop: "{{ range(1, _rel_parts | length + 1) | list }}"
       loop_control:
         index_var: idx
+      # A degenerate data_dir == deploy_dir override relpaths to '.': the
+      # 'deploy_dir/.' prefix never matches find's -path patterns, so the
+      # prune would silently disable ITSELF and the heal would chown -R
+      # across the uid-1000 data handover. Skip the degenerate spelling —
+      # the seed data_dir_resolved already in the chain IS the data dir.
+      when: (_rel_parts[0:idx + 1] | join('/')) != '.'
 
     - name: Build the find prune expression from the chain
       ansible.builtin.set_fact:
@@ -528,7 +534,7 @@
       # secrets/ssl creation).
       become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/secrets/ssl"
+        path: "{{ deploy_dir_resolved }}/secrets/ssl"
         state: directory
         mode: '0755'
 

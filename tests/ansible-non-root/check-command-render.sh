@@ -152,7 +152,7 @@ PYEOF
 # tokenize, execute.
 # ---------------------------------------------------------------------------
 MIGRATION=deploy/ansible/tasks/no-root-data-migration.yml
-awk '/^    _trio_probe_cmd: >-/{p=1} p{print} p && /^      -exec chown/{exit}' \
+awk '/^    _trio_probe_cmd: >-/{p=1} p{print} p && /-exec chown -h 1000/{exit}' \
   "$MIGRATION" > "$TMP/trio.frag"
 grep -q '_trio_probe_cmd' "$TMP/trio.frag" ||
   fail "could not extract _trio_probe_cmd/_trio_heal_cmd from $MIGRATION"

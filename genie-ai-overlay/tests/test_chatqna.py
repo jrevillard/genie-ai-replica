@@ -2235,18 +2235,15 @@ class TestTranslationHelpers:
 
     @pytest.mark.asyncio
     async def test_a_long_chunk_without_a_window_is_refused_when_cut(self):
-        """The long-chunk scenario (#1256) end to end: no discovered window,
-        a 15k-char chunk — the degraded estimate exceeds the ceiling, so the
+        """The long-chunk scenario end to end: no discovered window, a
+        15k-char chunk — the degraded estimate exceeds the ceiling, so the
         request goes out bounded by the ceiling, not by the raw estimate,
         and a completion the server cut off at it is refused, never spliced
         into the answer."""
-        from chatqna.genieai_chatqna import TranslationFailedError
-
         svc = create_chatqna_service()
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "Traduit"}, "finish_reason": "length"}]}
-        mock_response.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_response
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -2257,7 +2254,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
             patch("chatqna.genieai_chatqna._get_translation_window", return_value=None),
-            pytest.raises(TranslationFailedError, match="max_tokens"),
+            pytest.raises(chatqna_module.TranslationFailedError, match="max_tokens"),
         ):
             await svc._translate_chunk_in_language("x" * 15000, "fr", "French")
         # The estimate (7500) exceeds the ceiling: the cap that went out is
@@ -2273,7 +2270,6 @@ class TestTranslationHelpers:
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}}]}
-        mock_response.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_response
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -2974,6 +2970,23 @@ class TestQueryTranslationStatus:
         choice = {} if finish_reason == "missing" else {"finish_reason": finish_reason}
         assert chatqna_module._completion_truncated(choice) is truncated
 
+    @pytest.mark.asyncio
+    async def test_a_choice_without_a_finish_reason_is_translated_end_to_end(self):
+        """The absent-field half of the exact-match contract, wired through
+        the seam (the table above owns the decision): a 200 whose choice
+        carries no finish_reason at all comes back as a translation — the
+        seam must READ the field tolerantly, not crash a good completion
+        into the fallback."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        mock_client.post.return_value.json.return_value = {"choices": [{"message": {"content": "USER: what is X?"}}]}
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
     async def test_a_generic_payload_cap_is_clamped_to_the_discovered_window(self):
         """The generic payload's cap is clamped so the measured prompt plus
         the completion cannot exceed the discovered window (else the server
@@ -3011,7 +3024,7 @@ class TestQueryTranslationStatus:
 
     @pytest.mark.asyncio
     async def test_a_long_history_without_a_window_is_refused_when_cut(self):
-        """The long-history scenario (#1256) end to end: a deployer raises
+        """The long-history scenario end to end: a deployer raises
         MAX_TRANSLATION_CHARS on an endpoint without window discovery, a
         30k-char history is admitted, and the degraded ceiling — not the
         raw estimate — bounds the completion. A completion cut at that

@@ -71,7 +71,10 @@ function validateComposeNonRoot(composeText) {
   let currentRestartPolicyCondition = null;
   let currentCapAdds = [];
   let capAddsSeen = false; // an explicit cap_add key REPLACES the anchor's list
+  let currentCapDrops = []; // cap_drop items seen service-locally
+  let capDropsSeen = false; // an explicit cap_drop key REPLACES the anchor's [ALL]
   let inCapAdds = false;
+  let inCapDrops = false;
   let inDeploy = false;
   let localDeploySeen = false;
   let inRestartPolicy = false;
@@ -216,6 +219,14 @@ function validateComposeNonRoot(composeText) {
                 : 'any';
           const maxAttempts =
             currentMaxAttempts !== null ? currentMaxAttempts : anchorDeployApplies ? anchorDefaults.maxAttempts : null;
+          const capDrops = capDropsSeen ? currentCapDrops : anchorMerged ? anchorDefaults.capDrops : [];
+          if (!capDrops.includes('ALL')) {
+            // shallow-replace semantics cut both ways: a service-local
+            // cap_drop: [] REPLACES the anchor's [ALL] per YAML merge
+            // rules — the init would run with full root caps while every
+            // other invariant stayed green
+            violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_drop: [ALL]`);
+          }
           if (!capAdds.includes('CHOWN')) {
             violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
           }
@@ -261,7 +272,10 @@ function validateComposeNonRoot(composeText) {
     currentMode = null;
     currentCapAdds = [];
     capAddsSeen = false;
+    currentCapDrops = [];
+    capDropsSeen = false;
     inCapAdds = false;
+    inCapDrops = false;
     inDeploy = false;
     localDeploySeen = false;
     inRestartPolicy = false;
@@ -270,7 +284,7 @@ function validateComposeNonRoot(composeText) {
   // Pre-scan the x-chown-init extension anchor: services merge it via
   // `<<: *chown-init`, and a line-level parser must resolve that merge to
   // see the invariants it carries (cap_add, restart, restart_policy).
-  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null, mode: null };
+  const anchorDefaults = { capAdds: [], capDrops: [], restart: null, condition: null, maxAttempts: null, mode: null };
   {
     let inAnchor = false;
     let inAnchorPolicy = false;
@@ -285,9 +299,10 @@ function validateComposeNonRoot(composeText) {
         inAnchor = false;
         continue;
       }
-      // Only items under `cap_add:` are capabilities the anchor GRANTS —
-      // the anchor also carries `cap_drop: [ALL]`, whose ALL would poison
-      // the CHOWN invariant check if it leaked into the same list.
+      // Anchor cap lists are kept SEPARATE: `cap_add:` items are the
+      // capabilities the anchor GRANTS; `cap_drop: [ALL]` items feed the
+      // capDrops invariant (an ALL that leaked into capAdds would poison
+      // the CHOWN membership check).
       if (/^ {2}[\w-]+:\s*(\[.*\]\s*)?(?:#.*)?$/.test(line)) {
         anchorKey = line.match(/^ {2}([\w-]+):/)[1];
         continue;
@@ -295,6 +310,11 @@ function validateComposeNonRoot(composeText) {
       const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;
       if (cap) {
         anchorDefaults.capAdds.push(cap[1]);
+        continue;
+      }
+      const drop = anchorKey === 'cap_drop' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;
+      if (drop) {
+        anchorDefaults.capDrops.push(drop[1]);
         continue;
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
@@ -392,7 +412,21 @@ function validateComposeNonRoot(composeText) {
       capAddsSeen = true;
       continue;
     }
+    if (/^ {4}cap_drop:\s*(?:#.*)?$/.test(line)) {
+      inCapDrops = true;
+      capDropsSeen = true;
+      continue;
+    }
     // flow style: cap_add: [CHOWN, DAC_OVERRIDE] — same invariant surface
+    const dropFlow = line.match(/^ {4}cap_drop:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
+    if (dropFlow) {
+      capDropsSeen = true;
+      for (const drop of dropFlow[1].split(',')) {
+        const d = drop.trim();
+        if (d) currentCapDrops.push(d);
+      }
+      continue;
+    }
     const capFlow = line.match(/^ {4}cap_add:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
     if (capFlow) {
       capAddsSeen = true;
@@ -401,6 +435,15 @@ function validateComposeNonRoot(composeText) {
         if (c) currentCapAdds.push(c);
       }
       continue;
+    }
+    if (inCapDrops) {
+      if (!/^ {6}/.test(line)) {
+        inCapDrops = false;
+      } else {
+        const drop = line.match(/^ {6}-\s*([A-Z_]+)\s*$/);
+        if (drop) currentCapDrops.push(drop[1]);
+        continue;
+      }
     }
     if (inCapAdds) {
       if (!/^ {6}/.test(line)) {
@@ -691,7 +734,10 @@ function splitFlowItems(body) {
       continue;
     }
     if (ch === '{') depth += 1;
-    if (ch === '}') depth -= 1;
+    // clamp at 0: a stray unmatched '}' (corrupt YAML compose rejects
+    // anyway) must not drive depth negative — top-level commas would stop
+    // splitting and silently MERGE distinct entries (under-enforcement)
+    if (ch === '}' && depth > 0) depth -= 1;
     if (ch === ',' && depth === 0) {
       items.push(cur);
       cur = '';

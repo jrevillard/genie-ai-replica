@@ -594,6 +594,39 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(quotedSpaceOpted).violations).toEqual([]);
   });
 
+  test('mutations: cap_drop [ALL] is pinned on one-shot members; stray brace cannot merge flow items', () => {
+    // A service-local cap_drop: [] shallow-replaces the anchor's [ALL]
+    // (same YAML merge rule the gate models for cap_add) — the init would
+    // run with full root caps while the cap_add invariant stayed green.
+    const droppedAll = composeText.replace(
+      '  arango-vector-db-init:\n    <<: *chown-init\n',
+      '  arango-vector-db-init:\n    <<: *chown-init\n    cap_drop: []\n'
+    );
+    expect(droppedAll).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(droppedAll);
+    expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('cap_drop: [ALL]'))).toBe(true);
+
+    // restating the anchor's drop explicitly stays clean
+    const restatedAll = composeText.replace(
+      '  arango-vector-db-init:\n    <<: *chown-init\n',
+      '  arango-vector-db-init:\n    <<: *chown-init\n    cap_drop: [ALL]\n'
+    );
+    expect(validateComposeNonRoot(restatedAll).violations).toEqual([]);
+
+    // a stray unmatched '}' in a flow list must not drive the splitter's
+    // depth negative — negative depth stops top-level commas from
+    // splitting and silently MERGES distinct entries (under-enforcement)
+    const merged = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: [{type: bind, source: ./data/x, target: /x}}, "${DATA_DIR:-./data}/y:/y"]',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(merged);
+    expect(v2.some((v) => v.includes('kong'))).toBe(true);
+  });
+
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
     // The shell gate keeps its own copy (no JS runtime there); without
     // this pin a third self-dropping image added to the validator would

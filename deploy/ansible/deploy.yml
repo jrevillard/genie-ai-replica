@@ -209,8 +209,12 @@
     # The deploy-payload ownership pass (depth-1 children except the data/
     # tree), shared VERBATIM by the pre-download and post-extract tasks —
     # one string, so the two passes cannot drift apart on a later edit.
+    # Quoted + trailing-slash-normalized: command-module splits with shlex,
+    # so an unquoted whitespace path (or a data_dir like './data/' whose
+    # basename is empty → `find: missing argument to '-name'`) would abort
+    # the whole prepare play.
     _fix_payload_ownership_cmd: >-
-      find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
+      find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1 ! -name "{{ data_dir | regex_replace('/$', '') | basename }}"
       -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.

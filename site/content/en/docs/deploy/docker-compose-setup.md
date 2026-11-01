@@ -43,6 +43,16 @@ sudo chgrp 101 secrets/ssl/server.key && sudo chmod 0640 secrets/ssl/server.key
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself.)
 
+Upgrading an existing deployment with a pre-#1227
+`data/database_backups` tree? The backend (uid 1000) must OWN it —
+`backend-init` heals only named volumes, never this host bind, so
+re-own it yourself (the Ansible path does this via its migration
+tasks):
+
+```bash
+sudo chown -R 1000:1000 data/database_backups
+```
+
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
 - **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)
 - **Hugging Face API token** (only if using `--profile opea` — set

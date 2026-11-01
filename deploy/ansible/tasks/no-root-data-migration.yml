@@ -66,7 +66,7 @@
   become: true
   become_user: root
   ansible.builtin.command: >-
-    find {{ _no_root_data_dir }}/database_backups ! -uid 1000 -print -quit
+    find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000 -print -quit
   register: _backup_misowned
   failed_when: false
   changed_when: false
@@ -79,7 +79,7 @@
   become: true
   become_user: root
   ansible.builtin.command: >-
-    find {{ _no_root_data_dir }}/database_backups ! -uid 1000
+    find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000
     -exec chown -h 1000:1000 {} +
   register: _backup_heal
   when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0

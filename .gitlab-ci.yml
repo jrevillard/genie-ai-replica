@@ -485,6 +485,11 @@ workflow:
       ROPC_TOKEN=${ROPC_FIELDS#*|}
       ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
       rm -f /tmp/ropc-probe-body.json
+      # A truncated 200 token response can land in the body of a transport
+      # failure; withhold any body that carries a minted token.
+      case "$ROPC_BODY" in
+        *access_token*) ROPC_BODY="<token response withheld>" ;;
+      esac
       ropc_gateway_fail() {
         echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
         exit 1
@@ -3137,6 +3142,7 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
+#     The image-source exception below is deliberate — see its bullet.
 #   - the configs/keycloak/ tree: its themes/ subtree is bind-mounted into
 #     the stack, and genie-realm.yaml plus the import entrypoint are baked
 #     into the keycloak-config candidate image — the ROPC-refusal probe

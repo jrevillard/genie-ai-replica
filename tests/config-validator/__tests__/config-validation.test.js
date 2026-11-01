@@ -10,6 +10,7 @@ const {
   parseComposeImages,
   parseAnsibleImages,
   parseGitlabCiImages,
+  parseGitlabCiJobChanges,
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
@@ -2221,5 +2222,238 @@ describe('Configuration Validation Suite', () => {
         }
       });
     });
+  });
+});
+
+// --- e2e merge-train changes filters (#1264) ---
+// e2e:playwright hard-needs e2e:integration on merge trains: a train whose
+// paths instantiate e2e:playwright must also instantiate its needs-partner,
+// or GitLab fails pipeline creation and the whole train goes red. The CI file
+// makes that hold structurally — both jobs alias one hidden anchor
+// (.e2e_merge_train_changes) — so this guard pins the alias wiring and the
+// anchor contents instead of re-deriving a subset relation. Every path the
+// jobs execute or consume must be in the anchor, or e2e silently skips on
+// the train.
+describe('e2e merge-train changes filters (#1264)', () => {
+  const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  const ANCHOR = '.e2e_merge_train_changes';
+  const E2E_JOBS = ['e2e:integration', 'e2e:playwright'];
+  let content;
+  let filters;
+
+  beforeAll(() => {
+    content = fs.readFileSync(ciFile, 'utf-8');
+    filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
+  });
+
+  // Section of the file from a top-level key to the next one. The boundary
+  // matches a top-level KEY line only — a column-0 comment inside the job
+  // body is valid YAML there and must not truncate the section. Comment
+  // lines are stripped entirely: they are layout, not configuration, and
+  // must not leak literals (a path, a condition) into the assertions below.
+  const sectionOf = (job) => {
+    const start = content.indexOf(`\n${job}:`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = content.slice(start + 1);
+    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
+    const section = end === -1 ? rest : rest.slice(0, end + 1);
+    return section
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+  };
+
+  // Executed paths are derived from the `npx playwright test` invocation in
+  // .e2e_web_base rather than copied into a second hand-maintained list — a
+  // hardcoded list would inherit the same drift this guard exists to catch.
+  // The derivation is anchored to that base's section so a second invocation
+  // added elsewhere in the file cannot silently redirect it.
+  const executedPaths = () => {
+    const invocation = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/);
+    expect(invocation).not.toBeNull();
+    const targets = invocation[1]
+      .split(/\s+/)
+      .filter((arg) => arg.startsWith('tests/e2e'))
+      .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg));
+    expect(targets).toEqual([
+      'tests/e2e/chatbot/**/*',
+      'tests/e2e/documents/**/*',
+      'tests/e2e/theme-runtime-config.spec.js'
+    ]);
+    return targets;
+  };
+
+  // Consumed at runtime by the executed specs but not visible on the
+  // invocation line: helpers are imported, fixtures are uploaded/read by the
+  // documents specs.
+  const CONSUMED_PATHS = ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*'];
+
+  test('executed and consumed paths are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of [...executedPaths(), ...CONSUMED_PATHS]) {
+      expect(anchorPaths).toContain(required);
+    }
+  });
+
+  test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
+    // The invariant exists because of this hard needs — pin it too.
+    expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');
+    for (const job of E2E_JOBS) {
+      expect(sectionOf(job)).toContain('paths: *e2e_merge_train_changes');
+    }
+    // The line parser cannot see through the alias; an empty parse proves
+    // e2e:playwright carries no block-form changes: entries beside it. Any
+    // rewrite that drops the alias text fails the toContain above, so flow
+    // or list-item rewrites are caught either way.
+    expect(filters.get('e2e:playwright')).toEqual([]);
+  });
+
+  test('every rule carries the merge-train condition', () => {
+    // Broadening e2e:playwright's rule to all merge_request_event pipelines
+    // would dangle its hard needs on every ordinary MR pipeline and fail
+    // pipeline creation repo-wide; e2e:integration's two rules must stay
+    // scoped the same way. The FULL condition is pinned — dropping either
+    // half re-scopes the rule — and the RULE COUNTS are pinned, so an extra
+    // broadened rule cannot be appended beside the alias (every rule starts
+    // with a `- if:` list item).
+    const trainCondition =
+      '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
+    const ruleCount = (section) => section.split('\n').filter((line) => line.trimStart().startsWith('- if:')).length;
+    expect(ruleCount(sectionOf('e2e:playwright'))).toBe(1);
+    expect(ruleCount(sectionOf('e2e:integration'))).toBe(2);
+    expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
+    expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
+  });
+
+  test('mobile stays integration-only', () => {
+    expect(filters.get('e2e:integration')).toEqual(['mobile/genie_ai_mobile/**/*']);
+    expect(sectionOf('e2e:playwright')).not.toContain('mobile/');
+    // Neither half of the split may reach the shared anchor: an alias entry
+    // is invisible to the section checks above.
+    expect(filters.get(ANCHOR)).not.toContain('mobile/genie_ai_mobile/**/*');
+  });
+});
+
+// --- parseGitlabCiJobChanges: block scoping ---
+describe('parseGitlabCiJobChanges', () => {
+  const tempDirs = [];
+  const writeTempCi = (lines) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-job-changes-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, '.gitlab-ci.yml');
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+    return file;
+  };
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('entries are scoped to their changes: block — the next rule is not swallowed', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*',
+      '    - if: \'$CI_PIPELINE_SOURCE == "web"\'',
+      '      when: manual',
+      '',
+      'job-b:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a', 'job-b']);
+    expect(parsed.get('job-a')).toEqual(['tests/e2e/chatbot/**/*']);
+    expect(parsed.get('job-b')).toEqual(['tests/e2e/chatbot/**/*']);
+  });
+
+  test('inline comments are stripped from entries', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/x/**/*  # not executed yet (wired by a later MR)'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/x/**/*']);
+  });
+
+  test('a changes: key carrying a trailing comment still starts a block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:  # why these paths',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
+  });
+
+  test('a same-indent sequence is a valid changes: block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '      - tests/a/**/*',
+      '      - tests/b/**/*  # trailing comment',
+      "    - if: '$Y'",
+      '      when: manual'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+  });
+
+  test('hidden anchor keys parse their direct list; aliases stay opaque', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '  - tests/a/**/*',
+      '  - tests/b/**/*  # trailing comment',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a hidden anchor whose sequence sits at indent 0 still parses', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '- tests/a/**/*',
+      '- tests/b/**/*',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a job key carrying a trailing comment is still recognized', () => {
+    const file = writeTempCi([
+      'job-a:  # annotated key',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
   });
 });

@@ -461,21 +461,39 @@ workflow:
       fi
       # The committed realm refuses direct access grants — assert it. Keycloak
       # answers unauthorized_client BEFORE credential validation when the
-      # client has directAccessGrantsEnabled: false, so a 200 or any other
-      # error here means the posture drifted.
-      ROPC_RESP=$(curl -sk --max-time 15 -w "\n%{http_code}" -X POST \
-        "${KC_URL}/realms/genie/protocol/openid-connect/token" \
-        -d "client_id=genie-app" -d "grant_type=password" \
-        -d "username=testuser" -d "password=TestPass123!")
-      ROPC_STATUS=$(printf '%s' "$ROPC_RESP" | tail -n1)
-      ROPC_ERROR=$(printf '%s' "$ROPC_RESP" | head -n1 \
-        | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',''))" 2>/dev/null || true)
-      if [ "$ROPC_STATUS" = "400" ] && [ "$ROPC_ERROR" = "unauthorized_client" ]; then
-        echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP 400 unauthorized_client)"
-      else
-        echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS:-none}, error '${ROPC_ERROR:-none}') — directAccessGrantsEnabled must stay false on genie-app"
-        exit 1
-      fi
+      # client has directAccessGrantsEnabled: false, so a success or any other
+      # error here means the posture drifted. The transport case (no HTTP
+      # status from curl) retries and then fails honestly instead of
+      # masquerading as a posture verdict.
+      for i in 1 2 3; do
+        ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
+          "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+          -d "client_id=genie-app" -d "grant_type=password" \
+          -d "username=testuser" -d "password=TestPass123!")
+        case "$ROPC_STATUS" in [234][0-9][0-9]) break ;; esac
+        echo "ROPC probe attempt ${i}/3 could not reach the token endpoint (HTTP ${ROPC_STATUS:-none}); retrying"
+        sleep 2
+      done
+      ROPC_ERROR=$(python3 -c "import sys,json; print(json.load(open('/tmp/ropc-probe-body.json')).get('error',''))" 2>/dev/null || true)
+      rm -f /tmp/ropc-probe-body.json
+      case "$ROPC_STATUS" in
+        4[0-9][0-9])
+          if [ "$ROPC_ERROR" = "unauthorized_client" ]; then
+            echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} unauthorized_client)"
+          else
+            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error '${ROPC_ERROR:-none}') — directAccessGrantsEnabled must stay false on genie-app"
+            exit 1
+          fi
+          ;;
+        2[0-9][0-9]|3[0-9][0-9])
+          echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          exit 1
+          ;;
+        *)
+          echo "ERROR: could not get a verdict from the genie token endpoint after 3 attempts (HTTP ${ROPC_STATUS:-none}) — transport failure, not a posture result"
+          exit 1
+          ;;
+      esac
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
@@ -3090,6 +3108,10 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
+#   - configs/keycloak/genie-realm.yaml is the one baked-in image input
+#     listed here: build:keycloak-config copies it into the candidate image
+#     and the ROPC-refusal probe in .e2e_web_base asserts its runtime
+#     behaviour, so a realm-posture change must instantiate the e2e jobs.
 # tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
 # until MR2 wires them into the script (see .e2e_web_base script comment),
 # and listing unexecuted paths only buys 30-minute train jobs that test
@@ -3110,6 +3132,7 @@ test:flutter:
   - docker-compose.yaml
   - env
   - configs/keycloak/themes/**/*
+  - configs/keycloak/genie-realm.yaml
   - configs/otel/otel-collector-config.yaml
   - .gitlab-ci.yml
 

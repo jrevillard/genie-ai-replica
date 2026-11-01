@@ -2257,8 +2257,9 @@ class TestTranslationHelpers:
             pytest.raises(chatqna_module.TranslationFailedError, match="max_tokens"),
         ):
             await svc._translate_chunk_in_language("x" * 15000, "fr", "French")
-        # The estimate (7500) exceeds the ceiling: the cap that went out is
-        # the ceiling itself.
+        # The estimate (~7.5k tokens — the full prompt, template included,
+        # halved) exceeds the ceiling: the cap that went out is the ceiling
+        # itself.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
 
     @pytest.mark.asyncio
@@ -3046,8 +3047,9 @@ class TestQueryTranslationStatus:
             text, status = await svc._get_translated_history_string(history)
         assert text.startswith("USER: AAAA")  # untranslated
         assert status == "fallback_error"
-        # The estimate (15000) exceeds the ceiling: the cap that went out is
-        # the ceiling itself.
+        # The estimate (~15k tokens — the full prompt, template included,
+        # halved) exceeds the ceiling: the cap that went out is the ceiling
+        # itself.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
 
     async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):

@@ -71,8 +71,8 @@ Map<String, dynamic> parseQuickHelpButton(
   return {
     // The id is kept RAW: the presence rule (quickHelpIdOf, the web's
     // `button.id || title`) reads the value's truthiness, which a
-    // stringified '0' would erase. Every read still goes through
-    // quickHelpFieldOf / quickHelpIdOf, which stringify.
+    // stringified '0' would erase. Every id read goes through
+    // quickHelpIdOf, which stringifies in the web's own form.
     'id': btn['id'],
     // The category is an EQUALITY read — but against the form the WEB
     // resolves: a numeric reference carries JavaScript's serialization
@@ -456,11 +456,11 @@ bool restoredScopeTitleFollowsLocale({
       categoryKey.isNotEmpty;
 }
 
-/// The button's [key] as a string — ONE read of the id and the category,
-/// whatever shape the value carries: a hand-built map need not carry
-/// strings, and a numeric value must degrade to its string form rather
-/// than throw. (The parse keeps the id RAW — the truthiness rule below
-/// reads it — and pre-stringifies the category in the web's own form.)
+/// The button's [key] as a plain string — the CATEGORY read. A
+/// hand-built map need not carry strings, and a numeric value must
+/// degrade to its string form rather than throw. NOT an id read: the
+/// id's presence rule lives in quickHelpIdOf (raw truthiness + the
+/// web's serialization), and every id consumer reads that one.
 String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
     button[key]?.toString();
 
@@ -469,11 +469,15 @@ String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
 /// differs in the plain range (it appends '.0': 5.0 → '5.0', JS: '5');
 /// the exponential range (≥ 1e21) already matches. An integral value
 /// inside the int64 range converts exactly; OUTSIDE it (an integral
-/// double ≥ 2^63 but < 1e21) the Dart form stands — a configuration
-/// with an id that large is not one the two platforms can agree on by
-/// serialization; the durable answer is normalizing the tag at the
-/// save/restore boundary on both platforms, tracked beside the
-/// numeric-tag contract.
+/// double ≥ 2^63 but < 1e21) the Dart form stands. Two further bands
+/// stay unmatched BY DECODE, not by this form: an integer literal
+/// above 2^53 decodes to an imprecise double on the web but to the
+/// exact int64 here (the two platforms then disagree about the value
+/// itself), and a double ≥ 2^63 clips differently again — a
+/// configuration with an id that large is not one the platforms can
+/// agree on by serialization; the durable answer is normalizing the
+/// tag at the save/restore boundary on both platforms, tracked beside
+/// the numeric-tag contract.
 String _jsTagForm(dynamic raw) {
   if (raw is double &&
       raw.isFinite &&
@@ -491,11 +495,17 @@ String _jsTagForm(dynamic raw) {
 /// id (`0`, `false`, a hand-edited configuration; none shipped) is no
 /// id, and its stringified `'0'` must not resurrect it. Every rule
 /// that decides whether an id EXISTS reads this one — the identity,
-/// the dedupe, the restore index, the by-id lookups — while
-/// quickHelpFieldOf stays the un-normalized string read.
+/// the dedupe, the restore index, the by-id lookups.
 String? quickHelpIdOf(Map<String, dynamic>? button) {
   final raw = button?['id'];
   if (!configTruthy(raw)) return null;
+  // A non-scalar id (an array, an object) is no identity: the web saves
+  // the LIVE value, which its own restore can never match again after
+  // the JSON round trip, while a stringified form ('[]') would restore
+  // on this platform alone — the platforms would disagree about the
+  // same saved conversation. Falling to the title (the rule below)
+  // converges every save direction on the sidebar branch, on both.
+  if (raw is! String && raw is! num && raw is! bool) return null;
   return _jsTagForm(raw);
 }
 

@@ -1682,6 +1682,24 @@ void main() {
         '1e+21',
       );
     });
+
+    test('a NON-SCALAR id is no identity — the title carries the card', () {
+      // An array or object id cannot be a portable identity: the web
+      // saves the LIVE value (an object), which its own restore can
+      // never match again after the JSON round trip, while a Dart
+      // stringification would produce a tag ('[]') the mobile alone
+      // would restore — the platforms would disagree about the same
+      // saved conversation. Falling to the TITLE converges every save
+      // direction on the sidebar branch, on both platforms.
+      expect(
+        quickHelpButtonIdentity({'id': [], 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': {}, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+    });
   });
 
   /// The config-side parse of a Quick Help button — the shape the shipped

@@ -9,10 +9,12 @@
 module.exports = {
   // The POST /api/analytics/events request wire — the route reads exactly
   // these two fields; `timestamp` is server-set and not read from the wire.
-  // minLength mirrors the runtime's truthiness check (an empty eventType
-  // is refused with 400); additionalProperties:false says the stored
-  // document's `data` spelling is NOT accepted on the wire (the runtime
-  // currently drops it silently — #1293 tracks enforcing that).
+  // minLength: 1 covers the string half of the runtime's truthiness check
+  // (an empty eventType is refused with 400); additionalProperties:false
+  // says the stored document's `data` spelling is NOT accepted on the wire.
+  // The runtime does not yet enforce either beyond strings — a truthy
+  // non-string eventType is stored as-is and unknown keys are dropped
+  // silently (#1293 tracks enforcing the declared shape).
   EventRequest: {
     type: 'object',
     required: ['eventType'],

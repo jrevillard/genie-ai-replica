@@ -2245,9 +2245,7 @@ class TestTranslationHelpers:
         svc = create_chatqna_service()
         mock_client = AsyncMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Traduit"}, "finish_reason": "length"}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Traduit"}, "finish_reason": "length"}]}
         mock_response.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_response
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)

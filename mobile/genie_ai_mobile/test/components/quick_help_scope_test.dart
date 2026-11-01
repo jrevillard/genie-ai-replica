@@ -57,6 +57,30 @@ void main() {
       expect(resolver.stateFor(button)['broken'], isFalse);
     });
 
+    test(
+      'a numeric catKey indexes in the form the config reference resolves',
+      () {
+        // Both sides of the lookup must speak ONE form: the config's
+        // numeric category reference carries the web's serialization
+        // ('5'), so a hierarchy catKey that decoded as an integral
+        // double must index as '5' too — the Dart form ('5.0') would
+        // miss it and only the mobile would render the card broken.
+        final floatTree = <dynamic>[
+          {
+            'catKey': 5.0,
+            'name': 'Cinco',
+            'nameEN': 'Five',
+            'children': <dynamic>[],
+          },
+        ];
+        final floatResolver = QuickHelpScopeResolver(floatTree);
+        final button = {'id': 'x', 'category': 5.0};
+
+        expect(floatResolver.stateFor(button)['broken'], isFalse);
+        expect(floatResolver.categoryLabelEn(button), 'Five');
+      },
+    );
+
     test('an empty hierarchy says every scoped category is missing', () {
       // A hierarchy that LOADED and carries nothing is not a hierarchy
       // that knows nothing: every category a button names is absent
@@ -1757,6 +1781,9 @@ void main() {
         quickHelpButtonIdentity({'id': 1e19, 'resolvedTitle': 'C'}),
         '10000000000000000000',
       );
+      // The negative branch of the same strip: the sign stays, the
+      // suffix goes.
+      expect(quickHelpButtonIdentity({'id': -5.0, 'resolvedTitle': 'C'}), '-5');
     });
 
     test('a NON-SCALAR id is no identity — the title carries the card', () {

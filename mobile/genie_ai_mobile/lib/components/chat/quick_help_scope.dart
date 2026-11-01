@@ -646,7 +646,11 @@ class QuickHelpScopeResolver {
     final byKey = <String, String>{};
     for (final entry in enTree) {
       if (entry is! Map) continue;
-      final key = entry['catKey']?.toString();
+      // The index speaks the form the config references resolve in (the
+      // web's serialization, _jsTagForm): a numeric catKey must index as
+      // the reference reads, or only this platform would render the card
+      // broken.
+      final key = _jsTagForm(entry['catKey']);
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
       final value = valueOf(entry);

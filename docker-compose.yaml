@@ -119,9 +119,11 @@ x-chown-init: &chown-init
   cap_add:
     # CHOWN (the chown itself) + DAC_OVERRIDE (traversal): once the sweep
     # has chowned a 0700 directory to the target uid, root with CHOWN only
-    # can no longer descend into it — find would fail mid-traversal with
-    # 'Permission denied' and its rc is discarded by the $() probe shape,
-    # silently truncating the sweep. DAC_OVERRIDE keeps root reading every
+    # can no longer descend into it — find fails mid-traversal with
+    # 'Permission denied'. Every find's rc IS enforced (|| exit 9), so
+    # without this capability the truncation would still be caught — but
+    # as a FAILED init churning its whole retry budget on every attempt
+    # instead of a completed handover. DAC_OVERRIDE lets root read every
     # directory until the verify passes (both capabilities verified live
     # against nested 0700 fixtures).
     - CHOWN
@@ -177,6 +179,22 @@ x-chown-init: &chown-init
       condition: on-failure
       delay: 30s
       max_attempts: 60
+
+  # Placement-scoped extension merged BEHIND x-chown-init by the four
+  # constrained inits via `<<: [*chown-init, *chown-init-genieai]` — in a
+  # YAML sequence merge the LAST map's deploy: wins whole, so this carries
+  # the full race-sized policy plus the genieai constraint. One copy, or
+  # the four bounded policies drift.
+  x-chown-init-genieai: &chown-init-genieai
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
 
 services:
 
@@ -1267,22 +1285,13 @@ services:
   # root-era backend hold root-owned files in backend_data and
   # backend_uploads, which the now non-root backend could no longer write.
   backend-init:
-    <<: *chown-init
-    # Same node set as the follow-up service's own placement
-    # constraint: without it the global init also runs on
-    # gateway/gpu nodes the service can never land on, chowning
-    # volumes nothing there will read. A service-local deploy:
-    # shallow-replaces the anchor's whole deploy map — mode and the
-    # race-sized bounded policy are restated verbatim.
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 30s
-        max_attempts: 60
+    # Same node set as the follow-up service's own placement constraint
+    # (see the x-chown-init-genieai anchor): without it the global init
+    # also runs on gateway/gpu nodes the service can never land on,
+    # chowning volumes nothing there will read. Sequence merge: the LAST
+    # map's deploy: wins whole — the race-sized policy travels with the
+    # placement.
+    <<: [*chown-init, *chown-init-genieai]
     # PER-VOLUME guard: the loop probes each volume independently, so a
     # root-era file in ONE volume heals only that volume — an operator
     # recovering one volume with `docker volume rm` leaves the other's
@@ -1316,22 +1325,13 @@ services:
   # that ran the root-era image hold a root-owned volume, and the now
   # non-root document-repository would get EACCES on every upload.
   document-repository-init:
-    <<: *chown-init
-    # Same node set as the follow-up service's own placement
-    # constraint: without it the global init also runs on
-    # gateway/gpu nodes the service can never land on, chowning
-    # volumes nothing there will read. A service-local deploy:
-    # shallow-replaces the anchor's whole deploy map — mode and the
-    # race-sized bounded policy are restated verbatim.
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 30s
-        max_attempts: 60
+    # Same node set as the follow-up service's own placement constraint
+    # (see the x-chown-init-genieai anchor): without it the global init
+    # also runs on gateway/gpu nodes the service can never land on,
+    # chowning volumes nothing there will read. Sequence merge: the LAST
+    # map's deploy: wins whole — the race-sized policy travels with the
+    # placement.
+    <<: [*chown-init, *chown-init-genieai]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /app/uploads -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
@@ -1493,22 +1493,13 @@ services:
   # arango-vector-db-init` (compose) or `docker service update --force
   # <stack>_<init>` (swarm).
   arango-vector-db-init:
-    <<: *chown-init
-    # Same node set as the follow-up service's own placement
-    # constraint: without it the global init also runs on
-    # gateway/gpu nodes the service can never land on, chowning
-    # volumes nothing there will read. A service-local deploy:
-    # shallow-replaces the anchor's whole deploy map — mode and the
-    # race-sized bounded policy are restated verbatim.
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 30s
-        max_attempts: 60
+    # Same node set as the follow-up service's own placement constraint
+    # (see the x-chown-init-genieai anchor): without it the global init
+    # also runs on gateway/gpu nodes the service can never land on,
+    # chowning volumes nothing there will read. Sequence merge: the LAST
+    # map's deploy: wins whole — the race-sized policy travels with the
+    # placement.
+    <<: [*chown-init, *chown-init-genieai]
     # PER-VOLUME guard (same doctrine as backend-init): the loop probes
     # each volume independently — a root-era file in one volume heals
     # only that volume. Every find's exit status is enforced (see
@@ -2876,22 +2867,13 @@ services:
   # as (#1227). One-shot, runs as root ON PURPOSE (the chown IS the job) and
   # writes nothing outside the named volume - see the no-root contract test.
   victorialogs-init:
-    <<: *chown-init
-    # Same node set as the follow-up service's own placement
-    # constraint: without it the global init also runs on
-    # gateway/gpu nodes the service can never land on, chowning
-    # volumes nothing there will read. A service-local deploy:
-    # shallow-replaces the anchor's whole deploy map — mode and the
-    # race-sized bounded policy are restated verbatim.
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 30s
-        max_attempts: 60
+    # Same node set as the follow-up service's own placement constraint
+    # (see the x-chown-init-genieai anchor): without it the global init
+    # also runs on gateway/gpu nodes the service can never land on,
+    # chowning volumes nothing there will read. Sequence merge: the LAST
+    # map's deploy: wins whole — the race-sized policy travels with the
+    # placement.
+    <<: [*chown-init, *chown-init-genieai]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /var/lib/victoria-logs -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:

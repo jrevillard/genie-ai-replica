@@ -224,13 +224,21 @@
     # the uid-1000 ownership the migration just handed over. The resolved
     # spelling comes from group_vars (ONE formula for every consumer).
     _fix_payload_data_path: "{{ data_dir_resolved }}"
+    # secrets/ is excluded too: the SSL certificate tree is ROOT-owned by
+    # DESIGN (root:101 0640 key — the "Normalize SSL certificate ownership"
+    # block owns it later in this play), so leaving it to the payload heal
+    # would flip the TLS key to ansible_user on every deploy — a permanent
+    # probe hit, and a transient window where gid-101 nginx cannot read the
+    # key.
     _fix_payload_probe_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
       ! -path "{{ _fix_payload_data_path }}"
+      ! -name secrets
       ! -uid {{ ansible_user_uid }} -print -quit
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
       ! -path "{{ _fix_payload_data_path }}"
+      ! -name secrets
       -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.

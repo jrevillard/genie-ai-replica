@@ -601,17 +601,17 @@ describe('compose non-root contract (#1227)', () => {
     // (same YAML merge rule the gate models for cap_add) — the init would
     // run with full root caps while the cap_add invariant stayed green.
     const droppedAll = composeText.replace(
-      '  arango-vector-db-init:\n    <<: *chown-init\n',
-      '  arango-vector-db-init:\n    <<: *chown-init\n    cap_drop: []\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    cap_drop: []\n'
     );
     expect(droppedAll).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(droppedAll);
-    expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('cap_drop: [ALL]'))).toBe(true);
+    expect(v1.some((v) => v.includes('otel-collector-init') && v.includes('cap_drop: [ALL]'))).toBe(true);
 
     // restating the anchor's drop explicitly stays clean
     const restatedAll = composeText.replace(
-      '  arango-vector-db-init:\n    <<: *chown-init\n',
-      '  arango-vector-db-init:\n    <<: *chown-init\n    cap_drop: [ALL]\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    cap_drop: [ALL]\n'
     );
     expect(validateComposeNonRoot(restatedAll).violations).toEqual([]);
 
@@ -702,6 +702,44 @@ describe('compose non-root contract (#1227)', () => {
     // out (pre-existing host-relative path, same doctrine as absolute)
     const parentPlain = parentEscape.replace('../shared/data/backups', '../shared/backups');
     expect(validateComposeNonRoot(parentPlain).violations).toEqual([]);
+  });
+
+  test('mutations: untyped long-syntax entries are claimed, not dropped', () => {
+    // Current compose-go rejects an untyped long-syntax entry outright,
+    // but older builds within the documented floor infer the mount type
+    // from the source shape — dropping the deferred source would be
+    // fail-open. It is claimed as a bind (conservatively) at every place
+    // the entry ends: a new entry, the block closing, or end of file.
+    const untypedEof = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - source: ${DATA_DIR:-./data}/logs/kong',
+      '        target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(untypedEof);
+    expect(v1.some((v) => v.includes('kong') && v.includes('create_host_path'))).toBe(true);
+
+    const untypedFollowed = untypedEof
+      .replace(
+        '        target: /var/log/kong',
+        '        target: /var/log/kong\n      - type: bind\n        source: ./data/other\n        target: /other\n        bind: {create_host_path: false}'
+      )
+      .replace('      - source: ${DATA_DIR:-./data}/logs/kong', '      - source: ./data/logs/kong');
+    const { violations: v2 } = validateComposeNonRoot(untypedFollowed);
+    expect(v2.some((v) => v.includes('kong') && v.includes('create_host_path'))).toBe(true);
+
+    // a NAMED volume reference (no path shape) and an explicit type:
+    // volume stay out
+    const namedVolume = untypedEof.replace('source: ${DATA_DIR:-./data}/logs/kong', 'source: kong_logs');
+    expect(validateComposeNonRoot(namedVolume).violations).toEqual([]);
+
+    const explicitVolume = untypedEof
+      .replace('      - source:', '      - type: volume\n        source:')
+      .replace('        bind: {create_host_path: false}\n', '');
+    expect(validateComposeNonRoot(explicitVolume).violations).toEqual([]);
   });
 
   test('mutations: a 6-space mode: after the deploy block is not deploy state', () => {
@@ -795,8 +833,8 @@ describe('compose non-root contract (#1227)', () => {
     // An EXPLICIT cap_add: [] replaces the anchor's list (YAML merge
     // semantics) — the CHOWN invariant must trip, not inherit.
     const emptyCaps = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    cap_add: []\n'
+      '    <<: [*chown-init, *chown-init-genieai]\n',
+      '    <<: [*chown-init, *chown-init-genieai]\n    cap_add: []\n'
     );
     expect(emptyCaps).not.toBe(composeText);
     const { violations: v3 } = validateComposeNonRoot(emptyCaps);
@@ -849,8 +887,8 @@ describe('compose non-root contract (#1227)', () => {
     // A SERVICE-LOCAL commented restart hides behind the anchor's bounded
     // values (the r19 mutation covered the anchor line only).
     const localCommented = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    restart: always # self-heal\n'
+      '    <<: [*chown-init, *chown-init-genieai]\n',
+      '    <<: [*chown-init, *chown-init-genieai]\n    restart: always # self-heal\n'
     );
     expect(localCommented).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(localCommented);

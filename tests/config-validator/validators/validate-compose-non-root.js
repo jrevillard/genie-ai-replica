@@ -85,6 +85,9 @@ function validateComposeNonRoot(composeText) {
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
+    // the last volumes entry of the file never sees a new-entry line or a
+    // block close — claim it here
+    claimDeferred();
     if (currentService) {
       const gated = currentProfiles.length > 0;
       if (!gated) {
@@ -362,6 +365,19 @@ function validateComposeNonRoot(composeText) {
   let entryType = null; // long-syntax entry type: 'bind' | 'volume'
   let entryTypeExplicit = false; // type: seen in this entry (vs the untyped volume default)
   let deferredSource = null; // source: seen while entryType is still the untyped default
+  // An UNCLAIMED deferred source (an untyped long-syntax entry) is a
+  // fail-open drop — current compose-go rejects the spelling outright, but
+  // older builds within the documented floor infer the mount type from the
+  // source shape, so it can be a real host bind at runtime. Claim it as a
+  // bind (conservatively) at every place the entry ends: a new entry, the
+  // volumes block closing, or end of file.
+  const claimDeferred = () => {
+    if (deferredSource !== null && !entryTypeExplicit && currentService) {
+      const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+      binds.push({ path: deferredSource, createHostPathFalse: pendingCreateFalse, shortSyntax: false });
+    }
+    deferredSource = null;
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -396,8 +412,11 @@ function validateComposeNonRoot(composeText) {
     if (!currentService) continue;
 
     // `<<: *chown-init` — the service inherits the anchor's invariants as
-    // its baseline (service-local keys still override).
-    if (/^ {4}<<:\s*\*chown-init\s*$/.test(line)) {
+    // its baseline (service-local keys still override). The sequence form
+    // `<<: [*chown-init, *chown-init-genieai]` merges the SAME policy (the
+    // placement extension only adds deploy.placement and restates the
+    // identical deploy values), so it earns the same credit.
+    if (/^ {4}<<:\s*\[?\*chown-init\b/.test(line)) {
       anchorMerged = true;
       continue;
     }
@@ -569,6 +588,7 @@ function validateComposeNonRoot(composeText) {
     }
     if (inVolumes) {
       if (!/^ {6}/.test(line)) {
+        claimDeferred();
         inVolumes = false;
         inBindOpts = false;
         pendingCreateFalse = false;
@@ -602,8 +622,11 @@ function validateComposeNonRoot(composeText) {
         // a new entry begins — its opts may only attach to a source: seen
         // from here on, and a pending opt-out armed by a bind: block with
         // no source: of its own dies here (it must never leak into the
-        // next entry); type: decides host-bind vs named volume (compose-go
-        // defaults an UNtyped long-syntax entry to volume)
+        // next entry); type: decides host-bind vs named volume (current
+        // compose-go REJECTS an untyped long-syntax entry outright, but
+        // older builds within the documented floor infer the mount type
+        // from the source shape — dropping the source would be fail-open)
+        claimDeferred();
         sourceSeenThisEntry = false;
         entryTypeExplicit = false;
         deferredSource = null;

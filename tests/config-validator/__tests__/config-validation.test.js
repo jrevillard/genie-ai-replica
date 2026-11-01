@@ -2263,9 +2263,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section. Comment
-  // lines are stripped entirely: they are layout, not configuration, and
-  // must not leak literals (a path, a condition) into the assertions below.
+  // body is valid YAML there and must not truncate the section. Comments
+  // are stripped entirely — whole-line ones and inline ` #...` tails: they
+  // are layout, not configuration, and must not leak literals (a path, a
+  // condition, a tool name) into the assertions below. Inline stripping is
+  // safe on this file: the only in-code hash signs are bash expansions of
+  // the `${VAR#word}` form, which no space precedes.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
     expect(start).toBeGreaterThan(-1);
@@ -2275,6 +2278,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return section
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('#'))
+      .map((line) => line.replace(/\s+#.*$/, ''))
       .join('\n');
   };
 
@@ -2353,14 +2357,17 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const deriveConsumedPaths = (specFiles) => {
     // Specifier quotes are unenforced in tests/e2e (no ESLint config covers
     // the tree), so single, double and backtick quotes are all consumed;
-    // the backreference keeps the pairs matched. `import ... from`, dynamic
+    // the backreference keeps the pairs matched. require( accepts the
+    // spaced and require.resolve spellings. `import ... from`, dynamic
     // import() and bare side-effect imports land in the same alternation.
-    // Quoted relative paths inside comments over-capture — the filesystem
-    // arbitrates existence, so only comments naming real files over-derive;
-    // that is the conservative direction for a trigger guard (more anchor
-    // coverage, never a silent skip) and it fails the pin loudly, not
-    // silently.
-    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
+    // Computed specifiers (template literals with interpolation) match the
+    // regex but fail existence resolution and drop silently — the same
+    // non-literal-argument family tracked in #1325. Quoted relative paths
+    // inside comments over-capture — the filesystem arbitrates existence,
+    // so only comments naming real files over-derive; that is the
+    // conservative direction for a trigger guard (more anchor coverage,
+    // never a silent LOSS of coverage) and it fails the pin loudly.
+    const specifierRe = /(?:require(?:\.resolve)?\s*\(\s*|from\s+|import\(\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
     // Same shape tolerance for __dirname chains: either quote style, any
     // spacing. A join carrying a non-literal argument is not matched at all
     // (tracked in #1325); an inline comment inside the call likewise.
@@ -2438,9 +2445,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // targets. If the config ever pins its own testMatch or moves testDir,
   // the scan set silently diverges from what actually executes — the same
   // hand-copied drift this guard exists to catch, in its own input. Pin
-  // both so an override fails here first, loudly.
+  // both (on code lines only — a prose comment naming the keys must not
+  // fail the pin) so an override fails here first, loudly.
   test('playwright.config.js keeps the defaults the derivation assumes', () => {
-    const config = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    const config = fs
+      .readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .join('\n');
     expect(config).not.toMatch(/testMatch/);
     expect(config).toMatch(/testDir:\s*'\.\/tests\/e2e'/);
   });
@@ -2530,6 +2542,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', 'const h = require(`../helpers/auth`);')).toEqual([
         'tests/e2e/helpers/**/*'
       ]);
+    });
+
+    test('a spaced require and require.resolve are consumed too', () => {
+      const source = "const a = require ('../helpers/auth');\nconst b = require.resolve('../helpers/locale');";
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
     });
 
     test('specifiers that leave tests/e2e or do not exist are dropped', () => {
@@ -2622,9 +2639,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const section = sectionOf(job);
     expect(section).toContain('extends: .e2e_web_base');
     // The derivation reads the invocation from .e2e_web_base only — a
-    // consuming job overriding script with its own `npx playwright test`
-    // would execute targets nothing derived. Keep the invocation single.
-    expect(section).not.toContain('npx playwright');
+    // consuming job overriding script with its own playwright invocation
+    // (any runner spelling) would execute targets nothing derived. Keep
+    // the invocation single.
+    expect(section).not.toMatch(/playwright\s+test/);
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

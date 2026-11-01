@@ -66,7 +66,7 @@ class ServiceCategoryService {
       // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
-        nameEN: payload.nameEN
+        nameEN: payload.nameEN.trim()
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
@@ -180,7 +180,8 @@ class ServiceCategoryService {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
       this._validateTranslationsPayload(payload.translations);
-      logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
+      const nameEN = payload.nameEN.trim();
+      logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
 
       // 1. Ensure the service exists (this will throw an error if not found)
       await this.services.document(serviceKey);
@@ -190,7 +191,7 @@ class ServiceCategoryService {
         _key: `${serviceKey}_EN`,
         serviceId: serviceKey,
         languageCode: 'EN',
-        translation: payload.nameEN,
+        translation: nameEN,
         isActive: true,
         updatedAt: new Date().toISOString()
       };
@@ -198,7 +199,7 @@ class ServiceCategoryService {
       logger.info(`Upserted English translation for service ${serviceKey}`);
 
       // 2b. Keep nameEN in sync on the parent service document
-      await this.services.update(serviceKey, { nameEN: payload.nameEN });
+      await this.services.update(serviceKey, { nameEN });
 
       // 3. Clear old non-English translations and save the new set. The
       // REMOVE only runs when the payload carries a translations array —
@@ -809,7 +810,7 @@ class ServiceCategoryService {
       // 2. Create the category document with the correct order and nameEN
       const categoryDoc = {
         order: newOrder,
-        nameEN: payload.nameEN
+        nameEN: payload.nameEN.trim()
       };
       const newCategory = await this.serviceCategories.save(categoryDoc);
 
@@ -836,7 +837,8 @@ class ServiceCategoryService {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
       this._validateTranslationsPayload(payload.translations);
-      logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
+      const nameEN = payload.nameEN.trim();
+      logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
       // For now, we'll assume the main document has no fields that change here.
@@ -846,7 +848,7 @@ class ServiceCategoryService {
         _key: `${categoryKey}_EN`,
         serviceCategoryId: categoryKey,
         languageCode: 'EN',
-        translation: payload.nameEN,
+        translation: nameEN,
         isActive: true,
         updatedAt: new Date().toISOString()
       };
@@ -854,7 +856,7 @@ class ServiceCategoryService {
       logger.info(`Upserted English translation for category ${categoryKey}`);
 
       // 2b. Keep nameEN in sync on the parent category document
-      await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
+      await this.serviceCategories.update(categoryKey, { nameEN });
 
       // 3. Update/create the other translations
       if (payload.translations) {

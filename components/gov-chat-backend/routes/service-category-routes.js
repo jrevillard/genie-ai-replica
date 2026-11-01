@@ -371,6 +371,15 @@ module.exports = (serviceCategoryService) => {
    *                       description: Localized display name.
    *                   required: [languageCode, translation]
    *     responses:
+   *       '400':
+   *         description: Validation error (missing nameEN, bad translation shape, duplicate or EN languageCode)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
    *       '201':
    *         description: Category created successfully
    */
@@ -521,6 +530,15 @@ module.exports = (serviceCategoryService) => {
    *                       description: Localized display name.
    *                   required: [languageCode, translation]
    *     responses:
+   *       '400':
+   *         description: Validation error (missing nameEN, bad translation shape, duplicate or EN languageCode)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
    *       '201':
    *         description: Service created successfully
    *       '500':
@@ -582,6 +600,15 @@ module.exports = (serviceCategoryService) => {
    *                       description: Localized display name.
    *                   required: [languageCode, translation]
    *     responses:
+   *       '400':
+   *         description: Validation error (missing nameEN, bad translation shape, duplicate or EN languageCode)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
    *       '200':
    *         description: Category updated successfully
    *       '500':
@@ -643,6 +670,15 @@ module.exports = (serviceCategoryService) => {
    *                       description: Localized display name.
    *                   required: [languageCode, translation]
    *     responses:
+   *       '400':
+   *         description: Validation error (missing nameEN, bad translation shape, duplicate or EN languageCode)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
    *       '200':
    *         description: Service updated successfully
    *       '500':

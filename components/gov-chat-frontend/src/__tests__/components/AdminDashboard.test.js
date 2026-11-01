@@ -737,20 +737,22 @@ describe('AdminDashboard', () => {
       expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
-    it('surfaces the backend rejection message in the error toast', async () => {
+    it('shows the generic save-error toast when the service call rejects', async () => {
       const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
-      const backendError = new Error('Request failed');
-      backendError.response = {
-        data: { message: "translations must not include 'EN' — the English name is owned by nameEN" }
-      };
-      treeMock.updateService.mockRejectedValueOnce(backendError);
+      // httpService rejects with {status, data, message} and toasts the
+      // backend reason itself; the component adds its own action-level toast.
+      treeMock.updateService.mockRejectedValueOnce({
+        status: 400,
+        data: { message: 'boom' },
+        message: 'boom'
+      });
 
       await wrapper.vm.saveHierarchyItem();
 
       const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
       const errorToast = emissions.find(([, p]) => p.type === 'error');
       expect(errorToast).toBeTruthy();
-      expect(errorToast[1].message).toContain("must not include 'EN'");
+      expect(errorToast[1].message).toBe('Failed to save hierarchy item.');
     });
 
     it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {

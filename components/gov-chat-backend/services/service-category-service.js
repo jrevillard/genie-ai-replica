@@ -274,7 +274,12 @@ class ServiceCategoryService {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
       // Validate before any write: a rejected payload must not leave a
-      // half-created service (or its category edge) behind.
+      // half-created service (or its category edge) behind. The parent
+      // category must exist too — the edge save would otherwise fail after
+      // the service document was already written.
+      if (!(await this.categoryExists(categoryKey))) {
+        throw new NotFoundError(`Category ${categoryKey} not found`);
+      }
       this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
 
@@ -405,12 +410,12 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Existence first: an unknown id must answer 404 even when the
+      // payload is also malformed. Validation still runs before any write.
+      await this.services.document(serviceKey);
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
-
-      // 1. Ensure the service exists (this will throw an error if not found)
-      await this.services.document(serviceKey);
 
       // 2. Update/create the English translation
       const englishTranslationDoc = {
@@ -946,6 +951,9 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Existence first: an unknown id must answer 404 even when the
+      // payload is also malformed. Validation still runs before any write.
+      await this.serviceCategories.document(categoryKey);
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);

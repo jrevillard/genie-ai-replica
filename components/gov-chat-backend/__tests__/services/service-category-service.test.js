@@ -212,6 +212,18 @@ describe('ServiceCategoryService', () => {
       expect(mockServices.save).not.toHaveBeenCalled();
       expect(mockCategoryServices.save).not.toHaveBeenCalled();
     });
+
+    it('rejects a nonexistent parent category before saving anything', async () => {
+      mockServices.document.mockRejectedValue(Object.assign(new Error('not found'), { code: 404 }));
+      // categoryExists walks the serviceCategories collection
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('not found'), { code: 404 }));
+
+      await expect(service.createServiceWithTranslations('ghost-cat', { nameEN: 'New Service' })).rejects.toThrow(
+        'not found'
+      );
+      expect(mockServices.save).not.toHaveBeenCalled();
+      expect(mockCategoryServices.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateServiceWithTranslations', () => {
@@ -292,6 +304,17 @@ describe('ServiceCategoryService', () => {
       mockServices.document.mockRejectedValue(new Error('Not found'));
 
       await expect(service.updateServiceWithTranslations('missing', { nameEN: 'Test' })).rejects.toThrow('Not found');
+    });
+
+    it('answers 404-class existence before payload validation', async () => {
+      mockServices.document.mockRejectedValue(new Error('Not found'));
+
+      await expect(
+        service.updateServiceWithTranslations('missing', {
+          nameEN: 'Test',
+          translations: [{ lang: 'fr', text: 'bad shape' }]
+        })
+      ).rejects.toThrow('Not found');
     });
 
     it('rejects non-string translation values before mutating', async () => {

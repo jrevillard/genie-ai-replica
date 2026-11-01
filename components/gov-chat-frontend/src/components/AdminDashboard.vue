@@ -2985,8 +2985,10 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
+      // Null-safe: a legacy item without an EN translation loads nameEN as
+      // null; the empty string lets the backend answer its 400 cleanly.
       const payload = {
-        nameEN: this.hierarchyForm.nameEN.trim(),
+        nameEN: (this.hierarchyForm.nameEN ?? '').trim(),
         translations: rows
       };
 
@@ -3023,11 +3025,12 @@ export default {
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
         eventBus.$emit('knowledge-hierarchy-updated'); // Emit global event for other components
       } catch (error) {
-        // Surface the backend's ValidationError message when present — the
-        // generic toast alone sends the admin retrying with no hint.
-        const detail = error?.response?.data?.message;
+        // httpService's interceptor already toasts the backend's rejection
+        // reason for non-401 responses; this generic toast marks the failed
+        // action in the dashboard context.
         this.showNotification(
-          this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.') + (detail ? `: ${detail}` : ''),
+          // MODIFIED: Use new i18n key
+          this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'),
           'error'
         );
         console.error(error);

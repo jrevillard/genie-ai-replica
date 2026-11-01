@@ -201,6 +201,17 @@ describe('ServiceCategoryService', () => {
         'nameEN is required'
       );
     });
+
+    it('rejects malformed translations without creating the service or its edge', async () => {
+      await expect(
+        service.createServiceWithTranslations('cat-1', {
+          nameEN: 'New Service',
+          translations: [{ lang: 'fr', text: 'Nouveau' }]
+        })
+      ).rejects.toThrow('unexpected shape');
+      expect(mockServices.save).not.toHaveBeenCalled();
+      expect(mockCategoryServices.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateServiceWithTranslations', () => {
@@ -266,6 +277,39 @@ describe('ServiceCategoryService', () => {
       mockServices.document.mockRejectedValue(new Error('Not found'));
 
       await expect(service.updateServiceWithTranslations('missing', { nameEN: 'Test' })).rejects.toThrow('Not found');
+    });
+
+    it('rejects non-string translation values before mutating', async () => {
+      await expect(
+        service.updateServiceWithTranslations('svc-1', {
+          nameEN: 'Updated',
+          translations: [{ languageCode: 'fr', translation: 123 }]
+        })
+      ).rejects.toThrow('unexpected shape');
+      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects duplicate language codes that differ only in case or whitespace', async () => {
+      await expect(
+        service.updateServiceWithTranslations('svc-1', {
+          nameEN: 'Updated',
+          translations: [
+            { languageCode: 'fr', translation: 'A' },
+            { languageCode: ' FR ', translation: 'B' }
+          ]
+        })
+      ).rejects.toThrow('Duplicate languageCode');
+      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('preserves existing translations when the payload omits the translations field', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateServiceWithTranslations('svc-1', { nameEN: 'Renamed' });
+
+      expect(mockDb.query).not.toHaveBeenCalled();
     });
   });
 
@@ -466,6 +510,16 @@ describe('ServiceCategoryService', () => {
 
     it('should throw ValidationError when nameEN is missing', async () => {
       await expect(service.createCategory({ nameEN: '' })).rejects.toThrow('nameEN is required');
+    });
+
+    it('rejects malformed translations without creating the category', async () => {
+      await expect(
+        service.createCategory({
+          nameEN: 'New Category',
+          translations: [{ lang: 'fr', text: 'Nouvelle' }]
+        })
+      ).rejects.toThrow('unexpected shape');
+      expect(mockServiceCategories.save).not.toHaveBeenCalled();
     });
   });
 

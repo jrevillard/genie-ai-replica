@@ -273,6 +273,9 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Validate before any write: a rejected payload must not leave a
+      // half-created service (or its category edge) behind.
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
 
       // 1. Get the current maximum order number for services IN THIS CATEGORY
@@ -327,19 +330,29 @@ class ServiceCategoryService {
     if (!Array.isArray(translations)) {
       throw new ValidationError('translations must be an array of {languageCode, translation}');
     }
+    const seenLocales = new Set();
     for (let i = 0; i < translations.length; i++) {
       const trans = translations[i];
       if (
         !trans ||
         typeof trans !== 'object' ||
-        !String(trans.languageCode || '').trim() ||
-        !String(trans.translation || '').trim()
+        typeof trans.languageCode !== 'string' ||
+        !trans.languageCode.trim() ||
+        typeof trans.translation !== 'string' ||
+        !trans.translation.trim()
       ) {
         const keys = trans && typeof trans === 'object' ? Object.keys(trans).join(',') : typeof trans;
         throw new ValidationError(
           `Translation entry ${i} has an unexpected shape (expected {languageCode, translation}, got keys: ${keys})`
         );
       }
+      // Same normalized code = same stored _key: the second entry would
+      // silently overwrite the first via overwrite:true.
+      const locale = trans.languageCode.trim().toUpperCase();
+      if (seenLocales.has(locale)) {
+        throw new ValidationError(`Duplicate languageCode '${locale}' in translations`);
+      }
+      seenLocales.add(locale);
     }
   }
 
@@ -397,15 +410,18 @@ class ServiceCategoryService {
       // 2b. Keep nameEN in sync on the parent service document
       await this.services.update(serviceKey, { nameEN: payload.nameEN });
 
-      // 3. Clear old non-English translations and save the new set
-      await this.db.query(aql`
-      FOR trans IN serviceTranslations
-        FILTER trans.serviceId == ${serviceKey}
-        FILTER trans.languageCode != 'EN'
-        REMOVE trans IN serviceTranslations
-    `);
-
+      // 3. Clear old non-English translations and save the new set. The
+      // REMOVE only runs when the payload carries a translations array —
+      // an omitted field means "leave the translations untouched" (an
+      // explicit empty array is the clear-all), matching the category path.
       if (payload.translations) {
+        await this.db.query(aql`
+        FOR trans IN serviceTranslations
+          FILTER trans.serviceId == ${serviceKey}
+          FILTER trans.languageCode != 'EN'
+          REMOVE trans IN serviceTranslations
+      `);
+
         for (const trans of payload.translations) {
           await this.serviceTranslations.save(this._buildTranslationDoc(serviceKey, 'serviceId', trans), {
             overwrite: true
@@ -869,6 +885,9 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Validate before any write: a rejected payload must not leave a
+      // half-created category behind.
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating new category "${payload.nameEN}"`);
 
       // 1. Get the current maximum order number for categories

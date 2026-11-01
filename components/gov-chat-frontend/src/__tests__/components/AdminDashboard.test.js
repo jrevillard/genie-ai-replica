@@ -687,6 +687,20 @@ describe('AdminDashboard', () => {
       });
     });
 
+    it('drops rows with null lang or text instead of throwing', async () => {
+      const { wrapper, treeMock } = mountEditingService([
+        { lang: null, text: 'orphan' },
+        { lang: 'fr', text: 'Nom' }
+      ]);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Nom' }]
+      });
+    });
+
     it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
       const { wrapper, treeMock } = mountEditingService([
         { lang: 'fr', text: 'A' },

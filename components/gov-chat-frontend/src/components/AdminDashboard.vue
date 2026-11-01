@@ -2958,11 +2958,11 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      // Normalize rows once: trimmed lang/text, empties dropped. The
-      // {lang, text} rows are converted to the write contract by the service
-      // layer (serviceTreeService).
+      // Normalize rows once: null-safe trimmed lang/text, empties dropped.
+      // The {lang, text} rows are converted to the write contract by the
+      // service layer (serviceTreeService).
       const rows = this.hierarchyForm.translations
-        .map((t) => ({ lang: t.lang.trim(), text: t.text.trim() }))
+        .map((t) => ({ lang: (t?.lang ?? '').trim(), text: (t?.text ?? '').trim() }))
         .filter((r) => r.lang && r.text);
       const langCodes = rows.map((r) => r.lang.toLowerCase());
 

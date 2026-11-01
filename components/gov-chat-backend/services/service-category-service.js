@@ -346,14 +346,30 @@ class ServiceCategoryService {
           `Translation entry ${i} has an unexpected shape (expected {languageCode, translation}, got keys: ${keys})`
         );
       }
+      const locale = this._normalizeLocale(trans.languageCode);
       // Same normalized code = same stored _key: the second entry would
       // silently overwrite the first via overwrite:true.
-      const locale = trans.languageCode.trim().toUpperCase();
       if (seenLocales.has(locale)) {
         throw new ValidationError(`Duplicate languageCode '${locale}' in translations`);
       }
+      // The English name is owned by the nameEN field of the same payload;
+      // an EN entry here would silently overwrite it and desync the parent.
+      if (locale === 'EN') {
+        throw new ValidationError("translations must not include 'EN' — the English name is owned by nameEN");
+      }
       seenLocales.add(locale);
     }
+  }
+
+  /**
+   * Normalizes a language code to its stored form. The storage key of a
+   * translation is `${ownerKey}_${LOCALE}`, so the validator's duplicate
+   * detection and the document builder MUST normalize identically.
+   * @param {String} code - The raw language code.
+   * @returns {String} The uppercased, trimmed code.
+   */
+  _normalizeLocale(code) {
+    return code.trim().toUpperCase();
   }
 
   /**
@@ -364,7 +380,7 @@ class ServiceCategoryService {
    * @returns {Object} The translation document to save.
    */
   _buildTranslationDoc(ownerKey, fkField, trans) {
-    const transLocale = String(trans.languageCode).trim().toUpperCase();
+    const transLocale = this._normalizeLocale(trans.languageCode);
     const now = new Date().toISOString();
     return {
       _key: `${ownerKey}_${transLocale}`,

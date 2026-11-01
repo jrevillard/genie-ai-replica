@@ -311,6 +311,25 @@ describe('ServiceCategoryService', () => {
 
       expect(mockDb.query).not.toHaveBeenCalled();
     });
+
+    it('treats an explicit empty translations array as clear-all', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateServiceWithTranslations('svc-1', { nameEN: 'Renamed', translations: [] });
+
+      expect(mockDb.query).toHaveBeenCalled();
+      expect(mockServiceTranslations.save).toHaveBeenCalledTimes(1); // EN upsert only
+    });
+
+    it('rejects an EN entry — the English name is owned by nameEN', async () => {
+      await expect(
+        service.updateServiceWithTranslations('svc-1', {
+          nameEN: 'Tax Filing',
+          translations: [{ languageCode: 'en', translation: 'Impots' }]
+        })
+      ).rejects.toThrow("must not include 'EN'");
+      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('categoryExists', () => {
@@ -558,6 +577,48 @@ describe('ServiceCategoryService', () => {
 
       expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects non-string translation values before mutating', async () => {
+      await expect(
+        service.updateCategoryWithTranslations('cat-1', {
+          nameEN: 'Updated',
+          translations: [{ languageCode: 'fr', translation: 123 }]
+        })
+      ).rejects.toThrow('unexpected shape');
+      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects duplicate language codes that differ only in case or whitespace', async () => {
+      await expect(
+        service.updateCategoryWithTranslations('cat-1', {
+          nameEN: 'Updated',
+          translations: [
+            { languageCode: 'fr', translation: 'A' },
+            { languageCode: ' FR ', translation: 'B' }
+          ]
+        })
+      ).rejects.toThrow('Duplicate languageCode');
+      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('preserves existing translations when the payload omits the translations field', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateCategoryWithTranslations('cat-1', { nameEN: 'Renamed' });
+
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('treats an explicit empty translations array as clear-all', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateCategoryWithTranslations('cat-1', { nameEN: 'Renamed', translations: [] });
+
+      expect(mockDb.query).toHaveBeenCalled();
+      expect(mockServiceCategoryTranslations.save).toHaveBeenCalledTimes(1); // EN upsert only
     });
   });
 

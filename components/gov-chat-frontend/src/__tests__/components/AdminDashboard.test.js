@@ -701,6 +701,42 @@ describe('AdminDashboard', () => {
       });
     });
 
+    it('drops rows with non-string lang or text (legacy numeric docs)', async () => {
+      const { wrapper, treeMock } = mountEditingService([
+        { lang: 'fr', text: 123 },
+        { lang: 'es', text: 'Nombre' }
+      ]);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'es', text: 'Nombre' }]
+      });
+    });
+
+    it('trims the nameEN field in the payload', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.hierarchyForm.nameEN = '  Tax Filing  ';
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Nom' }]
+      });
+    });
+
+    it('shows an error and saves nothing on an unknown form mode', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.hierarchyForm.mode = 'teleportCategory';
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).not.toHaveBeenCalled();
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+    });
+
     it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
       const { wrapper, treeMock } = mountEditingService([
         { lang: 'fr', text: 'A' },

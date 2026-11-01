@@ -2958,11 +2958,15 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      // Normalize rows once: null-safe trimmed lang/text, empties dropped.
-      // The {lang, text} rows are converted to the write contract by the
-      // service layer (serviceTreeService).
+      // Normalize rows once: only string lang/text survive (legacy docs can
+      // hold nulls or numbers), trimmed, empties dropped. The {lang, text}
+      // rows are converted to the write contract by the service layer
+      // (serviceTreeService).
       const rows = this.hierarchyForm.translations
-        .map((t) => ({ lang: (t?.lang ?? '').trim(), text: (t?.text ?? '').trim() }))
+        .map((t) => ({
+          lang: typeof t?.lang === 'string' ? t.lang.trim() : '',
+          text: typeof t?.text === 'string' ? t.text.trim() : ''
+        }))
         .filter((r) => r.lang && r.text);
       const langCodes = rows.map((r) => r.lang.toLowerCase());
 
@@ -2982,7 +2986,7 @@ export default {
 
       // --- 2. PREPARE PAYLOAD ---
       const payload = {
-        nameEN: this.hierarchyForm.nameEN,
+        nameEN: this.hierarchyForm.nameEN.trim(),
         translations: rows
       };
 
@@ -2999,6 +3003,11 @@ export default {
           await serviceTreeService.createService(parentId, payload);
         } else if (mode === 'editService') {
           await serviceTreeService.updateService(_key, payload);
+        } else {
+          // An unknown mode must not report success: nothing was saved.
+          console.error(`saveHierarchyItem: unknown form mode "${mode}"`);
+          this.showNotification(this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'), 'error');
+          return;
         }
 
         this.showNotification(

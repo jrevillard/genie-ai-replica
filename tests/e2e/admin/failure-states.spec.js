@@ -27,7 +27,11 @@ test.describe('Admin overview failure states', () => {
         }),
       }),
     );
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
+    // domcontentloaded, not networkidle: the toast hides itself after 3 s,
+    // and waiting for the network to go quiet can land the first
+    // assertion after it is already gone. The toast assertion below
+    // auto-waits from the moment the DOM is ready.
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
 
     // The visible failure — the global toast the component raises from
     // its catch path.
@@ -58,7 +62,7 @@ test.describe('Admin overview failure states', () => {
       }),
     );
 
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.notification.error')).toBeVisible();
 
     await page.unroute('**/api/admin/system-health');

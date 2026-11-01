@@ -12,10 +12,8 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
  * value in the mocked payload (or break the component's assignment) and
  * the exact-text assertions below fail.
  */
-// The injected metric values — they collide with none of the
-// component's uninitialized defaults (99.98 / 245 / 0.05 / 0), so
-// seeing them on screen can only mean the API response drove the
-// render. Single source: a mutation-gate edit changes them once.
+// The injected metric values. Single source for both tests: a
+// mutation-gate edit changes them once.
 const METRICS = {
   systemUptime: 87.65,
   avgResponseTime: 321,

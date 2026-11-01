@@ -45,6 +45,15 @@ test.describe('Admin logs view', () => {
         }),
       });
     });
+    // The Logs tab also fires the raw /api/admin/logs read; mock it so
+    // the spec stays isolated from the VictoriaLogs-backed query path.
+    await page.route('**/api/admin/logs?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ logs: [], total: 0, limit: 20, offset: 0 }),
+      }),
+    );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
     // The DsTabs control renders the tab as a button (the sidebar nav
     // entries are links, so the role separates the two).
@@ -73,8 +82,11 @@ test.describe('Admin logs view', () => {
   test('an empty summary renders the explicit empty row', async ({ page }) => {
     await loginAdminWithSummary(page, { errors: [], warnings: [] });
 
-    await expect(page.locator('.log-summary-table .empty-logs')).toBeVisible();
-    await expect(page.locator('.log-summary-table .log-count')).toHaveCount(0);
+    // Both roll-up tables render their own empty row; scope to the
+    // warnings card (the table this spec's payload drives).
+    const warningsCard = page.locator('.logs-summary', { hasText: 'Warning Logs' });
+    await expect(warningsCard.locator('.empty-logs')).toBeVisible();
+    await expect(warningsCard.locator('.log-count')).toHaveCount(0);
     expect(page._summaryCalls).toBeGreaterThanOrEqual(1);
   });
 });

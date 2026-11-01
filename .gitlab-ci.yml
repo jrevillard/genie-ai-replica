@@ -587,23 +587,23 @@ workflow:
           exit 1
           ;;
       esac
-      # testadmin (admin realm role) + testplain (no roles) for the admin
-      # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
-      # and a role-less login (testplain — requireAdmin must answer 403).
-      # Same createUser helper the compose venue uses
-      # (tests/e2e/helpers/keycloak-admin.js — 201/409 tolerance, exact id
-      # lookup, realmRoles assignment); testuser above keeps its admin
-      # role for the document tests.
-      - BASE_URL="${E2E_BASE_URL}" node -e "
-          const { getAdminToken } = require('./tests/e2e/helpers/auth');
-          const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
-          (async () => {
-            const token = await getAdminToken();
-            await createUser(token, 'genie', { username: 'testadmin', email: 'testadmin@e2e.test', firstName: 'Test', lastName: 'Admin', password: 'TestAdmin123!', realmRoles: ['admin'] });
-            await createUser(token, 'genie', { username: 'testplain', email: 'testplain@e2e.test', firstName: 'Test', lastName: 'Plain', password: 'TestPlain123!' });
-            console.log('testadmin + testplain ready');
-          })().catch((e) => { console.error(e.message); process.exit(1); });
-        "
+    # testadmin (admin realm role) + testplain (no roles) for the admin
+    # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
+    # and a role-less login (testplain — requireAdmin must answer 403).
+    # Same createUser helper the compose venue uses
+    # (tests/e2e/helpers/keycloak-admin.js — 201/409 tolerance, exact id
+    # lookup, realmRoles assignment); testuser above keeps its admin
+    # role for the document tests.
+    - >
+      ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node -e "
+      const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+      (async () => {
+        const token = process.env.ADMIN_TOKEN;
+        await createUser(token, 'genie', { username: 'testadmin', email: 'testadmin@e2e.test', firstName: 'Test', lastName: 'Admin', password: 'TestAdmin123!', realmRoles: ['admin'] });
+        await createUser(token, 'genie', { username: 'testplain', email: 'testplain@e2e.test', firstName: 'Test', lastName: 'Plain', password: 'TestPlain123!' });
+        console.log('testadmin + testplain ready');
+      })().catch((e) => { console.error(e.message); process.exit(1); });
+      "
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they

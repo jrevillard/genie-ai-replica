@@ -538,7 +538,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} arquivo(s) selecionado(s) não podem ser excluídos ({'{'}reason{'}'}) — apenas os outros {'{'}n{'}'} serão excluídos.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los."
+        "{'{'}count{'}'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los."
     },
     queryInspector: {
       title: 'Inspetor de consultas',

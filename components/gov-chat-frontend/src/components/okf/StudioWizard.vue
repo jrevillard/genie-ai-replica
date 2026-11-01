@@ -133,32 +133,23 @@ import OkfStepAutocorrect from './steps/Autocorrect.vue';
 import OkfStepReview from './steps/Review.vue';
 import OkfStepPublish from './steps/Publish.vue';
 
-const STEP_LABELS = [
-  'Entry',
-  'Choose workflow',
-  'Input',
-  'Produce',
-  'Label onboard',
-  'Curate',
-  'Validate',
-  'Auto-correct',
-  'Review',
-  'Secure and Finish'
-];
+// ROUND 23 (review 81258): slug + English fallback live in ONE array — the
+// two index-aligned arrays had to be edited in lockstep (four call sites
+// zipping them by index; one slip mislabeled a step silently).
 // Round 22 (David, live screenshot — the stepper rendered English in every
-// locale): the names are i18n leaves now (okf.stepNames.*); the array above
-// stays as the English fallback path.
-const STEP_SLUGS = [
-  'entry',
-  'choose',
-  'input',
-  'produce',
-  'labelOnboard',
-  'curate',
-  'validate',
-  'autocorrect',
-  'review',
-  'secureFinish'
+// locale): the names are i18n leaves (okf.stepNames.<slug>); the label here
+// is the English fallback path.
+const STEPS = [
+  { slug: 'entry', label: 'Entry' },
+  { slug: 'choose', label: 'Choose workflow' },
+  { slug: 'input', label: 'Input' },
+  { slug: 'produce', label: 'Produce' },
+  { slug: 'labelOnboard', label: 'Label onboard' },
+  { slug: 'curate', label: 'Curate' },
+  { slug: 'validate', label: 'Validate' },
+  { slug: 'autocorrect', label: 'Auto-correct' },
+  { slug: 'review', label: 'Review' },
+  { slug: 'secureFinish', label: 'Secure and Finish' }
 ];
 
 export default {
@@ -200,9 +191,9 @@ export default {
     // hardcoded English STEP_LABELS, so the stepper rendered English in
     // every locale (the live screenshot).
     stepConfig() {
-      return STEP_LABELS.map((label, idx) => ({
+      return STEPS.map((step, idx) => ({
         value: String(idx),
-        label: `${idx + 1}. ${this.translate(`okf.stepNames.${STEP_SLUGS[idx]}`, label)}`
+        label: `${idx + 1}. ${this.translate(`okf.stepNames.${step.slug}`, step.label)}`
       }));
     },
     // A5 context rail: the REAL repo doc is the source of truth — never a
@@ -304,7 +295,8 @@ export default {
   },
   methods: {
     stepLabel(i) {
-      return `${i + 1}. ${this.translate(`okf.stepNames.${STEP_SLUGS[i]}`, STEP_LABELS[i])}`;
+      const step = STEPS[i];
+      return `${i + 1}. ${this.translate(`okf.stepNames.${step.slug}`, step.label)}`;
     },
     onStepClick(idx) {
       if (idx === this.activeStep) return;

@@ -653,8 +653,11 @@ export default {
       const savedText = this.markdown;
       if (!this.dirty || this.saving || !conceptId || !this.repoId) return;
       this.saving = true;
-      // Held for flushPendingSave (#80942) — cleared with `saving` below.
-      this._savePromise = (async () => {
+      // Held AND RETURNED for flushPendingSave (#80942; round 23: the
+      // assignment alone made the 'just started' arm resolve before the
+      // PATCH committed — the flush must mean "the autosave has COMMITTED"
+      // on every path). Cleared with `saving` below.
+      return (this._savePromise = (async () => {
         this.saveError = false;
         try {
           // Labels write-through (2026-09-05): when the edited frontmatter is
@@ -702,7 +705,7 @@ export default {
           this.saving = false;
           this._savePromise = null;
         }
-      })();
+      })());
     },
     // ── PII CACHE helpers (2026-09-09 lockup fix) ──────────────────────────
     updatePiiCache(conceptId, patch) {

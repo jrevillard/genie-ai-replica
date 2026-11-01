@@ -538,7 +538,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'}reason{'}'}) — nur die anderen {'{'}n{'}'} werden gelöscht.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
+        "{'{'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
     },
     queryInspector: {
       title: 'Abfrage-Inspektor',

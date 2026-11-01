@@ -2173,7 +2173,15 @@ export default {
     okfGateTitle() {
       if (this.okfRepoGate.reasonKey) return this.translate(this.okfRepoGate.reasonKey, '');
       if (this.okfRepoGate.warnKey)
-        return this.translate(this.okfRepoGate.warnKey, '').replace('{n}', String(this.okfRepoGate.servingCount));
+        // ROUND 23 (review 82678): the .replace('{n}', …) form never rendered
+        // — translate's raw-lookup returns the locale string WITH {n} only
+        // when nothing interpolates it, but the compiled path (and the
+        // fixture's own i18n) resolves {n} as a NAMED slot and blanks it on
+        // empty params. Feed the count through the compiled path as the
+        // named param instead.
+        return this.translate(this.okfRepoGate.warnKey, '', {
+          n: String(this.okfRepoGate.servingCount)
+        });
       return '';
     }
   },

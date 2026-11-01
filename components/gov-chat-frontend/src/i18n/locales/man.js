@@ -531,7 +531,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} selected file(s) cannot be deleted ({'{'}reason{'}'}) — only the other {'{'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
+        "{'{'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
       title: 'Inspektur Kauri',

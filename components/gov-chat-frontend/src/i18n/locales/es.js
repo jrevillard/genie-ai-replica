@@ -535,7 +535,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} archivo(s) seleccionado(s) no se pueden eliminar ({'{'}reason{'}'}) — solo se eliminarán los otros {'{'}n{'}'}.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} archivo(s) ingerido(s)/en curso se OMITIRÁN — retráquelos primero para eliminarlos."
+        "{'{'}count{'}'} archivo(s) ingerido(s)/en curso se OMITIRÁN — retráquelos primero para eliminarlos."
     },
     queryInspector: {
       title: 'Inspector de consultas',

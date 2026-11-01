@@ -1434,9 +1434,12 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
     // so the same query could read 'answerable' from Run All and
     // 'unanswerable' from the Probe button with no corpus change — and both
     // wrote row.lastProbe, overwriting each other with contradictory
-    // measurements. One contract: embedQueryBatch, like every simulator).
-    const embeddings = await headTestService.embedQueryBatch([query]);
-    const emb = embeddings && embeddings.vectors && embeddings.vectors[0];
+    // measurements). ROUND 23 (review 81251): the single-query form is
+    // embedQuery — the one-call helper probeQueryLight itself uses (prefix
+    // contract + EMBED_EMPTY guard included); the batch([q]) + .vectors[0]
+    // hand-roll was its second copy.
+    const embedded = await headTestService.embedQuery(query);
+    const emb = embedded && embedded.vector;
     if (!emb) {
       const err = new Error('query embedding failed');
       err.code = 'PROBE_EMBED_FAILED';

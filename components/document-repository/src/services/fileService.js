@@ -1052,13 +1052,40 @@ class FileService {
   // persists them via the T5 fix).
 
   /** Idempotency lookup for ingest-bundle (#80943): the stored zip for one
-   * (repo_id, bundle_version) — newest wins. null when none stored yet. */
+   * (repo_id, bundle_version) — newest wins. null when none stored yet.
+   * Sort field (round 23, review 81380): the files docs carry
+   * `uploaded_date` (metadataService.extractMetadata), never `uploaded_at`
+   * — sorting on a field no writer sets made every row tie and the LIMIT 1
+   * fall back to Arango's _key order, so the "newest wins" could hand back
+   * the OLDER zip. `uploaded_date` is ISO-8601 UTC (toISOString), so
+   * lexicographic DESC is chronological — the timezone trap the :703
+   * comment avoided does not apply to an ISO string.
+   * Index (round 22 review 81260): the filter runs on every versioned
+   * publish-retry over a grow-only collection — a persistent index keeps
+   * it off the full scan. ensureIndex is idempotent; the flag keeps the
+   * DDL to one call per process. */
+  _bundleIndexEnsured = false;
   async findBundleByRepoVersion(repoId, bundleVersion) {
     const db = await dbService.getConnection();
+    if (!this._bundleIndexEnsured) {
+      try {
+        await db.collection('files').ensureIndex({
+          type: 'persistent',
+          fields: ['repo_id', 'bundle_version'],
+          name: 'idx_files_repo_id_bundle_version',
+          sparse: false
+        });
+        this._bundleIndexEnsured = true;
+      } catch (err) {
+        // A failed DDL must not take the lookup down — the query still
+        // works, just unindexed (logged, retried on the next call).
+        console.error('[FileService] bundle lookup index ensure failed:', err.message);
+      }
+    }
     const rows = await (
       await db.query(
         'FOR f IN files FILTER f.repo_id == @repoId && f.bundle_version == @v && f.is_bundle == true ' +
-          'SORT f.uploaded_at DESC LIMIT 1 RETURN f',
+          'SORT f.uploaded_date DESC LIMIT 1 RETURN f',
         { repoId, v: bundleVersion }
       )
     ).all();
@@ -1068,7 +1095,7 @@ class FileService {
           file_id: doc.file_id || doc._key,
           file_name: doc.file_name,
           bundle_version: doc.bundle_version,
-          stored_at: doc.uploaded_at || doc._key,
+          stored_at: doc.uploaded_date || doc._key,
           graph_name: doc.graph_name,
           repo_id: doc.repo_id
         }

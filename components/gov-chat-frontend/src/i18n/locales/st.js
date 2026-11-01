@@ -537,7 +537,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} lifaele tse khethiloeng ha li ka tlosoa ({'{'}reason{'}'}) — feela tse ling {'{'}n{'}'} li tla tlosoa.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} lifaele tse kennyeng/tsa kennyang li TLA TLOHESOA — di khutlisa pele ho li tlosa."
+        "{'{'}count{'}'} lifaele tse kennyeng/tsa kennyang li TLA TLOHESOA — di khutlisa pele ho li tlosa."
     },
     queryInspector: {
       title: 'Molekomi wa lipotso',

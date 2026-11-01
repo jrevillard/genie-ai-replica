@@ -2433,23 +2433,21 @@ export default {
       }
       if (!res.ok) {
         // #80805: the advisor's poll (headTestService.recommendTags) throws
-        // with CODES — map them to translated sentences here. The English
-        // message rides the envelope as the fallback for verbatim callers.
+        // with CODES — map them to translated sentences here. ROUND 23
+        // (review 81339/82705): the RECOMMEND_FAILED special case is folded
+        // into the generic fall-through — translateLabError passes a plain
+        // server reason verbatim, TRANSLATES an okf.labErrors.* key (the
+        // special arm rendered such keys RAW), and the generic sentence is
+        // the fallback when the message is absent. The tests own this
+        // contract (verbatim reason kept, empty falls back, key translated).
         this.error =
           res.code === 'ADVISOR_TIMEOUT'
             ? this.translate(
                 'okf.testingLab.error.advisorTimeout',
                 'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
               )
-            : res.code === 'RECOMMEND_FAILED'
-              ? // #80880: recommendTags throws the SERVER's reason for this
-                // code ('vLLM 503: model not ready', 'no head tags yet', …) —
-                // keep it; the generic sentence is only the fallback when the
-                // message is absent (translateLabError's own contract: server
-                // detail must not be swapped for a generic sentence).
-                res.message || this.translate('okf.testingLab.error.advisor', 'Advisor failed')
-              : translateLabError(res.message, this.translate) ||
-                this.translate('okf.testingLab.error.advisor', 'Advisor failed');
+            : translateLabError(res.message, this.translate) ||
+              this.translate('okf.testingLab.error.advisor', 'Advisor failed');
         return;
       }
       this.advisor = res.result;

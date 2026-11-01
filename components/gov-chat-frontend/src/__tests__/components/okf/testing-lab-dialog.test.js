@@ -1987,9 +1987,46 @@ describe('#80805 — poll-envelope messages render translated, server detail ver
     await w.vm.$nextTick();
     dispatch.mockResolvedValueOnce({ ok: false, code: 'RECOMMEND_FAILED', message: '' });
     await w.vm.onRecommend();
-    // No $i18n: the fallback IS the translated default (the key passthrough
-    // is covered by the onRecommend ADVISOR_TIMEOUT test).
-    expect(typeof w.vm.error).toBe('string');
-    expect(w.vm.error.length).toBeGreaterThan(0);
+    // No $i18n: translate() returns the fallback verbatim — assert it
+    // EXACTLY. A typeof/length assertion also passes on the RAW KEY
+    // 'okf.testingLab.error.advisor' (review 81334/81349: the mutant that
+    // drops the English default leaked the key and stayed green).
+    expect(w.vm.error).toBe('Advisor failed');
+  });
+
+  it('an okf.labErrors.* advisor message is TRANSLATED, not rendered raw (round 23, 82705)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    // The store authors keys into `message` (27 sites) — the folded
+    // fall-through routes it through translateLabError, which hands the key
+    // to translate. No $i18n here: translate returns the KEY-AS-FALLBACK —
+    // the pin is that translateLabError was CONSULTED (a raw `res.message`
+    // passthrough would skip it entirely and we assert the key survives the
+    // translate hop, not the raw envelope hop).
+    const spy = jest.spyOn(w.vm, 'translate');
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'RECOMMEND_FAILED',
+      message: 'okf.labErrors.noHeadTags'
+    });
+    await w.vm.onRecommend();
+    expect(spy).toHaveBeenCalledWith('okf.labErrors.noHeadTags', 'okf.labErrors.noHeadTags');
+    spy.mockRestore();
+  });
+
+  it('ADVISOR_TIMEOUT keeps the timeout sentence even when a server message rides the envelope (81274)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'ADVISOR_TIMEOUT',
+      message: 'server-side detail the timeout arm must not surface'
+    });
+    await w.vm.onRecommend();
+    // No $i18n: the fallback IS the timeout sentence — a swapped arm (or a
+    // res.message leak into it) fails this.
+    expect(w.vm.error).toBe(
+      'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+    );
   });
 });

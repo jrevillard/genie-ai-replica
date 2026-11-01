@@ -835,6 +835,7 @@ module.exports = {
   loadSiblings,
   explainRouting,
   guardSuggestions,
+  embedQuery,
   embedQueryBatch,
   // test surface — ONLY the helpers the specs actually drive; everything
   // else is exercised through the public rebuildHead/routingTest/explainRouting

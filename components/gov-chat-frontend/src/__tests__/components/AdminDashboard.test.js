@@ -2519,9 +2519,14 @@ describe('AdminDashboard', () => {
         documents: [doc('f1', 'Ingested')],
         selectedDocuments: ['f1']
       });
-      // The factory mocks $t as identity; shadow translate so the {n} template
-      // survives to the .replace the computed applies.
-      wrapper.vm.translate = (key) => (key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key);
+      // ROUND 23 (review 82678): the count rides the NAMED-param path —
+      // translate(key, '', { n }) — because the compiled i18n path blanks
+      // {n} on empty params and a .replace on the already-blanked string
+      // found nothing. The stub mirrors the mixin's interpolateNamed.
+      wrapper.vm.translate = (key, fallback, named) => {
+        const out = key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key;
+        return out.replace('{n}', named && named.n !== undefined ? named.n : '{n}');
+      };
       expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
     });
 

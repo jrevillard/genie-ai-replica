@@ -539,7 +539,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} fichier(s) sélectionné(s) ne peuvent pas être supprimés ({'{'}reason{'}'}) — seuls les {'{'}n{'}'} autres seront supprimés.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} fichier(s) ingéré(s)/en cours seront IGNORÉS — rétractez-les d’abord pour les supprimer."
+        "{'{'}count{'}'} fichier(s) ingéré(s)/en cours seront IGNORÉS — rétractez-les d’abord pour les supprimer."
     },
     queryInspector: {
       title: 'Inspecteur de requêtes',

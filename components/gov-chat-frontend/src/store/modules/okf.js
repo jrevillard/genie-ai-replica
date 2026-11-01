@@ -80,6 +80,17 @@ const initialState = () => ({
  * "In progress" lane regardless of its lifecycle_state — the UI mirror of
  * the server's buildingBlocker (it refuses every transition while building).
  */
+/** Append a repo_id to the DRAFT lane (round 23, review 81261: the identical
+ * 4-line block was pasted in createFromCrawl and createRepo — and the
+ * per-lane Array.isArray guard was dead by #80913's own reasoning, since
+ * initialState() declares all five lanes as arrays). One paste, one place. */
+function pushRepoToDraft(context, commit, repoId) {
+  const byStage = context.state.okf.reposByStage;
+  const draftLane = byStage.draft.slice();
+  if (!draftLane.includes(repoId)) draftLane.push(repoId);
+  commit('setReposByStage', { ...byStage, draft: draftLane });
+}
+
 function laneFor(repos) {
   // P0-UI: no isBuilding consult here anymore — lifecycle truth alone
   // buckets the lanes (the building state renders on the card, never as a
@@ -548,10 +559,8 @@ const actions = {
       if (repo && repo.repo_id) {
         commit('upsertRepo', repo);
         // No fallback (#80913) — see createRepo: the 5-lane state always exists.
-        const byStage = this.state.okf.reposByStage;
-        const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
-        if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
-        commit('setReposByStage', { ...byStage, draft: draftLane });
+        // The append itself is shared with createRepo (pushRepoToDraft, below).
+        pushRepoToDraft(this, commit, repo.repo_id);
         // Register for live progress tracking (the conversion is a
         // SERVER-SIDE job now — the repo doc's `conversion` field is the
         // source of truth; the poller keeps it fresh until terminal).
@@ -638,10 +647,7 @@ const actions = {
       // Round 21 audit (#80913): no fallback — initialState() declares the
       // full 5-lane reposByStage, so it is never nullish here; the round-20
       // `|| laneFor()` arm (and the 3-lane literal before it) was dead code.
-      const byStage = this.state.okf.reposByStage;
-      const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
-      if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
-      commit('setReposByStage', { ...byStage, draft: draftLane });
+      pushRepoToDraft(this, commit, repo.repo_id);
       return { ok: true, repo };
     } catch (err) {
       commit('setError', err.message || 'createRepo failed');

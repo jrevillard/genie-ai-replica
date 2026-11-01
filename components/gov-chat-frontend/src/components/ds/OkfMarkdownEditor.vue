@@ -173,6 +173,7 @@ import DsSelect from './Select.vue';
 import DsFormGroup from './FormGroup.vue';
 import DsTable from './Table.vue';
 import DsDialog from './Dialog.vue';
+import translateMixin from '@/mixins/translateMixin';
 
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('bash', bash);
@@ -287,6 +288,14 @@ const STATUS_OPTIONS = [
 export default {
   name: 'DsOkfMarkdownEditor',
   components: { DsInput, DsSelect, DsFormGroup, DsTable, DsDialog, DsProgress },
+  // ROUND 23 (review 81280/81282): every `this.$t(key, 'English default')`
+  // below passed the default as vue-i18n 9 legacy's LOCALE-OVERRIDE
+  // argument — a string second argument to t() is the target LOCALE, so
+  // each lookup ran under a locale literally named 'Rendering…', missed,
+  // and fell back to English on EVERY call in EVERY locale. The mixin's
+  // translate(key, fallback) is the repo's raw-lookup form and is what
+  // these calls always meant.
+  mixins: [translateMixin],
   props: {
     value: { type: String, default: '' },
     mode: { type: String, default: 'split', validator: (v) => MODES.includes(v) },
@@ -343,7 +352,7 @@ export default {
       return this.enableFrontmatter && Object.keys(this.parsedData).length > 0;
     },
     renderLabel() {
-      const base = this.$t ? this.$t('okf.md.rendering', 'Rendering…') : 'Rendering…';
+      const base = this.translate('okf.md.rendering', 'Rendering…');
       const pct = Math.round((this.renderDone / (this.renderTotal || 1)) * 100);
       return base + ' ' + pct + '%';
     },
@@ -357,12 +366,12 @@ export default {
       return this.currentMode === 'split' || this.currentMode === 'source';
     },
     formatToolbarLabel() {
-      return this.$t ? this.$t('okf.md.toolbar', 'Formatting') : 'Formatting';
+      return this.translate('okf.md.toolbar', 'Formatting');
     },
     formatActions() {
       return FORMAT_ACTIONS.map((a) => ({
         ...a,
-        title: this.$t ? this.$t(a.titleKey, a.titleDefault) : a.titleDefault
+        title: this.translate(a.titleKey, a.titleDefault)
       }));
     },
     attestationPreview() {
@@ -378,34 +387,34 @@ export default {
       ];
     },
     sourcesLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.sources', 'provenance.sources') : 'provenance.sources';
+      return this.translate('okf.curator.frontmatter.sources', 'provenance.sources');
     },
     attestationLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.attestation', 'attestation') : 'attestation';
+      return this.translate('okf.curator.frontmatter.attestation', 'attestation');
     },
     statusLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.status', 'lifecycle.status') : 'lifecycle.status';
+      return this.translate('okf.curator.frontmatter.status', 'lifecycle.status');
     },
     staleAfterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after') : 'lifecycle.stale_after';
+      return this.translate('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after');
     },
     trustTierLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.trustTier', 'trust_tier') : 'trust_tier';
+      return this.translate('okf.curator.frontmatter.trustTier', 'trust_tier');
     },
     okfVersionLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.okfVersion', 'okf_version') : 'okf_version';
+      return this.translate('okf.curator.frontmatter.okfVersion', 'okf_version');
     },
     editFrontmatterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.edit', 'Edit frontmatter') : 'Edit frontmatter';
+      return this.translate('okf.curator.frontmatter.edit', 'Edit frontmatter');
     },
     editFrontmatterTitle() {
-      return this.$t ? this.$t('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter') : 'Edit frontmatter';
+      return this.translate('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter');
     },
     frontmatterLabel() {
-      return this.$t ? this.$t('okf.curator.frontmatter.label', 'Frontmatter') : 'Frontmatter';
+      return this.translate('okf.curator.frontmatter.label', 'Frontmatter');
     },
     showSourceLabel() {
-      return this.$t ? this.$t('okf.curator.showSource', 'Show source') : 'Show source';
+      return this.translate('okf.curator.showSource', 'Show source');
     },
     sourceAriaLabel() {
       return this.ariaLabel + ' — source';

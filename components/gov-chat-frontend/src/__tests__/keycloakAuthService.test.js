@@ -27,7 +27,11 @@ const MockUserManager = jest.fn().mockImplementation(() => ({
 }));
 
 jest.mock('oidc-client-ts', () => ({
-  UserManager: MockUserManager
+  UserManager: MockUserManager,
+  // The REAL User class: the adoption path rehydrates the published plain
+  // object into a User so storeUser's toStorageString() works (round 23) —
+  // mocking it away would hide exactly the bug the fix exists for.
+  User: jest.requireActual('oidc-client-ts').User
 }));
 
 // Mock oidcConfig to avoid window.APP_CONFIG dependency
@@ -562,7 +566,6 @@ describe('cross-tab renew lease (#80800)', () => {
   });
 
   const LEASE_KEY = 'genie.renew.lease';
-  const DONE_KEY = 'genie.renew.done';
   const USER_KEY = 'genie.renew.user';
 
   async function initialized() {
@@ -591,7 +594,6 @@ describe('cross-tab renew lease (#80800)', () => {
       const published = createMockUser({ access_token: 'holder-published-token' });
       setTimeout(() => {
         window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
-        window.localStorage.setItem(DONE_KEY, String(Date.now()));
         window.localStorage.removeItem(LEASE_KEY);
       }, 300);
       const p = keycloakAuthService.signinSilent();
@@ -659,32 +661,130 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
   });
 
-  it('wrapManagerSignin is idempotent per instance and getUserManager lazy-wraps (#80941)', async () => {
+  it('a re-initialize wraps the NEW manager and releases the old subscriptions (#80941, round 23)', async () => {
     await initialized();
     const first = keycloakAuthService.getUserManager();
     expect(first.__signinWrapped).toBe(true);
-    // Re-wrapping the SAME instance must not double-wrap.
     mockGetUser.mockResolvedValue(null);
-    await keycloakAuthService.initialize(); // a re-initialize creates a NEW manager
+    const registered = mockAddUserLoaded.mock.calls.length;
+    await keycloakAuthService.initialize(); // re-initialize: NEW manager
     const second = keycloakAuthService.getUserManager();
     expect(second).not.toBe(first);
     expect(second.__signinWrapped).toBe(true);
     expect(second.signinSilent).not.toBe(mockSigninSilent);
+    // The FIRST manager's event subscriptions were released before the new
+    // ones registered (round 23: re-init used to orphan them).
+    const firstBatchUnsubs = mockAddUserLoaded.mock.results.slice(0, registered).map((r) => r.value);
+    expect(firstBatchUnsubs.length).toBeGreaterThan(0);
+    firstBatchUnsubs.forEach((unsub) => expect(unsub).toHaveBeenCalled());
   });
 
-  it('getAccessTokenClaims: null without a token, null on a malformed token, claims on a valid JWT', async () => {
+  it('getAccessTokenClaims decodes the ACCESS TOKEN — roles come from it, not the profile (#80941, round 23)', async () => {
+    // base64url, no padding — the shape every real Keycloak token has
+    // (btoa's standard base64 + Latin-1 round-trips wrong, review 81337).
+    const makeJwt = (payload) =>
+      [
+        Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url'),
+        Buffer.from(JSON.stringify(payload)).toString('base64url'),
+        'sig'
+      ].join('.');
+
     mockGetUser.mockResolvedValue(null);
     await keycloakAuthService.initialize();
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // no-token arm
 
-    const payload = btoa(JSON.stringify({ sub: 'user-123', realm_access: { roles: ['admin'] } }));
-    mockGetUser.mockResolvedValue(createMockUser({ access_token: `hdr.${payload}.sig` }));
+    // The token's sub deliberately DIFFERS from the fixture profile's sub
+    // ('user-123'): a mutant reading currentUser.profile instead of
+    // decoding the token (the pre-ff8492c5d bug class) cannot pass.
+    mockGetUser.mockResolvedValue(
+      createMockUser({
+        access_token: makeJwt({
+          sub: 'token-sub-456',
+          realm_access: { roles: ['token-role-only'] }
+        })
+      })
+    );
     await keycloakAuthService.initialize();
-    expect(keycloakAuthService.getAccessTokenClaims().sub).toBe('user-123'); // decode path
+    const claims = keycloakAuthService.getAccessTokenClaims();
+    expect(claims.sub).toBe('token-sub-456'); // decoded, not the profile's
+    expect(claims.realm_access.roles).toEqual(['token-role-only']); // the contract (auth store reads this)
 
     mockGetUser.mockResolvedValue(createMockUser({ access_token: 'not-a-jwt' }));
     await keycloakAuthService.initialize();
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
+  });
+
+  it('a FREE lock with a fresh publication ADOPTS it — no fresh grant on a rotated-away token (round 23)', async () => {
+    // RESTORE the engine's (missing) Web Locks after this test — a lingering
+    // mock flips every later contention test onto the always-grant path.
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
+    });
+    try {
+      const holderUser = createMockUser({ access_token: 'holder-finished-token' });
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: holderUser }));
+      mockGetUser.mockResolvedValue(null);
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('holder-finished-token'); // adopted
+      expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
+      expect(mockStoreUser).toHaveBeenCalled();
+      const stored = mockStoreUser.mock.calls[mockStoreUser.mock.calls.length - 1][0];
+      expect(typeof stored.toStorageString).toBe('function'); // a REAL User — storeUser cannot throw
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
+      else delete navigator.locks;
+    }
+  });
+
+  it('publication retention: the TTL cleanup drops a stale publication at renew entry, keeps a fresh one (round 23)', async () => {
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-ok' }));
+    const removeItem = jest.spyOn(Storage.prototype, 'removeItem');
+    try {
+      // Stale (past the 20s TTL): inadmissible to every reader — dropped at
+      // the renew entry, before the renew itself can overwrite it.
+      const stale = createMockUser({ access_token: 'stale-pub' });
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 30000, user: stale }));
+      await keycloakAuthService.signinSilent();
+      expect(removeItem).toHaveBeenCalledWith(USER_KEY);
+      // Fresh: the entry-level cleanup must NOT touch it (concurrent waiters
+      // may still adopt it). This tab's own renew may overwrite the entry as
+      // the holder — the contract under test is only that the CLEANUP did
+      // not remove a fresh publication.
+      removeItem.mockClear();
+      const fresh = createMockUser({ access_token: 'fresh-pub' });
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-again' }));
+      await keycloakAuthService.signinSilent();
+      expect(removeItem).not.toHaveBeenCalledWith(USER_KEY);
+      expect(window.localStorage.getItem(USER_KEY)).not.toBeNull();
+    } finally {
+      removeItem.mockRestore();
+    }
+  });
+
+  it('logout removes any publication from disk (round 23 retention)', async () => {
+    await initialized();
+    const fresh = createMockUser({ access_token: 'pub-at-logout' });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
+    await keycloakAuthService.logout();
+    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
+  });
+
+  it('getUserManager LAZILY wraps when no initialize ran (round 23, 81347: reachable post-logout)', async () => {
+    // The lazy branch fires when userManager is still null — reachable in
+    // production when the auth store's initialize SHORT-CIRCUITS on
+    // genie_post_logout and a later caller needs the manager anyway.
+    jest.isolateModules(() => {
+      const fresh = require('@/services/keycloakAuthService').default;
+      const manager = fresh.getUserManager(); // NO initialize first
+      expect(manager.__signinWrapped).toBe(true);
+      expect(manager.signinSilent).not.toBe(mockSigninSilent);
+      expect(typeof manager.__rawSigninSilent).toBe('function');
+    });
   });
 
   it('two tabs contending: exactly ONE renew runs, the other adopts (#80914)', async () => {
@@ -776,11 +876,10 @@ describe('cross-tab renew lease (#80800)', () => {
       const user = await keycloakAuthService.signinSilent();
       expect(user.access_token).toBe('lock-holder-token');
       expect(mockSigninSilent).toHaveBeenCalledTimes(1);
-      // The publication is what waiters adopt: the user lands BEFORE the
-      // done marker, both stamped at the same instant.
+      // The publication is what waiters adopt — and nothing else is written:
+      // the done marker is gone (round 23: it was write-only).
       const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
       expect(entry.user.access_token).toBe('lock-holder-token');
-      expect(Number(window.localStorage.getItem(DONE_KEY))).toBe(entry.at);
     });
 
     it('busy lock: waits for the holder PUBLICATION — never its own signinSilent', async () => {
@@ -795,7 +894,6 @@ describe('cross-tab renew lease (#80800)', () => {
         const published = createMockUser({ access_token: 'locked-holder-token' });
         setTimeout(() => {
           window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
-          window.localStorage.setItem(DONE_KEY, String(Date.now()));
         }, 300);
         const p = keycloakAuthService.signinSilent();
         const assertion = expect(p).resolves.toMatchObject({ access_token: 'locked-holder-token' });

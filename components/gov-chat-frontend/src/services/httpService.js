@@ -195,7 +195,14 @@ class HttpService {
             try {
               return await this.axios(originalRequest);
             } catch (retryError) {
-              const retryStatus = retryError.response ? retryError.response.status : null;
+              // The retried request re-enters THIS interceptor: a second 401
+              // skips the refresh branch (._retryCount is set) and is
+              // normalized to the {status, ...} envelope — which carries NO
+              // .response. Read the status from both shapes, or the 401-on-
+              // retry case (the one the escalation below exists for) was
+              // unreachable and every retried 401 looked like a server-side
+              // problem (round 23, review 81378).
+              const retryStatus = retryError.response ? retryError.response.status : (retryError.status ?? null);
               if (retryStatus !== 401) {
                 // Server-side problem: surface it verbatim. Redirecting here is
                 // how a gateway blip used to look like an expired session.

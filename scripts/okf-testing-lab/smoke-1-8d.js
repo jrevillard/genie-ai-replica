@@ -175,17 +175,15 @@ function runDocTerminal(got) {
   return got.status !== 'running';
 }
 
-async function waitForRunDoc(suiteKey, runKey, leg = 'runs', tries = 200) {
-  // leg: 'runs' for suite RUN docs, 'explain' for the advice doc — they have
-  // SEPARATE poll paths (GET …/runs/:run_key vs GET …/explain/:run_key,
-  // repos-routes.js:124/:160). Polling the wrong leg 404s forever.
+/** ONE poll loop (round 23, review 82699): waitForRunDoc and
+ * waitForAdvisorJob were verbatim twins — GET → runDocTerminal →
+ * TOKEN_INVALID refresh → 2.5 s sleep → timeout — differing only in URL and
+ * default tries. The TOKEN_INVALID handling had to land in every copy once
+ * already; the next poll-semantics change lands exactly here. */
+async function pollJobDoc(url, tries) {
   for (let i = 0; i < tries; i++) {
     // eslint-disable-next-line no-await-in-loop
-    const got = j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${suiteKey}/${leg}/${runKey}`, {
-        token: USER_TOKEN
-      })
-    );
+    const got = j(await req('GET', url, { token: USER_TOKEN }));
     if (runDocTerminal(got)) return got;
     if (got && got.error === 'TOKEN_INVALID') await refreshUserToken();
     // eslint-disable-next-line no-await-in-loop
@@ -194,16 +192,15 @@ async function waitForRunDoc(suiteKey, runKey, leg = 'runs', tries = 200) {
   return { status: 'timeout' };
 }
 
+async function waitForRunDoc(suiteKey, runKey, leg = 'runs', tries = 200) {
+  // leg: 'runs' for suite RUN docs, 'explain' for the advice doc — they have
+  // SEPARATE poll paths (GET …/runs/:run_key vs GET …/explain/:run_key,
+  // repos-routes.js:124/:160). Polling the wrong leg 404s forever.
+  return pollJobDoc(`${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${suiteKey}/${leg}/${runKey}`, tries);
+}
+
 async function waitForAdvisorJob(jobKey, tries = 240) {
-  for (let i = 0; i < tries; i++) {
-    // eslint-disable-next-line no-await-in-loop
-    const got = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor/jobs/${jobKey}`, { token: USER_TOKEN }));
-    if (runDocTerminal(got)) return got;
-    if (got && got.error === 'TOKEN_INVALID') await refreshUserToken();
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((r) => setTimeout(r, 2500));
-  }
-  return { status: 'timeout' };
+  return pollJobDoc(`${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor/jobs/${jobKey}`, tries);
 }
 
 // The smoke user's access token outlives its ~5-min lifespan on long runs

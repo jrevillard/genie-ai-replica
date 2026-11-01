@@ -99,7 +99,29 @@ def _load_national_id_overrides() -> dict[str, list[dict]]:
             flush=True,
         )
         return {}
-    return parsed
+
+    # Value-shape validation (round 23, review 81379): each value must be a
+    # LIST of {name, regex, score} dicts — create_analyzer iterates
+    # `Pattern(name=p["name"], ...)` and a dict-shaped or string-shaped
+    # value raised TypeError/Value there, taking the worker down at import.
+    valid: dict[str, list[dict]] = {}
+    for key, patterns in parsed.items():
+        if not isinstance(patterns, list) or not all(
+            isinstance(p, dict)
+            and isinstance(p.get("name"), str)
+            and isinstance(p.get("regex"), str)
+            and isinstance(p.get("score"), (int, float))
+            for p in patterns
+        ):
+            print(
+                "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[" + str(key) + "] must be a list of "
+                "{name, regex, score} objects — ignoring that key and using the "
+                "built-in national-ID registry for it.",
+                flush=True,
+            )
+            continue
+        valid[key] = patterns
+    return valid
 
 
 NATIONAL_ID_PATTERNS: dict[str, list[dict]] = {

@@ -927,30 +927,29 @@ async function transition(repoId, action, actor, opts = {}) {
       logger.info('[OKF-PUBLISH] step=frontmatter gate OK', { repo_id: repoId });
       // Round 21c (#80943): a retry of an INTERRUPTED publish reuses the
       // already-stored zip (the doc-repo answers with the existing file for
-      // the same (repo_id, bundle_version)) — appending a SECOND entry for
-      // the same version would show two Versions-menu rows for one version.
-      const bundleAlreadyListed = prevBundles.some(
-        (b) => b && b.bundle_version === bundle.bundle_version && b.file_id === (bundle.file_id || null)
-      );
+      // the same (repo_id, bundle_version)). ROUND 23 (review 81254): the
+      // double-append guard here was UNREACHABLE — the PUBLISH_NO_CHANGES
+      // gate refuses a publish whose current version is already listed with
+      // a file_id, and the interrupted-publish retry this path serves
+      // guarantees NO listing exists — so the guard's "already listed" arm
+      // was dead (and encoded a different predicate than the gate's).
+      // Deletion kills the dead-arm mutant with it; the single-listing
+      // property is owned by the state machine + the doc-repo's reuse.
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
-        // APPEND the new bundle entry; never overwrite (a re-used artifact
-        // is already listed — the merge is then a no-op for `bundles`).
-        bundles: bundleAlreadyListed
-          ? prevBundles
-          : [
-              ...prevBundles,
-              {
-                file_id: bundle.file_id || null,
-                file_name: bundle.file_name,
-                bundle_version: bundle.bundle_version,
-                stored_at: bundle.stored_at,
-                ingest_status: null,
-                concepts_indexed: 0,
-                concepts_failed: 0,
-                settled_at: null
-              }
-            ],
+        bundles: [
+          ...prevBundles,
+          {
+            file_id: bundle.file_id || null,
+            file_name: bundle.file_name,
+            bundle_version: bundle.bundle_version,
+            stored_at: bundle.stored_at,
+            ingest_status: null,
+            concepts_indexed: 0,
+            concepts_failed: 0,
+            settled_at: null
+          }
+        ],
         // Keep the legacy single-slot field populated too — the worker's
         // getBundleFileId + the ingest guard at :532 read repo.bundle.file_id.
         bundle: {

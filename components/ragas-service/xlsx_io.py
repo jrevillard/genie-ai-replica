@@ -179,10 +179,16 @@ def _deformula(cell) -> None:
 
 
 def _append_text_safe(ws, row: list) -> None:
-    """ws.append + the formula guard on the row just written."""
+    """ws.append + the formula guard on exactly the appended cells (round 23,
+    review 81256: the old guard re-scanned max_column × max_row — both O(all
+    cells) in openpyxl — making the whole export ~O(N²), and ws.cell()
+    materializes phantom cells past the row's width while scanning; the
+    guard now deformulae only the cells this row actually wrote)."""
     ws.append(row)
-    for c in range(1, ws.max_column + 1):
-        _deformula(ws.cell(row=ws.max_row, column=c))
+    width = len(row)
+    last = ws.max_row
+    for c in range(1, width + 1):
+        _deformula(ws.cell(row=last, column=c))
 
 
 def write_suite_workbook(name: str, entries: list[dict]) -> bytes:
@@ -397,11 +403,16 @@ def write_results_workbook(suite: dict, runs: list[dict]) -> bytes:
             for c, v in enumerate(body + _run_row(entry, res, extra), start=1):
                 _deformula(rs.cell(row=3 + i, column=c, value=v))
 
-    # Compare tab — one row per run, first is baseline
+    # Compare tab — one row per run, first is baseline. The guard covers the
+    # label too (round 23, review 81269): run.label is curator-typed in the
+    # Testing Lab — the same trust boundary as the guarded query field — and
+    # a label starting '=' landed here as data_type 'f', executing on open.
     cs = wb.create_sheet("Compare")
     cs.append(COMPARE_HEADERS)
     for idx, run in enumerate(runs):
-        cs.append(_compare_row(str(run.get("label") or f"run{idx + 1}")[:26], run, None if idx == 0 else {}))
+        _append_text_safe(
+            cs, _compare_row(str(run.get("label") or f"run{idx + 1}")[:26], run, None if idx == 0 else {})
+        )
     _style_header(cs, 1, len(COMPARE_HEADERS))
 
     # Calibrate tab — structural parity, empty (no calibration data in the Lab)

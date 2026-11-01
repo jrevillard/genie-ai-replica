@@ -537,7 +537,7 @@ export default {
       deletePartialNotice:
         "{'{'}blocked{'}'} file terpilih tidak dapat dihapus ({'{'}reason{'}'}) — hanya {'{'}n{'}'} lainnya yang akan dihapus.",
       confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
+        "{'{'}count{'}'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
     },
     queryInspector: {
       title: 'Inspektur Kueri',

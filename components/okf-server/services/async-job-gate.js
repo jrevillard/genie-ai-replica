@@ -28,16 +28,13 @@ class AsyncJobGate {
     }
   }
 
-  /** Reserve SYNCHRONOUSLY — re-checks (the F12 fix), then claims. */
+  /** Reserve SYNCHRONOUSLY — re-checks (the F12 fix), then claims. The
+   * re-check DELEGATES to assertFree (round 23, review 82698): the error
+   * construction was pasted verbatim here, and the round-21 drift the
+   * comment above documents happened exactly because two copies can
+   * diverge — one call makes the predicates identical by construction. */
   reserve(key, value, { code = 'GENERATION_IN_FLIGHT', message } = {}) {
-    const inflight = this._inFlight.get(key);
-    if (inflight !== undefined) {
-      const err = new Error(message || 'a job is already running for this key');
-      err.code = code;
-      err.status = 409;
-      err.details = { suite_key: inflight };
-      throw err;
-    }
+    this.assertFree(key, { code, message });
     this._inFlight.set(key, value);
   }
 

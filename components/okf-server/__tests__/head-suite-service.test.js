@@ -40,6 +40,14 @@ jest.mock('../services/head-test-service', () => ({
     vectors: queries.map(() => [0.1, 0.2, 0.3]),
     prefixed: true,
     model: 'test-model'
+  })),
+  // ROUND 23 (review 81251): the per-query Probe embeds through embedQuery
+  // — the single-query helper probeQueryLight itself uses (one contract,
+  // one vector space).
+  embedQuery: jest.fn(async () => ({
+    vector: [0.1, 0.2, 0.3],
+    prefixed: true,
+    model: 'test-model'
   }))
 }));
 
@@ -1841,6 +1849,10 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
         top_score: 0.83,
         verdict: 'answerable'
       });
+      // ROUND 23 (review 81271): the Probe embeds through the SINGLE-query
+      // gate helper — pinning it keeps the #80955 one-vector-space contract
+      // (a swap back to bare teiEmbed or the batch hand-roll fails here).
+      expect(headTestService.embedQuery).toHaveBeenCalledWith(query);
       // top_chunks are RERANK-ordered now (the rerank-best 0.83 leads,
       // not the vector-best 0.82) — the summary panel's order of truth
       expect(res.top_chunks[0].score).toBeCloseTo(0.83, 3);

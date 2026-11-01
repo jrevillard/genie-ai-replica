@@ -126,11 +126,16 @@ test.describe('the RAGAS model selection is in the UI', () => {
     // from the same broken envelope and was blank for the same reason.
     // Deployment-INDEPENDENT: the contract is that the envelope is read and
     // the rows render — not that the operator named configs these three
-    // names. A differently-named deployment must not false-alarm (review
-    // !622 round 9, #78684). A blank or errored tab still fails this.
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    const emptyStateVisible = /no (model )?configurations|create (your )?first|no configs/i.test(bodyText);
-    expect(emptyStateVisible, 'the Models tab must list the configured models (non-empty rows rendered)').toBe(false);
+    // names. ROUND 23 (review 82701): the deployment-independence fix left
+    // the assertion toothless — `emptyStateVisible === false` is also what a
+    // BLANK tab produces (the #78684 bug rendered nothing at all), so the
+    // pre-fix mutant passed. The teeth are POSITIVE: at least one rendered
+    // configuration row must exist.
+    const rowCount = await page.locator('tr', { has: page.locator('td.okf-models__cell-url') }).count();
+    expect(
+      rowCount,
+      'the Models tab must list the configured models — ≥1 rendered configuration row'
+    ).toBeGreaterThan(0);
 
     await page.screenshot({ path: 'test-results/okf-models-tab.png', fullPage: false });
     await context.close();

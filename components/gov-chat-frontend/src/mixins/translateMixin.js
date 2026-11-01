@@ -44,9 +44,9 @@ export default {
         // Match AdminDashboard.translate — when i18n is unavailable we still
         // fall back to the key itself if no explicit fallback was supplied,
         // so missing strings are obvious in the UI rather than silently empty.
-        let out = fallback || key;
-        if (named && typeof named === 'object') out = interpolateNamed(out, named);
-        return out;
+        // (interpolateNamed's own guard makes the named check redundant —
+        // round 23, review 82700.)
+        return interpolateNamed(fallback || key, named);
       }
       try {
         // RAW message lookup — deliberately NOT $t(). vue-i18n's message
@@ -66,9 +66,7 @@ export default {
         if (typeof hit === 'string') return interpolateNamed(hit, named);
         const en = resolve(messages && messages.en, key);
         if (typeof en === 'string') return interpolateNamed(en, named);
-        let out = fallback || key;
-        if (named && typeof named === 'object') out = interpolateNamed(out, named);
-        return out;
+        return interpolateNamed(fallback || key, named);
       } catch (e) {
         console.error(`[translateMixin] Translation error for key ${key}:`, e);
         return fallback || key;

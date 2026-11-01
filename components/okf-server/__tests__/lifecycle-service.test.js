@@ -569,7 +569,9 @@ describe('publish — mint + bundle export + serving cleared', () => {
   // same (repo_id, version)) and the merge lists it ONCE — no orphan, no
   // duplicate Versions row. (A listing that ALREADY has the version + file
   // hits the PUBLISH_NO_CHANGES guard instead — correct, so the only
-  // reachable merge carries a not-yet-listed version.)
+  // reachable merge carries a not-yet-listed version. ROUND 23 (81254):
+  // the in-path double-append guard was deleted as unreachable — this test
+  // pins the reachable path: ONE append with the reused artifact.)
   test('an interrupted publish whose zip survived reuses it and lists the version once (#80943)', async () => {
     seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
     currentFingerprint.mockResolvedValueOnce('same-fp');

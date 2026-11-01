@@ -526,7 +526,7 @@ export default {
       actionSuccess: "对文件 {'{'}fileId{'}'} 的操作 \"{'{'}action{'}'}\" 成功。",
       metadataUpdateSuccess: "文件 {'{'}fileId{'}'} 的元数据已更新。",
       deletePartialNotice: "{'{'}blocked{'}'} 个所选文件无法删除（{'{'}reason{'}'}）——只会删除其余的 {'{'}n{'}'} 个。",
-      confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
+      confirmDeleteSkipped: "{'{'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
     },
     queryInspector: {
       title: '查询检查器',

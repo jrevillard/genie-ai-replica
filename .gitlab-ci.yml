@@ -478,7 +478,7 @@ workflow:
       # Failure verdicts log the response body they saw, except the
       # token-mint drift case: its body IS the token, never logged.
       ROPC_ANSWERED=""
-      ROPC_LAST_DEF=""
+      ROPC_LAST_ANSWERED=""
       for i in 1 2 3 4 5; do
         rm -f /tmp/ropc-probe-body.json
         ROPC_CURL_RC=0
@@ -493,24 +493,24 @@ workflow:
           # the answer was truncated — retry it like the other faults.
           408|425|429) ;;
           [234][0-9][0-9])
-            ROPC_LAST_DEF="$ROPC_STATUS"
+            ROPC_LAST_ANSWERED="$ROPC_STATUS"
             if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
+          [56][0-9][0-9]) ROPC_LAST_ANSWERED="$ROPC_STATUS" ;;
         esac
         echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
         { [ "$i" -lt 5 ] && sleep 5; } || true
       done
       # A truncated 200 token response can land in the body of a transport
       # failure, and JSON member order is not guaranteed — a body from a
-      # 2xx answer is withheld outright, and any other body that carries a
-      # minted token alongside it.
+      # 2xx answer is withheld outright, and any other body carrying a
+      # minted token member alongside it. Error pages that merely mention
+      # the words keep their evidence.
       ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
+      case "$ROPC_BODY" in
+        *'"access_token"'*) ROPC_BODY="<token response withheld>" ;;
+      esac
       case "$ROPC_STATUS" in
         2[0-9][0-9]) ROPC_BODY="<token response withheld>" ;;
-        *)
-          case "$ROPC_BODY" in
-            *access_token*) ROPC_BODY="<token response withheld>" ;;
-          esac
-          ;;
       esac
       if [ -z "$ROPC_ANSWERED" ]; then
         rm -f /tmp/ropc-probe-body.json
@@ -522,7 +522,7 @@ workflow:
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
             ;;
           *)
-            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last definitive HTTP ${ROPC_LAST_DEF:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last answered HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
             ;;
         esac
         exit 1
@@ -3201,11 +3201,11 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
-#   - the configs/keycloak/ tree: its themes/ subtree is bind-mounted into
-#     the stack, and genie-realm.yaml plus the import entrypoint are baked
-#     into the keycloak-config candidate image — the ROPC-refusal probe
-#     in .e2e_web_base asserts the realm's runtime behaviour, so any
-#     change in the tree must instantiate the e2e jobs.
+#   - the rest of the configs/keycloak/ tree: genie-realm.yaml and the
+#     import entrypoint are baked into the keycloak-config candidate image
+#     (its themes/ subtree is the bind-mount covered by the bullet above) —
+#     the ROPC-refusal probe in .e2e_web_base asserts the realm's runtime
+#     behaviour, so any change in the tree must instantiate the e2e jobs.
 # tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
 # until MR2 wires them into the script (see .e2e_web_base script comment),
 # and listing unexecuted paths only buys 30-minute train jobs that test

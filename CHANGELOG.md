@@ -15,14 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The 201 response is documented as the storage metadata the route actually returns (`_id` / `_key` / `_rev`, new `EventCreated` schema) instead of the full document that body never contained.
 - **No runtime behavior change.** The route still reads exactly `eventType` + `eventData`; the service still stores `data: eventData`.
 - **The generated Dart client was regenerated.** The `Event` model drops the request-only `eventData` property, `ApiAnalyticsEventsPostRequest` becomes `EventRequest`, and `apiAnalyticsEventsPost` returns the new `EventCreated` model. This is not a wire change, and no shipped code consumes the renamed models (the client package is generated and consumed in-repo, in the same commit). (#1223)
-- **The main Compose stack no longer runs any container as root.**
-  Every always-on service now runs as a non-root user (postgres and
+- **The core Compose stack no longer runs any container as root.**
+  Every always-on service of the core stack now runs as a non-root user
+  (postgres and
   redis-cache rely on their upstream entrypoints, which drop to their
   package users; every other service declares an explicit `user:`); five short-lived one-shot init
   containers (`arango-vector-db-init`, `victorialogs-init`,
   `document-repository-init`, `backend-init`, `otel-collector-init`)
   chown the existing root-era named volumes to their service's uid on
-  first deploy. A new `arango_apps` named volume appears (the arangodb
+  first deploy. Still running as root, deliberately out of this
+  migration: the profile-gated observability services
+  (`victoriametrics`, `victoriatraces`, `tempo-proxy`), the
+  profile-gated GPU/OPEA model-serving images, and the letsencrypt
+  `certbot` renewal container. A new `arango_apps` named volume appears (the arangodb
   app directory was previously root-owned inside the container).
   Kong and the edge nginx log to stdout — the `data/logs` host
   directory is no longer used or mounted by anything. The runtime gate

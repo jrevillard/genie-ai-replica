@@ -291,8 +291,12 @@
         # SINGLE backslash in "\1": template strings are not Python —
         # escapes are passed through verbatim to re.sub, which needs \1
         # (one backslash) to see the group backref.
+        # The parens render WITH surrounding spaces: the command module
+        # shlex-splits its string, and a glued '(-path' would arrive as ONE
+        # argv token (find: "paths must precede expression") — proven by
+        # rendering the builder and tokenizing the output.
         _fix_payload_prune_expr: >-
-          {{ '(' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets"' ~ ') -prune' }}
+          {{ ' ( ' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets" ) -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:
@@ -856,4 +860,3 @@
         echo ""
       changed_when: false
       when: not (_compose_changed | bool)
-

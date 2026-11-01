@@ -302,6 +302,11 @@ workflow:
         sleep 5
       done
     - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    # #1227 runtime contract gate: sweep the LIVE stack — long-term root
+    # processes, init one-shot discipline, root-owned files on the host
+    # binds. The static suite cannot see any of this; without this call
+    # the runtime gate exists but nothing ever runs it.
+    - bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"
   artifacts:
     when: always
     expire_in: 7 days
@@ -3061,11 +3066,18 @@ docs:validate:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
+    # Renders the #1227 payload probe/heal command builders through real
+    # ansible and executes the tokenized output — the two layers
+    # --syntax-check cannot see (it never templates set_fact values, and
+    # shlex splitting decides what find receives). Mutation-proven red on
+    # the paren-glue bug this closes.
+    - bash tests/ansible-non-root/check-command-render.sh
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "deploy/**/*"
         - "docs/**/*"
+        - "tests/ansible-non-root/**/*"
         - "CLAUDE.md"
         - ".gitlab-ci.yml"
       when: on_success

@@ -68,8 +68,10 @@ mkdir -p data/database_backups
 # uid is rarely 1000 (chown needs root):
 sudo chown 1000:1000 data/database_backups
 # secrets/ssl must pre-exist too: the edge nginx bind is
-# create_host_path:false (the e2e job creates it, self-signed certs land
-# there on this path).
+# create_host_path:false (the e2e job creates it). It stays EMPTY on the
+# self-signed path — the nginx entrypoint generates those inside the
+# container at /etc/nginx/certs. This directory holds certificates YOU
+# provide (mounted read-only) and the letsencrypt certbot's copies.
 mkdir -p secrets/ssl
 
 docker compose up -d

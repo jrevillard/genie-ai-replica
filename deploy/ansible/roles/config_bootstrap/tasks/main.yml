@@ -504,9 +504,16 @@
     # Root is needed to create {{ config_dir }} itself on a host that does not
     # have it yet (the play runs on `all`, including GPU nodes), mirroring the
     # deploy play's "Ensure deploy directory exists" task for the same tree.
-    # The directories stay root-owned, consistent with the rest of the
-    # playbook: the rsync below runs under the play's become, so it writes
-    # into them as root.
+    # --chown on both rsync invocations: the staging tree is extracted as
+    # root, and plain --archive re-applies the staging tree's root ownership
+    # to the destination DIRECTORIES on every run (content stays
+    # checksum-equal, but rsync still aligns directory attributes) — that
+    # flip-fought the deploy play's #1227 payload heal, which re-owns
+    # everything under deploy_dir except data/ and secrets/: the config/
+    # dirs flipped root (rsync) → ansible_user (heal) → root on every
+    # deploy, churning the heal forever. --chown pins the mirrored tree to
+    # the same owner the deploy play converges to, so neither pass ever
+    # undoes the other. (rsync >= 3.1; Debian 12 / Ubuntu 22.04 ship 3.2.)
     #
     # The directories are created AFTER the guards: a deployment that stops on
     # one of them leaves a fresh node without the config dirs — the guards run
@@ -583,6 +590,7 @@
           - --archive
           - --checksum
           - --delete
+          - --chown={{ ansible_user }}:{{ ansible_user }}
           - --out-format=%i %n%L
           - "{{ item.src }}"
           - "{{ item.dest }}"
@@ -628,6 +636,7 @@
           - --archive
           - --checksum
           - --delete
+          - --chown={{ ansible_user }}:{{ ansible_user }}
           - --dry-run
           - --itemize-changes
           - --out-format=%i %n%L

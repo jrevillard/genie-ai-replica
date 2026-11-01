@@ -140,6 +140,12 @@ const buildSpecWithRealFs = (options) => {
   }
 };
 
+// One spec build shared by every describe that reads the same merged spec
+// (the route annotations and the shared schemas do not change between
+// tests). The Server URL describe below cannot use it: it re-requires
+// index.js after jest.resetModules and builds its own.
+const mergedSpec = buildSpecWithRealFs(swaggerOptions);
+
 describe('Swagger Configuration', () => {
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
@@ -221,7 +227,7 @@ describe('Swagger Configuration', () => {
       // once: !609 referenced CategoryTree without defining it. Build the
       // merged spec exactly as the runtime does and assert every local
       // schema $ref resolves.
-      const spec = buildSpecWithRealFs(swaggerOptions);
+      const spec = mergedSpec;
       const defined = new Set(Object.keys(spec.components?.schemas || {}));
       const refs = new Set();
       const walk = (node) => {
@@ -252,11 +258,11 @@ describe('Swagger Configuration', () => {
     // the stored ArangoDB document shape. A shared schema carrying both
     // spellings made `eventData` vs `data` ambiguous to client authors —
     // sending `data` was silently dropped (stored as {}).
-    const spec = buildSpecWithRealFs(swaggerOptions);
-    const eventsPost = spec.paths['/api/analytics/events'].post;
+    const spec = mergedSpec;
+    const eventsOps = spec.paths['/api/analytics/events'];
 
     it('annotates the POST request body with EventRequest, not Event', () => {
-      expect(eventsPost.requestBody.content['application/json'].schema).toEqual({
+      expect(eventsOps.post.requestBody.content['application/json'].schema).toEqual({
         $ref: '#/components/schemas/EventRequest'
       });
     });
@@ -277,12 +283,12 @@ describe('Swagger Configuration', () => {
       // trackEvent returns the arangojs save() result ({_id, _key, _rev}) —
       // the full persisted document is never in the 201 body — while GET
       // /events returns the stored documents themselves.
-      expect(eventsPost.responses['201'].content['application/json'].schema.$ref).toBe(
+      expect(eventsOps.post.responses['201'].content['application/json'].schema.$ref).toBe(
         '#/components/schemas/EventCreated'
       );
-      expect(
-        spec.paths['/api/analytics/events'].get.responses['200'].content['application/json'].schema.items.$ref
-      ).toBe('#/components/schemas/Event');
+      expect(eventsOps.get.responses['200'].content['application/json'].schema.items.$ref).toBe(
+        '#/components/schemas/Event'
+      );
     });
   });
 

@@ -1,7 +1,8 @@
 // Shared OpenAPI component schemas — the single source of truth for the
 // components.schemas section of the runtime spec. Some are $ref'd from the
-// route annotations (Analytics, CategoryTree, Event, EventRequest,
-// QueryContext); the rest document the runtime contract in swagger-ui.
+// route annotations (Analytics, CategoryTree, Event, EventCreated,
+// EventRequest, QueryContext); the rest document the runtime contract in
+// swagger-ui.
 // Consumed by index.js (the runtime swagger spec) and by
 // scripts/generate-api-client.sh (the mobile client generation spec), so
 // both specs carry the same schemas.

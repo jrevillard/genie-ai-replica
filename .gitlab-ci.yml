@@ -481,9 +481,10 @@ workflow:
       # Create-first: HTTP 201 = created, 409 = already exists (the body names
       # the conflict — username or email). exact=true on the lookup: ?username=
       # is a prefix search otherwise — a stray testuser2 would misdirect it.
+      TESTUSER_EMAIL='testuser@e2e.test'
       TESTUSER_PWD='TestPass123!'
       create_payload() {
-        python3 -c 'import json,sys; print(json.dumps({"username":"testuser","email":"testuser@e2e.test","emailVerified":True,"firstName":"Test","lastName":"User","enabled":True,"credentials":[{"type":"password","value":sys.argv[1],"temporary":False}]}))' "$TESTUSER_PWD"
+        python3 -c 'import json,sys; print(json.dumps({"username":"testuser","email":sys.argv[1],"emailVerified":True,"firstName":"Test","lastName":"User","enabled":True,"credentials":[{"type":"password","value":sys.argv[2],"temporary":False}]}))' "$TESTUSER_EMAIL" "$TESTUSER_PWD"
       }
       create_testuser() {
         CREATE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
@@ -506,13 +507,13 @@ workflow:
         # emailVerified, the fixture email, and no requiredActions all read
         # true; only password drift is invisible to this lookup (and to any
         # probe — the realm refuses direct access grants).
-        RESOLVED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print((u.get('id') + '|' + ('yes' if u.get('enabled') is True and u.get('emailVerified') is True and u.get('email') == 'testuser@e2e.test' and not u.get('requiredActions') else 'no')) if u and u.get('id') else '|')" 2>/dev/null || true)
+        RESOLVED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print((u.get('id') + '|' + ('yes' if u.get('enabled') is True and u.get('emailVerified') is True and u.get('email') == sys.argv[1] and not u.get('requiredActions') else 'no')) if u and u.get('id') else '|')" "$TESTUSER_EMAIL" 2>/dev/null || true)
         USER_ID=${RESOLVED%%|*}
         USER_HEALTHY=${RESOLVED#*|}
         if [ -z "$USER_ID" ]; then
           echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200), lookup HTTP $(http_label "$LOOKUP_STATUS"))"
           if [ "$CREATE_STATUS" = "409" ] && [ "$LOOKUP_STATUS" = "200" ]; then
-            echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+            echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
           fi
           exit 1
         fi
@@ -521,7 +522,7 @@ workflow:
         echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
         echo "response body: ${CREATE_BODY}"
         if [ "$CREATE_STATUS" = "409" ]; then
-          echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+          echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
         fi
         exit 1
       }

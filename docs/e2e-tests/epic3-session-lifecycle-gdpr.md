@@ -465,6 +465,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
     "username": "testuser",
     "enabled": true,
     "email": "testuser@e2e.test",
+    "emailVerified": true,
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -550,6 +551,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
     "username": "testuser",
     "enabled": true,
     "email": "testuser@e2e.test",
+    "emailVerified": true,
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -589,6 +591,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
     "username": "testuser",
     "enabled": true,
     "email": "testuser@e2e.test",
+    "emailVerified": true,
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]

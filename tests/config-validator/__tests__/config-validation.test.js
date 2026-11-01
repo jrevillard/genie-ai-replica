@@ -2225,6 +2225,23 @@ describe('Configuration Validation Suite', () => {
   });
 });
 
+// Section of the CI file from a top-level key to the next one. The boundary
+// matches a top-level KEY line only — a column-0 comment inside the job body
+// is valid YAML there and must not truncate the section. Comment lines are
+// stripped entirely: they are layout, not configuration, and must not leak
+// literals (a path, a condition) into the assertions built on it.
+const stripComments = (lines) =>
+  lines.filter((line) => !line.trimStart().startsWith('#')).map((line) => line.replace(/\s+#.*$/, ''));
+
+const gitlabSection = (content, job) => {
+  const start = content.indexOf(`\n${job}:`);
+  expect(start).toBeGreaterThan(-1);
+  const rest = content.slice(start + 1);
+  const end = rest.search(/\n[\w:.-]+:(\s|$)/);
+  const section = end === -1 ? rest : rest.slice(0, end + 1);
+  return stripComments(section.split('\n')).join('\n');
+};
+
 // --- e2e merge-train changes filters (#1264) ---
 // e2e:playwright hard-needs e2e:integration on merge trains: a train whose
 // paths instantiate e2e:playwright must also instantiate its needs-partner,
@@ -2267,20 +2284,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // file-wide — a line like `echo "Add a ## [v1] section"` (config:changelog
   // carries one) would truncate, so a future section pin on such a job
   // needs a quote-aware strip first.
-  const stripComments = (lines) =>
-    lines.filter((line) => !line.trimStart().startsWith('#')).map((line) => line.replace(/\s+#.*$/, ''));
-
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section.
-  const sectionOf = (job) => {
-    const start = content.indexOf(`\n${job}:`);
-    expect(start).toBeGreaterThan(-1);
-    const rest = content.slice(start + 1);
-    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
-    const section = end === -1 ? rest : rest.slice(0, end + 1);
-    return stripComments(section.split('\n')).join('\n');
-  };
+  // body is valid YAML there and must not truncate the section. Comment
+  // lines are stripped entirely: they are layout, not configuration, and
+  // must not leak literals (a path, a condition) into the assertions below.
+  const sectionOf = (job) => gitlabSection(content, job);
 
   // Executed paths are derived from the `npx playwright test` invocation
   // line(s) in .e2e_web_base rather than copied into a second hand-maintained
@@ -2791,24 +2800,13 @@ describe('the testuser 409 convergence in .e2e_web_base', () => {
     content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
   });
 
-  // Same section extraction as the merge-train describe above: from a
-  // top-level key to the next one, comment lines stripped.
-  const sectionOf = (job) => {
-    const start = content.indexOf(`\n${job}:`);
-    expect(start).toBeGreaterThan(-1);
-    const rest = content.slice(start + 1);
-    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
-    const section = end === -1 ? rest : rest.slice(0, end + 1);
-    return section
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
-      .join('\n');
-  };
+  const sectionOf = (job) => gitlabSection(content, job);
 
   test('both repair arms and their gates are present', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('username=testuser&exact=true');
-    expect(section).toContain("u.get('email') == 'testuser@e2e.test'");
+    expect(section).toContain("TESTUSER_EMAIL='testuser@e2e.test'");
+    expect(section).toContain("u.get('email') == sys.argv[1]");
     expect(section).toContain('/reset-password');
     expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
     expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');

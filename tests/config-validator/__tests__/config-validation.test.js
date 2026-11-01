@@ -2286,14 +2286,161 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Consumed at runtime by the executed specs but not visible on the
   // invocation line: helpers are imported, fixtures are uploaded/read by the
-  // documents specs.
-  const CONSUMED_PATHS = ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*'];
+  // documents specs (#1283). Like executedPaths above, the consumed list is
+  // derived from the specs themselves — a hand-written copy would inherit the
+  // same drift this guard exists to catch (a new shared directory imported by
+  // an executed spec would escape the anchor until someone edits a list).
+  // Two consumption shapes exist in the tree: relative require/import
+  // specifiers (the helpers) and path.join(__dirname, ...) segment chains
+  // (the fixtures dir). Anything else a spec consumes is not derived.
+  const TESTS_E2E_ROOT = 'tests/e2e';
+
+  // Resolve a specifier the way Node does for these CJS specs: as-is, with
+  // .js appended, or as a directory index — first existing file wins.
+  // Candidates outside tests/e2e are dropped: a traversal or a cross-tree
+  // import must not become an anchor expectation.
+  const resolveSpecifier = (fromDir, specifier) => {
+    const base = path.posix.normalize(path.posix.join(fromDir, specifier));
+    for (const candidate of [base, `${base}.js`, path.posix.join(base, 'index.js')]) {
+      if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) continue;
+      const abs = path.join(ROOT, candidate);
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return candidate;
+    }
+    return null;
+  };
+
+  // Anchor-style entry covering a resolved path: a file directly under
+  // tests/e2e is listed exactly (the anchor lists such files verbatim),
+  // anything deeper becomes its directory glob.
+  const toAnchorPath = (resolvedPath, isDir) => {
+    if (resolvedPath === TESTS_E2E_ROOT) return null;
+    if (isDir) return `${resolvedPath}/**/*`;
+    const dir = path.posix.dirname(resolvedPath);
+    return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
+  };
+
+  // Extract the consumed paths from spec sources: relative require/import
+  // specifiers and path.join(__dirname, ...) / path.resolve(__dirname, ...)
+  // string-literal segment chains. Candidates are dropped unless they resolve
+  // inside tests/e2e to something that exists on disk — the regexes
+  // over-capture (comments, dead references) and the filesystem arbitrates.
+  const deriveConsumedPaths = (specFiles) => {
+    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*)'(\.[^']*)'/g;
+    const joinRe = /path\.(?:join|resolve)\(__dirname((?:\s*,\s*'[^']*')+)\)/g;
+    const globs = new Set();
+    for (const { file, source } of specFiles) {
+      const dir = path.posix.dirname(file);
+      for (const match of source.matchAll(specifierRe)) {
+        const resolved = resolveSpecifier(dir, match[1]);
+        if (resolved) globs.add(toAnchorPath(resolved, false));
+      }
+      for (const match of source.matchAll(joinRe)) {
+        const segments = [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
+        const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
+        if (!resolved.startsWith(`${TESTS_E2E_ROOT}/`)) continue;
+        const abs = path.join(ROOT, resolved);
+        if (!fs.existsSync(abs)) continue;
+        const anchorPath = toAnchorPath(resolved, fs.statSync(abs).isDirectory());
+        if (anchorPath) globs.add(anchorPath);
+      }
+    }
+    return [...globs].sort();
+  };
+
+  // The spec files the invocation executes: real files under the executed
+  // globs (a `X/**/*` glob narrows to the `X/` subtree, an exact entry stays
+  // exact).
+  const specFilesUnderExecuted = (executedGlobs) =>
+    fs
+      .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
+      .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`)
+      .filter((f) => f.endsWith('.spec.js'))
+      .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(g.slice(0, -5)) : f === g)));
+
+  const derivedConsumedPaths = () =>
+    deriveConsumedPaths(
+      specFilesUnderExecuted(executedPaths()).map((file) => ({
+        file,
+        source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
+      }))
+    );
 
   test('executed and consumed paths are listed in the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
-    for (const required of [...executedPaths(), ...CONSUMED_PATHS]) {
+    for (const required of [...executedPaths(), ...derivedConsumedPaths()]) {
       expect(anchorPaths).toContain(required);
     }
+  });
+
+  test('derivation scans exactly the spec files the invocation executes', () => {
+    expect(specFilesUnderExecuted(executedPaths()).sort()).toEqual([
+      'tests/e2e/chatbot/conversation-history.spec.js',
+      'tests/e2e/chatbot/error-handling.spec.js',
+      'tests/e2e/chatbot/quick-help-scope.spec.js',
+      'tests/e2e/chatbot/send-message-and-stream.spec.js',
+      'tests/e2e/documents/search.spec.js',
+      'tests/e2e/documents/upload.spec.js',
+      'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/theme-runtime-config.spec.js'
+    ]);
+  });
+
+  // Exact pin — the mutation gate for the derivation itself: a scanner branch
+  // that stops matching (a require shape, the fixtures path.join) fails here
+  // before it can silently shrink what the anchor check above covers.
+  test('consumed paths derived from the executed specs are the expected set', () => {
+    expect(derivedConsumedPaths()).toEqual(['tests/e2e/fixtures/**/*', 'tests/e2e/helpers/**/*']);
+  });
+
+  describe('consumed-path derivation units', () => {
+    const deriveFrom = (file, source) => deriveConsumedPaths([{ file, source }]);
+
+    test('a relative require maps to its directory glob', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "const h = require('../helpers/auth');")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    test('an extensionless same-dir require resolves through the .js rule', () => {
+      expect(deriveFrom('tests/e2e/helpers/auth.spec.js', "const a = require('./auth');")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    test('a path.join(__dirname, ...) chain maps to the referenced directory', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/upload.spec.js', "const d = path.join(__dirname, '..', 'fixtures');")
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('path.resolve is treated like path.join', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', "const d = path.resolve(__dirname, '..', 'fixtures');")
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('a file directly under tests/e2e maps to its exact path', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', "const t = require('../theme-runtime-config.spec.js');")
+      ).toEqual(['tests/e2e/theme-runtime-config.spec.js']);
+    });
+
+    test('ESM import and dynamic import specifiers are consumed too', () => {
+      const source = "import x from '../helpers/auth';\nconst y = import('../helpers/locale');";
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
+    });
+
+    test('specifiers that leave tests/e2e or do not exist are dropped', () => {
+      const source = [
+        "const p = require('../../../tests/config-validator/package.json');", // exists, outside tests/e2e
+        "const g = require('../../../etc/passwd');", // traversal
+        "const m = require('path');", // builtin
+        "const n = require('../helpers/no-such-helper');", // nonexistent
+        "const j = path.join(__dirname, '..', '..', 'config-validator');", // join, outside tests/e2e
+        "// const c = require('../helpers/also-missing');" // dead reference
+      ].join('\n');
+      expect(deriveFrom('tests/e2e/documents/x.spec.js', source)).toEqual([]);
+    });
   });
 
   // Entries the jobs deploy or consume from this checkout — the component
@@ -2369,12 +2516,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
   });
 
-  test.each(['e2e:playwright', 'scheduled:e2e-web'])(
-    '%s still extends the base that carries the probe',
-    (job) => {
-      expect(sectionOf(job)).toContain('extends: .e2e_web_base');
-    }
-  );
+  test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
+    expect(sectionOf(job)).toContain('extends: .e2e_web_base');
+  });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.

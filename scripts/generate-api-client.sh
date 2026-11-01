@@ -48,18 +48,28 @@ const swaggerJsdoc = require('swagger-jsdoc');
 // They are placeholders that land in the committed artifacts' cosmetics
 // (ApiClient's basePath default, README server/OAuth URLs); the endpoint paths
 // are env-independent, and the app overrides basePath at runtime.
-const PINNED = ['API_URL', 'PORT', 'KEYCLOAK_URL', 'KEYCLOAK_REALM'];
-const envReads = [...require('fs').readFileSync('./swagger-definition.js', 'utf8')
-  .matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]);
-const unpinned = [...new Set(envReads)].filter((name) => !PINNED.includes(name));
-assert.ok(unpinned.length === 0,
-  'swagger-definition.js reads env vars the generation pin block does not set: '
-  + unpinned.join(', ')
-  + ' — pin them above or the committed client becomes env-dependent again.');
 const spec = swaggerJsdoc({
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
+// Assert the composed spec's env-derived fields equal the pinned placeholders:
+// a missing prefix assignment or a new env read leaking into these fields
+// (from the envelope or the transitive swagger-schemas.js, in any access
+// form) fails the run instead of shipping a shell-dependent client.
+const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
+const envDerived = [
+  ['servers[0].url', spec.servers?.[0]?.url, 'https://localhost'],
+  ['authorizationUrl', flow?.authorizationUrl,
+    'https://keycloak.example.com/realms/genie/protocol/openid-connect/auth'],
+  ['tokenUrl', flow?.tokenUrl,
+    'https://keycloak.example.com/realms/genie/protocol/openid-connect/token']
+];
+for (const [label, actual, expected] of envDerived) {
+  assert.strictEqual(actual, expected,
+    label + ' does not match the pinned placeholder — the pin block above is'
+    + ' incomplete or a new env read reached the spec; generation must stay'
+    + ' independent of the invoking shell.');
+}
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));
 const count = Object.keys(spec.paths).length;
 console.log('Generated ' + count + ' endpoints');

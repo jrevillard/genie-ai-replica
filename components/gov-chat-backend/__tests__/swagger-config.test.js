@@ -104,7 +104,11 @@ afterAll(() => {
   process.exit = originalExit;
 });
 
-// Access the exported config objects directly — no capture mocking needed
+// Access the exported config objects directly — no capture mocking needed.
+// The shared envelope is required into a binding at file scope (not inside
+// the test) so the identity assert is independent of jest.resetModules()
+// re-evaluations by describes that run first.
+const sharedDefinition = require('../swagger-definition');
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
 
 // Build the merged spec the way the runtime does. This suite mocks fs and
@@ -154,7 +158,7 @@ describe('Swagger Configuration', () => {
     // two-sources drift #1218 fixed (the generator would build its spec from
     // a different envelope than the backend serves) — pin the shared object.
     it('exposes the shared swagger-definition module as the runtime envelope', () => {
-      expect(swaggerOptions.definition).toBe(require('../swagger-definition'));
+      expect(swaggerOptions.definition).toBe(sharedDefinition);
     });
   });
 

@@ -60,9 +60,9 @@ contractual evidence — a fresh clone does not carry them.)
   stay untouched; mutation-proven), but LIST values are the exception:
   `services.<name>.env` replaces the template-built rows whole, so
   per-variable env goes through `opea.<svc>.env`. Defaults render
-  value-identical — the hand-rendered translation template restyles
-  its resources flow→block with identical values. The translation template, hand-rendered outside the
-  factory, reads `services.translation.resources` the same way. From
+  value-identical. The translation template, hand-rendered outside
+  the factory, reads `services.translation.resources` the same way —
+  its resources render restyled flow→block with identical values. From
   the deploy repo's forge-review issue (#1 there).
 - **The post-OKF review round (0.2.139)** — an adversarial pass over
   everything after the OKF verification found the OKF NetworkPolicy

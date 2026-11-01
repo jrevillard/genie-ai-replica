@@ -714,6 +714,16 @@ describe('compose non-root contract (#1227)', () => {
     );
     expect(validateComposeNonRoot(restatedAll).violations).toEqual([]);
 
+    // restating BOTH caps in block form (certbot's spelling): the lists
+    // must not eat each other's items — entering cap_add clears
+    // inCapDrops and vice versa
+    const bothBlocks = composeText.replace(
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    cap_drop:\n      - ALL\n    cap_add:\n      - CHOWN\n      - DAC_OVERRIDE\n'
+    );
+    expect(bothBlocks).not.toBe(composeText);
+    expect(validateComposeNonRoot(bothBlocks).violations).toEqual([]);
+
     // a stray unmatched '}' in a flow list must not drive the splitter's
     // depth negative — negative depth stops top-level commas from
     // splitting and silently MERGES distinct entries (under-enforcement)

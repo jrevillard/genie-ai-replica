@@ -505,12 +505,14 @@ function validateComposeNonRoot(composeText) {
     if (/^ {4}cap_add:\s*(?:#.*)?$/.test(line)) {
       inCapAdds = true;
       capAddsSeen = true;
-      continue;
+      inCapDrops = false; // restating both caps: the lists must not eat
+      continue; // each other's items
     }
     if (/^ {4}cap_drop:\s*(?:#.*)?$/.test(line)) {
       inCapDrops = true;
       capDropsSeen = true;
-      continue;
+      inCapAdds = false; // restating both caps: the lists must not eat
+      continue; // each other's items
     }
     // flow style: cap_add: [CHOWN, DAC_OVERRIDE] — same invariant surface
     const dropFlow = line.match(/^ {4}cap_drop:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
@@ -900,10 +902,11 @@ function collectServiceNames(composeText) {
   const names = new Set();
   let inServices = false;
   for (const line of composeText.split('\n')) {
-    // the trigger regex is IDENTICAL to the main parser's — a dotted
-    // top-level key would flip one scanner into services: scope while
-    // the other stayed out
-    if (/^[a-z][\w-]*:\s*$/.test(line)) {
+    // the trigger is IDENTICAL to the main parser's (bare OR quoted
+    // top-level key — the main parser EXITS services: scope on a quoted
+    // top-level key, so the collector must exit too or its name-set
+    // diverges)
+    if ((line.match(/^[a-z][\w-]*:\s*$/) || line.match(/^["'][\w.-]+["']:\s*$/)) && !line.startsWith(' ')) {
       inServices = line.trim() === 'services:';
     } else if (inServices) {
       // same comment/flow tolerance as the main parser's service

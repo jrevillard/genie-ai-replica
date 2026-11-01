@@ -87,12 +87,14 @@ fi
 # `restarting` is included too: the EACCES crash loop a botched no-root
 # upgrade produces sits between restart attempts, and a vacuous skip is
 # exactly what the exit-code doctrine forbids. Exited one-shots stay
-# excluded (created + restarting + running only).
+# excluded (created + restarting + paused + running only). A paused
+# container is frozen but LIVE — its uid-0 process tree is exactly what
+# rule 1 exists to inspect.
 containers=$(
   {
-    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=running" \
+    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=paused" --filter "status=running" \
       --filter "label=com.docker.compose.project=$PROJECT" --format '{{.Names}}'
-    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=running" \
+    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=paused" --filter "status=running" \
       --filter "label=com.docker.stack.namespace=$PROJECT" --format '{{.Names}}'
   } | sort -u
 )

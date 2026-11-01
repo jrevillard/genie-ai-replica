@@ -1555,6 +1555,138 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems[0].serviceKey).toBeNull();
     });
 
+    describe('a falsy JSON id — the cross-platform identity contract (#1244)', () => {
+      // A hand-edited configuration can declare `"id": 0` or `false`.
+      // The web's identity rule (`button.id || title`) tests the RAW
+      // value's truthiness; the mobile must read the same rule, or the
+      // two platforms save different tags for the same card and no
+      // cross-platform restore matches. These tests pin the WEB half of
+      // the contract (the mobile's live beside the mobile identity
+      // rules); the web's own behaviour here is unchanged.
+      const falsyIdConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 0, title: 'Card Zero', category: '1', serviceLabels: ['Tomato'] }]
+            }
+          }
+        }
+      };
+
+      it('saves the TITLE as the identity — the raw id is falsy', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Card Zero');
+        // The id itself stays RAW: the restore compares it with ===.
+        expect(vm.quickHelpButtons[0].id).toBe(0);
+      });
+
+      it('does not match a mobile-saved "0" tag — it restores as an unnamed sidebar tag', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['0']
+        });
+
+        await vm.loadExistingConversation('c1');
+
+        // The strict `candidate.id === tag` cannot match a raw 0 against
+        // the string '0': the tag falls to the sidebar branch, the
+        // unnamed-tag count refuses the send. The mobile's restore index
+        // skips falsy raw ids and reaches the SAME verdict.
+        expect(vm.selectedContextItems.length).toBe(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+      });
+
+      it('restores the title tag a falsy-id card saves as a sidebar tag, not a card', async () => {
+        // The title is what BOTH platforms now save for a falsy-id card.
+        // Neither restore matches a title to a button (the lookup is
+        // id-only): the tag falls to the sidebar branch on both, and —
+        // the title naming no tree entity — refuses the send on both.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Card Zero']
+        });
+
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems.length).toBe(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+      });
+
+      it('saves and restores a numeric id RAW — in its own JSON type only', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        // The identity is the RAW number — not a stringified '5'.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe(5);
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        // The web's own tag (the raw number) restores.
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: [5]
+        });
+        await vm.loadExistingConversation('c1');
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+
+        // The mobile's stringified tag cannot — the one-way break of the
+        // same root cause, tracked separately from #1244: a mobile-saved
+        // numeric-id conversation restores unscoped here.
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c2',
+          title: 'Saved chat 2',
+          messages: [],
+          tags: ['5']
+        });
+        await vm.loadExistingConversation('c2');
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+      });
+    });
+
     it('restores a sidebar scope as its EN label when the tree confirms it', async () => {
       // A saved conversation carries the EN label of the scope (a
       // locale-independent identity). The tree confirms it → the wire

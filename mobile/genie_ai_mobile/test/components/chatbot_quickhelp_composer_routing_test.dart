@@ -35,12 +35,29 @@ void main() {
 
   final tree = quickHelpTreeFixture();
 
+  // A broken composer entry: no title in the loaded language — the
+  // parse keeps it, the partition makes it broken.
+  final brokenComposerCard = <String, dynamic>{
+    'id': 'broken-composer-id',
+    'title': {'en': ''},
+    'category': '2',
+    'serviceLabels': ['Births'],
+    'placement': 'composer',
+  };
+
   late Uint8List config;
+  late Uint8List composerOnlyConfig;
+  late Uint8List brokenComposerConfig;
   setUpAll(() async {
     config = await chatbotConfigBytesWithButtons([
       composerCard,
       tileCard,
       tileCard2,
+    ]);
+    composerOnlyConfig = await chatbotConfigBytesWithButtons([composerCard]);
+    brokenComposerConfig = await chatbotConfigBytesWithButtons([
+      brokenComposerCard,
+      tileCard,
     ]);
   });
 
@@ -74,4 +91,45 @@ void main() {
     // surface, no leftover text.
     expect(find.text('Just Chat'), findsNothing);
   });
+
+  testWidgets(
+    'a composer-only configuration mounts no overlay: no surface, no empty shell',
+    (tester) async {
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, composerOnlyConfig);
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
+
+      // Every entry targets the composer the platform lacks — the
+      // overlay does not mount to render the heading above an empty
+      // grid.
+      expect(find.byType(GridView), findsNothing);
+      expect(find.text('Just Chat'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a broken composer entry keeps its diagnosis row above the grid',
+    (tester) async {
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, brokenComposerConfig);
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
+
+      // The composer entry has no surface to occupy, but its config
+      // defect is a VISIBLE failure: the caption renders outside the
+      // grid, the healthy tile stays a grid tile.
+      final caption = find.textContaining('no title in this language');
+      expect(caption, findsOneWidget);
+      expect(
+        find.ancestor(of: caption, matching: find.byType(GridView)),
+        findsNothing,
+      );
+      expect(
+        find.ancestor(
+          of: find.text('Births Card'),
+          matching: find.byType(GridView),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

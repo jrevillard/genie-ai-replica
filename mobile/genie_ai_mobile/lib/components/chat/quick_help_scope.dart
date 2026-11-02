@@ -132,6 +132,28 @@ class QuickHelpCardStyles {
   const QuickHelpCardStyles({this.background, this.outline});
 }
 
+/// A colour in the styles block's own vocabulary — the web's CSS, whose
+/// 8-digit form is #RRGGBBAA with the alpha LAST. Flutter's Color(int)
+/// reads AARRGGBB, so an alpha-carrying declaration parsed naively
+/// becomes a different colour; every other parseHex caller keeps the
+/// Flutter order, so the conversion lives beside the only reader of the
+/// web's form. Anything unparseable is a null field — the token
+/// fallback, never a dropped card.
+Color? parseStylesHexColor(dynamic value) {
+  if (value is! String) return null;
+  final cleaned = value.replaceAll('#', '');
+  if (cleaned.length == 8) {
+    try {
+      return Color(
+        int.parse(cleaned.substring(6, 8) + cleaned.substring(0, 6), radix: 16),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+  return ColorUtils.parseHexNullable(value);
+}
+
 /// The declared tint of [btn]'s `styles` block. A missing or malformed
 /// hex value is a NULL field — the card paints its token fallback, the
 /// way the web's `var(--qh-bg, var(--surface))` falls back per
@@ -139,8 +161,8 @@ class QuickHelpCardStyles {
 QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
   final styles = configMapOf(btn['styles']);
   return QuickHelpCardStyles(
-    background: ColorUtils.parseHexNullable(styles['backgroundColor']),
-    outline: ColorUtils.parseHexNullable(styles['outlineColor']),
+    background: parseStylesHexColor(styles['backgroundColor']),
+    outline: parseStylesHexColor(styles['outlineColor']),
   );
 }
 

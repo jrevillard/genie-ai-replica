@@ -1607,19 +1607,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     EdgeInsetsGeometry? margin,
     required Widget child,
   }) {
-    return Container(
-      margin: margin,
-      child: DsCard(
-        variant: DsCardVariant.standard,
-        // Flush: the old hand-rolled Container carried no margin, and
-        // Card's own 4-side default would slip an unmeasured gap into
-        // the grid's spacing and the broken row's.
-        margin: EdgeInsets.zero,
-        padding: _quickHelpCardPadding,
-        overrideBg: background,
-        overrideBorderColor: borderColor,
-        child: child,
-      ),
+    return DsCard(
+      variant: DsCardVariant.standard,
+      // Flush by default: the hand-rolled Container this replaced
+      // carried no margin, and Card's own 4-side default would slip an
+      // unmeasured gap into the grid's spacing and the broken row's.
+      margin: margin ?? EdgeInsets.zero,
+      padding: _quickHelpCardPadding,
+      overrideBg: background,
+      overrideBorderColor: borderColor,
+      child: child,
     );
   }
 
@@ -2640,7 +2637,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
           // Quick Help Overlay
           if (_showQuickHelpOverlay &&
-              _quickHelpButtons.isNotEmpty &&
+              // A composer-only configuration has NO mobile surface:
+              // every entry targets the composer the platform lacks,
+              // and an empty overlay shell under the greeting would
+              // render the nothing the config asked for.
+              _quickHelpButtons.any(
+                (button) => !quickHelpIsComposerPlaced(button),
+              ) &&
               _treeSettled)
             Container(
               color: tokens.bg,
@@ -2674,30 +2677,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           _quickHelpLayout,
                         );
 
-                        // The composer-placed entries never RENDER on
-                        // the mobile — no composer surface, and both
-                        // display halves are tiles — but they STAY in
-                        // the loaded list: the restore and the re-title
-                        // lookups index the full parse output, the way
-                        // the web's restore reads its full button list.
-                        // Strict STRING equality, the web's
-                        // `placement === 'composer'`: a non-string
-                        // placement renders.
-                        final displayButtons = [
-                          for (final button in _quickHelpButtons)
-                            if (button['placement'] != 'composer') button,
-                        ];
-                        // The cards split ONCE per build, on the SAME
-                        // scope derivation for both halves: a broken
-                        // card — a scope the tree cannot verify, or a
-                        // card with no title — leaves the fixed-aspect
-                        // grid for a full-width row whose height
-                        // follows its text, because the tile's aspect
-                        // ratio gives its diagnosis caption a box
-                        // smaller than one line of text. The healthy
-                        // cards keep the compact grid.
+                        // The cards split ONCE per build, over the
+                        // FULL loaded list, on the SAME scope derivation
+                        // for both halves: a broken card — a scope the
+                        // tree cannot verify, or a card with no title —
+                        // leaves the fixed-aspect grid for a full-width
+                        // row whose height follows its text, because
+                        // the tile's aspect ratio gives its diagnosis
+                        // caption a box smaller than one line of text.
+                        // The healthy cards keep the compact grid.
                         final (:broken, :healthy) = quickHelpPartitionButtons(
-                          displayButtons,
+                          _quickHelpButtons,
                           (button) => _treeUnavailable
                               ? QuickHelpScopeResolver.unavailableScopeFor(
                                   button,
@@ -2710,6 +2700,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         // breaks EVERY card, and a column of full-width
                         // rows can exceed the viewport. The grid gives
                         // up its own scrolling for the shared one.
+                        // The grid's source: the healthy TILE
+                        // placements. A healthy composer-placed entry
+                        // has no mobile surface.
+                        final gridButtons = [
+                          for (final button in healthy)
+                            if (!quickHelpIsComposerPlaced(button)) button,
+                        ];
                         return SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2731,9 +2728,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       mainAxisSpacing: quickHelpGridSpacing,
                                       crossAxisSpacing: quickHelpGridSpacing,
                                     ),
-                                itemCount: healthy.length,
+                                // The grid renders the healthy TILE
+                                // placements only — a healthy
+                                // composer-placed entry has no mobile
+                                // surface (a BROKEN composer entry keeps
+                                // its diagnosis row above the grid: a
+                                // broken card is a VISIBLE failure, and
+                                // the surface it has nowhere to occupy
+                                // does not change the failure the row
+                                // names).
+                                itemCount: gridButtons.length,
                                 itemBuilder: (context, index) {
-                                  final button = healthy[index];
+                                  final button = gridButtons[index];
                                   final String translatedTitle =
                                       quickHelpTitleOf(button) ?? '';
                                   final String iconAsset =
@@ -2742,9 +2748,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       button['iconInlineSvg']?.toString() ?? '';
                                   final QuickHelpCardStyles cardStyles =
                                       button['styles'] as QuickHelpCardStyles;
-                                  final bool dark =
-                                      Theme.of(context).brightness ==
-                                      Brightness.dark;
+                                  final bool dark = isDark;
 
                                   return Material(
                                     color: Colors.transparent,

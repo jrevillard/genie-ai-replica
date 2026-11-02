@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/quick_help_scope.dart';
 
@@ -2329,6 +2331,28 @@ void main() {
 
       expect(parsed['iconInlineSvg'], markup);
       expect(parsed['iconAsset'], '');
+    });
+
+    test('the styles vocabulary reads 8-digit hex in the web CSS order', () {
+      // Web CSS reads #RRGGBBAA — alpha LAST; Flutter's Color(int)
+      // reads AARRGGBB. The parse converts the web's form: #A9B6C280 is
+      // the blue-gray at alpha 0x80, not the olive the raw read gives.
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#A9B6C280'},
+      }, 'en');
+      final styles = parsed['styles'] as QuickHelpCardStyles;
+      expect(styles.outline, const Color(0x80A9B6C2));
+
+      // The 6-digit form parses as before; an unparseable value is a
+      // null field, the token fallback.
+      final plain = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': '#D9E2EA', 'outlineColor': 'nope'},
+      }, 'en');
+      final plainStyles = plain['styles'] as QuickHelpCardStyles;
+      expect(plainStyles.background, const Color(0xFFD9E2EA));
+      expect(plainStyles.outline, isNull);
     });
 
     test('an inline icon with a non-string value declares no markup', () {

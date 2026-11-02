@@ -96,7 +96,14 @@ void main() {
       // cross axis spacing are the ONE value the column bound divides
       // by.
       final delegate =
-          tester.widget<GridView>(find.byType(GridView)).gridDelegate
+          tester
+                  .widget<GridView>(
+                    find.ancestor(
+                      of: find.text('Births Card'),
+                      matching: find.byType(GridView),
+                    ),
+                  )
+                  .gridDelegate
               as SliverGridDelegateWithFixedCrossAxisCount;
       expect(delegate.mainAxisSpacing, DsSpacing.sm);
       expect(delegate.crossAxisSpacing, DsSpacing.sm);

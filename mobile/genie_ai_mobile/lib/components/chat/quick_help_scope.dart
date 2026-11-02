@@ -132,8 +132,12 @@ class QuickHelpCardStyles {
   const QuickHelpCardStyles({this.background, this.outline});
 }
 
-/// A colour in the styles block's own vocabulary — the web's CSS, whose
-/// 8-digit form is #RRGGBBAA with the alpha LAST. Flutter's Color(int)
+/// A colour in the styles block's own vocabulary — the web's CSS in its
+/// HEX forms only (#RGB, #RRGGBB, and #RRGGBBAA with the alpha LAST);
+/// the shipped configurations are hex-only. A named colour or a
+/// functional notation (rgb()/hsl()/color-mix()) is NOT parsed — it is
+/// a null field and the token fallback paints, a divergence the
+/// vocabulary does not pretend to cover. Flutter's Color(int)
 /// reads AARRGGBB, so an alpha-carrying declaration parsed naively
 /// becomes a different colour; every other parseHex caller keeps the
 /// Flutter order, so the conversion lives beside the only reader of the

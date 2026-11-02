@@ -47,6 +47,7 @@ void main() {
 
   late Uint8List config;
   late Uint8List composerOnlyConfig;
+  late Uint8List brokenComposerOnlyConfig;
   late Uint8List brokenComposerConfig;
   setUpAll(() async {
     config = await chatbotConfigBytesWithButtons([
@@ -55,6 +56,9 @@ void main() {
       tileCard2,
     ]);
     composerOnlyConfig = await chatbotConfigBytesWithButtons([composerCard]);
+    brokenComposerOnlyConfig = await chatbotConfigBytesWithButtons([
+      brokenComposerCard,
+    ]);
     brokenComposerConfig = await chatbotConfigBytesWithButtons([
       brokenComposerCard,
       tileCard,
@@ -104,6 +108,25 @@ void main() {
       // grid.
       expect(find.byType(GridView), findsNothing);
       expect(find.text('Just Chat'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a broken composer-only configuration still mounts the diagnosis row',
+    (tester) async {
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, brokenComposerOnlyConfig);
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
+
+      // No surface for the entry itself, but its config defect is a
+      // VISIBLE failure: the title-missing gate mounts the overlay so
+      // the diagnosis row has a channel.
+      final caption = find.textContaining('no title in this language');
+      expect(caption, findsOneWidget);
+      expect(
+        find.ancestor(of: caption, matching: find.byType(GridView)),
+        findsNothing,
+      );
     },
   );
 

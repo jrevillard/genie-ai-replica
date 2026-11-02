@@ -1595,12 +1595,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   static const double _quickHelpCardHeaderGap = 12;
 
   /// The container a Quick Help card renders in — the tile's and the
-  /// broken row's shared chrome, differing only in border colour and
-  /// the surface the deployment's tint (or the surface token) paints.
-  /// A DsCard: the DS primitive already carries the surface, border
-  /// side and radius the shell used to hand-roll, and its
-  /// overrideBg / overrideBorderColor are the override points the
-  /// tint (and the broken diagnosis) read through.
+  /// broken row's shared chrome: a DsCard whose standard variant
+  /// carries the surface, border side and DsRadii.lg radius, and whose
+  /// overrideBg / overrideBorderColor are the points the deployment's
+  /// tint (or the broken diagnosis's danger border) read through.
   Widget _quickHelpCardShell({
     required Color background,
     required Color borderColor,
@@ -1609,8 +1607,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }) {
     return DsCard(
       variant: DsCardVariant.standard,
-      // Flush by default: the hand-rolled Container this replaced
-      // carried no margin, and Card's own 4-side default would slip an
+      // Flush by default: Card's own 4-side margin would slip an
       // unmeasured gap into the grid's spacing and the broken row's.
       margin: margin ?? EdgeInsets.zero,
       padding: _quickHelpCardPadding,
@@ -1652,9 +1649,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     required Map<String, dynamic> scope,
     required ThemeData theme,
     required AppTokens tokens,
+    required bool dark,
   }) {
+    // The declared tint stays on a broken card — the failure names
+    // itself in the danger BORDER (the web's .config-error overrides
+    // only the border too); the surface keeps the deployment's colour.
     return _quickHelpCardShell(
-      background: tokens.surface,
+      background: _quickHelpCardBackground(
+        button['styles'] as QuickHelpCardStyles,
+        tokens,
+        dark,
+      ),
       borderColor: tokens.danger,
       margin: const EdgeInsets.only(bottom: quickHelpGridSpacing),
       child: Column(
@@ -2642,7 +2647,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               // and an empty overlay shell under the greeting would
               // render the nothing the config asked for.
               _quickHelpButtons.any(
-                (button) => !quickHelpIsComposerPlaced(button),
+                (button) =>
+                    !quickHelpIsComposerPlaced(button) ||
+                    // A composer entry with no title is broken in every
+                    // tree state: the overlay mounts so its diagnosis
+                    // row has a channel. (A scope-only breakage stays
+                    // hidden — the gate cannot consult the resolver.)
+                    quickHelpTitleMissing(button),
               ) &&
               _treeSettled)
             Container(
@@ -2717,6 +2728,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   scope: scope,
                                   theme: theme,
                                   tokens: tokens,
+                                  dark: isDark,
                                 ),
                               GridView.builder(
                                 shrinkWrap: true,

@@ -55,15 +55,31 @@ void main() {
 
   final tree = quickHelpTreeFixture();
 
+  // A tinted card whose title is empty in the loaded language —
+  // broken, but still the deployment's colour under the danger border.
+  final brokenTintedCard = <String, dynamic>{
+    'id': 'broken-tinted-id',
+    'title': {'en': ''},
+    'category': '2',
+    'serviceLabels': ['Births'],
+    'styles': {'backgroundColor': '#D9E2EA', 'outlineColor': '#A9B6C2'},
+  };
+
   late Uint8List tintedConfig;
+  late Uint8List brokenConfig;
   late Uint8List malformedConfig;
   setUpAll(() async {
     tintedConfig = await chatbotConfigBytesWithButtons([
       tintedCard,
       untintedCard,
     ]);
+    brokenConfig = await chatbotConfigBytesWithButtons([
+      brokenTintedCard,
+      untintedCard,
+    ]);
     malformedConfig = await chatbotConfigBytesWithButtons([
       outlineOnlyCard,
+      tintedCard,
       malformedCard,
     ]);
   });
@@ -132,14 +148,40 @@ void main() {
       // background is a pale step that cannot carry a hue at surface
       // depth): the outline's hue at the LIVE surface token's lightness.
       final outline = ColorUtils.parseHex('#A9B6C2');
-      final derived = cardOf(tester, 'Outline Only Card').color;
+      Color darkDerived(String title) => cardOf(tester, title).color!;
       final expected = HSLColor.fromColor(
         outline,
       ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor();
-      expect(derived, expected);
+      expect(darkDerived('Outline Only Card'), expected);
       final outlineShape =
           cardOf(tester, 'Outline Only Card').shape! as RoundedRectangleBorder;
       expect(outlineShape.side.color, outline);
+
+      // A card declaring BOTH fields derives from the outline in dark
+      // mode too — the pale declared background would be unreadable
+      // against the near-white dark foreground (the web's dark rule
+      // ignores --qh-bg the same way).
+      expect(darkDerived('Tinted Card'), expected);
     },
   );
+
+  testWidgets('a broken card keeps the declared tint under its danger border', (
+    tester,
+  ) async {
+    usePhoneSurface(tester);
+    mockChatbotConfigAsset(tester, brokenConfig);
+    await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
+
+    // The diagnosis row carries the tint; the DANGER BORDER is the
+    // failure's colour (the web's .config-error overrides only the
+    // border too).
+    final caption = find.textContaining('no title in this language');
+    expect(caption, findsOneWidget);
+    final card = tester.widget<Card>(
+      find.ancestor(of: caption, matching: find.byType(Card)),
+    );
+    expect(card.color, ColorUtils.parseHex('#D9E2EA'));
+    final shape = card.shape! as RoundedRectangleBorder;
+    expect(shape.side.color, ThemeManager().tokens.danger);
+  });
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +202,76 @@ void main() {
     },
   );
 
+  testWidgets('a restore parked on the config read leaves the bar untouched', (
+    tester,
+  ) async {
+    // The tree recovers while the config read is still IN FLIGHT: the
+    // new load's own reset has already revoked the parked restore's
+    // ownership (the epoch), so the tree fetch's re-resolve refuses and
+    // the bar stays as the parked restore's predecessor left it — no
+    // title, no caption. Nothing judges a scope from a half-settled
+    // source pair; the settled parse (the cache) opens the commit.
+    final mock = _DeadScopeMockClient(
+      tree,
+      conversationTags: [deadTag],
+      failFirstCounts: const {'en': 2},
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    final heldConfig = Completer<ByteData?>();
+    // The mount and restore #1 read a FAILING asset; restore #2's read
+    // is HELD. (The bundle serves a failed read from its cache without
+    // consulting the handler, so the phases are armed by handler, not
+    // by counting reads.)
+    void armFailing() {
+      rootBundle.evict('assets/config/genie-ai-config.json');
+      tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+        'flutter/assets',
+        (ByteData? message) async => null, // every read fails
+      );
+    }
+
+    void armHeld() {
+      rootBundle.evict('assets/config/genie-ai-config.json');
+      tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+        'flutter/assets',
+        (ByteData? message) async {
+          if (message == null) return null;
+          final key = utf8.decode(message.buffer.asUint8List());
+          if (key != 'assets/config/genie-ai-config.json') return null;
+          return heldConfig.future;
+        },
+      );
+    }
+
+    armFailing();
+    await pumpChatBot(tester, mock, chatKey: chatKey);
+
+    // Restore #1: both sources fail — the double outage, quiet.
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no longer carries'), findsNothing);
+
+    // Restore #2: the tree fetch (3rd) succeeds while the config read
+    // is held. The restore parks on the held read — the load spinner
+    // keeps animating, so pumpAndSettle never settles; bounded clock
+    // pumps flush the fetch's own chain instead.
+    armHeld();
+    final loadFuture = chatKey.currentState!.loadConversation('conv-1');
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('Context:'), findsNothing);
+
+    // The read settles: the parse lands, the restore commits, and the
+    // genuinely absent tag gets its caption.
+    heldConfig.complete(ByteData.sublistView(configBytes));
+    await loadFuture;
+    await tester.pumpAndSettle();
+    expect(find.text('Context: Civil Registry'), findsOneWidget);
+    expect(find.textContaining('no longer carries'), findsOneWidget);
+  });
+
   testWidgets('a sidebar selection replaces the dead-scope caption', (
     tester,
   ) async {
@@ -259,18 +332,23 @@ class _DeadScopeMockClient extends http.BaseClient {
   final String? conversationCategoryId;
 
   /// Per locale: the FIRST N tree requests fail with a 500 (a transient
-  /// hierarchy outage) and every later one serves the tree.
+  /// hierarchy outage) and every later one serves the tree. The counts
+  /// are keyed by the REQUEST's locale, like the sibling mock's — a
+  /// localized fetch inside the outage window must not consume another
+  /// locale's failure budget.
   final Map<String, int> failFirstCounts;
-  int _treeRequests = 0;
+  final Map<String, int> _treeRequestsByLocale = {};
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
     final locale = request.url.queryParameters['locale'] ?? 'en';
     if (path.contains('/api/service-categories/categories')) {
-      _treeRequests += 1;
+      _treeRequestsByLocale[locale] = (_treeRequestsByLocale[locale] ?? 0) + 1;
+      // ignore: avoid_print
+      print('TREE-REQ #$locale ${_treeRequestsByLocale[locale]}');
       final failFirst = failFirstCounts[locale];
-      if (failFirst != null && _treeRequests <= failFirst) {
+      if (failFirst != null && _treeRequestsByLocale[locale]! <= failFirst) {
         return httpResponseJson(<String, dynamic>{}, 500);
       }
       return httpResponseJson(tree, 200);

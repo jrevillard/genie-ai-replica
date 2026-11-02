@@ -611,13 +611,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // scope carries the ones selected beside the button.
     _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
     // The tags the restore could not carry, named in the context bar.
-    // An OUTAGE of either source the restore resolved against names tags
-    // it cannot judge: an empty tree reads every label dropped, and an
-    // unreadable configuration loses the button index — a button id then
-    // falls to the sidebar branch and reads as a dead tag. The caption
-    // stays quiet (the outage is visible in the grid), and the recovery
-    // re-resolve re-applies the real verdict.
-    _deadScopeTags = _treeUnavailable || _quickHelpLoadFailed
+    // The caption only states what a SETTLED source pair judged: an
+    // empty tree reads every label dropped, and a configuration with no
+    // successful parse yet — failed, or mid-read (the load resets its
+    // flag at START) — has no button index, so a live button id would
+    // fall to the sidebar branch and be captioned as a dead tag. The
+    // cache is the settled mark: set only by a parse that succeeded.
+    // The caption stays quiet (the outage is visible in the grid), and
+    // the recovery re-resolve re-applies the real verdict.
+    _deadScopeTags = _treeUnavailable || _cachedConfig == null
         ? const []
         : scope.droppedTags;
     // How many sidebar tags the conversation was saved with: a tag

@@ -26,6 +26,10 @@ void main() {
     () {
       final config = getConfig();
       expect(config, equals(flavors.config));
+      // The equality above self-compares: getConfig() returns the same
+      // instance the flavor table maps "itu" to. This assert names the
+      // deployment contract directly — the production flavor keeps the
+      // trust-all TLS client off.
       expect(config.allowInsecureConnections, isFalse);
     },
     skip: !kReleaseMode

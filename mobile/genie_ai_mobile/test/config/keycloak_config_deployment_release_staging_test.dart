@@ -26,6 +26,10 @@ void main() {
     () {
       final config = getConfig();
       expect(config, equals(stagingConfig));
+      // The equality above self-compares: getConfig() returns the same
+      // instance the flavor table maps "staging" to. This assert names the
+      // deployment contract directly — staging keeps the trust-all TLS
+      // client off — instead of relying on the guard to fail first.
       expect(config.allowInsecureConnections, isFalse);
     },
     skip: !kReleaseMode

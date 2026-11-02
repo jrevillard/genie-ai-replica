@@ -38,9 +38,9 @@ ownership and modes on the next recreate.
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself, and on the compose path
-the certbot entrypoint normalizes an existing pair at startup — but
-certbot only runs with the `letsencrypt` profile, so without it apply
-the `chgrp 101` command above yourself.)
+`secrets-ssl-init` — NOT profile-gated — normalizes any provided pair
+on every up, so the manual `chgrp 101` above is only the fallback for
+a running stack you do not want to recreate.)
 
 The key is readable by numeric group 101 (the nginx image's uid/gid —
 fixed upstream). On the HOST, check no untrusted account holds primary
@@ -49,13 +49,10 @@ occupy that id, and any member could read the TLS private key.
 
 Upgrading an existing deployment with a pre-#1227
 `data/database_backups` tree? The backend (uid 1000) must OWN it —
-`backend-init` heals only named volumes, never this host bind, so
-re-own it yourself (the Ansible path does this via its migration
-tasks):
-
-```bash
-sudo chown -R 1000:1000 data/database_backups
-```
+`backend-init` heals this host bind on every up (its third loop
+directory), so no manual step: bring the stack up and the tree is
+re-owned before the backend starts (the Ansible path converges it via
+its migration tasks instead).
 
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
 - **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)

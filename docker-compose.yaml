@@ -427,13 +427,16 @@ services:
         delay: 30s
         max_attempts: 60
     # One sweep: chown the tree (dir + files + symlinks) to root:101,
-    # pin the dir to 0750 (group r-x for gid 101), KEY material to 0640,
-    # certs to 0644 — then verify group and key readability, exit 9 on
-    # any survivor (failed init = visible + retried by the bounded
-    # policy). Key detection is CONTENT-SHAPED, not just *.key: the
-    # Let's Encrypt spelling (privkey.pem) is a private key too, and a
-    # filename-only predicate once landed it world-readable 0644.
-    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -name '*.key' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name 'privkey*' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f ! -name '*.key' ! -name 'privkey*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name 'privkey*' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name '*.key' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    # pin the dir to 0750 (group r-x for gid 101), then modes —
+    # DENY-BY-DEFAULT: every file starts at key-tight 0640 and only the
+    # known CERT spellings (*.crt/*.cer/*.pem with no 'key' in the name —
+    # key.pem IS a key)
+    # widened to 0644. A deny-by-default inversion replaced the earlier
+    # 'everything not *.key -> 0644' catch-all, which world-read any
+    # key parked under a non-canonical name (key.pem, *.old, *.bak —
+    # verified defect shape). Verify group + tight modes, exit 9 on any
+    # survivor (failed init = visible + retried by the bounded policy).
+    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.crt' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.cer' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.pem' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -perm 0640 ! -perm 0644 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - type: bind
         source: ./secrets/ssl

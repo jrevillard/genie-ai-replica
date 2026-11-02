@@ -492,15 +492,21 @@
       # tree as root). Default ./data is unaffected either way.
       become_user: root
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ item.path }}"
         state: directory
-        mode: '0755'
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+        mode: "{{ item.mode }}"
       # data_dir_resolved is ALWAYS absolute (group_vars joins the
       # absolute deploy_dir) — no ternary here: its else branch would
       # relpath a relative path against an absolute start and throw.
+      # secrets/ssl is root:101 0750: the runtime gate (rule 4) demands
+      # group 101 + group r-x on the populated directory — the edge's
+      # gid 101 must traverse it (matches secrets-ssl-init's compose
+      # normalization; root keeps full owner access for certbot writes).
       loop:
-        - "{{ data_dir_resolved }}/huggingface"
-        - "{{ deploy_dir_resolved }}/secrets/ssl"
+        - {path: "{{ data_dir_resolved }}/huggingface", mode: '0755'}
+        - {path: "{{ deploy_dir_resolved }}/secrets/ssl", owner: root, group: "101", mode: '0750'}
 
     # no-root data-dir migration (#1227) — the tasks live in
     # tasks/no-root-data-migration.yml, shared VERBATIM with the
@@ -530,12 +536,15 @@
       # binds <deploy_dir>/secrets/ssl — without this task swarmkit
       # silently root-creates it on that worker (the certs themselves are
       # manager-scoped; the shape matches the manager's own
-      # secrets/ssl creation).
+      # secrets/ssl creation — root:101 0750, the runtime gate's rule-4
+      # converged shape).
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir_resolved }}/secrets/ssl"
         state: directory
-        mode: '0755'
+        owner: root
+        group: "101"
+        mode: '0750'
 
     - name: Pre-create the huggingface cache bind source on workers (#1227)
       # data/huggingface is ALSO a bind source (${DATA_DIR}/huggingface:/data

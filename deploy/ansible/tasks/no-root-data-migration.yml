@@ -181,7 +181,12 @@
   # churning every deploy.)
   # The probe/heal/warn skeleton itself lives ONCE in
   # tasks/ownership-probe-heal.yml; only the commands differ here.
+  # Same escape guard as the creation task above: an ancestor/'/'
+  # data_dir must not get its database_backups tree chowned by the
+  # trio either (the find -H path would land on the unmanaged host
+  # tree the guard exists to protect).
   ansible.builtin.import_tasks: tasks/ownership-probe-heal.yml
+  when: not _data_dir_escaped
   vars:
     # -H: the data dir is commonly a SYMLINK (a small /opt pointing at a
     # bigger volume — check-runtime.sh documents and resolves the same

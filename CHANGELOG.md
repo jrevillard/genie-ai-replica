@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every always-on service of the core stack now runs as a non-root user
   (postgres and
   redis-cache rely on their upstream entrypoints, which drop to their
-  package users; every other service declares an explicit `user:`); five short-lived one-shot init
+  package users; every other service declares an explicit `user:`); six short-lived one-shot init
   containers (`arango-vector-db-init`, `victorialogs-init`,
-  `document-repository-init`, `backend-init`, `otel-collector-init`)
+  `document-repository-init`, `backend-init`, `otel-collector-init`,
+  `secrets-ssl-init` — the last one converging the `secrets/ssl` HOST
+  bind on the gateway node, not a named volume)
   chown the existing root-era named volumes to their service's uid on
   first deploy. Still running as root, deliberately out of this
   migration: the profile-gated observability services

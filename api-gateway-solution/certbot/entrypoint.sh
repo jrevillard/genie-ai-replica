@@ -142,11 +142,11 @@ else
     request_certificate || true
 fi
 
-# Ownership fix-up on an existing pair (upgrade path): copy_certs only
-# runs at (re)issuance, so a pre-#1227 root:root 0600 key would keep the
-# uid-101 edge crash-looping until the renewal loop re-copied it — up to
-# 12 hours. Normalize in place whenever a pair already exists, valid or
-# not (idempotent).
+# Ownership fix-up on an existing pair: copy_certs only runs at
+# (re)issuance, so a pair the operator replaced while the stack was down
+# (certbot `restart` bypasses the depends_on health gate that would
+# otherwise hold it back) is normalized here at startup — idempotent,
+# and a no-op whenever secrets-ssl-init already converged the tree.
 if [ -f "${SECRETS_DIR}/server.crt" ] && [ -f "${SECRETS_DIR}/server.key" ]; then
     if chmod 644 "${SECRETS_DIR}/server.crt" \
         && chmod 640 "${SECRETS_DIR}/server.key" \

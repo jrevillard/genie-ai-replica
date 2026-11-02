@@ -936,6 +936,7 @@ const Map<String, dynamic> zhLocale = {
         "配置问题：知识层次结构无法加载，因此无法验证此按钮的范围。在层次结构可用之前，此按钮无法使用。",
     "scopeNotNameable": "配置问题：所选范围在知识层次结构中没有英文名称，因此无法确定查询的范围。该查询未发送。",
     "scopeTagGone": "此对话保存时的范围 \"{tags}\" 已不在知识层次结构中。在清除上下文之前，后续问题将被拒绝。",
+    "justChat": "仅聊天",
     "queryContext": "查询上下文",
     "contextAdded": "上下文已添加到您的查询",
     "contextRemoved": "上下文已从您的查询中移除",

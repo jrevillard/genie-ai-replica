@@ -430,6 +430,76 @@ void main() {
       expect(floatScope.serviceLabelsEn, isEmpty);
     });
 
+    test('a web-saved just-chat tag answers unfiltered without the entry', () {
+      // The web's restore carries exactly ONE reserved id: 'just-chat'.
+      // The scope it names (NONE, unfiltered by design) does not depend
+      // on the configuration, so the tag restores even when the
+      // deployment dropped the entry — never the dead-tag refusal the
+      // sidebar branch would produce for it.
+      final scope = convResolver(
+        const [],
+      ).resolve(tags: ['just-chat'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.serviceLabelsEn, isEmpty);
+      expect(scope.sidebarTagCount, 0);
+      expect(scope.sidebarLabelsEn, isEmpty);
+      expect(scope.droppedTags, isEmpty);
+      expect(scope.quickHelpScopeState, isNull);
+      // The conversation's own edge stands (the web's reserved branch
+      // leaves the saved category in place).
+      expect(scope.categoryId, '2');
+      // And the scope goes on the wire: the send must not refuse it.
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+          quickHelpScopeBroken: quickHelpScopeBroken(
+            scope.quickHelpScopeState ?? const <String, dynamic>{},
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a just-chat tag ignores a config entry that declares one', () {
+      // The web restores the reserved chip from the id ALONE — even when
+      // the configuration still carries the entry. A deployment that
+      // gave its just-chat entry labels would otherwise narrow a scope
+      // both platforms name unfiltered by design.
+      final justChatEntry = [
+        {
+          'id': 'just-chat',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(justChatEntry).resolve(tags: ['just-chat']);
+
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.serviceLabelsEn, isEmpty);
+      expect(scope.categoryId, isNull);
+      expect(scope.quickHelpScopeState, isNull);
+    });
+
+    test('a just-chat tag beside a sidebar label restores both', () {
+      // The web writes one tag per context item: a just-chat conversation
+      // can carry sidebar labels beside the reserved tag, and the restore
+      // replays both — the labels narrow, the reserved tag adds nothing.
+      final scope = convResolver(
+        const [],
+      ).resolve(tags: ['just-chat', 'Births'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.serviceLabelsEn, isEmpty);
+      expect(scope.sidebarLabelsEn, ['Births']);
+      expect(scope.sidebarTagCount, 1);
+      expect(scope.droppedTags, isEmpty);
+    });
+
     test('a web-saved numeric id tag restores the scope', () {
       // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
       // is string-typed and the index keys the stringified id — the

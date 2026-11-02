@@ -119,14 +119,19 @@ void main() {
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
   });
 
-  testWidgets('an outage stays quiet', (tester) async {
+  testWidgets('an outage names the outage in the bar, not a config problem', (
+    tester,
+  ) async {
     // The tree never loads (every EN request 500s): the restore runs
     // under the outage, the broken verdict is re-stamped, and the bar
-    // shows the title with NO caption — the grid carries the verdict.
+    // names the OUTAGE — never a configuration caption computed over
+    // the empty tree. The saved history hides the Quick Help grid, so
+    // the bar is the only surface the verdict can appear on.
     final mock = _BrokenScopeMockClient(
       tree,
       conversationTags: ['births-card'],
       failEn: true,
+      withHistory: true,
     );
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, brokenLabelBytes);
@@ -135,8 +140,13 @@ void main() {
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
 
+    // The configuration captions stay silent: the dead label is
+    // UNVERIFIED, not gone.
     expect(find.textContaining('Marriages'), findsNothing);
     expect(find.textContaining('category'), findsNothing);
+    // The outage caption is visible in the bar.
+    expect(find.textContaining('could not be loaded'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
   });
 
   testWidgets('the first send of a broken restored scope is refused', (

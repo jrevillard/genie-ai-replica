@@ -525,6 +525,24 @@ void main() {
       expect(reversed.categoryId, '2');
     });
 
+    test('a falsy raw category declares none, as on the web', () {
+      // The web's restore gates a button's category on its RAW
+      // JavaScript truthiness (`if (button.category)`): a hand-edited
+      // config declaring `category: 0` contributes no category there.
+      // The parse stringifies the reference ('0'), which would read as
+      // a declaration — the walk gates on the raw value the parse kept.
+      final parsed = parseQuickHelpButton({
+        'id': 'zero-cat',
+        'category': 0,
+        'serviceLabels': ['Births'],
+      }, 'en');
+      final scope = convResolver([
+        parsed,
+      ]).resolve(tags: const ['zero-cat'], categoryKey: '2');
+      expect(scope.quickHelpButtonId, 'zero-cat');
+      expect(scope.categoryId, '2');
+    });
+
     test('a general placeholder and the reserved tag set no category', () {
       // 'category.general' declares NO scope (the placeholder a
       // category-less selection is stored under), and the reserved

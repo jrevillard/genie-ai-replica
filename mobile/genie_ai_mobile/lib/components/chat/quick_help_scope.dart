@@ -85,7 +85,10 @@ Map<String, dynamic> parseQuickHelpButton(
     // The category is an EQUALITY read — but against the form the WEB
     // resolves: a numeric reference carries JavaScript's serialization
     // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
-    // the mobile renders the card broken.
+    // the mobile renders the card broken. The RAW value is kept beside
+    // it: the web's restore gates the category on its truthiness
+    // (`if (button.category)`), which a stringified '0' would flip.
+    'categoryRaw': btn['category'],
     'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
@@ -916,8 +919,18 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final taggedButton = tag == justChatTagId ? null : _buttons[tag];
       if (taggedButton != null) {
+        // The web's restore gates the category on the RAW value's
+        // JavaScript truthiness (`if (button.category)`) BEFORE any
+        // stringification: a falsy raw category (0, false, '') declares
+        // none. The parse keeps the raw value beside its string form
+        // for exactly this gate; a map with no raw record (a hand-built
+        // fixture) falls back to the string form's non-emptiness.
+        final raw = taggedButton['categoryRaw'];
         final declared = quickHelpCategoryOf(taggedButton);
-        if (declared != null && declared.isNotEmpty) {
+        final declaresCategory = raw != null
+            ? configTruthy(raw)
+            : (declared != null && declared.isNotEmpty);
+        if (declaresCategory) {
           effectiveCategory = _hierarchy.categoryIdFor(declared);
         }
       } else if (tag.startsWith('category.')) {
@@ -960,6 +973,9 @@ class ConversationScopeResolver {
     final tagList = (tags ?? const <dynamic>[])
         .map((tag) => _jsTagForm(tag) ?? 'null')
         .toList();
+    // The category the conversation was scoped by: read ONCE over the
+    // whole tag list (the web's last-wins forEach), never per tag.
+    final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
 
     // A Quick Help tag is the id of the button that produced the
     // conversation: the button is looked up by that id, and its own scope
@@ -1028,7 +1044,6 @@ class ConversationScopeResolver {
       // refuses on, read as the kept labels' exact complement so the
       // caption and the guard can never disagree about which tags died.
       final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
-      final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
@@ -1072,7 +1087,6 @@ class ConversationScopeResolver {
         .where((tag) => !tag.startsWith('category.'))
         .toList();
     final knownLabels = sidebarTags.where(_hierarchy.knowsLabel).toList();
-    final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
     return ConversationScope(
       categoryId: effectiveCategory,
       categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),

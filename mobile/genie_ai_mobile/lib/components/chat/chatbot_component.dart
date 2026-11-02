@@ -800,7 +800,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         tr('chatbot.quickHelpLabelGone', args: {'labels': missing.join(', ')}),
       );
     }
-    if (scope['categoryMissing'] as bool) {
+    if (scope['categoryMissing'] as bool? ?? false) {
       parts.add(tr('chatbot.quickHelpCategoryGone'));
     }
     return parts.join(' ');
@@ -2188,10 +2188,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // the tag names a live button, but the button's declared labels or
     // category have left the hierarchy — is the same visible failure:
     // the send guard would announce it at the first follow-up, and the
-    // bar names it now. Quiet during an outage, like the dead-tag
-    // caption: the grid already shows the unavailable verdict there.
+    // bar names it now. An OUTAGE shows it too: the stamped verdict
+    // names the outage (never a configuration problem), and the grid
+    // that carries the verdict is hidden whenever the conversation
+    // carries saved history — suppression would leave the broken scope
+    // with no visible trace at all until the first refused send.
     final bool hasBrokenQuickHelpScope =
-        !_treeUnavailable &&
         _activeQuickHelpScope != null &&
         quickHelpScopeBroken(_activeQuickHelpScope!);
 

@@ -54,23 +54,50 @@ Future<Uint8List> chatbotConfigBytesWithButtons(
   return Uint8List.fromList(utf8.encode(jsonEncode(config)));
 }
 
+/// The phone-sized surface the Quick Help layout tests mount on (360×
+/// 740 logical): at the desktop-sized default the tiles are wide
+/// enough to hide the defects the suites report.
+void usePhoneSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(360, 740);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 /// Serves the prepared configuration over the asset bundle's RAW
 /// messenger (a ByteData key in, a ByteData asset out — a MethodChannel
 /// mock never sees it). Every other key returns null, which degrades a
 /// card icon to its neutral fallback instead of failing the test. The
 /// bundle CACHES asset reads, so the eviction is what makes the mock
 /// visible.
-void mockChatbotConfigAsset(WidgetTester tester, Uint8List configBytes) {
+void mockChatbotConfigAsset(
+  WidgetTester tester,
+  Uint8List configBytes, {
+  Map<String, String> extraAssets = const {},
+}) {
+  // A re-mock in the same test replaces the served set: the PREVIOUS
+  // set's keys are evicted up front, so bytes a stale cache holds
+  // under a key the new handler no longer answers cannot resurface.
+  for (final key in _mockedExtraAssetKeys) {
+    rootBundle.evict(key);
+  }
+  _mockedExtraAssetKeys = extraAssets.keys.toSet();
   tester.binding.defaultBinaryMessenger.setMockMessageHandler(
     'flutter/assets',
     (ByteData? message) async {
       if (message == null) return null;
       final key = utf8.decode(message.buffer.asUint8List());
-      if (key != 'assets/config/genie-ai-config.json') return null;
-      return ByteData.sublistView(configBytes);
+      if (key == 'assets/config/genie-ai-config.json') {
+        return ByteData.sublistView(configBytes);
+      }
+      final extra = extraAssets[key];
+      if (extra == null) return null;
+      return ByteData.sublistView(utf8.encode(extra));
     },
   );
   rootBundle.evict('assets/config/genie-ai-config.json');
+  for (final key in _mockedExtraAssetKeys) {
+    rootBundle.evict(key);
+  }
 }
 
 /// Tears the chatbot tests' singletons down: the font scale and theme
@@ -78,6 +105,12 @@ void mockChatbotConfigAsset(WidgetTester tester, Uint8List configBytes) {
 /// name the next test's mount), the locale, and the asset mock (the
 /// handler AND the bundle's CACHE of the mutated bytes — a later test
 /// reading the real asset must not get a cache hit serving them).
+/// The extra asset keys the LAST mockChatbotConfigAsset call served —
+/// the teardown evicts them, so a later test loading the same key
+/// without mocking it gets the degradation path, not the previous
+/// test's cached bytes.
+Set<String> _mockedExtraAssetKeys = <String>{};
+
 void resetChatbotTestState() {
   // ThemeManager persists every set through the shared_preferences
   // plugin; without an in-memory mock the unhandled MissingPluginException
@@ -89,6 +122,10 @@ void resetChatbotTestState() {
   TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
       .setMockMessageHandler('flutter/assets', null);
   rootBundle.evict('assets/config/genie-ai-config.json');
+  for (final key in _mockedExtraAssetKeys) {
+    rootBundle.evict(key);
+  }
+  _mockedExtraAssetKeys = <String>{};
 }
 
 /// The chatbot widget the harness mounts. Its constructor's arguments
@@ -123,6 +160,7 @@ Future<void> pumpChatBot(
   GlobalKey<ChatBotComponentState>? chatKey,
   List<Locale> supportedLocales = const [Locale('en')],
   Widget Function(Widget chatbot)? buildHome,
+  ThemeData? theme,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -138,7 +176,7 @@ Future<void> pumpChatBot(
       child: AnimatedBuilder(
         animation: I18nService(),
         builder: (context, _) => MaterialApp(
-          theme: ThemeManager().lightTheme,
+          theme: theme ?? ThemeManager().lightTheme,
           locale: I18nService().currentLocale,
           supportedLocales: supportedLocales,
           localizationsDelegates: const [
@@ -152,6 +190,25 @@ Future<void> pumpChatBot(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// The tree-answer mock client the Quick Help grid tests share: the
+/// categories endpoint answers with [tree] at [categoriesStatus],
+/// every other path 404s.
+class QuickHelpTreeMockClient extends http.BaseClient {
+  QuickHelpTreeMockClient(this.tree, {this.categoriesStatus = 200});
+
+  final List<dynamic> tree;
+  final int categoriesStatus;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final path = request.url.path;
+    if (path.contains('/api/service-categories/categories')) {
+      return httpResponseJson(tree, categoriesStatus);
+    }
+    return httpResponseJson(<String, dynamic>{}, 404);
+  }
 }
 
 /// The JSON response every chatbot test's mock client answers with —

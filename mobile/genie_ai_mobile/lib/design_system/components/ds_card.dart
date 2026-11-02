@@ -10,6 +10,7 @@ class DsCard extends StatelessWidget {
   final Widget child;
   final DsCardVariant variant;
   final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
   final double? radius;
   final Color? overrideBg;
   final Color? overrideBorderColor;
@@ -19,6 +20,7 @@ class DsCard extends StatelessWidget {
     required this.child,
     this.variant = DsCardVariant.standard,
     this.padding,
+    this.margin,
     this.radius,
     this.overrideBg,
     this.overrideBorderColor,
@@ -51,6 +53,10 @@ class DsCard extends StatelessWidget {
     return Card(
       key: const ValueKey('ds-card'),
       elevation: elevation,
+      // Card's own default margin (4 on every side) is not the
+      // primitive's business — a consumer that needs a flush card
+      // passes zero; null keeps Material's default.
+      margin: margin,
       color: bgColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(effectiveRadius),

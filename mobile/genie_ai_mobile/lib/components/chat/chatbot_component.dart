@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
 import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
@@ -82,7 +83,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> get messages => _messages;
-  bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
@@ -1508,12 +1508,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   /// The icon a Quick Help card shows: the warning of a broken scope,
-  /// the card's own bundled asset, or the neutral help icon (no asset at
-  /// all, an asset still loading, or an asset the flavour did not
-  /// bundle). ONE copy of the neutral icon, built only where it is used.
+  /// the card's own inline SVG markup, the card's bundled asset, or the
+  /// neutral help icon (no icon at all, an asset still loading, or an
+  /// asset the flavour did not bundle). ONE copy of the neutral icon,
+  /// built only where it is used.
   Widget _quickHelpCardIcon({
     required bool broken,
     required String iconAsset,
+    required String inlineSvg,
     required AppTokens tokens,
   }) {
     if (broken) {
@@ -1521,6 +1523,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
     Widget neutralIcon() =>
         Icon(Icons.help_outline, size: 18, color: tokens.accent);
+    if (inlineSvg.isNotEmpty) {
+      return SvgPicture.string(
+        inlineSvg,
+        width: 18,
+        height: 18,
+        placeholderBuilder: (_) => neutralIcon(),
+        errorBuilder: (_, _, _) => neutralIcon(),
+      );
+    }
     if (iconAsset.isEmpty) return neutralIcon();
     return SvgPicture.asset(
       iconAsset,
@@ -1539,6 +1550,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Widget _quickHelpCardHeader({
     required bool broken,
     required String iconAsset,
+    required String inlineSvg,
     required String title,
     required ThemeData theme,
     required AppTokens tokens,
@@ -1548,9 +1560,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _quickHelpCardIcon(
           broken: broken,
           iconAsset: iconAsset,
+          inlineSvg: inlineSvg,
           tokens: tokens,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: _quickHelpCardHeaderGap),
         Expanded(
           child: Text(
             title,
@@ -1567,22 +1580,41 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// The card chrome's step: the off-scale 12 the DS spacing scale
+  /// cannot express (xs=4, sm=8, md=16) — the padding's horizontal
+  /// measure and the icon-to-title gap are the SAME design fact, one
+  /// constant.
+  static const double _quickHelpCardChromeStep = 12;
+
+  /// The Quick Help card's padding, on the chrome step.
+  static const EdgeInsets _quickHelpCardPadding = EdgeInsets.symmetric(
+    horizontal: _quickHelpCardChromeStep,
+    vertical: DsSpacing.sm,
+  );
+
+  /// The gap between the card's icon and its title, on the chrome
+  /// step.
+  static const double _quickHelpCardHeaderGap = _quickHelpCardChromeStep;
+
   /// The container a Quick Help card renders in — the tile's and the
-  /// broken row's shared chrome, differing only in border colour.
+  /// broken row's shared chrome: a DsCard whose standard variant
+  /// carries the surface, border side and DsRadii.lg radius, and whose
+  /// overrideBg / overrideBorderColor are the points the deployment's
+  /// tint (or the broken diagnosis's danger border) read through.
   Widget _quickHelpCardShell({
+    required Color background,
     required Color borderColor,
-    required AppTokens tokens,
     EdgeInsetsGeometry? margin,
     required Widget child,
   }) {
-    return Container(
-      margin: margin,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(DsRadii.lg),
-        border: Border.all(color: borderColor),
-      ),
+    return DsCard(
+      variant: DsCardVariant.standard,
+      // Flush by default: Card's own 4-side margin would slip an
+      // unmeasured gap into the grid's spacing and the broken row's.
+      margin: margin ?? EdgeInsets.zero,
+      padding: _quickHelpCardPadding,
+      overrideBg: background,
+      overrideBorderColor: borderColor,
       child: child,
     );
   }
@@ -1597,11 +1629,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     required Map<String, dynamic> scope,
     required ThemeData theme,
     required AppTokens tokens,
+    required bool dark,
   }) {
+    // The declared tint stays on a broken card — the failure names
+    // itself in the danger BORDER (the web's .config-error overrides
+    // only the border too); the surface keeps the deployment's colour.
     return _quickHelpCardShell(
+      background: quickHelpCardBackgroundFor(
+        button['styles'] as QuickHelpCardStyles,
+        tokens,
+        dark,
+      ),
       borderColor: tokens.danger,
       margin: const EdgeInsets.only(bottom: quickHelpGridSpacing),
-      tokens: tokens,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1609,6 +1649,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpCardHeader(
             broken: true,
             iconAsset: button['iconAsset']?.toString() ?? '',
+            inlineSvg: button['iconInlineSvg']?.toString() ?? '',
             title: quickHelpTitleOf(button) ?? '',
             theme: theme,
             tokens: tokens,
@@ -2177,6 +2218,39 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final theme = Theme.of(context);
     final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
+    // The Quick Help cards derive ONCE per build, before the overlay
+    // gate: the same scope derivation feeds both display halves, and
+    // the gate reads the derived lists — a broken composer-only
+    // configuration mounts (its diagnosis row has a channel), a
+    // healthy composer-only one does not (every entry targets a
+    // surface the platform lacks, and an empty overlay shell under the
+    // greeting would render the nothing the config asked for).
+    // The lists exist only while the overlay can show: once the
+    // conversation has interaction the overlay never mounts, and the
+    // per-chunk rebuilds of streaming must not pay the resolver walk.
+    final (
+      :broken,
+      :healthy,
+    ) = _showQuickHelpOverlay && _quickHelpButtons.isNotEmpty
+        ? quickHelpPartitionButtons(
+            _quickHelpButtons,
+            (button) => _treeUnavailable
+                ? QuickHelpScopeResolver.unavailableScopeFor(button)
+                : (_scopeResolver?.stateFor(button) ??
+                      QuickHelpScopeResolver.pending),
+          )
+        : (
+            broken: <(Map<String, dynamic>, Map<String, dynamic>)>[],
+            healthy: <Map<String, dynamic>>[],
+          );
+    // The grid's source: the healthy TILE placements. A healthy
+    // composer-placed entry has no mobile surface.
+    final List<Map<String, dynamic>> gridButtons = _showQuickHelpOverlay
+        ? [
+            for (final button in healthy)
+              if (!quickHelpIsComposerPlaced(button)) button,
+          ]
+        : const <Map<String, dynamic>>[];
     // One read of the verdict the bar renders: the gate, the icon and
     // the caption below all follow it.
     final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;
@@ -2581,7 +2655,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
           // Quick Help Overlay
           if (_showQuickHelpOverlay &&
-              _quickHelpButtons.isNotEmpty &&
+              (broken.isNotEmpty || gridButtons.isNotEmpty) &&
               _treeSettled)
             Container(
               color: tokens.bg,
@@ -2615,25 +2689,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           _quickHelpLayout,
                         );
 
-                        // The cards split ONCE per build, on the SAME
-                        // scope derivation for both halves: a broken
-                        // card — a scope the tree cannot verify, or a
-                        // card with no title — leaves the fixed-aspect
-                        // grid for a full-width row whose height
-                        // follows its text, because the tile's aspect
-                        // ratio gives its diagnosis caption a box
-                        // smaller than one line of text. The healthy
-                        // cards keep the compact grid.
-                        final (:broken, :healthy) = quickHelpPartitionButtons(
-                          _quickHelpButtons,
-                          (button) => _treeUnavailable
-                              ? QuickHelpScopeResolver.unavailableScopeFor(
-                                  button,
-                                )
-                              : (_scopeResolver?.stateFor(button) ??
-                                    QuickHelpScopeResolver.pending),
-                        );
-
                         // ONE scroll view for rows and grid: an outage
                         // breaks EVERY card, and a column of full-width
                         // rows can exceed the viewport. The grid gives
@@ -2648,6 +2703,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   scope: scope,
                                   theme: theme,
                                   tokens: tokens,
+                                  dark: isDark,
                                 ),
                               GridView.builder(
                                 shrinkWrap: true,
@@ -2659,13 +2715,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       mainAxisSpacing: quickHelpGridSpacing,
                                       crossAxisSpacing: quickHelpGridSpacing,
                                     ),
-                                itemCount: healthy.length,
+                                // The grid renders the healthy TILE
+                                // placements only — a healthy
+                                // composer-placed entry has no mobile
+                                // surface (a BROKEN composer entry keeps
+                                // its diagnosis row above the grid: a
+                                // broken card is a VISIBLE failure, and
+                                // the surface it has nowhere to occupy
+                                // does not change the failure the row
+                                // names).
+                                itemCount: gridButtons.length,
                                 itemBuilder: (context, index) {
-                                  final button = healthy[index];
+                                  final button = gridButtons[index];
                                   final String translatedTitle =
                                       quickHelpTitleOf(button) ?? '';
                                   final String iconAsset =
                                       button['iconAsset']?.toString() ?? '';
+                                  final String inlineSvg =
+                                      button['iconInlineSvg']?.toString() ?? '';
+                                  final QuickHelpCardStyles cardStyles =
+                                      button['styles'] as QuickHelpCardStyles;
 
                                   return Material(
                                     color: Colors.transparent,
@@ -2675,8 +2744,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       ),
                                       onTap: () => _quickHelpPressed(button),
                                       child: _quickHelpCardShell(
-                                        borderColor: tokens.borderLight,
-                                        tokens: tokens,
+                                        background: quickHelpCardBackgroundFor(
+                                          cardStyles,
+                                          tokens,
+                                          isDark,
+                                        ),
+                                        borderColor:
+                                            cardStyles.outline ??
+                                            tokens.borderLight,
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -2695,6 +2770,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                               child: _quickHelpCardHeader(
                                                 broken: false,
                                                 iconAsset: iconAsset,
+                                                inlineSvg: inlineSvg,
                                                 title: translatedTitle,
                                                 theme: theme,
                                                 tokens: tokens,

@@ -102,12 +102,18 @@ ensure_namespace() {
 
 install_keycloak_operator() {
   local ns="keycloak-system"
-  # Pre-flight: an operator left in the upstream kustomize default
-  # namespace (`keycloak`, from the pre-overlay install command) would
-  # fight this one over the same CRs once both watch all namespaces.
-  # Refuse rather than silently install a second one.
-  if kubectl get deployment keycloak-operator -n keycloak >/dev/null 2>&1; then
-    printf 'ERROR: keycloak-operator found in namespace "keycloak" (upstream default). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "${ns}" >&2
+  # Pre-flight: a keycloak-operator left anywhere OUTSIDE this script's
+  # namespace would fight this one over the same CRs once both watch all
+  # namespaces. The upstream kustomize default lands it in `keycloak`;
+  # a hand-rolled bootstrap can land it in any namespace (a dev venue
+  # shipped one in `keycloak-operator`) — scan every namespace rather
+  # than trusting the one name. Refuse rather than silently install a
+  # second operator.
+  stray=$(kubectl get deployment --all-namespaces \
+            -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}' \
+            | awk -F'\t' -v ns="${ns}" '$2 == "keycloak-operator" && $1 != ns' || true)
+  if [ -n "${stray}" ]; then
+    printf 'ERROR: keycloak-operator found in namespace "%s" (not installed by this script). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "$(printf '%s\n' "${stray}" | head -1 | cut -f1)" "${ns}" >&2
     exit 1
   fi
   if kubectl get namespace "${ns}" >/dev/null 2>&1 && \

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "GENIE.AI Reference Architecture",
+    "locale": "en",
+    "output": "docs/architecture/genie-ai-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1130, 880],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Chat request path",
+        "focus": ["users", "nginx", "kong", "frontend", "backend", "opea", "vllm"],
+        "note": "A citizen chat request from TLS edge to GPU inference."
+      },
+      {
+        "id": "sovereign-rag",
+        "label": "Sovereign RAG core",
+        "focus": ["backend", "docrepo", "arango", "opea", "vllm"],
+        "note": "Documents, vectors, and retrieval all stay inside the deployment."
+      },
+      {
+        "id": "trust-plane",
+        "label": "Trust and telemetry",
+        "focus": ["keycloak", "kong", "docrepo", "obs"],
+        "note": "OIDC at the gateway, malware scanning at ingest, fleet telemetry."
+      }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Users", "sublabel": "web + mobile", "pos": [50, 466], "size": [96, 60] },
+    { "id": "nginx", "type": "cloud", "label": "Nginx Edge", "sublabel": "TLS termination", "pos": [198, 466], "size": [96, 60], "tag": "gateway node" },
+    { "id": "keycloak", "type": "security", "label": "Keycloak IdP", "sublabel": "OIDC identity", "pos": [346, 250], "size": [100, 60], "tag": "gateway node" },
+    { "id": "kong", "type": "security", "label": "Kong Gateway", "sublabel": "routes + OIDC", "pos": [346, 466], "size": [100, 60], "tag": "gateway node" },
+    { "id": "frontend", "type": "frontend", "label": "Web UI", "sublabel": "chat + SSE", "pos": [498, 466], "size": [88, 60] },
+    { "id": "backend", "type": "backend", "label": "Backend API", "sublabel": "gov-chat-backend", "pos": [638, 463], "size": [102, 66] },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "cache + sessions", "pos": [640, 250], "size": [98, 58] },
+    { "id": "docrepo", "type": "backend", "label": "Document Repository", "sublabel": "ClamAV scans", "pos": [590, 686], "size": [128, 62] },
+    { "id": "arango", "type": "database", "label": "ArangoDB", "sublabel": "app data + vectors", "pos": [770, 686], "size": [106, 62] },
+    { "id": "opea", "type": "backend", "label": "OPEA ChatQnA", "sublabel": "RAG + guardrails", "pos": [792, 463], "size": [98, 66] },
+    { "id": "vllm", "type": "backend", "label": "vLLM + TEI", "sublabel": "LLM + embeddings", "pos": [942, 463], "size": [96, 66], "tag": "GPU node" },
+    { "id": "obs", "type": "external", "label": "Observability", "sublabel": "OTel + Grafana", "pos": [938, 250], "size": [104, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Sovereign deployment - Docker Swarm / Kubernetes", "wraps": ["nginx", "keycloak", "kong", "frontend", "backend", "redis", "docrepo", "arango", "opea", "vllm", "obs"], "pad": 26 },
+    { "kind": "security-group", "label": "gateway=true", "wraps": ["nginx", "kong", "keycloak"], "pad": 16 },
+    { "kind": "security-group", "label": "GPU node (gpu=true)", "wraps": ["vllm"], "pad": 14 }
+  ],
+  "connections": [
+    { "from": "users", "to": "nginx", "label": "HTTPS", "variant": "emphasis" },
+    { "from": "nginx", "to": "kong", "label": "proxy" },
+    { "from": "kong", "to": "keycloak", "label": "OIDC verify", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "from": "kong", "to": "frontend", "label": "routes" },
+    { "from": "frontend", "to": "backend", "label": "REST/SSE", "variant": "emphasis" },
+    { "from": "backend", "to": "redis", "label": "cache", "fromSide": "top", "toSide": "bottom" },
+    { "from": "backend", "to": "opea", "label": "chat", "variant": "emphasis" },
+    { "from": "opea", "to": "vllm", "label": "inference", "variant": "emphasis" },
+    { "from": "opea", "to": "obs", "label": "OTLP + logs", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "from": "backend", "to": "docrepo", "label": "documents", "fromSide": "bottom", "toSide": "top" },
+    { "from": "backend", "to": "arango", "label": "app data", "fromSide": "bottom", "toSide": "left" },
+    { "from": "opea", "to": "arango", "label": "vector retrieval", "fromSide": "bottom", "toSide": "top", "labelDy": 24 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Request Path", "items": ["TLS ends at Nginx; Kong enforces OIDC before routing", "UI consumes REST + SSE streaming from the backend", "Backend hands chat turns to the OPEA pipeline"] },
+    { "dot": "emerald", "title": "Sovereign RAG Core", "items": ["ArangoDB holds both app data and the vector store", "Documents are ClamAV-scanned at ingest", "vLLM and TEI serve LLM, embeddings and rerank on a labelled GPU node"] },
+    { "dot": "amber", "title": "Trust and Telemetry", "items": ["Keycloak provides OIDC identity at the gateway", "Every container ships fluentd logs to the OTel collector", "Victoria metrics/logs/traces roll up into Grafana"] }
+  ]
+}

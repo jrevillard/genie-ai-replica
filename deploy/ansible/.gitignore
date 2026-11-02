@@ -1,0 +1,13 @@
+# Vault password files
+.vault-pass-*
+
+# SSL certificates (secrets)
+files/certificates/**/*.crt
+files/certificates/**/*.key
+!files/certificates/README.md
+
+# Ansible retry files
+*.retry
+
+# OS files
+.DS_Store

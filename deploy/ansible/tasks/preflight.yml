@@ -1,0 +1,302 @@
+---
+# B2 — var-coherence preflight. Included FIRST by deploy.yml's
+# "Preflight: var coherence + certificates" play (main scope, the default) and
+# by deploy-gpu.yml's "Preflight (var coherence, gpu scope)" play
+# (preflight_scope: gpu) — both tags: [always], gather_facts: false, so it runs
+# before any install/prepare work on EVERY invocation. Read-only
+# (assert + debug + include): check-mode safe.
+#
+# What runs when:
+#   main scope (deploy.yml):    entry guard -> cert include (B1) -> placeholder
+#                               sweep -> EMAIL_* coherence -> enum asserts ->
+#                               deployment plan -> confirm gate
+#   gpu scope (deploy-gpu.yml): entry guard -> gpu placeholder sweep only
+#
+# Vars whose consumers died in Epic A (and the A7-era postgres superuser var,
+# dead since compose moved to per-DB passwords) were DELETED end-to-end in B3 —
+# group_vars, env.j2 emissions and this sweep. email_from is REQUIRED always
+# (B4 live-verified: the realm's smtpServer block is unconditional, and an empty
+# sender hard-fails the keycloak-config import with HTTP 400 "Invalid sender
+# address 'null'" on every deploy); the remaining EMAIL_* empty = SMTP off
+# (legal; mail simply undeliverable) but placeholders/type-confusions fail.
+
+# --- 0. entry guard -------------------------------------------------------------
+# preflight_offenders / preflight_var_specs / preflight_scope are task-internal
+# names. Task vars lose to -e, so an extra-var carrying any of them disables or
+# reroutes the gate (-e preflight_offenders=[] kills the sweep; -e
+# preflight_scope=gpu skips every main-only check). set_fact would not help
+# (facts also lose to -e) — the entry guard is the fix. gpu scope is authorized
+# ONLY from a play whose name contains 'gpu' (deploy-gpu.yml's preflight play);
+# ansible_play_name is executor-provided and cannot be overridden via -e.
+- name: "Preflight: entry guard (reserved internal names must not be set externally)"
+  ansible.builtin.assert:
+    that:
+      - preflight_offenders is not defined
+      - preflight_var_specs is not defined
+      - preflight_scope is not defined or (preflight_scope == 'gpu' and (ansible_play_name | default('') | string | lower) is search('gpu'))
+    fail_msg: >-
+      reserved preflight internal var must not be set externally — preflight_offenders,
+      preflight_var_specs and preflight_scope are task-internal names (gpu scope comes only
+      from deploy-gpu.yml's preflight play include); setting them via -e disables or reroutes
+      the gate. Unset them and re-run.
+    quiet: true
+
+# --- 1. certificate rules (B1) — included, not duplicated ------------------------
+- name: Cert preflight (B1 tasks/preflight-cert.yml — included, not duplicated)
+  ansible.builtin.include_tasks: preflight-cert.yml
+  when: preflight_scope | default('main') == 'main'
+
+# --- 2. placeholder sweep — ONE assert over a jinja-mapped var list --------------
+# Required class: CHANGE/FILL tokens, exact-value placeholder synonyms, reserved
+# defaults, wrong types (everything must be a string; membered lists are lists of
+# mappings), empty, undefined and null all fail. empty_ok class (optional vars):
+# only placeholders/synonyms/reserved/wrong-type fail. One task, one round-trip;
+# the fail_msg names each var, its group_vars file (static hint — vars merge
+# invisibly in scope) and the offending value.
+#
+# ponytail/NFKC ceiling: no builtin jinja normalize filter exists and
+# community.general (unicode_normalize) is not a deploy-path dependency, so
+# values are NOT Unicode-normalized — fullwidth ＣＨＡＮＧＥ_ＭＥ passes. Threat
+# model is accidental placeholders, not adversarial encoding; upgrade path:
+# add community.general to requirements.yml and filter values through
+# unicode_normalize('NFKC') before matching. Cyrillic-confusable placeholders
+# are the same documented ceiling — no confusable table.
+- name: "Preflight: placeholder sweep (CHANGE_ME/FILL-IN/synonyms/wrong-type/empty-where-illegal all fail)"
+  ansible.builtin.assert:
+    that:
+      - preflight_offenders | length == 0
+    fail_msg: |-
+      Preflight: {{ preflight_offenders | length }} offending var(s) found — set REAL values before deploying (nothing has been mutated yet):
+      {% for o in preflight_offenders %}
+      - {{ o.name }} = {{ o.value }}  [{{ o.reason }}] — set in {{ o.file }}{{ ' — ' ~ o.note if o.note }}{% endfor %}
+    quiet: true
+  vars:
+    preflight_required_always:
+      - { name: nginx_public_domain, file: "group_vars/all.yml or <env>/vars.yml" }
+      - { name: arango_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: translation_cache_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: kong_db_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: keycloak_admin_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: genie_admin_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: genie_admin_email, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: keycloak_db_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: keycloak_proxy_client_secret, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: kc_dataprep_client_secret, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: kc_mobile_client_id, file: "group_vars/<env>/vars.yml" }
+      - { name: kc_mobile_redirect_scheme, file: "group_vars/<env>/vars.yml" }
+      # Emitted UNCONDITIONALLY by env.j2: genie-realm.yaml always creates the
+      # grafana client and config-and-sleep.sh asserts this secret even when
+      # the observability stack itself is off.
+      - { name: grafana_client_secret, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      # Required regardless of SMTP: the realm's smtpServer block is always
+      # present, and an empty sender makes keycloak-config reject the realm
+      # import (B4 live-verified: HTTP 400 "Invalid sender address 'null'",
+      # every attempt). Any valid address works without an SMTP host.
+      - { name: email_from, file: "group_vars/<env>/vars.yml or vault.yml", note: 'empty EMAIL_FROM hard-fails the Keycloak realm import (HTTP 400 "Invalid sender address null") — any valid address works without SMTP' }
+    preflight_required_if_observability:
+      - { name: grafana_admin_password, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+    preflight_required_if_swarm:
+      - { name: repo_url, file: "group_vars/<env>/vars.yml" }
+      - { name: registry_deploy_token_user, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      - { name: registry_deploy_token, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      # docker login pulls from this registry in swarm mode — empty fails late there
+      - { name: swarm_registry_url, file: "group_vars/<env>/vars.yml", note: 'swarm needs a real registry URL (the docker login / image-pull target)' }
+    # swarm_registry_url in LOCAL mode: empty/undefined legal, CHANGE_ME never
+    # (the swarm-required entry above covers the swarm branch, so the two never
+    # both fire and no offender line duplicates).
+    preflight_registry_local:
+      - { name: swarm_registry_url, file: "group_vars/<env>/vars.yml", empty_ok: true, note: 'local wants "" or a real registry — never CHANGE_ME' }
+    preflight_placeholder_only:
+      # Empty/undefined = legal by design; placeholders/synonyms never pass.
+      - { name: hugging_face_hub_token, file: "group_vars/<env>/vault.yml (or vars.yml)", empty_ok: true, note: empty is legal (non-gated models); set a real token when a gated model is used }
+      - { name: vllm_api_key, file: "group_vars/<env>/vault.yml (or vars.yml)", empty_ok: true }
+      - { name: email_host, file: "group_vars/<env>/vars.yml or vault.yml", empty_ok: true, note: "empty = SMTP off (mail undeliverable, lifecycle unaffected); email_from is required regardless" }
+      - { name: email_port, file: "group_vars/<env>/vars.yml or vault.yml", empty_ok: true }
+      - { name: email_secure, file: "group_vars/<env>/vars.yml or vault.yml", empty_ok: true }
+      - { name: email_user, file: "group_vars/<env>/vars.yml or vault.yml", empty_ok: true }
+      - { name: email_password, file: "group_vars/<env>/vault.yml (or vars.yml)", empty_ok: true }
+    preflight_gpu_required:
+      - { name: hugging_face_hub_token, file: "group_vars/<env>/vault.yml (or vars.yml)" }
+      # members: check each entry's key — entries must be mappings with a
+      # non-empty STRING key; the fail_msg prints ONLY the offending entry
+      # (siblings stay out of the logs).
+      - { name: gpu_api_keys, file: "group_vars/<env>/vault.yml (or vars.yml)", members: true }
+      - { name: gpu_public_domain, file: "group_vars/<env>/vars.yml", reject: ['gpu.example.com'], note: "the gpu.example.com group_vars/all.yml default is placeholder-shaped — set the real IP/FQDN" }
+    preflight_var_specs: >-
+      {{ (preflight_required_always
+          + (preflight_required_if_observability if (enable_observability | default('0') | string) == '1' else [])
+          + (preflight_required_if_swarm if (deploy_mode | default('local') | string) == 'swarm' else [])
+          + (preflight_registry_local if (deploy_mode | default('local') | string) != 'swarm' else [])
+          + preflight_placeholder_only)
+         if (preflight_scope | default('main')) == 'main' else preflight_gpu_required }}
+    preflight_offenders: |
+      {%- set out = [] -%}
+      {%- set nil = '__preflight_undefined__' -%}
+      {%- set ph_re = '\\bCHANGE[\\s_-]*ME\\b|\\bFILL[\\s_-]*IN\\b' -%}
+      {%- set syn_list = ['TODO', 'PLACEHOLDER', 'REPLACE_ME', 'PASSWORD', 'YOUR@EMAIL'] -%}
+      {%- for spec in preflight_var_specs -%}
+      {%- set val = lookup('vars', spec.name, default=nil) -%}
+      {%- set is_def = val != nil -%}
+      {%- set is_none = is_def and (val is none) -%}
+      {%- set member_spec = spec.members | default(false) | bool -%}
+      {%- set membered = member_spec and is_def and (not is_none) and val is sequence and val is not string -%}
+      {%- set is_wrong_type = is_def and (not is_none) and ((
+            member_spec and (val is string or val is not sequence))
+            or ((not member_spec) and (val is not string))) -%}
+      {%- set u = ((val | string | trim | upper) if (is_def and not is_none) else '') -%}
+      {%- set is_syn = (not is_wrong_type) and (u != '' and (u in syn_list
+            or (spec.name == 'nginx_public_domain' and (u == 'EXAMPLE.COM' or u is search('\\.EXAMPLE\\.COM$'))))) -%}
+      {%- set is_ph = (not membered) and (not is_wrong_type) and (not is_syn) and is_def and (not is_none) and (u is search(ph_re)) -%}
+      {%- set is_rej = (not is_wrong_type) and is_def and (not is_none) and (u in (spec.reject | default([]) | map('upper') | list)) -%}
+      {%- set is_empty = (not is_def) or is_none or ((val | string | trim | length == 0) or (val is sequence and val is not string and val | length == 0)) -%}
+      {%- set required = not (spec.empty_ok | default(false) | bool) -%}
+      {%- if is_wrong_type or is_ph or is_syn or is_rej or (required and is_empty) -%}
+      {%- set reason = ('wrong type' if member_spec else 'wrong type (expected string)') if is_wrong_type else ('placeholder' if (is_ph or is_syn) else ('reserved default' if is_rej else ('undefined' if not is_def else 'empty'))) -%}
+      {%- set _ = out.append({'name': spec.name, 'file': spec.file, 'note': spec.note | default(''), 'reason': reason, 'value': ('(null)' if is_none else ((val | string) if is_def else '(undefined)'))}) -%}
+      {%- endif -%}
+      {%- if membered -%}
+      {%- for entry in val -%}
+      {%- set mask = ', {} other entries hidden'.format((val | length) - 1) -%}
+      {%- if entry is not mapping -%}
+      {%- set _ = out.append({'name': spec.name, 'file': spec.file, 'note': spec.note | default(''), 'reason': 'wrong type', 'value': 'entry {} is not a mapping (got {}){}'.format(loop.index, (entry | string), mask)}) -%}
+      {%- else -%}
+      {%- set ename = entry.name | default('', true) | string -%}
+      {%- set ekey = entry['key'] | default('', true) -%}
+      {%- if ekey is not string -%}
+      {%- set _ = out.append({'name': spec.name, 'file': spec.file, 'note': spec.note | default(''), 'reason': 'wrong type (expected string)', 'value': 'entry {} (name={}): key={} is not a string{}'.format(loop.index, ename, (ekey | string), mask)}) -%}
+      {%- else -%}
+      {%- set eu = ekey | string | trim | upper -%}
+      {%- set e_ph = (eu is search(ph_re)) or (eu in syn_list) -%}
+      {%- set e_empty = (eu | length == 0) -%}
+      {%- if e_ph or e_empty -%}
+      {%- set _ = out.append({'name': spec.name, 'file': spec.file, 'note': spec.note | default(''), 'reason': 'placeholder' if e_ph else 'empty', 'value': 'entry {} (name={}): key={}, {}'.format(loop.index, ename, ekey, mask)}) -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out | unique }}
+
+# --- 2b. EMAIL_* coherence (main scope) -----------------------------------------
+# KC SMTP needs the host+password PAIR; user only completes a configured host.
+# Any of host/user/password set → both email_host and email_password required;
+# those three empty = SMTP off (legal). email_from is excluded from the trigger:
+# it is required-always above and a sender alone must not imply an SMTP host
+# (B4 live-verified: from set + host empty deploys fine, mail just undeliverable).
+- name: "Preflight: EMAIL_* coherence (email_host + email_password are all-or-none)"
+  ansible.builtin.assert:
+    that:
+      - not (preflight_email_any | bool) or (preflight_email_host | bool and preflight_email_pass | bool)
+    fail_msg: >-
+      EMAIL_* coherence: email_host and email_password must be set TOGETHER — Keycloak's
+      SMTP needs the pair (email_user only completes a configured host; email_host/user/password
+      empty = SMTP off and legal — email_from is required regardless). Set both or none.
+    quiet: true
+  vars:
+    preflight_email_any: >-
+      {{ [email_host | default(''), email_user | default(''), email_password | default('')]
+         | reject('none') | map('string') | map('trim') | select | list | length > 0 }}
+    preflight_email_host: >-
+      {{ [email_host | default('')] | reject('none') | map('string') | map('trim') | select | list | length > 0 }}
+    preflight_email_pass: >-
+      {{ [email_password | default('')] | reject('none') | map('string') | map('trim') | select | list | length > 0 }}
+  when: preflight_scope | default('main') == 'main'
+
+# --- 2c. pipeline-settings seed coherence (K.1) -----------------------------------
+# Controller-side parse of the committed seeds (deploy.yml's prepare tag
+# copies them to the box ONCE). A corrupt seed, a missing seed (raw lookup
+# error), or one missing its integer "version" must fail the deploy BEFORE
+# any mutation (B2 pattern).
+# The guard keys on the repo's configs/ tree presence (fileglob glob stars
+# must stay in the BASENAME — a star in a directory component matches
+# nothing). Repo-external wrapper plays (test-preflight.sh's $TMP wrappers —
+# no configs/ beside them) skip instead of false-failing; inside a real
+# checkout the keycloak anchor keeps the check alive even with both seeds
+# deleted, so a missing seed dies as a raw lookup error AT THIS TASK. Corrupt
+# JSON fails via the from_json templating error — ugly but loud, which is the
+# contract.
+- name: "Preflight: pipeline-settings seeds parse and carry version (K.1)"
+  ansible.builtin.assert:
+    that:
+      - _seed_raw | from_json is mapping
+      - (_seed_raw | from_json).version is defined
+      - (_seed_raw | from_json).version is integer
+    fail_msg: >-
+      configs/pipeline/{{ item }} is invalid — must be a JSON object carrying an integer
+      "version" (K.1: the deploy seeds this file to the box; a corrupt seed must never ship).
+    success_msg: "configs/pipeline/{{ item }} OK"
+    quiet: true
+  loop:
+    - llm-settings.seed.json
+    - rag-tuning.seed.json
+  vars:
+    _seed_raw: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../configs/pipeline/' ~ item) }}"
+  when:
+    - preflight_scope | default('main') == 'main'
+    - lookup('ansible.builtin.fileglob', playbook_dir ~ '/../../configs/pipeline/*') | length > 0
+      or lookup('ansible.builtin.fileglob', playbook_dir ~ '/../../configs/keycloak/*') | length > 0
+
+# --- 3. coherence enums (main scope) ---------------------------------------------
+- name: "Preflight: deploy_mode must be local or swarm"
+  ansible.builtin.assert:
+    that:
+      - deploy_mode is defined and (deploy_mode | string) in ['local', 'swarm']
+    fail_msg: >-
+      deploy_mode={{ deploy_mode | default('undefined') }} is invalid — must be 'local' or 'swarm'
+      (group_vars/all.yml or group_vars/<env>/vars.yml). A typo matches NEITHER branch and
+      silently skips both deploy paths today.
+    quiet: true
+  when: preflight_scope | default('main') == 'main'
+
+- name: "Preflight: enable_observability must be 0 or 1"
+  ansible.builtin.assert:
+    that:
+      - enable_observability is defined and (enable_observability | string) in ['0', '1']
+    fail_msg: >-
+      enable_observability={{ enable_observability | default('undefined') }} is invalid — must be
+      '0' or '1' (group_vars/all.yml or group_vars/<env>/vars.yml).
+    quiet: true
+  when: preflight_scope | default('main') == 'main'
+
+# --- 4. deployment plan (pre-mutation picture; no secret values) ------------------
+- name: "Preflight: deployment plan"
+  ansible.builtin.debug:
+    msg:
+      - "================ GENIE.AI deployment plan ================"
+      - "deploy_mode:       {{ deploy_mode | default('local') }}"
+      - "domain:            {{ nginx_public_domain | default('localhost') }}"
+      - "cert_mode:         {{ cert_mode | default('selfsigned') }}  (certbot_email: {{ ((certbot_email | default('') | string | trim) is search('@')) | ternary((certbot_email | default('') | string | trim).split('@')[0] ~ '@…', '(unset)') }})"
+      - "llm model:         {{ vllm_llm_model_id | default('(compose default)') }}"
+      - "embedding model:   {{ embedding_model_id | default('(compose default)') }}"
+      - "reranker model:    {{ reranker_model_id | default('(compose default)') }}"
+      - "translation:       {{ translation_backend | default('(compose default)') }}"
+      - "compose profiles:  {{ preflight_plan_profiles | trim }}"
+      - "gpu models:        {{ (gpu_node_host | default('') | length > 0) | ternary('remote: ' ~ (gpu_node_host | default('')), 'local (on-box)') }}"
+      - "deploy_dir:        {{ deploy_dir | default('/opt/genieai') }}"
+      - "==========================================================="
+  vars:
+    # Same conditions as deploy.yml's _compose_profiles — names, not the flags.
+    preflight_plan_profiles: >-
+      {% if deploy_opea | default('1') | string != '0' %}opea {% endif %}{% if certbot_replicas | default('0') | string != '0' %}letsencrypt {% endif %}{% if enable_observability | default('0') | string == '1' %}observability {% endif %}{% if (deploy_opea | default('1') | string != '0') and (gpu_node_host | default('') | length == 0) %}gpu-models{% endif %}
+  when: preflight_scope | default('main') == 'main'
+
+# --- 5. confirm gate (check-safe: assert only, runs BEFORE any mutation) ----------
+# GPU hosts don't deploy the main domain — gate is main-scope only (gpu_public_domain
+# is covered by its own placeholder sweep). Domain compared TRIMMED so a
+# whitespace-padded " localhost " cannot dodge the gate.
+- name: "Preflight: confirm gate (domain != localhost requires confirm=yes)"
+  ansible.builtin.assert:
+    that:
+      - (confirm | default('no') | string | lower) in ['yes', 'true']
+      # 'true' covers `confirm: yes` in a YAML -e @file, which YAML-parses as
+      # boolean True — an explicit confirmation, not a typo.
+    fail_msg: |-
+      nginx_public_domain={{ nginx_public_domain | default('localhost') }} is not localhost — this
+      deploy would MUTATE that host. Nothing has been changed yet (preflight runs before any
+      mutating play). To confirm the deployment, re-run with:
+        ansible-playbook -i <inventory>.ini deploy.yml --extra-vars "confirm=yes" [your existing --tags / --vault-id flags]
+    quiet: true
+  when:
+    - preflight_scope | default('main') == 'main'
+    - (nginx_public_domain | default('localhost') | string | trim) != 'localhost'

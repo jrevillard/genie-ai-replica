@@ -1,0 +1,337 @@
+/**
+ * Vuex Auth Module — Keycloak OIDC integration
+ * Ported from upstream GenieAI v2.0.1 (components/gov-chat-frontend/src/store/modules/auth.js).
+ *
+ * Replaces the existing auth module entirely (no coexistence).
+ * Consumes keycloakAuthService for all OIDC operations.
+ * Token storage = oidc-client-ts browser-storage defaults per DEC-11.
+ */
+
+import keycloakAuthService from '@/services/keycloakAuthService';
+
+function mapOidcUserToState(oidcUser) {
+  if (!oidcUser || !oidcUser.profile) {
+    return null;
+  }
+
+  const profile = oidcUser.profile;
+
+  // realm_access.roles lives in the access token, not the ID token.
+  const accessTokenClaims = keycloakAuthService.getAccessTokenClaims();
+  const roles = (accessTokenClaims?.realm_access?.roles || []).filter(
+    (r) => r !== 'offline_access' && r !== 'uma_authorization' && !r.startsWith('default-roles-')
+  );
+
+  return {
+    iss_sub: `${profile.iss}#${profile.sub}`,
+    sub: profile.sub,
+    iss: profile.iss,
+    email: profile.email || null,
+    name: profile.name || profile.preferred_username || null,
+    preferred_username: profile.preferred_username || null,
+    roles
+  };
+}
+
+let silentRenewCallback = null;
+
+function registerSilentRenewCallback(commit) {
+  // Clean up any existing callback from a previous session
+  if (silentRenewCallback) {
+    keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+  }
+
+  silentRenewCallback = (refreshedUser) => {
+    const updatedUser = mapOidcUserToState(refreshedUser);
+    if (updatedUser) {
+      commit('updateAccessToken', {
+        accessToken: refreshedUser.access_token,
+        user: updatedUser
+      });
+    }
+  };
+  keycloakAuthService.onAccessTokenUpdated(silentRenewCallback);
+}
+
+const state = {
+  isAuthenticated: false,
+  user: null,
+  accessToken: null,
+  error: null,
+  isInitialized: false
+};
+
+const getters = {
+  isAuthenticated: (state) => state.isAuthenticated,
+  currentUser: (state) => state.user,
+  // Local addition (not upstream): WeatherPanel.vue maps ['user'] — maps the same
+  // claims-derived state object as currentUser.
+  user: (state) => state.user,
+  accessToken: (state) => state.accessToken,
+  authError: (state) => {
+    // Backward compatibility: return message string if error is object
+    if (state.error && typeof state.error === 'object') {
+      return state.error.message;
+    }
+    return state.error;
+  },
+  lastAuthErrorCode: (state) => {
+    // Return error code if error is object, null otherwise
+    if (state.error && typeof state.error === 'object') {
+      return state.error.code;
+    }
+    return null;
+  },
+  isAuthInitialized: (state) => state.isInitialized,
+  // M.1 (DEC-33): hide-by-role gate. True = regular user (farmer):
+  // authenticated with no elevated role. A farmer's roles array is EMPTY
+  // after mapOidcUserToState strips default-roles-*. Elevated set mirrors
+  // NavBarComponent's isManagerOrAbove semantics (case-insensitive).
+  // PRECONDITION: false for anonymous/unauthenticated users, so
+  // !isRegularUser means elevated-OR-anonymous — every consumer must sit
+  // inside App.vue's authenticated gate (v-else-if="!isLoading &&
+  // isAuthenticated && currentUser").
+  isRegularUser: (state) =>
+    state.isAuthenticated &&
+    !!state.user &&
+    !(state.user.roles || []).some((role) =>
+      ['admin', 'manager', 'ai engineer'].includes(role.toLowerCase())
+    )
+};
+
+const actions = {
+  /**
+   * Initialize OIDC service and restore session if available.
+   * Blocks session restoration after intentional logout (genie_post_logout flag).
+   * Registers callback for silent token renew updates.
+   */
+  async initialize({ commit }) {
+    try {
+      // Honor intentional logout — block session restoration until user explicitly re-logs in.
+      // The flag is consumed by handleCallback/login on successful authentication.
+      if (sessionStorage.getItem('genie_post_logout')) {
+        commit('clearAuth');
+        commit('setInitialized');
+        return;
+      }
+
+      const user = await keycloakAuthService.initialize();
+
+      if (user && !user.expired) {
+        const stateUser = mapOidcUserToState(user);
+        if (stateUser) {
+          commit('setAuth', {
+            isAuthenticated: true,
+            user: stateUser,
+            accessToken: user.access_token
+          });
+
+          // Register callback for silent token renew
+          registerSilentRenewCallback(commit);
+        } else {
+          commit('clearAuth');
+        }
+      } else {
+        commit('clearAuth');
+      }
+    } catch (error) {
+      console.error('[Auth Store] Initialization error:', error.message);
+      commit('setError', { code: 'INIT_ERROR', message: 'Authentication initialization failed' });
+    } finally {
+      commit('setInitialized');
+    }
+  },
+
+  /**
+   * Redirect to Keycloak login
+   * @param {Object} [options] - Optional login options
+   * @param {string} [options.returnUrl] - URL to return to after login
+   */
+  async login({ commit }, options = {}) {
+    try {
+      commit('clearError');
+      // Explicit login — clear post_logout block
+      sessionStorage.removeItem('genie_post_logout');
+      await keycloakAuthService.login(options);
+    } catch (error) {
+      console.error('[Auth Store] Login error:', error.message);
+      commit('setError', { code: 'LOGIN_ERROR', message: 'Login redirect failed' });
+      throw error;
+    }
+  },
+
+  /**
+   * Process OIDC callback and set authenticated state.
+   * Consumes the post_logout flag to allow session restoration on explicit re-login.
+   */
+  async handleCallback({ commit }) {
+    try {
+      commit('clearError');
+      // New successful login — clear post_logout block
+      sessionStorage.removeItem('genie_post_logout');
+      const user = await keycloakAuthService.handleCallback();
+
+      if (user) {
+        const stateUser = mapOidcUserToState(user);
+        if (stateUser) {
+          commit('setAuth', {
+            isAuthenticated: true,
+            user: stateUser,
+            accessToken: user.access_token
+          });
+
+          registerSilentRenewCallback(commit);
+        }
+      }
+
+      return user;
+    } catch (error) {
+      console.error('[Auth Store] Callback error:', error.message);
+      commit('setError', { code: 'CALLBACK_ERROR', message: 'Authentication callback failed' });
+      throw error;
+    }
+  },
+
+  /**
+   * Logout and clear auth state
+   */
+  async logout({ commit }) {
+    try {
+      commit('clearError');
+      // Clean up legacy localStorage BEFORE Keycloak redirect
+      // (signoutRedirect navigates away — code after it never executes)
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      // Mark session as intentionally terminated to prevent auto re-login
+      sessionStorage.setItem('genie_post_logout', 'true');
+      // Clean up silent renew callback before redirect
+      if (silentRenewCallback) {
+        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+        silentRenewCallback = null;
+      }
+      await keycloakAuthService.logout();
+      commit('clearAuth');
+    } catch (error) {
+      console.error('[Auth Store] Logout error:', error.message);
+      // Always clear local state even if Keycloak redirect fails
+      commit('clearAuth');
+    }
+  },
+
+  /**
+   * Clear the current auth error
+   */
+  clearError({ commit }) {
+    commit('clearError');
+  },
+
+  /**
+   * Handle API error responses with structured error parsing
+   *
+   * This action provides a standardized way for Vue components to handle API errors
+   * from backend responses. Use this in components that need to react to specific
+   * error codes or display user-friendly error messages.
+   *
+   * USAGE EXAMPLE IN VUE COMPONENT:
+   * ```javascript
+   * import { mapActions } from 'vuex';
+   *
+   * export default {
+   *   methods: {
+   *     ...mapActions(['handleApiError', 'login']),
+   *
+   *     async someApiCall() {
+   *       try {
+   *         const response = await api.someMethod();
+   *         return response;
+   *       } catch (error) {
+   *         const parsedError = this.handleApiError(error.response.data);
+   *
+   *         // React based on error code — there is no local /login route (A4):
+   *         // token problems go through the OIDC login action (Keycloak
+   *         // redirect); anything else renders a structured error state
+   *         if (parsedError.code === 'TOKEN_EXPIRED') {
+   *           this.login();
+   *         } else if (parsedError.code === 'INSUFFICIENT_ROLES') {
+   *           // Show permission denied UI
+   *           this.showPermissionDeniedMessage();
+   *         }
+   *
+   *         // Error is also stored in Vuex state (authError, lastAuthErrorCode getters)
+   *         // for template access: {{ $store.getters.authError }}
+   *       }
+   *     }
+   *   }
+   * }
+   * ```
+   *
+   * @param {Object} context - Vuex context
+   * @param {Object} errorResponse - Backend error response { error, message, details }
+   * @returns {Object} Parsed error { code, message }
+   */
+  handleApiError({ commit }, errorResponse) {
+    let code = 'UNKNOWN_ERROR';
+    let message = 'An error occurred';
+
+    if (errorResponse && typeof errorResponse === 'object') {
+      code = errorResponse.error || 'UNKNOWN_ERROR';
+      message = errorResponse.message || 'An error occurred';
+    }
+
+    commit('setError', { code, message });
+
+    return { code, message };
+  }
+};
+
+const mutations = {
+  setAuth(state, { isAuthenticated, user, accessToken }) {
+    state.isAuthenticated = isAuthenticated;
+    state.user = user;
+    state.accessToken = accessToken;
+    state.error = null;
+  },
+
+  clearAuth(state) {
+    state.isAuthenticated = false;
+    state.user = null;
+    state.accessToken = null;
+    state.error = null;
+  },
+
+  setError(state, error) {
+    // Handle both string and { code, message } object formats
+    if (typeof error === 'string') {
+      state.error = error;
+    } else if (error && typeof error === 'object') {
+      state.error = {
+        code: error.code || 'UNKNOWN_ERROR',
+        message: error.message || 'An error occurred'
+      };
+    } else {
+      state.error = null;
+    }
+  },
+
+  clearError(state) {
+    state.error = null;
+  },
+
+  setInitialized(state) {
+    state.isInitialized = true;
+  },
+
+  updateAccessToken(state, { accessToken, user }) {
+    state.accessToken = accessToken;
+    if (user) {
+      state.user = user;
+    }
+  }
+};
+
+export default {
+  state,
+  getters,
+  actions,
+  mutations
+};

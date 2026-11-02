@@ -1,0 +1,34 @@
+{{/*
+ClamAV Deployment - Auth & Utility Tier (CPU Node Pool)
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "clamav" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.clamav.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "clamav" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "clamav" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: clamav
+          image: {{ .Values.cpu.clamav.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.clamav.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          {{- include "genieai.cpuResources" .Values.cpu.clamav.resources | nindent 10 }}
+          {{- include "genieai.tcpReadinessProbe" (dict "port" .Values.cpu.clamav.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.tcpLivenessProbe" (dict "port" .Values.cpu.clamav.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}

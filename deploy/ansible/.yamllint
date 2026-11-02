@@ -1,0 +1,11 @@
+yaml-files:
+  - '*.yaml'
+  - '*.yml'
+
+extends: relaxed
+rules:
+  line-length: disable
+  document-start: disable
+
+ignore:
+  - 'deploy/ansible/templates/'

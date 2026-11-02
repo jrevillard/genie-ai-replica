@@ -1,0 +1,249 @@
+---
+# GENIE.AI - Shared configuration (all environments)
+# Environment-specific config goes in group_vars/<env>.yml
+# Environment-specific secrets go in group_vars/<env>.vault (Ansible Vault encrypted)
+
+# =============================================================================
+# DEPLOYMENT PATHS
+# =============================================================================
+deploy_dir: /opt/genieai
+data_dir: ./data
+
+# =============================================================================
+# DOCKER / NVIDIA — VERSION PINNING
+# =============================================================================
+# Packages are held via dpkg --set-selections to prevent accidental upgrades.
+# To upgrade: change the pin, unhold, run apt upgrade, re-hold.
+docker_version_pin: "5:28.5.*"
+docker_hold_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - docker-ce-rootless-extras
+nvidia_version_pin: "1.18.*"
+nvidia_hold_packages:
+  - nvidia-container-toolkit
+  - nvidia-container-toolkit-base
+  - libnvidia-container-tools
+  - libnvidia-container1
+
+# =============================================================================
+# STACK CONFIGURATION
+# =============================================================================
+stack_name: genieai
+compose_file: docker-compose.yaml
+deploy_stabilization_timeout: 900
+# local: sync repo to host, docker compose up -d --build (no registry)
+# swarm: download compose via repo raw API, pull pre-built images from registry
+deploy_mode: "local"
+deploy_opea: "1"
+enable_observability: "0"
+grafana_admin_user: "admin"
+victoriametrics_retention: "30d"
+victorialogs_retention: "30d"
+victoriatraces_retention: "30d"
+otel_traces_sampler_rate: "100.0"
+# =============================================================================
+# REPOSITORY
+# =============================================================================
+repo_url: ""
+repo_branch: main
+
+# =============================================================================
+# API GATEWAY (defaults)
+# =============================================================================
+nginx_public_domain: "localhost"
+nginx_http_port: "80"
+nginx_https_port: "443"
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
+
+# Kong trusted IPs for X-Forwarded-* header passthrough.
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Kong is NOT exposed to the host — only containers on the internal Docker network can reach it,
+# so IP spoofing from outside is not possible regardless of the CIDR range.
+# Docker Compose (bridge networks): 172.16.0.0/12 (covers 172.16-172.31)
+# Docker Swarm (overlay networks): 10.0.0.0/8 (default overlay subnet range)
+# Restrict further with: docker network inspect <network> to find the exact subnet.
+kong_trusted_ips: "172.16.0.0/12"
+
+# =============================================================================
+# BROWSER-FACING VALUES — COMPUTED from nginx_public_domain (B3 single source).
+# Never hand-copy these per env; env files only set nginx_public_domain and the
+# https/wss/http variants below follow it automatically (lazy jinja evaluation
+# resolves against the final merged domain). https/wss carry the non-default
+# https port, mirroring compose's ${NGINX_HTTPS_PORT:+:…} auth-URL derivation
+# (env.j2 likewise emits NGINX_HTTPS_PORT only when != '443'); plain http stays
+# on the default port 80.
+# =============================================================================
+_public_https_host: "{{ nginx_public_domain }}{{ ':' ~ nginx_https_port if (nginx_https_port | default('443') | string) != '443' else '' }}"
+vue_app_api_url: "https://{{ _public_https_host }}/api"
+# Links inside product emails (approval/notify) — email-service + admin-routes
+# read FRONTEND_URL and fall back to localhost without it.
+frontend_url: "https://{{ _public_https_host }}"
+vue_app_available_locales: "en,st"
+# Quoted 'self' + CSP directives — env.j2 double-quotes the emission so compose
+# does not strip the single quotes (see README "Note on CSP values").
+vue_app_csp_connect_src: "'self' https://{{ _public_https_host }} wss://{{ _public_https_host }} http://{{ nginx_public_domain }}"
+csp_connect_src: "'self' https://{{ _public_https_host }} wss://{{ _public_https_host }} http://{{ nginx_public_domain }}"
+cors_allowed_origins: "https://{{ _public_https_host }},http://{{ nginx_public_domain }}"
+
+# =============================================================================
+# SSL CERTIFICATES
+# =============================================================================
+# cert_mode — the ONE decision for how the public TLS cert is obtained (B1).
+#   letsencrypt -> certbot issues/renews (requires FQDN + certbot_email + certbot_replicas != '0')
+#   provided    -> server.crt/server.key from files/certificates/<env-group>/ on the controller
+#   selfsigned  -> dev-only (nginx_public_domain must be 'localhost'); generated with CN+SAN
+# Enforced by tasks/preflight-cert.yml before any install/prepare work.
+cert_mode: selfsigned
+
+# =============================================================================
+# TEARDOWN OPTIONS
+# =============================================================================
+teardown_remove_volumes: false
+teardown_remove_registry: false
+
+# =============================================================================
+# GPU NODE (defaults — override in group_vars/<env>/vars.yml)
+# =============================================================================
+gpu_deploy_dir: /opt/genieai-gpu
+gpu_data_dir: ./data
+gpu_generated_dir: configs/nginx-gpu
+
+gpu_public_domain: gpu.example.com
+gpu_https_port: "443"
+gpu_self_signed_certs: true
+gpu_env_file: ""
+nvidia_visible_devices: "all"
+
+# Remote GPU node (set in group_vars/<env>/vars.yml to route AI services to a dedicated GPU host)
+gpu_node_host: ""
+vllm_api_key: ""
+
+# OPEA runtime patches (set in group_vars/<env>/vars.yml when needed)
+# These are independent of gpu_node_host. For example:
+#   - Remote GPU node with Let's Encrypt: no need to set opea_ssl_skip_verify
+#   - Remote GPU node with self-signed cert: set opea_ssl_skip_verify = "1"
+#     (enforced by tasks/preflight-cert.yml when gpu_self_signed_certs + gpu_node_host are set)
+opea_ssl_skip_verify: ""
+
+# Keycloak SSL verification (independent of OPEA settings)
+# Set to "1" when Keycloak uses a self-signed certificate.
+# Only affects dataprep's Keycloak service account token fetch.
+keycloak_ssl_skip_verify: ""
+
+# Dataprep LLM labeling tuning (defaults live in code; set in group_vars/<env>/vars.yml to override).
+# LLM labeling is the dominant document-ingestion cost (one vLLM call per chunk).
+#   dataprep_max_concurrent_batches: 20  # concurrent LLM label calls (code default 20; was 5)
+#   dataprep_llm_label_batch_size: 4     # chunks per LLM call (code default 4); raise to 8 on
+#                                        #   capable models (e.g. granite-4.1-8b). Batches fall
+#                                        #   back to per-chunk on parse failure.
+
+# Chunking (I.3, Adem 10-04): 3000 chars ≈ 750 tokens — inside the 512-1024-token
+# RAG sweet spot (was 500/50 ~ 125 tokens). Overlap 10%. ONE knob for all file
+# types (get_chunk_size_for_file inherits it); per-extension overrides stay
+# available via dataprep_chunk_size_<ext> if a type ever needs its own value.
+# NB: .html splits by headers (HTMLHeaderTextSplitter) — size gates the segment decision.
+dataprep_chunk_size: "3000"
+dataprep_chunk_overlap: "300"           # code default 50; not previously wired
+
+# =============================================================================
+# SINGLE SOURCE OF TRUTH — models, tuning, images (B3)
+# =============================================================================
+# These are named ONCE, here. env.j2 emits them; docker-compose.yaml reads the
+# env vars with fallbacks set to the SAME values (so compose-only runs without
+# a .env agree with ansible deploys by construction). Override per env in
+# group_vars/<env>/vars.yml only when that env genuinely differs.
+
+# --- Models (product standard) ---
+vllm_llm_model_id: ibm-granite/granite-4.1-8b
+# DEC-25 (supersedes DEC-24's AfriSLM): facebook/nllb-200-3.3B on the dedicated
+# nllb-translate GPU sidecar — purpose-built translation, native sot_Latn
+# (Sesotho), ~7 GB bf16. vLLM is out for translation for good: vLLM 0.30 hung
+# on every model tried here (F14 verdict) and its OpenAI API can't express
+# src_lang/forced_bos_token_id anyway. Resolves DEC-19-R.
+vllm_translation_model_id: "facebook/nllb-200-3.3B"
+# The sidecar the two consumers (chatqna + backend GpuTranslateBackend) POST to
+# in FLORES-200 codes. Local-build service in the gpu-models profile.
+nllb_translate_url: "http://nllb-translate:9201"
+# bge-m3 is the product embedding standard — the corpus MUST be ingested with it.
+embedding_model_id: BAAI/bge-m3
+reranker_model_id: BAAI/bge-reranker-v2-m3
+translation_backend: "auto"
+
+# --- Container image pins (runtime values; keep compose fallbacks in sync) ---
+vllm_llm_image: "vllm/vllm-openai:v0.30.0"  # Blackwell-proven (old stack ran it healthy on this box; v0.10.0 lacks sm_120)
+tei_embedding_image: "ghcr.io/huggingface/text-embeddings-inference:120-1.9"  # sm_120 Blackwell build — plain 1.9.3 lacks the kernels (D2 crash-loop fix; proven on this GPU)
+tei_reranker_image: "ghcr.io/huggingface/text-embeddings-inference:120-1.9"  # sm_120 Blackwell build
+docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
+nginx_image: nginx:1.28-alpine
+
+# --- TEI reranker throughput (main compose ran 128; the GPU template's old 8
+#     was the remote-GPU default — both read these now; set 8 in <env>/vars.yml
+#     if a remote GPU node needs it back) ---
+tei_reranking_max_batch_tokens: "1024"
+tei_reranking_max_concurrent_requests: "128"
+
+# --- GPU memory utilization (B5) — homed here so an env omitting it cannot
+#     silently fall back to compose's stale default (the exact bug class B5
+#     fixed: the wrong-named knob fed only the probe env while vLLM ran at the
+#     compose default). One var, two consumers: VLLM_GPU_UTILIZATION (vLLM
+#     launch flag -> --gpu_memory_utilization) + VLLM_GPU_UTIL (backend
+#     admin-dashboard probe env; component-side name unchanged). ---
+# DEC-25b (K.0, 10-05): 0.80 → 0.50. Measured at 0.80: 93,466 MiB used of
+# 97,887 total, nvidia-smi memory.free 3.7 GiB (used + free sits ~0.6 GiB
+# under total — the ECC/reserved gap; total-minus-used is ~4.3 GiB) — the
+# 13:07 reranker CUDA-OOM class was a coincident-peak squeeze into that slack
+# (20-doc rerank batch at vLLM KV peak). At 0.50: ~62 GiB committed / ~33
+# free ≈ 8x the ~4.3 GiB total slack at 0.80; granite-4.1-8b needs ~19 GiB
+# (weights+workspace), KV ~29 GiB ≈ 25 concurrent 8k conversations vs
+# single-digit real load. Supersedes DEC-25's 0.75→0.80 rationale (which
+# anchored on boot stability, not spike headroom; the live-proven D4
+# comparison stays in decisions.md history).
+vllm_gpu_utilization: "0.50"
+
+# --- Contextual Retrieval — TODAY'S RUNTIME VALUES (not the Anthropic recipe).
+#     Per-chunk LLM doc-context prefix prepended before embedding (+ optionally
+#     labeling). Adds one vLLM call/chunk at ingest; never blocks ingestion
+#     (raw-chunk fallback). These values are what the stack actually runs
+#     today; flipping to the documented recipe values (enabled with
+#     per_chunk + 100000 doc budget + label_raw decoupled) is a one-place edit
+#     HERE — a D-phase (D5 ingestion) tuning decision, not a deploy default.
+contextual_retrieval_enabled: "true"
+contextual_strategy: doc_level          # doc_level (one call/doc, N× cheaper) | per_chunk (Anthropic recipe)
+dataprep_contextual_doc_budget: "6000"  # max chars of doc text fed to the context LLM
+dataprep_contextual_max_tokens: "512"   # max OUTPUT tokens (200 truncated the JSON under load; model stops early ~196)
+contextual_label_raw: "true"            # decoupled: label RAW chunk, context for embedding only
+# I.4: TEI reranker runs WITHOUT --normalize (raw bge-reranker logits, ~0-15) — the
+# confidence badge needs them mapped to [0,1]. Sigmoid is correct HERE because the
+# inputs are unnormalized (the docstring's compression warning is about normalized).
+reranker_score_calibration: "sigmoid"
+dataprep_contextual_model: ""           # empty = reuse vllm_llm_model_id; must support guided JSON
+
+# --- Multi-turn retrieval blend (K.7, 10-06; issue #833) — homed here per B5 so
+#     an env omitting it cannot silently fall back to the old OFF default. Under
+#     strict grounding retrieval is the model's ONLY knowledge source, so
+#     prompt-history alone cannot ground a follow-up: the query embedding blends
+#     the prior turn (alpha 0.7 / 1 turn = upstream defaults, env-tunable). ---
+multi_turn_blend_enabled: "true"
+
+# --- Conversational query reformulation (K.7b, 10-06) — homed here per B5. With
+#     history, ONE small granite call rewrites the follow-up into a self-contained
+#     retrieval query BEFORE retrieval, so BOTH retrieval legs (dense + BM25) and
+#     the KB question line carry the resolved subject ("how much do I need of
+#     that" -> "How much CAMIX herbicide..."). Failure/kill-switch = raw-query
+#     K.7 fallback — chat never breaks. ---
+query_reformulation_enabled: "true"
+
+# --- Realm (product — do not revert to upstream genie/genie-app) ---
+keycloak_realm: agrivisory
+keycloak_client_id: itu-agrivisory-client
+
+# --- Docling ---
+docling_device: "cpu"
+
+# --- Reranker strategy defaults ---
+#   reranking_strategy: slice           # slice (default; top-N by TEI score) | threshold | adaptive | knee_threshold | slice_threshold
+#   reranker_top_n: 3                   # chunks kept for slice/slice_threshold strategies

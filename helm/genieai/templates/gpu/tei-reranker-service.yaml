@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tei-reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "tei-reranker" "tier" "gpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "tei-reranker" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.gpu.teiReranker.port }}
+      targetPort: {{ .Values.gpu.teiReranker.port }}
+      protocol: TCP
+      name: http

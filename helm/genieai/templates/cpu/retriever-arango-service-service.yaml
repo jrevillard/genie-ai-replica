@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: retriever-arango-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "retriever-arango-service" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "retriever-arango-service" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.retrieverArangoService.port }}
+      targetPort: {{ .Values.cpu.retrieverArangoService.port }}
+      protocol: TCP
+      name: http

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei-reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "tei-reranker" "tier" "gpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.gpu.teiReranker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "tei-reranker" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "tei-reranker" "tier" "gpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.gpuAffinity" . | nindent 6 }}
+      {{- include "genieai.gpuTolerations" . | nindent 6 }}
+      containers:
+        - name: tei-reranker
+          image: {{ .Values.gpu.teiReranker.image }}
+          ports:
+            - containerPort: {{ .Values.gpu.teiReranker.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: gpu-services-config
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: genieai-secrets
+                  key: HF_TOKEN
+          {{- include "genieai.gpuResources" .Values.gpu.teiReranker.resources | nindent 10 }}
+          {{- include "genieai.gpuStartupProbe" (dict "path" .Values.gpu.teiReranker.healthPath "port" .Values.gpu.teiReranker.port "settings" .Values.gpuProbes.startup) | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.gpu.teiReranker.healthPath "port" .Values.gpu.teiReranker.port "settings" .Values.gpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.gpu.teiReranker.healthPath "port" .Values.gpu.teiReranker.port "settings" .Values.gpuProbes.liveness) | nindent 10 }}

@@ -1,0 +1,51 @@
+{{/*
+Keycloak Database (PostgreSQL) Deployment - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "keycloak-db" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.keycloakDb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "keycloak-db" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "keycloak-db" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ .Values.cpu.keycloakDb.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.keycloakDb.port }}
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: "keycloak"
+            - name: POSTGRES_DB
+              value: "keycloak"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: genieai-secrets
+                  key: KEYCLOAK_DB_PASSWORD
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          {{- include "genieai.cpuResources" .Values.cpu.keycloakDb.resources | nindent 10 }}
+          {{- include "genieai.execReadinessProbe" (dict "command" .Values.cpu.keycloakDb.probeCommand "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.execLivenessProbe" (dict "command" .Values.cpu.keycloakDb.probeCommand "settings" .Values.cpuProbes.liveness) | nindent 10 }}
+          {{- include "genieai.execSlowStartupProbe" (dict "command" .Values.cpu.keycloakDb.probeCommand "settings" .Values.cpuProbes.slowStartup) | nindent 10 }}
+          volumeMounts:
+            - name: keycloak-db-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: keycloak-db-data
+          persistentVolumeClaim:
+            claimName: keycloak-db-pvc

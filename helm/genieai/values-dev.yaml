@@ -1,0 +1,91 @@
+# GenieAI Helm Chart - Development Environment Overrides
+
+namespace: genieai-dev
+
+# Smaller autoscaler limits for dev
+autoscaler:
+  gpu:
+    minNodes: 0
+    maxNodes: 1
+  cpu:
+    minNodes: 1
+    maxNodes: 2
+
+# GPU services - minimal replicas
+gpu:
+  vllm:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "1"
+        memory: "8Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "16Gi"
+        nvidia.com/gpu: "1"
+  tei:
+    replicas: 1
+  teiReranker:
+    replicas: 1
+  dataprep:
+    replicas: 1
+
+# CPU services - single replicas for dev
+cpu:
+  backend:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  frontend:
+    replicas: 1
+  documentRepository:
+    replicas: 1
+  nginx:
+    replicas: 1
+  kong:
+    replicas: 1
+  embedding:
+    replicas: 1
+  reranker:
+    replicas: 1
+  textgen:
+    replicas: 1
+  translation:
+    replicas: 1
+  guardrail:
+    replicas: 1
+  retrieverArangoService:
+    replicas: 1
+  httpService:
+    replicas: 1
+  chatqnaXeonBackendServer:
+    replicas: 1
+  chatqnaXeonUiServer:
+    replicas: 1
+  chatqnaXeonNginxServer:
+    replicas: 1
+
+# Smaller storage for dev
+storage:
+  arango:
+    size: "10Gi"
+  kongDb:
+    size: "5Gi"
+  keycloakDb:
+    size: "5Gi"
+  documentUploads:
+    size: "10Gi"
+  redisData:
+    size: "5Gi"
+
+# Dev ingress
+ingress:
+  host: "dev.genieai.local"
+  tls:
+    enabled: false

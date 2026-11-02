@@ -1,0 +1,19 @@
+{{/*
+Kong Database (PostgreSQL) Service - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-database
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "kong-database" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "kong-database" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.kongDatabase.port }}
+      targetPort: {{ .Values.cpu.kongDatabase.port }}
+      protocol: TCP
+      name: postgres

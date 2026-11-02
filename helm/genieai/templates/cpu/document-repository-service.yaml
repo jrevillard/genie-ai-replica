@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: document-repository
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "document-repository" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "document-repository" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.documentRepository.port }}
+      targetPort: {{ .Values.cpu.documentRepository.port }}
+      protocol: TCP
+      name: http

@@ -1,0 +1,82 @@
+[
+  {
+    "category": "Crop Management",
+    "services": [
+      "Seasonal Planting Guide",
+      "Crop Rotation",
+      "Seed Selection & Varieties",
+      "Harvesting Techniques",
+      "Post-Harvest Handling"
+    ]
+  },
+  {
+    "category": "Soil & Fertilizers",
+    "services": [
+      "Soil Testing & Analysis",
+      "Organic Fertilizers",
+      "Chemical Fertilizers",
+      "Composting",
+      "Soil Conservation"
+    ]
+  },
+  {
+    "category": "Pest & Disease Control",
+    "services": [
+      "Pest Identification",
+      "Organic Pest Control",
+      "Chemical Pest Control",
+      "Crop Diseases",
+      "Integrated Pest Management"
+    ]
+  },
+  {
+    "category": "Livestock & Animal Husbandry",
+    "services": [
+      "Animal Health & Diseases",
+      "Feeding & Nutrition",
+      "Breeding Programs",
+      "Poultry Farming",
+      "Dairy & Cattle Management"
+    ]
+  },
+  {
+    "category": "Weather & Climate",
+    "services": [
+      "Seasonal Forecasts",
+      "Climate Adaptation",
+      "Drought Management",
+      "Frost Protection",
+      "Climate-Smart Agriculture"
+    ]
+  },
+  {
+    "category": "Market & Trade",
+    "services": [
+      "Current Market Prices",
+      "Selling Channels",
+      "Value Addition & Processing",
+      "Export Opportunities",
+      "Cooperatives & Farmer Groups"
+    ]
+  },
+  {
+    "category": "Water Management",
+    "services": [
+      "Irrigation Techniques",
+      "Rainwater Harvesting",
+      "Water Conservation",
+      "Drip Irrigation",
+      "Dam & Reservoir Management"
+    ]
+  },
+  {
+    "category": "Government Programs & Support",
+    "services": [
+      "Subsidies & Grants",
+      "Extension Services",
+      "Training Programs",
+      "Land Registration",
+      "Agricultural Loans & Finance"
+    ]
+  }
+]

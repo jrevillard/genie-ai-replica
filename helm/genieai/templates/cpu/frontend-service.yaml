@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "frontend" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "frontend" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.frontend.port }}
+      targetPort: {{ .Values.cpu.frontend.port }}
+      protocol: TCP
+      name: http

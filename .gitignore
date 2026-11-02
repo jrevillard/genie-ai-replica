@@ -1,0 +1,42 @@
+node_modules/
+.env.local
+.DS_Store
+*.log
+logs
+*.log.gz
+dist/
+build/
+# Security scan results
+data/security/
+# K.1: live pipeline settings (box-local; committed seeds live in configs/pipeline/)
+data/pipeline-settings/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.hypothesis/
+
+graphify-out/
+
+# secrets (untracked 2026-08-28 — rotate any previously committed values)
+/.env
+/env
+/env-T4
+api-gateway-solution/env
+components/*/env
+api-gateway-solution/nginx/certs/*.crt
+api-gateway-solution/nginx/certs/*.key
+
+# operational backups/dumps (deleted from tracking 2026-08-28)
+api-gateway-solution/kong-postgres-backups/
+api-gateway-solution/kong-backups/
+api-gateway-solution/new-config/kong_backups/
+.env-s2a-local
+
+# ansible vault password files (README: "Store passwords (gitignored)")
+.vault-pass-*
+
+# BMAD personal config (installer-regenerated; never commit)
+_bmad/config.user.toml
+genie-ai-overlay/reports/

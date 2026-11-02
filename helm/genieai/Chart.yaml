@@ -1,0 +1,13 @@
+apiVersion: v2
+name: genieai
+description: GenieAI MVP Helm chart for AKS deployment with GPU/CPU node pool separation
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - genieai
+  - llm
+  - inference
+  - aks
+maintainers:
+  - name: GenieAI Team

@@ -1,0 +1,183 @@
+---
+# B1 — cert_mode preflight. Included by deploy.yml's "Preflight: certificates"
+# play (tags: always) so it runs BEFORE any install/prepare work, on every
+# tagged re-run. Read-only: set_fact + stat + openssl -noout + assert only
+# (check-mode safe). General var coherence (CHANGE_ME sweep, confirm gate) is
+# B2's preflight — this file owns certificates only. The vault assert in
+# deploy.yml stays where it is.
+
+# Env-group resolution: hosts live in several groups (rtx6000.ini puts one host
+# in 3 groups) and group_names[0] is whichever sorted first — the old cert-path
+# bug. The same expression serves the provided-path copy and the fail messages.
+# EXACTLY ONE ^agrivisory group: the cert dir resolves from the alphabetically
+# FIRST such group while group_vars merge from the LAST — a host in two env
+# groups gets vars from one env and certs from another (both false-pass and
+# false-block reproduce), so divergence is an error, not a preference.
+- name: Assert host belongs to exactly ONE ^agrivisory inventory group
+  ansible.builtin.assert:
+    that:
+      - (group_names | select('search', '^agrivisory') | list | length) == 1
+    fail_msg: >-
+      {{ inventory_hostname }} must belong to exactly ONE ^agrivisory inventory group —
+      one env group per host (group_vars/<env>/, files/certificates/<env>/) all resolve
+      from it; two env groups means vars from one env and certs from another.
+      {{ 'create or rename the inventory group (none found)' if (group_names | select('search', '^agrivisory') | list | length == 0)
+         else 'remove the host from all but one of: ' ~ (group_names | select('search', '^agrivisory') | join(', ')) }}
+      (all groups: {{ group_names | join(', ') }}).
+    quiet: true
+
+- name: Resolve certificate env group (^agrivisory group beats group_names[0])
+  ansible.builtin.set_fact:
+    certificate_env_group: "{{ group_names | select('search', '^agrivisory') | list | first }}"
+
+- name: "Preflight cert: cert_mode must be a known value"
+  ansible.builtin.assert:
+    that:
+      - cert_mode is defined
+      - cert_mode in ['letsencrypt', 'provided', 'selfsigned']
+    fail_msg: >-
+      cert_mode={{ cert_mode | default('undefined') }} is invalid.
+      Allowed values: letsencrypt, provided, selfsigned
+      (set in group_vars/all.yml or group_vars/<env>/vars.yml).
+    quiet: true
+
+- name: "Preflight cert: retired self_signed_certs flag must be gone"
+  ansible.builtin.assert:
+    that:
+      - self_signed_certs is not defined
+    fail_msg: >-
+      self_signed_certs was renamed to cert_mode (B1) — remove it. The old
+      true/false semantics map to letsencrypt (LE + bootstrap fallback) and
+      provided, NOT selfsigned: self_signed_certs=true on a real FQDN is now
+      cert_mode: letsencrypt (or provided), not cert_mode: selfsigned.
+    quiet: true
+
+# --- letsencrypt -----------------------------------------------------------
+- name: "Preflight cert [letsencrypt]: nginx_public_domain must be a real FQDN"
+  ansible.builtin.assert:
+    that:
+      - nginx_public_domain is defined and (nginx_public_domain | string | trim) != 'localhost'
+    fail_msg: >-
+      cert_mode=letsencrypt requires nginx_public_domain to be a real FQDN,
+      not localhost (got: {{ nginx_public_domain | default('undefined') }}).
+    quiet: true
+  when: cert_mode == 'letsencrypt'
+
+- name: "Preflight cert [letsencrypt]: certbot_email required (before any certbot retry-burn)"
+  ansible.builtin.assert:
+    that:
+      - certbot_email is defined and (certbot_email | string | trim | length > 0) and ((certbot_email | string | trim) | upper != 'CHANGE_ME')
+    fail_msg: >-
+      cert_mode=letsencrypt requires certbot_email — a real address, not unset/whitespace/CHANGE_ME
+      (got: {{ certbot_email | default('undefined') }}).
+    quiet: true
+  when: cert_mode == 'letsencrypt'
+
+- name: "Preflight cert [letsencrypt]: certbot_replicas must activate the letsencrypt profile"
+  ansible.builtin.assert:
+    that:
+      - certbot_replicas is defined and certbot_replicas | string != '0'
+    fail_msg: >-
+      cert_mode=letsencrypt requires certbot_replicas != '0'
+      (got: {{ certbot_replicas | default('undefined') }}) — otherwise the certbot
+      service never starts and no certificate is ever issued.
+    quiet: true
+  when: cert_mode == 'letsencrypt'
+
+# --- provided --------------------------------------------------------------
+- name: "Preflight cert [provided]: check certificate files on the controller"
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/files/certificates/{{ certificate_env_group }}/{{ item }}"
+  register: preflight_provided_certs
+  delegate_to: localhost
+  become: false
+  loop:
+    - server.crt
+    - server.key
+  when: cert_mode == 'provided'
+
+- name: "Preflight cert [provided]: both files must exist in the resolved env-group dir"
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      cert_mode=provided: missing {{ playbook_dir }}/files/certificates/{{ certificate_env_group }}/{{ item.item }}
+      — place server.crt and server.key there (directory name = the ^agrivisory inventory group).
+    quiet: true
+  loop: "{{ preflight_provided_certs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: cert_mode == 'provided'
+
+# --- selfsigned ------------------------------------------------------------
+- name: "Preflight cert [selfsigned]: dev-only"
+  ansible.builtin.assert:
+    that:
+      - nginx_public_domain is defined and (nginx_public_domain | string | trim) == 'localhost'
+    fail_msg: >-
+      cert_mode=selfsigned is dev-only (nginx_public_domain={{ nginx_public_domain | default('undefined') }}) —
+      set cert_mode: letsencrypt or provided for real domains.
+    quiet: true
+  when: cert_mode == 'selfsigned'
+
+# --- stale-cert trap (ANY mode) ---------------------------------------------
+# A staged secrets/ssl/server.crt whose CN/SAN lacks nginx_public_domain means
+# an old domain's cert is about to serve the new domain — fail with remediation.
+# In letsencrypt mode this also beats the bootstrap: an existing-but-mismatching
+# cert is stale, not bootstrap (no staged certs at all -> deploy.yml bootstrap).
+- name: "Preflight cert: check for a staged certificate on the target"
+  ansible.builtin.stat:
+    path: "{{ deploy_dir | default('/opt/genieai') }}/secrets/ssl/server.crt"
+  register: preflight_staged_cert
+
+- name: "Preflight cert: read staged certificate CN/SAN"
+  ansible.builtin.command:
+    cmd: >-
+      openssl x509 -in {{ deploy_dir | default('/opt/genieai') }}/secrets/ssl/server.crt
+      -noout -subject -ext subjectAltName
+  register: preflight_staged_cert_info
+  changed_when: false
+  failed_when: false
+  when: preflight_staged_cert.stat.exists
+
+- name: "Preflight cert: staged certificate must be readable"
+  ansible.builtin.assert:
+    that:
+      - preflight_staged_cert_info.rc is defined and preflight_staged_cert_info.rc == 0
+    fail_msg: >-
+      openssl cannot read {{ deploy_dir | default('/opt/genieai') }}/secrets/ssl/server.crt
+      (corrupt or unreadable certificate) — delete it or replace it with a valid cert.
+    quiet: true
+  when:
+    - preflight_staged_cert.stat.exists
+    - preflight_staged_cert_info is not skipped
+
+- name: "Preflight cert: staged certificate must cover nginx_public_domain (stale-cert trap)"
+  ansible.builtin.assert:
+    that:
+      - preflight_staged_cert_info.stdout is search('(CN *= *|DNS:)' ~ ((nginx_public_domain | default('localhost') | string | trim) | regex_escape) ~ '($|,|[^0-9A-Za-z.-])', multiline=True)
+    fail_msg: >-
+      Staged certificate at {{ deploy_dir | default('/opt/genieai') }}/secrets/ssl/server.crt
+      does not cover nginx_public_domain={{ nginx_public_domain | default('localhost') }} —
+      delete {{ deploy_dir | default('/opt/genieai') }}/secrets/ssl/server.* or update nginx_public_domain.
+    quiet: true
+  when:
+    - preflight_staged_cert.stat.exists
+    - preflight_staged_cert_info is not skipped
+
+# --- GPU rule ----------------------------------------------------------------
+# Main-stack services calling self-signed GPU endpoints cannot verify TLS —
+# force opea_ssl_skip_verify="1" (comment block in group_vars/all.yml states it;
+# this enforces it). GPU playbook parity (LE path) is B5's.
+- name: "Preflight cert: GPU self-signed endpoints require opea_ssl_skip_verify on the main stack"
+  ansible.builtin.assert:
+    that:
+      - opea_ssl_skip_verify is defined and opea_ssl_skip_verify | string == '1'
+    fail_msg: >-
+      gpu_self_signed_certs=true with gpu_node_host={{ gpu_node_host | default('undefined') }} requires
+      opea_ssl_skip_verify="1" in group_vars — main-stack services must skip-verify against
+      GPU self-signed endpoints (vars: gpu_self_signed_certs, gpu_node_host, opea_ssl_skip_verify).
+    quiet: true
+  when:
+    - gpu_self_signed_certs | default(false) | bool
+    - gpu_node_host is defined and gpu_node_host | length > 0

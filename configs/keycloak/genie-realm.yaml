@@ -1,0 +1,225 @@
+# Agrivisory realm-as-code — ported from upstream GenieAI v2.0.1
+# (git show upstream-v2.0.1:configs/keycloak/genie-realm.yaml).
+# Local deltas vs upstream: ssoSessionIdleTimeout/ssoSessionMaxLifespan knobs (DEC-4 —
+# upstream has none), admin lastName Agrivisory, mobile doc path, KEYCLOAK_THEME default
+# (compose: keycloak, DEC-5 stock theme).
+# Applied by the keycloak-config sidecar (Dockerfile.config-cli) with
+# IMPORT_VARSUBSTITUTION_ENABLED=true — every value is env-substituted (syntax:
+# dollar-paren env:VAR — NB: substitution runs on the raw file text, so never write
+# that syntax inside a comment); redirect URIs derive from KC_PUBLIC_ORIGIN — never
+# a hardcoded host.
+realm: $(env:KC_REALM)
+enabled: true
+# TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
+sslRequired: none
+
+# Realm security and behavior properties
+registrationAllowed: $(env:KEYCLOAK_REGISTRATION_ENABLED)
+verifyEmail: $(env:KEYCLOAK_VERIFY_EMAIL)
+resetPasswordAllowed: $(env:KEYCLOAK_RESET_PASSWORD)
+loginWithEmailAllowed: $(env:KEYCLOAK_LOGIN_WITH_EMAIL)
+duplicateEmailsAllowed: $(env:KEYCLOAK_DUPLICATE_EMAILS)
+bruteForceProtected: $(env:KEYCLOAK_BRUTE_FORCE)
+passwordPolicy: $(env:KEYCLOAK_PASSWORD_POLICY)
+# DEC-12: remember-me checkbox re-added (deliberate upstream divergence, user convenience)
+rememberMe: $(env:KEYCLOAK_REMEMBER_ME)
+loginTheme: $(env:KEYCLOAK_THEME)
+accountTheme: $(env:KEYCLOAK_THEME)
+adminTheme: $(env:KEYCLOAK_THEME)
+emailTheme: $(env:KEYCLOAK_THEME)
+# DEC-32c/32d (10-06, Adem): Keycloak login pages wear the agrivisory theme —
+# the Keletso/pending-screen style (CSS-only child of keycloak.v2, shipped
+# in configs/keycloak/themes/, mounted onto the stock image's EMPTY
+# /opt/keycloak/themes — built-ins live in jars). The other three themes
+# stay env-driven stock (compose default `keycloak`). FINAL VERDICT after
+# live iterations: the login page is the styled card ALONE — no logo, no
+# brand column (theme hides #kc-header). displayNameHtml pinned EMPTY to
+# keep it off AND to re-clear earlier values still live in the realm
+# (config-cli never clears absent keys on its own).
+loginTheme: agrivisory
+displayNameHtml: ''
+smtpServer:
+  from: $(env:EMAIL_FROM)
+  host: $(env:EMAIL_HOST)
+  port: $(env:EMAIL_PORT)
+  ssl: $(env:EMAIL_SECURE)
+  starttls: $(env:EMAIL_SMTP_STARTTLS)
+  auth: $(env:EMAIL_SMTP_AUTH)
+  user: $(env:EMAIL_USER)
+  password: $(env:EMAIL_PASSWORD)
+internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
+defaultLocale: $(env:KEYCLOAK_LOCALE)
+supportedLocales: $(env:KEYCLOAK_SUPPORTED_LOCALES)
+accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
+# DEC-4 session lifespans (new knobs, not upstream): idle 8h / max 12h via compose defaults
+ssoSessionIdleTimeout: $(env:KEYCLOAK_SSO_IDLE)
+ssoSessionMaxLifespan: $(env:KEYCLOAK_SSO_MAX)
+
+# Realm roles (must be defined before users that reference them)
+roles:
+  realm:
+    - name: admin
+      description: Administrator role with full access
+      composite: true
+      composites:
+        client:
+          realm-management:
+            - manage-users
+            - query-users
+            - view-identity-providers
+    - name: dataprep-service
+      description: Service account role for Dataprep ingestion pipeline
+
+# Default admin user
+users:
+  - username: $(env:GENIE_ADMIN_USERNAME)
+    enabled: true
+    email: $(env:GENIE_ADMIN_EMAIL)
+    # Deliberate delta vs upstream: verifyEmail defaults true, but the bootstrap admin
+    # must not be locked out behind an unreachable mailbox on first deploy.
+    emailVerified: true
+    firstName: Admin
+    lastName: Agrivisory
+    credentials:
+      - type: password
+        value: $(env:GENIE_ADMIN_PASSWORD)
+        temporary: false
+    realmRoles:
+      - admin
+    clientRoles:
+      realm-management:
+        # Realm
+        - view-realm
+        - manage-realm
+        - query-realms
+        # Users
+        - view-users
+        - manage-users
+        - query-users
+        - impersonation
+        # Groups
+        - query-groups
+        # Clients
+        - view-clients
+        - manage-clients
+        - query-clients
+        - create-client
+        # Events
+        - view-events
+        - manage-events
+        # Identity Providers
+        - view-identity-providers
+        - manage-identity-providers
+        # Authorization
+        - view-authorization
+        - manage-authorization
+  # Service account user for genie-proxy-client — assigns realm-management client roles
+  # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
+  - username: service-account-genie-proxy-client
+    enabled: true
+    serviceAccountClientId: genie-proxy-client
+    clientRoles:
+      realm-management:
+        - query-users
+        - view-users
+        - manage-users
+        - view-realm
+  # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
+  - username: service-account-dataprep-service-client
+    enabled: true
+    serviceAccountClientId: dataprep-service-client
+    realmRoles:
+      - dataprep-service
+
+# OIDC client configuration
+clients:
+  # Keycloak built-in account console (needs webOrigins for iframe auth)
+  - clientId: account
+    enabled: true
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+  - clientId: account-console
+    enabled: true
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+
+  - clientId: $(env:KC_CLIENT_ID)
+    enabled: true
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_PUBLIC_ORIGIN)/*
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+
+  # Service account for GENIE.AI backend → Keycloak Admin API proxy
+  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.
+  # Permissions are restricted: cannot modify realm settings, client config, or other admin operations.
+  - clientId: genie-proxy-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_PROXY_CLIENT_SECRET)
+
+  # Service account for Dataprep ingestion pipeline → document-repository
+  # Uses client_credentials grant to obtain tokens for service-to-service calls.
+  # The dataprep-service realm role authorizes PATCH /api/files/:fileId/status in document-repository.
+  - clientId: dataprep-service-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_DATAPREP_CLIENT_SECRET)
+
+  # Mobile OIDC client for institutional deployments (Flutter app)
+  # Each deployment configures its own clientId and redirect scheme via env vars.
+  # Public client with PKCE — mobile apps cannot securely hold client secrets (RFC 8252).
+  # Refresh token rotation: each refresh invalidates the old RT and issues a new one.
+  # See: mobile/genie_ai_mobile/README.md (deployment guide)
+  - clientId: $(env:KC_MOBILE_CLIENT_ID)
+    enabled: true
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      client.credentials.use.refresh.token: true
+      oauth2.device.authorization.grant.enabled: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_MOBILE_REDIRECT_SCHEME)://callback
+
+  # Grafana observability dashboards — OIDC SSO via Keycloak
+  # Confidential client with standard flow. Grafana authenticates users via Generic OAuth.
+  - clientId: $(env:KC_GRAFANA_CLIENT_ID)
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    secret: $(env:KC_GRAFANA_CLIENT_SECRET)
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_PUBLIC_ORIGIN)/grafana/*
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)

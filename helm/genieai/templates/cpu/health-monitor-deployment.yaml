@@ -1,0 +1,46 @@
+{{/*
+Health Monitor Deployment - Monitoring (CPU Node Pool)
+Polls GPU and CPU service health endpoints and exposes /health-status JSON endpoint.
+Uses alpine + curl + jq image with a ConfigMap-mounted health check script.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health-monitor
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "health-monitor" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.healthMonitor.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "health-monitor" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "health-monitor" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: health-monitor
+          image: {{ .Values.cpu.healthMonitor.image }}
+          command:
+            - "/opt/health-monitor/health-check.sh"
+          ports:
+            - containerPort: {{ .Values.cpu.healthMonitor.port }}
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              value: {{ .Values.namespace | quote }}
+          {{- include "genieai.cpuResources" .Values.cpu.healthMonitor.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.healthMonitor.healthPath "port" .Values.cpu.healthMonitor.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.healthMonitor.healthPath "port" .Values.cpu.healthMonitor.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}
+          volumeMounts:
+            - name: health-monitor-script
+              mountPath: /opt/health-monitor/
+      volumes:
+        - name: health-monitor-script
+          configMap:
+            name: health-monitor-script
+            defaultMode: 0755

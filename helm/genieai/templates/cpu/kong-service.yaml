@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "kong" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "kong" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.kong.port }}
+      targetPort: {{ .Values.cpu.kong.port }}
+      protocol: TCP
+      name: tcp-proxy

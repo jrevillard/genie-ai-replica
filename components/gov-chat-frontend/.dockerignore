@@ -1,0 +1,10 @@
+# Keep host state out of the build context — the build stage installs its own
+# node_modules and emits its own dist; logs and local env files are never
+# image content.
+node_modules
+dist
+server.log
+*.log
+.env*
+env
+.git

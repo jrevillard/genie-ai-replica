@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+# Copyright (C) 2025 ITU
+# SPDX-License-Identifier: Apache-2.0
+"""Fill ``content_hash`` + ``chunk_key`` on a ``gold_dataset.json`` from ArangoDB.
+
+After the corpus is ingested and the gold dataset has ``preview`` text on each
+``expected_chunks[]`` entry, this script:
+
+1. Dumps every chunk from the source collection (``_key``, full text).
+2. Normalises chunk text + each preview with the SAME normaliser as
+   ``chunk_identity.normalize`` (whitespace-collapsed, lowercased) — so the
+   preview is the SAME string the chunker produced (modulo punctuation the
+   benchmark author dropped) only when it really matches.
+3. For each preview, finds every chunk that holds the preview:
+   - whole preview is a substring of chunk text (chunk spans the whole
+     passage);
+   - any 40-char window of the preview sits inside the chunk text (chunk
+     holds a slice of the passage — the chunker split the verbatim preview
+     across multiple chunks).
+   All matching chunks become gold; both halves of a split preview are valid
+   gold. Each matched chunk is recorded with its ``_key`` and ``content_hash``.
+   If nothing matches, the preview is marked ``match_unresolved``.
+
+Why substring instead of full equality? The benchmark author often paraphrases,
+truncates, or strips line breaks from the source passage. Normalisation makes
+those collapses invisible, and substring-with-normalisation catches the vast
+majority of real matches. Window-based matching additionally handles passages
+that span more than one chunk.
+
+Run AFTER the corpus is ingested (chunk _keys exist only post-ingest). Pairs
+with ``xlsx_to_gold.py``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+# Reuse the exact same normaliser the eval uses — drift here silently breaks
+# the gold set.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from arango import source_chunks
+from chunk_identity import content_hash, normalize
+from harness import write_json
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--gold-dataset",
+        required=True,
+        type=Path,
+        help="Input gold_dataset.json (will be overwritten in place unless --output is given)",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write to a new path instead of overwriting the input",
+    )
+    p.add_argument(
+        "--arango-url",
+        default=os.getenv("ARANGO_URL", "http://localhost:8529"),
+        help="ArangoDB base URL (default: $ARANGO_URL or http://localhost:8529)",
+    )
+    p.add_argument(
+        "--arango-db",
+        default=os.getenv("ARANGO_DB", "genieai"),
+        help="ArangoDB database name (default: $ARANGO_DB or genieai)",
+    )
+    p.add_argument(
+        "--arango-user",
+        default=os.getenv("ARANGO_USER", "root"),
+        help="ArangoDB user (default: $ARANGO_USER or root)",
+    )
+    p.add_argument(
+        "--arango-password",
+        default=os.getenv("ARANGO_PASSWORD", ""),
+        help="ArangoDB password (default: $ARANGO_PASSWORD). Prefer env var to keep this off the CLI.",
+    )
+    p.add_argument(
+        "--graph-source",
+        default=os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE"),
+        help="Source collection holding the chunks (default: $GRAPH_SOURCE or GRAPH_TEST_SOURCE). "
+        "Override per corpus: e.g. GENIEAI_EL_SALVADOR_SOURCE.",
+    )
+    p.add_argument(
+        "--chunk-text-field",
+        default="chunk_text",
+        help="Document field carrying the chunk text (default: chunk_text). Match your ingestion schema.",
+    )
+    p.add_argument(
+        "--min-preview-len",
+        type=int,
+        default=20,
+        help="Skip matching previews shorter than this many chars (too noisy; default: %(default)s)",
+    )
+    p.add_argument(
+        "--mode",
+        choices=["in-place", "in-place-new", "report-only"],
+        default="in-place",
+        help="in-place=mutate input JSON and overwrite; in-place-new=write to --output; report-only=print summary, no write (default: %(default)s)",
+    )
+    p.add_argument(
+        "--keep-duplicate-passages",
+        action="store_true",
+        help=(
+            "LOCAL DEVIATION (Agrivisory 10-21, Adem): skip the F7 cross-entry "
+            "dedup. With coarse section-sized chunks several questions' gold "
+            "resolves to the SAME chunk set and F7 empties every entry after "
+            "the first (19/42 gutted on the 32-chunk distilled corpus). "
+            "Passage-recall then credits a shared chunk once per question — "
+            "intended; re-chunking (N.8) makes this flag unnecessary."
+        ),
+    )
+    return p.parse_args()
+
+
+def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
+    """Dump (key, text) for every document in the source collection.
+
+    Routes through the shared ``source_chunks`` helper in ``arango.py`` — the
+    single AQL implementation lives there (gate: exactly one ``_api/cursor``
+    in the tree). The CLI ``--arango-*`` flags are forwarded as the
+    ``conn`` override so an operator can still target a non-default DB or
+    a self-signed endpoint without going through the env defaults.
+    """
+    return source_chunks(
+        args.graph_source,
+        args.chunk_text_field,
+        conn={
+            "url": args.arango_url,
+            "db": args.arango_db,
+            "user": args.arango_user,
+            "password": args.arango_password,
+        },
+    )
+
+
+def atomic_write_json(out_path: Path, payload: Any) -> None:
+    """Thin wrapper around ``harness.write_json`` retained for the test patch
+    target (``match_gold_chunks`` tests exercise the cleanup branch by
+    patching ``os.replace``; the real atomic-write + BaseException cleanup
+    now lives in ``harness.write_json``). ``Path`` is accepted and stringified
+    for the harness call, which uses string paths throughout.
+    """
+    write_json(str(out_path), payload)
+
+
+def write_with_backup(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically, keeping a one-generation backup.
+
+    The backup is the ORIGINAL contents (copied before the new payload is
+    written) so a botched match run can be reverted by ``mv
+    <path>.bak.json <path>``. Only created when ``out_path`` matches the
+    input gold dataset — explicit ``--output`` paths do not get a backup
+    because the operator chose a separate target.
+    """
+    if out_path.is_file():
+        backup = out_path.with_suffix(out_path.suffix + ".bak.json")
+        backup.write_bytes(out_path.read_bytes())
+    atomic_write_json(out_path, payload)
+
+
+def find_matches(preview: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return chunks that contain (or are contained in) the normalised preview.
+
+    Two acceptance paths:
+      - Whole preview is a substring of chunk text (chunk spans the whole passage).
+      - Any sufficiently long window of the preview sits inside the chunk text
+        (chunk holds part of the passage — chunker split the verbatim preview
+        across multiple chunks). Both halves are valid gold.
+    """
+    norm_preview = normalize(preview)
+    if not norm_preview:
+        return []
+    out: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    WIN = 40  # chars; matches the strict-substring mode granularity
+    STEP = 20
+    for c in chunks:
+        norm_text = normalize(c.get("text") or "")
+        if not norm_text:
+            continue
+        if norm_preview in norm_text or norm_text in norm_preview:
+            if c["key"] not in seen_keys:
+                seen_keys.add(c["key"])
+                out.append(c)
+            continue
+        for off in range(0, max(1, len(norm_preview) - WIN + 1), STEP):
+            window = norm_preview[off : off + WIN]
+            if len(window) < 12:
+                continue
+            if window in norm_text:
+                if c["key"] not in seen_keys:
+                    seen_keys.add(c["key"])
+                    out.append(c)
+                break
+    return out
+
+
+def main() -> int:
+    args = parse_args()
+    if not args.gold_dataset.is_file():
+        sys.stderr.write(f"ERROR: gold dataset not found: {args.gold_dataset}\n")
+        return 2
+
+    payload = json.loads(args.gold_dataset.read_text(encoding="utf-8"))
+    entries: list[dict[str, Any]] = payload.get("entries", [])
+    if not entries:
+        sys.stderr.write("ERROR: gold dataset has no entries\n")
+        return 2
+
+    sys.stderr.write(
+        f"[match] dumping chunks from {args.graph_source!r} on {args.arango_url} ...\n"
+    )
+    chunks = load_chunks(args)
+    sys.stderr.write(f"[match] {len(chunks)} chunks loaded\n")
+
+    stats = {
+        "resolved": 0,
+        "split_passages": 0,
+        "unresolved": 0,
+        "skipped_short": 0,
+        "total_previews": 0,
+        "deduped_passages": 0,
+    }
+    for entry in entries:
+        expected = entry.get("expected_chunks", [])
+        if not expected:
+            continue
+        new_expected: list[dict[str, Any]] = []
+        for ec_idx, ec in enumerate(expected):
+            preview = (ec.get("preview") or "").strip()
+            stats["total_previews"] += 1
+            if len(preview) < args.min_preview_len:
+                stats["skipped_short"] += 1
+                new_expected.append({**ec, "match_status": "skipped_short"})
+                continue
+            matches = find_matches(preview, chunks)
+            if matches:
+                # Multi-match = chunker split the verbatim preview across N chunks.
+                # All N chunks share a passage_id so the eval can enforce passage-level
+                # recall (a passage counts only when ALL its chunks are retrieved).
+                passage_id = f"{entry.get('id', 'q')}-p{ec_idx}"
+                for idx, m in enumerate(matches):
+                    new_expected.append(
+                        {
+                            **ec,
+                            "chunk_key": m["key"],
+                            "content_hash": content_hash(m["text"]),
+                            "match_status": "resolved_split" if idx > 0 else "resolved",
+                            "passage_id": passage_id,
+                        }
+                    )
+                stats["resolved"] += len(matches)
+                if len(matches) > 1:
+                    stats["split_passages"] += 1
+            else:
+                new_expected.append({**ec, "match_status": "unresolved"})
+                stats["unresolved"] += 1
+        entry["expected_chunks"] = new_expected
+
+    # F7 (MR !505 review): when two previews resolve to the SAME chunk-key
+    # set, the second is a near-duplicate of the first and would inflate
+    # passage-level recall (the eval would credit two gold passages for one
+    # retrieved set). Drop duplicates across the WHOLE payload, keeping the
+    # first passage_id seen. Operates at the passage_id level (a passage
+    # that was split into N chunks is a single unit, not N).
+    seen_passage_keys: set[frozenset[str]] = set()
+    deduped_entries: list[dict[str, Any]] = []  # upstream vestige: never read
+    # --keep-duplicate-passages (local deviation): skip the whole F7 pass.
+    for entry in () if args.keep_duplicate_passages else entries:
+        new_expected: list[dict[str, Any]] = []
+        for ec in entry.get("expected_chunks", []):
+            pid = ec.get("passage_id")
+            if pid is None:
+                # Unresolved / skipped rows have no passage; pass through.
+                new_expected.append(ec)
+                continue
+            keys = frozenset(
+                c["chunk_key"] for c in entry["expected_chunks"]
+                if c.get("passage_id") == pid and c.get("chunk_key")
+            )
+            if not keys:
+                new_expected.append(ec)
+                continue
+            if keys in seen_passage_keys:
+                stats["deduped_passages"] += 1
+                continue
+            seen_passage_keys.add(keys)
+            new_expected.append(ec)
+        entry["expected_chunks"] = new_expected
+
+    payload["match_run"] = {
+        "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "graph_source": args.graph_source,
+        "stats": stats,
+    }
+
+    if args.mode == "report-only":
+        sys.stderr.write(f"[report] {json.dumps(stats)}\n")
+        return 0
+
+    out_path = args.output or args.gold_dataset
+    if out_path == args.gold_dataset:
+        write_with_backup(out_path, payload)
+    else:
+        atomic_write_json(out_path, payload)
+    sys.stderr.write(
+        f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
+        f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "
+        f"deduped_passages={stats['deduped_passages']} "
+        f"total_previews={stats['total_previews']} -> {out_path}\n"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

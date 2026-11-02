@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "http-service" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.httpService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "http-service" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "http-service" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: http-service
+          image: {{ .Values.cpu.httpService.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.httpService.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          {{- include "genieai.cpuResources" .Values.cpu.httpService.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.httpService.healthPath "port" .Values.cpu.httpService.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.httpService.healthPath "port" .Values.cpu.httpService.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}

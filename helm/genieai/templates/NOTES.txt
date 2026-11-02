@@ -1,0 +1,44 @@
+GenieAI has been deployed to namespace: {{ .Values.namespace }}
+
+=== GPU Services ===
+  - vLLM:          http://vllm.{{ .Values.namespace }}.svc.cluster.local:8000
+  - TEI:           http://tei.{{ .Values.namespace }}.svc.cluster.local:80
+  - TEI Reranker:  http://tei-reranker.{{ .Values.namespace }}.svc.cluster.local:80
+  - Dataprep:      http://dataprep.{{ .Values.namespace }}.svc.cluster.local:5000
+
+=== CPU Application Services ===
+  - Backend:              http://backend.{{ .Values.namespace }}.svc.cluster.local:3000
+  - Frontend:             http://frontend.{{ .Values.namespace }}.svc.cluster.local:5173
+  - Document Repository:  http://document-repository.{{ .Values.namespace }}.svc.cluster.local:3001
+  - Nginx:                http://nginx.{{ .Values.namespace }}.svc.cluster.local:80
+  - Kong:                 http://kong.{{ .Values.namespace }}.svc.cluster.local:8010
+
+=== CPU Data Services ===
+  - ArangoDB:      http://arango-vector-db.{{ .Values.namespace }}.svc.cluster.local:8529
+  - Redis:         http://redis-cache.{{ .Values.namespace }}.svc.cluster.local:6379
+  - Kong DB:       kong-database.{{ .Values.namespace }}.svc.cluster.local:5432
+  - Keycloak DB:   keycloak-db.{{ .Values.namespace }}.svc.cluster.local:5432
+
+=== Auth & Utility ===
+  - Keycloak:      http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080
+  - ClamAV:        clamav.{{ .Values.namespace }}.svc.cluster.local:3310
+
+=== Monitoring ===
+  - Health Monitor: http://health-monitor.{{ .Values.namespace }}.svc.cluster.local:8080/health-status
+
+=== Post-Install Steps ===
+1. Verify GPU node pool is ready:
+   kubectl get nodes -l gpu-pool=true
+
+2. Verify NVIDIA Device Plugin:
+   kubectl get daemonset nvidia-device-plugin -n kube-system
+
+3. Check all pods are running:
+   kubectl get pods -n {{ .Values.namespace }}
+
+4. Verify Ingress has external IP:
+   kubectl get ingress -n {{ .Values.namespace }}
+
+5. Test health endpoint:
+   kubectl port-forward svc/health-monitor 8080:8080 -n {{ .Values.namespace }}
+   curl http://localhost:8080/health-status

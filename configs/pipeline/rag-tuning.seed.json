@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-05T00:00:00Z",
+  "updatedBy": "seed",
+  "retriever": {
+    "retrievalK": 20,
+    "fetchK": 30,
+    "scoreThreshold": 0.2,
+    "lambdaMult": 0.5,
+    "searchStart": "chunk",
+    "searchMode": "vector",
+    "filterStrategy": "OR",
+    "enableTraversal": true,
+    "traversalMaxDepth": 2,
+    "traversalMaxReturned": 5,
+    "traversalScoreThreshold": 0.7,
+    "traversalConcurrentBatches": 4,
+    "hybridEnabled": true,
+    "hybridRrfK": 60,
+    "hybridDenseWeight": 1.0,
+    "hybridLexicalWeight": 1.0,
+    "hybridBm25Candidates": 50
+  },
+  "reranker": {
+    "strategy": "slice",
+    "threshold": 0.75,
+    "topN": 3,
+    "noveltySigmoidA": 20.0,
+    "noveltySigmoidB": 0.25,
+    "contextDecayFactor": 0.0025,
+    "minValueThreshold": -1.0
+  }
+}

@@ -1,0 +1,94 @@
+# GenieAI Helm Chart - Production Environment Overrides
+
+namespace: genieai
+
+# Production autoscaler limits
+autoscaler:
+  gpu:
+    minNodes: 0
+    maxNodes: 2
+  cpu:
+    minNodes: 2
+    maxNodes: 5
+
+# GPU services - production settings
+gpu:
+  vllm:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        nvidia.com/gpu: "1"
+  tei:
+    replicas: 1
+  teiReranker:
+    replicas: 1
+  dataprep:
+    replicas: 1
+
+# CPU services - production replicas for HA
+cpu:
+  backend:
+    replicas: 3
+    resources:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+  frontend:
+    replicas: 3
+  documentRepository:
+    replicas: 2
+  nginx:
+    replicas: 3
+  kong:
+    replicas: 3
+  embedding:
+    replicas: 2
+  reranker:
+    replicas: 2
+  textgen:
+    replicas: 2
+  translation:
+    replicas: 2
+  guardrail:
+    replicas: 2
+  retrieverArangoService:
+    replicas: 2
+  httpService:
+    replicas: 2
+  chatqnaXeonBackendServer:
+    replicas: 2
+  chatqnaXeonUiServer:
+    replicas: 2
+  chatqnaXeonNginxServer:
+    replicas: 2
+  keycloak:
+    replicas: 2
+
+# Production storage
+storage:
+  arango:
+    size: "50Gi"
+  kongDb:
+    size: "10Gi"
+  keycloakDb:
+    size: "10Gi"
+  documentUploads:
+    size: "50Gi"
+  redisData:
+    size: "10Gi"
+
+# Production ingress
+ingress:
+  host: "agrivisory.itu.int"
+  tls:
+    enabled: true
+    secretName: "tls-secret-prod"

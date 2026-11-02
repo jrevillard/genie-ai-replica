@@ -1,0 +1,32 @@
+# GENIE.AI Docker Swarm - Inventory Example
+#
+# One inventory file per environment. Copy to inventory/<environment>.ini.
+# The environment group (e.g. [agrivisory_myenv]) tells Ansible which group_vars to load:
+#   - group_vars/<env>/vars.yml (non-secret config)
+#   - group_vars/all.yml is always loaded (shared config)
+#
+# Use underscores in group names (hyphens cause Ansible warnings).
+
+# --- Environment group (one per inventory file) ---
+
+[agrivisory_myenv]
+my-host ansible_host=10.0.0.10
+
+# --- Role groups (all environments) ---
+
+[swarm_managers]
+# Manager node(s) - runs API gateway (gateway=true label) and docker stack deploy
+my-host
+
+[gpu_nodes]
+# GPU node(s) - runs OPEA AI/ML services (vLLM, TEI, etc.)
+# Single-node: same host as manager
+my-host
+
+# [gpu_api_nodes]
+# Standalone remote GPU API node - target of deploy-gpu.yml
+
+# --- Common variables ---
+[all:vars]
+ansible_user=ubuntu
+# ansible_ssh_private_key_file=~/.ssh/id_ed25519

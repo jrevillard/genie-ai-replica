@@ -1,0 +1,19 @@
+{{/*
+ArangoDB Service - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: arango-vector-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "arango-vector-db" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "arango-vector-db" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.arangodb.port }}
+      targetPort: {{ .Values.cpu.arangodb.port }}
+      protocol: TCP
+      name: arangodb

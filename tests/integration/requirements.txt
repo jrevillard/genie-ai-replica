@@ -1,0 +1,4 @@
+pytest==8.3.4
+hypothesis==6.115.6
+pyyaml==6.0.2
+kubernetes==31.0.0

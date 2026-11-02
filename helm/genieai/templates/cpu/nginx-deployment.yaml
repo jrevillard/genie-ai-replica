@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "nginx" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.nginx.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "nginx" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "nginx" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: nginx
+          image: {{ .Values.cpu.nginx.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.nginx.port }}
+              protocol: TCP
+          {{- include "genieai.cpuResources" .Values.cpu.nginx.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.nginx.healthPath "port" .Values.cpu.nginx.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.nginx.healthPath "port" .Values.cpu.nginx.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}

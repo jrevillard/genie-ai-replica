@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "frontend" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "frontend" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "frontend" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: frontend
+          image: {{ .Values.cpu.frontend.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.frontend.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          {{- include "genieai.cpuResources" .Values.cpu.frontend.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.frontend.healthPath "port" .Values.cpu.frontend.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.frontend.healthPath "port" .Values.cpu.frontend.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}

@@ -1,0 +1,40 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android" // Changed from "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.example.genie_ai_mobile"
+    ndkVersion = "27.0.12077973"
+    compileSdk = 36
+
+    compileOptions {
+        // Updated to Java 17 for Gradle 8.5 compatibility
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        // Updated to Java 17
+        jvmTarget = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        applicationId = "com.example.genie_ai_mobile"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}

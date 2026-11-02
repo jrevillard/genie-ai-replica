@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatqna-xeon-ui-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "chatqna-xeon-ui-server" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "chatqna-xeon-ui-server" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.chatqnaXeonUiServer.port }}
+      targetPort: {{ .Values.cpu.chatqnaXeonUiServer.port }}
+      protocol: TCP
+      name: http

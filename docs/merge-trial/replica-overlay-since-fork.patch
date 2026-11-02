@@ -1,0 +1,1146 @@
+diff --git a/genie-ai-overlay/chatqna/genieai_chatqna.py b/genie-ai-overlay/chatqna/genieai_chatqna.py
+index 7df65c7e..fa73ba72 100644
+--- a/genie-ai-overlay/chatqna/genieai_chatqna.py
++++ b/genie-ai-overlay/chatqna/genieai_chatqna.py
+@@ -29,6 +29,7 @@ from langchain_core.prompts import PromptTemplate
+ 
+ from langdetect import detect
+ from datetime import date, datetime, timedelta
++import time
+ from transformers import AutoTokenizer
+ 
+ 
+@@ -51,7 +52,7 @@ RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
+ LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
+ LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
+ LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
+-LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
++LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "ibm-granite/granite-3.3-2b-instruct")
+ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
+ 
+ RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
+@@ -75,6 +76,12 @@ USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
+ CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
+ SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
+ 
++# Weather RAG Augmentation config
++WEATHER_AUGMENTATION_ENABLED = os.getenv("WEATHER_AUGMENTATION_ENABLED", "true").lower() == "true"
++WEATHER_DEFAULT_LATITUDE = float(os.getenv("WEATHER_DEFAULT_LATITUDE", "-29.3167"))
++WEATHER_DEFAULT_LONGITUDE = float(os.getenv("WEATHER_DEFAULT_LONGITUDE", "27.4833"))
++WEATHER_CACHE_TTL_SECONDS = int(os.getenv("WEATHER_CACHE_TTL_SECONDS", "900"))
++
+ 
+ ##################################################################################################################################
+ # HELPER CLASSES
+@@ -470,13 +477,21 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+             user_context_string = builder.build_user_context_string(user_details)
+             logger.info(f"\n[ DEBUG ] user_context_string compiled {user_context_string}\n")
+ 
++        # Weather RAG augmentation context
++        weather_context_string = kwargs.get("weather_context", "")
+ 
+         ##################################
+         ###### Token limit handling ######
+         ##################################
+         system_instructions = CHATQNA_SYSTEM_PROMPT
++
++        # Build weather section only if we have data
++        weather_section = ""
++        if weather_context_string:
++            weather_section = f"\n\nCURRENT WEATHER DATA:\n{weather_context_string}"
+     
+         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
++                         f"{weather_section}"
+                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
+                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
+         
+@@ -509,6 +524,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+             translated_history_string = " |<-MSG->| ".join(truncated_history)
+             # Reconstruct final prompt
+             prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
++                         f"{weather_section}"
+                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
+                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
+             final_llm_prompt = f"{system_instructions}{prompt_add_context}"
+@@ -702,7 +718,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
+         else:
+             if logflag:
+                 logger.debug(f'\nRaw output of the llm\n {data}\n')
+-            next_data["text"] = data["choices"][0]["message"]["content"]
++            next_data["text"] = data["choices"][0]["message"]["content"] if "choices" in data else "System Error: " + data.get("error", {}).get("message", "Unknown LLM Error")
+         if logflag:
+             logger.debug(f'\nAligned output of the llm\n {next_data}\n')
+     else:
+@@ -756,6 +772,202 @@ class ChatQnAService:
+             if key.startswith(service_name):
+                 return key
+         return None
++
++    # ==================== WEATHER RAG AUGMENTATION ====================
++    _weather_cache = {}  # key: (lat, lon) → value: (timestamp, formatted_string)
++    _geocode_cache = {}  # key: place_name_lower → value: (timestamp, {latitude, longitude})
++
++    async def _geocode_location_from_query(self, query_text: str) -> dict | None:
++        """
++        Attempt to extract and geocode a location from the user's query text.
++        Uses OpenStreetMap Nominatim forward geocoding, scoped to Lesotho (countrycodes=ls).
++        
++        Returns {"latitude": float, "longitude": float} if a location is found, else None.
++        Caches results indefinitely (place names don't move).
++        """
++        if not query_text:
++            return None
++
++        # Simple heuristic: look for location-related keywords in the query
++        # This avoids geocoding every single message
++        location_indicators = [
++            "weather", "rain", "temperature", "forecast", "climate",
++            "plant", "planting", "harvest", "irrigat", "spray",
++            "in ", "at ", "near ", "around ", "for "
++        ]
++        query_lower = query_text.lower()
++        
++        # Quick check: does the query seem to mention a location context?
++        has_location_hint = any(indicator in query_lower for indicator in location_indicators)
++        if not has_location_hint:
++            return None
++
++        # Extract potential location name using common patterns
++        # Look for patterns like "in <Place>", "near <Place>", "at <Place>", "for <Place>"
++        # Also try to match known Lesotho place-like words (capitalized words)
++        location_patterns = [
++            r'\b(?:in|at|near|around|for)\s+([A-Z][a-zA-Z\'\-]+(?:\s+[A-Z][a-zA-Z\'\-]+)*)',  # "in Maseru", "near Ha Matala"
++            r'\b(?:weather|rain|forecast|temperature|climate)\s+(?:in|at|for|of)\s+([A-Z][a-zA-Z\'\-]+(?:\s+[A-Z][a-zA-Z\'\-]+)*)',  # "weather in Semonkong"
++            r'\b([A-Z][a-zA-Z\'\-]+(?:\s+[A-Z][a-zA-Z\'\-]+)*)\s+(?:weather|rain|forecast|temperature|climate)',  # "Mokhotlong weather"
++        ]
++
++        candidate_locations = []
++        for pattern in location_patterns:
++            matches = re.findall(pattern, query_text)
++            candidate_locations.extend(matches)
++
++        if not candidate_locations:
++            return None
++
++        # Try to geocode the first candidate
++        for candidate in candidate_locations:
++            candidate_clean = candidate.strip().rstrip('?.!')
++            if len(candidate_clean) < 3:
++                continue
++
++            # Check geocode cache
++            cache_key = candidate_clean.lower()
++            if cache_key in self._geocode_cache:
++                cached_time, cached_coords = self._geocode_cache[cache_key]
++                if logflag:
++                    logger.debug(f"[WEATHER-RAG] Geocode cache hit for '{candidate_clean}'")
++                return cached_coords
++
++            # Call Nominatim forward geocoding (scoped to Lesotho)
++            try:
++                nominatim_url = "https://nominatim.openstreetmap.org/search"
++                params = {
++                    "q": candidate_clean,
++                    "countrycodes": "ls",
++                    "format": "json",
++                    "limit": 1,
++                    "addressdetails": 0
++                }
++                headers = {
++                    "User-Agent": "GENIE-AI-Agrivisory/1.0 (weather-rag-integration)"
++                }
++
++                async with aiohttp.ClientSession() as session:
++                    async with session.get(nominatim_url, params=params, headers=headers, 
++                                          timeout=aiohttp.ClientTimeout(total=3)) as response:
++                        if response.status == 200:
++                            results = await response.json()
++                            if results and len(results) > 0:
++                                lat = float(results[0]["lat"])
++                                lon = float(results[0]["lon"])
++                                coords = {"latitude": lat, "longitude": lon}
++                                # Cache the result (place names don't change)
++                                self._geocode_cache[cache_key] = (time.time(), coords)
++                                if logflag:
++                                    logger.info(f"[WEATHER-RAG] Geocoded '{candidate_clean}' → ({lat}, {lon})")
++                                return coords
++                            else:
++                                if logflag:
++                                    logger.debug(f"[WEATHER-RAG] Nominatim returned no results for '{candidate_clean}'")
++                        else:
++                            logger.warning(f"[WEATHER-RAG] Nominatim returned status {response.status}")
++            except Exception as e:
++                logger.warning(f"[WEATHER-RAG] Geocoding failed for '{candidate_clean}': {e}")
++
++        return None
++
++    async def _fetch_weather_context(self, location_data: dict = None, query_text: str = None) -> str:
++        """
++        Fetch weather from the backend weather service and format as compact LLM context.
++        
++        Location resolution priority:
++        1. Geocoded location from user's query text (if a place is mentioned)
++        2. Frontend-provided weatherLocation (from weather widget selection)
++        3. Default coordinates (Maseru)
++        
++        Uses an in-memory cache with configurable TTL to avoid excessive API calls.
++        Returns an empty string on failure (non-critical, graceful degradation).
++        """
++        if not WEATHER_AUGMENTATION_ENABLED:
++            return ""
++
++        try:
++            # Priority 1: Try to geocode a location from the user's query
++            geocoded_location = None
++            if query_text:
++                geocoded_location = await self._geocode_location_from_query(query_text)
++
++            # Resolve final coordinates
++            latitude = WEATHER_DEFAULT_LATITUDE
++            longitude = WEATHER_DEFAULT_LONGITUDE
++
++            if geocoded_location:
++                latitude = geocoded_location["latitude"]
++                longitude = geocoded_location["longitude"]
++                if logflag:
++                    logger.info(f"[WEATHER-RAG] Using geocoded location: ({latitude}, {longitude})")
++            elif location_data:
++                latitude = float(location_data.get("latitude", latitude))
++                longitude = float(location_data.get("longitude", longitude))
++                if logflag:
++                    logger.info(f"[WEATHER-RAG] Using widget location: ({latitude}, {longitude})")
++
++            # Check cache
++            cache_key = (round(latitude, 2), round(longitude, 2))
++            now = time.time()
++            if cache_key in self._weather_cache:
++                cached_time, cached_data = self._weather_cache[cache_key]
++                if now - cached_time < WEATHER_CACHE_TTL_SECONDS:
++                    if logflag:
++                        logger.debug(f"[WEATHER-RAG] Cache hit for {cache_key}")
++                    return cached_data
++
++            # Fetch from backend weather API (internal Docker network)
++            url = f"{BACKEND_SERVICE_URL}/api/weather"
++            token = await self.user_profile_client._get_auth_token()
++            if not token:
++                logger.warning("[WEATHER-RAG] No auth token available, skipping weather fetch")
++                return ""
++
++            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
++            payload = {"latitude": latitude, "longitude": longitude}
++
++            async with aiohttp.ClientSession() as session:
++                async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as response:
++                    if response.status == 200:
++                        data = await response.json()
++                        formatted = self._format_weather_context(data)
++                        # Store in cache
++                        self._weather_cache[cache_key] = (now, formatted)
++                        if logflag:
++                            logger.info(f"[WEATHER-RAG] Weather fetched and cached for {cache_key}")
++                        return formatted
++                    else:
++                        logger.warning(f"[WEATHER-RAG] Backend returned status {response.status}")
++                        return ""
++
++        except Exception as e:
++            logger.warning(f"[WEATHER-RAG] Weather fetch failed (non-critical): {e}")
++            return ""
++
++    def _format_weather_context(self, weather_data: dict) -> str:
++        """Format weather API response into compact LLM context block."""
++        location = weather_data.get("location", "Unknown")
++        current = weather_data.get("current", {})
++        forecast = weather_data.get("forecast", [])
++
++        lines = [
++            f"Location: {location}",
++            f"Now: {current.get('temperature')}°C, {current.get('condition')}, "
++            f"Humidity {current.get('humidity')}%, Wind {current.get('windSpeed')} km/h"
++        ]
++
++        for day in forecast[:7]:
++            date_str = day.get("date", "")[:10]
++            precip = day.get("precipitation")
++            precip_str = f", Rain {precip}mm" if precip and precip > 0 else ""
++            lines.append(
++                f"{date_str}: {day.get('condition')}, "
++                f"High {day.get('highTemp')}°C / Low {day.get('lowTemp')}°C{precip_str}"
++            )
++
++        return "\n".join(lines)
++    # ==================== END WEATHER RAG AUGMENTATION ====================
+     
+ 
+ 
+@@ -1022,8 +1234,10 @@ class ChatQnAService:
+         A helper that:
+         1. Truncates history to stay within a token limit.
+         2. Flattens the history into a single string.
+-        3. Sends the string to the translation LLM.
++        3. Translates each message via the NLLB CPU translation service.
+         """
++        if logflag:
++            logger.info(f"[NLLB-INPUT] _get_translated_history_string called. history length: {len(history)}, target: {target_language}")
+         
+         max_translation_chars = MAX_TRANSLATION_CHARS
+         current_chars = 0
+@@ -1041,58 +1255,121 @@ class ChatQnAService:
+             current_chars += message_chars
+         messages_to_process.reverse()
+ 
+-        
++        # Translate each message content via NLLB CPU service
++        # Detect source language from the messages (non-English) and translate to English
++        texts_to_translate = [msg.get("content", "") for msg in messages_to_process]
++        roles = [msg.get("role", "unknown").upper() for msg in messages_to_process]
++
++        if logflag:
++            logger.info(f"[NLLB-INPUT] texts_to_translate count: {len(texts_to_translate)}, roles: {roles}")
++
++        if texts_to_translate:
++            translated_texts = await self._translate_via_nllb(texts_to_translate, target_lang="en")
++        else:
++            logger.warning("[NLLB-INPUT] No texts to translate - list is empty")
++            translated_texts = texts_to_translate
++
++        # Rebuild the flattened history string with translated content
+         flattened_history_parts = []
+-        for message in messages_to_process:
+-            role = message.get("role", "unknown").upper()
+-            content = message.get("content", "")
++        for i, role in enumerate(roles):
++            content = translated_texts[i] if i < len(translated_texts) else ""
+             flattened_history_parts.append(f"{role}: {content}")
+         
+         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+ 
+-        # --- Simple Translation API Call ---
+-        prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
++        if logflag:
++            logger.debug(f"Translated chat history via NLLB: {flattened_history_string}")
++
++        return flattened_history_string
++
++
++    def load_language_codes(self, filepath: str) -> dict:
++        """Load language codes from a JSON file."""
++        try:
++            with open(filepath, 'r') as file:
++                language_codes = json.load(file)
++            return language_codes
++        except Exception as e:
++            logger.error(f"Error loading language codes from {filepath}: {e}")
++            return {}
++
++    async def _translate_via_nllb(self, texts: list, target_lang: str = "en", source_lang: str = None) -> list:
++        """
++        Translate texts using the NLLB CPU translation service (backend /api/translate).
++        
++        Args:
++            texts: List of text strings to translate
++            target_lang: Target language ISO code (e.g., 'en', 'st')
++            source_lang: Source language ISO code. If None, auto-detected based on target.
++        
++        Returns:
++            List of translated text strings
++        """
++        if not texts:
++            return texts
++
++        # Auto-detect source language: if translating TO English, source is Sesotho and vice versa
++        if source_lang is None:
++            source_lang = "st" if target_lang == "en" else "en"
++
++        # Get auth token - try user_profile_client first, fallback to direct fetch
++        token = None
++        try:
++            token = await self.user_profile_client._get_auth_token()
++        except Exception as e:
++            logger.warning(f"[NLLB-TRANSLATE] user_profile_client token fetch failed: {e}")
++
++        if not token:
++            # Fallback: fetch token directly from http-service
++            try:
++                async with httpx.AsyncClient(timeout=10.0) as client:
++                    resp = await client.get(GET_AUTH_TOKEN_URL)
++                    if resp.status_code == 200:
++                        token = resp.json().get("accessToken")
++                        logger.info(f"[NLLB-TRANSLATE] Got token via direct http-service call")
++                    else:
++                        logger.error(f"[NLLB-TRANSLATE] http-service returned {resp.status_code}")
++            except Exception as e:
++                logger.error(f"[NLLB-TRANSLATE] Direct token fetch failed: {e}")
++
++        if not token:
++            logger.error("[NLLB-TRANSLATE] Failed to get auth token from all sources. Returning original texts.")
++            return texts
+ 
+         payload = {
+-            "messages": [{"role": "user", "content": prompt}],
+-            "temperature": 0,
+-            "stream": False
++            "texts": texts,
++            "source_lang": source_lang,
++            "target_lang": target_lang
+         }
+ 
+         if logflag:
+-            logger.debug(f"Payload for translation service: {payload}")
++            logger.info(f"[NLLB-TRANSLATE] Calling {BACKEND_SERVICE_URL}/api/translate ({source_lang} -> {target_lang}, {len(texts)} texts)")
+ 
+         try:
+             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
+                 response = await client.post(
+-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
++                    f"{BACKEND_SERVICE_URL}/api/translate",
+                     json=payload,
+-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
++                    headers={
++                        "Authorization": f"Bearer {token}",
++                        "Content-Type": "application/json"
++                    }
+                 )
+                 response.raise_for_status()
+                 response_data = response.json()
+-                translated_blob = response_data["choices"][0]["message"]["content"]
+-                if logflag:
+-                    logger.debug(f"Translated chat history: {translated_blob.strip()}")
+-                return translated_blob.strip()
++                translated = response_data.get("translated_texts", texts)
+ 
+-        except httpx.TimeoutException as e:
+-            logger.error(f"History translation timeout after {TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history in original language. Error: {e}")
+-            return flattened_history_string
+-        except Exception as e:
+-            logger.error(f"Translation error: {e}")
+-            return flattened_history_string
++                if logflag:
++                    logger.info(f"[NLLB-TRANSLATE] Translated {len(texts)} texts ({source_lang} -> {target_lang})")
+ 
++                return translated
+ 
+-    def load_language_codes(self, filepath: str) -> dict:
+-        """Load language codes from a JSON file."""
+-        try:
+-            with open(filepath, 'r') as file:
+-                language_codes = json.load(file)
+-            return language_codes
++        except httpx.TimeoutException as e:
++            logger.error(f"[NLLB-TRANSLATE] Timeout after {TRANSLATION_SERVICE_TIMEOUT}s: {e}")
++            return texts
+         except Exception as e:
+-            logger.error(f"Error loading language codes from {filepath}: {e}")
+-            return {}
++            logger.error(f"[NLLB-TRANSLATE] Translation failed ({source_lang} -> {target_lang}): {e}")
++            return texts
+ 
+     def _split_text_into_chunks(self, text: str, max_chars: int = 2000) -> list:
+         """Split text into chunks, trying to break at sentence boundaries."""
+@@ -1117,39 +1394,13 @@ class ChatQnAService:
+         return chunks
+ 
+     async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None) -> str:
+-        """Translate a single chunk of text."""
+-        # More specific prompt to avoid language confusion (e.g., Sesotho vs Afrikaans, Bengali vs Hindi)
+-        language_notes = {
+-            "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
+-            "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
+-            "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+-        }
+-
+-        note = language_notes.get(target_lang, "")
+-
+-        if iso_code:
+-            prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+-        else:
+-            prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
+-        payload = {
+-            "messages": [{"role": "user", "content": prompt}],
+-            "temperature": 0,
+-            "stream": False
+-        }
+-
+-        try:
+-            async with httpx.AsyncClient(timeout=30.0) as client:
+-                response = await client.post(
+-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+-                    json=payload,
+-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+-                )
+-                response.raise_for_status()
+-                response_data = response.json()
+-                return response_data["choices"][0]["message"]["content"].strip()
+-        except Exception as e:
+-            logger.warning(f"Failed to translate chunk, returning original: {e}")
+-            return text
++        """Translate a single chunk of text via NLLB CPU service."""
++        # Determine the target language code for NLLB
++        # iso_code comes as uppercase (e.g., "ST"), target_lang as name (e.g., "Sesotho")
++        lang_code = iso_code.lower() if iso_code else "st"  # Default to Sesotho
++        
++        translated_texts = await self._translate_via_nllb([text], target_lang=lang_code, source_lang="en")
++        return translated_texts[0] if translated_texts else text
+ 
+     async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None) -> str:
+         """Translate long text by splitting into chunks and translating separately."""
+@@ -1332,6 +1583,12 @@ class ChatQnAService:
+             top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
+         )
+ 
++        # Fetch weather context for RAG augmentation (runs in parallel with pipeline where possible)
++        weather_location = None
++        if chat_request.context and hasattr(chat_request.context, 'weatherLocation') and chat_request.context.weatherLocation:
++            weather_location = chat_request.context.weatherLocation
++        weather_context = await self._fetch_weather_context(weather_location, query_text=last_translated_message_content)
++
+         result_dict, runtime_graph = await self.megaservice.schedule(
+             initial_inputs={"text": last_translated_message_content},
+             llm_parameters=parameters,
+@@ -1341,6 +1598,7 @@ class ChatQnAService:
+             retrieval_context=retrieval_context,
+             original_language=original_language,
+             user_details = user_details,
++            weather_context=weather_context,
+         )
+ 
+         if logflag:
+diff --git a/genie-ai-overlay/chatqna/language_codes.json b/genie-ai-overlay/chatqna/language_codes.json
+index d8d5cfde..f02cda05 100644
+--- a/genie-ai-overlay/chatqna/language_codes.json
++++ b/genie-ai-overlay/chatqna/language_codes.json
+@@ -1,19 +1,4 @@
+ {
+     "en": "English",
+-    "id": "Indonesian",
+-    "ru": "Russian",
+-    "zh": "Chinese",
+-    "th": "Thai",
+-    "es": "Spanish",
+-    "fr": "French",
+-    "sw": "Swahili",
+-    "ar": "Arabic",
+-    "pt": "Portuguese",
+-    "de": "German",
+-    "ja": "Japanese",
+-    "ko": "Korean",
+-    "hi": "Hindi",
+-    "st": "Sesotho",
+-    "bn": "Bengali",
+-    "man": "Mandinka"
++    "st": "Sesotho"
+ }
+\ No newline at end of file
+diff --git a/genie-ai-overlay/core/genieai_api_protocol.py b/genie-ai-overlay/core/genieai_api_protocol.py
+index 2467ca6d..517e31d0 100644
+--- a/genie-ai-overlay/core/genieai_api_protocol.py
++++ b/genie-ai-overlay/core/genieai_api_protocol.py
+@@ -33,7 +33,8 @@ class RequestContext(BaseModel):
+     """
+     categoryLabel: Optional[str] = None
+     serviceLabels: Optional[List[str]] = None
+-    language: Optional[str] = None 
++    language: Optional[str] = None
++    weatherLocation: Optional[Dict[str, float]] = None  # { "latitude": float, "longitude": float }
+ 
+ class ChatCompletionRequest(BaseModel):
+     # Ordered by official OpenAI API documentation
+diff --git a/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai b/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+index 8eb06921..4641a734 100644
+--- a/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
++++ b/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+@@ -112,6 +112,9 @@ COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/comps/dataprep/sr
+ # 2. Overwrite OPEA's entry point with our new one
+ COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/comps/dataprep/src/genieai_dataprep_microservice.py
+ 
++# 3. Copy the progress reporter module
++COPY genie-ai-overlay/dataprep/progress_reporter.py /app/comps/dataprep/src/progress_reporter.py
++
+ # 3. Overwrite the OPEA API protocol with our custom version
+ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
+ 
+diff --git a/genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py b/genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py
+index 869db948..7904b275 100644
+--- a/genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py
++++ b/genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py
+@@ -6,6 +6,7 @@ import json
+ import os
+ import re
+ import asyncio
++import time
+ import aiohttp
+ import fcntl  # Added for file locking
+ from typing import List, Optional, Union, Dict, Any
+@@ -39,6 +40,8 @@ from comps.dataprep.src.genieai_dataprep_utils import (
+ from comps.dataprep.src.utils import get_tables_result, get_separators
+ # Import Parent Class
+ from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
++# Import Progress Reporter
++from progress_reporter import ProgressReporter
+ 
+ logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
+ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
+@@ -277,7 +280,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+         
+         if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
+             logger.info(f"Using Docling for file: {path}")
+-            content = await docling_document_loader(path)
++            try:
++                content = await docling_document_loader(path)
++            except Exception as e:
++                logger.error(f"Docling failed for {path} with error: {e}. Falling back to standard loader.")
++                content = await document_loader(path)
+         else:
+             logger.info(f"Using Standard Loader for file: {path}")
+             content = await document_loader(path)
+@@ -482,6 +489,180 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+             # Default to LLM (with retry fix and advisory logic)
+             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
+ 
++    async def _process_batch_with_progress(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore, progress_counter):
++        """Helper to process a single batch with concurrency control and progress tracking."""
++        async with semaphore:
++            try:
++                await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
++                
++                # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
++                # to avoid blocking the event loop if they are heavy CPU tasks.
++                graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
++                
++                if graph_docs:
++                    # Run graph insertion in a thread as well if it's blocking
++                    await asyncio.to_thread(
++                        self.graph.add_graph_documents,
++                        graph_documents=graph_docs,
++                        include_source=getattr(input, "include_chunks", True),
++                        graph_name=graph_name,
++                        use_one_entity_collection=True,
++                        embeddings=self.embeddings,
++                        embedding_field="embedding",
++                        embed_source=getattr(input, "embed_chunks", True),
++                        embed_nodes=getattr(input, "embed_nodes", True),
++                        embed_relationships=getattr(input, "embed_edges", True),
++                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
++                    )
++            except (ValidationError, Exception) as ve:
++                logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
++                await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
++                
++                # Retry logic for individual docs in case of failure
++                for retry_doc in batch_docs:
++                    try:
++                        retry_graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, [retry_doc])
++                        if retry_graph_docs:
++                            await asyncio.to_thread(
++                                self.graph.add_graph_documents,
++                                graph_documents=retry_graph_docs,
++                                include_source=getattr(input, "include_chunks", True),
++                                graph_name=graph_name,
++                                use_one_entity_collection=True,
++                                embeddings=self.embeddings,
++                                embedding_field="embedding",
++                                embed_source=getattr(input, "embed_chunks", True),
++                                embed_nodes=getattr(input, "embed_nodes", True),
++                                embed_relationships=getattr(input, "embed_edges", True),
++                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
++                            )
++                    except Exception as inner_e:
++                        logger.error(f"Skipping individual bad document: {inner_e}")
++            finally:
++                # Increment the shared progress counter
++                progress_counter["completed"] += 1
++
++    async def _apply_labels_with_progress(self, plain_chunks, all_labels, file_labels, file_id, progress_counter):
++        """
++        Applies labels to chunks while tracking progress via a shared counter.
++        Delegates to existing labeling strategy methods.
++        """
++        if not all_labels:
++            await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels.")
++            result = [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
++            progress_counter["completed"] = len(plain_chunks)
++            return result
++
++        logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
++        
++        if LABELING_STRATEGY == "embedding":
++            result = await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
++            progress_counter["completed"] = len(plain_chunks)
++            return result
++        elif LABELING_STRATEGY == "bm25":
++            result = await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
++            progress_counter["completed"] = len(plain_chunks)
++            return result
++        else:
++            # LLM labeling with per-chunk progress tracking
++            return await self._label_with_llm_progress(plain_chunks, all_labels, file_labels, file_id, progress_counter)
++
++    async def _label_with_llm_progress(self, chunks, all_labels, file_labels, file_id, progress_counter):
++        """Labels chunks using VLLM with progress tracking, retry logic, and advisory warnings."""
++        client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
++        model = os.getenv("VLLM_MODEL_ID")
++    
++        # Debug Requirement 3: Print what is sent to LLM
++        print("\n" + "-"*60)
++        print(f" DEBUG: LLM LABELING INPUTS ")
++        print("-"*60)
++        print(f" Taxonomy ({len(all_labels)} labels): {all_labels}")
++        print(f" File Metadata Labels: {file_labels}")
++        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT}")
++        print("-"*60 + "\n")
++        
++        # Parallel Processing with Semaphore
++        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
++        
++        async def _label_single_chunk(i, text):
++            async with semaphore:
++                retries = 0
++                suggested_labels = []
++                
++                while retries < 3:
++                    try:
++                        response = await client.chat.completions.create(
++                            model=model,
++                            messages=[
++                                {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
++                                {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
++                            ]
++                        )
++                        parsed = json.loads(response.choices[0].message.content)
++                        suggested_labels = parsed.get("labels", [])
++                        break 
++                    except Exception as e:
++                        retries += 1
++            
++                if retries == 3:
++                    await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
++                    suggested_labels = []
++
++                final_labels = set()
++
++                for label in suggested_labels:
++                    if label in final_labels:
++                        continue 
++                
++                    if label in all_labels:
++                        final_labels.add(label)
++                        await self._write_ingestion_log(
++                            file_id, "INFO", "Labeling", 
++                            f"Chunk {i}: LLM selected label '{label}'."
++                        )
++                        continue
++                
++                    match = next((x for x in all_labels if x.lower() == label.lower()), None)
++                    if not match and label.endswith('s'):
++                        match = next((x for x in all_labels if x.lower() == label[:-1].lower()), None)
++                    if not match:
++                        match = next((x for x in all_labels if x.lower() == label.lower() + 's'), None)
++
++                    if match:
++                        final_labels.add(match)
++                        await self._write_ingestion_log(
++                            file_id, "INFO", "Labeling", 
++                            f"Chunk {i}: LLM suggested '{label}' → Mapped to existing '{match}'."
++                        )
++                    else:
++                        await self._write_ingestion_log(
++                            file_id, "WARN", "Labeling", 
++                            f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy."
++                        )
++
++                labels_list = list(final_labels)
++                if labels_list:
++                    await self._write_ingestion_log(
++                        file_id, "INFO", "Labeling",
++                        f"Chunk {i}: Final Labels: {labels_list}"
++                    )
++
++                # Increment progress counter after each chunk is labeled
++                progress_counter["completed"] += 1
++
++                return {"text": text, "labels": labels_list}
++
++        # Create tasks for all chunks
++        tasks = [
++            _label_single_chunk(i, text) 
++            for i, text in enumerate(chunks)
++        ]
++        
++        # Run all tasks concurrently (limited by semaphore)
++        results = await asyncio.gather(*tasks)
++        
++        return results
++
+     # --- Main Ingestion Logic (Async + Batched) ---
+     
+     async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
+@@ -538,9 +719,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+         """
+         Asynchronous ingestion task with support for graceful 'Killed' status transitions.
+         Ensures auto-retraction occurs if the task is cancelled or fails.
++        Reports progress to the Document Repository via ProgressReporter.
+         """
+         # NOTE: lock_file is passed from the microservice and is already LOCKED.
+         # We are responsible for releasing and closing it in the finally block.
++
++        # --- Instantiate Progress Reporter ---
++        progress_reporter = ProgressReporter(
++            file_id=input.file_id,
++            doc_repo_url=DOCUMENT_REPOSITORY_URL,
++            auth_token_getter=self._get_auth_token,
++        )
+         
+         try:
+             # --- START PROTECTED EXECUTION (Spec 5.1) ---
+@@ -566,24 +755,101 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+                     table_strategy=input.table_strategy,
+                 )
+                 
+-                # 2. Extract and Chunk Content
+-                chunks = await self._load_and_chunk(doc_path)
++                # ===== STAGE 0: EXTRACTION =====
++                # Report Extraction stage transition (stage index 0, 0 stages completed)
++                await progress_reporter.report_stage_transition("Extraction", 0)
++                await progress_reporter.report_progress(0, "Starting content extraction")
++
++                # Run extraction with heartbeat since Docling doesn't provide page-level progress
++                extraction_start_time = time.time()
++                extraction_done = asyncio.Event()
++
++                async def _extraction_heartbeat():
++                    """Sends heartbeat updates while extraction is running (no page-level progress)."""
++                    while not extraction_done.is_set():
++                        elapsed = int(time.time() - extraction_start_time)
++                        await progress_reporter.report_progress(
++                            0,  # Keep at last known value (0 since no page-level data)
++                            f"Extraction in progress, elapsed_seconds={elapsed}"
++                        )
++                        try:
++                            await asyncio.wait_for(extraction_done.wait(), timeout=30)
++                            break  # Event was set, stop heartbeat
++                        except asyncio.TimeoutError:
++                            continue  # 30s elapsed, loop and send next heartbeat
++
++                # Start heartbeat task and run extraction concurrently
++                heartbeat_task = asyncio.create_task(_extraction_heartbeat())
++                try:
++                    chunks = await self._load_and_chunk(doc_path)
++                finally:
++                    extraction_done.set()
++                    await heartbeat_task
++
+                 if not chunks:
+                     raise Exception("No valid content extracted from file.")
+ 
++                # Report Extraction complete at 100% with element count
++                await progress_reporter.report_progress(
++                    100, f"Extraction complete: {len(chunks)} content elements extracted"
++                )
++
++                # ===== STAGE 1: CHUNKING =====
++                # Report Chunking stage transition (1 stage completed: Extraction)
++                await progress_reporter.report_stage_transition("Chunking", 1)
+                 await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
++                # Chunking completes quickly (already done as part of _load_and_chunk)
++                await progress_reporter.report_progress(100, f"Chunking complete: {len(chunks)} chunks")
+ 
+-                # 3. Guardrail Check
++                # ===== STAGE 2: GUARDRAIL =====
++                # Report Guardrail stage transition (2 stages completed: Extraction, Chunking)
++                await progress_reporter.report_stage_transition("Guardrail", 2)
+                 gr_result = await self._run_guardrail(chunks)
+                 if not gr_result["success"]:
+                     await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
+                     raise Exception("Guardrail Violation")
++                # Report Guardrail complete at 100%
++                await progress_reporter.report_progress(100, "Guardrail check passed")
+ 
+-                # 4. Labeling (Spec 5.3, 5.4)
++                # ===== STAGE 3: LABELING =====
++                # Report Labeling stage transition (3 stages completed: Extraction, Chunking, Guardrail)
++                await progress_reporter.report_stage_transition("Labeling", 3)
+                 file_labels = getattr(input, "file_labels", [])
+-                labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
++                total_chunks = len(chunks)
++
++                # Track labeling progress via a shared counter
++                labeling_progress = {"completed": 0}
++
++                async def _labeling_progress_tracker(done_event: asyncio.Event):
++                    """Reports labeling progress at ≤30s intervals."""
++                    while not done_event.is_set():
++                        completed = labeling_progress["completed"]
++                        percent = int((completed / total_chunks) * 100) if total_chunks > 0 else 0
++                        await progress_reporter.report_progress(
++                            percent, f"Labeled {completed}/{total_chunks} chunks"
++                        )
++                        try:
++                            await asyncio.wait_for(done_event.wait(), timeout=30)
++                            break
++                        except asyncio.TimeoutError:
++                            continue
++
++                labeling_done = asyncio.Event()
++                labeling_tracker_task = asyncio.create_task(_labeling_progress_tracker(labeling_done))
++                try:
++                    labelled_docs = await self._apply_labels_with_progress(
++                        chunks, all_labels, file_labels, input.file_id, labeling_progress
++                    )
++                finally:
++                    labeling_done.set()
++                    await labeling_tracker_task
+ 
+-                # 5. Graph Insertion (BATCHED & CONCURRENT)
++                # Report Labeling complete at 100%
++                await progress_reporter.report_progress(100, f"Labeling complete: {total_chunks} chunks labeled")
++
++                # ===== STAGE 4: GRAPH =====
++                # Report Graph stage transition (4 stages completed: Extraction, Chunking, Guardrail, Labeling)
++                await progress_reporter.report_stage_transition("Graph", 4)
+                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
+                 
+                 documents_to_process = []
+@@ -603,25 +869,56 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+                 
+                 self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
+                 semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+-                tasks = []
+ 
++                # Track graph batch progress via a shared counter
++                graph_progress = {"completed": 0}
++
++                async def _graph_progress_tracker(done_event: asyncio.Event):
++                    """Reports graph batch progress at ≤30s intervals."""
++                    while not done_event.is_set():
++                        completed = graph_progress["completed"]
++                        percent = int((completed / total_batches) * 100) if total_batches > 0 else 0
++                        await progress_reporter.report_progress(
++                            percent, f"Graph batch {completed}/{total_batches} completed"
++                        )
++                        try:
++                            await asyncio.wait_for(done_event.wait(), timeout=30)
++                            break
++                        except asyncio.TimeoutError:
++                            continue
++
++                graph_done = asyncio.Event()
++                graph_tracker_task = asyncio.create_task(_graph_progress_tracker(graph_done))
++
++                tasks = []
+                 for i in range(0, len(documents_to_process), BATCH_SIZE):
+                     batch_docs = documents_to_process[i : i + BATCH_SIZE]
+                     current_batch_num = (i // BATCH_SIZE) + 1
+                     
+-                    # Schedule batch processing with concurrency control
++                    # Schedule batch processing with concurrency control and progress tracking
+                     task = asyncio.create_task(
+-                        self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
++                        self._process_batch_with_progress(
++                            batch_docs, current_batch_num, total_batches, input, graph_name, semaphore, graph_progress
++                        )
+                     )
+                     tasks.append(task)
+                 
+-                # Wait for all batches to complete
+-                if tasks:
+-                    await asyncio.gather(*tasks)
++                try:
++                    # Wait for all batches to complete
++                    if tasks:
++                        await asyncio.gather(*tasks)
++                finally:
++                    graph_done.set()
++                    await graph_tracker_task
++
++                # Report Graph complete at 100%
++                await progress_reporter.report_progress(100, f"Graph insertion complete: {total_batches} batches processed")
+ 
++                # ===== COMPLETION =====
+                 # 6. Final Status Update
+                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
++                await progress_reporter.report_completion()
+ 
+                 return {
+                     "status": 200, 
+@@ -635,6 +932,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+                 kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
+                 logger.warning(kill_msg)
+                 
++                # Report error before propagating
++                await progress_reporter.report_error()
++                
+                 # Log the termination event
+                 await self._write_ingestion_log(input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
+                 
+@@ -652,6 +952,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
+                 error_msg = f"Ingestion failed: {str(e)}"
+                 logger.error(error_msg)
+                 
++                # Report error before propagating
++                await progress_reporter.report_error()
++                
+                 await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
+                 await self._update_doc_status(input.file_id, "Ingestion Error")
+                 
+diff --git a/genie-ai-overlay/dataprep/progress_reporter.py b/genie-ai-overlay/dataprep/progress_reporter.py
+new file mode 100644
+index 00000000..621d9589
+--- /dev/null
++++ b/genie-ai-overlay/dataprep/progress_reporter.py
+@@ -0,0 +1,154 @@
++# Copyright (C) 2025 International Telecommunication Union (ITU)
++# SPDX-License-Identifier: Apache-2.0
++
++"""
++Progress Reporter for the Dataprep Pipeline.
++
++Reports ingestion stage transitions and sub-step progress to the Document Repository
++via HTTP PATCH. All reporting is fire-and-forget: failures are logged as warnings
++and never interrupt the ingestion pipeline.
++"""
++
++import time
++import os
++
++import aiohttp
++
++from comps import CustomLogger
++
++logger = CustomLogger("progress_reporter")
++
++# Request timeout for progress updates (seconds)
++PROGRESS_REQUEST_TIMEOUT = 5
++
++# Minimum interval between sub-step progress updates (seconds)
++PROGRESS_MIN_INTERVAL = 30
++
++
++class ProgressReporter:
++    """
++    Reports ingestion progress to the Document Repository.
++
++    Sends HTTP PATCH requests to /api/files/{fileId}/ingestion-progress with
++    stage transitions, sub-step progress, completion, and error signals.
++
++    All methods are fire-and-forget: exceptions are caught and logged as warnings,
++    never raised or retried.
++    """
++
++    def __init__(self, file_id: str, doc_repo_url: str, auth_token_getter):
++        """
++        Args:
++            file_id: The unique file identifier being ingested.
++            doc_repo_url: Base URL of the Document Repository (e.g. http://document-repository:3001).
++            auth_token_getter: An async callable that returns a JWT token string (or None).
++        """
++        self.file_id = file_id
++        self.base_url = f"{doc_repo_url}/api/files/{file_id}/ingestion-progress"
++        self._get_token = auth_token_getter
++        self._last_report_time = 0
++        self._min_interval = PROGRESS_MIN_INTERVAL
++
++    async def _send_update(self, payload: dict) -> None:
++        """
++        Sends an HTTP PATCH to the ingestion-progress endpoint.
++
++        Fire-and-forget: logs warnings on any failure (network, timeout, non-2xx),
++        never raises exceptions or retries.
++        """
++        try:
++            token = await self._get_token()
++            if not token:
++                logger.warning(
++                    f"[ progress ] Skipping progress update for {self.file_id}: no auth token available."
++                )
++                return
++
++            headers = {
++                "Authorization": f"Bearer {token}",
++                "Content-Type": "application/json",
++            }
++
++            timeout = aiohttp.ClientTimeout(total=PROGRESS_REQUEST_TIMEOUT)
++
++            async with aiohttp.ClientSession(timeout=timeout) as session:
++                async with session.patch(
++                    self.base_url, json=payload, headers=headers
++                ) as response:
++                    if response.status < 200 or response.status >= 300:
++                        body = await response.text()
++                        logger.warning(
++                            f"[ progress ] Non-2xx response ({response.status}) updating progress "
++                            f"for {self.file_id}: {body}"
++                        )
++        except aiohttp.ClientError as e:
++            logger.warning(
++                f"[ progress ] Network error updating progress for {self.file_id}: {e}"
++            )
++        except TimeoutError:
++            logger.warning(
++                f"[ progress ] Timeout updating progress for {self.file_id} (>{PROGRESS_REQUEST_TIMEOUT}s)."
++            )
++        except Exception as e:
++            logger.warning(
++                f"[ progress ] Unexpected error updating progress for {self.file_id}: {e}"
++            )
++
++    async def report_stage_transition(self, stage: str, stages_completed: int) -> None:
++        """
++        Reports a stage transition to the Document Repository.
++
++        Sends immediately (not throttled) with stage_progress_percent reset to 0.
++
++        Args:
++            stage: The new stage name (e.g. "Extraction", "Chunking", "Graph").
++            stages_completed: Number of stages fully completed so far.
++        """
++        payload = {
++            "current_stage": stage,
++            "stages_completed": stages_completed,
++            "stage_progress_percent": 0,
++        }
++        await self._send_update(payload)
++        # Reset throttle timer on stage transition so first sub-step in new stage can report
++        self._last_report_time = 0
++
++    async def report_progress(self, stage_progress_percent: int, message: str = None) -> None:
++        """
++        Reports sub-step progress within the current stage.
++
++        Throttled to a minimum interval of 30 seconds between updates.
++        If called more frequently, the update is silently skipped.
++
++        Args:
++            stage_progress_percent: Integer 0-100 representing progress within current stage.
++            message: Optional human-readable message (e.g. "Processed 5/20 pages").
++        """
++        now = time.time()
++        if (now - self._last_report_time) < self._min_interval:
++            return
++
++        payload = {"stage_progress_percent": stage_progress_percent}
++        if message is not None:
++            payload["message"] = message
++
++        await self._send_update(payload)
++        self._last_report_time = now
++
++    async def report_completion(self) -> None:
++        """
++        Reports successful ingestion completion.
++
++        Sends immediately (not throttled).
++        """
++        payload = {"status": "completed"}
++        await self._send_update(payload)
++
++    async def report_error(self) -> None:
++        """
++        Reports ingestion failure.
++
++        Sends immediately (not throttled).
++        """
++        payload = {"status": "error"}
++        await self._send_update(payload)

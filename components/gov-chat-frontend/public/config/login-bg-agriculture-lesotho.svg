@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <!-- Sky gradient -->
+  <defs>
+    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#E0F2FE;stop-opacity:0.2"/>
+    </linearGradient>
+    <linearGradient id="mountain1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#6B8E6B;stop-opacity:0.25"/>
+      <stop offset="100%" style="stop-color:#4A7C4A;stop-opacity:0.15"/>
+    </linearGradient>
+    <linearGradient id="mountain2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8FBC8F;stop-opacity:0.2"/>
+      <stop offset="100%" style="stop-color:#6B8E6B;stop-opacity:0.12"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#90C67C;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#6DAF5C;stop-opacity:0.1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sky background -->
+  <rect width="1200" height="800" fill="url(#sky)"/>
+
+  <!-- Distant mountains (Maluti range) -->
+  <path d="M0 400 L100 280 L200 320 L350 220 L500 300 L600 200 L750 260 L900 180 L1000 250 L1100 220 L1200 300 L1200 500 L0 500 Z" fill="url(#mountain1)"/>
+
+  <!-- Closer mountains -->
+  <path d="M0 480 L150 380 L300 420 L450 350 L600 400 L750 340 L900 380 L1050 360 L1200 420 L1200 550 L0 550 Z" fill="url(#mountain2)"/>
+
+  <!-- Terraced fields -->
+  <path d="M0 550 L200 520 L400 540 L600 510 L800 530 L1000 515 L1200 540 L1200 600 L0 600 Z" fill="url(#field)"/>
+  <path d="M0 600 L300 580 L600 595 L900 575 L1200 590 L1200 650 L0 650 Z" fill="url(#field)" opacity="0.8"/>
+  <path d="M0 650 L200 640 L500 655 L800 635 L1100 650 L1200 645 L1200 700 L0 700 Z" fill="url(#field)" opacity="0.6"/>
+
+  <!-- Crop rows (subtle lines suggesting planted fields) -->
+  <g stroke="#6DAF5C" stroke-opacity="0.12" stroke-width="1.5" fill="none">
+    <path d="M50 570 Q300 555 550 565 Q800 575 1150 560"/>
+    <path d="M50 585 Q300 570 550 580 Q800 590 1150 575"/>
+    <path d="M50 615 Q300 605 550 612 Q800 620 1150 608"/>
+    <path d="M50 630 Q300 620 550 627 Q800 635 1150 623"/>
+    <path d="M50 660 Q300 652 550 658 Q800 665 1150 655"/>
+    <path d="M50 675 Q300 667 550 673 Q800 680 1150 670"/>
+  </g>
+
+  <!-- Wheat/maize stalks (scattered, subtle) -->
+  <g stroke="#7CB342" stroke-opacity="0.18" stroke-width="1.5" fill="none">
+    <!-- Left cluster -->
+    <line x1="80" y1="560" x2="80" y2="530"/>
+    <line x1="82" y1="535" x2="90" y2="525"/>
+    <line x1="78" y1="538" x2="70" y2="528"/>
+
+    <line x1="120" y1="555" x2="120" y2="520"/>
+    <line x1="122" y1="525" x2="130" y2="515"/>
+    <line x1="118" y1="528" x2="110" y2="518"/>
+
+    <!-- Right cluster -->
+    <line x1="1050" y1="545" x2="1050" y2="510"/>
+    <line x1="1052" y1="515" x2="1060" y2="505"/>
+    <line x1="1048" y1="518" x2="1040" y2="508"/>
+
+    <line x1="1100" y1="550" x2="1100" y2="515"/>
+    <line x1="1102" y1="520" x2="1110" y2="510"/>
+    <line x1="1098" y1="523" x2="1090" y2="513"/>
+  </g>
+
+  <!-- Sun (subtle, top right) -->
+  <circle cx="1050" cy="120" r="60" fill="#FFD700" fill-opacity="0.08"/>
+  <circle cx="1050" cy="120" r="40" fill="#FFD700" fill-opacity="0.06"/>
+
+  <!-- Subtle clouds -->
+  <g fill="#ffffff" fill-opacity="0.15">
+    <ellipse cx="200" cy="150" rx="80" ry="30"/>
+    <ellipse cx="250" cy="145" rx="60" ry="25"/>
+    <ellipse cx="700" cy="100" rx="90" ry="28"/>
+    <ellipse cx="760" cy="95" rx="65" ry="22"/>
+  </g>
+
+  <!-- Bottom field gradient fade -->
+  <rect x="0" y="700" width="1200" height="100" fill="#F5F7FA" fill-opacity="0.5"/>
+</svg>

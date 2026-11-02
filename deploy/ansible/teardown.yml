@@ -1,0 +1,83 @@
+---
+# GENIE.AI - Teardown Playbook
+#
+# Removes the deployed stack (local compose or Swarm) and optionally cleans volumes.
+#
+# Usage:
+#   ansible-playbook -i inventory/<env>.ini teardown.yml
+#   ansible-playbook -i inventory/<env>.ini teardown.yml -e "teardown_remove_volumes=true"
+
+- name: GENIE.AI - Teardown
+  hosts: swarm_managers
+  become: true
+  tasks:
+    - name: Local compose mode
+      when: deploy_mode | default('local') == 'local'
+      block:
+        - name: Stop compose stack
+          ansible.builtin.command: >
+            docker compose --profile opea --profile gpu-models
+            -f {{ deploy_dir }}/{{ compose_file }} down{% if teardown_remove_volumes | bool %} -v{% endif %}
+          args:
+            chdir: "{{ deploy_dir }}"
+
+        - name: Remove orphaned pre-A7 auth sidecar (profile-gated; compose down is no longer told about its profile)
+          ansible.builtin.command: docker rm -f http-service
+          failed_when: false
+          changed_when: false
+
+    - name: Swarm mode
+      when: deploy_mode | default('local') == 'swarm'
+      block:
+        - name: Check if stack exists
+          ansible.builtin.command: docker stack ls --filter name={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+          register: stack_check
+          changed_when: false
+          failed_when: false
+
+        - name: Remove stack
+          ansible.builtin.command: docker stack rm {{ stack_name }}
+          when: stack_check.stdout | length > 0
+          changed_when: true
+
+        - name: Wait for services to stop
+          ansible.builtin.pause:
+            seconds: 30
+          when: stack_check.stdout | length > 0
+
+        - name: Verify stack is removed
+          ansible.builtin.command: docker stack ls --filter name={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+          register: stack_verify
+          changed_when: false
+
+        - name: Assert stack is removed
+          ansible.builtin.assert:
+            that:
+              - stack_verify.stdout | length == 0
+            fail_msg: "Stack {{ stack_name }} is still running. Check with: docker stack ls"
+            success_msg: "Stack {{ stack_name }} removed successfully"
+
+        - name: List named volumes (dry run)
+          ansible.builtin.command: docker volume ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+          register: volume_list
+          changed_when: false
+
+        - name: Named volumes (not removed)
+          ansible.builtin.debug:
+            msg: "{{ volume_list.stdout_lines }}"
+          when: not teardown_remove_volumes | bool
+
+        - name: Remove named volumes
+          ansible.builtin.command: docker volume rm {{ item }}
+          loop: "{{ volume_list.stdout_lines }}"
+          when:
+            - teardown_remove_volumes | bool
+            - volume_list.stdout_lines | length > 0
+          loop_control:
+            label: "{{ item }}"
+
+    - name: Stop local registry (legacy — only if present from older deployments)
+      community.docker.docker_container:
+        name: registry
+        state: absent
+      when: teardown_remove_registry | bool

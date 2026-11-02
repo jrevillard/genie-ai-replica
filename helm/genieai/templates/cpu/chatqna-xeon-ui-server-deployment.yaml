@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatqna-xeon-ui-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "chatqna-xeon-ui-server" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.chatqnaXeonUiServer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "chatqna-xeon-ui-server" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "chatqna-xeon-ui-server" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: chatqna-xeon-ui-server
+          image: {{ .Values.cpu.chatqnaXeonUiServer.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.chatqnaXeonUiServer.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          {{- include "genieai.cpuResources" .Values.cpu.chatqnaXeonUiServer.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.chatqnaXeonUiServer.healthPath "port" .Values.cpu.chatqnaXeonUiServer.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.chatqnaXeonUiServer.healthPath "port" .Values.cpu.chatqnaXeonUiServer.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}

@@ -1,0 +1,58 @@
+---
+# RTX PRO 6000 Blackwell (whole machine, 96 GB) — NON-SECRET config only.
+# Secrets live in group_vars/agrivisory_rtx6000/vault.yml (Ansible Vault) —
+# see README "Required Vault Secrets".
+# Driver (once, before playbook): standard — sudo ubuntu-drivers install, 570+ (580 recommended).
+# [RTX Blackwell watch item] sm_120 needs CUDA 12.8+ builds. The pinned
+# vllm/vllm-openai image (all.yml) is fine; if TEI 1.9.3 (all.yml pin)
+# crash-loops with CUDA errors, bump its tag in all.yml.
+
+# --- Machine ---
+# DEC-1 (settled 09-27): agriconnect.site — A record already -> 151.185.34.95 (www too);
+# ports 80+443 verified open from the internet; IP stable per Adem.
+nginx_public_domain: "agriconnect.site"
+deploy_dir: /opt/agrivisory-app
+cert_mode: letsencrypt    # DEC-1 (settled 09-27): agriconnect.site via certbot
+
+# --- Realm bootstrap admin (password lives in vault.yml; email MUST equal genie_admin_email — B3 SSOT) ---
+genie_admin_username: "AdminAdem"
+
+# --- Email (realm smtpServer.from — required ALWAYS, even with SMTP off; empty = realm import HTTP 400) ---
+email_from: "noreply@agriconnect.site"   # must match the DreamHost mailbox in vault (email_user) — DEC-16-R via domain mail
+
+# --- Let's Encrypt (DEC-1) ---
+certbot_email: "***REMOVED***"  # placeholder-by-choice — Adem WILL change this later (zero-cost swap; cert binds to the domain, not the email)
+certbot_replicas: "1"                      # != 0 activates the compose letsencrypt profile (env.j2 gate)
+
+repo_url: ""
+repo_branch: main
+swarm_registry_url: ""   # local builds (DEC-9): deploy-shared-facts.yml's set_fact rewrites "" to 'agrivisory' BEFORE the env.j2 render (local image names) — do NOT remove that set_fact; a real registry URL is set only in swarm mode
+
+# --- Non-secret product config (env.j2 SECTION 22) ---
+keycloak_admin_username: "admin"
+user_approval_required: "true"
+app_name: "Agrivisory"
+kc_mobile_client_id: "agrivisory-mobile"
+kc_mobile_redirect_scheme: "agrivisory"
+
+# --- GPU tuning (96 GB: 0.85 leaves big headroom; room for a larger model later) ---
+# vllm_llm_model_id: meta-llama/Meta-Llama-3.1-8B-Instruct   # uncomment for Llama (default: granite-4.1-8b in all.yml)
+
+# --- Observability (Epic N eval window; N.1 verdict #4) ---
+# Brings up --profile observability (VictoriaTraces + otel-collector + Grafana) on deploy;
+# requires grafana_admin_password in vault.yml (preflight gate).
+enable_observability: "1"
+
+# --- Arango (env.j2 bare vars) ---
+arango_db: "genie-ai"
+arango_graph_name: "GRAPH"               # DEC-23: clean flip before D5 (pilot debris disposable; verified zero hard-codes)
+arango_port: "8529"
+
+# SECRETS (in vault.yml, NOT here) — the live set the preflight sweeps:
+#   arango_password, translation_cache_password, kong_db_password,
+#   keycloak_admin_password, genie_admin_password, genie_admin_email,
+#   keycloak_db_password, keycloak_proxy_client_secret, kc_dataprep_client_secret,
+#   hugging_face_hub_token, grafana_client_secret
+#   (+ grafana_admin_password when enable_observability=1)
+# Models/images/browser vars (vue/csp/cors) come from group_vars/all.yml — the
+# single source; browser values compute from nginx_public_domain above.

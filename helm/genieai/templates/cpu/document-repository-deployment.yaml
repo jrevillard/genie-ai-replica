@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: document-repository
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "document-repository" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.documentRepository.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "document-repository" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "document-repository" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: document-repository
+          image: {{ .Values.cpu.documentRepository.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.documentRepository.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          {{- include "genieai.cpuResources" .Values.cpu.documentRepository.resources | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.cpu.documentRepository.healthPath "port" .Values.cpu.documentRepository.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.cpu.documentRepository.healthPath "port" .Values.cpu.documentRepository.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}
+          volumeMounts:
+            - name: document-uploads
+              mountPath: /app/uploads
+      volumes:
+        - name: document-uploads
+          persistentVolumeClaim:
+            claimName: document-uploads-pvc

@@ -1,0 +1,26 @@
+{{/*
+Cluster Autoscaler Configuration Reference
+---
+AKS manages the cluster autoscaler at the Azure level (not as an in-cluster deployment).
+This ConfigMap documents the autoscaler parameters and can be consumed by deployment
+scripts to configure AKS node pool autoscaling via `az aks nodepool update` commands.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "genieai.fullname" . }}-cluster-autoscaler-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "cluster-autoscaler-config" "tier" "infrastructure" "context" .) | nindent 4 }}
+data:
+  # GPU Node Pool Autoscaler Settings
+  gpu.minNodes: {{ .Values.autoscaler.gpu.minNodes | quote }}
+  gpu.maxNodes: {{ .Values.autoscaler.gpu.maxNodes | quote }}
+  gpu.scaleDownUnneededTime: {{ .Values.autoscaler.gpu.scaleDownUnneededTime | quote }}
+  gpu.nodePoolLabel: {{ .Values.nodePools.gpu.label | quote }}
+  gpu.nodePoolLabelValue: {{ .Values.nodePools.gpu.labelValue | quote }}
+  # CPU Node Pool Autoscaler Settings
+  cpu.minNodes: {{ .Values.autoscaler.cpu.minNodes | quote }}
+  cpu.maxNodes: {{ .Values.autoscaler.cpu.maxNodes | quote }}
+  cpu.nodePoolLabel: {{ .Values.nodePools.cpu.label | quote }}
+  cpu.nodePoolLabelValue: {{ .Values.nodePools.cpu.labelValue | quote }}

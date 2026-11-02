@@ -1,0 +1,38 @@
+{{/*
+Redis Deployment - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "redis-cache" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.redis.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "redis-cache" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "redis-cache" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: redis
+          image: {{ .Values.cpu.redis.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.redis.port }}
+              protocol: TCP
+          {{- include "genieai.cpuResources" .Values.cpu.redis.resources | nindent 10 }}
+          {{- include "genieai.tcpReadinessProbe" (dict "port" .Values.cpu.redis.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.tcpLivenessProbe" (dict "port" .Values.cpu.redis.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data-pvc

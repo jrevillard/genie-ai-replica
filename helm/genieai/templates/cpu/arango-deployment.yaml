@@ -1,0 +1,48 @@
+{{/*
+ArangoDB Deployment - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arango-vector-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "arango-vector-db" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.cpu.arangodb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "arango-vector-db" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "arango-vector-db" "tier" "cpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.cpuAffinity" . | nindent 6 }}
+      containers:
+        - name: arangodb
+          image: {{ .Values.cpu.arangodb.image }}
+          ports:
+            - containerPort: {{ .Values.cpu.arangodb.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cpu-services-config
+          env:
+            - name: ARANGO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: genieai-secrets
+                  key: ARANGO_ROOT_PASSWORD
+          {{- include "genieai.cpuResources" .Values.cpu.arangodb.resources | nindent 10 }}
+          {{- include "genieai.tcpReadinessProbe" (dict "port" .Values.cpu.arangodb.port "settings" .Values.cpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.tcpLivenessProbe" (dict "port" .Values.cpu.arangodb.port "settings" .Values.cpuProbes.liveness) | nindent 10 }}
+          {{- include "genieai.tcpSlowStartupProbe" (dict "port" .Values.cpu.arangodb.port "settings" .Values.cpuProbes.slowStartup) | nindent 10 }}
+          volumeMounts:
+            - name: arango-data
+              mountPath: /var/lib/arangodb3
+      volumes:
+        - name: arango-data
+          persistentVolumeClaim:
+            claimName: arango-data-pvc

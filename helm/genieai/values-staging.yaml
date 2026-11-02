@@ -1,0 +1,76 @@
+# GenieAI Helm Chart - Staging Environment Overrides
+
+namespace: genieai-staging
+
+# Moderate autoscaler for staging
+autoscaler:
+  gpu:
+    minNodes: 0
+    maxNodes: 1
+  cpu:
+    minNodes: 1
+    maxNodes: 3
+
+# GPU services - same as prod but single replica
+gpu:
+  vllm:
+    replicas: 1
+  tei:
+    replicas: 1
+  teiReranker:
+    replicas: 1
+  dataprep:
+    replicas: 1
+
+# CPU services - moderate replicas
+cpu:
+  backend:
+    replicas: 1
+  frontend:
+    replicas: 1
+  documentRepository:
+    replicas: 1
+  nginx:
+    replicas: 1
+  kong:
+    replicas: 1
+  embedding:
+    replicas: 1
+  reranker:
+    replicas: 1
+  textgen:
+    replicas: 1
+  translation:
+    replicas: 1
+  guardrail:
+    replicas: 1
+  retrieverArangoService:
+    replicas: 1
+  httpService:
+    replicas: 1
+  chatqnaXeonBackendServer:
+    replicas: 1
+  chatqnaXeonUiServer:
+    replicas: 1
+  chatqnaXeonNginxServer:
+    replicas: 1
+
+# Moderate storage for staging
+storage:
+  arango:
+    size: "20Gi"
+  kongDb:
+    size: "10Gi"
+  keycloakDb:
+    size: "10Gi"
+  documentUploads:
+    size: "20Gi"
+  redisData:
+    size: "10Gi"
+
+# Staging ingress
+ingress:
+  host: "staging.genieai.itu.int"
+  tls:
+    enabled: true
+    secretName: "tls-secret-staging"

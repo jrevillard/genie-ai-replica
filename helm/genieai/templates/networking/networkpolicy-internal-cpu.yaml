@@ -1,0 +1,540 @@
+{{/*
+Internal CPU-to-CPU NetworkPolicy: allows communication between CPU services
+that need to talk to each other.
+
+Communication paths:
+- nginx → kong (8010)
+- kong → backend (3000), document-repository (3001)
+- backend → arango-vector-db (8529), redis-cache (6379), keycloak (8080)
+- document-repository → arango-vector-db (8529), redis-cache (6379)
+- keycloak → keycloak-db (5432)
+- kong → kong-database (5432)
+- chatqna-xeon-backend-server → embedding (6000), reranker (6100), retriever-arango-service (7025), textgen (9000)
+- retriever-arango-service → arango-vector-db (8529)
+- embedding → tei (handled in cpu-to-gpu)
+- guardrail → vllm (handled in cpu-to-gpu)
+*/}}
+
+# --- Egress: nginx → kong ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nginx-to-kong-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nginx
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8010
+---
+# --- Egress: kong → backend, document-repository ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-to-services-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: document-repository
+      ports:
+        - protocol: TCP
+          port: 3001
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong-database
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# --- Egress: backend → arango-vector-db, redis-cache, keycloak ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-services-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: arango-vector-db
+      ports:
+        - protocol: TCP
+          port: 8529
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis-cache
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# --- Egress: document-repository → arango-vector-db, redis-cache ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-docrepo-to-services-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: document-repository
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: arango-vector-db
+      ports:
+        - protocol: TCP
+          port: 8529
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis-cache
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# --- Egress: keycloak → keycloak-db ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-keycloak-to-db-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak-db
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# --- Egress: chatqna-xeon-backend-server → embedding, reranker, retriever, textgen ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-chatqna-to-services-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: chatqna-xeon-backend-server
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: embedding
+      ports:
+        - protocol: TCP
+          port: 6000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: reranker
+      ports:
+        - protocol: TCP
+          port: 6100
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: retriever-arango-service
+      ports:
+        - protocol: TCP
+          port: 7025
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: textgen
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+# --- Egress: retriever-arango-service → arango-vector-db ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-retriever-to-arango-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: retriever-arango-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: arango-vector-db
+      ports:
+        - protocol: TCP
+          port: 8529
+---
+# --- Ingress: kong receives from nginx ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-ingress-from-nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nginx
+      ports:
+        - protocol: TCP
+          port: 8010
+---
+# --- Ingress: backend receives from kong, chatqna-xeon-backend-server ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - kong
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# --- Ingress: document-repository receives from kong ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-docrepo-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: document-repository
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 3001
+---
+# --- Ingress: arango-vector-db receives from backend, document-repository, retriever-arango-service ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-arango-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: arango-vector-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - backend
+                  - document-repository
+                  - retriever-arango-service
+      ports:
+        - protocol: TCP
+          port: 8529
+---
+# --- Ingress: redis-cache receives from backend, document-repository ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis-cache
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - backend
+                  - document-repository
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# --- Ingress: keycloak receives from backend ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-keycloak-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# --- Ingress: keycloak-db receives from keycloak ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-keycloak-db-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# --- Ingress: kong-database receives from kong ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-db-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kong-database
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# --- Ingress: embedding receives from chatqna-xeon-backend-server ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-embedding-ingress-from-chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: embedding
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: chatqna-xeon-backend-server
+      ports:
+        - protocol: TCP
+          port: 6000
+---
+# --- Ingress: reranker receives from chatqna-xeon-backend-server ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-reranker-ingress-from-chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: reranker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: chatqna-xeon-backend-server
+      ports:
+        - protocol: TCP
+          port: 6100
+---
+# --- Ingress: retriever-arango-service receives from chatqna-xeon-backend-server ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-retriever-ingress-from-chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: retriever-arango-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: chatqna-xeon-backend-server
+      ports:
+        - protocol: TCP
+          port: 7025
+---
+# --- Ingress: textgen receives from chatqna-xeon-backend-server ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-textgen-ingress-from-chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: textgen
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: chatqna-xeon-backend-server
+      ports:
+        - protocol: TCP
+          port: 9000

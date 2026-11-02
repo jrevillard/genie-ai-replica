@@ -1,0 +1,912 @@
+suite: CPU Scheduling Tests
+templates:
+  # Application tier
+  - cpu/backend-deployment.yaml
+  - cpu/backend-service.yaml
+  - cpu/frontend-deployment.yaml
+  - cpu/frontend-service.yaml
+  - cpu/document-repository-deployment.yaml
+  - cpu/document-repository-service.yaml
+  - cpu/nginx-deployment.yaml
+  - cpu/nginx-service.yaml
+  - cpu/kong-deployment.yaml
+  - cpu/kong-service.yaml
+  # Data tier
+  - cpu/arango-deployment.yaml
+  - cpu/arango-service.yaml
+  - cpu/redis-deployment.yaml
+  - cpu/redis-service.yaml
+  - cpu/kong-database-deployment.yaml
+  - cpu/kong-database-service.yaml
+  - cpu/keycloak-db-deployment.yaml
+  - cpu/keycloak-db-service.yaml
+  # Microservices tier
+  - cpu/embedding-deployment.yaml
+  - cpu/embedding-service.yaml
+  - cpu/reranker-deployment.yaml
+  - cpu/reranker-service.yaml
+  - cpu/textgen-deployment.yaml
+  - cpu/textgen-service.yaml
+  - cpu/translation-deployment.yaml
+  - cpu/translation-service.yaml
+  - cpu/guardrail-deployment.yaml
+  - cpu/guardrail-service.yaml
+  - cpu/retriever-arango-service-deployment.yaml
+  - cpu/retriever-arango-service-service.yaml
+  - cpu/http-service-deployment.yaml
+  - cpu/http-service-service.yaml
+  - cpu/chatqna-xeon-backend-server-deployment.yaml
+  - cpu/chatqna-xeon-backend-server-service.yaml
+  - cpu/chatqna-xeon-ui-server-deployment.yaml
+  - cpu/chatqna-xeon-ui-server-service.yaml
+  - cpu/chatqna-xeon-nginx-server-deployment.yaml
+  - cpu/chatqna-xeon-nginx-server-service.yaml
+  # Auth & Utility tier
+  - cpu/keycloak-deployment.yaml
+  - cpu/keycloak-service.yaml
+  - cpu/clamav-deployment.yaml
+  - cpu/clamav-service.yaml
+tests:
+  # ============================================================
+  # APPLICATION TIER - Deployment Affinity Tests
+  # ============================================================
+  - it: backend deployment should have CPU node affinity
+    template: cpu/backend-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: backend deployment should NOT have GPU resources
+    template: cpu/backend-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: backend deployment should NOT have GPU tolerations
+    template: cpu/backend-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: frontend deployment should have CPU node affinity
+    template: cpu/frontend-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: frontend deployment should NOT have GPU resources
+    template: cpu/frontend-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: frontend deployment should NOT have GPU tolerations
+    template: cpu/frontend-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: document-repository deployment should have CPU node affinity
+    template: cpu/document-repository-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: document-repository deployment should NOT have GPU resources
+    template: cpu/document-repository-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: document-repository deployment should NOT have GPU tolerations
+    template: cpu/document-repository-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: nginx deployment should have CPU node affinity
+    template: cpu/nginx-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: nginx deployment should NOT have GPU resources
+    template: cpu/nginx-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: nginx deployment should NOT have GPU tolerations
+    template: cpu/nginx-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: kong deployment should have CPU node affinity
+    template: cpu/kong-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: kong deployment should NOT have GPU resources
+    template: cpu/kong-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: kong deployment should NOT have GPU tolerations
+    template: cpu/kong-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  # ============================================================
+  # DATA TIER - Deployment Affinity Tests
+  # ============================================================
+  - it: arango deployment should have CPU node affinity
+    template: cpu/arango-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: arango deployment should NOT have GPU resources
+    template: cpu/arango-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: arango deployment should NOT have GPU tolerations
+    template: cpu/arango-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: redis deployment should have CPU node affinity
+    template: cpu/redis-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: redis deployment should NOT have GPU resources
+    template: cpu/redis-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: redis deployment should NOT have GPU tolerations
+    template: cpu/redis-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: kong-database deployment should have CPU node affinity
+    template: cpu/kong-database-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: kong-database deployment should NOT have GPU resources
+    template: cpu/kong-database-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: kong-database deployment should NOT have GPU tolerations
+    template: cpu/kong-database-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: keycloak-db deployment should have CPU node affinity
+    template: cpu/keycloak-db-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: keycloak-db deployment should NOT have GPU resources
+    template: cpu/keycloak-db-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: keycloak-db deployment should NOT have GPU tolerations
+    template: cpu/keycloak-db-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  # ============================================================
+  # MICROSERVICES TIER - Deployment Affinity Tests
+  # ============================================================
+  - it: embedding deployment should have CPU node affinity
+    template: cpu/embedding-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: embedding deployment should NOT have GPU resources
+    template: cpu/embedding-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: embedding deployment should NOT have GPU tolerations
+    template: cpu/embedding-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: reranker deployment should have CPU node affinity
+    template: cpu/reranker-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: reranker deployment should NOT have GPU resources
+    template: cpu/reranker-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: reranker deployment should NOT have GPU tolerations
+    template: cpu/reranker-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: textgen deployment should have CPU node affinity
+    template: cpu/textgen-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: textgen deployment should NOT have GPU resources
+    template: cpu/textgen-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: textgen deployment should NOT have GPU tolerations
+    template: cpu/textgen-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: translation deployment should have CPU node affinity
+    template: cpu/translation-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: translation deployment should NOT have GPU resources
+    template: cpu/translation-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: translation deployment should NOT have GPU tolerations
+    template: cpu/translation-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: guardrail deployment should have CPU node affinity
+    template: cpu/guardrail-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: guardrail deployment should NOT have GPU resources
+    template: cpu/guardrail-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: guardrail deployment should NOT have GPU tolerations
+    template: cpu/guardrail-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: retriever-arango-service deployment should have CPU node affinity
+    template: cpu/retriever-arango-service-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: retriever-arango-service deployment should NOT have GPU resources
+    template: cpu/retriever-arango-service-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: retriever-arango-service deployment should NOT have GPU tolerations
+    template: cpu/retriever-arango-service-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: http-service deployment should have CPU node affinity
+    template: cpu/http-service-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: http-service deployment should NOT have GPU resources
+    template: cpu/http-service-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: http-service deployment should NOT have GPU tolerations
+    template: cpu/http-service-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: chatqna-xeon-backend-server deployment should have CPU node affinity
+    template: cpu/chatqna-xeon-backend-server-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: chatqna-xeon-backend-server deployment should NOT have GPU resources
+    template: cpu/chatqna-xeon-backend-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: chatqna-xeon-backend-server deployment should NOT have GPU tolerations
+    template: cpu/chatqna-xeon-backend-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: chatqna-xeon-ui-server deployment should have CPU node affinity
+    template: cpu/chatqna-xeon-ui-server-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: chatqna-xeon-ui-server deployment should NOT have GPU resources
+    template: cpu/chatqna-xeon-ui-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: chatqna-xeon-ui-server deployment should NOT have GPU tolerations
+    template: cpu/chatqna-xeon-ui-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: chatqna-xeon-nginx-server deployment should have CPU node affinity
+    template: cpu/chatqna-xeon-nginx-server-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: chatqna-xeon-nginx-server deployment should NOT have GPU resources
+    template: cpu/chatqna-xeon-nginx-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: chatqna-xeon-nginx-server deployment should NOT have GPU tolerations
+    template: cpu/chatqna-xeon-nginx-server-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  # ============================================================
+  # AUTH & UTILITY TIER - Deployment Affinity Tests
+  # ============================================================
+  - it: keycloak deployment should have CPU node affinity
+    template: cpu/keycloak-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: keycloak deployment should NOT have GPU resources
+    template: cpu/keycloak-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: keycloak deployment should NOT have GPU tolerations
+    template: cpu/keycloak-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  - it: clamav deployment should have CPU node affinity
+    template: cpu/clamav-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: cpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: clamav deployment should NOT have GPU resources
+    template: cpu/clamav-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources.requests.nvidia\.com/gpu
+      - isNull:
+          path: spec.template.spec.containers[0].resources.limits.nvidia\.com/gpu
+
+  - it: clamav deployment should NOT have GPU tolerations
+    template: cpu/clamav-deployment.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.tolerations
+
+  # ============================================================
+  # APPLICATION TIER - Service Tests
+  # ============================================================
+  - it: backend service should be ClusterIP on port 3000
+    template: cpu/backend-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 3000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 3000
+
+  - it: frontend service should be ClusterIP on port 5173
+    template: cpu/frontend-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5173
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 5173
+
+  - it: document-repository service should be ClusterIP on port 3001
+    template: cpu/document-repository-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 3001
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 3001
+
+  - it: nginx service should be ClusterIP on port 80
+    template: cpu/nginx-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 80
+
+  - it: kong service should be ClusterIP on port 8010
+    template: cpu/kong-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 8010
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8010
+
+  # ============================================================
+  # DATA TIER - Service Tests
+  # ============================================================
+  - it: arango service should be ClusterIP on port 8529
+    template: cpu/arango-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 8529
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8529
+
+  - it: redis service should be ClusterIP on port 6379
+    template: cpu/redis-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 6379
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 6379
+
+  - it: kong-database service should be ClusterIP on port 5432
+    template: cpu/kong-database-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5432
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 5432
+
+  - it: keycloak-db service should be ClusterIP on port 5432
+    template: cpu/keycloak-db-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5432
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 5432
+
+  # ============================================================
+  # MICROSERVICES TIER - Service Tests
+  # ============================================================
+  - it: embedding service should be ClusterIP on port 6000
+    template: cpu/embedding-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 6000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 6000
+
+  - it: reranker service should be ClusterIP on port 6100
+    template: cpu/reranker-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 6100
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 6100
+
+  - it: textgen service should be ClusterIP on port 9000
+    template: cpu/textgen-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 9000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 9000
+
+  - it: translation service should be ClusterIP on port 9030
+    template: cpu/translation-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 9030
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 9030
+
+  - it: guardrail service should be ClusterIP on port 9090
+    template: cpu/guardrail-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 9090
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 9090
+
+  - it: retriever-arango-service service should be ClusterIP on port 7025
+    template: cpu/retriever-arango-service-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 7025
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 7025
+
+  - it: http-service service should be ClusterIP on port 6666
+    template: cpu/http-service-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 6666
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 6666
+
+  - it: chatqna-xeon-backend-server service should be ClusterIP on port 8888
+    template: cpu/chatqna-xeon-backend-server-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 8888
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8888
+
+  - it: chatqna-xeon-ui-server service should be ClusterIP on port 5173
+    template: cpu/chatqna-xeon-ui-server-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5173
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 5173
+
+  - it: chatqna-xeon-nginx-server service should be ClusterIP on port 80
+    template: cpu/chatqna-xeon-nginx-server-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 80
+
+  # ============================================================
+  # AUTH & UTILITY TIER - Service Tests
+  # ============================================================
+  - it: keycloak service should be ClusterIP on port 8080
+    template: cpu/keycloak-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 8080
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8080
+
+  - it: clamav service should be ClusterIP on port 3310
+    template: cpu/clamav-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 3310
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 3310

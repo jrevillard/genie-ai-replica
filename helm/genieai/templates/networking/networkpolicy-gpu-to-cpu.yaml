@@ -1,0 +1,215 @@
+{{/*
+GPU-to-CPU NetworkPolicy: allows egress from Dataprep to CPU services
+on specific ports, and ingress to those CPU pods from Dataprep.
+
+Dataprep needs access to:
+- arango-vector-db on port 8529
+- embedding on port 6000
+- guardrail on port 9090
+- document-repository on port 3001
+- backend on port 3000
+- http-service on port 6666
+*/}}
+
+# --- Egress: Allow Dataprep to reach CPU services ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dataprep-to-cpu-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dataprep
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: arango-vector-db
+      ports:
+        - protocol: TCP
+          port: 8529
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: embedding
+      ports:
+        - protocol: TCP
+          port: 6000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: guardrail
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: document-repository
+      ports:
+        - protocol: TCP
+          port: 3001
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: http-service
+      ports:
+        - protocol: TCP
+          port: 6666
+---
+# --- Ingress: Allow arango-vector-db to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-arango
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: arango-vector-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 8529
+---
+# --- Ingress: Allow embedding to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-embedding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: embedding
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 6000
+---
+# --- Ingress: Allow guardrail to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-guardrail
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: guardrail
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+# --- Ingress: Allow document-repository to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-docrepo
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: document-repository
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 3001
+---
+# --- Ingress: Allow backend to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# --- Ingress: Allow http-service to receive from Dataprep ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-ingress-from-dataprep-http-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: http-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dataprep
+      ports:
+        - protocol: TCP
+          port: 6666

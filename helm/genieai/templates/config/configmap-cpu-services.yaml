@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cpu-services-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "cpu-services-config" "tier" "cpu" "context" .) | nindent 4 }}
+data:
+  # GPU service endpoint references (Kubernetes DNS)
+  VLLM_ENDPOINT: "http://vllm.{{ .Values.namespace }}.svc.cluster.local:8000"
+  TEI_EMBEDDING_ENDPOINT: "http://tei.{{ .Values.namespace }}.svc.cluster.local:80"
+  TEI_RERANKING_ENDPOINT: "http://tei-reranker.{{ .Values.namespace }}.svc.cluster.local:80"
+
+  # Internal CPU service references
+  ARANGO_URL: "http://arango-vector-db.{{ .Values.namespace }}.svc.cluster.local:8529"
+  REDIS_HOST: "redis-cache.{{ .Values.namespace }}.svc.cluster.local"
+  REDIS_PORT: "6379"
+  KEYCLOAK_URL: "http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth"
+  BACKEND_URL: "http://backend.{{ .Values.namespace }}.svc.cluster.local:3000"
+
+  # Application settings
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"

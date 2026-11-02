@@ -1,0 +1,313 @@
+suite: GPU Scheduling Tests
+templates:
+  - gpu/vllm-deployment.yaml
+  - gpu/vllm-service.yaml
+  - gpu/tei-deployment.yaml
+  - gpu/tei-service.yaml
+  - gpu/tei-reranker-deployment.yaml
+  - gpu/tei-reranker-service.yaml
+  - gpu/dataprep-deployment.yaml
+  - gpu/dataprep-service.yaml
+tests:
+  # ============================================================
+  # vLLM Deployment Tests
+  # ============================================================
+  - it: vllm deployment should have GPU node affinity
+    template: gpu/vllm-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: gpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: vllm deployment should have GPU tolerations
+    template: gpu/vllm-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: "nvidia.com/gpu"
+      - equal:
+          path: spec.template.spec.tolerations[0].value
+          value: "present"
+      - equal:
+          path: spec.template.spec.tolerations[0].effect
+          value: "NoSchedule"
+
+  - it: vllm deployment should have GPU resources
+    template: gpu/vllm-deployment.yaml
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.requests
+          content:
+            nvidia.com/gpu: "1"
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.limits
+          content:
+            nvidia.com/gpu: "1"
+
+  - it: vllm deployment should have RollingUpdate strategy
+    template: gpu/vllm-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+      - equal:
+          path: spec.strategy.rollingUpdate.maxSurge
+          value: 1
+
+  # ============================================================
+  # TEI Deployment Tests
+  # ============================================================
+  - it: tei deployment should have GPU node affinity
+    template: gpu/tei-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: gpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: tei deployment should have GPU tolerations
+    template: gpu/tei-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: "nvidia.com/gpu"
+      - equal:
+          path: spec.template.spec.tolerations[0].value
+          value: "present"
+      - equal:
+          path: spec.template.spec.tolerations[0].effect
+          value: "NoSchedule"
+
+  - it: tei deployment should have GPU resources
+    template: gpu/tei-deployment.yaml
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.requests
+          content:
+            nvidia.com/gpu: "1"
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.limits
+          content:
+            nvidia.com/gpu: "1"
+
+  - it: tei deployment should have RollingUpdate strategy
+    template: gpu/tei-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+      - equal:
+          path: spec.strategy.rollingUpdate.maxSurge
+          value: 1
+
+  # ============================================================
+  # TEI Reranker Deployment Tests
+  # ============================================================
+  - it: tei-reranker deployment should have GPU node affinity
+    template: gpu/tei-reranker-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: gpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: tei-reranker deployment should have GPU tolerations
+    template: gpu/tei-reranker-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: "nvidia.com/gpu"
+      - equal:
+          path: spec.template.spec.tolerations[0].value
+          value: "present"
+      - equal:
+          path: spec.template.spec.tolerations[0].effect
+          value: "NoSchedule"
+
+  - it: tei-reranker deployment should have GPU resources
+    template: gpu/tei-reranker-deployment.yaml
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.requests
+          content:
+            nvidia.com/gpu: "1"
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.limits
+          content:
+            nvidia.com/gpu: "1"
+
+  - it: tei-reranker deployment should have RollingUpdate strategy
+    template: gpu/tei-reranker-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+      - equal:
+          path: spec.strategy.rollingUpdate.maxSurge
+          value: 1
+
+  # ============================================================
+  # Dataprep Deployment Tests
+  # ============================================================
+  - it: dataprep deployment should have GPU node affinity
+    template: gpu/dataprep-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: gpu-pool
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator
+          value: In
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]
+          value: "true"
+
+  - it: dataprep deployment should have GPU tolerations
+    template: gpu/dataprep-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: "nvidia.com/gpu"
+      - equal:
+          path: spec.template.spec.tolerations[0].value
+          value: "present"
+      - equal:
+          path: spec.template.spec.tolerations[0].effect
+          value: "NoSchedule"
+
+  - it: dataprep deployment should have GPU resources
+    template: gpu/dataprep-deployment.yaml
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.requests
+          content:
+            nvidia.com/gpu: "1"
+      - isSubset:
+          path: spec.template.spec.containers[0].resources.limits
+          content:
+            nvidia.com/gpu: "1"
+
+  - it: dataprep deployment should have RollingUpdate strategy
+    template: gpu/dataprep-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+      - equal:
+          path: spec.strategy.rollingUpdate.maxSurge
+          value: 1
+
+  # ============================================================
+  # GPU Service Tests
+  # ============================================================
+  - it: vllm service should be ClusterIP on port 8000
+    template: gpu/vllm-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 8000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8000
+
+  - it: vllm service selector should match deployment labels
+    template: gpu/vllm-service.yaml
+    asserts:
+      - isSubset:
+          path: spec.selector
+          content:
+            app.kubernetes.io/name: vllm
+
+  - it: tei service should be ClusterIP on port 80
+    template: gpu/tei-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 80
+
+  - it: tei service selector should match deployment labels
+    template: gpu/tei-service.yaml
+    asserts:
+      - isSubset:
+          path: spec.selector
+          content:
+            app.kubernetes.io/name: tei
+
+  - it: tei-reranker service should be ClusterIP on port 80
+    template: gpu/tei-reranker-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 80
+
+  - it: tei-reranker service selector should match deployment labels
+    template: gpu/tei-reranker-service.yaml
+    asserts:
+      - isSubset:
+          path: spec.selector
+          content:
+            app.kubernetes.io/name: tei-reranker
+
+  - it: dataprep service should be ClusterIP on port 5000
+    template: gpu/dataprep-service.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 5000
+
+  - it: dataprep service selector should match deployment labels
+    template: gpu/dataprep-service.yaml
+    asserts:
+      - isSubset:
+          path: spec.selector
+          content:
+            app.kubernetes.io/name: dataprep

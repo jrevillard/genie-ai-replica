@@ -1,0 +1,527 @@
+{{- /*
+  Health Monitor ConfigMap - contains the health check script
+  Deployed on CPU node pool, polls GPU and CPU service health endpoints
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-monitor-script
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "health-monitor" "tier" "cpu" "context" .) | nindent 4 }}
+data:
+  health-monitor.sh: |
+    #!/bin/sh
+    # GenieAI Health Monitor Script
+    # Runs in alpine + curl + jq container on CPU node pool
+    # Polls GPU and CPU service health endpoints every 10 seconds
+    # Implements state machine: healthy → degraded (3 failures) → unreachable (6 failures)
+    # Recovery: 2 consecutive successes → healthy
+    # Detects scaled-down: no endpoints AND GPU node count = 0
+
+    set -e
+
+    # --- Configuration ---
+    POLL_INTERVAL=10
+    DEGRADED_THRESHOLD=3
+    UNREACHABLE_THRESHOLD=6
+    RECOVERY_THRESHOLD=2
+    HTTP_PORT=8080
+    STATE_DIR="/tmp/health-state"
+    RESPONSE_FILE="/tmp/health-status.json"
+    NAMESPACE="{{ .Values.namespace }}"
+    SA_TOKEN_PATH="/var/run/secrets/kubernetes.io/serviceaccount/token"
+    SA_CA_PATH="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    K8S_API="https://kubernetes.default.svc"
+
+    # --- Service Definitions ---
+    # Format: name|nodePool|endpoint|port|checkType|healthPath
+    # checkType: http, tcp
+    GPU_SERVICES="vllm|gpu|vllm|8000|http|/health
+    tei|gpu|tei|80|http|/health
+    tei-reranker|gpu|tei-reranker|80|http|/health
+    dataprep|gpu|dataprep|5000|http|/v1/health"
+
+    CPU_SERVICES="arango-vector-db|cpu|arango-vector-db|8529|tcp|
+    kong|cpu|kong|8010|tcp|
+    keycloak|cpu|keycloak|8080|http|/health
+    backend|cpu|backend|3000|http|/health
+    redis-cache|cpu|redis-cache|6379|tcp|"
+
+    ALL_SERVICES="${GPU_SERVICES}
+    ${CPU_SERVICES}"
+
+    # --- Initialize state directory ---
+    mkdir -p "${STATE_DIR}"
+
+    init_service_state() {
+      local name="$1"
+      local state_file="${STATE_DIR}/${name}.state"
+      if [ ! -f "${state_file}" ]; then
+        echo "healthy|0|0|0" > "${state_file}"
+      fi
+    }
+
+    # Initialize state for all services
+    echo "${ALL_SERVICES}" | while IFS='|' read -r name nodePool endpoint port checkType healthPath; do
+      [ -z "${name}" ] && continue
+      init_service_state "${name}"
+    done
+
+    # --- Kubernetes API Helper ---
+    get_k8s_token() {
+      if [ -f "${SA_TOKEN_PATH}" ]; then
+        cat "${SA_TOKEN_PATH}"
+      else
+        echo ""
+      fi
+    }
+
+    # Check if a service has endpoints via Kubernetes API
+    check_endpoints() {
+      local service_name="$1"
+      local token
+      token=$(get_k8s_token)
+      if [ -z "${token}" ]; then
+        # Cannot check endpoints without token; assume endpoints exist
+        echo "true"
+        return
+      fi
+      local response
+      response=$(curl -s --max-time 5 \
+        --cacert "${SA_CA_PATH}" \
+        -H "Authorization: Bearer ${token}" \
+        "${K8S_API}/api/v1/namespaces/${NAMESPACE}/endpoints/${service_name}" 2>/dev/null)
+
+      if [ $? -ne 0 ]; then
+        echo "true"
+        return
+      fi
+
+      # Check if subsets exist and have addresses
+      local has_addresses
+      has_addresses=$(echo "${response}" | jq -r '.subsets // [] | length' 2>/dev/null)
+      if [ "${has_addresses}" = "0" ] || [ -z "${has_addresses}" ]; then
+        echo "false"
+      else
+        # Check if any subset has addresses (not just notReadyAddresses)
+        local addr_count
+        addr_count=$(echo "${response}" | jq -r '[.subsets[]? | .addresses // [] | length] | add // 0' 2>/dev/null)
+        if [ "${addr_count}" = "0" ] || [ -z "${addr_count}" ]; then
+          echo "false"
+        else
+          echo "true"
+        fi
+      fi
+    }
+
+    # Check GPU node pool node count
+    get_gpu_node_count() {
+      local token
+      token=$(get_k8s_token)
+      if [ -z "${token}" ]; then
+        # Cannot determine node count; assume nodes exist
+        echo "1"
+        return
+      fi
+      local response
+      response=$(curl -s --max-time 5 \
+        --cacert "${SA_CA_PATH}" \
+        -H "Authorization: Bearer ${token}" \
+        "${K8S_API}/api/v1/nodes?labelSelector={{ .Values.nodePools.gpu.label }}%3D{{ .Values.nodePools.gpu.labelValue }}" 2>/dev/null)
+
+      if [ $? -ne 0 ]; then
+        echo "1"
+        return
+      fi
+
+      local count
+      count=$(echo "${response}" | jq -r '.items | length' 2>/dev/null)
+      if [ -z "${count}" ]; then
+        echo "1"
+      else
+        echo "${count}"
+      fi
+    }
+
+    # --- Health Check Functions ---
+    check_http() {
+      local host="$1"
+      local port="$2"
+      local path="$3"
+      local start_ms end_ms duration_ms http_code
+
+      start_ms=$(date +%s%N 2>/dev/null || echo "0")
+      http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+        "http://${host}.${NAMESPACE}.svc.cluster.local:${port}${path}" 2>/dev/null) || http_code="000"
+      end_ms=$(date +%s%N 2>/dev/null || echo "0")
+
+      if [ "${start_ms}" != "0" ] && [ "${end_ms}" != "0" ]; then
+        duration_ms=$(( (end_ms - start_ms) / 1000000 ))
+      else
+        duration_ms=0
+      fi
+
+      if [ "${http_code}" = "200" ]; then
+        echo "success|${duration_ms}"
+      else
+        echo "failure|${duration_ms}"
+      fi
+    }
+
+    check_tcp() {
+      local host="$1"
+      local port="$2"
+      local start_ms end_ms duration_ms
+
+      start_ms=$(date +%s%N 2>/dev/null || echo "0")
+      # Use timeout + shell TCP check or wget --spider
+      if timeout 5 sh -c "echo > /dev/tcp/${host}.${NAMESPACE}.svc.cluster.local/${port}" 2>/dev/null; then
+        end_ms=$(date +%s%N 2>/dev/null || echo "0")
+        if [ "${start_ms}" != "0" ] && [ "${end_ms}" != "0" ]; then
+          duration_ms=$(( (end_ms - start_ms) / 1000000 ))
+        else
+          duration_ms=0
+        fi
+        echo "success|${duration_ms}"
+      else
+        # Fallback: use nc (netcat) if /dev/tcp not available in sh
+        if nc -z -w 5 "${host}.${NAMESPACE}.svc.cluster.local" "${port}" 2>/dev/null; then
+          end_ms=$(date +%s%N 2>/dev/null || echo "0")
+          if [ "${start_ms}" != "0" ] && [ "${end_ms}" != "0" ]; then
+            duration_ms=$(( (end_ms - start_ms) / 1000000 ))
+          else
+            duration_ms=0
+          fi
+          echo "success|${duration_ms}"
+        else
+          end_ms=$(date +%s%N 2>/dev/null || echo "0")
+          if [ "${start_ms}" != "0" ] && [ "${end_ms}" != "0" ]; then
+            duration_ms=$(( (end_ms - start_ms) / 1000000 ))
+          else
+            duration_ms=0
+          fi
+          echo "failure|${duration_ms}"
+        fi
+      fi
+    }
+
+    # --- State Machine ---
+    # State file format: status|consecutiveFailures|consecutiveSuccesses|lastResponseTimeMs
+    update_state() {
+      local name="$1"
+      local nodePool="$2"
+      local check_result="$3"
+      local response_time_ms="$4"
+      local has_endpoints="$5"
+      local gpu_node_count="$6"
+      local state_file="${STATE_DIR}/${name}.state"
+
+      # Read current state
+      local current_state
+      if [ -f "${state_file}" ]; then
+        current_state=$(cat "${state_file}")
+      else
+        current_state="healthy|0|0|0"
+      fi
+
+      local status consec_failures consec_successes last_response
+      status=$(echo "${current_state}" | cut -d'|' -f1)
+      consec_failures=$(echo "${current_state}" | cut -d'|' -f2)
+      consec_successes=$(echo "${current_state}" | cut -d'|' -f3)
+      last_response=$(echo "${current_state}" | cut -d'|' -f4)
+
+      # Update response time
+      last_response="${response_time_ms}"
+
+      # Scaled-down detection for GPU services
+      if [ "${nodePool}" = "gpu" ] && [ "${has_endpoints}" = "false" ] && [ "${gpu_node_count}" = "0" ]; then
+        status="scaled-down"
+        consec_failures=0
+        consec_successes=0
+        echo "${status}|${consec_failures}|${consec_successes}|${last_response}" > "${state_file}"
+        return
+      fi
+
+      # State transitions based on check result
+      if [ "${check_result}" = "success" ]; then
+        # Success: reset failure count, increment success count
+        consec_failures=0
+        consec_successes=$((consec_successes + 1))
+
+        # Recovery: 2 consecutive successes → healthy
+        if [ "${consec_successes}" -ge "${RECOVERY_THRESHOLD}" ]; then
+          status="healthy"
+          consec_successes="${RECOVERY_THRESHOLD}"
+        fi
+      else
+        # Failure: reset success count, increment failure count
+        consec_successes=0
+        consec_failures=$((consec_failures + 1))
+
+        # State transitions based on consecutive failures
+        if [ "${consec_failures}" -ge "${UNREACHABLE_THRESHOLD}" ]; then
+          status="unreachable"
+        elif [ "${consec_failures}" -ge "${DEGRADED_THRESHOLD}" ]; then
+          status="degraded"
+        fi
+      fi
+
+      echo "${status}|${consec_failures}|${consec_successes}|${last_response}" > "${state_file}"
+    }
+
+    # --- JSON Response Builder ---
+    build_json_response() {
+      local gpu_node_count="$1"
+      local timestamp
+      timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+      local gpu_active="true"
+      if [ "${gpu_node_count}" = "0" ]; then
+        gpu_active="false"
+      fi
+
+      # Build services array
+      local services_json="["
+      local first="true"
+
+      echo "${ALL_SERVICES}" | while IFS='|' read -r name nodePool endpoint port checkType healthPath; do
+        [ -z "${name}" ] && continue
+
+        local state_file="${STATE_DIR}/${name}.state"
+        local current_state
+        if [ -f "${state_file}" ]; then
+          current_state=$(cat "${state_file}")
+        else
+          current_state="healthy|0|0|0"
+        fi
+
+        local status consec_failures consec_successes last_response
+        status=$(echo "${current_state}" | cut -d'|' -f1)
+        consec_failures=$(echo "${current_state}" | cut -d'|' -f2)
+        consec_successes=$(echo "${current_state}" | cut -d'|' -f3)
+        last_response=$(echo "${current_state}" | cut -d'|' -f4)
+
+        local has_endpoints_file="${STATE_DIR}/${name}.endpoints"
+        local has_eps="true"
+        if [ -f "${has_endpoints_file}" ]; then
+          has_eps=$(cat "${has_endpoints_file}")
+        fi
+
+        local endpoint_url
+        if [ "${checkType}" = "http" ]; then
+          endpoint_url="http://${endpoint}:${port}${healthPath}"
+        else
+          endpoint_url="tcp://${endpoint}:${port}"
+        fi
+
+        local last_checked
+        last_checked=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        local response_time_json
+        if [ "${last_response}" = "0" ] && [ "${status}" != "healthy" ]; then
+          response_time_json="null"
+        else
+          response_time_json="${last_response}"
+        fi
+
+        if [ "${first}" = "true" ]; then
+          first="false"
+        else
+          printf ","
+        fi
+
+        printf '{"name":"%s","nodePool":"%s","status":"%s","lastChecked":"%s","consecutiveFailures":%d,"consecutiveSuccesses":%d,"endpoint":"%s","responseTimeMs":%s,"hasEndpoints":%s}' \
+          "${name}" "${nodePool}" "${status}" "${last_checked}" "${consec_failures}" "${consec_successes}" "${endpoint_url}" "${response_time_json}" "${has_eps}"
+      done
+
+      services_json=$(echo "${ALL_SERVICES}" | {
+        first="true"
+        result="["
+        while IFS='|' read -r name nodePool endpoint port checkType healthPath; do
+          [ -z "${name}" ] && continue
+
+          local state_file="${STATE_DIR}/${name}.state"
+          local current_state
+          if [ -f "${state_file}" ]; then
+            current_state=$(cat "${state_file}")
+          else
+            current_state="healthy|0|0|0"
+          fi
+
+          local status consec_failures consec_successes last_response
+          status=$(echo "${current_state}" | cut -d'|' -f1)
+          consec_failures=$(echo "${current_state}" | cut -d'|' -f2)
+          consec_successes=$(echo "${current_state}" | cut -d'|' -f3)
+          last_response=$(echo "${current_state}" | cut -d'|' -f4)
+
+          local has_endpoints_file="${STATE_DIR}/${name}.endpoints"
+          local has_eps="true"
+          if [ -f "${has_endpoints_file}" ]; then
+            has_eps=$(cat "${has_endpoints_file}")
+          fi
+
+          local endpoint_url
+          if [ "${checkType}" = "http" ]; then
+            endpoint_url="http://${endpoint}:${port}${healthPath}"
+          else
+            endpoint_url="tcp://${endpoint}:${port}"
+          fi
+
+          local last_checked
+          last_checked=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          local response_time_json
+          if [ "${last_response}" = "0" ] && [ "${status}" != "healthy" ]; then
+            response_time_json="null"
+          else
+            response_time_json="${last_response}"
+          fi
+
+          if [ "${first}" = "true" ]; then
+            first="false"
+          else
+            result="${result},"
+          fi
+
+          result="${result}{\"name\":\"${name}\",\"nodePool\":\"${nodePool}\",\"status\":\"${status}\",\"lastChecked\":\"${last_checked}\",\"consecutiveFailures\":${consec_failures},\"consecutiveSuccesses\":${consec_successes},\"endpoint\":\"${endpoint_url}\",\"responseTimeMs\":${response_time_json},\"hasEndpoints\":${has_eps}}"
+        done
+        result="${result}]"
+        echo "${result}"
+      })
+
+      # Determine cluster status
+      local cluster_status="healthy"
+      local has_unreachable="false"
+      local has_degraded="false"
+      local has_scaled_down="false"
+
+      echo "${ALL_SERVICES}" | while IFS='|' read -r name nodePool endpoint port checkType healthPath; do
+        [ -z "${name}" ] && continue
+        local state_file="${STATE_DIR}/${name}.state"
+        if [ -f "${state_file}" ]; then
+          local s
+          s=$(cat "${state_file}" | cut -d'|' -f1)
+          case "${s}" in
+            unreachable) echo "unreachable" > "${STATE_DIR}/_cluster_flag";;
+            degraded) echo "degraded" > "${STATE_DIR}/_cluster_flag_degraded";;
+            scaled-down) echo "scaled-down" > "${STATE_DIR}/_cluster_flag_scaled";;
+          esac
+        fi
+      done
+
+      if [ -f "${STATE_DIR}/_cluster_flag" ]; then
+        cluster_status="unhealthy"
+        rm -f "${STATE_DIR}/_cluster_flag"
+      elif [ -f "${STATE_DIR}/_cluster_flag_degraded" ]; then
+        cluster_status="degraded"
+        rm -f "${STATE_DIR}/_cluster_flag_degraded"
+      elif [ -f "${STATE_DIR}/_cluster_flag_scaled" ]; then
+        cluster_status="partially-scaled-down"
+        rm -f "${STATE_DIR}/_cluster_flag_scaled"
+      fi
+      rm -f "${STATE_DIR}/_cluster_flag" "${STATE_DIR}/_cluster_flag_degraded" "${STATE_DIR}/_cluster_flag_scaled"
+
+      # Write JSON response
+      printf '{"timestamp":"%s","clusterStatus":"%s","gpuNodePoolActive":%s,"services":%s}' \
+        "${timestamp}" "${cluster_status}" "${gpu_active}" "${services_json}" | jq '.' > "${RESPONSE_FILE}"
+    }
+
+    # --- Main Polling Loop ---
+    poll_services() {
+      local gpu_node_count
+      gpu_node_count=$(get_gpu_node_count)
+
+      echo "${ALL_SERVICES}" | while IFS='|' read -r name nodePool endpoint port checkType healthPath; do
+        [ -z "${name}" ] && continue
+
+        # Check endpoints for GPU services
+        local has_endpoints="true"
+        if [ "${nodePool}" = "gpu" ]; then
+          has_endpoints=$(check_endpoints "${endpoint}")
+          echo "${has_endpoints}" > "${STATE_DIR}/${name}.endpoints"
+        else
+          echo "true" > "${STATE_DIR}/${name}.endpoints"
+        fi
+
+        # Perform health check
+        local result response_time
+        if [ "${checkType}" = "http" ]; then
+          result=$(check_http "${endpoint}" "${port}" "${healthPath}")
+        else
+          result=$(check_tcp "${endpoint}" "${port}")
+        fi
+
+        local check_result response_time_ms
+        check_result=$(echo "${result}" | cut -d'|' -f1)
+        response_time_ms=$(echo "${result}" | cut -d'|' -f2)
+
+        # Update state machine
+        update_state "${name}" "${nodePool}" "${check_result}" "${response_time_ms}" "${has_endpoints}" "${gpu_node_count}"
+      done
+
+      # Build JSON response
+      build_json_response "${gpu_node_count}"
+    }
+
+    # --- HTTP Server ---
+    # Serve /health-status endpoint using socat
+    start_http_server() {
+      # Create the handler script
+      cat > /tmp/http-handler.sh << 'HANDLER_EOF'
+    #!/bin/sh
+    # Read HTTP request
+    read -r request_line
+    # Consume headers
+    while read -r header; do
+      header=$(echo "${header}" | tr -d '\r')
+      [ -z "${header}" ] && break
+    done
+
+    # Parse path from request
+    path=$(echo "${request_line}" | cut -d' ' -f2)
+
+    RESPONSE_FILE="/tmp/health-status.json"
+
+    if [ "${path}" = "/health-status" ] || [ "${path}" = "/health-status/" ]; then
+      if [ -f "${RESPONSE_FILE}" ]; then
+        body=$(cat "${RESPONSE_FILE}")
+      else
+        body='{"timestamp":"","clusterStatus":"unknown","gpuNodePoolActive":false,"services":[]}'
+      fi
+      content_length=$(echo -n "${body}" | wc -c)
+      printf "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" "${content_length}" "${body}"
+    else
+      body='{"error":"not found"}'
+      content_length=$(echo -n "${body}" | wc -c)
+      printf "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" "${content_length}" "${body}"
+    fi
+    HANDLER_EOF
+      chmod +x /tmp/http-handler.sh
+
+      # Start socat as a TCP listener, forking for each connection
+      socat TCP-LISTEN:${HTTP_PORT},reuseaddr,fork EXEC:/tmp/http-handler.sh &
+      HTTP_SERVER_PID=$!
+      echo "Health monitor HTTP server started on port ${HTTP_PORT} (PID: ${HTTP_SERVER_PID})"
+    }
+
+    # --- Startup ---
+    echo "GenieAI Health Monitor starting..."
+    echo "Namespace: ${NAMESPACE}"
+    echo "Poll interval: ${POLL_INTERVAL}s"
+    echo "Degraded threshold: ${DEGRADED_THRESHOLD} consecutive failures"
+    echo "Unreachable threshold: ${UNREACHABLE_THRESHOLD} consecutive failures"
+    echo "Recovery threshold: ${RECOVERY_THRESHOLD} consecutive successes"
+
+    # Initialize response file with empty state
+    printf '{"timestamp":"%s","clusterStatus":"unknown","gpuNodePoolActive":false,"services":[]}' \
+      "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" | jq '.' > "${RESPONSE_FILE}"
+
+    # Start HTTP server
+    start_http_server
+
+    # Main loop
+    while true; do
+      poll_services
+      sleep "${POLL_INTERVAL}"
+    done

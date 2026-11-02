@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: textgen
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "textgen" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "textgen" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.textgen.port }}
+      targetPort: {{ .Values.cpu.textgen.port }}
+      protocol: TCP
+      name: http

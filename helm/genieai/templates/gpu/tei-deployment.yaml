@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "tei" "tier" "gpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.gpu.tei.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "tei" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "tei" "tier" "gpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.gpuAffinity" . | nindent 6 }}
+      {{- include "genieai.gpuTolerations" . | nindent 6 }}
+      containers:
+        - name: tei
+          image: {{ .Values.gpu.tei.image }}
+          ports:
+            - containerPort: {{ .Values.gpu.tei.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: gpu-services-config
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: genieai-secrets
+                  key: HF_TOKEN
+          {{- include "genieai.gpuResources" .Values.gpu.tei.resources | nindent 10 }}
+          {{- include "genieai.gpuStartupProbe" (dict "path" .Values.gpu.tei.healthPath "port" .Values.gpu.tei.port "settings" .Values.gpuProbes.startup) | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.gpu.tei.healthPath "port" .Values.gpu.tei.port "settings" .Values.gpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.gpu.tei.healthPath "port" .Values.gpu.tei.port "settings" .Values.gpuProbes.liveness) | nindent 10 }}

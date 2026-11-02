@@ -1,0 +1,200 @@
+suite: PVC Storage Tests
+templates:
+  - storage/arango-pvc.yaml
+  - storage/kong-db-pvc.yaml
+  - storage/keycloak-db-pvc.yaml
+  - storage/document-uploads-pvc.yaml
+  - storage/redis-data-pvc.yaml
+tests:
+  # ============================================================
+  # Azure Disk PVCs (managed-premium, ReadWriteOnce)
+  # ============================================================
+
+  # --- ArangoDB PVC ---
+  - it: arango PVC should use managed-premium storage class
+    template: storage/arango-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.storageClassName
+          value: "managed-premium"
+
+  - it: arango PVC should use ReadWriteOnce access mode
+    template: storage/arango-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.accessModes[0]
+          value: "ReadWriteOnce"
+
+  - it: arango PVC should request 50Gi storage
+    template: storage/arango-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "50Gi"
+
+  - it: arango PVC should be a PersistentVolumeClaim
+    template: storage/arango-pvc.yaml
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: arango-data-pvc
+
+  # --- Kong DB PVC ---
+  - it: kong-db PVC should use managed-premium storage class
+    template: storage/kong-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.storageClassName
+          value: "managed-premium"
+
+  - it: kong-db PVC should use ReadWriteOnce access mode
+    template: storage/kong-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.accessModes[0]
+          value: "ReadWriteOnce"
+
+  - it: kong-db PVC should request 10Gi storage
+    template: storage/kong-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "10Gi"
+
+  - it: kong-db PVC should be a PersistentVolumeClaim
+    template: storage/kong-db-pvc.yaml
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: kong-db-pvc
+
+  # --- Keycloak DB PVC ---
+  - it: keycloak-db PVC should use managed-premium storage class
+    template: storage/keycloak-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.storageClassName
+          value: "managed-premium"
+
+  - it: keycloak-db PVC should use ReadWriteOnce access mode
+    template: storage/keycloak-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.accessModes[0]
+          value: "ReadWriteOnce"
+
+  - it: keycloak-db PVC should request 10Gi storage
+    template: storage/keycloak-db-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "10Gi"
+
+  - it: keycloak-db PVC should be a PersistentVolumeClaim
+    template: storage/keycloak-db-pvc.yaml
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: keycloak-db-pvc
+
+  # ============================================================
+  # Azure File PVCs (azurefile, ReadWriteMany)
+  # ============================================================
+
+  # --- Document Uploads PVC ---
+  - it: document-uploads PVC should use azurefile storage class
+    template: storage/document-uploads-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.storageClassName
+          value: "azurefile"
+
+  - it: document-uploads PVC should use ReadWriteMany access mode
+    template: storage/document-uploads-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.accessModes[0]
+          value: "ReadWriteMany"
+
+  - it: document-uploads PVC should request 50Gi storage
+    template: storage/document-uploads-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "50Gi"
+
+  - it: document-uploads PVC should be a PersistentVolumeClaim
+    template: storage/document-uploads-pvc.yaml
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: document-uploads-pvc
+
+  # --- Redis Data PVC ---
+  - it: redis-data PVC should use azurefile storage class
+    template: storage/redis-data-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.storageClassName
+          value: "azurefile"
+
+  - it: redis-data PVC should use ReadWriteMany access mode
+    template: storage/redis-data-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.accessModes[0]
+          value: "ReadWriteMany"
+
+  - it: redis-data PVC should request 10Gi storage
+    template: storage/redis-data-pvc.yaml
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "10Gi"
+
+  - it: redis-data PVC should be a PersistentVolumeClaim
+    template: storage/redis-data-pvc.yaml
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: redis-data-pvc
+
+  # ============================================================
+  # Capacity Override Tests (values parameterization)
+  # ============================================================
+  - it: arango PVC should respect custom storage size from values
+    template: storage/arango-pvc.yaml
+    set:
+      storage.arango.size: "100Gi"
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "100Gi"
+
+  - it: document-uploads PVC should respect custom storage size from values
+    template: storage/document-uploads-pvc.yaml
+    set:
+      storage.documentUploads.size: "200Gi"
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "200Gi"
+
+  - it: redis-data PVC should respect custom storage size from values
+    template: storage/redis-data-pvc.yaml
+    set:
+      storage.redisData.size: "20Gi"
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: "20Gi"

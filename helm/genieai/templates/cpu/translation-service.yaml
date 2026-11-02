@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "translation" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "translation" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.translation.port }}
+      targetPort: {{ .Values.cpu.translation.port }}
+      protocol: TCP
+      name: http

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "dataprep" "tier" "gpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "dataprep" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.gpu.dataprep.port }}
+      targetPort: {{ .Values.gpu.dataprep.port }}
+      protocol: TCP
+      name: http

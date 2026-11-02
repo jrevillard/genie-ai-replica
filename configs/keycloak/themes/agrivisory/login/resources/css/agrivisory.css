@@ -1,0 +1,146 @@
+/*
+ * DEC-32c — Keycloak login pages in the Keletso / pending-screen style
+ * (same design language as PendingApprovalScreen.vue, ported from LSO
+ * commit bf57593f): soft field-green gradient, centered white card with
+ * round corners + soft shadow, maize/green/soil tokens, shield in a
+ * green-soft circle as the hero mark. CSS variables + surface styling on
+ * the stock PatternFly 5 login DOM only — no template overrides.
+ */
+
+.pf-v5-c-login {
+  /* Keletso tokens (mirror of the pending screen's --pa-* set) */
+  --kl-bg-top: #f2f6f0;
+  --kl-bg-bottom: #e3ece0;
+  --kl-card: #ffffff;
+  --kl-surface: #f3f7f2;
+  --kl-border: #d8e3d5;
+  --kl-ink: #1c2a21;
+  --kl-muted: #4f5f54;
+  --kl-green: #3f7f52;
+  --kl-green-hover: #2f6b3f;
+  --kl-green-soft: #e2efe5;
+  --kl-green-text: #2f6b3f;
+  --kl-maize: #d99a1e;
+  --kl-maize-text: #7a4e00;
+  --kl-on-green: #ffffff;
+  --kl-shadow: 0 1px 2px rgba(20, 40, 25, 0.05), 0 18px 44px -14px rgba(20, 40, 25, 0.22);
+
+  /* Feed the palette into PatternFly so every PF control follows */
+  --pf-v5-global--primary-color--100: var(--kl-green);
+  --pf-v5-global--primary-color--200: var(--kl-green-hover);
+  --pf-v5-global--primary-color--dark-100: var(--kl-green-hover);
+  --pf-v5-global--link--Color: var(--kl-green-text);
+  --pf-v5-global--link--Color--hover: var(--kl-green-hover);
+  --pf-v5-global--Color--100: var(--kl-ink);
+  --pf-v5-global--BorderColor--100: var(--kl-border);
+  --pf-v5-global--BackgroundColor--100: var(--kl-card);
+
+  background: linear-gradient(175deg, var(--kl-bg-top), var(--kl-bg-bottom));
+}
+
+/* KC dark mode (darkMode=true inherited; KC sets pf-v5-theme-dark on <html>
+   from the visitor's colour scheme) — pending-screen dark twins */
+.pf-v5-theme-dark .pf-v5-c-login,
+html.pf-v5-theme-dark .pf-v5-c-login {
+  --kl-bg-top: #101612;
+  --kl-bg-bottom: #18221c;
+  --kl-card: #1a231e;
+  --kl-surface: #222d26;
+  --kl-border: #304036;
+  --kl-ink: #eef3ef;
+  --kl-muted: #b3c1b7;
+  --kl-green-soft: #22392b;
+  --kl-green-text: #8fd0a2;
+  --kl-maize: #e8ae34;
+  --kl-maize-text: #f3c567;
+  --kl-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 44px -14px rgba(0, 0, 0, 0.6);
+}
+
+/* The credential card — pending-card treatment. PF's container is a full-width
+   grid with one left-anchored 544px track; we pin it to the card width and
+   center it. DEC-32d: a brand column sits RIGHT of the card (#kc-header,
+   fed by realm displayNameHtml: shield + name + tagline). */
+/* Card centered in normal flow (PF's one left-anchored 544px track pinned
+   to the card width and centered). DEC-32d: the brand column is absolutely
+   positioned beside the card instead of fighting PF's responsive grid —
+   deterministic at every width. */
+.pf-v5-c-login__container {
+  grid-template-columns: minmax(0, 440px) !important;
+  justify-content: center !important;
+}
+
+.pf-v5-c-login {
+  position: relative;
+}
+
+.pf-v5-c-login__main {
+  background: var(--kl-card);
+  border: 1px solid var(--kl-border);
+  border-radius: 20px;
+  box-shadow: var(--kl-shadow);
+  max-width: 440px;
+  width: 100%;
+}
+
+/* Title: pending-title treatment */
+.pf-v5-c-login__main-header .pf-v5-c-title,
+#kc-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--kl-ink);
+}
+
+/* Subtitle / helper text: muted */
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer {
+  color: var(--kl-muted);
+}
+
+/* Inputs: soft border, rounded */
+.pf-v5-c-login .pf-v5-c-form-control,
+.pf-v5-c-login .pf-v5-c-form__control {
+  border-radius: 10px;
+  border-color: var(--kl-border);
+  background-color: var(--kl-card);
+  color: var(--kl-ink);
+}
+
+/* Primary button: action-primary treatment */
+.pf-v5-c-login .pf-v5-c-button.pf-m-primary {
+  background-color: var(--kl-green);
+  border-radius: 12px;
+  border-color: var(--kl-green);
+  color: var(--kl-on-green);
+  font-weight: 600;
+}
+
+.pf-v5-c-login .pf-v5-c-button.pf-m-primary:hover:not([disabled]) {
+  background-color: var(--kl-green-hover);
+  border-color: var(--kl-green-hover);
+}
+
+.pf-v5-c-login .pf-v5-c-button.pf-m-primary:focus-visible {
+  outline: 3px solid var(--kl-maize);
+  outline-offset: 2px;
+}
+
+/* Secondary/outline controls (password-visibility toggle etc.) */
+.pf-v5-c-login .pf-v5-c-button.pf-m-control {
+  border-radius: 10px;
+  border-color: var(--kl-border);
+  color: var(--kl-muted);
+}
+
+/* Brand column REMOVED (Adem, 10-06 final verdict): login page = the
+   styled card alone. Hiding #kc-header kills KC's brand block entirely
+   (incl. the realm displayName fallback text). */
+#kc-header {
+  display: none;
+}
+
+/* Alerts (errors) — keep readable on both modes */
+.pf-v5-c-login .pf-v5-c-alert {
+  border-radius: 12px;
+}

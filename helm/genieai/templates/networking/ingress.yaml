@@ -1,0 +1,63 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "genieai.fullname" . }}-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  annotations:
+    # nginx Ingress Controller — TLS and redirect configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Minimum TLS version for secure connections
+    nginx.ingress.kubernetes.io/ssl-min-protocol-version: {{ .Values.ingress.tls.minVersion | quote }}
+    # Use 301 (permanent) redirect for HTTP→HTTPS instead of default 308
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      if ($scheme = "http") {
+        return 301 https://$host$request_uri;
+      }
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        {{- if .Values.ingress.host }}
+        - {{ .Values.ingress.host | quote }}
+        {{- else }}
+        - ""
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName | quote }}
+  {{- end }}
+  # Default backend returns 404 for unmatched routes
+  defaultBackend:
+    service:
+      name: nginx
+      port:
+        number: 80
+  rules:
+    {{- if .Values.ingress.host }}
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+    {{- else }}
+    - http:
+    {{- end }}
+        paths:
+          # Route API gateway paths to Kong service
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: kong
+                port:
+                  number: 8010
+          # Route all other paths to nginx service (main application)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx
+                port:
+                  number: 80
+{{- end }}

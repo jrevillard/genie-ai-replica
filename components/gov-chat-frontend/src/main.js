@@ -1,0 +1,353 @@
+/*****************************************************************************************************
+ * main.js
+ * 
+ * Full file, including:
+ * - Importing your App.vue, router, i18n.js, and store
+ * - Setting up locale based on user preference or browser
+ * - Logging all messages for each locale (only in development mode)
+ * - Logging the active locale before and after mount
+ * - Theme system integration - Synchronized with ThemeManager.js
+ * - Loading genie-ai-config.json from /config folder for GENIE.AI framework customization
+ *****************************************************************************************************/
+
+import { createApp } from 'vue'
+import App from './App.vue'
+import router from './router'
+import i18n from './i18n'
+import store from './store' // Import the Vuex store
+import FileDialogSafe from './fileDialogSafe' // Import our custom directive
+import '@fortawesome/fontawesome-free/css/all.min.css';
+import VueApexCharts from 'vue3-apexcharts'
+import './text-fix.css'
+import { themeManager } from './utils/ThemeManager'; // Updated import path
+
+// Import theme CSS files
+import './theme-variables.css'
+import './theme-components.css'
+
+// Fetch configuration for GENIE.AI framework with fallback defaults
+// (L.1: fallback brand = Agrivisory — a failed config fetch must never
+// silently rebrand the navbar to another product's identity)
+let config = {
+  app: {
+    title: 'Agrivisory-Lesotho',
+    icon: { type: 'file', value: '/config/agrivisory-logo.webp' }
+  },
+  theme: {
+    primaryColor: '#4E97D1',
+    secondaryColor: '#2C5F8A',
+    backgroundColor: '#f5f7fa',
+    textColor: '#333333',
+    navbar: {
+      gradientStart: '#4E97D1',
+      gradientEnd: '#2C5F8A',
+      textColor: '#ffffff'
+    }
+  },
+  features: {
+    chat: {
+      welcomeMessage: 'Welcome to Huduma AI, your public service assistant!',
+      botName: 'Huduma'
+    }
+  },
+  custom: {}
+};
+export async function loadConfig() {
+  try {
+    const response = await fetch('/config/genie-ai-config.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    config = { ...config, ...data }; // Merge fetched config with defaults
+    console.log('Configuration loaded:', config);
+
+    // Dynamically set CSS variables based on config (FIX: Added for success case)
+    const root = document.documentElement;
+    if (config.theme) {
+      if (config.theme.navbar) {
+        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
+        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
+        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
+      }
+      root.style.setProperty('--accent-color', config.theme.primaryColor);
+      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
+      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
+    }
+  } catch (error) {
+    console.error('Error loading config:', error);
+    console.warn('Using default configuration');
+
+    // Set default CSS variables
+    const root = document.documentElement;
+    if (config.theme) {
+      if (config.theme.navbar) {
+        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
+        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
+        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
+      }
+      root.style.setProperty('--accent-color', config.theme.primaryColor);
+      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
+      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
+    }
+  }
+  return config;
+}
+
+// Helper function to adjust color brightness (for hover states)
+function adjustColor(hexColor, percent) {
+  let r = parseInt(hexColor.slice(1, 3), 16);
+  let g = parseInt(hexColor.slice(3, 5), 16);
+  let b = parseInt(hexColor.slice(5, 7), 16);
+
+  // Adjust brightness
+  r = Math.min(255, Math.max(0, Math.round(r * (1 + percent / 100))));
+  g = Math.min(255, Math.max(0, Math.round(g * (1 + percent / 100))));
+  b = Math.min(255, Math.max(0, Math.round(b * (1 + percent / 100))));
+
+  // Convert back to hex
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Initialize configuration before app creation to ensure it's available globally
+await loadConfig();
+
+// Determine the initial locale - prioritize:
+// 1. Previously saved user preference
+// 2. Browser language
+// 3. Default to 'en'
+const getSavedLocale = () => {
+  try {
+    return localStorage.getItem('userLocale')
+  } catch (e) {
+    console.warn('Unable to access localStorage:', e)
+    return null
+  }
+}
+
+const savedLanguage = localStorage.getItem('userLocale');
+if (savedLanguage && i18n) {
+  i18n.locale = savedLanguage;
+  document.documentElement.setAttribute('lang', savedLanguage);
+}
+
+// Global language change handler
+window.addEventListener('languageChanged', (event) => {
+  if (event.detail && event.detail.language) {
+    // Force reload the page when language changes from settings
+    // This ensures all components get the new translations
+    window.location.reload();
+  }
+});
+
+const getBrowserLocale = () => {
+  // Get browser language (e.g. 'en-US' -> 'en')
+  const browserLang = navigator.language || navigator.userLanguage
+  const shortLang = browserLang.split('-')[0]
+
+  // Check if we support this language
+  const supportedLocales = ['en', 'fr', 'sw']
+  return supportedLocales.includes(shortLang) ? shortLang : null
+}
+
+// Set the initial locale based on our prioritization logic
+const savedLocale = getSavedLocale()
+const browserLocale = getBrowserLocale()
+const initialLocale = savedLocale || browserLocale || 'en'
+
+// Set the locale directly as a string (not as a ref)
+i18n.global.locale = initialLocale
+
+// Log information only in development mode
+if (process.env.NODE_ENV === 'development') {
+  console.log("Available messages:", {
+    'en': i18n.global.getLocaleMessage('en'),
+    'fr': i18n.global.getLocaleMessage('fr'),
+    'sw': i18n.global.getLocaleMessage('sw')
+  })
+  console.log("Active locale:", i18n.global.locale)
+}
+
+// Initialize theme system BEFORE creating the app
+const initializeTheme = () => {
+  let theme = 'light'; // Default theme
+
+  try {
+    // Synchronize with ThemeManager.js for initial theme detection
+    const themeInfo = themeManager.getThemeInfo();
+    theme = themeInfo.theme || 'light'; // Use ThemeManager's detected theme
+
+    // Override with saved user preference if it exists
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
+      theme = savedTheme;
+    }
+
+    // Apply theme to both HTML and BODY elements to ensure it cascades properly
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+
+    console.log('Theme initialized to:', theme);
+
+    // Initialize font size if saved
+    const fontSize = localStorage.getItem('fontSize');
+    if (fontSize) {
+      document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
+    }
+  } catch (e) {
+    console.warn('Error initializing theme, defaulting to light theme:', e);
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.body.setAttribute('data-theme', 'light');
+  }
+};
+
+// Run theme initialization immediately
+initializeTheme();
+
+// Create the Vue app
+const app = createApp(App)
+
+// Make config available globally for GENIE.AI framework customization (e.g., title, icon, navbar colors)
+app.config.globalProperties.$config = config;
+
+// Use router, i18n, and store
+app.use(router)
+app.use(i18n)
+app.use(store) // Register the Vuex store
+app.use(FileDialogSafe) // Register our custom directive
+app.use(VueApexCharts)
+
+// Create a global method for changing locale
+app.config.globalProperties.$setLocale = function (locale) {
+  i18n.global.locale = locale
+  try {
+    localStorage.setItem('userLocale', locale)
+  } catch (e) {
+    console.warn('Unable to save locale preference:', e)
+  }
+
+  // Update HTML lang attribute for accessibility
+  document.documentElement.setAttribute('lang', locale)
+}
+
+// Mount the app
+app.mount('#app')
+
+// *** ADD THIS DEBUG BLOCK ***
+console.log('DEBUG: Runtime VUE_APP_CSP_CONNECT_SRC:', process.env.VUE_APP_CSP_CONNECT_SRC);
+// Log effective CSP if set via meta (dev server uses header, so this may be null; check Network tab manually)
+const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+console.log('DEBUG: CSP from meta tag (if any):', cspMeta ? cspMeta.content : 'None - Check Network headers');
+
+// Log active locale after mount (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log("Active locale (after mount):", i18n.global.locale)
+}
+
+// M.12: ONE unified visualViewport keyboard handler (replaces the two
+// competing systems: body- vs html-class + a load-time window height
+// snapshot that broke on rotation). Sets the same class on BOTH root
+// elements and publishes --window-height (visual height) + --kb-offset
+// (visual top) so CSS can pin the input pill above the keyboard on any
+// mobile browser, however it treats the layout viewport.
+function applyVisualViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const keyboardOpen = (window.innerHeight - vv.height) > 150;
+  document.documentElement.style.setProperty('--window-height', `${vv.height}px`);
+  document.documentElement.style.setProperty('--visible-height', `${vv.height}px`);
+  document.documentElement.style.setProperty('--kb-offset', `${vv.offsetTop}px`);
+  document.body.classList.toggle('keyboard-open', keyboardOpen);
+  document.documentElement.classList.toggle('keyboard-open', keyboardOpen);
+  dockChatInput(vv, keyboardOpen);
+}
+
+// M.12, researched production pattern (mathix.dev / bram.us): iOS Safari
+// ignores interactive-widget and anchors position:fixed to the LAYOUT
+// viewport, so the chat input is docked by writing the offset as INLINE
+// PIXELS from the visual viewport — never 100vh (that is the large
+// viewport on iOS and overshoots by the toolbar height). Runs on vv
+// resize AND scroll because iOS pans the visual viewport while the
+// keyboard is open (offsetTop changes as you type).
+function dockChatInput(vv, keyboardOpen) {
+  const dock = document.querySelector('.chat-input');
+  if (!dock) return;
+  if (keyboardOpen) {
+    dock.style.bottom =
+      Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px';
+  } else {
+    dock.style.removeProperty('bottom');
+  }
+}
+
+// Legacy fallback for browsers without visualViewport (rare): keep the
+// layout-viewport height fresh so 100dvh/% chains have a sane var.
+function setViewportHeight() {
+  if (!window.visualViewport) {
+    document.documentElement.style.setProperty('--window-height', `${window.innerHeight}px`);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setViewportHeight();
+  window.addEventListener('resize', setViewportHeight);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', applyVisualViewport);
+    window.visualViewport.addEventListener('scroll', applyVisualViewport);
+    applyVisualViewport();
+  }
+});
+
+// Helper function to detect iOS devices
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// Add iOS-specific class if needed
+if (isIOS() && document.documentElement) {
+  document.documentElement.classList.add('ios-device');
+}
+
+// Function to handle Android keyboard behavior
+const handleAndroidKeyboard = () => {
+  // Detect Android devices
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
+  if (!isAndroid) return;
+
+  // Add Android flag to document
+  if (document.documentElement) {
+    document.documentElement.classList.add('android-device');
+  }
+
+  // M.12: keyboard detection itself moved to the unified visualViewport
+  // handler above — this resize-based variant captured window height at
+  // load (rotation-broken) and fought the vv handler over the class and
+  // vars. Only the focus flags remain here.
+
+  document.addEventListener('focusin', (event) => {
+    // Only handle input and textarea elements
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      if (document.documentElement) {
+        document.documentElement.classList.add('input-focused');
+      }
+    }
+  });
+
+  document.addEventListener('focusout', (event) => {
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      // Use timeout to ensure keyboard is fully closed
+      setTimeout(() => {
+        if (document.documentElement) {
+          document.documentElement.classList.remove('input-focused');
+        }
+      }, 300);
+    }
+  });
+};
+
+// Initialize when the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  handleAndroidKeyboard();
+});

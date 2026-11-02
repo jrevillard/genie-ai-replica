@@ -1,0 +1,383 @@
+.query-inspector {
+  width: 100%;
+}
+
+/* Filters */
+.inspector-filters {
+  background: var(--bg-secondary, #f8f9fa);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #6c757d);
+}
+
+.filter-group input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 120px;
+}
+
+.filter-group input[type="text"] {
+  min-width: 200px;
+}
+
+.filter-actions {
+  flex-direction: row;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* Loading */
+.inspector-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary, #6c757d);
+}
+
+/* Table */
+.inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.inspector-table th {
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #f8f9fa);
+  border-bottom: 2px solid var(--border-color, #dee2e6);
+  font-weight: 600;
+  color: var(--text-secondary, #6c757d);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inspector-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color, #eee);
+  vertical-align: middle;
+}
+
+.query-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.query-row:hover {
+  background: var(--bg-hover, #f0f4ff);
+}
+
+.col-time {
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.col-question {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-confidence,
+.col-response-time,
+.col-sources,
+.col-feedback {
+  text-align: center;
+}
+
+/* Confidence badges */
+.confidence-high {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.confidence-medium {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.confidence-low {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.confidence-na {
+  color: var(--text-secondary, #6c757d);
+}
+
+/* Feedback */
+.feedback-positive {
+  color: #28a745;
+}
+
+.feedback-neutral {
+  color: #ffc107;
+}
+
+.feedback-negative {
+  color: #dc3545;
+}
+
+.no-feedback {
+  color: var(--text-secondary, #aaa);
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.page-info {
+  font-size: 13px;
+  color: var(--text-secondary, #6c757d);
+}
+
+/* Detail View */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-section {
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.detail-section h4 {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--bg-secondary, #f8f9fa);
+  font-size: 14px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.detail-content {
+  padding: 16px;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.detail-box {
+  background: var(--bg-code, #f4f4f4);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.response-box {
+  background: #f0f7ff;
+  border-left: 3px solid #4a90d9;
+}
+
+.context-box {
+  background: #fff8f0;
+  border-left: 3px solid #f5a623;
+}
+
+.feedback-box {
+  background: #f0fff4;
+  border-left: 3px solid #28a745;
+}
+
+/* Messages list */
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.message-item.role-user {
+  background: #e8f4fd;
+}
+
+.message-item.role-assistant {
+  background: #f0f0f0;
+}
+
+.message-item.role-system {
+  background: #fff3cd;
+}
+
+.msg-role {
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-right: 8px;
+}
+
+/* Source documents */
+.source-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-doc-card {
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.doc-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.doc-score {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--bg-secondary, #f8f9fa);
+}
+
+.doc-meta {
+  font-size: 12px;
+  color: var(--text-secondary, #6c757d);
+  display: flex;
+  gap: 16px;
+}
+
+.doc-meta a {
+  color: #4a90d9;
+  text-decoration: none;
+}
+
+.doc-meta a:hover {
+  text-decoration: underline;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.muted {
+  color: var(--text-secondary, #999);
+  font-size: 12px;
+}
+
+/* Buttons */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* RAG Payload section */
+.rag-payload-box {
+  background: #f5f0ff;
+  border-left: 3px solid #7c3aed;
+}
+
+.rag-payload-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.rag-payload-details {
+  margin-top: 8px;
+}
+
+.rag-payload-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary, #6c757d);
+  margin-bottom: 8px;
+}
+
+.rag-payload-json {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
+
+/* LLM Model badge */
+.col-model {
+  white-space: nowrap;
+}
+
+.model-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e8e0f0;
+  color: #5b21b6;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}

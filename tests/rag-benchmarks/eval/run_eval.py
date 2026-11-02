@@ -1,0 +1,1030 @@
+#!/usr/bin/env python3
+# Copyright (C) 2025 ITU
+# SPDX-License-Identifier: Apache-2.0
+"""Retrieval eval driver. Two modes, one collection path.
+
+WARNING — chatqna enforces OIDC authentication. Requests without a valid
+Bearer token are rejected with HTTP 401, even from in-network containers.
+Calling this script directly via `python3 run_eval.py anchor ...` against
+a production-deployed chatqna returns 401 on every query and the report's
+`n_missed_traces` shows all queries as missed. For ANY live-stack eval use
+the wrapper at `../scripts/run_anchor_with_cleanup.sh` which enables ROPC
+temporarily, verifies the revert on exit, and lets this driver refresh its
+own realm token in-run (EVAL_KC_* env). The retired host-side chunked
+runner no longer exists. Leaving ROPC enabled in production is a security
+vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
+(auth, score threshold, diagnostic mode).
+
+Both modes drive gold queries through chatqna via docker exec (OIDC via
+the wrapper — this driver refreshes its own realm bearer from EVAL_KC_*
+when set, or honors a pre-minted E2E_BEARER_TOKEN for service-account
+flows; the docker exec + chatqna label-filtered retrieval path is
+otherwise faithful to production) and pull the selection from the
+chatqna.reranker_selection span in VictoriaTraces.
+
+The span emits ``chunk_key`` (the ArangoDB ``_key``), recovered by the retriever
+via per-chunk metadata that survives the langchain retriever->chatqna handoff
+(langchain mangles ``Document.id`` to a UUID; ``_key`` is carried in
+``metadata["chunk_key"]`` and re-read by chatqna's ``text_to_chunk_key`` map).
+Matching stays CONTENT-BASED: gold ``expected_chunks[].content_hash`` (sha256 of
+normalized text) is the identity, and each span ``_key`` is converted to its
+content fingerprint via a ``_key -> content_hash`` map built from the SOURCE
+collection — so the gold SURVIVES a corpus re-ingest (same chunk text -> same
+hash). Only a chunking-param change (which alters chunk text) invalidates it:
+a signal to re-baseline, not a bug.
+
+  --mode anchor       Deterministic: match selected/candidate content hashes
+                      against gold. Reproducible, no LLM. recall/precision/
+                      complete_recall/noise/retrieval_recall. The report keeps
+                      the raw span ``_key``s in ``selected``/``candidates`` and
+                      adds the content-hash projections in ``*_hashes``.
+
+  --mode dump-tuples  Collect (question, contexts, answer, reference_answer)
+                      per query → eval_tuples.json. Feed to run_ragas_eval.py
+                      (an external LLM judge) for semantic faithfulness/
+
+Run twice (once per reranker config, redeploy between) + diff reports for an A/B.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.error
+
+import metrics
+from arango import cursor, source_chunks
+from chunk_identity import content_hash
+from harness import HarnessError, docker_exec as _docker_exec, write_json
+from keycloak import KeycloakError, fetch_realm_token
+
+# --- stack config (env-overridable) -----------------------------------------
+# Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
+# has a dynamic Swarm replica suffix, so resolve it live:
+#   export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+# VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
+# See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
+CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "chatqna-xeon-backend-server")
+VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
+CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
+CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
+GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
+TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
+TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
+
+
+# --- chatqna container resolution (F1) --------------------------------------
+# A `docker service update` rotates the chatqna container (new replica
+# suffix), so the module-level CHATQNA_CONTAINER goes stale mid-run and
+# every subsequent query 3-fails. The fix: on HarnessError, re-resolve via
+# `docker ps | grep` (same pattern as scripts/run_anchor_with_cleanup.sh)
+# and let the per-entry retry loop (3 attempts) consume the recovered
+# attempt on its next call. VICTORIATRACES_SVC is a service DNS name and
+# stable across service updates — do not touch it.
+_CHATQNA_CONTAINER_SUBSTRING = "chatqna-xeon-backend-server"
+_chatqna_container_cache: str | None = None
+
+
+def _resolve_chatqna_container(force: bool = False) -> str | None:
+    """Return the live chatqna container name.
+
+    On the happy path: env override is authoritative; otherwise the cached
+    value (populated by an earlier call or by the wrapper) is returned.
+
+    With ``force=True`` (after a docker-exec ``HarnessError``): shell out
+    to ``docker ps | grep`` and update the cache. The env override is
+    still checked first; if the pinned name went stale, a warning is
+    logged and the discovered name is used so the run recovers even when
+    the operator pinned the name manually.
+    """
+    global _chatqna_container_cache
+    pinned = os.getenv("CHATQNA_CONTAINER")
+    if not force and pinned:
+        return pinned
+    if not force and _chatqna_container_cache:
+        return _chatqna_container_cache
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"[chatqna] re-resolve failed: {e}", file=sys.stderr)
+        return pinned or _chatqna_container_cache
+    if result.returncode != 0:
+        print(
+            f"[chatqna] docker ps failed: {result.stderr.strip()[:200]}",
+            file=sys.stderr,
+        )
+        return pinned or _chatqna_container_cache
+    for line in result.stdout.splitlines():
+        if _CHATQNA_CONTAINER_SUBSTRING in line:
+            if pinned and line != pinned:
+                print(
+                    f"[chatqna] pinned CHATQNA_CONTAINER={pinned!r} went stale; "
+                    f"using {line!r}",
+                    file=sys.stderr,
+                )
+            _chatqna_container_cache = line
+            return line
+    return pinned or _chatqna_container_cache
+
+
+def _chatqna_docker_exec(
+    cmd: str, timeout: float = 150, pass_env: tuple = ()
+) -> str:
+    """Wrap ``_docker_exec`` against the chatqna container with mid-run
+    re-resolution on ``HarnessError``.
+
+    On the first call uses ``CHATQNA_CONTAINER`` as resolved; on
+    ``HarnessError`` (container rotated), call
+    ``_resolve_chatqna_container(force=True)`` to discover the new
+    replica and update the module-level cache, then re-raise so the
+    per-entry retry loop (3 attempts) consumes the recovered attempt
+    on its next call.
+    """
+    global CHATQNA_CONTAINER
+    try:
+        return _docker_exec(
+            CHATQNA_CONTAINER, cmd, timeout=timeout, pass_env=pass_env
+        )
+    except HarnessError:
+        new = _resolve_chatqna_container(force=True)
+        if new and new != CHATQNA_CONTAINER:
+            CHATQNA_CONTAINER = new
+        raise
+
+
+# --- optional in-run bearer refresh (MR-B) -------------------------------
+# When EVAL_KC_URL + EVAL_KC_PASSWORD are set, _maybe_refresh_token() refreshes
+# E2E_BEARER_TOKEN in-run (TTL-bounded pre-emptively, immediate on 401). When
+# unset, the script preserves its prior static-token contract (capture_baseline
+# relies on this). Env vars are read at call time so tests (and operators) can
+# toggle them via monkeypatch / export without re-importing the module.
+_TOKEN_TTL = 240.0
+_TOKEN_REFRESH_MARGIN = 60.0
+_token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
+
+
+def _refresh_configured() -> bool:
+    """True iff the operator opted into in-run refresh (EVAL_KC_URL +
+    EVAL_KC_PASSWORD both set). Defaults for realm/client/user mean the
+    other three vars do not gate activation. Re-reads env so tests can toggle."""
+    return bool(os.getenv("EVAL_KC_URL", "") and os.getenv("EVAL_KC_PASSWORD", ""))
+
+
+def _maybe_refresh_token(force: bool = False) -> bool:
+    """Refresh E2E_BEARER_TOKEN in-run when refresh is configured.
+
+    Returns True on a successful refresh (caller may retry). Returns False
+    on no-op (refresh disabled, TTL not crossed) or on transient failure —
+    failures NEVER raise: the run continues with the existing token and the
+    401/403 path takes over on the next drive_query.
+
+    ``force=True`` skips the TTL check so a 401 reaction can refresh
+    immediately regardless of how recently the last fetch happened.
+    """
+    global _token_ts
+    if not _refresh_configured():
+        return False
+    if not force and time.time() - _token_ts <= _TOKEN_TTL - _TOKEN_REFRESH_MARGIN:
+        return False
+    try:
+        token = fetch_realm_token(
+            os.getenv("EVAL_KC_URL", ""),
+            os.getenv("EVAL_KC_REALM", "genie"),
+            os.getenv("EVAL_KC_CLIENT_ID", "genie-app"),
+            os.getenv("EVAL_KC_USER", "genie-admin"),
+            os.getenv("EVAL_KC_PASSWORD", ""),
+        )
+    except (KeycloakError, urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        print(f"[refresh] failed (run continues): {e}", file=sys.stderr)
+        return False
+    os.environ["E2E_BEARER_TOKEN"] = token
+    _token_ts = time.time()
+    return True
+
+
+def _as_list(v) -> list:
+    """VictoriaTraces serializes span array attributes as JSON STRINGS — coerce."""
+    if isinstance(v, list):
+        return v
+    if isinstance(v, str) and v:
+        try:
+            r = json.loads(v)
+            return r if isinstance(r, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def drive_query(entry: dict) -> tuple[float, str, int]:
+    """POST the gold query to chatqna. Returns (start_time, body, http_status)."""
+    payload = {
+        "messages": [{"role": "user", "content": entry["query"]}],
+        "context": {
+            "categoryLabels": entry.get("categoryLabels", []),
+            "serviceLabels": entry.get("serviceLabels", []),
+            "language": entry.get("language", "en"),
+        },
+        "stream": False,
+    }
+    payload_json = json.dumps(payload).replace("'", "'\\''")
+    start = time.time()
+    # Auth: chatqna enforces OIDC. When E2E_BEARER_TOKEN is set, inject it
+    # as a Bearer header. When unset, the request relies on chatqna being
+    # open in-network — only valid on legacy pre-prod harnesses; returns
+    # 401 on a production-deployed chatqna. The wrapper script
+    # (`../scripts/run_anchor_with_cleanup.sh`) handles the token lifecycle.
+    #
+    # G1 fix: token travels via `docker exec -e E2E_BEARER_TOKEN` (valueless
+    # = inherit from python process env), never on argv — the value is
+    # never visible in `ps`/procfs. The curl header references the var by
+    # NAME; the shell expands it container-side.
+    _token = os.getenv("E2E_BEARER_TOKEN")
+    if _token:
+        cmd = (
+            f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+            f" -H \"Authorization: Bearer $E2E_BEARER_TOKEN\" -d '{payload_json}' -w '\\n%{{http_code}}'"
+        )
+        raw = _chatqna_docker_exec(cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
+    else:
+        cmd = (
+            f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+            f" -d '{payload_json}' -w '\\n%{{http_code}}'"
+        )
+        raw = _chatqna_docker_exec(cmd, timeout=150)
+    body, _, code = raw.rpartition("\n")
+    status = int(code) if code.strip().isdigit() else 0
+    return start, body, status
+
+
+def _extract_answer(body: str) -> str:
+    if not body:
+        return ""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return body.strip()
+    if isinstance(data, dict):
+        # chatqna answers with {"response": <text>, "metadata": {...}}. The
+        # other keys are historical shapes.
+        #
+        # `response` is resolved on PRESENCE, not truthiness: its presence is
+        # the strongest available evidence that the body IS the chatqna
+        # envelope. A present-but-empty value is an empty answer — an abstention
+        # can carry no prose — and must not fall through to the serialised-envelope
+        # dump, which is the shape this resolver used to return by mistake and
+        # which every RAGAS metric then scored instead of the answer.
+        #
+        # Non-string values are not answers. `str()` on a dict would emit a
+        # Python repr — single quotes, wrong key order — straight into the row
+        # that RAGAS then scores, so those fall through to the envelope dump
+        # instead, which is at least valid JSON.
+        if "response" in data and isinstance(data["response"], str):
+            return data["response"]
+        for key in ("text", "answer", "generated_text"):
+            if isinstance(data.get(key), str) and data[key]:
+                return data[key]
+        md = data.get("metadata") or {}
+        if isinstance(md, dict) and md.get("answer"):
+            return str(md["answer"])
+        return json.dumps(data)
+    return str(data)
+
+
+def _extract_selection(
+    raw: str, start_s: float
+) -> tuple[list[str], list[str], list[dict]]:
+    """Return (candidate_keys, selected_keys, adaptive_breakdown) for THIS query's trace.
+
+    The keys are ArangoDB ``_key``s (what the reranker_selection span emits);
+    they are projected to content hashes later in score_anchor.
+
+    Picks the newest reranker_selection span at/after the query start. Coerces
+    JSON-stringified array attrs (VictoriaTraces does this) via _as_list.
+
+    Also harvests ``rag.adaptive_breakdown`` (a JSON-stringified array of
+    per-candidate utility/cost terms) from the matching ``reranker.tei_invoke``
+    span, so the eval report carries the full adaptive breakdown for offline
+    recalibration of CONTEXT_DECAY_FACTOR and the confusion formula.
+    """
+    data = json.loads(raw or "{}")
+    query_start_us = start_s * 1e6
+    best = None  # (startTime, candidates, selected)
+    breakdown_best_st = -1
+    breakdown: list[dict] = []
+    for tr in data.get("data", []):
+        for sp in tr.get("spans", []):
+            op = sp.get("operationName", "")
+            st = sp.get("startTime", 0)
+            if st < query_start_us - 5_000_000:  # >5s before query — older trace
+                continue
+            tags = {t["key"]: t.get("value") for t in sp.get("tags", [])}
+            if "reranker_selection" in op:
+                c = _as_list(tags.get("rag.candidate_chunk_keys"))
+                s = _as_list(tags.get("rag.selected_chunk_keys"))
+                if best is None or st > best[0]:
+                    best = (st, c, s)
+            elif op == "reranker.tei_invoke" and "rag.adaptive_breakdown" in tags:
+                # newest tei_invoke span carrying a breakdown wins
+                if st > breakdown_best_st:
+                    breakdown_best_st = st
+                    raw_b = tags.get("rag.adaptive_breakdown")
+                    try:
+                        breakdown = (
+                            json.loads(raw_b) if isinstance(raw_b, str) else raw_b or []
+                        )
+                    except json.JSONDecodeError:
+                        breakdown = []
+    if best is None:
+        return [], [], breakdown
+    return best[1], best[2], breakdown
+
+
+def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
+    """Poll VictoriaTraces until the trace is indexed or TRACE_FETCH_TIMEOUT.
+
+    Generous window (1h back/1min forward) — VT's tight-window time filter has
+    quirky boundary semantics; the trace is disambiguated by startTime in
+    _extract_selection. Indexing lag on a busy VT node can exceed a minute.
+
+    The sleep is clamped to ``remaining`` so we never sleep past the deadline
+    (finding 11). On deadline, returns without a final query.
+
+    Returns ``(candidates, selected, adaptive_breakdown)``.
+    """
+    deadline = time.time() + TRACE_FETCH_TIMEOUT
+    delay = 0.0  # check immediately — spans are often indexed by the time curl returns
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return [], [], []
+        if delay:
+            time.sleep(min(delay, remaining))
+        delay = 1.0 if delay < 1.0 else (2.0 if delay < 2.0 else TRACE_FLUSH_WAIT)
+        start_us = int((start_s - 3600) * 1e6)
+        end_us = int((time.time() + 60) * 1e6)
+        url = (
+            f"http://{VICTORIATRACES_SVC}:10428/select/jaeger/api/traces"
+            f"?service={CHATQNA_SERVICE_NAME}"
+            f"&start={start_us}&end={end_us}&limit=50"
+        )
+        raw = _chatqna_docker_exec(f"curl -s '{url}'", timeout=60)
+        candidates, selected, breakdown = _extract_selection(raw, start_s)
+        if candidates or selected:
+            return candidates, selected, breakdown
+        if time.time() >= deadline:
+            return [], [], breakdown
+
+
+def build_hash_to_text() -> dict[str, str]:
+    """Return {_key: full_text} from ArangoDB (dump-tuples mode only).
+
+    The reranker_selection span emits ``_key`` (NOT content_hash), so the
+    semantic-path context lookup must key on ``_key``. The older content_hash
+    keying produced empty contexts once the span switched to ``_key``.
+    """
+    return {r["key"]: r["text"] for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD) if r.get("text")}
+
+
+def build_key_to_content_hash() -> dict[str, str]:
+    """Return {_key: content_hash} from ArangoDB (anchor mode).
+
+    The reranker_selection span emits the ArangoDB ``_key``, but the gold is
+    content-hash-keyed (content-based identity survives re-ingest). Map each
+    span ``_key`` to its content fingerprint so matching stays content-based.
+    ``content_hash`` is computed Python-side (sha256 of normalized text) — it is
+    NOT stored in ArangoDB — so fetch the text and hash it here.
+    """
+    return {
+        r["key"]: content_hash(r["text"])
+        for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD)
+        if r.get("text")
+    }
+
+
+def score_anchor(
+    entry,
+    cand_keys,
+    sel_keys,
+    trace_found: bool,
+    adaptive_breakdown=None,
+    key_to_hash: dict[str, str] | None = None,
+) -> dict:
+    gold = [c.get("content_hash") for c in entry.get("expected_chunks", [])]
+    gold = [g for g in gold if g] or [
+        c.get("chunk_key") for c in entry.get("expected_chunks", [])
+    ]
+    # Project the span's _keys to content hashes for scoring; keep the raw _keys
+    # in "gold"/"selected"/"candidates" (the calibrator + CLAUDE.md schema read
+    # those as _keys); the content-hash projections live in the *_hashes fields.
+    sel = (
+        [key_to_hash[h] for h in sel_keys if h in key_to_hash]
+        if key_to_hash is not None
+        else sel_keys
+    )
+    cand = (
+        [key_to_hash[h] for h in cand_keys if h in key_to_hash]
+        if key_to_hash is not None
+        else cand_keys
+    )
+    gold_keys = [
+        c.get("chunk_key")
+        for c in entry.get("expected_chunks", [])
+        if c.get("chunk_key")
+    ]
+    row = {
+        "id": entry["id"],
+        "query": entry["query"],
+        "trace_found": trace_found,
+        "gold": gold_keys,  # raw _keys — calibrator-compatible, matches CLAUDE.md schema
+        "selected": sel_keys,  # raw _keys as emitted by the span
+        "candidates": cand_keys,
+        "gold_hashes": gold,  # content hashes used for scoring
+        "selected_hashes": sel,
+        "candidate_hashes": cand,
+        "expected_chunks": entry.get("expected_chunks", []),  # passage_id lives here
+        "adaptive_breakdown": adaptive_breakdown or [],
+    }
+    if trace_found:
+        row.update(
+            recall=metrics.recall(gold, sel),
+            precision=metrics.precision(gold, sel),
+            complete_recall=metrics.complete_recall(gold, sel),
+            noise=metrics.noise(gold, sel),
+        )
+        if cand:
+            row["retrieval_recall"] = metrics.retrieval_recall(gold, cand)
+        # Rank-aware: assumes `sel` is ordered best-first. chatqna's
+        # `_emit_reranker_selection_span` iterates `reranked_docs_with_scores`
+        # so the order is preserved from the reranker. See metrics.RANK_AWARE_K.
+        if sel:
+            for k in metrics.RANK_AWARE_K:
+                row[f"recall_at_{k}"] = metrics.recall_at_k(gold, sel, k)
+                row[f"ndcg_at_{k}"] = metrics.ndcg_at_k(gold, sel, k)
+        # Passage-level recall: a passage (verbatim preview) counts as retrieved
+        # only when ALL its chunks are in `selected`. Chunks without a passage_id
+        # (older gold sets) each count as their own single-chunk passage.
+        row["passage_recall"], row["n_passages"], row["passages_retrieved"] = (
+            _passage_recall(entry.get("expected_chunks", []), sel)
+        )
+    return row
+
+
+def _passage_recall(
+    expected_chunks: list[dict], selected_hashes: list[str]
+) -> tuple[float, int, int]:
+    """Group gold chunks by passage_id; a passage is retrieved iff every chunk hash is in `selected`.
+
+    For pre-refactor gold (no passage_id on chunks), each chunk is treated as its
+    own single-chunk passage — i.e. equivalent to chunk-level recall for that
+    chunk. Returns (passage_recall, n_passages, passages_retrieved).
+    """
+    by_passage: dict[str, set[str]] = {}
+    for c in expected_chunks:
+        if not c.get("chunk_key"):
+            continue
+        ch = c.get("content_hash")
+        if not ch:
+            continue
+        pid = c.get("passage_id") or f"{c.get('chunk_key')}#singleton"
+        by_passage.setdefault(pid, set()).add(ch)
+    if not by_passage:
+        return 0.0, 0, 0
+    sel_set = set(selected_hashes)
+    retrieved = sum(1 for chunks in by_passage.values() if chunks.issubset(sel_set))
+    return retrieved / len(by_passage), len(by_passage), retrieved
+
+
+def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
+    contexts = [hash_to_text[h] for h in sel_hashes if h in hash_to_text]
+    return {
+        "id": entry["id"],
+        "question": entry["query"],
+        "contexts": contexts,
+        "answer": answer,
+        "reference_answer": entry.get("reference_answer", ""),
+    }
+
+
+def _write_out(out_path: str, payload, mode: str) -> None:
+    """Atomic write through ``harness.write_json`` (tmp+os.replace + BaseException
+    cleanup). Used for both the anchor report dict and the dump-tuples list.
+    ``mode`` is retained for call-site symmetry with ``_write_out_post`` even
+    though the underlying write is mode-agnostic.
+    """
+    del mode  # see docstring; write_json handles indent + ensure_ascii uniformly
+    write_json(out_path, payload, ensure_ascii=False)
+
+
+def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
+    """Return ``(done_ids, rows_or_empty, tuples_or_empty)`` for resume.
+
+    ``done_ids`` is the union of ids read from ``<out_path>.done.jsonl`` (the
+    authoritative skip-set) and ids recoverable from ``out_path`` itself
+    (per_query rows for anchor, tuple-list entries for dump-tuples). Error
+    rows (``trace_found is False`` with an ``error`` field) in the anchor
+    report are deliberately EXCLUDED from ``done`` so a resume retries them
+    — they represent transient infrastructure failures, not a final result.
+
+    Resumability rules:
+    * ``out_path`` missing → fresh start, sidecar wiped if it existed (orphan).
+    * ``out_path`` exists but fails to parse → fresh start, sidecar wiped.
+    * Both present → load both, take the union.
+    """
+    done: set[str] = set()
+    rows: list = []
+    tuples: list = []
+    sidecar = f"{out_path}.done.jsonl"
+
+    if not os.path.exists(out_path):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
+
+    try:
+        with open(out_path) as fh:
+            payload = json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
+
+    if mode == "dump-tuples":
+        if isinstance(payload, list):
+            tuples = payload
+            for t in tuples:
+                if isinstance(t, dict) and t.get("id"):
+                    done.add(t["id"])
+    else:  # anchor
+        if isinstance(payload, dict):
+            for r in payload.get("per_query", []):
+                if not isinstance(r, dict):
+                    continue
+                # W3: keep error rows in `rows` so the W3 seed can recover
+                # n_http_errors / n_missed_traces from prior classifications.
+                # Error rows are still EXCLUDED from `done` so they retry — the
+                # intent was "must retry", not "must lose accounting".
+                rows.append(r)
+                is_error_row = (
+                    r.get("trace_found") is False and r.get("error")
+                )
+                if r.get("id") and not is_error_row:
+                    done.add(r["id"])
+
+    if os.path.exists(sidecar):
+        with open(sidecar) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    done.add(line)
+    return done, rows, tuples
+
+
+def _dedup_row(rows: list, entry_id: str) -> None:
+    """Drop any existing row with this id to keep the per-id invariant.
+
+    ``rows`` is the single source of truth for the report; the dedup guarantee
+    (at most one row per id) makes ``missed`` and ``skipped_entries`` safely
+    derivable from ``rows`` at report-build time. Without it, a resumed entry
+    that retries and succeeds appends a SECOND row with the same id — the
+    dedup invariant was the source of N1 (resume+retry-success interaction).
+    """
+    rows[:] = [r for r in rows if r.get("id") != entry_id]
+
+
+def _derive_missed(mode: str, rows: list, tuples: list) -> int:
+    """Single source of truth for n_missed_traces across both modes.
+
+    Anchor: rows with ``trace_found is False`` (covers both trace-miss and
+    HTTP-error rows — both are terminal non-scorables).
+    Dump-tuples: tuples with empty ``contexts`` (the only signal that the
+    drive returned but the trace fetch found nothing). 4xx/5xx entries do
+    NOT append a tuple — they surface via ``skipped``/``n_http_errors``,
+    not here.
+    """
+    if mode == "anchor":
+        return sum(1 for r in rows if r.get("trace_found") is False)
+    return sum(1 for t in tuples if not t.get("contexts"))
+
+
+def _derive_skipped_ids(rows: list) -> list[str]:
+    """Anchor-only: ids of rows carrying an ``error`` field (HTTP errors + retry-exhausted)."""
+    return sorted({r["id"] for r in rows if r.get("error")})
+
+
+def _write_out_post(
+    mode: str, out_path: str, tuples: list, rows: list,
+    unmapped: int, http_errors: int,
+) -> dict | None:
+    """Build the current payload from accumulated state and atomic-write it.
+    Called after EVERY entry so a mid-run kill never loses progress past the
+    last completed entry. For anchor this means recomputing the aggregate; for
+    dump-tuples this is just the list.
+
+    ``missed`` and ``skipped_entries`` are DERIVED from rows/tuples at write
+    time — no mutable threading, single source of truth. ``unmapped`` and
+    ``http_errors`` remain event counters (informational; the rc-3 gate runs
+    on the derived values).
+
+    Returns the anchor report dict so the caller can print/inspect without
+    rebuilding it (W11 — the old final block recomputed the same aggregate
+    right after _write_out_post ran on the last iteration). Returns None for
+    dump-tuples (the per-iter write is the only thing that matters there).
+    """
+    if mode == "dump-tuples":
+        _write_out(out_path, tuples, mode)
+        return None
+    scored = [r for r in rows if r.get("trace_found")]
+    # F2 (MR !505 review): a scored row whose gold set is empty or fully
+    # unresolved skews the aggregate — empty gold scores vacuous recall=1.0
+    # and all-unresolved gold forces recall=0.0, both of which are
+    # uninformative and corrupt the mean. Classify them out of the aggregate
+    # but keep them in per_query (traceability) and count them separately.
+    # ``evaluable`` requires at least one resolved (truthy) gold hash — a
+    # list of Nones from a fully-unresolved row is not evaluable either.
+    evaluable = [
+        r for r in scored
+        if r.get("gold_hashes") and any(r["gold_hashes"])
+    ]
+    n_empty_gold = sum(1 for r in scored if not r.get("expected_chunks"))
+    n_unresolved_gold = sum(
+        1
+        for r in scored
+        if r.get("expected_chunks")
+        and not any(c.get("content_hash") for c in r["expected_chunks"])
+    )
+    agg = metrics.aggregate(evaluable)
+    p_recalls = [
+        r["passage_recall"] for r in evaluable if r.get("n_passages")
+    ]
+    total_passages = sum(r.get("n_passages", 0) for r in evaluable)
+    retrieved_passages = sum(
+        r.get("passages_retrieved", 0) for r in evaluable
+    )
+    agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+    agg["total_passages"] = total_passages
+    agg["retrieved_passages"] = retrieved_passages
+    agg["n_evaluable"] = len(evaluable)
+    agg["n_empty_gold"] = n_empty_gold
+    agg["n_unresolved_gold"] = n_unresolved_gold
+    report = {
+        "per_query": rows,
+        "aggregate": agg,
+        "n_missed_traces": _derive_missed(mode, rows, tuples),
+        "n_unmapped_chunk_keys": unmapped,
+        "n_http_errors": http_errors,
+        "skipped_entries": _derive_skipped_ids(rows),
+    }
+    _write_out(out_path, report, mode)
+    return report
+
+
+def main(mode: str, gold_path: str, out_path: str) -> int:
+    with open(gold_path) as fh:
+        gold = json.load(fh)
+    entries = gold["entries"]
+    # W13: defer the (potentially expensive) ArangoDB hash-map build until we
+    # know there's actual work to do. On a no-op resume (every id already in
+    # `done`) the loop body is skipped and the maps would be discarded —
+    # building them anyway was the regression. Mode-specific maps (anchor
+    # needs key→hash, dump-tuples needs hash→text) stay empty until needed.
+    hash_to_text: dict[str, str] = {}
+    key_to_hash: dict[str, str] = {}
+
+    # --- resume: prefill from existing out + sidecar --------------------
+    sidecar_path = f"{out_path}.done.jsonl"
+    # W7: EVAL_FRESH=1 forces a clean slate — overwrite any pre-existing out
+    # and sidecar so the run starts from zero (use after a corrupted resume or
+    # when re-running a changed gold against an old report).
+    if os.getenv("EVAL_FRESH") == "1":
+        for p in (out_path, sidecar_path):
+            if os.path.exists(p):
+                os.remove(p)
+    done, rows, tuples = _load_done(out_path, mode)
+    # W7: validate the resume set against the CURRENT gold. If any prefilled id
+    # is not in the gold's entry ids, the operator swapped the gold mid-run
+    # without EVAL_FRESH=1; abort with exit 2 and the first 5 mismatches so
+    # they can decide (EVAL_FRESH=1 to discard, or fix the gold).
+    gold_ids = {e["id"] for e in entries}
+    mismatched = [iid for iid in done if iid not in gold_ids]
+    if mismatched:
+        sample = mismatched[:5]
+        print(
+            f"EXIT 2: {len(mismatched)} prefilled ids not in current gold "
+            f"(gold changed mid-run?). First {len(sample)}: {sample}",
+            file=sys.stderr,
+        )
+        return 2
+
+    backoff = float(os.getenv("EVAL_RETRY_BACKOFF", "5"))
+    # W3: seed http_errors from the prefilled report so a resume reflects
+    # HTTP-error counts from the prior run instead of restarting at 0 (the
+    # sidecar tells us which ids are done — not what classification they
+    # got). ``missed`` and ``skipped_entries`` are DERIVED from ``rows`` at
+    # report time (N1 fix: dedup invariant + derivation; rows is the single
+    # source of truth). ``unmapped`` stays 0 (recomputed only for new rows;
+    # acceptable window since the metric gates the exit, not the count).
+    if mode == "anchor":
+        http_errors = sum(
+            1 for r in rows
+            if isinstance(r.get("error"), str) and r["error"].startswith("HTTP")
+        )
+    else:
+        http_errors = 0
+    unmapped = 0
+
+    # W13: build the hash maps only when there is at least one entry remaining
+    # to drive. On a fully-covered no-op resume both dicts stay empty and we
+    # skip the (potentially many-second) ArangoDB cursor entirely.
+    if any(e["id"] not in done for e in entries):
+        if mode == "dump-tuples":
+            hash_to_text = build_hash_to_text()
+        else:
+            key_to_hash = build_key_to_content_hash()
+
+    # Open sidecar for the lifetime of the loop. When _load_done rebuilt done
+    # from out but the sidecar is empty/missing, seed it with the prefilled ids
+    # so a re-run finds the same skip-set via the sidecar union.
+    seed_needed = (
+        (not os.path.exists(sidecar_path) or os.path.getsize(sidecar_path) == 0)
+        and (rows or tuples)
+    )
+    # In-run bearer refresh: seed the TTL clock once at startup so the first
+    # top-of-loop hook sees elapsed=0 and skips refresh on entry 0.
+    global _token_ts
+    if _refresh_configured():
+        _token_ts = time.time()
+        # W9: when refresh is opted in BUT no static E2E_BEARER_TOKEN was
+        # seeded, the TTL check (elapsed ≤ TTL − margin) sees elapsed=0 and
+        # skips — the first drive carries an empty/undefined token → 401.
+        # Force one refresh up front so the loop starts authenticated.
+        if not os.getenv("E2E_BEARER_TOKEN"):
+            _maybe_refresh_token(force=True)
+    with open(sidecar_path, "a") as sidecar_fh:
+        if seed_needed:
+            for r in (rows if mode == "anchor" else tuples):
+                eid = r.get("id") if isinstance(r, dict) else None
+                if eid:
+                    sidecar_fh.write(f"{eid}\n")
+            sidecar_fh.flush()
+
+        for entry in entries:
+            eid = entry["id"]
+            if eid in done:
+                # Already completed in a prior run — skip (resume).
+                continue
+
+            # Per-entry retry: 3 attempts, swallow infra errors.
+            entry_succeeded = False
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    # W6: TTL-bounded pre-emptive refresh lives INSIDE the
+                    # per-entry try block (was a top-of-loop call that ran
+                    # outside the retry budget — a KeycloakError from the
+                    # refresh itself would crash the run). First statement so
+                    # a 401 reaction on the next line still has a fresh token.
+                    _maybe_refresh_token()
+                    start, body, status = drive_query(entry)
+                    # In-run bearer refresh on 401/403: if the operator opted in,
+                    # force a refresh and re-drive ONCE before falling through
+                    # to the AUTH-FAILURE row. Static-token path is untouched
+                    # (the retry is gated on _refresh_configured()).
+                    if status in (401, 403) and _refresh_configured():
+                        if _maybe_refresh_token(force=True):
+                            start, body, status = drive_query(entry)
+                    # Non-2xx catchall (finding 5): any status outside 200..299
+                    # takes the error path — skip the entry, count it, avoid
+                    # the expensive VT poll. HTTP errors are NOT retried: a
+                    # 401/502/400 against chatqna is deterministic for this
+                    # query within the same run; the retry budget is reserved
+                    # for transient infra failures (RuntimeError, JSONDecode,
+                    # OSError, TimeoutExpired).
+                    if status < 200 or status >= 300:
+                        http_errors += 1
+                        if status in (401, 403):
+                            print(
+                                f"[{eid}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                                "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                                file=sys.stderr,
+                            )
+                        else:
+                            print(
+                                f"[{eid}] HTTP {status} from chatqna — skipped",
+                                file=sys.stderr,
+                            )
+                        if mode == "anchor":
+                            # N1: drop any prior row for this id before appending
+                            # the new error row — preserves the per-id invariant
+                            # that makes ``missed``/``skipped_entries`` safely
+                            # derivable from ``rows`` at write time.
+                            _dedup_row(rows, eid)
+                            rows.append({
+                                "id": eid, "query": entry["query"],
+                                "trace_found": False, "error": f"HTTP {status}",
+                            })
+                        # Persist incrementally so a mid-run kill doesn't lose
+                        # this entry's classification.
+                        _write_out_post(mode, out_path, tuples, rows,
+                                         unmapped, http_errors)
+                        entry_succeeded = True
+                        break
+
+                    answer = _extract_answer(body)
+                    cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
+                    trace_found = bool(cand_keys or sel_keys)
+                    if mode == "anchor":
+                        unmapped += sum(
+                            1 for k in sel_keys + cand_keys if k not in key_to_hash
+                        )
+                    if not trace_found:
+                        print(
+                            f"[{eid}] WARNING: no reranker_selection span — trace missed "
+                            "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
+                            file=sys.stderr,
+                        )
+                    else:
+                        print(
+                            f"[{eid}] selected={len(sel_keys)} candidates={len(cand_keys)}",
+                            file=sys.stderr,
+                        )
+                    if mode == "dump-tuples":
+                        tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
+                    else:
+                        # N1: drop any prior row for this id before appending
+                        # the new scored row. On resume, a prefilled error row
+                        # would otherwise be paired with the success row — a
+                        # duplicate in per_query and a stale skipped_entries
+                        # entry that forces rc 3 despite a fully-scored report.
+                        _dedup_row(rows, eid)
+                        rows.append(
+                            score_anchor(
+                                entry, cand_keys, sel_keys, trace_found,
+                                adaptive_breakdown, key_to_hash,
+                            )
+                        )
+                    # W4: mark done in the OUT first, then append to the sidecar.
+                    # The previous order (sidecar then out) opened a kill-window
+                    # where a crash AFTER sidecar flush but BEFORE _write_out_post
+                    # would leave the sidecar claiming "done" but the report
+                    # missing the row — a re-run would silently skip the entry.
+                    # Out-derived done covers the reverse window so it is safe.
+                    done.add(eid)
+                    _write_out_post(mode, out_path, tuples, rows,
+                                     unmapped, http_errors)
+                    sidecar_fh.write(f"{eid}\n")
+                    sidecar_fh.flush()
+                    entry_succeeded = True
+                    break
+                except (subprocess.TimeoutExpired, RuntimeError,
+                        json.JSONDecodeError, OSError) as e:
+                    last_error = e
+                    if attempt < 2:
+                        time.sleep(backoff)
+                    continue
+
+            if not entry_succeeded:
+                # Retry budget exhausted: classify as error.
+                if mode == "anchor":
+                    # N1: dedup before append — see http_errors path comment.
+                    _dedup_row(rows, eid)
+                    rows.append({
+                        "id": eid, "query": entry["query"],
+                        "trace_found": False,
+                        "error": str(last_error)[:200] if last_error else "unknown",
+                    })
+                # NOTE: do NOT append the failed id to .done.jsonl — a later
+                # resume must be able to retry it.
+                _write_out_post(mode, out_path, tuples, rows,
+                                 unmapped, http_errors)
+                print(
+                    f"[{eid}] ERROR (3 attempts): {last_error}",
+                    file=sys.stderr,
+                )
+
+    if mode == "dump-tuples":
+        # N1: ``missed`` derived from tuples (single row per id, no mutable
+        # threading). ``skipped`` derived from entries-vs-tuples id diff —
+        # any entry that did not produce a tuple is "skipped" (covers both
+        # HTTP errors and retry-budget exhaustion).
+        missed = _derive_missed(mode, rows, tuples)
+        entry_ids = {e["id"] for e in entries}
+        tuple_ids = {t["id"] for t in tuples if t.get("id")}
+        skipped_meta = sorted(entry_ids - tuple_ids)
+        sidecar = {
+            "n_entries": len(entries),
+            "n_tuples": len(tuples),
+            "n_http_errors": http_errors,
+            "n_missed_traces": missed,
+            "skipped": skipped_meta,
+        }
+        write_json(f"{out_path}.meta.json", sidecar, ensure_ascii=False)
+        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
+        print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
+        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
+        if not tuples:
+            return 4
+        if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
+            print(
+                f"EXIT 3: {len(entries) - len(tuples)} entries skipped "
+                f"(see {out_path}.meta.json)",
+                file=sys.stderr,
+            )
+            return 3
+        max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+        if missed > max_missed:
+            print(
+                f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+                file=sys.stderr,
+            )
+            return 3
+        return 0
+
+    # Anchor branch. W11: use _write_out_post's returned report — the same
+    # aggregate we just wrote — instead of recomputing it (the old code did
+    # the build twice on the final iteration).
+    report = _write_out_post(
+        mode, out_path, tuples, rows,
+        unmapped, http_errors,
+    )
+    agg = report["aggregate"]
+    # N1: missed and skipped_entries are derived in _write_out_post from
+    # ``rows`` (single source of truth). Read them off the report for the
+    # threshold checks; the dedup invariant guarantees they're exact.
+    missed = report["n_missed_traces"]
+    skipped_entries = report["skipped_entries"]
+    print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
+    set_based_keys = [
+        "recall", "precision", "complete_recall", "noise",
+        "retrieval_recall", "passage_recall",
+    ]
+    for k in set_based_keys:
+        if k in agg:
+            print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+    for k in metrics.RANK_AWARE_K:
+        rk = f"recall_at_{k}"
+        nk = f"ndcg_at_{k}"
+        if rk in agg:
+            print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
+        if nk in agg:
+            print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
+    if agg.get("total_passages"):
+        print(
+            f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+            file=sys.stderr,
+        )
+    if missed:
+        print(
+            f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
+            file=sys.stderr,
+        )
+    print(f"\nReport → {out_path}", file=sys.stderr)
+    max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+    # N1: order matters — skipped_entries (HTTP errors) first, then missed
+    # (trace misses), then zero-scored guard, then unmapped. Putting the
+    # missed check BEFORE the agg["n"]==0 check lets all-missed resumes exit
+    # 3 with the missed message instead of the less-informative "zero scored
+    # rows" rc 4. (Pre-refactor, skipped_entries was seeded from trace-miss
+    # rows too — derivation narrows that semantic to error rows only.)
+    if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
+        print(
+            f"EXIT 3: {len(skipped_entries)} entries skipped (HTTP errors); "
+            "set EVAL_ALLOW_PARTIAL=1 to ignore. See report.skipped_entries.",
+            file=sys.stderr,
+        )
+        return 3
+    if missed > max_missed:
+        print(
+            f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+            file=sys.stderr,
+        )
+        return 3
+    if agg["n"] == 0:
+        return 4
+    if unmapped and not os.getenv("EVAL_ALLOW_UNMAPPED"):
+        print(
+            f"EXIT 3: {unmapped} unmapped chunk keys (wrong GRAPH_SOURCE?)",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    mode = (
+        sys.argv[1]
+        if len(sys.argv) > 1 and sys.argv[1] in ("anchor", "dump-tuples")
+        else "anchor"
+    )
+    gold = sys.argv[2] if len(sys.argv) > 2 else "gold_dataset.json"
+    default_out = "eval_tuples.json" if mode == "dump-tuples" else "eval_report.json"
+    out = sys.argv[3] if len(sys.argv) > 3 else default_out
+    sys.exit(main(mode, gold, out))

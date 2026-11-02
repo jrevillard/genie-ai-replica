@@ -1,0 +1,170 @@
+{{/*
+CPU-to-GPU NetworkPolicy: allows egress from CPU services to GPU services
+on specific ports, and ingress to GPU pods from those CPU pods.
+
+CPU services that need GPU access:
+- embedding, reranker, textgen, translation, guardrail, chatqna-xeon-backend-server
+
+GPU services they access:
+- vllm on port 8000 (embedding, textgen, translation, guardrail, chatqna-xeon-backend-server)
+- tei on port 80 (embedding)
+- tei-reranker on port 80 (reranker)
+*/}}
+
+# --- Egress: Allow CPU services to reach vLLM on port 8000 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-to-vllm-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - embedding
+          - textgen
+          - translation
+          - guardrail
+          - chatqna-xeon-backend-server
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# --- Egress: Allow embedding to reach TEI on port 80 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-to-tei-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: embedding
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tei
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# --- Egress: Allow reranker to reach TEI Reranker on port 80 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cpu-to-tei-reranker-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: reranker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tei-reranker
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# --- Ingress: Allow vLLM to receive from authorized CPU services ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gpu-ingress-from-cpu-vllm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - embedding
+                  - textgen
+                  - translation
+                  - guardrail
+                  - chatqna-xeon-backend-server
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# --- Ingress: Allow TEI to receive from embedding ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gpu-ingress-from-cpu-tei
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tei
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: embedding
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# --- Ingress: Allow TEI Reranker to receive from reranker ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gpu-ingress-from-cpu-tei-reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tei-reranker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: reranker
+      ports:
+        - protocol: TCP
+          port: 80

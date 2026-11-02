@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "dataprep" "tier" "gpu" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.gpu.dataprep.replicas }}
+  selector:
+    matchLabels:
+      {{- include "genieai.selectorLabels" (dict "name" "dataprep" "context" .) | nindent 6 }}
+  {{- include "genieai.rollingUpdate" . | nindent 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai.componentLabels" (dict "name" "dataprep" "tier" "gpu" "context" .) | nindent 8 }}
+    spec:
+      {{- include "genieai.gpuAffinity" . | nindent 6 }}
+      {{- include "genieai.gpuTolerations" . | nindent 6 }}
+      containers:
+        - name: dataprep
+          image: {{ .Values.gpu.dataprep.image }}
+          ports:
+            - containerPort: {{ .Values.gpu.dataprep.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: gpu-services-config
+          {{- include "genieai.gpuResources" .Values.gpu.dataprep.resources | nindent 10 }}
+          {{- include "genieai.gpuStartupProbe" (dict "path" .Values.gpu.dataprep.healthPath "port" .Values.gpu.dataprep.port "settings" .Values.gpuProbes.startup) | nindent 10 }}
+          {{- include "genieai.httpReadinessProbe" (dict "path" .Values.gpu.dataprep.healthPath "port" .Values.gpu.dataprep.port "settings" .Values.gpuProbes.readiness) | nindent 10 }}
+          {{- include "genieai.httpLivenessProbe" (dict "path" .Values.gpu.dataprep.healthPath "port" .Values.gpu.dataprep.port "settings" .Values.gpuProbes.liveness) | nindent 10 }}

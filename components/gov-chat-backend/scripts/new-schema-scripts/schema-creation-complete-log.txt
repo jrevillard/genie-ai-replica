@@ -1,0 +1,922 @@
+2026-03-24T10:41:54.038Z: LOG: --- Database Schema Creator ---
+2026-03-24T10:41:54.038Z: LOG: This script will apply a schema to an ArangoDB database.
+2026-03-24T10:41:54.039Z: LOG: 
+Database configuration to be used:
+2026-03-24T10:41:54.039Z: LOG:   URL:      http://127.0.0.1:8529
+2026-03-24T10:41:54.039Z: LOG:   Database: genie-ai
+2026-03-24T10:41:54.039Z: LOG:   User:     root
+2026-03-24T10:42:24.272Z: LOG: Creating schema for database: genie-ai
+2026-03-24T10:42:24.272Z: LOG: Creating collections...
+2026-03-24T10:42:24.272Z: LOG:   Processing schema for categoryServices
+2026-03-24T10:42:24.273Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2026-03-24T10:42:24.273Z: LOG:   Adding schema validation to categoryServices
+2026-03-24T10:42:24.391Z: LOG: Created collection: categoryServices
+2026-03-24T10:42:24.391Z: LOG:   No schema validation for userConversations
+2026-03-24T10:42:24.393Z: LOG: Created collection: userConversations
+2026-03-24T10:42:24.393Z: LOG:   Processing schema for userFolders
+2026-03-24T10:42:24.393Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "sharedBy": {
+      "type": "string"
+    },
+    "sharedAt": {
+      "type": "string"
+    },
+    "lastAccessedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "role"
+  ]
+}
+2026-03-24T10:42:24.393Z: LOG:   Adding schema validation to userFolders
+2026-03-24T10:42:24.394Z: LOG: Created collection: userFolders
+2026-03-24T10:42:24.394Z: LOG:   No schema validation for conversationCategories
+2026-03-24T10:42:24.395Z: LOG: Created collection: conversationCategories
+2026-03-24T10:42:24.395Z: LOG:   Processing schema for events
+2026-03-24T10:42:24.395Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "eventType",
+    "timestamp"
+  ]
+}
+2026-03-24T10:42:24.395Z: LOG:   Adding schema validation to events
+2026-03-24T10:42:24.396Z: LOG: Created collection: events
+2026-03-24T10:42:24.396Z: LOG:   No schema validation for userSessions
+2026-03-24T10:42:24.397Z: LOG: Created collection: userSessions
+2026-03-24T10:42:24.397Z: LOG:   Processing schema for messages
+2026-03-24T10:42:24.397Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "conversationId": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "sender": {
+      "type": "string"
+    },
+    "sequence": {
+      "type": "number"
+    },
+    "readStatus": {
+      "type": "boolean"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "_key",
+    "conversationId",
+    "content",
+    "timestamp",
+    "sender",
+    "sequence"
+  ]
+}
+2026-03-24T10:42:24.397Z: LOG:   Adding schema validation to messages
+2026-03-24T10:42:24.399Z: LOG: Created collection: messages
+2026-03-24T10:42:24.399Z: LOG:   Processing schema for serviceCategoryTranslations
+2026-03-24T10:42:24.399Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "serviceCategoryId": {
+      "type": "string"
+    },
+    "languageCode": {
+      "type": "string"
+    },
+    "translation": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "serviceCategoryId",
+    "languageCode",
+    "translation"
+  ]
+}
+2026-03-24T10:42:24.399Z: LOG:   Adding schema validation to serviceCategoryTranslations
+2026-03-24T10:42:24.400Z: LOG: Created collection: serviceCategoryTranslations
+2026-03-24T10:42:24.400Z: LOG:   Processing schema for folderConversations
+2026-03-24T10:42:24.400Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2026-03-24T10:42:24.400Z: LOG:   Adding schema validation to folderConversations
+2026-03-24T10:42:24.401Z: LOG: Created collection: folderConversations
+2026-03-24T10:42:24.401Z: LOG:   Processing schema for users
+2026-03-24T10:42:24.402Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "loginName": {
+      "type": "string"
+    },
+    "accessToken": {
+      "type": "string"
+    },
+    "encPassword": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "emailVerified": {
+      "type": "boolean"
+    },
+    "personalIdentification": {
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string"
+        },
+        "dob": {
+          "type": "string"
+        },
+        "gender": {
+          "type": "string"
+        },
+        "nationality": {
+          "type": "string"
+        },
+        "maritalStatus": {
+          "type": "string"
+        },
+        "photoUrl": {
+          "type": "string"
+        },
+        "biometricUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "civilRegistration": {
+      "type": "object",
+      "properties": {
+        "birthCertUrl": {
+          "type": "string"
+        },
+        "deathCertUrl": {
+          "type": "string"
+        },
+        "marriageDivorceUrl": {
+          "type": "string"
+        },
+        "adoptionUrl": {
+          "type": "string"
+        },
+        "citizenshipUrl": {
+          "type": "string"
+        },
+        "immigrationUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "addressResidency": {
+      "type": "object",
+      "properties": {
+        "currentAddress": {
+          "type": "string"
+        },
+        "previousAddresses": {
+          "type": "string"
+        },
+        "homeOrRental": {
+          "type": "string"
+        },
+        "utilityBillsUrl": {
+          "type": "string"
+        },
+        "landRecordsUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "identityTravel": {
+      "type": "object",
+      "properties": {
+        "idCard": {
+          "type": "string"
+        },
+        "passport": {
+          "type": "string"
+        },
+        "driversLicense": {
+          "type": "string"
+        },
+        "voterId": {
+          "type": "string"
+        },
+        "ssn": {
+          "type": "string"
+        },
+        "militaryRecordsUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "healthMedical": {
+      "type": "object",
+      "properties": {
+        "medicalHistory": {
+          "type": "string"
+        },
+        "vaccinationsUrl": {
+          "type": "string"
+        },
+        "insuranceDetails": {
+          "type": "string"
+        },
+        "disability": {
+          "type": "string"
+        },
+        "organDonor": {
+          "type": "string"
+        },
+        "prescriptions": {
+          "type": "string"
+        },
+        "mentalHealth": {
+          "type": "string"
+        }
+      }
+    },
+    "employment": {
+      "type": "object",
+      "properties": {
+        "eHistory": {
+          "type": "string"
+        },
+        "currentEmployer": {
+          "type": "string"
+        },
+        "workPermitsUrl": {
+          "type": "string"
+        },
+        "certificationsUrl": {
+          "type": "string"
+        },
+        "unemployment": {
+          "type": "string"
+        },
+        "tin": {
+          "type": "string"
+        },
+        "businessAffiliations": {
+          "type": "string"
+        }
+      }
+    },
+    "education": {
+      "type": "object",
+      "properties": {
+        "schools": {
+          "type": "string"
+        },
+        "diplomas": {
+          "type": "string"
+        },
+        "performance": {
+          "type": "string"
+        },
+        "scholarships": {
+          "type": "string"
+        }
+      }
+    },
+    "financialTax": {
+      "type": "object",
+      "properties": {
+        "incomeTaxUrl": {
+          "type": "string"
+        },
+        "bankAccounts": {
+          "type": "string"
+        },
+        "propertyTaxUrl": {
+          "type": "string"
+        },
+        "businessTaxUrl": {
+          "type": "string"
+        },
+        "pensionContribUrl": {
+          "type": "string"
+        },
+        "loanAidUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "socialSecurity": {
+      "type": "object",
+      "properties": {
+        "pensionStatus": {
+          "type": "string"
+        },
+        "unemployment": {
+          "type": "string"
+        },
+        "disability": {
+          "type": "string"
+        },
+        "childcare": {
+          "type": "string"
+        },
+        "foodAssistance": {
+          "type": "string"
+        },
+        "housingAssistance": {
+          "type": "string"
+        }
+      }
+    },
+    "criminalLegal": {
+      "type": "object",
+      "properties": {
+        "policeRecordsUrl": {
+          "type": "string"
+        },
+        "courtCasesUrl": {
+          "type": "string"
+        },
+        "finesPenaltiesUrl": {
+          "type": "string"
+        },
+        "paroleProbation": {
+          "type": "string"
+        },
+        "citizenshipRevocation": {
+          "type": "string"
+        }
+      }
+    },
+    "transportation": {
+      "type": "object",
+      "properties": {
+        "vehicleReg": {
+          "type": "string"
+        },
+        "trafficViolationsUrl": {
+          "type": "string"
+        },
+        "licenseHistory": {
+          "type": "string"
+        },
+        "publicTransportCard": {
+          "type": "string"
+        }
+      }
+    },
+    "civicParticipation": {
+      "type": "object",
+      "properties": {
+        "voterRegistration": {
+          "type": "string"
+        },
+        "electionHistory": {
+          "type": "string"
+        },
+        "partyMembership": {
+          "type": "string"
+        },
+        "militaryStatus": {
+          "type": "string"
+        },
+        "publicServiceRoles": {
+          "type": "string"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "loginName",
+    "email",
+    "encPassword"
+  ]
+}
+2026-03-24T10:42:24.402Z: LOG:   Adding schema validation to users
+2026-03-24T10:42:24.403Z: LOG: Created collection: users
+2026-03-24T10:42:24.403Z: LOG:   No schema validation for graphql_appearsIn
+2026-03-24T10:42:24.404Z: LOG: Created collection: graphql_appearsIn
+2026-03-24T10:42:24.404Z: LOG:   No schema validation for files
+2026-03-24T10:42:24.405Z: LOG: Created collection: files
+2026-03-24T10:42:24.405Z: LOG:   Processing schema for analytics
+2026-03-24T10:42:24.405Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string"
+    },
+    "endDate": {
+      "type": "string"
+    },
+    "totalQueries": {
+      "type": "number"
+    },
+    "uniqueUsers": {
+      "type": "number"
+    },
+    "averageResponseTime": {
+      "type": "number"
+    },
+    "satisfactionRate": {
+      "type": "number"
+    },
+    "queryDistribution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "topQueries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "period",
+    "startDate",
+    "endDate",
+    "totalQueries",
+    "lastUpdated"
+  ]
+}
+2026-03-24T10:42:24.405Z: LOG:   Adding schema validation to analytics
+2026-03-24T10:42:24.406Z: LOG: Created collection: analytics
+2026-03-24T10:42:24.406Z: LOG:   Processing schema for folders
+2026-03-24T10:42:24.406Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "name"
+  ],
+  "additionalProperties": true
+}
+2026-03-24T10:42:24.406Z: LOG:   Adding schema validation to folders
+2026-03-24T10:42:24.408Z: LOG: Created collection: folders
+2026-03-24T10:42:24.408Z: LOG:   No schema validation for graphql_friends
+2026-03-24T10:42:24.408Z: LOG: Created collection: graphql_friends
+2026-03-24T10:42:24.408Z: LOG:   Processing schema for passwordResetTokens
+2026-03-24T10:42:24.408Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "string"
+    },
+    "used": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "token",
+    "expiresAt",
+    "createdAt"
+  ]
+}
+2026-03-24T10:42:24.408Z: LOG:   Adding schema validation to passwordResetTokens
+2026-03-24T10:42:24.409Z: LOG: Created collection: passwordResetTokens
+2026-03-24T10:42:24.409Z: LOG:   No schema validation for ingestion_log
+2026-03-24T10:42:24.410Z: LOG: Created collection: ingestion_log
+2026-03-24T10:42:24.410Z: LOG:   Processing schema for services
+2026-03-24T10:42:24.411Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "categoryId": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "categoryId",
+    "nameEN",
+    "order"
+  ]
+}
+2026-03-24T10:42:24.411Z: LOG:   Adding schema validation to services
+2026-03-24T10:42:24.411Z: LOG: Created collection: services
+2026-03-24T10:42:24.411Z: LOG:   No schema validation for queryCategories
+2026-03-24T10:42:24.413Z: LOG: Created collection: queryCategories
+2026-03-24T10:42:24.413Z: LOG:   No schema validation for verificationTokens
+2026-03-24T10:42:24.413Z: LOG: Created collection: verificationTokens
+2026-03-24T10:42:24.413Z: LOG:   Processing schema for queryMessages
+2026-03-24T10:42:24.414Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "responseType": {
+      "type": "string"
+    },
+    "confidenceScore": {
+      "type": "number"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "responseType",
+    "createdAt"
+  ]
+}
+2026-03-24T10:42:24.414Z: LOG:   Adding schema validation to queryMessages
+2026-03-24T10:42:24.415Z: LOG: Created collection: queryMessages
+2026-03-24T10:42:24.415Z: LOG:   No schema validation for analyticsMetrics
+2026-03-24T10:42:24.415Z: LOG: Created collection: analyticsMetrics
+2026-03-24T10:42:24.415Z: LOG:   Processing schema for serviceCategoryTranslationsEdge
+2026-03-24T10:42:24.416Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2026-03-24T10:42:24.416Z: LOG:   Adding schema validation to serviceCategoryTranslationsEdge
+2026-03-24T10:42:24.416Z: LOG: Created collection: serviceCategoryTranslationsEdge
+2026-03-24T10:42:24.416Z: LOG:   No schema validation for graphql_characters
+2026-03-24T10:42:24.417Z: LOG: Created collection: graphql_characters
+2026-03-24T10:42:24.417Z: LOG:   No schema validation for queries
+2026-03-24T10:42:24.418Z: LOG: Created collection: queries
+2026-03-24T10:42:24.418Z: LOG:   Processing schema for serviceTranslations
+2026-03-24T10:42:24.418Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "serviceId": {
+      "type": "string"
+    },
+    "languageCode": {
+      "type": "string"
+    },
+    "translation": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "serviceId",
+    "languageCode",
+    "translation"
+  ]
+}
+2026-03-24T10:42:24.418Z: LOG:   Adding schema validation to serviceTranslations
+2026-03-24T10:42:24.419Z: LOG: Created collection: serviceTranslations
+2026-03-24T10:42:24.419Z: LOG:   No schema validation for weatherRequests
+2026-03-24T10:42:24.420Z: LOG: Created collection: weatherRequests
+2026-03-24T10:42:24.420Z: LOG:   Processing schema for serviceTranslationsEdge
+2026-03-24T10:42:24.420Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2026-03-24T10:42:24.420Z: LOG:   Adding schema validation to serviceTranslationsEdge
+2026-03-24T10:42:24.421Z: LOG: Created collection: serviceTranslationsEdge
+2026-03-24T10:42:24.421Z: LOG:   No schema validation for sessionQueries
+2026-03-24T10:42:24.422Z: LOG: Created collection: sessionQueries
+2026-03-24T10:42:24.422Z: LOG:   Processing schema for conversations
+2026-03-24T10:42:24.422Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "lastMessage": {
+      "type": "string"
+    },
+    "created": {
+      "type": "string"
+    },
+    "updated": {
+      "type": "string"
+    },
+    "messageCount": {
+      "type": "number"
+    },
+    "isStarred": {
+      "type": "boolean"
+    },
+    "isArchived": {
+      "type": "boolean"
+    },
+    "category": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "_key",
+    "title",
+    "created",
+    "updated",
+    "messageCount",
+    "isStarred",
+    "isArchived"
+  ]
+}
+2026-03-24T10:42:24.422Z: LOG:   Adding schema validation to conversations
+2026-03-24T10:42:24.423Z: LOG: Created collection: conversations
+2026-03-24T10:42:24.423Z: LOG:   No schema validation for graphql_episodes
+2026-03-24T10:42:24.425Z: LOG: Created collection: graphql_episodes
+2026-03-24T10:42:24.425Z: LOG:   Processing schema for serviceCategories
+2026-03-24T10:42:24.425Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "nameEN",
+    "order"
+  ]
+}
+2026-03-24T10:42:24.425Z: LOG:   Adding schema validation to serviceCategories
+2026-03-24T10:42:24.426Z: LOG: Created collection: serviceCategories
+2026-03-24T10:42:24.426Z: LOG:   No schema validation for sessions
+2026-03-24T10:42:24.427Z: LOG: Created collection: sessions
+2026-03-24T10:42:24.427Z: LOG: Creating indexes...
+2026-03-24T10:42:24.427Z: LOG: Skipping managed edge index on categoryServices
+2026-03-24T10:42:24.432Z: LOG: Created index on categoryServices: createdAt
+2026-03-24T10:42:24.432Z: LOG: Skipping managed edge index on userConversations
+2026-03-24T10:42:24.433Z: LOG: Created index on userConversations: createdAt
+2026-03-24T10:42:24.433Z: LOG: Skipping managed edge index on userFolders
+2026-03-24T10:42:24.433Z: LOG: Created index on userFolders: createdAt
+2026-03-24T10:42:24.434Z: LOG: Skipping managed edge index on conversationCategories
+2026-03-24T10:42:24.434Z: LOG: Created index on conversationCategories: createdAt
+2026-03-24T10:42:24.435Z: LOG: Created index on events: createdAt
+2026-03-24T10:42:24.435Z: LOG: Skipping managed edge index on userSessions
+2026-03-24T10:42:24.436Z: LOG: Created index on userSessions: userId, createdAt
+2026-03-24T10:42:24.437Z: LOG: Created index on messages: createdAt
+2026-03-24T10:42:24.438Z: LOG: Created index on serviceCategoryTranslations: createdAt
+2026-03-24T10:42:24.438Z: LOG: Skipping managed edge index on folderConversations
+2026-03-24T10:42:24.439Z: LOG: Created index on folderConversations: createdAt
+2026-03-24T10:42:24.440Z: LOG: Created index on users: email
+2026-03-24T10:42:24.440Z: LOG: Created index on users: createdAt
+2026-03-24T10:42:24.441Z: LOG: Created index on users: loginName
+2026-03-24T10:42:24.442Z: LOG: Created index on users: email
+2026-03-24T10:42:24.442Z: LOG: Skipping managed edge index on graphql_appearsIn
+2026-03-24T10:42:24.443Z: LOG: Created index on graphql_appearsIn: createdAt
+2026-03-24T10:42:24.444Z: LOG: Created index on files: createdAt
+2026-03-24T10:42:24.444Z: LOG: Created index on analytics: createdAt
+2026-03-24T10:42:24.445Z: LOG: Created index on folders: createdAt
+2026-03-24T10:42:24.445Z: LOG: Skipping managed edge index on graphql_friends
+2026-03-24T10:42:24.446Z: LOG: Created index on graphql_friends: createdAt
+2026-03-24T10:42:24.447Z: LOG: Created index on passwordResetTokens: createdAt
+2026-03-24T10:42:24.447Z: LOG: Created index on ingestion_log: file_id
+2026-03-24T10:42:24.448Z: LOG: Created index on ingestion_log: timestamp
+2026-03-24T10:42:24.449Z: LOG: Created index on services: categoryId, order
+2026-03-24T10:42:24.449Z: LOG: Skipping managed edge index on queryCategories
+2026-03-24T10:42:24.450Z: LOG: Created index on queryCategories: createdAt
+2026-03-24T10:42:24.450Z: LOG: Created index on verificationTokens: createdAt
+2026-03-24T10:42:24.451Z: LOG: Skipping managed edge index on queryMessages
+2026-03-24T10:42:24.451Z: LOG: Created index on queryMessages: createdAt
+2026-03-24T10:42:24.452Z: LOG: Created index on analyticsMetrics: createdAt
+2026-03-24T10:42:24.452Z: LOG: Skipping managed edge index on serviceCategoryTranslationsEdge
+2026-03-24T10:42:24.453Z: LOG: Created index on serviceCategoryTranslationsEdge: createdAt
+2026-03-24T10:42:24.454Z: LOG: Created index on graphql_characters: createdAt
+2026-03-24T10:42:24.454Z: LOG: Created index on queries: createdAt
+2026-03-24T10:42:24.455Z: LOG: Created index on serviceTranslations: createdAt
+2026-03-24T10:42:24.456Z: LOG: Created index on weatherRequests: createdAt
+2026-03-24T10:42:24.456Z: LOG: Skipping managed edge index on serviceTranslationsEdge
+2026-03-24T10:42:24.457Z: LOG: Created index on serviceTranslationsEdge: createdAt
+2026-03-24T10:42:24.457Z: LOG: Skipping managed edge index on sessionQueries
+2026-03-24T10:42:24.458Z: LOG: Created index on sessionQueries: createdAt
+2026-03-24T10:42:24.458Z: LOG: Created index on conversations: createdAt
+2026-03-24T10:42:24.459Z: LOG: Created index on graphql_episodes: createdAt
+2026-03-24T10:42:24.460Z: LOG: Created index on serviceCategories: catCode, order
+2026-03-24T10:42:24.461Z: LOG: Created index on sessions: userId, createdAt
+2026-03-24T10:42:24.461Z: LOG: Creating graphs...
+2026-03-24T10:42:24.461Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
+2026-03-24T10:42:24.461Z: LOG: Creating views...
+2026-03-24T10:42:24.462Z: LOG: Creating analyzers...
+2026-03-24T10:42:24.462Z: LOG: Creating AQL functions...
+2026-03-24T10:42:24.462Z: LOG: Schema creation completed successfully

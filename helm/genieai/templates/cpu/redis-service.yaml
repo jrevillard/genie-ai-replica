@@ -1,0 +1,19 @@
+{{/*
+Redis Service - Data Tier (CPU Node Pool)
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "redis-cache" "tier" "cpu" "context" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "genieai.selectorLabels" (dict "name" "redis-cache" "context" .) | nindent 4 }}
+  ports:
+    - port: {{ .Values.cpu.redis.port }}
+      targetPort: {{ .Values.cpu.redis.port }}
+      protocol: TCP
+      name: redis

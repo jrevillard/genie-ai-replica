@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-services-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.componentLabels" (dict "name" "gpu-services-config" "tier" "gpu" "context" .) | nindent 4 }}
+data:
+  # vLLM configuration
+  VLLM_MODEL: {{ .Values.gpu.vllm.env.model | quote }}
+  VLLM_PORT: {{ .Values.gpu.vllm.port | quote }}
+  VLLM_MAX_MODEL_LEN: {{ .Values.gpu.vllm.env.maxModelLen | quote }}
+  VLLM_GPU_MEMORY_UTILIZATION: {{ .Values.gpu.vllm.env.gpuMemoryUtilization | quote }}
+  VLLM_DTYPE: {{ .Values.gpu.vllm.env.dtype | quote }}
+  VLLM_TRUST_REMOTE_CODE: {{ .Values.gpu.vllm.env.trustRemoteCode | quote }}
+
+  # TEI Embedding configuration
+  TEI_MODEL: {{ .Values.gpu.tei.env.model | quote }}
+  TEI_PORT: {{ .Values.gpu.tei.port | quote }}
+  TEI_MAX_BATCH_REQUESTS: {{ .Values.gpu.tei.env.maxBatchRequests | quote }}
+
+  # TEI Reranker configuration
+  TEI_RERANKER_MODEL: {{ .Values.gpu.teiReranker.env.model | quote }}
+  TEI_RERANKER_PORT: {{ .Values.gpu.teiReranker.port | quote }}
+
+  # Dataprep configuration
+  DATAPREP_PORT: {{ .Values.gpu.dataprep.port | quote }}
+
+  # Service endpoints (Kubernetes DNS)
+  ARANGO_URL: "http://arango-vector-db.{{ .Values.namespace }}.svc.cluster.local:8529"
+  EMBEDDING_ENDPOINT: "http://embedding.{{ .Values.namespace }}.svc.cluster.local:6000"
+  GUARDRAIL_URL: "http://guardrail.{{ .Values.namespace }}.svc.cluster.local:9090"
+  DOCUMENT_REPOSITORY_URL: "http://document-repository.{{ .Values.namespace }}.svc.cluster.local:3001"
+  BACKEND_SERVICE_URL: "http://backend.{{ .Values.namespace }}.svc.cluster.local:3000"
+  HTTP_SERVICE_URL: "http://http-service.{{ .Values.namespace }}.svc.cluster.local:6666"

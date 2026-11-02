@@ -1,0 +1,477 @@
+# GenieAI Helm Chart - Default Values
+# Override per environment using values-dev.yaml, values-staging.yaml, values-prod.yaml
+
+namespace: genieai
+
+# --- Node Pool Configuration ---
+nodePools:
+  gpu:
+    label: "gpu-pool"
+    labelValue: "true"
+    taint:
+      key: "nvidia.com/gpu"
+      value: "present"
+      effect: "NoSchedule"
+  cpu:
+    label: "cpu-pool"
+    labelValue: "true"
+
+# --- Cluster Autoscaler ---
+autoscaler:
+  gpu:
+    minNodes: 0
+    maxNodes: 2
+    scaleDownUnneededTime: "10m"
+  cpu:
+    minNodes: 1
+    maxNodes: 5
+
+# --- GPU Services ---
+gpu:
+  vllm:
+    image: vllm/vllm-openai:latest
+    replicas: 1
+    port: 8000
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "2"
+        memory: "16Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "4"
+        memory: "32Gi"
+        nvidia.com/gpu: "1"
+    env:
+      model: "meta-llama/Llama-3.1-8B-Instruct"
+      maxModelLen: "8192"
+      gpuMemoryUtilization: "0.9"
+      dtype: "float16"
+      trustRemoteCode: "true"
+
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.2
+    replicas: 1
+    port: 80
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        nvidia.com/gpu: "1"
+    env:
+      model: "BAAI/bge-base-en-v1.5"
+      maxBatchRequests: "64"
+
+  teiReranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.2
+    replicas: 1
+    port: 80
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        nvidia.com/gpu: "1"
+    env:
+      model: "BAAI/bge-reranker-base"
+
+  dataprep:
+    image: genieai/dataprep:latest
+    replicas: 1
+    port: 5000
+    healthPath: "/v1/health"
+    resources:
+      requests:
+        cpu: "2"
+        memory: "8Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "4"
+        memory: "16Gi"
+        nvidia.com/gpu: "1"
+
+# --- GPU Probe Settings ---
+gpuProbes:
+  startup:
+    initialDelaySeconds: 60
+    periodSeconds: 12
+    failureThreshold: 30
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# --- CPU Services ---
+cpu:
+  # Application tier
+  backend:
+    image: genieai/backend:latest
+    replicas: 2
+    port: 3000
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  frontend:
+    image: genieai/frontend:latest
+    replicas: 2
+    port: 5173
+    healthPath: "/"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  documentRepository:
+    image: genieai/document-repository:latest
+    replicas: 2
+    port: 3001
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  nginx:
+    image: nginx:alpine
+    replicas: 2
+    port: 80
+    healthPath: "/"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+
+  kong:
+    image: kong:3.4
+    replicas: 2
+    port: 8010
+    probeType: "tcp"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  # Data tier
+  arangodb:
+    image: arangodb:3.11
+    replicas: 1
+    port: 8529
+    probeType: "tcp"
+    slowStart: true
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+
+  redis:
+    image: redis:7-alpine
+    replicas: 1
+    port: 6379
+    probeType: "tcp"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  kongDatabase:
+    image: postgres:13
+    replicas: 1
+    port: 5432
+    probeType: "exec"
+    probeCommand: ["pg_isready", "-U", "kong"]
+    slowStart: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  keycloakDb:
+    image: postgres:15
+    replicas: 1
+    port: 5432
+    probeType: "exec"
+    probeCommand: ["pg_isready", "-U", "keycloak"]
+    slowStart: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  # Microservices tier
+  embedding:
+    image: genieai/embedding:latest
+    replicas: 2
+    port: 6000
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  reranker:
+    image: genieai/reranker:latest
+    replicas: 2
+    port: 6100
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  textgen:
+    image: genieai/textgen:latest
+    replicas: 2
+    port: 9000
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  translation:
+    image: genieai/translation:latest
+    replicas: 2
+    port: 9030
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  guardrail:
+    image: genieai/guardrail:latest
+    replicas: 2
+    port: 9090
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  retrieverArangoService:
+    image: genieai/retriever-arango-service:latest
+    replicas: 2
+    port: 7025
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  httpService:
+    image: genieai/http-service:latest
+    replicas: 2
+    port: 6666
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  chatqnaXeonBackendServer:
+    image: genieai/chatqna-xeon-backend-server:latest
+    replicas: 2
+    port: 8888
+    healthPath: "/health"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  chatqnaXeonUiServer:
+    image: genieai/chatqna-xeon-ui-server:latest
+    replicas: 2
+    port: 5173
+    healthPath: "/"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  chatqnaXeonNginxServer:
+    image: genieai/chatqna-xeon-nginx-server:latest
+    replicas: 2
+    port: 80
+    healthPath: "/"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+
+  # Auth & Utility tier
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    replicas: 1
+    port: 8080
+    healthPath: "/auth/health"
+    slowStart: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  clamav:
+    image: clamav/clamav:latest
+    replicas: 1
+    port: 3310
+    probeType: "tcp"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+
+  # Monitoring
+  healthMonitor:
+    image: alpine:3.18
+    replicas: 1
+    port: 8080
+    healthPath: "/health-status"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "250m"
+        memory: "128Mi"
+
+# --- CPU Probe Settings ---
+cpuProbes:
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # Startup probe for slow-starting CPU services (databases, Keycloak)
+  slowStartup:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 30
+
+# --- Storage ---
+storage:
+  arango:
+    storageClass: "managed-premium"
+    accessMode: "ReadWriteOnce"
+    size: "50Gi"
+  kongDb:
+    storageClass: "managed-premium"
+    accessMode: "ReadWriteOnce"
+    size: "10Gi"
+  keycloakDb:
+    storageClass: "managed-premium"
+    accessMode: "ReadWriteOnce"
+    size: "10Gi"
+  documentUploads:
+    storageClass: "azurefile"
+    accessMode: "ReadWriteMany"
+    size: "50Gi"
+  redisData:
+    storageClass: "azurefile"
+    accessMode: "ReadWriteMany"
+    size: "10Gi"
+
+# --- Ingress ---
+ingress:
+  enabled: true
+  className: "nginx"
+  host: ""
+  tls:
+    enabled: true
+    secretName: "tls-secret"
+    minVersion: "TLSv1.2"
+
+# --- Secrets (Azure Key Vault via Secrets Store CSI Driver) ---
+secrets:
+  azureKeyVault:
+    keyvaultName: ""
+    tenantId: ""
+    userAssignedIdentityID: ""
+
+# --- Deployment Strategy ---
+strategy:
+  type: "RollingUpdate"
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1

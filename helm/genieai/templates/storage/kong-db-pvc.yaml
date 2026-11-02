@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kong-db-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kong-db-storage
+    genieai/tier: cpu
+spec:
+  storageClassName: {{ .Values.storage.kongDb.storageClass }}
+  accessModes:
+    - {{ .Values.storage.kongDb.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.kongDb.size }}

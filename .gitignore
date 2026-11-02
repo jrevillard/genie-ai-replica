@@ -153,6 +153,10 @@ _bmad/render/
 _bmad-output/implementation-artifacts/orchestrate-runs/
 _bmad-output/implementation-artifacts/bmad-build-auto-result-*.md
 
+# CI-mirrored openapi-generator install (config:api-client before_script;
+# wrapper node_modules + the downloaded generator jar it caches)
+.openapi-tools/
+
 # Legacy file-mode log artefacts (T8 deleted the code path)
 components/gov-chat-backend/logs/
 

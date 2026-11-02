@@ -3741,27 +3741,32 @@ config:docs-links:
 config:api-client:
   extends: .node_base
   stage: config
+  dependencies: []
   before_script:
-    # openapi-generator-cli is Java-based; bookworm-free alpine JRE is enough
-    - apk add --no-cache openjdk17-jre-headless
+    # openapi-generator-cli is Java-based: a JRE for the generator jar, bash
+    # (the script is a bash script) and GNU diff (the staleness diff uses
+    # --exclude, which busybox diff lacks) for the check itself.
+    - apk add --no-cache bash diffutils openjdk17-jre-headless
     # Install into the project dir (not -g) so the wrapper AND the generator
     # jar it downloads (node_modules/@openapitools/.../versions/7.22.0.jar)
-    # land inside the cacheable path below.
-    - npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli
+    # land inside the cacheable path below. The wrapper is pinned too: it
+    # resolves the jar version from the tracked openapitools.json, but its
+    # own version must not drift under a cache key that never moves.
+    - npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@2.42.0
     - export PATH="${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin:$PATH"
     # The spec extraction needs swagger-jsdoc — a production dependency.
     - cd components/gov-chat-backend && npm ci --omit=dev && cd ${CI_PROJECT_DIR}
   script:
     - npm run api-client:check
   cache:
+    # when: always — the gate's red path (a stale client) must not discard
+    # the jar it just downloaded, or every push on the MR re-downloads it.
     - key:
         files:
           - openapitools.json
       paths:
         - .openapi-tools/
-      fallback_keys:
-        - "openapi-tools-$CI_DEFAULT_BRANCH"
-        - "openapi-tools-"
+      when: always
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

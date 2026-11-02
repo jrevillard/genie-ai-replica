@@ -289,14 +289,15 @@ class _LocaleMockClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    debugPrint('[MOCK] ${request.method} ${request.url.path}');
     // Only the categories endpoint is answered: every other request the
     // mount issues (a chat-history fetch) gets the clean 404 the other
     // chatbot mocks return — not the tree, which would parse as the
-    // wrong type, and not a count in requestsByLocale.
-    if (!request.url.path.contains('/api/service-categories/categories')) {
+    // wrong type, and not a count in requestsByLocale. Logged above, so
+    // a request the mock does not understand stays visible.
+    if (!request.url.path.endsWith('/api/service-categories/categories')) {
       return httpResponseJson(<String, dynamic>{}, 404);
     }
-    debugPrint('[MOCK] ${request.method} ${request.url.path}');
     final locale =
         Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
     requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;

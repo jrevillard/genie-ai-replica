@@ -123,6 +123,7 @@ Future<void> pumpChatBot(
   List<Locale> supportedLocales = const [Locale('en')],
   Widget Function(Widget chatbot)? buildHome,
 }) async {
+  final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -144,9 +145,7 @@ Future<void> pumpChatBot(
             FallbackWidgetsLocalizationsDelegate(),
             GlobalCupertinoLocalizations.delegate,
           ],
-          home:
-              buildHome?.call(chatBotUnderTest(chatKey)) ??
-              Scaffold(body: chatBotUnderTest(chatKey)),
+          home: homeWith(chatBotUnderTest(chatKey)),
         ),
       ),
     ),

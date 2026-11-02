@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -320,11 +319,9 @@ class _LocaleMockClient extends http.BaseClient {
   }
 
   http.StreamedResponse _respond(String locale) {
-    final bytes = utf8.encode(jsonEncode(treesByLocale[locale] ?? []));
-    return http.StreamedResponse(
-      http.ByteStream.fromBytes(bytes),
+    return httpResponseJson(
+      treesByLocale[locale] ?? [],
       statusByLocale[locale] ?? 200,
-      headers: {'content-type': 'application/json'},
     );
   }
 }

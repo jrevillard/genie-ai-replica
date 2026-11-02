@@ -206,6 +206,9 @@ void main() {
       for (var i = 0; i < 10 && (mock.requestsByLocale['en'] ?? 0) < 4; i++) {
         await tester.pump();
       }
+      // The switch-back fetches FIRED: without them the title assertion
+      // below would pass on the original pick while covering no race.
+      expect(mock.requestsByLocale['en'], 4);
       await tester.pumpAndSettle();
       // Release the held 'es' responses: the chatbot's late one must be
       // superseded, the panel's late tree is display-only.
@@ -289,19 +292,19 @@ class _LocaleMockClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     debugPrint('[MOCK] ${request.method} ${request.url.path}');
-    // Only the categories endpoint is answered: every other request the
-    // mount issues (a chat-history fetch) gets the clean 404 the other
-    // chatbot mocks return — not the tree, which would parse as the
-    // wrong type, and not a count in requestsByLocale. Logged above, so
-    // a request the mock does not understand stays visible.
+    // Only the categories endpoint is answered: any other request the
+    // mount may issue gets the clean 404 the other chatbot mocks return
+    // — not the tree, which would parse as the wrong type, and not a
+    // count in requestsByLocale. Logged above, so a request the mock
+    // does not understand stays visible.
     if (!request.url.path.endsWith('/api/service-categories/categories')) {
       return httpResponseJson(<String, dynamic>{}, 404);
     }
-    final locale =
-        Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
-    requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;
+    final locale = request.url.queryParameters['locale'] ?? 'en';
+    final count = (requestsByLocale[locale] ?? 0) + 1;
+    requestsByLocale[locale] = count;
     final holdFrom = holdFromCounts[locale];
-    if (holdFrom != null && (requestsByLocale[locale] ?? 0) >= holdFrom) {
+    if (holdFrom != null && count >= holdFrom) {
       final completer = Completer<http.StreamedResponse>();
       _held.add((locale: locale, completer: completer));
       return completer.future;

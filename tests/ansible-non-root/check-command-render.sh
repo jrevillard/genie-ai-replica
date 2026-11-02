@@ -182,6 +182,59 @@ YAML
 ansible-playbook -i localhost, "$TMP/degen.yml" > "$TMP/degen.log" 2>&1 ||
   { tail -20 "$TMP/degen.log" >&2; fail "degenerate-shape render run failed"; }
 
+# The escape-guard FACT renders for each misconfigured spelling (the
+# round-61 stray-chown class): '/' and '.' and a deploy_dir ancestor are
+# True, the supported external override and the default ./data are False.
+# The guard fact is EXTRACTED from no-root-data-migration.yml verbatim
+# (a copied expression would drift exactly like the command builders
+# did) and rendered against each misconfigured spelling: '/' and '.'
+# and a deploy_dir ancestor are True; the supported external override
+# and the default ./data are False.
+MIG2=deploy/ansible/tasks/no-root-data-migration.yml
+awk '/^    _data_dir_escaped: >-/{p=1} p{print} p && /regex_escape/{exit}' \
+  "$MIG2" > "$TMP/guard.frag"
+grep -q '_data_dir_escaped' "$TMP/guard.frag" ||
+  fail "could not extract the _data_dir_escaped guard fact from $MIG2"
+
+cat > "$TMP/guard.yml" <<YAML
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    deploy_dir_resolved: /opt/genieai
+$(cat "$TMP/guard.frag")
+  tasks:
+    - name: Render the guard fact per shape
+      ansible.builtin.set_fact:
+        "{{ item.name }}": "{{ _data_dir_escaped }}"
+      vars:
+        data_dir_resolved: "{{ item.data_dir }}"
+      loop:
+        - {name: _g_slash, data_dir: /}
+        - {name: _g_dot, data_dir: .}
+        - {name: _g_ancestor, data_dir: /opt}
+        - {name: _g_external, data_dir: /srv/genieai-data}
+        - {name: _g_default, data_dir: ./data}
+    - name: Persist rendered guards
+      ansible.builtin.copy:
+        content: "{{ _g_slash }}\n{{ _g_dot }}\n{{ _g_ancestor }}\n{{ _g_external }}\n{{ _g_default }}\n"
+        dest: $TMP/guards.txt
+YAML
+ansible-playbook -i localhost, "$TMP/guard.yml" > "$TMP/guard.log" 2>&1 ||
+  { tail -20 "$TMP/guard.log" >&2; fail "guard fact render run failed"; }
+
+python3 - "$TMP" <<'PYEOF'
+import sys, os
+tmp = sys.argv[1]
+got = open(os.path.join(tmp, "guards.txt")).read().splitlines()
+expected = ["True", "True", "True", "False", "False"]
+labels = ["/", ".", "/opt (ancestor)", "/srv external", "./data default"]
+for g, e, l in zip(got, expected, labels):
+    if g != e:
+        print(f"escape guard[{l}]: rendered {g!r}, expected {e!r}", file=sys.stderr); sys.exit(1)
+print("OK: escape guard renders True for '/', '.', ancestor; False for external/default")
+PYEOF
+
 python3 - "$TMP" <<'PYEOF'
 import shlex, subprocess, sys, os
 

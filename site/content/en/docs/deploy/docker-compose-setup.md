@@ -147,7 +147,7 @@ mkdir -p data/database_backups secrets/ssl
 | Directory | Purpose |
 |---|---|
 | `data/database_backups` | Backend DB dump output (bind mount) |
-| `secrets/ssl` | SSL certificates — auto-generated self-signed cert if missing |
+| `secrets/ssl` | SSL certificates you provide (read-only bind; must be `root:101` `0640` for the key). Self-signed dev certs are generated INSIDE the edge container (`/etc/nginx/certs`) — this directory stays empty on that path. |
 
 There is no `data/logs/` since #1227: every service logs to stdout and
 the fluentd logging driver ships the logs — a `data/logs` bind would

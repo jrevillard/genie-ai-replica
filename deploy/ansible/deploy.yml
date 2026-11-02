@@ -440,7 +440,12 @@
       failed_when: false
 
     - name: Generate self-signed SSL certificate
+      # ROOT (become_user): the secrets/ssl directory is created root:root
+      # by "Create deploy directories" — writing server.key as the play's
+      # ansible_user dies EACCES on a fresh host (the adjacent normalize
+      # task pins become_user: root for the same reason).
       become: true
+      become_user: root
       ansible.builtin.command: >
         openssl req -x509 -nodes -days 365 -newkey rsa:2048
         -keyout {{ deploy_dir }}/secrets/ssl/server.key

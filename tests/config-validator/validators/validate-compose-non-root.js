@@ -85,6 +85,16 @@ function validateComposeNonRoot(composeText) {
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
+    // an UNTERMINATED reflow accumulation (no closing bracket before the
+    // next top-level key) once swallowed the list AND the next service's
+    // volumes block — fail loud instead of letting the parser eat them.
+    if (inFlowVolumes) {
+      inFlowVolumes = false;
+      flowBuffer = '';
+      violations.push(
+        'an unterminated `volumes: [` reflow accumulation never closed — the list (and everything after it) went unenforced'
+      );
+    }
     // wholesale re-indent trap (see the saw* declarations). The flag is
     // CONSUMED here: flush() runs once per top-level key, and re-emitting
     // the identical violation per flush buried the one actionable defect
@@ -1047,12 +1057,46 @@ function validateComposeNonRoot(composeText) {
 // backslash-escaped quotes): a ']' inside a quoted path once closed the
 // accumulation early and silently dropped every bind listed after it.
 function flowCloseIndex(buf) {
+  // strip '#'-to-EOL comments OUTSIDE quoted spans first: a comment
+  // carrying a quote or bracket once desynced the scan and the
+  // accumulation never closed (swallowing the list AND the next
+  // service's volumes block — a total fail-open, measured).
   let q = null;
+  let stripped = '';
+  for (let i = 0; i < buf.length; i += 1) {
+    const ch = buf[i];
+    if (q) {
+      stripped += ch;
+      if (ch === '\\' && buf[i + 1] === q) {
+        stripped += buf[i + 1];
+        i += 1;
+        continue;
+      }
+      if (ch === q) q = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q = ch;
+      stripped += ch;
+      continue;
+    }
+    if (ch === '#') {
+      while (i < buf.length && buf[i] !== '\n') i += 1;
+      stripped += '\n';
+      continue;
+    }
+    stripped += ch;
+  }
+  buf = stripped;
+  q = null;
   let depth = 1; // the opening '[' precedes this buffer
   for (let i = 0; i < buf.length; i += 1) {
     const ch = buf[i];
     if (q) {
-      if (ch === '\\' && buf[i + 1] === q) {
+      // a backslash escapes ANY following character in a YAML double-
+      // quoted scalar (not just a quote) — honoring only \\" once
+      // desynced the span at a trailing backslash
+      if (q === '"' && ch === '\\' && i + 1 < buf.length) {
         i += 1;
         continue;
       }
@@ -1073,6 +1117,36 @@ function flowCloseIndex(buf) {
 }
 
 function splitFlowItems(body) {
+  // strip '#'-to-EOL comments outside quoted spans first (same doctrine
+  // as flowCloseIndex — a comment once desynced the splitter)
+  let q0 = null;
+  let stripped = '';
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i];
+    if (q0) {
+      stripped += ch;
+      if (ch === '\\' && q0 === '"' && i + 1 < body.length) {
+        stripped += body[i + 1];
+        i += 1;
+        continue;
+      }
+      if (ch === q0) q0 = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q0 = ch;
+      stripped += ch;
+      continue;
+    }
+    if (ch === '#') {
+      while (i < body.length && body[i] !== '\n') i += 1;
+      stripped += '\n';
+      continue;
+    }
+    stripped += ch;
+  }
+  body = stripped;
+
   const items = [];
   let depth = 0;
   let quote = null;
@@ -1081,9 +1155,10 @@ function splitFlowItems(body) {
     const ch = body[i];
     if (quote) {
       cur += ch;
-      // a BACKSLASH-ESCAPED quote ("a \" b") does not close the span —
-      // honoring it once desynced the tracker and split entries mid-path
-      if (ch === '\\' && body[i + 1] === quote) {
+      // a backslash escapes ANY following character in a YAML double-
+      // quoted scalar; single-quoted YAML has none ('' doubling keeps
+      // the two-quote state machine correct)
+      if (quote === '"' && ch === '\\' && i + 1 < body.length) {
         cur += body[i + 1];
         i += 1;
         continue;

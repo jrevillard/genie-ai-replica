@@ -7,10 +7,17 @@
 #      container must have a uid != 0 (checked via `docker top`, the host's
 #      view of the container's process table);
 #   2. no root-owned file exists under the data directory — the host-visible
-#      surface container filesystems and bind mounts land on.
+#      surface container filesystems and bind mounts land on;
+#   3. every file under <data>/database_backups is owned by the backend's
+#      uid 1000 (the backend must own its own dump dir);
+#   4. every file under the secrets/ssl bind is group-101-readable and the
+#      directory grants gid-101 traverse (the shipped state is root:101
+#      0640 — the pre-#1227 root:root 0600/0640 spellings crash-loop the
+#      edge).
 #
-# Usage: tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
-# Env:   DATA_DIR overrides ./data default when data_dir arg is omitted.
+# Usage: tests/compose-non-root/check-runtime.sh <compose-project> [data_dir] [secrets_dir]
+# Env:   DATA_DIR overrides ./data default when data_dir arg is omitted;
+#        ./secrets/ssl is the secrets_dir default (repo-relative to CWD).
 #
 # PRECONDITION — run as root or as the owner of the data directory: the
 # sweeps in rules 2-3 traverse the live tree, and an unprivileged run over
@@ -299,11 +306,11 @@ if [ ! -d "$secrets_dir" ]; then
 else
   find_err=$(mktemp)
   find_out=$(mktemp)
-  # busybox find (the CI image) has no -perm negation quirk here, but it
-  # DOES lack -uid: -perm is implemented on both. Group-read is the
-  # contract bit: 0640 root:101 (the normalized state) passes, 0600
-  # root:root (the pre-#1227 crash-loop state) fails.
-  find "$secrets_dir" -type f ! -perm -0040 -print > "$find_out" 2>"$find_err"
+  # busybox find (the CI image) has no -uid: -perm and -group are
+  # implemented on both. The contract = MODE BIT + GROUP 101: the mode
+  # bit alone once passed a root:root 0640 key (verified) that gid-101
+  # still cannot read — the same crash-loop as the 0600 spelling.
+  find "$secrets_dir" -type f ! \( -perm -0040 -a -group 101 \) -print > "$find_out" 2>"$find_err"
   find_rc=$?
   if [ -s "$find_err" ] || [ $find_rc -ne 0 ]; then
     echo "FIND ERRORS while sweeping $secrets_dir (untraversable paths are NOT checked):"
@@ -312,11 +319,18 @@ else
   fi
   unreadable=$(head -20 "$find_out")
   if [ -n "$unreadable" ]; then
-    echo "FILES WITHOUT GROUP-READ under $secrets_dir (the gid-101 edge must read the key; normalize to root:101 0640):"
+    echo "FILES WITHOUT GROUP-READ OR NOT GROUP-101 under $secrets_dir (normalize to root:101 0640):"
     echo "$unreadable" | sed 's/^/  /'
     violations=$((violations + 1))
   fi
   rm -f "$find_err" "$find_out"
+  # the directory itself must grant gid-101 traverse+read (a root:root
+  # 0700 dir shadows even a correctly-owned key)
+  dir_bad=$(find "$secrets_dir" -maxdepth 0 ! -perm -0050 -print)
+  if [ -n "$dir_bad" ]; then
+    echo "SECRETS DIR NOT GROUP-TRAVERSABLE (needs group r-x for the gid-101 edge): $dir_bad"
+    violations=$((violations + 1))
+  fi
 fi
 
 if [ "$violations" -gt 0 ]; then

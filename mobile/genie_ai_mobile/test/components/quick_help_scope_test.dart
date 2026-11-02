@@ -2346,6 +2346,23 @@ void main() {
 
       // The 6-digit form parses as before; an unparseable value is a
       // null field, the token fallback.
+      // Surrounding whitespace trims (CSS semantics); a sign
+      // character or any non-hex junk is the null fallback, never a
+      // garbage colour.
+      final trimmed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': ' #D9E2EA'},
+      }, 'en');
+      expect(
+        (trimmed['styles'] as QuickHelpCardStyles).background,
+        const Color(0xFFD9E2EA),
+      );
+      final signed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#ffffff-f'},
+      }, 'en');
+      expect((signed['styles'] as QuickHelpCardStyles).outline, isNull);
+
       // The #RGBA shorthand doubles its digits, alpha last: #A9B6 is
       // RRGGBBAA AA99BB66, the blue-gray at alpha 0x66.
       final shorthand = parseQuickHelpButton({

@@ -45,6 +45,16 @@ void main() {
     'styles': {'outlineColor': '#A9B6C2'},
   };
 
+  // An alpha-carrying outline: the DERIVED dark surface is a
+  // synthesis and paints opaque, whatever alpha the declaration had.
+  final alphaOutlineCard = <String, dynamic>{
+    'id': 'alpha-outline-id',
+    'title': {'en': 'Alpha Outline Card'},
+    'category': '2',
+    'serviceLabels': ['Births'],
+    'styles': {'outlineColor': '#A9B6C280'},
+  };
+
   final malformedCard = <String, dynamic>{
     'id': 'malformed-id',
     'title': {'en': 'Malformed Card'},
@@ -80,6 +90,7 @@ void main() {
     malformedConfig = await chatbotConfigBytesWithButtons([
       outlineOnlyCard,
       tintedCard,
+      alphaOutlineCard,
       malformedCard,
     ]);
   });
@@ -162,6 +173,12 @@ void main() {
       // against the near-white dark foreground (the web's dark rule
       // ignores --qh-bg the same way).
       expect(darkDerived('Tinted Card'), expected);
+
+      // The derived surface is opaque: the alpha-carrying outline's
+      // alpha does not bleed the overlay's background through the
+      // synthesized card.
+      final derivedAlpha = darkDerived('Alpha Outline Card');
+      expect(derivedAlpha.toARGB32() >>> 24, 0xFF);
     },
   );
 

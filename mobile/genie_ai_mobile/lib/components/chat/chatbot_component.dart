@@ -2222,19 +2222,32 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // healthy composer-only one does not (every entry targets a
     // surface the platform lacks, and an empty overlay shell under the
     // greeting would render the nothing the config asked for).
-    final (:broken, :healthy) = quickHelpPartitionButtons(
-      _quickHelpButtons,
-      (button) => _treeUnavailable
-          ? QuickHelpScopeResolver.unavailableScopeFor(button)
-          : (_scopeResolver?.stateFor(button) ??
-                QuickHelpScopeResolver.pending),
-    );
+    // The lists exist only while the overlay can show: once the
+    // conversation has interaction the overlay never mounts, and the
+    // per-chunk rebuilds of streaming must not pay the resolver walk.
+    final (
+      :broken,
+      :healthy,
+    ) = _showQuickHelpOverlay && _quickHelpButtons.isNotEmpty
+        ? quickHelpPartitionButtons(
+            _quickHelpButtons,
+            (button) => _treeUnavailable
+                ? QuickHelpScopeResolver.unavailableScopeFor(button)
+                : (_scopeResolver?.stateFor(button) ??
+                      QuickHelpScopeResolver.pending),
+          )
+        : (
+            broken: <(Map<String, dynamic>, Map<String, dynamic>)>[],
+            healthy: <Map<String, dynamic>>[],
+          );
     // The grid's source: the healthy TILE placements. A healthy
     // composer-placed entry has no mobile surface.
-    final gridButtons = [
-      for (final button in healthy)
-        if (!quickHelpIsComposerPlaced(button)) button,
-    ];
+    final List<Map<String, dynamic>> gridButtons = _showQuickHelpOverlay
+        ? [
+            for (final button in healthy)
+              if (!quickHelpIsComposerPlaced(button)) button,
+          ]
+        : const <Map<String, dynamic>>[];
     // One read of the verdict the bar renders: the gate, the icon and
     // the caption below all follow it.
     final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;

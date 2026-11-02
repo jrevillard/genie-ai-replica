@@ -148,7 +148,14 @@ class QuickHelpCardStyles {
 /// fallback, never a dropped card.
 Color? parseStylesHexColor(dynamic value) {
   if (value is! String) return null;
-  final cleaned = value.replaceAll('#', '');
+  // CSS trims surrounding whitespace; the hex digits alone remain.
+  // int.parse(radix: 16) accepts a sign character, so a malformed
+  // '#-fffffff' would parse to a garbage colour — the digits-only
+  // guard keeps the contract: unparseable means the null fallback.
+  final cleaned = value.trim().replaceAll('#', '');
+  if (cleaned.isEmpty || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(cleaned)) {
+    return null;
+  }
   // #RGBA: each digit doubles, and the alpha still re-joins first.
   if (cleaned.length == 4) {
     final doubled = cleaned.split('').map((c) => c * 2).join();
@@ -169,7 +176,7 @@ Color? parseStylesHexColor(dynamic value) {
       return null;
     }
   }
-  return ColorUtils.parseHexNullable(value);
+  return ColorUtils.parseHexNullable('#$cleaned');
 }
 
 /// The declared tint of [btn]'s `styles` block. A missing or malformed
@@ -209,9 +216,14 @@ Color quickHelpCardBackgroundFor(
   if (!dark) return styles.background ?? tokens.surface;
   final Color? outline = styles.outline;
   if (outline == null) return tokens.surface;
-  return HSLColor.fromColor(
-    outline,
-  ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor();
+  // The derived surface is a SYNTHESIS, not a declared background: it
+  // paints opaque (the web's oklch derivation carries the source's
+  // alpha, but a translucent card under the overlay's own background
+  // defeats the readability the derivation exists for).
+  return HSLColor.fromColor(outline)
+      .withLightness(HSLColor.fromColor(tokens.surface).lightness)
+      .toColor()
+      .withValues(alpha: 1.0);
 }
 
 /// The Quick Help section of a runtime configuration, parsed under

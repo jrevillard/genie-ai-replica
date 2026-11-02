@@ -2232,7 +2232,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                               Text(
                                 tr(
                                   'chatbot.scopeTagGone',
-                                  args: {'tags': _deadScopeTags.join(', ')},
+                                  // A display list: the saved tags may
+                                  // repeat (the count keeps them for the
+                                  // send guard), the diagnosis names each
+                                  // once.
+                                  args: {
+                                    'tags': _deadScopeTags.toSet().join(', '),
+                                  },
                                 ),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontSize: tokens.textXs,

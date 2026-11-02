@@ -69,6 +69,10 @@ void main() {
     // not the hint bulb.
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
     expect(find.byIcon(Icons.lightbulb_outline), findsNothing);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.warning_amber_rounded)).color,
+      ThemeManager().tokens.danger,
+    );
   });
 
   testWidgets('a live restore shows no caption', (tester) async {
@@ -85,6 +89,10 @@ void main() {
     // A live scope keeps the hint bulb.
     expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.lightbulb_outline)).color,
+      ThemeManager().tokens.accent,
+    );
   });
 
   testWidgets('a dead tag with no live category edge still names itself', (
@@ -138,6 +146,28 @@ void main() {
       expect(find.textContaining('no longer carries'), findsOneWidget);
     },
   );
+
+  testWidgets('a tag saved twice is named once in the caption', (tester) async {
+    // The resolver keeps duplicate tags (the saved count feeds the send
+    // guard); the caption is a diagnosis, not the raw list — each dead
+    // tag is named once.
+    final mock = _DeadScopeMockClient(
+      tree,
+      conversationTags: [deadTag, deadTag],
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockChatbotConfigAsset(tester, configBytes);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
+
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+
+    final caption = tester.widget<Text>(
+      find.textContaining('no longer carries'),
+    );
+    expect(caption.data, contains('"$deadTag"'));
+    expect(caption.data, isNot(contains('$deadTag, $deadTag')));
+  });
 
   testWidgets(
     'a Quick Help config outage stays quiet and the recovery names the tag',

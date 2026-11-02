@@ -962,9 +962,7 @@ class ConversationScopeResolver {
       // the dropped half of the count-vs-labels delta the send guard
       // refuses on, read as the kept labels' exact complement so the
       // caption and the guard can never disagree about which tags died.
-      final droppedTags = otherTags
-          .where((tag) => !sidebarLabels.contains(tag))
-          .toList();
+      final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
       // unscoped (a silent widening) while the web kept the edge.
@@ -1041,12 +1039,16 @@ class ConversationScopeResolver {
       // restore names it, the way the web restores it as an unresolved
       // chip. The kept labels' exact complement — one partition, so the
       // caption and the guard can never disagree about which tags died.
-      droppedTags: sidebarTags
-          .where((tag) => !knownLabels.contains(tag))
-          .toList(),
+      droppedTags: _droppedTagsOf(sidebarTags, knownLabels),
     );
   }
 }
+
+/// The tags of [tags] the kept labels' complement names — the ONE
+/// dropped/kept partition behind both resolver branches, so a caption
+/// and the send guard read the same fact.
+List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
+    tags.where((tag) => !kept.contains(tag)).toList();
 
 /// Whether a committed restore should be re-resolved now that a source it
 /// depended on (the hierarchy, the config) settled.

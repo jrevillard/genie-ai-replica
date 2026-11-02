@@ -43,6 +43,15 @@ contractual evidence — a fresh clone does not carry them.)
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.
+- **The branch was rebased onto `main` again (16 new commits, 548 replayed, zero conflicts)** —
+  main carried the OKF frontend MR2 (dark by default, `OKF_ENABLED=0`):
+  no new Compose service, no new `env` template rows, so the parity
+  floor holds at 323 untouched — the frontend gate is app-side, not a
+  Compose service. When OKF goes live on Kubernetes the chart's
+  frontend values surface will need `OKF_ENABLED`; noted for that
+  cycle. The three `env` hunks the branch carries over main (granite
+  labelling docs, translation-backend semantics, streaming default) are
+  branch-owned truthing, not drift.
 - **The branch was rebased onto `main` again (58 new commits, 545 replayed)** —
   one conflict: `main`'s merge-train e2e trigger filters (#1264) and this
   branch's chart jobs had both grown at the same anchor in

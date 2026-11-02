@@ -1058,7 +1058,7 @@ const Map<String, dynamic> deLocale = {
     "scopeNotNameable":
         "Konfigurationsproblem: der ausgewählte Bereich trägt keinen englischen Namen in der Wissenshierarchie, daher kann der Umfang der Abfrage nicht bestimmt werden. Die Abfrage wurde nicht gesendet.",
     "scopeTagGone":
-        "Diese Unterhaltung wurde im Bereich \"{tags}\" gespeichert, den die Wissenshierarchie nicht mehr führt. Folgefragen werden abgelehnt, bis der Kontext gelöscht wird.",
+        "Diese Unterhaltung wurde im Bereich \"{tags}\" gespeichert, den weder die Wissenshierarchie noch die Quick-Hilfe-Konfiguration mehr führt. Folgefragen werden abgelehnt, bis der Kontext gelöscht wird.",
     "justChat": "Einfacher Chat",
     "queryContext": "Abfragekontext",
     "contextAdded": "Kontext zu deiner Anfrage hinzugefügt",

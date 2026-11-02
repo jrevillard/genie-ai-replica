@@ -1035,7 +1035,7 @@ const Map<String, dynamic> manLocale = {
     "scopeNotNameable":
         "Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.",
     "scopeTagGone":
-        "This conversation was saved in the scope \"{tags}\", which the knowledge hierarchy no longer carries. Follow-up questions are refused until the context is cleared.",
+        "This conversation was saved in the scope \"{tags}\", which neither the knowledge hierarchy nor the Quick Help configuration carries any more. Follow-up questions are refused until the context is cleared.",
     "justChat": "Feewre tanngay",
     "queryContext": "Nyininka kumo",
     "contextAdded": "Kumo kafuta i la nyininka la",

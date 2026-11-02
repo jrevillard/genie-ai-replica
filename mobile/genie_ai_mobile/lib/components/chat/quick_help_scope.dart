@@ -800,6 +800,7 @@ class ConversationScope {
     this.serviceLabelsEn = const <String>[],
     this.sidebarLabelsEn = const <String>[],
     this.sidebarTagCount = 0,
+    this.droppedTags = const <String>[],
     this.quickHelpButtonId,
     this.quickHelpScopeState,
   });
@@ -826,6 +827,12 @@ class ConversationScope {
   /// dropped tag must refuse the send (the scope it named cannot be
   /// carried), never quietly vanish from it.
   final int sidebarTagCount;
+
+  /// The saved tags the live hierarchy can no longer carry — the ones
+  /// [sidebarTagCount] counts and the labels do not. The restore names
+  /// them in the context bar (the web restores them as unresolved
+  /// chips); empty when every saved tag still names something.
+  final List<String> droppedTags;
 
   /// The id of the Quick Help button that produced the conversation, when
   /// it was one.
@@ -951,6 +958,12 @@ class ConversationScopeResolver {
           )
           .toList();
       final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
+      // The tags beside the button that the live hierarchy cannot name —
+      // the dropped half of the count-vs-labels delta the send guard
+      // refuses on.
+      final droppedTags = otherTags
+          .where((tag) => !_hierarchy.knowsLabel(tag))
+          .toList();
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
       // unscoped (a silent widening) while the web kept the edge.
@@ -970,6 +983,7 @@ class ConversationScopeResolver {
         // beside a Quick Help tag must refuse the follow-up, exactly as
         // it does when there is no Quick Help tag.
         sidebarTagCount: otherTags.length,
+        droppedTags: droppedTags,
         quickHelpButtonId: tag,
         // EVERY restored button's state, merged: the web checks every
         // chip at send, and a broken SECOND button must refuse here too
@@ -1022,6 +1036,12 @@ class ConversationScopeResolver {
       // re-deriving the fallback this used to force.
       sidebarLabelsEn: knownLabels,
       sidebarTagCount: sidebarTags.length,
+      // A tag that names nothing of the live hierarchy is dead: the
+      // restore names it, the way the web restores it as an unresolved
+      // chip.
+      droppedTags: sidebarTags
+          .where((tag) => !_hierarchy.knowsLabel(tag))
+          .toList(),
     );
   }
 }

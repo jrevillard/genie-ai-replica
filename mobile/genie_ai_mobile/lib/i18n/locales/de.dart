@@ -1057,6 +1057,8 @@ const Map<String, dynamic> deLocale = {
         "Konfigurationsproblem: die Wissenshierarchie konnte nicht geladen werden, daher kann der Umfang dieser Schaltfläche nicht überprüft werden. Diese Schaltfläche kann nicht verwendet werden, bis die Hierarchie verfügbar ist.",
     "scopeNotNameable":
         "Konfigurationsproblem: der ausgewählte Bereich trägt keinen englischen Namen in der Wissenshierarchie, daher kann der Umfang der Abfrage nicht bestimmt werden. Die Abfrage wurde nicht gesendet.",
+    "scopeTagGone":
+        "Diese Unterhaltung wurde im Bereich \"{tags}\" gespeichert, den die Wissenshierarchie nicht mehr führt. Folgefragen werden abgelehnt, bis der Kontext gelöscht wird.",
     "queryContext": "Abfragekontext",
     "contextAdded": "Kontext zu deiner Anfrage hinzugefügt",
     "contextRemoved": "Kontext von deiner Anfrage entfernt",

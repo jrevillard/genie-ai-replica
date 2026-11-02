@@ -1230,6 +1230,51 @@ describe('compose non-root contract (#1227)', () => {
     expect(shellList).toEqual(Object.keys(SELF_DROPPING).sort());
   });
 
+  test('secrets-ssl-init widens ONLY name-filtered cert spellings (deny-by-default pin)', () => {
+    // The init's widening logic lives inside a shell one-liner no other
+    // gate parses: jest stays 268-green and check-runtime.sh rule 4
+    // (host-side, under-readability only) both stay green if the sweep
+    // inverts back to an 'everything not *.key -> 0644' catch-all — the
+    // exact round-67 critical-class defect shape. Pin the widening
+    // structure itself: every chmod-0644 arm must be find-filtered on a
+    // cert spelling AND exclude '*key*', the default must be the tight
+    // 0640, and the widened set must be content-grepped for PRIVATE KEY.
+    const compose = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docker-compose.yaml'), 'utf-8');
+    const start = compose.indexOf('\n  secrets-ssl-init:');
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    // next EXACTLY-2-space key (a 4-space line matches a naive indexOf('\n  '));
+    // slice(1) keeps the header line out of ^'s reach in /m mode
+    const next = rest.slice(1).search(/^  (?=\S)/m);
+    const block = next === -1 ? rest : rest.slice(0, next + 1);
+    const cmdLine = block.split('\n').find((l) => l.trim().startsWith('command:'));
+    expect(cmdLine).toBeDefined();
+    const cmd = cmdLine
+      .match(/"([^"]*)"/g)
+      .map((s) => s.slice(1, -1))
+      .find((s) => s.length > 2); // the sh -c payload, not "sh"/"-c"
+
+    // default deny: every file starts at the tight 0640 before any widen
+    expect(cmd).toContain('-type f -exec chmod 0640 {} +');
+
+    // widen arms: exactly the three cert spellings, each name-filtered
+    // and key-excluded
+    const widenArms = cmd.split(';').filter((s) => s.includes('chmod 0644'));
+    expect(widenArms).toHaveLength(3);
+    for (const spelling of ['*.crt', '*.cer', '*.pem']) {
+      const arm = widenArms.find((s) => s.includes(`-name '${spelling}'`));
+      expect(arm).toBeDefined();
+      expect(arm).toContain(`! -name '*key*'`);
+    }
+
+    // no other 0644-widening arm may exist (the catch-all inversion shape)
+    expect(widenArms.every((s) => s.includes("-name '*."))).toBe(true);
+
+    // content verify: the widened (0644) set is grepped for private keys
+    expect(cmd).toContain("grep -l 'BEGIN .*PRIVATE KEY'");
+    expect(cmd).toMatch(/grep -l 'BEGIN \.\*PRIVATE KEY' \$\(find \/ssl [^)]* -perm 0644\)/);
+  });
+
   test('mutations: source-first bind, cross-entry opt-out leak, explicit empty cap_add', () => {
     // A source:-first entry whose type: bind arrives LATE is a host bind —
     // the untyped default must not swallow it.

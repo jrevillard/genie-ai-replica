@@ -93,9 +93,9 @@ This service runs the Node.js server that provides the application's API and bus
 * **Ports**: The backend API is accessible on the host machine at port **3000**.
 * **Volumes**: The service uses bind mounts and named volumes to persist data:
   * `data/database_backups` → `/app/database_backups`: persists automated database backups. Long-syntax
-    bind with `create_host_path: false` (#1227): create the directory before `docker compose up` — a
-    missing directory fails the backend loudly instead of being created root-owned. The backend
-    runs as uid 1000 and must own the directory: `chown 1000:1000 data/database_backups`.
+    bind with `create_host_path: true` (#1227): compose creates a missing directory itself and the
+    `backend-init` one-shot hands it to uid 1000 before the backend starts (its `depends_on` gates
+    the backend's start) — no manual `mkdir`/`chown` required.
   * backend_data:/app/data: Named volume for application data persistence.
   * backend_uploads:/app/Uploads: Named volume for user-uploaded files.
 * **Environment File**: Loads configuration from the root `.env`.

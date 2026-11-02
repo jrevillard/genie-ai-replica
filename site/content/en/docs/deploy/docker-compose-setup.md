@@ -39,7 +39,9 @@ ownership and modes on the next recreate.
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself, and on the compose path
 `secrets-ssl-init` — NOT profile-gated — normalizes any provided pair
-on every up, so the manual fallback
+whenever it (re)runs (a plain `up` on an unchanged state does NOT
+re-run an exited one-shot — use the `--force-recreate` command above),
+so the manual fallback
 (`sudo chgrp 101 secrets/ssl/server.key secrets/ssl/server.crt && sudo chmod 0640 secrets/ssl/server.key`)
 is only for a running stack you do not want to recreate.)
 
@@ -50,7 +52,8 @@ occupy that id, and any member could read the TLS private key.
 
 Upgrading an existing deployment with a pre-#1227
 `data/database_backups` tree? The backend (uid 1000) must OWN it —
-`backend-init` heals this host bind on every up (its third loop
+`backend-init` heals this host bind when it (re)runs — the compose-file
+change recreates it on the first `up` after the upgrade (its third loop
 directory), so no manual step: bring the stack up and the tree is
 re-owned before the backend starts (the Ansible path converges it via
 its migration tasks instead).

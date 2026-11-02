@@ -432,7 +432,8 @@ services:
     # known CERT spellings (*.crt/*.cer/*.pem with no 'key' in the
     # name — key.pem IS a key) are widened to 0644. A final grep keeps
     # the name-whitelist honest: any widened file whose CONTENT is a
-    # private key (private.pem-shaped, id_rsa.cer) fails the init. A deny-by-default inversion replaced the earlier
+    # private key (private.pem-shaped, id_rsa.cer) fails the init. A
+    # deny-by-default inversion replaced the earlier
     # 'everything not *.key -> 0644' catch-all, which world-read any
     # key parked under a non-canonical name (key.pem, *.old, *.bak —
     # verified defect shape). Verify group + tight modes, exit 9 on any
@@ -520,8 +521,14 @@ services:
           - node.labels.gateway == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        # Race-sized like the gated services' budget: on the swarm path
+        # Ansible strips depends_on, so nginx's start is NOT gated on
+        # secrets-ssl-init — its uid-101 entrypoint exits on a
+        # non-converged key while the init churns through its own
+        # 30s x 60 budget; a 5s x 10 budget (~1 min) would exhaust and
+        # swarm never re-runs an exhausted task.
+        delay: 30s
+        max_attempts: 60
 
   # ===========================================================================
   # Let's Encrypt Certificate Management (optional)
@@ -1362,12 +1369,9 @@ services:
   # root-era backend hold root-owned files in backend_data and
   # backend_uploads, which the now non-root backend could no longer write.
   backend-init:
-    # Same node set as the follow-up service's own placement constraint
-    # (see the x-chown-init-genieai anchor): without it the global init
-    # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: EARLIER
-    # maps win — this anchor's deploy: (policy + placement) shadows the
-    # outer anchor's.
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
     <<: [*chown-init-genieai, *chown-init]
     # PER-VOLUME guard: the loop probes each volume independently, so a
     # root-era file in ONE volume heals only that volume — an operator
@@ -1421,12 +1425,9 @@ services:
   # that ran the root-era image hold a root-owned volume, and the now
   # non-root document-repository would get EACCES on every upload.
   document-repository-init:
-    # Same node set as the follow-up service's own placement constraint
-    # (see the x-chown-init-genieai anchor): without it the global init
-    # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: EARLIER
-    # maps win — this anchor's deploy: (policy + placement) shadows the
-    # outer anchor's.
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
     <<: [*chown-init-genieai, *chown-init]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /app/uploads ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
@@ -1589,12 +1590,9 @@ services:
   # arango-vector-db-init` (compose) or `docker service update --force
   # <stack>_<init>` (swarm).
   arango-vector-db-init:
-    # Same node set as the follow-up service's own placement constraint
-    # (see the x-chown-init-genieai anchor): without it the global init
-    # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: EARLIER
-    # maps win — this anchor's deploy: (policy + placement) shadows the
-    # outer anchor's.
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
     <<: [*chown-init-genieai, *chown-init]
     # PER-VOLUME guard (same doctrine as backend-init): the loop probes
     # each volume independently — a root-era file in one volume heals
@@ -2997,12 +2995,9 @@ services:
   # as (#1227). One-shot, runs as root ON PURPOSE (the chown IS the job) and
   # writes nothing outside the named volume - see the no-root contract test.
   victorialogs-init:
-    # Same node set as the follow-up service's own placement constraint
-    # (see the x-chown-init-genieai anchor): without it the global init
-    # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: EARLIER
-    # maps win — this anchor's deploy: (policy + placement) shadows the
-    # outer anchor's.
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
     <<: [*chown-init-genieai, *chown-init]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs ! -user 65534 -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]

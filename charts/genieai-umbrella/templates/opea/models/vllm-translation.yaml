@@ -12,7 +12,7 @@
 {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
 {{- $modelId := $opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString -}}
 {{- $translation := $opeaTranslation -}}
-{{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: %s/curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" ($global.toolingImageRegistry | default "docker.io") .Values.namespace -}}
+{{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: %s/busybox:1.36\n          # busybox, not curlimages/curl: the curl image layers\n          # carry the build host's overlayfs xattrs in PAX headers\n          # and cannot be extracted on storage refusing user.*\n          # setxattr (fuse-overlayfs venues).\n          command:\n            - sh\n            - -c\n            - until wget -q -O /dev/null http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" ($global.toolingImageRegistry | default "docker.io") .Values.namespace -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "vllm-translation"

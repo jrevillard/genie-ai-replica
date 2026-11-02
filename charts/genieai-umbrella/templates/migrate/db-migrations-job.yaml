@@ -77,7 +77,11 @@ spec:
       {{- if $dataArangodb.enabled }}
       initContainers:
         - name: wait-for-arango
-          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+          {{- /* busybox, not curlimages/curl: the curl image layers carry the
+          build host's overlayfs xattrs in PAX headers and cannot be
+          extracted on storage that refuses user.* setxattr
+          (fuse-overlayfs venues) — ImagePullBackOff on the install hook. */}}
+          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -100,9 +104,15 @@ spec:
             - -c
             - |
               url="{{ include "genieai-umbrella.arangoURL" . }}/_api/version"
+              # busybox wget has no --user/--password: the basic-auth pair
+              # rides in the userinfo form instead. A password carrying a
+              # raw @, : or / would need percent-encoding here — the
+              # chart-generated arango-root-secret never contains one.
+              prefix="${url%%://*}"
+              authurl="${prefix}://${ARANGO_USER}:${ARANGO_PASSWORD}@${url#*://}"
               i=0
               while [ "$i" -lt 100 ]; do
-                if curl -sf -u "$ARANGO_USER:$ARANGO_PASSWORD" "$url" >/dev/null 2>&1; then
+                if wget -q -O /dev/null "$authurl" >/dev/null 2>&1; then
                   echo "arangodb is up: $url"
                   exit 0
                 fi

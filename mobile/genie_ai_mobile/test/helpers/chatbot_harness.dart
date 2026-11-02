@@ -91,16 +91,35 @@ void resetChatbotTestState() {
   rootBundle.evict('assets/config/genie-ai-config.json');
 }
 
+/// The chatbot widget the harness mounts. Its constructor's arguments
+/// live HERE, so a change to [ChatBotComponent]'s constructor lands
+/// once, not once per test file.
+Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
+    ChatBotComponent(
+      key: key,
+      userId: 'user-1',
+      onRefreshSidebar: () {},
+      onRelatedDocumentsUpdate: (_) {},
+    );
+
 /// Mounts the chatbot under the harness every chatbot widget test
 /// shares: the mocked APIs, the i18n singleton driving the locale, and
 /// the app's OWN ThemeData — a widget under a plain MaterialApp
 /// resolves text themes the shipped theme does not carry (the trap the
 /// mobile Visual Fidelity rule names).
+///
+/// [buildHome] replaces the default screen — a test that mounts its own
+/// widgets around the chatbot (a service tree panel above it) passes
+/// them here, and wraps the chatbot with [chatBotUnderTest] so the
+/// constructor's arguments stay in this file. It is a BUILDER, not a
+/// widget: the harness rebuilds the screen on every locale change, and
+/// a widget instance reused across rebuilds is not rebuilt at all.
 Future<void> pumpChatBot(
   WidgetTester tester,
   http.BaseClient mock, {
   GlobalKey<ChatBotComponentState>? chatKey,
   List<Locale> supportedLocales = const [Locale('en')],
+  Widget Function(GlobalKey<ChatBotComponentState>? key)? buildHome,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -123,14 +142,9 @@ Future<void> pumpChatBot(
             FallbackWidgetsLocalizationsDelegate(),
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: Scaffold(
-            body: ChatBotComponent(
-              key: chatKey,
-              userId: 'user-1',
-              onRefreshSidebar: () {},
-              onRelatedDocumentsUpdate: (_) {},
-            ),
-          ),
+          home:
+              buildHome?.call(chatKey) ??
+              Scaffold(body: chatBotUnderTest(chatKey)),
         ),
       ),
     ),

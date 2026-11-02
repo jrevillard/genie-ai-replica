@@ -2,17 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
+import '../helpers/chatbot_harness.dart';
 import '../helpers/theme_helper.dart';
 
 // The sidebar scope's context-bar title across a locale switch. The title
@@ -62,63 +58,43 @@ void main() {
     _LocaleMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
   }) async {
-    final api = ServiceCategoriesApi(ApiClient()..client = mock);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: Column(
-                children: [
-                  SizedBox(
-                    height: 300,
-                    child: ServiceTreePanel(
-                      onSelectionChange: (selection) {
-                        // The page's own mapping (main.dart's
-                        // _onServiceSelected): display name and EN
-                        // wire labels travel to the chat together.
-                        chatKey?.currentState?.setCategoryContext(
-                          selection['category_id'] ?? selection['id'] ?? '',
-                          selection['name'] ?? '',
-                          categoryNameEn:
-                              selection['categoryNameEn']?.toString() ?? '',
-                          serviceLabelsEn:
-                              (selection['serviceLabelsEn'] as List<dynamic>? ??
-                                      const <dynamic>[])
-                                  .map((e) => e.toString())
-                                  .where((e) => e.isNotEmpty)
-                                  .toList(),
-                          serviceCount:
-                              (selection['serviceCount'] as num?)?.toInt() ?? 0,
-                        );
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: ChatBotComponent(
-                      key: chatKey,
-                      userId: 'user-1',
-                      onRefreshSidebar: () {},
-                      onRelatedDocumentsUpdate: (_) {},
-                    ),
-                  ),
-                ],
+    await pumpChatBot(
+      tester,
+      mock,
+      chatKey: chatKey,
+      supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
+      buildHome: (key) => Scaffold(
+        body: Column(
+          children: [
+            SizedBox(
+              height: 300,
+              child: ServiceTreePanel(
+                onSelectionChange: (selection) {
+                  // The page's own mapping (main.dart's
+                  // _onServiceSelected): display name and EN
+                  // wire labels travel to the chat together.
+                  key?.currentState?.setCategoryContext(
+                    selection['category_id'] ?? selection['id'] ?? '',
+                    selection['name'] ?? '',
+                    categoryNameEn:
+                        selection['categoryNameEn']?.toString() ?? '',
+                    serviceLabelsEn:
+                        (selection['serviceLabelsEn'] as List<dynamic>? ??
+                                const <dynamic>[])
+                            .map((e) => e.toString())
+                            .where((e) => e.isNotEmpty)
+                            .toList(),
+                    serviceCount:
+                        (selection['serviceCount'] as num?)?.toInt() ?? 0,
+                  );
+                },
               ),
             ),
-          ),
+            Expanded(child: chatBotUnderTest(key)),
+          ],
         ),
       ),
     );
-    await tester.pumpAndSettle();
   }
 
   testWidgets(

@@ -157,7 +157,9 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
   // Round 21c (#80943): an interrupted publish leaves a zip no registry
   // entry references; the retry re-exported version N and minted a SECOND
   // (undeletable — bundleProtectedIds) file. The handler must reuse the
-  // already-stored zip for the same (repo_id, bundle_version).
+  // already-stored zip for the same (repo_id, bundle_version). ROUND 28
+  // (review — collision): reuse requires the caller to declare
+  // source='publish-export' — this test IS that publish retry.
   it('reuses the stored zip for a known (repo_id, bundle_version) — no duplicate mint (#80943)', async () => {
     fileService.findBundleByRepoVersion.mockResolvedValue({
       file_id: 'existing-zip-id',
@@ -168,7 +170,7 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
 
     const res = await request(app)
       .post('/api/files/ingest-bundle')
-      .send({ ...validBody, bundle_version: 3, is_bundle: true });
+      .send({ ...validBody, bundle_version: 3, is_bundle: true, source: 'publish-export' });
 
     expect(res.status).toBe(200);
     expect(res.body.reused).toBe(true);
@@ -176,6 +178,79 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     // The lookup ran with the EXACT version; nothing new was stored.
     expect(fileService.findBundleByRepoVersion).toHaveBeenCalledWith(repoId, 3);
     expect(fileService.uploadBundle).not.toHaveBeenCalled();
+  });
+
+  // ROUND 28 (review — ingest-bundle collision, silent data loss): the reuse
+  // guard used to be ENDPOINT-GLOBAL. A user-zip import into an
+  // already-published repo sends the same (repo_id, repo.version) → it
+  // received the PUBLISH zip while its OWN bytes were dropped. Reuse is
+  // scoped to source='publish-export'; a user-import must store its own
+  // bytes even when the version already exists. Pre-fix (guard without the
+  // source condition), this test goes red: the lookup fires and the
+  // response is the publish zip.
+  it('a user-import with an existing (repo_id, bundle_version) stores its OWN bytes — never the publish zip', async () => {
+    fileService.findBundleByRepoVersion.mockResolvedValue({
+      file_id: 'publish-zip-id',
+      file_name: 'repo-v3.zip',
+      bundle_version: 3,
+      repo_id: repoId
+    });
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'user-zip-id',
+      file_name: 'my-repo-bundle.zip',
+      storage_path: '/uploads/user-zip-id.zip'
+    });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({
+        ...validBody,
+        originalFileName: 'my-repo-bundle.zip',
+        bundle_version: 3,
+        is_bundle: true,
+        source: 'user-import'
+      });
+
+    expect(res.status).toBe(201); // stored, not reused
+    expect(res.body.reused).toBeUndefined();
+    expect(res.body.file_id).toBe('user-zip-id');
+    // The lookup must not even run — the caller class is not entitled to reuse.
+    expect(fileService.findBundleByRepoVersion).not.toHaveBeenCalled();
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+    expect(fileService.uploadBundle.mock.calls[0][1].source).toBe('user-import');
+  });
+
+  it('a legacy caller (no source field) also skips the reuse guard — reuse is explicit opt-in', async () => {
+    // An old okf-server image (mid-rollout skew) sends no source. Skipping
+    // the guard costs a duplicate zip (the pre-#80943 behavior, rare);
+    // firing it could silently substitute bytes. Bias to skip.
+    fileService.uploadBundle.mockResolvedValue({ file_id: 'legacy-id', file_name: 'x.zip' });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, bundle_version: 3, is_bundle: true });
+
+    expect(res.status).toBe(201);
+    expect(res.body.reused).toBeUndefined();
+    expect(fileService.findBundleByRepoVersion).not.toHaveBeenCalled();
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+  });
+
+  it('the publish-export path forwards source to uploadBundle for the files doc', async () => {
+    // Explicit null: clearAllMocks clears CALLS but not implementations —
+    // without this, a leftover mockResolvedValue from an earlier test would
+    // flip this test onto the reuse path depending on file order.
+    fileService.findBundleByRepoVersion.mockResolvedValueOnce(null);
+    fileService.uploadBundle.mockResolvedValue({ file_id: 'pub-id', file_name: 'x.zip' });
+
+    await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, bundle_version: 4, is_bundle: true, source: 'publish-export' });
+
+    // No existing bundle (lookup returned null path — publish-export ran the
+    // lookup, found nothing) → stored WITH the source on the doc.
+    expect(fileService.findBundleByRepoVersion).toHaveBeenCalledWith(repoId, 4);
+    expect(fileService.uploadBundle.mock.calls[0][1].source).toBe('publish-export');
   });
 
   it('a null bundle_version (unminted) skips the reuse lookup — always stores', async () => {

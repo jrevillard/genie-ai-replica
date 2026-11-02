@@ -900,7 +900,13 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
           labels, // the ACL + caller hierarchy labels — the SAME set dataprep's
           // LLM labeler selects from (per-concept 4f + the bundle doc both carry it)
           bundle_version: bundleVersion,
-          is_bundle: true
+          is_bundle: true,
+          // ROUND 28 (review — ingest-bundle collision): declare the caller
+          // class. A user-zip import must NEVER hit the doc-repo reuse guard
+          // — it stores its OWN bytes even when the same (repo_id,
+          // bundle_version) already holds the publish zip (the guard silently
+          // substituted it before the source scoping).
+          source: 'user-import'
         },
         { timeout: ENQUEUE_TIMEOUT_MS }
       );

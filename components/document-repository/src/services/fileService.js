@@ -1084,7 +1084,19 @@ class FileService {
     }
     const rows = await (
       await db.query(
+        // ROUND 28 (review — ingest-bundle collision): the reuse lookup must
+        // only ever match PUBLISH-EXPORT bundles. Without the source filter,
+        // a user-zip import that stored its own doc under the same
+        // (repo_id, bundle_version) could be adopted by a later publish
+        // retry — the same silent-substitution class the controller-side
+        // guard scoping fixed, re-entered through this lookup. Legacy docs
+        // (stored before `source` existed) have no source field and are
+        // missed by this filter: an interrupted-publish retry for such a
+        // version re-stores a second zip (the pre-#80943 behavior, rare and
+        // self-limiting — the upstream unchanged-fingerprint gate refuses
+        // normal same-version republishes anyway).
         'FOR f IN files FILTER f.repo_id == @repoId && f.bundle_version == @v && f.is_bundle == true ' +
+          "&& f.source == 'publish-export' " +
           'SORT f.uploaded_date DESC LIMIT 1 RETURN f',
         { repoId, v: bundleVersion }
       )
@@ -1143,6 +1155,10 @@ class FileService {
         graph_name: bundleInfo.graph_name,
         repo_id: bundleInfo.repo_id,
         bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null,
+        // ROUND 28 (review — ingest-bundle collision): the caller class rides
+        // the doc so the reuse lookup can tell publish-export zips from
+        // user-import zips (see findBundleByRepoVersion's source filter).
+        source: bundleInfo.source || null,
         ...(isBundle
           ? {
               is_bundle: true,

@@ -955,6 +955,12 @@ describe('fileService', () => {
       expect(aql).toContain('f.is_bundle == true');
       expect(aql).toContain('SORT f.uploaded_date DESC');
       expect(aql).not.toContain('uploaded_at');
+      // ROUND 28 (review — ingest-bundle collision): the reuse lookup must
+      // only ever match PUBLISH-EXPORT bundles — a user-import doc under the
+      // same (repo_id, bundle_version) must be invisible to it, or a later
+      // publish retry adopts the user's zip (the substitution class the
+      // controller-side guard scoping fixed, re-entered through this lookup).
+      expect(aql).toContain("f.source == 'publish-export'");
       expect(mockDb.query.mock.calls[0][1]).toEqual({ repoId: 'repo-1', v: 18 });
       expect(found.file_id).toBe('fb-18');
       expect(found.stored_at).toBe('2026-11-01T00:00:00Z');

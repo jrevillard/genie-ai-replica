@@ -1395,7 +1395,8 @@ class FileController {
       if (!req.body || typeof req.body !== 'object') {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'a JSON request body is required' });
       }
-      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle } = req.body;
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle, source } =
+        req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1429,7 +1430,16 @@ class FileController {
         // Story 2.9.5-amend (2026-08-18): a ZIP BUNDLE file doc — the zip is the
         // ingestion INPUT, stored at 'Ingested' + is_bundle=true (never re-chunked;
         // its concepts are enqueued separately). The worker ignores it (non-Pending).
-        is_bundle: Joi.boolean().default(false)
+        is_bundle: Joi.boolean().default(false),
+        // ROUND 28 (review — ingest-bundle collision): WHO is storing this
+        // bundle. The (repo_id, bundle_version) reuse guard is an idempotency
+        // mechanism for the PUBLISH-export path's interrupted retry — it must
+        // never fire for a user-zip import, or the import silently receives
+        // the publish zip instead of storing its own bytes (silent data loss
+        // on the re-import-into-a-published-repo workflow). Explicit opt-in:
+        // reuse fires ONLY for 'publish-export'; both okf-server callers
+        // declare their source.
+        source: Joi.string().valid('publish-export', 'user-import').optional()
       });
       const { error, value } = schema.validate({
         bundle,
@@ -1439,7 +1449,8 @@ class FileController {
         labels,
         defer_kick,
         bundle_version,
-        is_bundle
+        is_bundle,
+        source
       });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
@@ -1459,15 +1470,24 @@ class FileController {
         });
       }
 
-      // IDEMPOTENT PER (repo_id, bundle_version) (!622 round 21c, #80943):
-      // an interrupted publish that died between the zip store and the
-      // registry's bundles[] merge leaves a zip no registry entry references;
-      // the retry re-exported version N and APPENDED a second entry — and
-      // bundleProtectedIds makes the orphan undeletable. When this exact
-      // version already has a stored zip, return IT instead of minting a
-      // duplicate file (bundleProtectedIds still protects the reuse — the
-      // bundle is the same corpus fingerprint).
-      if (repo_id && value.bundle_version != null) {
+      // IDEMPOTENT PER (repo_id, bundle_version) — PUBLISH-EXPORT CALLERS
+      // ONLY (!622 round 21c, #80943; scoped round 28, review: ingest-bundle
+      // collision). An interrupted publish that died between the zip store
+      // and the registry's bundles[] merge leaves a zip no registry entry
+      // references; the retry re-exported version N and APPENDED a second
+      // entry — and bundleProtectedIds makes the orphan undeletable. When
+      // this exact version already has a stored zip, return IT instead of
+      // minting a duplicate file (bundleProtectedIds still protects the
+      // reuse — the bundle is the same corpus fingerprint).
+      // The guard is ENDPOINT-GLOBAL no more: it previously also matched a
+      // USER-zip import that sent the same (repo_id, repo.version) — that
+      // caller received the PUBLISH zip while its own bytes were dropped,
+      // silently (silent data loss on the re-import-into-a-published-repo
+      // workflow). Reuse now requires the caller to declare
+      // source='publish-export'; findBundleByRepoVersion additionally
+      // filters to publish-export docs, so a post-import publish retry can
+      // never adopt the user's zip through the lookup either.
+      if (repo_id && value.bundle_version != null && value.source === 'publish-export') {
         const existing = await fileService.findBundleByRepoVersion(repo_id, value.bundle_version);
         if (existing) {
           logger.info('ingest-bundle: reuse existing bundle for (repo_id, bundle_version)', {
@@ -1487,14 +1507,17 @@ class FileController {
       const buffer = Buffer.from(bundle, 'base64');
 
       // Store + ClamAV scan + files doc (graph_name + repo_id + bundle_version
-      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels)
+      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels;
+      // source identifies the caller class — publish-export vs user-import —
+      // so the reuse lookup can tell the two bundle families apart).
       const result = await fileService.uploadBundle(buffer, {
         originalFileName,
         graph_name,
         repo_id,
         bundle_version: value.bundle_version,
         labels: value.labels,
-        is_bundle: value.is_bundle
+        is_bundle: value.is_bundle,
+        source: value.source
       });
 
       // Fire-and-forget ingestion kick (does not block the 202). dataprep.status

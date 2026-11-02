@@ -1508,12 +1508,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   /// The icon a Quick Help card shows: the warning of a broken scope,
-  /// the card's own bundled asset, or the neutral help icon (no asset at
-  /// all, an asset still loading, or an asset the flavour did not
-  /// bundle). ONE copy of the neutral icon, built only where it is used.
+  /// the card's own inline SVG markup, the card's bundled asset, or the
+  /// neutral help icon (no icon at all, an asset still loading, or an
+  /// asset the flavour did not bundle). ONE copy of the neutral icon,
+  /// built only where it is used.
   Widget _quickHelpCardIcon({
     required bool broken,
     required String iconAsset,
+    required String inlineSvg,
     required AppTokens tokens,
   }) {
     if (broken) {
@@ -1521,6 +1523,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
     Widget neutralIcon() =>
         Icon(Icons.help_outline, size: 18, color: tokens.accent);
+    if (inlineSvg.isNotEmpty) {
+      return SvgPicture.string(
+        inlineSvg,
+        width: 18,
+        height: 18,
+        placeholderBuilder: (_) => neutralIcon(),
+        errorBuilder: (_, _, _) => neutralIcon(),
+      );
+    }
     if (iconAsset.isEmpty) return neutralIcon();
     return SvgPicture.asset(
       iconAsset,
@@ -1539,6 +1550,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Widget _quickHelpCardHeader({
     required bool broken,
     required String iconAsset,
+    required String inlineSvg,
     required String title,
     required ThemeData theme,
     required AppTokens tokens,
@@ -1548,6 +1560,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _quickHelpCardIcon(
           broken: broken,
           iconAsset: iconAsset,
+          inlineSvg: inlineSvg,
           tokens: tokens,
         ),
         const SizedBox(width: 12),
@@ -1609,6 +1622,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpCardHeader(
             broken: true,
             iconAsset: button['iconAsset']?.toString() ?? '',
+            inlineSvg: button['iconInlineSvg']?.toString() ?? '',
             title: quickHelpTitleOf(button) ?? '',
             theme: theme,
             tokens: tokens,
@@ -2666,6 +2680,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       quickHelpTitleOf(button) ?? '';
                                   final String iconAsset =
                                       button['iconAsset']?.toString() ?? '';
+                                  final String inlineSvg =
+                                      button['iconInlineSvg']?.toString() ??
+                                      '';
 
                                   return Material(
                                     color: Colors.transparent,
@@ -2695,6 +2712,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                               child: _quickHelpCardHeader(
                                                 broken: false,
                                                 iconAsset: iconAsset,
+                                                inlineSvg: inlineSvg,
                                                 title: translatedTitle,
                                                 theme: theme,
                                                 tokens: tokens,

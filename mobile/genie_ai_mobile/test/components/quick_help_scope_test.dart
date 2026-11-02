@@ -2312,8 +2312,35 @@ void main() {
         expect(parsed['id'], 'just-chat');
         expect(parsed['resolvedTitle'], 'Just Chat');
         expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
+        expect(parsed['iconInlineSvg'], '');
       },
     );
+
+    test('an inline icon carries its markup instead of an asset key', () {
+      // The bundled schema's `type: "inline"` declares the SVG MARKUP
+      // as the value; the basename rule would turn it into a garbage
+      // asset key and degrade the card to its neutral icon. The markup
+      // is kept whole under iconInlineSvg; no asset is named.
+      const markup = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'inline', 'value': markup},
+      }, 'en');
+
+      expect(parsed['iconInlineSvg'], markup);
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('an inline icon with a non-string value declares no markup', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'inline', 'value': 42},
+      }, 'en');
+
+      expect(parsed['iconInlineSvg'], '');
+      expect(parsed['iconAsset'], '');
+    });
+
 
     test('a numeric category carries the form the web resolves', () {
       // The web resolves a numeric category reference with

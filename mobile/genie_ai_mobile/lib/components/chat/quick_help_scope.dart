@@ -47,8 +47,9 @@ const String justChatTagId = 'just-chat';
 /// The shipped configurations declare the button's texts at the TOP
 /// level: `title` is a locale map (resolved here, once, like the
 /// welcome message), `icon` is an object whose `value` is a served
-/// path whose basename names the bundled asset, and `action` carries
-/// the visible and hidden texts. A button with no icon — or a
+/// path whose basename names the bundled asset (`type: "inline"`
+/// declares the markup itself, rendered from the string), and
+/// `action` carries the visible and hidden texts. A button with no icon — or a
 /// malformed one — carries NO asset: the card renders its neutral
 /// help icon, the way the web renders an empty image. A bare STRING
 /// where the label array belongs is wrapped as ONE label — the
@@ -65,11 +66,21 @@ Map<String, dynamic> parseQuickHelpButton(
   // a malformed file. A parsed-but-TITLE-LESS entry IS kept: the web
   // renders the same blank card and refuses its press.
   final iconMap = configMapOf(btn['icon']);
+  final dynamic rawIconValue = iconMap['value'];
+  // An `inline` icon's value IS the SVG markup — rendered directly from
+  // the string, no asset. The bundled schema documents the type; a
+  // markup STRING handed to the basename rule would become a garbage
+  // asset key and degrade the card to its neutral icon.
+  final bool iconInline =
+      iconMap['type'] == 'inline' && rawIconValue is String;
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
   // garbage path the card cannot load.
-  final dynamic rawIconValue = iconMap['value'];
-  final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
+  final iconFile = iconInline
+      ? ''
+      : rawIconValue is String
+      ? rawIconValue.split('/').last
+      : '';
   final String iconAsset = iconFile.isNotEmpty
       ? 'assets/config/quickhelp/$iconFile'
       : '';
@@ -92,6 +103,9 @@ Map<String, dynamic> parseQuickHelpButton(
     'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
+    'iconInlineSvg': iconInline && rawIconValue.trim().isNotEmpty
+        ? rawIconValue
+        : '',
     'resolvedTitle': resolveConfigText(btn['title'], locale),
     'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
     'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),

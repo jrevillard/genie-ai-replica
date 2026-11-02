@@ -547,12 +547,14 @@ function validateComposeNonRoot(composeText) {
             const val = qm ? qm[2] : rawVal.split('#')[0].trim();
             // strip a MATCHING quote pair for the quoted-span escape hatch
             const unquoted = val.replace(/^(['"])([\s\S]*)\1$/, '$2');
-            if (unquoted.startsWith('*')) {
+            if (unquoted.startsWith('*') || unquoted.startsWith('&')) {
               // a YAML alias cannot be resolved by a line parser: fail LOUD
               // (the conservative-resolution doctrine) instead of reading the
               // alias name as a literal uid that is neither root nor 0.
               // currentUser stays null, so the must-pin rule fires too.
-              violations.push(`${currentService}: flow user: is a YAML alias (${unquoted}) — inline a literal uid:uid`);
+              violations.push(
+                `${currentService}: flow user: is an unresolvable YAML alias or anchor (${unquoted}) — inline a literal uid:uid`
+              );
             } else {
               currentUser = unquoted;
             }
@@ -599,16 +601,26 @@ function validateComposeNonRoot(composeText) {
     // `user:` — mapping form only (the form every service in this file uses)
     // A trailing # comment is legal documentation on the pin — the value
     // ends at whitespace or the comment marker.
-    const userMatch = line.match(/^ {4}user:\s*['"]?([^'"\s#]+)['"]?\s*(?:#.*)?$/);
+    // capture is WIDE (everything up to an optional comment) then parsed:
+    // an inline anchor pin (`user: &a root`) carries a VALUE after the
+    // anchor name, which the old single-token capture could not see (the
+    // line fell through and only the must-pin rule fired, while a real
+    // parser would resolve the anchor to root). A matching quote pair is
+    // stripped after capture — the old inline ['"]? stripping is what the
+    // flow body once repeated wrong.
+    const userMatch = line.match(/^ {4}user:\s*([^#]+?)\s*(?:#.*)?$/);
     if (userMatch) {
-      if (userMatch[1].startsWith('*')) {
+      const rawPin = userMatch[1].trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
+      if (rawPin.startsWith('*') || rawPin.startsWith('&')) {
         // the same conservative alias rule the flow body applies: a line
-        // parser cannot resolve the anchor, and reading the alias name as
+        // parser cannot resolve the anchor/alias, and reading its NAME as
         // a literal uid fails OPEN (neither 'root' nor 0 — verified).
         // currentUser stays null, so the must-pin rule fires too.
-        violations.push(`${currentService}: user: is a YAML alias (${userMatch[1]}) — inline a literal uid:uid`);
+        violations.push(
+          `${currentService}: user: is an unresolvable YAML alias or anchor (${rawPin}) — inline a literal uid:uid`
+        );
       } else {
-        currentUser = userMatch[1];
+        currentUser = rawPin;
       }
       continue;
     }
@@ -792,9 +804,9 @@ function validateComposeNonRoot(composeText) {
         // a whole-entry YAML alias drops this bind from every collector
         // below (no type:/source: pair, no host:container colon) — the
         // conservative-resolution doctrine demands it inline.
-        if (/^\s*\*[\w-]+\s*$/.test(entry)) {
+        if (/^\s*[*&][\w-]+\s*$/.test(entry)) {
           violations.push(
-            `${currentService}: a volumes flow entry is a YAML alias (${entry.trim()}) — inline the bind so it stays enforced`
+            `${currentService}: a volumes flow entry is an unresolvable YAML alias or anchor (${entry.trim()}) — inline the bind so it stays enforced`
           );
           continue;
         }

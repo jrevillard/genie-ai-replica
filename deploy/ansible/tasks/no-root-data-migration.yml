@@ -47,8 +47,20 @@
     state: directory
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
-    # NO mode: key — the operator's 0700/0750 hardening of the data
-    # dir must survive every deploy (ownership only, never widened).
+  # NO mode: key — the operator's 0700/0750 hardening of the data
+  # dir must survive every deploy (ownership only, never widened).
+  # Escape guard: a MISCONFIGURED inventory (data_dir: / or an ANCESTOR
+  # of deploy_dir, e.g. data_dir: .. resolving to /opt) would make this
+  # depth-0 task hand the filesystem root — or deploy_dir's parent — to
+  # ansible_user on every deploy (rendered and confirmed for / and /opt).
+  # Note this is NOT the external-override case: an absolute data_dir
+  # OUTSIDE deploy_dir that is not its ancestor (/srv/genieai-data) is a
+  # supported spelling and still passes (it is neither '/' nor a parent).
+  vars:
+    _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
+  when:
+    - data_dir_resolved != '/'
+    - not _data_ancestor_of_deploy
 
 - name: Hand the data directory's intermediate ancestors to ansible_user (depth 0, #1227)
   # For a nested override (data_dir: /opt/genieai/state/data) the chain
@@ -93,6 +105,8 @@
   # root — a foreign-uid chown (or a dir pre-existing root-owned from a
   # bare-docker root-era install) is EPERM for the play's unprivileged
   # ansible_user.
+  # Same escape guard as the handover above: a '/' or ancestor data_dir
+  # must not get a /database_backups — or a handover — either.
   become: true
   become_user: root
   ansible.builtin.file:
@@ -103,6 +117,11 @@
     # as the depth-0 data-dir handover in deploy.yml.
     owner: "1000"
     group: "1000"
+  vars:
+    _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
+  when:
+    - data_dir_resolved != '/'
+    - not _data_ancestor_of_deploy
 
 - name: Hand the backup directory to the backend uid (#1227)
   # The probe matches EVERY uid != 1000, not just root: the manager play's

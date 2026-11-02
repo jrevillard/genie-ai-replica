@@ -136,7 +136,10 @@ if not hit or "/data/" in hit or "/secrets/" in hit:
 # is ASSERTED to have matched: a silent no-op would run the REAL heal
 # form (whose chown fails here — rendercheck is not a host user) and the
 # assertions below would pass on a command that validates nothing.
-heal_sweep = heal_s.replace("-exec chown -R -h rendercheck:rendercheck {} +", "-print")
+# The heal already carries -print BEFORE -exec (round-56's changed_when
+# signal): replacing only the exec tail printed every target twice and
+# made the diagnostic ambiguous. Replace the whole span instead.
+heal_sweep = heal_s.replace("-print -exec chown -R -h rendercheck:rendercheck {} +", "-print")
 if heal_sweep == heal_s:
     print("heal sweep rewrite no-op — the heal chown spelling drifted; update this assertion",
           file=sys.stderr); sys.exit(1)

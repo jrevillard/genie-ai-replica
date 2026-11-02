@@ -708,7 +708,7 @@ describe('compose non-root contract (#1227)', () => {
     // line parser cannot know *admin resolves to root — reading the alias
     // name as a literal uid is fail-open.
     const aliasUser = validateComposeNonRoot(['services:', '  kong: {user: *admin}', ''].join('\n'));
-    expect(aliasUser.violations.some((v) => v.includes('kong') && v.includes('YAML alias'))).toBe(true);
+    expect(aliasUser.violations.some((v) => v.includes('kong') && v.includes('YAML alias or anchor'))).toBe(true);
 
     // a WHOLE-LIST volumes alias drops every bind from enforcement (neither
     // the block collector nor the flow collectors match) — demand it inline.
@@ -729,7 +729,16 @@ describe('compose non-root contract (#1227)', () => {
 
     // the BLOCK form fails open the same way for an alias — same rule.
     const blockAlias = validateComposeNonRoot(['services:', '  kong:', '    user: *admin', ''].join('\n'));
-    expect(blockAlias.violations.some((v) => v.includes('kong') && v.includes('YAML alias'))).toBe(true);
+    expect(blockAlias.violations.some((v) => v.includes('kong') && v.includes('YAML alias or anchor'))).toBe(true);
+
+    // an INLINE ANCHOR on the pin (user: &a root — legal YAML a real
+    // parser resolves) is unresolvable for a line parser: captured `&a`
+    // (block) or `&a root` (flow) matched neither root test once. Same
+    // conservative rule as the *alias spelling.
+    const blockAnchor = validateComposeNonRoot(['services:', '  kong:', '    user: &a root', ''].join('\n'));
+    expect(blockAnchor.violations.some((v) => v.includes('kong') && v.includes('YAML alias or anchor'))).toBe(true);
+    const flowAnchor = validateComposeNonRoot(['services:', '  kong: {user: &a root}', ''].join('\n'));
+    expect(flowAnchor.violations.some((v) => v.includes('kong') && v.includes('YAML alias or anchor'))).toBe(true);
 
     // a nested flow-map key named user: (an environment USER var) is NOT
     // the service pin — the depth-aware capture must not raise a false
@@ -749,7 +758,9 @@ describe('compose non-root contract (#1227)', () => {
     const flowListAlias = validateComposeNonRoot(
       ['services:', '  backend:', '    user: "1000:1000"', '    volumes: ["./data:/data", *binds]', ''].join('\n')
     );
-    expect(flowListAlias.violations.some((v) => v.includes('backend') && v.includes('YAML alias'))).toBe(true);
+    expect(flowListAlias.violations.some((v) => v.includes('backend') && v.includes('YAML alias or anchor'))).toBe(
+      true
+    );
 
     // the flow deploy is still a SHALLOW replace: dropping mode from it
     // must trip, exactly like the block form

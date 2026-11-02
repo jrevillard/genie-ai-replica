@@ -10,6 +10,21 @@ contractual evidence — a fresh clone does not carry them.)
 
 ## Current state (2026-11-02)
 
+- **The live six-check pass ran on 0.2.149 (2026-11-02) — the first
+  since 0.2.130, and the first over the busybox tooling tier** — 6/6:
+  health, genie theme on the login form, the register link, a French
+  streaming chat ("La capitale de la France est Paris."), an
+  upload→ClamAV→ingest cycle (Ingested, 1 chunk, 20 s), and a RAG
+  query citing the just-ingested file at score 0.93. `helm test`
+  additionally passed both busybox test suites (stateless reach +
+  TCP reach) against the live release. Two checksum defects were
+  caught and fixed IN the campaign (0.2.147 shipped a naive
+  sha256sum -c that broke every install and was remediated;
+  0.2.148's bare-hash parse still failed — the checksum line
+  resolves against the cwd, fixed in 0.2.149 by verifying from
+  /tools/bin). The upgrades also exercised the deploy-repo
+  remediation path end-to-end: two failed releases auto-rolled-back
+  without operator intervention.
 - **The tooling images pull on xattr-refusing storage, and the
   long-running tier drops ALL capabilities (0.2.142–0.2.147)** —
   a dev venue of the fuse-overlayfs class spent a boot campaign

@@ -63,7 +63,10 @@ void main() {
 
     // The two tile cards made the grid.
     expect(
-      find.ancestor(of: find.text('Births Card'), matching: find.byType(GridView)),
+      find.ancestor(
+        of: find.text('Births Card'),
+        matching: find.byType(GridView),
+      ),
       findsOneWidget,
     );
     expect(

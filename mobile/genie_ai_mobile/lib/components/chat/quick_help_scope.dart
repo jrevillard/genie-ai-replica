@@ -1,4 +1,8 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 // The Quick Help rules, on both sides of the button: the SCOPE it claims
@@ -71,8 +75,7 @@ Map<String, dynamic> parseQuickHelpButton(
   // the string, no asset. The bundled schema documents the type; a
   // markup STRING handed to the basename rule would become a garbage
   // asset key and degrade the card to its neutral icon.
-  final bool iconInline =
-      iconMap['type'] == 'inline' && rawIconValue is String;
+  final bool iconInline = iconMap['type'] == 'inline' && rawIconValue is String;
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
   // garbage path the card cannot load.
@@ -109,7 +112,32 @@ Map<String, dynamic> parseQuickHelpButton(
     'resolvedTitle': resolveConfigText(btn['title'], locale),
     'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
     'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
+    'styles': quickHelpCardStylesOf(btn),
   };
+}
+
+/// The card's declared tint — the per-button `styles` block every
+/// shipped configuration writes, hex-parsed. `background` paints the
+/// card's surface and `outline` its border; the web's third field
+/// (`hoverColor`) has NO mobile consumer — a touch card has no hover
+/// state, so the web's hover wash does not transfer.
+class QuickHelpCardStyles {
+  final Color? background;
+  final Color? outline;
+
+  const QuickHelpCardStyles({this.background, this.outline});
+}
+
+/// The declared tint of [btn]'s `styles` block. A missing or malformed
+/// hex value is a NULL field — the card paints its token fallback, the
+/// way the web's `var(--qh-bg, var(--surface))` falls back per
+/// property; it never drops the card.
+QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
+  final styles = configMapOf(btn['styles']);
+  return QuickHelpCardStyles(
+    background: ColorUtils.parseHexNullable(styles['backgroundColor']),
+    outline: ColorUtils.parseHexNullable(styles['outlineColor']),
+  );
 }
 
 /// The Quick Help section of a runtime configuration, parsed under
@@ -166,9 +194,11 @@ List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   return const <String>[];
 }
 
-/// The spacing between the grid's columns — the delegate's own
-/// crossAxisSpacing and the column bound's denominator are ONE value.
-const double quickHelpGridSpacing = 10;
+/// The spacing between the grid's tiles — the delegate's own main and
+/// cross axis spacing, the broken-card row's bottom margin and the
+/// column bound's denominator are ONE value: a DsSpacing token, not a
+/// hand-picked literal.
+const double quickHelpGridSpacing = DsSpacing.sm;
 
 /// The grid's column count, from the config's `layout` block, bounded
 /// by [maxWidth] (the width the grid is given). A malformed value — a

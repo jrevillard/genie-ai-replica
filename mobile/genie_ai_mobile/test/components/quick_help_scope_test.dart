@@ -2341,7 +2341,6 @@ void main() {
       expect(parsed['iconAsset'], '');
     });
 
-
     test('a numeric category carries the form the web resolves', () {
       // The web resolves a numeric category reference with
       // String(reference): a JSON 5.0 becomes '5' and matches the
@@ -2511,12 +2510,19 @@ void main() {
     });
 
     test('a count wider than the grid is bounded by the width', () {
-      // 500 columns on a 328px grid: the cap is width/10 = 32 — the
-      // highest count whose columns still have a positive extent beside
-      // the 10px spacing (32 columns leave 18px for the tiles).
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 32);
+      // 500 columns on a 328px grid: the cap is the integer division
+      // width ~/ spacing — the highest count whose columns still have
+      // a positive extent beside the spacing between them. Derived
+      // from the ONE spacing value, so a token retune moves the bound.
+      expect(
+        quickHelpGridColumns({'columns': 500}, maxWidth: 328),
+        328 ~/ quickHelpGridSpacing,
+      );
       expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 2);
+      expect(
+        quickHelpGridColumns({'columns': 500}, maxWidth: 25),
+        25 ~/ quickHelpGridSpacing,
+      );
     });
 
     test('a width without room for two columns degrades to one', () {
@@ -2643,7 +2649,6 @@ void main() {
         expect(buttons.map((b) => b['id']), ['births', 'misplaced', 'typo']);
       },
     );
-
 
     test('a missing or malformed container degrades to the empty section', () {
       for (final config in <Map<String, dynamic>>[

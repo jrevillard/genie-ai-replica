@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,10 +31,7 @@ void main() {
     'title': {'en': 'File Card'},
     'category': '2',
     'serviceLabels': ['Births'],
-    'icon': {
-      'type': 'file',
-      'value': '/config/quickhelp/just-chat.svg',
-    },
+    'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
   };
 
   final tree = quickHelpTreeFixture();
@@ -99,7 +95,10 @@ void main() {
     // each card's press surface, then match the loader type.)
     Finder cardIconOf(String title, bool Function(Widget) predicate) =>
         find.descendant(
-          of: find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
+          of: find.ancestor(
+            of: find.text(title),
+            matching: find.byType(InkWell),
+          ),
           matching: find.byWidgetPredicate(predicate),
         );
     expect(find.text('Inline Card'), findsOneWidget);

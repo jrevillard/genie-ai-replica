@@ -123,6 +123,7 @@ Future<void> pumpChatBot(
   GlobalKey<ChatBotComponentState>? chatKey,
   List<Locale> supportedLocales = const [Locale('en')],
   Widget Function(Widget chatbot)? buildHome,
+  ThemeData? theme,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -138,7 +139,7 @@ Future<void> pumpChatBot(
       child: AnimatedBuilder(
         animation: I18nService(),
         builder: (context, _) => MaterialApp(
-          theme: ThemeManager().lightTheme,
+          theme: theme ?? ThemeManager().lightTheme,
           locale: I18nService().currentLocale,
           supportedLocales: supportedLocales,
           localizationsDelegates: const [

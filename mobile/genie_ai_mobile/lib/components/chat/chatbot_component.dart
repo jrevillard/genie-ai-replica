@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
 import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
@@ -1563,7 +1564,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           inlineSvg: inlineSvg,
           tokens: tokens,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: _quickHelpCardHeaderGap),
         Expanded(
           child: Text(
             title,
@@ -1580,24 +1581,66 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// The Quick Help card's padding — the card scale's horizontal and
+  /// vertical step. The DS spacing scale has no 12 (xs=4, sm=8, md=16),
+  /// so the card names its own constant instead of repeating the raw
+  /// literal at each site that styles the card.
+  static const EdgeInsets _quickHelpCardPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 8,
+  );
+
+  /// The gap between the card's icon and its title — the same
+  /// off-scale 12 as the padding (no DsSpacing value equals it).
+  static const double _quickHelpCardHeaderGap = 12;
+
   /// The container a Quick Help card renders in — the tile's and the
-  /// broken row's shared chrome, differing only in border colour.
+  /// broken row's shared chrome, differing only in border colour and
+  /// the surface the deployment's tint (or the surface token) paints.
+  /// A DsCard: the DS primitive already carries the surface, border
+  /// side and radius the shell used to hand-roll, and its
+  /// overrideBg / overrideBorderColor are the override points the
+  /// tint (and the broken diagnosis) read through.
   Widget _quickHelpCardShell({
+    required Color background,
     required Color borderColor,
-    required AppTokens tokens,
     EdgeInsetsGeometry? margin,
     required Widget child,
   }) {
     return Container(
       margin: margin,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(DsRadii.lg),
-        border: Border.all(color: borderColor),
+      child: DsCard(
+        variant: DsCardVariant.standard,
+        padding: _quickHelpCardPadding,
+        overrideBg: background,
+        overrideBorderColor: borderColor,
+        child: child,
       ),
-      child: child,
     );
+  }
+
+  /// The surface a Quick Help card paints. A declared `backgroundColor`
+  /// paints as-is in light mode; a declared `outlineColor` alone (the
+  /// shape the shipped configurations actually declare — the
+  /// background is a pale step whose chroma cannot carry a hue on a
+  /// dark surface) names the dark surface's HUE: the outline's colour
+  /// at the LIVE surface token's lightness, the same derivation shape
+  /// the web paints its dark cards with, without copying the web's
+  /// constants. An undeclared field falls back to the surface token.
+  Color _quickHelpCardBackground(
+    QuickHelpCardStyles? styles,
+    AppTokens tokens,
+    bool dark,
+  ) {
+    final Color? background = styles?.background;
+    if (background != null || !dark) {
+      return background ?? tokens.surface;
+    }
+    final Color? outline = styles?.outline;
+    if (outline == null) return tokens.surface;
+    return HSLColor.fromColor(
+      outline,
+    ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor();
   }
 
   /// The full-width row a BROKEN Quick Help card renders as, above the
@@ -1612,9 +1655,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     required AppTokens tokens,
   }) {
     return _quickHelpCardShell(
+      background: tokens.surface,
       borderColor: tokens.danger,
       margin: const EdgeInsets.only(bottom: quickHelpGridSpacing),
-      tokens: tokens,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2321,7 +2364,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         child: Row(
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: _quickHelpCardHeaderGap),
                             Text(
                               _isStreaming
                                   ? tr('chatbot.generating')
@@ -2575,7 +2618,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 _sendMessage(_inputController.text),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: _quickHelpCardHeaderGap),
                         DsButton(
                           iconOnly: true,
                           icon: Icons.send,
@@ -2681,8 +2724,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   final String iconAsset =
                                       button['iconAsset']?.toString() ?? '';
                                   final String inlineSvg =
-                                      button['iconInlineSvg']?.toString() ??
-                                      '';
+                                      button['iconInlineSvg']?.toString() ?? '';
+                                  final QuickHelpCardStyles cardStyles =
+                                      button['styles']
+                                          as QuickHelpCardStyles? ??
+                                      const QuickHelpCardStyles();
+                                  final bool dark =
+                                      Theme.of(context).brightness ==
+                                      Brightness.dark;
 
                                   return Material(
                                     color: Colors.transparent,
@@ -2692,8 +2741,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       ),
                                       onTap: () => _quickHelpPressed(button),
                                       child: _quickHelpCardShell(
-                                        borderColor: tokens.borderLight,
-                                        tokens: tokens,
+                                        background: _quickHelpCardBackground(
+                                          cardStyles,
+                                          tokens,
+                                          dark,
+                                        ),
+                                        borderColor:
+                                            cardStyles.outline ??
+                                            tokens.borderLight,
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,

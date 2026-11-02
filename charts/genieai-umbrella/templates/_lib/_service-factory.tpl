@@ -59,11 +59,11 @@ spec:
       # enforces `baseline` — see _model-deployment.tpl for why it cannot
       # go stricter). The
       # runAsUser/runAsNonRoot defaults that previously sat here
-      # are removed: the frontend/clamav entrypoints write to
-      # paths owned by the image's default USER (root=0 for the
-      # frontend, 100 for clamav) and crash-loop on 65534. Each
-      # service declares its own user via `securityContext` (container
-      # level) in values.yaml.
+      # are removed: each service declares its own identity via
+      # `securityContext` (container level) in values.yaml, pinned to
+      # the USER its image ships (frontend 101, clamav 1000, backend
+      # 1000 — see #1227: every image now runs non-root by default
+      # and its Dockerfile pre-chowns the paths it writes).
       #
       # `podSecurityContext` (e.g. fsGroup on documentRepository) is
       # merged into the same `securityContext:` block — emitting two
@@ -144,17 +144,12 @@ spec:
             # Per-service `services.<svc>.securityContext` overrides
             # entirely. The default below carries only the bits that
             # are safe regardless of UID: no privilege escalation,
-            # and only NET_RAW dropped from capabilities. We KEEP
-            # CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID — needed
-            # by entrypoints that chown paths at startup (the
-            # embedded-nginx frontend). Dropping ALL also drops
-            # CHOWN, which made the chown fail with EPERM even when
-            # running as root. UID and runAsNonRoot are service-
-            # specific — the frontend/clamav entrypoints write
-            # to paths owned by the image's default USER (root for
-            # the frontend, 100 for clamav) and break when forced
-            # to 65534. Each service declares its own `securityContext`
-            # in values.yaml.
+            # and only NET_RAW dropped from capabilities. Since #1227
+            # every service pins its full identity in values.yaml
+            # (runAsNonRoot + runAsUser + drop ALL) — each image runs
+            # non-root by default and its Dockerfile pre-chowns the
+            # paths it writes, so entrypoints no longer chown at
+            # startup and need no extra capabilities.
             {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "NET_RAW"))) -}}
             {{- toYaml $scc | nindent 12 }}
           {{- with $svc.volumeMounts }}

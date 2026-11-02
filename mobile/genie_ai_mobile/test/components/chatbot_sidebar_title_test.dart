@@ -1,19 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
-import '../helpers/theme_helper.dart';
+import '../helpers/chatbot_harness.dart';
 
 // The sidebar scope's context-bar title across a locale switch. The title
 // is the JOIN of the localized service names the panel installed it with,
@@ -47,14 +42,17 @@ void main() {
     },
   ];
 
-  setUp(() {
-    resetThemeManager();
-  });
+  setUp(resetChatbotTestState);
+  tearDown(resetChatbotTestState);
 
-  tearDown(() {
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
+  // The REAL bundled configuration with NO Quick Help buttons: the
+  // chatbot still loads a config, but the test's text assertions must
+  // not depend on the shipped buttons' labels ('Births' is a plausible
+  // button label for a civil-registry deployment).
+  late Uint8List configBytes;
+
+  setUpAll(() async {
+    configBytes = await chatbotConfigBytesWithButtons(<Map<String, dynamic>>[]);
   });
 
   Future<void> pumpChatWithTree(
@@ -62,63 +60,46 @@ void main() {
     _LocaleMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
   }) async {
-    final api = ServiceCategoriesApi(ApiClient()..client = mock);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: Column(
-                children: [
-                  SizedBox(
-                    height: 300,
-                    child: ServiceTreePanel(
-                      onSelectionChange: (selection) {
-                        // The page's own mapping (main.dart's
-                        // _onServiceSelected): display name and EN
-                        // wire labels travel to the chat together.
-                        chatKey?.currentState?.setCategoryContext(
-                          selection['category_id'] ?? selection['id'] ?? '',
-                          selection['name'] ?? '',
-                          categoryNameEn:
-                              selection['categoryNameEn']?.toString() ?? '',
-                          serviceLabelsEn:
-                              (selection['serviceLabelsEn'] as List<dynamic>? ??
-                                      const <dynamic>[])
-                                  .map((e) => e.toString())
-                                  .where((e) => e.isNotEmpty)
-                                  .toList(),
-                          serviceCount:
-                              (selection['serviceCount'] as num?)?.toInt() ?? 0,
-                        );
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: ChatBotComponent(
-                      key: chatKey,
-                      userId: 'user-1',
-                      onRefreshSidebar: () {},
-                      onRelatedDocumentsUpdate: (_) {},
-                    ),
-                  ),
-                ],
+    mockChatbotConfigAsset(tester, configBytes);
+    await pumpChatBot(
+      tester,
+      mock,
+      chatKey: chatKey,
+      supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
+      buildHome: (chatbot) => Scaffold(
+        body: Column(
+          children: [
+            SizedBox(
+              height: 300,
+              child: ServiceTreePanel(
+                onSelectionChange: (selection) {
+                  // The page's own mapping (main.dart's
+                  // _onServiceSelected): display name and EN
+                  // wire labels travel to the chat together.
+                  final serviceLabelsEn =
+                      (selection['serviceLabelsEn'] as List<dynamic>? ??
+                              const <dynamic>[])
+                          .map((e) => e.toString())
+                          .where((e) => e.isNotEmpty)
+                          .toList();
+                  chatKey?.currentState?.setCategoryContext(
+                    selection['category_id'] ?? selection['id'] ?? '',
+                    selection['name'] ?? 'Unknown Service',
+                    categoryNameEn:
+                        selection['categoryNameEn']?.toString() ?? '',
+                    serviceLabelsEn: serviceLabelsEn,
+                    serviceCount:
+                        (selection['serviceCount'] as num?)?.toInt() ??
+                        serviceLabelsEn.length,
+                  );
+                },
               ),
             ),
-          ),
+            Expanded(child: chatbot),
+          ],
         ),
       ),
     );
-    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -239,6 +220,9 @@ void main() {
       for (var i = 0; i < 10 && (mock.requestsByLocale['en'] ?? 0) < 4; i++) {
         await tester.pump();
       }
+      // The switch-back fetches FIRED: without them the title assertion
+      // below would pass on the original pick while covering no race.
+      expect(mock.requestsByLocale['en'], 4);
       await tester.pumpAndSettle();
       // Release the held 'es' responses: the chatbot's late one must be
       // superseded, the panel's late tree is display-only.
@@ -322,11 +306,19 @@ class _LocaleMockClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     debugPrint('[MOCK] ${request.method} ${request.url.path}');
-    final locale =
-        Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
-    requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;
+    // Only the categories endpoint is answered: any other request the
+    // mount may issue gets the clean 404 the other chatbot mocks return
+    // — not the tree, which would parse as the wrong type, and not a
+    // count in requestsByLocale. Logged above, so a request the mock
+    // does not understand stays visible.
+    if (!request.url.path.endsWith('/api/service-categories/categories')) {
+      return httpResponseJson(<String, dynamic>{}, 404);
+    }
+    final locale = request.url.queryParameters['locale'] ?? 'en';
+    final count = (requestsByLocale[locale] ?? 0) + 1;
+    requestsByLocale[locale] = count;
     final holdFrom = holdFromCounts[locale];
-    if (holdFrom != null && (requestsByLocale[locale] ?? 0) >= holdFrom) {
+    if (holdFrom != null && count >= holdFrom) {
       final completer = Completer<http.StreamedResponse>();
       _held.add((locale: locale, completer: completer));
       return completer.future;
@@ -344,11 +336,9 @@ class _LocaleMockClient extends http.BaseClient {
   }
 
   http.StreamedResponse _respond(String locale) {
-    final bytes = utf8.encode(jsonEncode(treesByLocale[locale] ?? []));
-    return http.StreamedResponse(
-      http.ByteStream.fromBytes(bytes),
+    return httpResponseJson(
+      treesByLocale[locale] ?? [],
       statusByLocale[locale] ?? 200,
-      headers: {'content-type': 'application/json'},
     );
   }
 }

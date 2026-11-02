@@ -280,6 +280,45 @@ else
   rm -f "$find_err" "$find_out"
 fi
 
+# Rule 4: the secrets/ssl host bind — the data directory's sibling
+# root-creatable source. Its shipped state is root:101 0640 (the edge's
+# gid 101 reads the key; the migrating playbook normalizes to it), so the
+# defect this sweep catches is a key WITHOUT group-read — the pre-#1227
+# root:root 0600 spelling that crash-loops the edge — plus any
+# world-unreadable leftover. On a RUNNING stack the directory must exist
+# (create_host_path:false): a missing dir is a violation, never a skip.
+secrets_dir="${3:-./secrets/ssl}"
+if [ -L "$secrets_dir" ]; then
+  secrets_dir="$(readlink -f "$secrets_dir")"
+fi
+if [ ! -d "$secrets_dir" ]; then
+  echo "SECRETS DIR MISSING: $secrets_dir does not exist — the edge nginx bind is"
+  echo "create_host_path:false, so on a RUNNING stack this directory must exist."
+  echo "A skipped readability check is never an OK."
+  violations=$((violations + 1))
+else
+  find_err=$(mktemp)
+  find_out=$(mktemp)
+  # busybox find (the CI image) has no -perm negation quirk here, but it
+  # DOES lack -uid: -perm is implemented on both. Group-read is the
+  # contract bit: 0640 root:101 (the normalized state) passes, 0600
+  # root:root (the pre-#1227 crash-loop state) fails.
+  find "$secrets_dir" -type f ! -perm -0040 -print > "$find_out" 2>"$find_err"
+  find_rc=$?
+  if [ -s "$find_err" ] || [ $find_rc -ne 0 ]; then
+    echo "FIND ERRORS while sweeping $secrets_dir (untraversable paths are NOT checked):"
+    sed 's/^/  /' "$find_err"
+    violations=$((violations + 1))
+  fi
+  unreadable=$(head -20 "$find_out")
+  if [ -n "$unreadable" ]; then
+    echo "FILES WITHOUT GROUP-READ under $secrets_dir (the gid-101 edge must read the key; normalize to root:101 0640):"
+    echo "$unreadable" | sed 's/^/  /'
+    violations=$((violations + 1))
+  fi
+  rm -f "$find_err" "$find_out"
+fi
+
 if [ "$violations" -gt 0 ]; then
   echo "NON-ROOT CONTRACT: $violations violation group(s)"
   exit 1

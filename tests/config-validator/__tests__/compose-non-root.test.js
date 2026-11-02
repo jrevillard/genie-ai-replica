@@ -871,6 +871,35 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     expect(validateComposeNonRoot(wrappedOpted).violations).toEqual([]);
+
+    // a ']' INSIDE a quoted path must not close the reflow accumulation —
+    // it once truncated at the quoted bracket and dropped every later
+    // bind from enforcement; and the bracket counter ignores quoted
+    // spans entirely.
+    const quotedBracket = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: [',
+      '      "data[a]/x:/x",',
+      '      "${DATA_DIR:-./data}/y:/y"',
+      '    ]',
+      ''
+    ].join('\n');
+    const { violations: vq } = validateComposeNonRoot(quotedBracket);
+    expect(vq.some((v) => v.includes('kong') && v.includes('templated but in short syntax'))).toBe(true);
+
+    // a backslash-escaped quote inside a span does not close it (the
+    // splitFlowItems tracker once desynced and split the entry mid-path).
+    const escapedQuote = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: ["${DATA_DIR:-./data}/logs:/var/log", "/mnt/a\"b/x:/x"]',
+      ''
+    ].join('\n');
+    const { violations: ve } = validateComposeNonRoot(escapedQuote);
+    expect(ve.some((v) => v.includes('kong') && v.includes('templated but in short syntax'))).toBe(true);
   });
 
   test('mutations: templated relative defaults and quoted sources with spaces', () => {

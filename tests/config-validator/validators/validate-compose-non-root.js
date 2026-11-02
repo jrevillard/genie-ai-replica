@@ -804,9 +804,10 @@ function validateComposeNonRoot(composeText) {
     }
     if (inFlowVolumes) {
       flowBuffer += `\n${line}`;
-      if (!line.includes(']')) continue;
+      const close = flowCloseIndex(flowBuffer);
+      if (close === -1) continue;
       inFlowVolumes = false;
-      flowSource = flowBuffer.slice(0, flowBuffer.lastIndexOf(']'));
+      flowSource = flowBuffer.slice(0, close);
     }
     if (flowSource !== null) {
       const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
@@ -1042,14 +1043,51 @@ function validateComposeNonRoot(composeText) {
  * surface), so commas inside `${...}` nesting or quoted strings must not
  * split.
  */
+// Index of the flow-sequence CLOSING bracket, honoring quoted spans (and
+// backslash-escaped quotes): a ']' inside a quoted path once closed the
+// accumulation early and silently dropped every bind listed after it.
+function flowCloseIndex(buf) {
+  let q = null;
+  let depth = 1; // the opening '[' precedes this buffer
+  for (let i = 0; i < buf.length; i += 1) {
+    const ch = buf[i];
+    if (q) {
+      if (ch === '\\' && buf[i + 1] === q) {
+        i += 1;
+        continue;
+      }
+      if (ch === q) q = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q = ch;
+      continue;
+    }
+    if (ch === '[') depth += 1;
+    if (ch === ']') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 function splitFlowItems(body) {
   const items = [];
   let depth = 0;
   let quote = null;
   let cur = '';
-  for (const ch of body) {
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i];
     if (quote) {
       cur += ch;
+      // a BACKSLASH-ESCAPED quote ("a \" b") does not close the span —
+      // honoring it once desynced the tracker and split entries mid-path
+      if (ch === '\\' && body[i + 1] === quote) {
+        cur += body[i + 1];
+        i += 1;
+        continue;
+      }
       if (ch === quote) quote = null;
       continue;
     }

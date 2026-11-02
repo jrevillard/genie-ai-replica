@@ -26,6 +26,18 @@
 # expand it at all, and compose would expand it as the invoking
 # ansible_user. Spell the override absolute.
 
+- name: Compute the data-dir escape guard once (#1227)
+  # ONE definition for BOTH guarded tasks below (handover + backup-dir):
+  # the guard was duplicated verbatim per task and the copies could drift
+  # — one running against '/' or a deploy_dir ancestor while the other
+  # skips, reintroducing the stray-chown class by maintenance.
+  # data_dir_resolved renders '.' for data_dir: '/' (the formula strips
+  # the slash then normpath('') = '.') — hence the dot in the skip list.
+  ansible.builtin.set_fact:
+    _data_dir_escaped: >-
+      {{ data_dir_resolved in ['/', '.']
+         or (deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/')) }}
+
 - name: Fail loud on an unsupported ~-rooted data_dir override (#1227)
   # The header documents that ~ is NOT supported; without this assertion
   # it degraded SILENTLY: '~/genieai-data' fails the absolute test and
@@ -73,14 +85,7 @@
   # Note this is NOT the external-override case: an absolute data_dir
   # OUTSIDE deploy_dir that is not its ancestor (/srv/genieai-data) is a
   # supported spelling and still passes (it is neither '/' nor a parent).
-  vars:
-    _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
-  # data_dir_resolved renders '.' for data_dir: '/' (the formula strips
-  # the slash then normpath('') = '.') — a bare '/' comparison would let
-  # BOTH guarded tasks run against the module cwd (reproduced).
-  when:
-    - data_dir_resolved not in ['/', '.']
-    - not _data_ancestor_of_deploy
+  when: not _data_dir_escaped
 
 - name: Hand the data directory's intermediate ancestors to ansible_user (depth 0, #1227)
   # For a nested override (data_dir: /opt/genieai/state/data) the chain
@@ -137,14 +142,7 @@
     # as the depth-0 data-dir handover in deploy.yml.
     owner: "1000"
     group: "1000"
-  vars:
-    _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
-  # data_dir_resolved renders '.' for data_dir: '/' (the formula strips
-  # the slash then normpath('') = '.') — a bare '/' comparison would let
-  # BOTH guarded tasks run against the module cwd (reproduced).
-  when:
-    - data_dir_resolved not in ['/', '.']
-    - not _data_ancestor_of_deploy
+  when: not _data_dir_escaped
 
 - name: Hand the backup directory to the backend uid (#1227)
   # The probe matches EVERY uid != 1000, not just root: the manager play's

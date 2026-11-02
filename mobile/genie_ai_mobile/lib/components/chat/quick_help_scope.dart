@@ -960,9 +960,10 @@ class ConversationScopeResolver {
       final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
       // The tags beside the button that the live hierarchy cannot name —
       // the dropped half of the count-vs-labels delta the send guard
-      // refuses on.
+      // refuses on, read as the kept labels' exact complement so the
+      // caption and the guard can never disagree about which tags died.
       final droppedTags = otherTags
-          .where((tag) => !_hierarchy.knowsLabel(tag))
+          .where((tag) => !sidebarLabels.contains(tag))
           .toList();
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
@@ -1038,9 +1039,10 @@ class ConversationScopeResolver {
       sidebarTagCount: sidebarTags.length,
       // A tag that names nothing of the live hierarchy is dead: the
       // restore names it, the way the web restores it as an unresolved
-      // chip.
+      // chip. The kept labels' exact complement — one partition, so the
+      // caption and the guard can never disagree about which tags died.
       droppedTags: sidebarTags
-          .where((tag) => !_hierarchy.knowsLabel(tag))
+          .where((tag) => !knownLabels.contains(tag))
           .toList(),
     );
   }

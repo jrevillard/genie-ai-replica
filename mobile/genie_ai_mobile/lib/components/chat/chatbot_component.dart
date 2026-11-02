@@ -2169,6 +2169,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final theme = Theme.of(context);
     final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
+    // One read of the verdict the bar renders: the gate, the icon and
+    // the caption below all follow it.
+    final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;
 
     // Wrap entire layout to detect taps outside input
     return GestureDetector(
@@ -2181,7 +2184,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           Column(
             children: [
               // Context Bar
-              if (_selectedCategoryName.isNotEmpty || _deadScopeTags.isNotEmpty)
+              if (_selectedCategoryName.isNotEmpty || hasDeadScopeTags)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -2198,13 +2201,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       // cannot carry is a failure — the broken Quick Help
                       // cards' warning, not the hint bulb.
                       Icon(
-                        _deadScopeTags.isNotEmpty
+                        hasDeadScopeTags
                             ? Icons.warning_amber_rounded
                             : Icons.lightbulb_outline,
                         size: 20,
-                        color: _deadScopeTags.isNotEmpty
-                            ? tokens.danger
-                            : tokens.accent,
+                        color: hasDeadScopeTags ? tokens.danger : tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2227,7 +2228,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             // broken Quick Help cards render, and the fact
                             // the send guard would only announce at the
                             // first attempted follow-up.
-                            if (_deadScopeTags.isNotEmpty)
+                            if (hasDeadScopeTags)
                               Text(
                                 tr(
                                   'chatbot.scopeTagGone',

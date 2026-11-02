@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,21 +44,13 @@ void main() {
   setUp(resetChatbotTestState);
   tearDown(resetChatbotTestState);
 
-  Future<void> pumpChat(
-    WidgetTester tester,
-    _DeadScopeMockClient mock, {
-    GlobalKey<ChatBotComponentState>? chatKey,
-  }) {
-    return pumpChatBot(tester, mock, chatKey: chatKey);
-  }
-
   testWidgets('a dead scope tag names itself in the context bar on restore', (
     tester,
   ) async {
     final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
-    await pumpChat(tester, mock, chatKey: chatKey);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
@@ -85,7 +75,7 @@ void main() {
     final mock = _DeadScopeMockClient(tree, conversationTags: ['Births']);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
-    await pumpChat(tester, mock, chatKey: chatKey);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
@@ -110,7 +100,7 @@ void main() {
     );
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
-    await pumpChat(tester, mock, chatKey: chatKey);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
@@ -135,7 +125,7 @@ void main() {
       );
       final chatKey = GlobalKey<ChatBotComponentState>();
       mockChatbotConfigAsset(tester, configBytes);
-      await pumpChat(tester, mock, chatKey: chatKey);
+      await pumpChatBot(tester, mock, chatKey: chatKey);
 
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
@@ -162,15 +152,10 @@ void main() {
       final chatKey = GlobalKey<ChatBotComponentState>();
       tester.binding.defaultBinaryMessenger.setMockMessageHandler(
         'flutter/assets',
-        (ByteData? message) async {
-          if (message == null) return null;
-          final key = utf8.decode(message.buffer.asUint8List());
-          if (key != 'assets/config/genie-ai-config.json') return null;
-          return null; // the failed read
-        },
+        (ByteData? message) async => null, // every asset read fails
       );
       rootBundle.evict('assets/config/genie-ai-config.json');
-      await pumpChat(tester, mock, chatKey: chatKey);
+      await pumpChatBot(tester, mock, chatKey: chatKey);
 
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
@@ -190,7 +175,7 @@ void main() {
     final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
-    await pumpChat(tester, mock, chatKey: chatKey);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
@@ -215,7 +200,7 @@ void main() {
     final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytesWithLiveCard);
-    await pumpChat(tester, mock, chatKey: chatKey);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();

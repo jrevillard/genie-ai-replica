@@ -63,6 +63,13 @@ DEPLOY_OPEA=0
 docker compose up -d
 ```
 
+No manual directory pre-create is needed: `backend-init` creates and
+chowns `data/database_backups` at first up, and `secrets-ssl-init`
+creates `secrets/ssl` (normalized root:101). `secrets/ssl` stays EMPTY
+on the self-signed path — the nginx entrypoint generates those inside
+the container at `/etc/nginx/certs`; the directory holds certificates
+YOU provide (mounted read-only) and the letsencrypt certbot's copies.
+
 Images are built automatically via `build:` directives in `docker-compose.yaml` — no manual build or registry needed.
 
 ### 0.4 Verify Stack Health

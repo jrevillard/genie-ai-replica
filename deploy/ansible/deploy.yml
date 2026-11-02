@@ -205,12 +205,95 @@
   tags: [prepare]
   become: true
   become_user: "{{ ansible_user }}"
+  vars:
+    # The deploy-payload ownership pass (depth-1 children except the data/
+    # tree), shared VERBATIM by the pre-download and post-extract tasks —
+    # one string, so the two passes cannot drift apart on a later edit.
+    # Quoted + trailing-slash-normalized: command-module splits with shlex,
+    # so an unquoted whitespace path (or a data_dir like './data/' whose
+    # basename is empty → `find: missing argument to '-name'`) would abort
+    # the whole prepare play.
+    # The probe/heal pair (same shape as tasks/no-root-data-migration.yml):
+    # the heal only runs when the probe found a mis-owned depth-1 child —
+    # a converged tree reports ok instead of churning `changed` on every
+    # deploy, and the change signal stays meaningful.
+    # The data tree is excluded UNCONDITIONALLY — an absolute data_dir can
+    # still live INSIDE deploy_dir (data_dir: /opt/genieai/data), and
+    # dropping the exclusion there would chown -R the whole tree (backend
+    # dump dir, huggingface caches) to ansible_user, transiently revoking
+    # the uid-1000 ownership the migration just handed over. The resolved
+    # spelling comes from group_vars (ONE formula for every consumer).
+    # The heal/probe prune list: the data dir ITSELF plus every
+    # deploy_dir-level ancestor on the way to it (a data_dir nested two
+    # levels deep must not have its parent `state/` chown -R'd — that
+    # would re-flip the uid-1000 handover the migration just performed).
+    _fix_payload_data_chain: []
+    # secrets/ is excluded too: the SSL certificate tree is ROOT-owned by
+    # DESIGN (root:101 0640 key — the "Normalize SSL certificate ownership"
+    # block owns it later in this play), so leaving it to the payload heal
+    # would flip the TLS key to ansible_user on every deploy — a permanent
+    # probe hit, and a transient window where gid-101 nginx cannot read the
+    # key.
+    # The probe is RECURSIVE (pruned, no -maxdepth): a heal that died
+    # midway left depth-1 dirs correct with root-owned DEEP paths a
+    # depth-1 probe could never re-detect.
+    # BOTH commands use the GNU-find idiom "( PRUNE ) -prune -o ( PRED
+    # -ACTION )": the -o is LOAD-BEARING. Without it the whole tail is one
+    # AND chain — for every non-pruned entry the prune-expr is false,
+    # -prune short-circuits, and the "! -uid … -print" tail is never
+    # reached: the probe would return empty forever (and the heal's -exec
+    # would never fire) while looking converged. Verified against real
+    # find on the fix branch (the pruned dirs' contents stay unvisited).
+    _fix_payload_probe_cmd: >-
+      find "{{ deploy_dir_resolved }}" -mindepth 1
+      {{ _fix_payload_prune_expr }}
+      -o ( ! -uid {{ ansible_user_uid }} -print -quit )
+    _fix_payload_ownership_cmd: >-
+      find "{{ deploy_dir_resolved }}" -mindepth 1 -maxdepth 1
+      {{ _fix_payload_prune_expr }}
+      -o -print -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.
     # Download individual files via GitLab raw API (reproducible, idempotent).
     - name: Set raw base URL
       ansible.builtin.set_fact:
         _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
+
+    # The prefix chain (deploy_dir → data_dir) is derived ONCE in
+    # tasks/compute-ancestors.yml — the intermediate-ancestor handover in
+    # the shared migration tasks slices the SAME fact, so the payload
+    # prune list and the depth-0 ancestor handover cannot drift apart.
+    - name: Build the data-dir exclusion chain (shared derivation)
+      ansible.builtin.import_tasks: tasks/compute-ancestors.yml
+
+    - name: Build the find prune expression from the chain
+      ansible.builtin.set_fact:
+        # Block scalar, NOT a quoted flow scalar: the expression embeds
+        # literal double quotes (the find -path arguments are shell-quoted
+        # because the command module shlex-splits its string). Inside a
+        # YAML double-quoted scalar every embedded quote would need \"
+        # escaping — and ansible-core 2.20's parser hard-fails on the
+        # unescaped form. In a block scalar the text is raw. Note the
+        # SINGLE backslash in "\1": template strings are not Python —
+        # escapes are passed through verbatim to re.sub, which needs \1
+        # (one backslash) to see the group backref.
+        # The parens render WITH surrounding spaces: the command module
+        # shlex-splits its string, and a glued '(-path' would arrive as ONE
+        # argv token (find: "paths must precede expression") — proven by
+        # rendering the builder and tokenizing the output.
+        # An EMPTY chain (the degenerate data_dir == deploy_dir override)
+        # must render a VALID prune WITHOUT the leading -o — ' (  -o -path
+        # …' is a syntactically invalid find expression (binary operator
+        # -o with nothing before it, verified) — AND it must still exclude
+        # database_backups: with data_dir == deploy_dir the backend's
+        # uid-1000 dump dir sits at deploy_dir depth 1, inside the heal's
+        # sweep; a secrets-only prune would chown -R it to ansible_user
+        # while the migration's handover flips it back to 1000 in the same
+        # play — the two passes would fight on every deploy (and a running
+        # backend eats EACCES between them). The empty-chain arm therefore
+        # prunes database_backups + secrets.
+        _fix_payload_prune_expr: >-
+          {{ ' ( ' ~ ((_fix_payload_data_chain | length > 0) | ternary(_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ') ~ ' -o ', '-path "' ~ data_dir_resolved ~ '/database_backups" -o ')) ~ '-path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:
@@ -226,7 +309,10 @@
     - name: Ensure deploy directory exists
       become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}"
+        # deploy_dir_resolved (group_vars): the one normalized spelling —
+        # a trailing-slash override must not fork the tree the payload
+        # probe/heal chain is built against.
+        path: "{{ deploy_dir_resolved }}"
         state: directory
         mode: '0755'
 
@@ -238,13 +324,22 @@
         mode: '0755'
       loop: "{{ _deploy_files }}"
 
-    - name: Fix ownership before download
+    - name: Run the payload-ownership pass before download (#1227)
+      # The shared probe/heal/warn trio (tasks/payload-ownership-pass.yml):
+      # extraction and get_url re-create root-era ownership on every pass
+      # that ships files. The registers are shared across imports — the
+      # pre-pass always completes before the post-pass overwrites them.
+      ansible.builtin.import_tasks: tasks/payload-ownership-pass.yml
+
+    - name: Fix ownership of the deploy directory itself (depth 0)
+      # The find above starts at -mindepth 1; on a FRESH host the top
+      # directory was created root-owned ("Ensure deploy directory exists")
+      # and the unprivileged get_url download would die EACCES.
       become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}"
+        path: "{{ deploy_dir_resolved }}"
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-        recurse: true
 
     - name: Download deploy files from GitLab
       ansible.builtin.get_url:
@@ -287,13 +382,9 @@
             extra_opts:
               - "--strip-components=1"
 
-    - name: Fix ownership to ansible_user
-      become_user: root
-      ansible.builtin.file:
-        path: "{{ deploy_dir }}"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        recurse: true
+    - name: Run the payload-ownership pass after extraction (#1227)
+      # Same shared trio, against the freshly extracted archive.
+      ansible.builtin.import_tasks: tasks/payload-ownership-pass.yml
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root
@@ -323,7 +414,12 @@
       failed_when: false
 
     - name: Generate self-signed SSL certificate
+      # ROOT (become_user): the secrets/ssl directory is created root:root
+      # by "Create deploy directories" — writing server.key as the play's
+      # ansible_user dies EACCES on a fresh host (the adjacent normalize
+      # task pins become_user: root for the same reason).
       become: true
+      become_user: root
       ansible.builtin.command: >
         openssl req -x509 -nodes -days 365 -newkey rsa:2048
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
@@ -344,19 +440,25 @@
         - server.key
       failed_when: false
 
-    # The cap-dropped nginx container (root with no DAC_OVERRIDE) can
-    # only read files it owns. Re-owning here keeps the fix idempotent
-    # and self-healing across re-runs.
-    - name: Normalize SSL certificate ownership for the cap-dropped nginx container
+    # The edge nginx runs as uid 101 since #1227 and reads both files
+    # through the read-only /etc/nginx/ssl bind: the private key must be
+    # group-readable by that uid (0640 + group 101), not root-only 0600.
+    # Re-normalizing here keeps the fix idempotent and self-healing.
+    # 101 is the NGINX IMAGE's uid/gid (fixed upstream — same idem in the
+    # certbot entrypoint and the compose upgrade docs): on the HOST it is
+    # an arbitrary numeric id — an inventory whose deploy host allocates
+    # gid 101 to an untrusted package group would let its members read the
+    # TLS key (checked/documented in docker-compose-setup.md).
+    - name: Normalize SSL certificate ownership for the uid-101 nginx edge
       become: true
       become_user: root
       ansible.builtin.file:
         path: "{{ item.stat.path }}"
         state: file
         owner: root
-        group: root
+        group: "101"
         mode: >-
-          {{ '0644' if (item.item == 'server.crt') else '0600' }}
+          {{ '0644' if (item.item == 'server.crt') else '0640' }}
       loop: "{{ ssl_files_pre.results }}"
       loop_control:
         label: "{{ item.item }}"
@@ -378,15 +480,84 @@
       when: not (self_signed_certs | default(false) | bool)
 
     - name: Create required directories
+      # huggingface resolves through data_dir_resolved (the ONE formula):
+      # a raw {{ data_dir }} join builds /opt/genieai//srv/... junk for an
+      # absolute override and leaves the real bind source for docker to
+      # root-create on the TEI node.
+      # ROOT (become_user) — NOT the play's ansible_user identity: on a
+      # FRESH host with a supported absolute override OUTSIDE deploy_dir
+      # (data_dir: /srv/genieai-data), the parent directory is root-owned
+      # 0755 and an ansible_user creation dies EACCES, aborting this play
+      # BEFORE the migration import (which runs later and creates the
+      # tree as root). Default ./data is unaffected either way.
+      become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ item }}"
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+        mode: "{{ item.mode }}"
+      # data_dir_resolved is ALWAYS absolute (group_vars joins the
+      # absolute deploy_dir) — no ternary here: its else branch would
+      # relpath a relative path against an absolute start and throw.
+      # secrets/ssl is root:101 0750: the runtime gate (rule 4) demands
+      # group 101 + group r-x on the populated directory — the edge's
+      # gid 101 must traverse it (matches secrets-ssl-init's compose
+      # normalization; root keeps full owner access for certbot writes).
+      loop:
+        - {path: "{{ data_dir_resolved }}/huggingface", mode: '0755'}
+        - {path: "{{ deploy_dir_resolved }}/secrets/ssl", owner: root, group: "101", mode: '0750'}
+
+    # no-root data-dir migration (#1227) — the tasks live in
+    # tasks/no-root-data-migration.yml, shared VERBATIM with the
+    # swarm_workers play below (one doctrine; prose "keep in step"
+    # contracts drifted three times before this extraction).
+    - name: Run the no-root data-dir migration tasks
+      ansible.builtin.import_tasks: tasks/no-root-data-migration.yml
+
+- name: GENIE.AI - Pre-create data directories on worker nodes (#1227)
+  # swarmkit silently creates a missing bind source ROOT-owned on the node
+  # the service lands on — the exact defect the #1227 contract forbids.
+  # The manager play above covers single-node deployments (where every node
+  # is a manager); this play covers the multi-node future where a
+  # genieai-labeled service lands on a worker. The commented [swarm_workers]
+  # group in inventory.example keeps this a no-op on single-node inventories.
+  hosts: swarm_workers
+  tags: [prepare]
+  become: true
+  tasks:
+    # Same shared migration tasks as the manager play — the bind sources
+    # materialize on the node the service lands on.
+    - name: Run the no-root data-dir migration tasks
+      ansible.builtin.import_tasks: tasks/no-root-data-migration.yml
+
+    - name: Pre-create the secrets/ssl bind source on workers (#1227)
+      # The THIRD host bind: on a gateway-labeled worker the edge nginx
+      # binds <deploy_dir>/secrets/ssl — without this task swarmkit
+      # silently root-creates it on that worker (the certs themselves are
+      # manager-scoped; the shape matches the manager's own
+      # secrets/ssl creation — root:101 0750, the runtime gate's rule-4
+      # converged shape).
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir_resolved }}/secrets/ssl"
+        state: directory
+        owner: root
+        group: "101"
+        mode: '0750'
+
+    - name: Pre-create the huggingface cache bind source on workers (#1227)
+      # data/huggingface is ALSO a bind source (${DATA_DIR}/huggingface:/data
+      # for the TEI model cache) — without this task a GPU-labeled worker
+      # that is not a manager lets swarmkit silently create it root-owned
+      # on first up, the exact defect this play exists to prevent. The TEI
+      # images are profile-gated root users (documented out of the no-root
+      # contract), so a root-owned 0755 cache dir is their correct state.
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ data_dir_resolved }}/huggingface"
         state: directory
         mode: '0755'
-      loop:
-        - "{{ data_dir }}/logs/kong"
-        - "{{ data_dir }}/database_backups"
-        - "{{ data_dir }}/huggingface"
-        - secrets/ssl
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers
@@ -408,9 +579,11 @@
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/files/certificates/{{ group_names[0] }}/{{ item.item }}"
         dest: "{{ deploy_dir }}/secrets/ssl/{{ item.item }}"
-        mode: '0600'
+        # group-readable by the edge's uid 101 (#1227) - see the normalize
+        # task above.
+        mode: '0640'
         owner: root
-        group: root
+        group: "101"
       loop: "{{ local_certs.results }}"
       when: item.stat.exists
       loop_control:
@@ -542,6 +715,14 @@
         # Generate resolved compose with docker compose, then fix port types
         # (docker compose config converts port integers to strings, which
         # docker stack deploy rejects — see docker/cli#1073)
+        # KNOWN LIMITATION (#1227): compose config re-serializes the long-
+        # syntax bind opt-outs (create_host_path: false) as 'bind: {}' — the
+        # resolved artifact does NOT carry them. This is harmless on the
+        # swarm path it feeds (swarmkit ignores bind options; the #1227
+        # guarantee there is the pre-create tasks above), but do NOT
+        # `docker compose -f docker-compose.resolved.yaml up` this file as
+        # if it were the contract file — missing bind sources would be
+        # root-created again.
         docker compose \
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
@@ -635,6 +816,10 @@
         --filter label=com.docker.stack.namespace={{ stack_name }}
         --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}'
       register: replica_check
+      # The unhealthy predicate matches a service at ZERO running
+      # replicas (" 0/1"), anchored to the replicas column: a bare '0/'
+      # substring also lives inside "10/10" or "20/30", which would wedge
+      # the gate on any stack scaled to 10+ replicas.
       until: >
         replica_check.stdout_lines
         | reject('search', 'kong-config')
@@ -643,8 +828,13 @@
         | reject('search', 'keycloak-config')
         | reject('search', 'db-migrations')
         | reject('search', 'otel-collector-init')
+        | reject('search', 'arango-vector-db-init')
+        | reject('search', 'victorialogs-init')
+        | reject('search', 'document-repository-init')
+        | reject('search', 'backend-init')
+        | reject('search', 'secrets-ssl-init')
         | reject('search', '0/0')
-        | select('search', '0/')
+        | select('search', '(^|\s)0/\d')
         | length == 0
       retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
       delay: 30
@@ -700,4 +890,3 @@
         echo ""
       changed_when: false
       when: not (_compose_changed | bool)
-

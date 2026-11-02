@@ -96,6 +96,11 @@ values with `grep ^KEY .env | cut -d= -f2-` instead.
 
 ## Step 2 — Start the dependency stack (no GPU)
 
+The host binds that used to need a manual pre-create are automated:
+`backend-init` creates and chowns `data/database_backups`
+at first up and `secrets-ssl-init` creates `secrets/ssl` — no manual
+pre-create step, even on a clean clone.
+
 ```bash
 docker compose up -d \
   postgres kong-migrations kong kong-config \

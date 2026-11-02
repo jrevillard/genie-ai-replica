@@ -12,7 +12,10 @@ COPY . .
 # root, outside the mount point.
 RUN npm run build && cp dist/config/theme-variables.css dist/theme-fallback.css
 
-FROM nginx:alpine
+# Pinned tag, not nginx:alpine: the Dockerfile chowns /app/dist/runtime to
+# the NUMERIC uid 101, so a floating tag whose nginx uid could shift would
+# freeze wrong ownership into the image. Same tag the edge nginx uses.
+FROM nginx:1.28-alpine
 
 WORKDIR /app
 
@@ -24,8 +27,19 @@ COPY nginx-revalidate-headers.inc /etc/nginx/nginx-revalidate-headers.inc
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Non-root runtime (#1227): the entrypoint writes the runtime config into
+# /app/dist/runtime and the CMD renders nginx.conf into /tmp (the stock
+# /etc/nginx location is root-owned) — hand the runtime dir to the nginx
+# user (101); the nginx temp paths live under /tmp, which the runtime
+# creates itself.
+RUN mkdir -p /app/dist/runtime \
+    && chown -R 101:101 /app/dist/runtime
+
+# In-container port is unprivileged (8090); nothing below 1024 is needed.
 EXPOSE 8090
+
+USER 101
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["sh", "-c", "envsubst '$NGINX_PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "envsubst '$NGINX_PORT' < /etc/nginx/nginx.conf.template > /tmp/nginx.conf && exec nginx -c /tmp/nginx.conf -g 'daemon off;'"]

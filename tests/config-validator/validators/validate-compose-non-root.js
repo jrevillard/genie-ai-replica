@@ -1,0 +1,1241 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// validate-compose-non-root — enforce the no-root contract (#1227) on
+// docker-compose.yaml:
+//   1. every always-on service declares a non-root `user:` (uid != 0), so no
+//      long-term process runs as root and no entrypoint phase writes
+//      root-owned files into host binds;
+//   2. every host bind under the data directory (and every templated or
+//      home-rooted / data-shaped source) opts into `create_host_path:
+//      false` — docker silently creates a missing bind source as
+//      root-owned, which is exactly the defect this contract forbids.
+//      Whether the path happens to exist in THIS checkout is irrelevant:
+//      any other checkout (a clean clone, CI) starts without it.
+//
+// `SELF_DROPPING` lists the upstream images whose entrypoint execs into an
+// unprivileged user by itself (postgres and redis `gosu`/`su-exec` to their
+// package users). Their runtime UID is image-defined, so no static `user:`
+// is pinned for them; everything else in the always-on set must carry an
+// explicit one. Profile-gated services (opea, gpu-models, observability,
+// okf, letsencrypt) are out of scope — they never run in the default
+// deployment this contract governs.
+
+'use strict';
+
+/**
+ * Services whose upstream image entrypoint drops privileges itself.
+ * Keyed by service name; the values are enforced documentation — pinned by
+ * compose-non-root.test.js so an entry can neither vanish silently nor
+ * lose its justification.
+ */
+const SELF_DROPPING = {
+  postgres: 'postgres:16 entrypoint gosu-execs as the postgres package user (uid 999)',
+  'redis-cache': 'redis:7-alpine entrypoint su-exec-execs as the redis user (uid 999)'
+};
+
+// Services whose untracked host binds are converged by a ONE-SHOT ROOT
+// INIT that depends_on-gates their START: the bind may let docker create
+// a missing directory (root-owned, transient at CREATE time) because the
+// init has already handed it to the right owner before the service ever
+// runs. The runtime gate polices the CONVERGED state.
+const INIT_BACKED_BINDS = {
+  backend: {
+    reason: 'backend-init creates and chowns data/database_backups before this service starts',
+    // the exemption is PER-BIND: only the init-backed source escapes the
+    // opt-out demand — a second host bind on the service still needs it
+    match: /database_backups$/
+  },
+  nginx: {
+    reason: 'secrets-ssl-init creates and normalizes secrets/ssl (root:101) before this service starts',
+    match: /^\.\/secrets\/ssl/
+  },
+  // the INIT services themselves get the same per-bind scoping: an init
+  // may create the host path it then chowns (its contract) but a second
+  // host bind on it still demands the opt-out.
+  'backend-init': {
+    reason: 'the init creates and chowns the bind it serves',
+    match: /database_backups$/
+  },
+  'secrets-ssl-init': {
+    reason: 'the init creates and normalizes the bind it serves',
+    match: /^\.\/secrets\/ssl/
+  }
+};
+
+/**
+ * One-shot init containers that legitimately run as root: their whole job is
+ * to chown a NAMED volume (or normalize an init-created host bind) for the
+ * unprivileged service that follows (the otel-collector-init convention).
+ * They write nothing host-visible — named volumes are daemon-managed, not
+ * host paths — and they are short-lived, so neither contract rule is broken.
+ * Anything in this list must keep `cap_add: [CHOWN]` and a restart policy of
+ * `none`/`on-failure`.
+ */
+const ONE_SHOT_ROOT_INIT = {
+  'otel-collector-init': 'chowns the otel-queue volume for the collector (uid 10001) before it starts',
+  'arango-vector-db-init': 'chowns the arango_data AND arango_apps volumes for arangodb (uid 999) before it starts',
+  'victorialogs-init': 'chowns the vlogs-data volume for victoria-logs (uid 65534) before it starts',
+  'document-repository-init': 'chowns the doc_repo_uploads volume for document-repository (uid 1000) before it starts',
+  'backend-init':
+    'chowns the backend root-era volumes (backend_data, backend_uploads) AND the data/database_backups host bind for the uid-1000 backend before it starts',
+  'secrets-ssl-init':
+    'creates the secrets/ssl host bind on the gateway node and normalizes it to root:101 (keys 0640) before the edge nginx starts'
+};
+
+/**
+ * @param {string} composeText raw docker-compose.yaml content (the file
+ *   contains ${VAR} substitutions, so callers must not round-trip it through
+ *   a YAML parser — same caveat as parse-compose.js)
+ * @returns {{violations: string[], alwaysOn: string[]}}
+ *   violations: human-readable lines, one per offending service or bind
+ *   alwaysOn: service names the contract applies to (for reporting)
+ */
+function validateComposeNonRoot(composeText) {
+  const violations = [];
+  const alwaysOn = [];
+  const lines = composeText.split('\n');
+
+  let inServices = false;
+  let currentService = null;
+  let currentUser = null;
+  let currentProfiles = [];
+  let inProfiles = false;
+  let inVolumes = false;
+  let currentRestart = null;
+  let currentRestartPolicyCondition = null;
+  let currentCapAdds = [];
+  let capAddsSeen = false; // an explicit cap_add key REPLACES the anchor's list
+  let currentCapDrops = []; // cap_drop items seen service-locally
+  let capDropsSeen = false; // an explicit cap_drop key REPLACES the anchor's [ALL]
+  let inCapAdds = false;
+  let inCapDrops = false;
+  let inDeploy = false;
+  let localDeploySeen = false;
+  let inRestartPolicy = false;
+  let currentMaxAttempts = null;
+  let currentMode = null;
+  const serviceBinds = {}; // service -> [{path, createHostPath}]
+
+  const flush = () => {
+    // an UNTERMINATED reflow accumulation (no closing bracket before the
+    // next top-level key) once swallowed the list AND the next service's
+    // volumes block — fail loud instead of letting the parser eat them.
+    if (inFlowVolumes) {
+      inFlowVolumes = false;
+      flowBuffer = '';
+      violations.push(
+        'an unterminated `volumes: [` reflow accumulation never closed — the list (and everything after it) went unenforced'
+      );
+    }
+    // wholesale re-indent trap (see the saw* declarations). The flag is
+    // CONSUMED here: flush() runs once per top-level key, and re-emitting
+    // the identical violation per flush buried the one actionable defect
+    // under N duplicate lines.
+    if (inServices && !sawTwoSpaceService && sawDeepServiceKey) {
+      sawDeepServiceKey = false;
+      violations.push(
+        'services: no service key sits at 2-space indent while deeper keys exist — the block was re-indented and the line parser enforced nothing in it'
+      );
+    }
+    // the last volumes entry of the file never sees a new-entry line or a
+    // block close — claim it here
+    claimDeferred();
+    if (currentService) {
+      const gated = currentProfiles.length > 0;
+      if (!gated) {
+        alwaysOn.push(currentService);
+        if (currentUser === null && !SELF_DROPPING[currentService] && !ONE_SHOT_ROOT_INIT[currentService]) {
+          violations.push(
+            `${currentService}: no \`user:\` declared — every always-on service must pin a non-root user ` +
+              '(or join SELF_DROPPING / ONE_SHOT_ROOT_INIT with a justification)'
+          );
+        } else if (currentUser !== null) {
+          const uid = String(currentUser).split(':')[0];
+          // Number() closes the numeric-zero spellings ("00", "000") that
+          // docker treats exactly as uid 0. A TEMPLATED pin (${...}, $VAR)
+          // resolves conservatively to root: the identity pin is the
+          // contract's primary rule and must be a literal — a
+          // compose-legal default-to-root variable would ship as root.
+          if (!ONE_SHOT_ROOT_INIT[currentService] && (uid === 'root' || Number(uid) === 0 || /[$]/.test(currentUser))) {
+            violations.push(
+              `${currentService}: \`user: ${currentUser}\` is root (or a templated pin that could resolve to root) — the contract forbids it`
+            );
+          }
+        }
+      }
+      // Profile-gated services are out of the contract's scope entirely —
+      // same boundary as the user: check above (they never run in the
+      // default deployment the contract governs).
+      if (!gated) {
+        const binds = serviceBinds[currentService] || [];
+        for (const b of binds) {
+          // A host path under the data dir that docker would silently create
+          // (root-owned) is a violation unless the config opts out. Sources
+          // carry variable forms — resolve them: `${VAR:-default}` to its
+          // default; a bare `${VAR}` (unknown location) to the data dir
+          // CONSERVATIVELY, so renaming the variable cannot defeat the gate.
+          let resolved = b.path.replace(/^['"]|['"]$/g, '');
+          // ${VAR:-default} strips to its default; defaults can NEST to
+          // any depth (${A:-${B:-${C:-./data}}} — legal compose), so strip
+          // from the INNERMOST braces outward until stable (bounded pass
+          // count), instead of matching one fixed nesting depth
+          for (let depth = 0; depth < 10; depth += 1) {
+            const next = resolved.replace(/\$\{[\w-]+:-([^${}]*)\}/, '$1');
+            if (next === resolved) break;
+            resolved = next;
+          }
+          resolved = resolved
+            // a default-less ${VAR}, an error-form ${VAR:?err}/${VAR?err},
+            // an alt-form ${VAR:+alt}, a braceless $VAR, or a YAML ALIAS
+            // (*anchor — unresolvable by a line parser) names an unknown
+            // location — resolve CONSERVATIVELY to the data dir so
+            // renaming cannot defeat the gate
+            .replace(/\$\{[\w-]+[:?+][^}]*\}/g, './data')
+            .replace(/\$\{[\w-]+\}/g, './data')
+            .replace(/\$(?!\{)[\w-]+/g, './data')
+            .replace(/^\*[\w-]+(?![\w./-])/, './data');
+          // An ABSOLUTE resolved source is under the data-dir rule too:
+          // re-pointing a variable default at /srv/genie or hand-writing
+          // /var/genie/data must not escape the create_host_path contract.
+          // Short syntax cannot carry the opt-out, so only data-shaped
+          // paths are flagged there — an absolute host path with a /data/
+          // segment counts (a DATA_DIR repointed absolute), while the
+          // docker socket and /dev nodes do not.
+          const underDataDir = /^(\.\/|\.\.\/)*data(\/|$)/.test(resolved);
+          // 'data' counts only as a WHOLE path segment — a suffix like
+          // /mnt/genie-data is a pre-existing host path for which the
+          // short syntax offers no compliant spelling, and flagging it
+          // would prescribe an impossible fix
+          const dataShaped = underDataDir || /\/data(\/|$)/.test(resolved);
+          // An absolute LITERAL path (/etc/localtime, the docker socket)
+          // pre-exists on every host — create_host_path is irrelevant on
+          // it. A TEMPLATED absolute (${VAR:-/srv/genie}/...) is a
+          // deployment-authored location whose default can point anywhere:
+          // that one stays under the rule. Same for a HOME-ROOTED source:
+          // compose expands `~` to the invoking user's home, and a source
+          // missing there is still created root-owned by the daemon.
+          const templated = /\$\{?\w/.test(b.path);
+          const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
+          const authoredLocation = templated || resolved.startsWith('/') || resolved.startsWith('~/');
+          // same doctrine for the guarded service itself: A BIND MATCHING
+          // THE INIT-BACKED PATH may rely on the init's convergence — the
+          // root-owned moment lives between CREATE and the init's
+          // completion, never once the service runs. Scoped per bind (an
+          // unconditional service-level skip once let a future second
+          // host bind on these services escape the rule entirely).
+          const backed = INIT_BACKED_BINDS[currentService];
+          if (backed && backed.match.test(b.path)) {
+            continue;
+          }
+          if (
+            // a literal HOME-ROOTED source (~/genie/x, no data segment) is
+            // deployment-authored too: whose home it lands in depends on who
+            // invokes compose, so no checkout can claim it pre-exists
+            b.shortSyntax
+              ? !(dataShaped || templated)
+              : !(underDataDir || absoluteDataPath || templated || dataShaped || resolved.startsWith('~/'))
+          ) {
+            continue;
+          }
+          if (b.shortSyntax) {
+            violations.push(
+              templated
+                ? `${currentService}: host bind "${b.path}" is templated but in short syntax, which ` +
+                    'cannot carry `create_host_path: false` — use long syntax or a named volume'
+                : `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
+                    'which cannot carry `create_host_path: false` — use long syntax or a named volume'
+            );
+          } else if (!b.createHostPathFalse && authoredLocation && !underDataDir) {
+            violations.push(
+              `${currentService}: host bind "${b.path}" is a deployment-authored location (templated ` +
+                'or ~-rooted) without `create_host_path: false` — docker creates a missing source as root-owned'
+            );
+          } else if (!b.createHostPathFalse) {
+            violations.push(
+              `${currentService}: host bind "${b.path}" sits under the data directory without ` +
+                '`create_host_path: false` — docker creates a missing source as root-owned'
+            );
+          }
+        }
+        if (ONE_SHOT_ROOT_INIT[currentService]) {
+          // Documented invariants, enforced: a root init exists to chown a
+          // named volume (needs CAP_CHOWN) and must stay a one-shot (a
+          // restart-always policy would make it a permanent root container).
+          // A service merged with the x-chown-init anchor inherits the
+          // invariants from the anchor unless it overrides them locally.
+          // capAddsSeen: an explicit cap_add key (even cap_add: []) REPLACES
+          // the anchor's list per YAML merge semantics — crediting the
+          // anchor through an explicit empty list would let a runtime
+          // EPERM-chown init pass the gate
+          const capAdds = capAddsSeen ? currentCapAdds : anchorMerged ? anchorDefaults.capAdds : [];
+          const restart = currentRestart !== null ? currentRestart : anchorMerged ? anchorDefaults.restart : null;
+          // A service-local deploy: SHALLOW-REPLACES the anchor's whole
+          // deploy map (compose merge semantics): mode: global and the
+          // anchor's restart_policy silently vanish at runtime. The gate
+          // must then judge the LOCAL values only — and an absent
+          // restart_policy condition under a local deploy: means swarm's
+          // default "any", which is not one-shot.
+          const anchorDeployApplies = anchorMerged && !localDeploySeen;
+          // mode: global is the anchor's own doctrine (named volumes are
+          // node-local; the init must run on WHATEVER node the follow-up
+          // service lands on). A local deploy: that restates the bounded
+          // policy but drops the mode strands that guarantee.
+          const mode = currentMode !== null ? currentMode : anchorDeployApplies ? anchorDefaults.mode : null;
+          if (mode !== 'global') {
+            violations.push(
+              `${currentService}: ONE_SHOT_ROOT_INIT member must keep deploy.mode: global (got ${mode ?? 'absent'})`
+            );
+          }
+          const condition =
+            currentRestartPolicyCondition !== null
+              ? currentRestartPolicyCondition
+              : anchorDeployApplies
+                ? anchorDefaults.condition
+                : 'any';
+          const maxAttempts =
+            currentMaxAttempts !== null ? currentMaxAttempts : anchorDeployApplies ? anchorDefaults.maxAttempts : null;
+          const capDrops = capDropsSeen ? currentCapDrops : anchorMerged ? anchorDefaults.capDrops : [];
+          if (!capDrops.includes('ALL')) {
+            // shallow-replace semantics cut both ways: a service-local
+            // cap_drop: [] REPLACES the anchor's [ALL] per YAML merge
+            // rules — the init would run with full root caps while every
+            // other invariant stayed green
+            violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_drop: [ALL]`);
+          }
+          if (!capAdds.includes('CHOWN')) {
+            violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
+          }
+          // BOTH keys must be one-shot: compose reads `restart:` while
+          // `docker stack deploy` reads deploy.restart_policy — an OR would
+          // let a single-key flip create a permanent root container on one
+          // front-end while the other still looks safe. An ABSENT key is the
+          // front-end's no-restart default (compose "no", swarm "none"), so
+          // only an explicit non-one-shot value violates.
+          // A BOUNDED compose retry (on-failure:N) terminates by itself —
+          // one-shot-in-spirit, same as a bounded swarm policy. An
+          // unbounded restart: always would BE a permanent root container.
+          const restartBounded = typeof restart === 'string' && /^on-failure:\d+$/.test(restart);
+          const oneShot =
+            (restart === null || restart === 'no' || restartBounded) &&
+            (condition === null || condition === 'none' || condition === 'on-failure');
+          // on-failure restarts a FAILING container — on swarm, without a
+          // max_attempts bound that is an infinite loop, i.e. a permanent
+          // root container for exactly as long as the chown keeps failing.
+          if (condition === 'on-failure' && maxAttempts === null) {
+            violations.push(
+              `${currentService}: restart_policy on-failure without max_attempts restarts a failing ` +
+                'root init forever on swarm — bound it'
+            );
+          }
+          if (!oneShot) {
+            violations.push(
+              `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot on BOTH front-ends ` +
+                '(restart "no" AND restart_policy none/on-failure)'
+            );
+          }
+        }
+      }
+    }
+    currentService = null;
+    currentUser = null;
+    currentProfiles = [];
+    inProfiles = false;
+    inVolumes = false;
+    currentRestart = null;
+    currentRestartPolicyCondition = null;
+    currentMaxAttempts = null;
+    currentMode = null;
+    currentCapAdds = [];
+    capAddsSeen = false;
+    currentCapDrops = [];
+    capDropsSeen = false;
+    inCapAdds = false;
+    inCapDrops = false;
+    inDeploy = false;
+    localDeploySeen = false;
+    inRestartPolicy = false;
+  };
+
+  // Pre-scan the x-chown-init extension anchor: services merge it via
+  // `<<: *chown-init`, and a line-level parser must resolve that merge to
+  // see the invariants it carries (cap_add, restart, restart_policy).
+  const anchorDefaults = { capAdds: [], capDrops: [], restart: null, condition: null, maxAttempts: null, mode: null };
+  {
+    let anchorName = null; // which extension anchor is being scanned
+    let inAnchorPolicy = false;
+    let inAnchorDeploy = false; // inside the anchor's deploy: block
+    let anchorKey = null; // which 2-space key the current 4-space list belongs to
+    // The placement extension's deploy: is what the sequence-merged inits
+    // actually inherit (the EARLIER map in the merge sequence wins whole)
+    // — its policy needs its own record so its one-shot invariants can be
+    // policed directly.
+    const genieaiPolicy = { mode: null, condition: null, maxAttempts: null };
+    let genieaiSeen = false; // the anchor DECL exists (mode may be absent)
+    let chownSeen = false;
+    const policyOf = () => (anchorName === 'x-chown-init-genieai' ? genieaiPolicy : anchorDefaults);
+    for (const line of lines) {
+      const anchorDecl = line.match(/^\s*(x-chown-init(?:-genieai)?):\s*&/);
+      if (anchorDecl) {
+        anchorName = anchorDecl[1];
+        if (anchorName === 'x-chown-init-genieai') genieaiSeen = true;
+        else chownSeen = true;
+        continue;
+      }
+      if (!anchorName) continue;
+      if (/^[a-z][\w-]*:\s*$/.test(line) && !line.startsWith(' ')) {
+        anchorName = null;
+        continue;
+      }
+      // Anchor cap lists are kept SEPARATE: `cap_add:` items are the
+      // capabilities the anchor GRANTS; `cap_drop: [ALL]` items feed the
+      // capDrops invariant (an ALL that leaked into capAdds would poison
+      // the CHOWN membership check).
+      const anchorKeyLine = line.match(/^ {2}([\w-]+):\s*(?:\[([^\]]*)\]\s*)?(?:#.*)?$/);
+      if (anchorKeyLine) {
+        anchorKey = anchorKeyLine[1];
+        // the anchor's deploy: key arms the gated policy parser — without
+        // this the anchorKey handler consumes the line first and the
+        // deploy block is never entered
+        if (anchorKey === 'deploy') {
+          inAnchorDeploy = true;
+          anchorKey = null;
+          continue;
+        }
+        // flow-form cap lists on the anchor: the same spelling the
+        // service-level parser accepts — route the bracket payload to
+        // the right defaults list
+        if (anchorKeyLine[2] !== undefined) {
+          const target =
+            anchorKey === 'cap_add'
+              ? anchorDefaults.capAdds
+              : anchorKey === 'cap_drop'
+                ? anchorDefaults.capDrops
+                : null;
+          if (target) {
+            for (const c of anchorKeyLine[2].split(',')) {
+              if (c.trim()) target.push(c.trim());
+            }
+          }
+        }
+        continue;
+      }
+      const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;
+      if (cap) {
+        anchorDefaults.capAdds.push(cap[1]);
+        continue;
+      }
+      const drop = anchorKey === 'cap_drop' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;
+      if (drop) {
+        anchorDefaults.capDrops.push(drop[1]);
+        continue;
+      }
+      const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
+      if (restart && anchorName === 'x-chown-init') anchorDefaults.restart = restart[1];
+      // block-state gating, the same hijack doctrine the service-level
+      // parser enforces: mode only under deploy:, condition/max_attempts
+      // only under restart_policy:
+      // BOTH anchors are TOP-LEVEL siblings (the placement extension is
+      // declared ahead of the base map): their deploy: keys share the
+      // same 2-space indent, so one dInd serves both and the 2-space
+      // anchorKey handler above arms deploy: for either.
+      const dInd = 2; // the anchor's deploy: key indent
+      if (inAnchorDeploy && !line.match(new RegExp(`^ {${dInd + 2}}`)) && line.trim() !== '') {
+        inAnchorDeploy = false;
+        inAnchorPolicy = false;
+      }
+      if (inAnchorDeploy && !inAnchorPolicy) {
+        const anchorMode = line.match(new RegExp(`^ {${dInd + 2}}mode:\\s*['"]?(\\w+)['"]?\\s*(?:#.*)?$`));
+        if (anchorMode) {
+          policyOf().mode = anchorMode[1];
+          continue;
+        }
+        if (line.match(new RegExp(`^ {${dInd + 2}}restart_policy:(?:\\s.*)?$`))) {
+          inAnchorPolicy = true;
+          continue;
+        }
+      }
+      if (inAnchorDeploy && inAnchorPolicy) {
+        const cInd = dInd + 4;
+        if (!line.match(new RegExp(`^ {${cInd}}`)) && line.trim() !== '') {
+          inAnchorPolicy = false;
+          continue;
+        }
+        const anchorAttempts = line.match(new RegExp(`^ {${cInd}}max_attempts:\\s*(\\d+)\\s*$`));
+        if (anchorAttempts) {
+          policyOf().maxAttempts = anchorAttempts[1];
+          continue;
+        }
+        const cond = line.match(new RegExp(`^ {${cInd}}condition:\\s*['"]?([\\w-]+)['"]?\\s*(?:#.*)?$`));
+        if (cond) {
+          policyOf().condition = cond[1];
+          continue;
+        }
+      }
+    }
+    // Policing the placement extension's OWN policy: the sequence merge
+    // gives its deploy: whole to the four constrained inits, so a drift
+    // here (condition any, bound stripped, mode dropped or deleted)
+    // turns them into unbounded root restart loops or single-node chowns
+    // while the OUTER anchor's copy still looks pristine. Keyed on the
+    // anchor DECL: deleting the mode line leaves all three fields null
+    // and field-presence guards would silently pass.
+    if (genieaiSeen) {
+      if (genieaiPolicy.mode !== 'global') {
+        violations.push('x-chown-init-genieai: the merged placement anchor must keep deploy.mode: global');
+      }
+      if (genieaiPolicy.condition !== 'on-failure' || genieaiPolicy.maxAttempts === null) {
+        violations.push(
+          'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
+        );
+      }
+    }
+    // same direct policing for the BASE anchor: deleting its whole
+    // restart_policy block leaves condition/maxAttempts null and the
+    // per-service checks treated null as safe — a persistently failing
+    // root init on swarm would then restart forever (default condition
+    // "any"), the exact state ONE_SHOT_ROOT_INIT forbids
+    if (chownSeen && (anchorDefaults.condition !== 'on-failure' || anchorDefaults.maxAttempts === null)) {
+      violations.push(
+        'x-chown-init: the merged anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
+      );
+    }
+  }
+  let anchorMerged = false;
+  // Long-syntax state: the index of the bind entry the current `bind:` opts
+  // block nests under, or null when there is none — a `create_host_path:`
+  // line must attach to the entry its own `bind:` key opened, not to the
+  // last-pushed source (a misplaced opt-out would otherwise silence the
+  // wrong bind).
+  let inBindOpts = false;
+  let pendingCreateFalse = false;
+  let sourceSeenThisEntry = false;
+  let bindOptsTarget = null;
+  let entryType = null; // long-syntax entry type: 'bind' | 'volume'
+  let entryTypeExplicit = false; // type: seen in this entry (vs the untyped volume default)
+  let deferredSource = null; // source: seen while entryType is still the untyped default
+  let inFlowVolumes = false; // a multi-line flow-sequence volumes list is open
+  let sawTwoSpaceService = false;
+  let sawDeepServiceKey = false;
+  let flowBuffer = '';
+  // An UNCLAIMED deferred source (an untyped long-syntax entry) is a
+  // fail-open drop — current compose-go rejects the spelling outright, but
+  // older builds within the documented floor infer the mount type from the
+  // source shape, so it can be a real host bind at runtime. Claim it as a
+  // bind (conservatively) at every place the entry ends: a new entry, the
+  // volumes block closing, or end of file.
+  const claimDeferred = () => {
+    if (deferredSource !== null && !entryTypeExplicit && currentService) {
+      const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+      binds.push({ path: deferredSource, createHostPathFalse: pendingCreateFalse, shortSyntax: false });
+    }
+    deferredSource = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+
+    if (
+      (line.match(/^[a-z][\w-]*:\s*(?:#.*)?$/) || line.match(/^["'][\w.-]+["']:\s*(?:#.*)?$/)) &&
+      !line.startsWith(' ')
+    ) {
+      flush();
+      // a trailing comment or a quoted key is the same section header —
+      // an unterminated spelling here left the WHOLE file unenforced
+      // (vacuous green) or, for the top-level volumes: block, turned its
+      // keys into userless 'services' (loud false positives)
+      // the top-level key may be quoted either way ('services': is legal
+      // YAML compose accepts — only the double-quoted spelling was
+      // recognized once, leaving the gate silently vacuous on the file)
+      inServices = /^services:\s*(?:#.*)?$/.test(trimmed) || /^['"]services['"]:\s*(?:#.*)?$/.test(trimmed);
+      continue;
+    }
+    // reserved top-level keys end the services scope
+    if (/^ {2}(volumes|networks|configs|secrets):/.test(line)) {
+      flush();
+      inServices = false;
+      continue;
+    }
+    if (!inServices) continue;
+
+    // a service key at any indent other than 2 spaces escapes every
+    // body matcher below (they are fixed-indent by design) — the
+    // realistic escape is a WHOLESALE re-indent (formatter or hand edit
+    // moving the whole services block), detected at flush: services
+    // present, no 2-space key anywhere, deeper bare keys exist → the
+    // file is malformed and nothing in it was enforced.
+    if (/^ {2}["']?[\w.-]+["']?:\s*(?:\{.*|#.*)?$/.test(line)) {
+      sawTwoSpaceService = true;
+    }
+    if (/^ {3,}["']?[\w.-]+["']?:\s*(?:\{.*|#.*)?$/.test(line)) {
+      sawDeepServiceKey = true;
+    }
+
+    // a service key may carry a trailing comment or a flow-map body —
+    // every other spelling class here tolerates comments; a bare-key-only
+    // match silently exempted such a service from EVERY check (fail-open).
+    // The body's user: pin is parsed (a compliant flow service otherwise
+    // reported 'no user: declared'); the REST of a flow-map body is
+    // line-parser-unreachable (extracted finding #1274).
+    const serviceMatch = line.match(
+      /^ {2}["']?([\w.-]+)["']?:\s*(?:&[\w-]+\s*)?(?:\{(.*)\}|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/
+    );
+    if (serviceMatch) {
+      flush();
+      currentService = serviceMatch[1];
+      const svcBody = serviceMatch[2];
+      if (svcBody !== undefined) {
+        // capture stops at '#': a trailing comment on the pin (`user: root
+        // # gw`) once rode along as `root # gw` — neither root test fired
+        // (verified). A quoted value keeps its '#' (extract the quoted
+        // span whole); a bare value truncates at the comment marker.
+        const fu = svcBody.match(/\buser:\s*([^,}]+)/);
+        if (fu) {
+          // DEPTH-AWARE: a user: key INSIDE a nested flow map (an
+          // environment USER variable) is not the service pin — the
+          // flat capture once turned {environment: {user: root}} into a
+          // false "is root" violation on a legal file (verified). Only a
+          // depth-0 key is the pin. Quoted spans are STRIPPED before the
+          // brace count: a quoted value containing '{' or '}' once pushed
+          // the real pin to depth!=0 and the service failed with
+          // "no user: declared" — a loud false positive prescribing an
+          // impossible fix (the pin was present).
+          const before = svcBody.slice(0, fu.index).replace(/'[^']*'|"[^"]*"/g, '');
+          const depth = (before.match(/\{/g) || []).length - (before.match(/\}/g) || []).length;
+          if (depth === 0) {
+            const rawVal = fu[1].trim();
+            const qm = rawVal.match(/^(['"])([\s\S]*?)\1/);
+            const val = qm ? qm[2] : rawVal.split('#')[0].trim();
+            // strip a MATCHING quote pair for the quoted-span escape hatch
+            const unquoted = val.replace(/^(['"])([\s\S]*)\1$/, '$2');
+            if (unquoted.startsWith('*') || unquoted.startsWith('&')) {
+              // a YAML alias cannot be resolved by a line parser: fail LOUD
+              // (the conservative-resolution doctrine) instead of reading the
+              // alias name as a literal uid that is neither root nor 0.
+              // currentUser stays null, so the must-pin rule fires too.
+              violations.push(
+                `${currentService}: flow user: is an unresolvable YAML alias or anchor (${unquoted}) — inline a literal uid:uid`
+              );
+            } else {
+              currentUser = unquoted;
+            }
+          }
+        }
+        // ANY volumes: key inside a flow body is unreachable by the bind
+        // collectors (block key, flow list, alias — none see it): every
+        // bind it carries would drop out of the create_host_path contract.
+        // Conservative: demand the block form.
+        if (/\bvolumes:/.test(svcBody)) {
+          violations.push(
+            `${currentService}: volumes: inside a flow-map body is unenforceable — move it to the block form so the binds stay collected`
+          );
+        }
+      }
+      serviceBinds[currentService] = [];
+      anchorMerged = false;
+      inBindOpts = false;
+      pendingCreateFalse = false;
+      sourceSeenThisEntry = false;
+      bindOptsTarget = null;
+      entryType = null;
+      entryTypeExplicit = false;
+      deferredSource = null;
+      continue;
+    }
+    if (!currentService) continue;
+
+    // `<<: *chown-init` — the service inherits the anchor's invariants as
+    // its baseline (service-local keys still override). The sequence form
+    // `<<: [*chown-init, *chown-init-genieai]` merges the SAME policy (the
+    // placement extension only adds deploy.placement and restates the
+    // identical deploy values), so it earns the same credit.
+    // (?![\w-]): a LONE *chown-init-genieai merge inherits NOTHING from
+    // the base anchor — crediting it via the chown-init prefix would let a
+    // root, uncapped, unbounded init pass every invariant
+    // bare form or anywhere inside the bracket list — a lookahead after
+    // the first *chown-init would die on [*chown-init-genieai, ...]
+    if (/^ {4}<<:\s*(?:\*chown-init(?![\w-])|\[[^\]]*\*chown-init(?![\w-])[^\]]*\])/.test(line)) {
+      anchorMerged = true;
+      continue;
+    }
+
+    // `user:` — mapping form only (the form every service in this file uses)
+    // A trailing # comment is legal documentation on the pin — the value
+    // ends at whitespace or the comment marker.
+    // capture is WIDE (everything up to an optional comment) then parsed:
+    // an inline anchor pin (`user: &a root`) carries a VALUE after the
+    // anchor name, which the old single-token capture could not see (the
+    // line fell through and only the must-pin rule fired, while a real
+    // parser would resolve the anchor to root). A matching quote pair is
+    // stripped after capture — the old inline ['"]? stripping is what the
+    // flow body once repeated wrong.
+    const userMatch = line.match(/^ {4}user:\s*([^#]+?)\s*(?:#.*)?$/);
+    if (userMatch) {
+      const rawPin = userMatch[1].trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
+      if (rawPin.startsWith('*') || rawPin.startsWith('&')) {
+        // the same conservative alias rule the flow body applies: a line
+        // parser cannot resolve the anchor/alias, and reading its NAME as
+        // a literal uid fails OPEN (neither 'root' nor 0 — verified).
+        // currentUser stays null, so the must-pin rule fires too.
+        violations.push(
+          `${currentService}: user: is an unresolvable YAML alias or anchor (${rawPin}) — inline a literal uid:uid`
+        );
+      } else {
+        currentUser = rawPin;
+      }
+      continue;
+    }
+
+    // restart / cap_add / deploy.restart_policy.condition — the one-shot
+    // init invariants
+    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
+    if (restartMatch) {
+      currentRestart = restartMatch[1];
+      continue;
+    }
+    if (/^ {4}cap_add:\s*(?:#.*)?$/.test(line)) {
+      inCapAdds = true;
+      capAddsSeen = true;
+      inCapDrops = false; // restating both caps: the lists must not eat
+      continue; // each other's items
+    }
+    if (/^ {4}cap_drop:\s*(?:#.*)?$/.test(line)) {
+      inCapDrops = true;
+      capDropsSeen = true;
+      inCapAdds = false; // restating both caps: the lists must not eat
+      continue; // each other's items
+    }
+    // flow style: cap_add: [CHOWN, DAC_OVERRIDE] — same invariant surface
+    const dropFlow = line.match(/^ {4}cap_drop:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
+    if (dropFlow) {
+      capDropsSeen = true;
+      for (const drop of dropFlow[1].split(',')) {
+        const d = drop.trim();
+        if (d) currentCapDrops.push(d);
+      }
+      continue;
+    }
+    const capFlow = line.match(/^ {4}cap_add:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
+    if (capFlow) {
+      capAddsSeen = true;
+      for (const cap of capFlow[1].split(',')) {
+        const c = cap.trim();
+        if (c) currentCapAdds.push(c);
+      }
+      continue;
+    }
+    if (inCapDrops) {
+      if (!/^ {6}/.test(line)) {
+        inCapDrops = false;
+      } else {
+        const drop = line.match(/^ {6}-\s*([A-Z_]+)\s*(?:#.*)?$/);
+        if (drop) currentCapDrops.push(drop[1]);
+        continue;
+      }
+    }
+    if (inCapAdds) {
+      if (!/^ {6}/.test(line)) {
+        inCapAdds = false;
+      } else {
+        const cap = line.match(/^ {6}-\s*([A-Z_]+)\s*(?:#.*)?$/);
+        if (cap) currentCapAdds.push(cap[1]);
+        continue;
+      }
+    }
+    if (/^ {4}deploy:\s*(?:#.*)?$/.test(line)) {
+      inDeploy = true;
+      localDeploySeen = true;
+      continue;
+    }
+    // flow form: deploy: {mode: global, restart_policy: {condition:
+    // on-failure, max_attempts: 60}} — same shallow-replace semantics as
+    // the block form, so the policy fields are parsed out of the body
+    // with the same shapes: an unparse-but-credit would judge a fully
+    // compliant flow spelling as ABSENT (over-enforcement prescribing an
+    // impossible fix)
+    const deployFlow = line.match(/^ {4}deploy:\s*\{(.*)\}\s*(?:#.*)?$/);
+    if (deployFlow) {
+      localDeploySeen = true;
+      const body = deployFlow[1];
+      const fm = body.match(/\bmode:\s*['"]?(\w+)/);
+      if (fm) currentMode = fm[1];
+      const fc = body.match(/\bcondition:\s*['"]?([\w-]+)/);
+      if (fc) currentRestartPolicyCondition = fc[1];
+      const fa = body.match(/\bmax_attempts:\s*(\d+)/);
+      if (fa) currentMaxAttempts = fa[1];
+      continue;
+    }
+    // dedent past the deploy map closes it: a later 6-space mode: or
+    // restart_policy: under a DIFFERENT parent key must not be credited to
+    // this service's deploy invariants (the block-open state must not
+    // outlive its indentation)
+    if (inDeploy && !/^ {6}/.test(line)) {
+      inDeploy = false;
+      inRestartPolicy = false;
+    }
+    if (inDeploy) {
+      if (/^ {6}restart_policy:\s*(?:#.*)?$/.test(line)) {
+        inRestartPolicy = true;
+        continue;
+      }
+      if (/^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/.test(line)) {
+        currentMode = line.match(/^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/)[1];
+        continue;
+      }
+      if (inRestartPolicy) {
+        if (!/^ {8}/.test(line)) {
+          inRestartPolicy = false;
+        } else {
+          const cond = line.match(/^ {8}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/);
+          if (cond) currentRestartPolicyCondition = cond[1];
+          const attempts = line.match(/^ {8}max_attempts:\s*(\d+)\s*(?:#.*)?$/);
+          if (attempts) currentMaxAttempts = attempts[1];
+          continue;
+        }
+      }
+    }
+
+    // `profiles:` — inline list or block list
+    const profilesInline = line.match(/^ {4}profiles:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
+    if (profilesInline) {
+      currentProfiles = profilesInline[1]
+        .split(',')
+        .map((s) => s.trim().replace(/['"]/g, ''))
+        .filter(Boolean);
+      continue;
+    }
+    if (/^ {4}profiles:\s*$/.test(line)) {
+      inProfiles = true;
+      continue;
+    }
+    if (inProfiles) {
+      if (!/^ {6}/.test(line)) {
+        inProfiles = false;
+      } else {
+        const item = line.match(/^ {6}-\s*['"]?([\w-]+)['"]?\s*$/);
+        if (item) currentProfiles.push(item[1]);
+        continue;
+      }
+    }
+
+    // `volumes:` — collect host binds with their create_host_path opt-out
+    if (/^ {4}volumes:\s*(?:#.*)?$/.test(line)) {
+      inVolumes = true;
+      continue;
+    }
+    // a WHOLE-LIST YAML alias matches neither the block key above nor the
+    // flow collectors below — the service would report zero binds and zero
+    // violations while carrying every bind the anchor holds (fail-open).
+    // Conservative resolution: demand the list inline. NO flush() here:
+    // the violation names the CURRENT service (a flush would null it).
+    if (/^ {4}volumes:\s*\*[\w-]+\s*(?:#.*)?$/.test(line)) {
+      violations.push(
+        `${currentService}: volumes: is a YAML alias — a line parser cannot resolve the anchor; inline the list so the binds stay enforced`
+      );
+      continue;
+    }
+    // flow LIST: volumes: [ "host:/container", {type: bind, source: ...} ] —
+    // same contract per entry, collected without opening the block scope.
+    // Items split nesting-aware (splitFlowItems) so `${VAR:-default}`
+    // braces and quoted commas stay inside one item.
+    // a flow-sequence volumes list carries the same contract per entry
+    // whether it sits on ONE line or is REFLOWED across lines (formatter
+    // output): the closed single-line form processes directly, an open
+    // `[` accumulates until the closing bracket instead of dropping the
+    // whole list (and every bind in it) from enforcement
+    const volumesFlow = line.match(/^ {4}volumes:\s*\[(.*)\]\s*(?:#.*)?$/);
+    const volumesFlowOpen = line.match(/^ {4}volumes:\s*\[(.*)$/);
+    let flowSource = null;
+    if (volumesFlow) {
+      flowSource = volumesFlow[1];
+    } else if (volumesFlowOpen) {
+      inFlowVolumes = true;
+      flowBuffer = volumesFlowOpen[1];
+      continue;
+    }
+    if (inFlowVolumes) {
+      flowBuffer += `\n${line}`;
+      const close = flowCloseIndex(flowBuffer);
+      if (close === -1) continue;
+      inFlowVolumes = false;
+      flowSource = flowBuffer.slice(0, close);
+    }
+    if (flowSource !== null) {
+      const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+      for (const entry of splitFlowItems(flowSource)) {
+        // a whole-entry YAML alias drops this bind from every collector
+        // below (no type:/source: pair, no host:container colon) — the
+        // conservative-resolution doctrine demands it inline.
+        if (/^\s*[*&][\w-]+\s*$/.test(entry)) {
+          violations.push(
+            `${currentService}: a volumes flow entry is an unresolvable YAML alias or anchor (${entry.trim()}) — inline the bind so it stays enforced`
+          );
+          continue;
+        }
+        const inner = entry.replace(/^[{'"]+|[}'"]+$/g, '');
+        const ft = inner.match(/type:\s*['"]?(\w+)/);
+        // `}` stays IN the match: truncating at the closing brace of
+        // `${VAR:-default}` cut the source short and dropped it from the
+        // data-dir rule entirely
+        const fsrc = inner.match(/source:\s*['"]?([^,'"]+)/);
+        if (ft && ft[1] === 'bind' && fsrc) {
+          binds.push({
+            path: fsrc[1].trim(),
+            createHostPathFalse: /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(inner),
+            shortSyntax: false
+          });
+          continue;
+        }
+        // quoted short-syntax entry (greedy host: ${VAR:-d} spans colons)
+        const sb = inner.match(/(.+):(\/[^:\s]+)(?::\S+)?/);
+        if (sb) {
+          const hostPart = sb[1].trim().replace(/^['"]|['"]$/g, '');
+          if (/[/${]|^\.?\.?\//.test(hostPart)) {
+            binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true });
+          }
+        }
+      }
+      continue;
+    }
+    if (inVolumes) {
+      if (!/^ {6}/.test(line)) {
+        claimDeferred();
+        inVolumes = false;
+        inBindOpts = false;
+        pendingCreateFalse = false;
+        sourceSeenThisEntry = false;
+        bindOptsTarget = null;
+        entryType = null;
+        entryTypeExplicit = false;
+        deferredSource = null;
+        continue;
+      }
+      // flow style: - {type: bind, source: ./data/x, target: /x, ...} —
+      // one-line entry, same contract; create_host_path can only appear
+      // inline inside the braces
+      const flowEntry = line.match(/^ {6}-\s*\{(.*)\}\s*(?:#.*)?$/);
+      if (flowEntry) {
+        const body = flowEntry[1];
+        const ft = body.match(/type:\s*['"]?(\w+)/);
+        // same `}`-tolerant source match as the flow-list form above
+        const fsrc = body.match(/source:\s*['"]?([^,'"]+)/);
+        if (ft && ft[1] === 'bind' && fsrc) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({
+            path: fsrc[1].trim(),
+            createHostPathFalse: /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(body),
+            shortSyntax: false
+          });
+        }
+        continue;
+      }
+      if (/^ {6,}-\s/.test(line)) {
+        // a new entry begins — its opts may only attach to a source: seen
+        // from here on, and a pending opt-out armed by a bind: block with
+        // no source: of its own dies here (it must never leak into the
+        // next entry); type: decides host-bind vs named volume (current
+        // compose-go REJECTS an untyped long-syntax entry outright, but
+        // older builds within the documented floor infer the mount type
+        // from the source shape — dropping the source would be fail-open)
+        claimDeferred();
+        sourceSeenThisEntry = false;
+        entryTypeExplicit = false;
+        deferredSource = null;
+        pendingCreateFalse = false;
+        inBindOpts = false;
+        const t = line.match(/^ {6,}-\s*type:\s*['"]?(\w+)/);
+        if (t) {
+          entryType = t[1];
+          entryTypeExplicit = true;
+        } else {
+          entryType = 'volume';
+        }
+        // source: can also be the entry's FIRST key (- source: X ...) —
+        // same deferral as the 8-space spelling below
+        const dashSrc = line.match(/^ {6,}-\s*source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))/);
+        if (dashSrc && !entryTypeExplicit) {
+          const dashVal = dashSrc[1] ?? dashSrc[2] ?? dashSrc[3];
+          // block-scalar indicator → the value lives on the next line and
+          // is unreachable: same conservative './data' resolution as the
+          // 8-space spelling below
+          deferredSource = /^[>|](?:[+-]|\d|$)/.test(dashVal) ? './data' : dashVal;
+        }
+        // no continue: the same line may be a short-syntax bind
+      }
+      // long syntax:
+      //   - type: bind
+      //     source: ./data/database_backups
+      //     target: /app/database_backups
+      //     bind:
+      //       create_host_path: false
+      // type: can also follow its own source: (mapping order is free) —
+      // a late `type: volume` reclassifies a just-pushed host bind into
+      // the named volume it is; a late `type: bind` claims a deferred
+      // source: as the host bind it is
+      const typeMatch = line.match(/^ {8,}type:\s*['"]?(\w+)/);
+      if (typeMatch) {
+        entryType = typeMatch[1];
+        entryTypeExplicit = true;
+        if (entryType === 'volume') {
+          deferredSource = null;
+          if (sourceSeenThisEntry && serviceBinds[currentService] && serviceBinds[currentService].length) {
+            serviceBinds[currentService].pop();
+          }
+        } else if (entryType === 'bind' && deferredSource !== null) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({ path: deferredSource, createHostPathFalse: pendingCreateFalse, shortSyntax: false });
+          deferredSource = null;
+          pendingCreateFalse = false;
+          sourceSeenThisEntry = true;
+          inBindOpts = false;
+        }
+        continue;
+      }
+      const srcMatch = line.match(/^ {8,}source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))\s*(?:#.*)?$/);
+      let srcVal = srcMatch ? (srcMatch[1] ?? srcMatch[2] ?? srcMatch[3]) : null;
+      if (srcVal && /^[>|](?:[+-]|\d|$)/.test(srcVal)) {
+        // folded/literal block scalar (`source: >-`, value on the NEXT
+        // line): the value is unreachable for a line parser — resolve to
+        // the data dir conservatively, so the bind still demands the
+        // opt-out instead of silently skipping the rule
+        srcVal = './data';
+      }
+      if (srcMatch) {
+        if (entryTypeExplicit && entryType === 'volume') {
+          // an EXPLICIT type: volume names a NAMED volume — not a host
+          // path, create_host_path is meaningless on it
+          continue;
+        }
+        if (!entryTypeExplicit) {
+          // untyped default = volume until proven otherwise: defer until
+          // the entry's type: (or end) decides
+          deferredSource = srcVal;
+          continue;
+        }
+        const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+        // YAML mapping order is free: a `bind:` opts block may follow its
+        // own source: (the common spelling) or precede it. Retro-attach to
+        // the source: this entry opened when we saw one; otherwise arm the
+        // pending flag the next source: consumes.
+        const idx = binds.length;
+        binds.push({ path: srcVal, createHostPathFalse: false, shortSyntax: false });
+        if (pendingCreateFalse) {
+          binds[idx].createHostPathFalse = true;
+          pendingCreateFalse = false;
+        }
+        sourceSeenThisEntry = true;
+        inBindOpts = false;
+        continue;
+      }
+      const bindKey = line.match(/^ {8,}bind:\s*(?:#.*)?$/);
+      const bindFlow = line.match(/^ {8,}bind:\s*\{(.*)\}\s*(?:#.*)?$/);
+      // an ALIASED bind options map is unresolvable for a line parser:
+      // reporting the missing-opt-out message would send the operator to
+      // "fix" an opt-out the alias may well carry — the conservative
+      // alias doctrine every other unresolvable spelling follows.
+      if (/^ {8,}bind:\s*[*&][\w-]+\s*(?:#.*)?$/.test(line)) {
+        violations.push(
+          `${currentService}: bind: options are an unresolvable YAML alias or anchor — inline them so create_host_path stays enforced`
+        );
+        inBindOpts = false;
+        continue;
+      }
+      if (bindKey || bindFlow) {
+        inBindOpts = true;
+        bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
+        // flow form carries the opt-out inline: bind: {create_host_path: false}
+        if (bindFlow && /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(bindFlow[1])) {
+          if (bindOptsTarget !== null) {
+            serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
+            bindOptsTarget = null;
+          } else {
+            pendingCreateFalse = true;
+          }
+        }
+        continue;
+      }
+      // indentation-flexible: a re-indented block is still the opts of the
+      // bind: above it — exact-indent matching rejected legal spellings
+      const createFalse = line.match(/^ {10,}create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]\s*(?:#.*)?$/);
+      if (createFalse && inBindOpts) {
+        if (bindOptsTarget !== null) {
+          serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
+          bindOptsTarget = null;
+        } else {
+          pendingCreateFalse = true;
+        }
+        continue;
+      }
+      // Short syntax: - <host>:<container>[:mode] — the form the deleted
+      // kong logs bind used. The container side always starts with `/` and
+      // the greedy host group absorbs `${VAR:-default}` spans (which contain
+      // colons); a named volume is a bare name with no `/`-rooted target.
+      const shortBind = line.match(/^ {6,}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*(?:#.*)?$/);
+      if (shortBind) {
+        const hostPart = shortBind[1].replace(/^['"]|['"]$/g, '');
+        if (/[/${]|^\.?\.?\//.test(hostPart)) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true });
+        }
+        continue;
+      }
+    }
+  }
+  flush();
+
+  return { violations, alwaysOn };
+}
+
+/**
+ * Split a YAML flow-sequence body (the text between `[` and `]`) into its
+ * top-level items. A naive `\{[^}]*\}` splitter truncates the FIRST item at
+ * the closing brace of an inner `${VAR:-default}` — the truncation silently
+ * dropped every templated bind source from the gate (the exact #1227
+ * surface), so commas inside `${...}` nesting or quoted strings must not
+ * split.
+ */
+// Strip '#'-to-EOL comments OUTSIDE quoted spans: a comment carrying a
+// quote or bracket once desynced both consumers of this pre-pass and
+// silently swallowed list content (a total fail-open, measured). Only
+// double-quoted YAML scalars escape ANY character — single-quoted have
+// none, and honoring \' there once desynced the passes about where the
+// span ends. Shared verbatim by flowCloseIndex and splitFlowItems (the
+// subtlest state machine in the file lives here, once).
+function stripCommentsOutsideQuotes(str) {
+  let q = null;
+  let stripped = '';
+  for (let i = 0; i < str.length; i += 1) {
+    const ch = str[i];
+    if (q) {
+      stripped += ch;
+      if (q === '"' && ch === '\\' && i + 1 < str.length) {
+        stripped += str[i + 1];
+        i += 1;
+        continue;
+      }
+      if (ch === q) q = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q = ch;
+      stripped += ch;
+      continue;
+    }
+    if (ch === '#') {
+      while (i < str.length && str[i] !== '\n') i += 1;
+      stripped += '\n';
+      continue;
+    }
+    stripped += ch;
+  }
+  return stripped;
+}
+
+// Index of the flow-sequence CLOSING bracket, honoring quoted spans (and
+// backslash-escaped quotes): a ']' inside a quoted path once closed the
+// accumulation early and silently dropped every bind listed after it.
+function flowCloseIndex(buf) {
+  buf = stripCommentsOutsideQuotes(buf);
+  let depth = 1; // the opening '[' precedes this buffer
+  let q = null;
+  for (let i = 0; i < buf.length; i += 1) {
+    const ch = buf[i];
+    if (q) {
+      // a backslash escapes ANY following character in a YAML double-
+      // quoted scalar (not just a quote) — honoring only \\" once
+      // desynced the span at a trailing backslash
+      if (q === '"' && ch === '\\' && i + 1 < buf.length) {
+        i += 1;
+        continue;
+      }
+      if (ch === q) q = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q = ch;
+      continue;
+    }
+    if (ch === '[') depth += 1;
+    if (ch === ']') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function splitFlowItems(body) {
+  body = stripCommentsOutsideQuotes(body);
+
+  const items = [];
+  let depth = 0;
+  let quote = null;
+  let cur = '';
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i];
+    if (quote) {
+      cur += ch;
+      // a backslash escapes ANY following character in a YAML double-
+      // quoted scalar; single-quoted YAML has none ('' doubling keeps
+      // the two-quote state machine correct)
+      if (quote === '"' && ch === '\\' && i + 1 < body.length) {
+        cur += body[i + 1];
+        i += 1;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
+    if (ch === '{') depth += 1;
+    // clamp at 0: a stray unmatched '}' (corrupt YAML compose rejects
+    // anyway) must not drive depth negative — top-level commas would stop
+    // splitting and silently MERGE distinct entries (under-enforcement)
+    if (ch === '}' && depth > 0) depth -= 1;
+    if (ch === ',' && depth === 0) {
+      items.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) items.push(cur);
+  return items;
+}
+
+/**
+ * Collect the service names declared under the top-level `services:`
+ * section — 2-space keys only, tracked by section so the top-level
+ * `volumes:` keys never leak in. compose-non-root.test.js MUST use this
+ * helper (not its own scan) or the two notions of "a service exists"
+ * drift apart silently.
+ */
+function collectServiceNames(composeText) {
+  const names = new Set();
+  let inServices = false;
+  for (const line of composeText.split('\n')) {
+    // the trigger is IDENTICAL to the main parser's (bare OR quoted
+    // top-level key — the main parser EXITS services: scope on a quoted
+    // top-level key, so the collector must exit too or its name-set
+    // diverges)
+    if (
+      (line.match(/^[a-z][\w-]*:\s*(?:#.*)?$/) || line.match(/^["'][\w.-]+["']:\s*(?:#.*)?$/)) &&
+      !line.startsWith(' ')
+    ) {
+      inServices = /^services:\s*(?:#.*)?$/.test(line.trim()) || /^['"]services['"]:\s*(?:#.*)?$/.test(line.trim());
+    } else if (inServices) {
+      // same comment/flow/anchor tolerance as the main parser's service
+      // detector — the two notions of "a service exists" must stay one
+      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:&[\w-]+\s*)?(?:\{.*|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
+      if (m) names.add(m[1]);
+    }
+  }
+  return names;
+}
+
+module.exports = { validateComposeNonRoot, collectServiceNames, SELF_DROPPING, ONE_SHOT_ROOT_INIT, INIT_BACKED_BINDS };

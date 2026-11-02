@@ -33,7 +33,9 @@ cd genie-ai
 #    KEYCLOAK_CLIENT_SECRET, HUGGING_FACE_HUB_TOKEN, VLLM_API_KEY, ...)
 cp env .env && $EDITOR .env
 
-# 3. Deploy
+# 3. Deploy — the host binds are created and owned automatically at
+#    first up (backend-init: data/database_backups, secrets-ssl-init:
+#    secrets/ssl; #1227: the guarded binds keep create_host_path:false)
 docker compose up -d                                  # core services
 docker compose --profile opea --profile gpu-models up -d   # full stack
 docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d   # NVIDIA T4

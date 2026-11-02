@@ -92,8 +92,10 @@ This service runs the Node.js server that provides the application's API and bus
 * **Build**: The image is built using the Dockerfile located in the ./gov-chat-backend/ directory.
 * **Ports**: The backend API is accessible on the host machine at port **3000**.
 * **Volumes**: The service uses bind mounts and named volumes to persist data:
-  * ./data/database_backups:/app/database_backups: Persists automated database backups.
-  * ./data/logs/backend:/app/logs: Persists application logs.
+  * `data/database_backups` → `/app/database_backups`: persists automated database backups. Long-syntax
+    bind with `create_host_path: true` (#1227): compose creates a missing directory itself and the
+    `backend-init` one-shot hands it to uid 1000 before the backend starts (its `depends_on` gates
+    the backend's start) — no manual `mkdir`/`chown` required.
   * backend_data:/app/data: Named volume for application data persistence.
   * backend_uploads:/app/Uploads: Named volume for user-uploaded files.
 * **Environment File**: Loads configuration from the root `.env`.
@@ -105,7 +107,6 @@ This service handles document uploads, validation, and ingestion.
 * **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.
 * **Ports**: The service is accessible on the host machine at port **3001**.
 * **Volumes**:
-  * ./data/logs/doc-repo:/app/logs: Persists application logs.
   * doc_repo_uploads:/app/uploads: Uses a named volume to persist file uploads.
 * **Environment File**: Loads configuration from the root `.env`.
 

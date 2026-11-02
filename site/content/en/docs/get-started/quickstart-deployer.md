@@ -154,6 +154,11 @@ For **remote GPU topology** (AI services on a separate node) — see
 
 ## Step 4 — Bring the stack up
 
+The host binds that used to need a manual pre-create are automated:
+`backend-init` creates and chowns `data/database_backups`
+at first up, and `secrets-ssl-init` creates `secrets/ssl` (root:101) —
+no manual pre-create step.
+
 ```bash
 docker compose up -d
 docker compose ps

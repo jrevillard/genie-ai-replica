@@ -22,6 +22,42 @@ single-host production deployments.
 
 ## Prerequisites
 
+No manual directory pre-create is needed: at first `up`, compose
+creates the directories (explicit `create_host_path: true` on those
+binds) and the one-shot inits converge ownership before the guarded
+services start — `backend-init` hands `data/database_backups` to the
+backend's uid 1000, `secrets-ssl-init` normalizes `secrets/ssl` to
+`root:101` (keys `0640`, certs `0644`). Dropped a new certificate pair
+into `secrets/ssl` while the stack was down? Recreate the init once —
+`docker compose up --force-recreate secrets-ssl-init` — and it
+re-normalizes before the edge starts. After the first `up` the
+directory is `root:101 0750` (the edge's gid 101 must traverse it), so
+provisioning certificates now needs sudo:
+`sudo cp server.crt server.key secrets/ssl/` — the init fixes their
+ownership and modes on the next recreate.
+
+(A root-owned 0600 key crash-loops nginx with a misleading openssl
+error; the Ansible path normalizes this itself, and on the compose path
+`secrets-ssl-init` — NOT profile-gated — normalizes any provided pair
+whenever it (re)runs (a plain `up` on an unchanged state does NOT
+re-run an exited one-shot — use the `--force-recreate` command above),
+so the manual fallback
+(`sudo chgrp 101 secrets/ssl/server.key secrets/ssl/server.crt && sudo chmod 0640 secrets/ssl/server.key`)
+is only for a running stack you do not want to recreate.)
+
+The key is readable by numeric group 101 (the nginx image's uid/gid —
+fixed upstream). On the HOST, check no untrusted account holds primary
+or supplemental gid 101 before deploying: a distro package group can
+occupy that id, and any member could read the TLS private key.
+
+Upgrading an existing deployment with a pre-#1227
+`data/database_backups` tree? The backend (uid 1000) must OWN it —
+`backend-init` heals this host bind when it (re)runs — the compose-file
+change recreates it on the first `up` after the upgrade (its third loop
+directory), so no manual step: bring the stack up and the tree is
+re-owned before the backend starts (the Ansible path converges it via
+its migration tasks instead).
+
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
 - **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)
 - **Hugging Face API token** (only if using `--profile opea` — set
@@ -102,17 +138,27 @@ If your organization runs a fork or mirror, replace the URL accordingly.
 ## Step 2: Prepare directories
 
 ```bash
-mkdir -p data/logs/kong data/logs/backend data/logs/doc-repo \
-         data/database_backups secrets/ssl
+mkdir -p data/database_backups secrets/ssl
 ```
 
 | Directory | Purpose |
 |---|---|
-| `data/logs/kong` | Kong gateway logs (bind mount) |
-| `data/logs/backend` | Backend API logs (bind mount) |
-| `data/logs/doc-repo` | Document Repository logs (bind mount) |
 | `data/database_backups` | Backend DB dump output (bind mount) |
-| `secrets/ssl` | SSL certificates — auto-generated self-signed cert if missing |
+| `secrets/ssl` | SSL certificates you provide (read-only bind; must be `root:101` `0640` for the key). Self-signed dev certs are generated INSIDE the edge container (`/etc/nginx/certs`) — this directory stays empty on that path. |
+
+There is no `data/logs/` since #1227: every service logs to stdout and
+the fluentd logging driver ships the logs — a `data/logs` bind would
+have docker create the directory root-owned.
+
+Upgrading from a pre-#1227 install that has a stale root-owned
+`data/logs` tree? It is no longer mounted by anything — every service
+logs to stdout — and the runtime gate excludes it from its sweep (it is
+not a bind source, so it cannot materialize root-owned files anymore).
+The tree is inert: delete it whenever convenient.
+
+```bash
+rm -rf data/logs   # optional cleanup; nothing mounts this since #1227
+```
 
 ## Step 3: Configure `.env`
 

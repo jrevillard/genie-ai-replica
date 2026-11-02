@@ -1,0 +1,56 @@
+---
+# ownership-probe-heal (#1227) — the ONE probe/heal/warn skeleton shared by
+# tasks/no-root-data-migration.yml (backup-dir handover) and
+# tasks/payload-ownership-pass.yml (deploy payload relabel). The behavioral
+# contract lives here exactly once: probe best-effort (failed_when: false),
+# heal gated on the freshest probe (non-empty stdout OR a probe error),
+# heal best-effort with honest changed_when, warn on failure. The callers
+# supply the three parameters:
+#
+#   _trio_probe_cmd — the probe command (find ... -print -quit shape)
+#   _trio_heal_cmd  — the targeted chown command
+#   _trio_label     — a noun for the WARNING message ("backup-dir handover",
+#                     "payload heal")
+
+- name: Detect mis-owned paths
+  # become: true EXPLICIT (not inherited): the escalation to root is this
+  # task's contract — an unprivileged probe exits EACCES on a 0700
+  # uid-1000 tree (failed_when: false) and the heal dies EPERM, silently
+  # degrading the handover to a warning on a future import without
+  # play-level become.
+  become: true
+  become_user: root
+  ansible.builtin.command: "{{ _trio_probe_cmd }}"
+  register: _trio_probe
+  changed_when: false
+  failed_when: false
+
+- name: Heal the mis-owned paths (best-effort)
+  # A transient find/chown error (EIO mid-traversal, vanished path between
+  # probe and exec) must not abort the deploy play — whatever survived is
+  # flagged by the runtime gate, and the next deploy re-probes.
+  # become: true EXPLICIT — same contract reason as the probe above.
+  become: true
+  become_user: root
+  ansible.builtin.command: "{{ _trio_heal_cmd }}"
+  when: _trio_probe.stdout | length > 0 or _trio_probe.rc != 0
+  register: _trio_heal
+  # changed = what the HEAL ITSELF chowned: both heal commands carry
+  # -print before -exec, so the task's stdout lists exactly the paths it
+  # re-owned and changed_when reads that list. The probe's stdout is NOT
+  # the signal: it is -print -quit (first hit only) while the heal
+  # traverses the whole tree, so a path appearing between the two
+  # commands (the root-era upgrade race this MR's compose comments
+  # describe) is genuinely chowned while the probe saw nothing — keying
+  # changed on the probe under-reported it; keying on the raw rc
+  # over-reported a probe-error re-run that mutated nothing.
+  changed_when: _trio_heal.stdout | length > 0
+  failed_when: false
+
+- name: Warn if the heal did not complete
+  ansible.builtin.debug:
+    msg: >-
+      WARNING (#1227): the {{ _trio_label }} failed (rc={{ _trio_heal.rc |
+      default('n/a') }}) — mis-owned paths remain; the next deploy
+      re-probes and the runtime gate will flag survivors.
+  when: _trio_heal.rc | default(0) != 0

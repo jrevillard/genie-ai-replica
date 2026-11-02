@@ -2574,6 +2574,50 @@ void main() {
       expect(buttons, isEmpty);
     });
 
+    test(
+      'a composer-placed card is dropped from the grid; any other placement stays a tile',
+      () {
+        // The web routes `placement: "composer"` entries into its
+        // welcome composer and keeps them out of `tileButtons`; the
+        // mobile has no composer surface, so the entry is dropped. The
+        // web's strict string compare (`placement === 'composer'`)
+        // keeps a NON-STRING placement a tile — mirrored here with the
+        // truthy non-string value the config typo class produces.
+        final (layout, buttons) = parseQuickHelpConfig({
+          'features': {
+            'chat': {
+              'quickHelp': {
+                'buttons': [
+                  {
+                    'id': 'just-chat',
+                    'title': {'en': 'Just Chat'},
+                    'placement': 'composer',
+                  },
+                  {
+                    'id': 'births',
+                    'title': {'en': 'Births'},
+                  },
+                  {
+                    'id': 'misplaced',
+                    'title': {'en': 'Misplaced'},
+                    'placement': 'tile',
+                  },
+                  {
+                    'id': 'typo',
+                    'title': {'en': 'Typo'},
+                    'placement': true,
+                  },
+                ],
+              },
+            },
+          },
+        }, 'en');
+
+        expect(buttons.map((b) => b['id']), ['births', 'misplaced', 'typo']);
+      },
+    );
+
+
     test('a missing or malformed container degrades to the empty section', () {
       for (final config in <Map<String, dynamic>>[
         {},

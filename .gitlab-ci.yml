@@ -3737,6 +3737,12 @@ config:docs-links:
 # for the pinned generator version (openapitools.json) and never invokes a
 # Dart SDK, so no Flutter tooling is needed here — only a JRE for the
 # generator jar plus Node for the spec extraction.
+#
+# The paths whose change can move the committed client or the gate itself —
+# one list for the MR rule and the branch rule so they cannot drift apart.
+.api_client_source_changes: &api_client_source_changes
+  [ "components/gov-chat-backend/**/*", "mobile/genie_ai_mobile/openapi_client/**/*", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
+
 config:api-client:
   extends: .node_base
   stage: config
@@ -3752,8 +3758,10 @@ config:api-client:
     # jar it downloads land inside the cacheable path below. The wrapper is
     # pinned too: it resolves the jar version from the tracked
     # openapitools.json, but its own version must not drift under a cache
-    # key that never moves.
-    - npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@2.42.0
+    # key that never moves. A cache hit already holds that exact pinned
+    # wrapper — skip the install (and its registry roundtrip) when the
+    # binary is present.
+    - '[ -x "${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin/openapi-generator-cli" ] || npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@2.42.0'
     - export PATH="${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin:$PATH"
     # The spec extraction executes only swagger-jsdoc (swagger-definition.js
     # and swagger-schemas.js have no npm requires of their own), so instead
@@ -3778,27 +3786,17 @@ config:api-client:
       when: always
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        # The whole backend tree, not just the spec sources: the extraction
-        # reads swagger-definition.js's require chain (which grows) and
-        # routes/*.js as text — an explicit source list would silently skip
-        # exactly the MR that changes the spec.
-        - "components/gov-chat-backend/**/*"
-        - "mobile/genie_ai_mobile/openapi_client/**/*"
-        - "scripts/generate-api-client.sh"
-        - "openapitools.json"
-        - ".gitlab-ci.yml"
+      # The whole backend tree, not just the spec sources: the extraction
+      # reads swagger-definition.js's require chain (which grows) and
+      # routes/*.js as text — an explicit source list would silently skip
+      # exactly the MR that changes the spec.
+      changes: *api_client_source_changes
       when: on_success
     # Same filter for branch pipelines (changes compares against the
     # previous SHA on pushes; pipeline sources without one — schedules, web
     # — run the job, which is what keeps validating main between merges).
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
-      changes:
-        - "components/gov-chat-backend/**/*"
-        - "mobile/genie_ai_mobile/openapi_client/**/*"
-        - "scripts/generate-api-client.sh"
-        - "openapitools.json"
-        - ".gitlab-ci.yml"
+      changes: *api_client_source_changes
       when: on_success
 
 # Validate CHANGELOG.md has an entry for the version being released

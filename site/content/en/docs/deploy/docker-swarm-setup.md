@@ -176,10 +176,11 @@ them. Swarm resolves bind mounts relative to where `docker stack deploy` runs
 relevant node:
 
 ```bash
-mkdir -p data/database_backups data/huggingface secrets/ssl
-# The backend runs as uid 1000 and must own the backup directory —
-# your own uid is rarely 1000 (chown needs root):
-sudo chown 1000:1000 data/database_backups
+# data/database_backups and secrets/ssl are created and owned
+# automatically at first up (backend-init / secrets-ssl-init on the
+# genieai / gateway nodes). data/huggingface has no init — pre-create
+# it on the GPU node (the TEI images are profile-gated root users).
+mkdir -p data/huggingface
 ```
 
 | Directory | Purpose | Which node |

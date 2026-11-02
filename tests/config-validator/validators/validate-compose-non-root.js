@@ -41,13 +41,25 @@ const SELF_DROPPING = {
  * are short-lived, so neither contract rule is broken. Anything in this list
  * must keep `cap_add: [CHOWN]` and a restart policy of `none`/`on-failure`.
  */
+// Services whose untracked host binds are converged by a ONE-SHOT ROOT
+// INIT that depends_on-gates their START: the bind may let docker create
+// a missing directory (root-owned, transient at CREATE time) because the
+// init has already handed it to the right owner before the service ever
+// runs. The runtime gate polices the CONVERGED state.
+const INIT_BACKED_BINDS = {
+  backend: 'backend-init creates and chowns data/database_backups before this service starts',
+  nginx: 'secrets-ssl-init creates and normalizes secrets/ssl (root:101) before this service starts'
+};
+
 const ONE_SHOT_ROOT_INIT = {
   'otel-collector-init': 'chowns the otel-queue volume for the collector (uid 10001) before it starts',
   'arango-vector-db-init': 'chowns the arango_data AND arango_apps volumes for arangodb (uid 999) before it starts',
   'victorialogs-init': 'chowns the vlogs-data volume for victoria-logs (uid 65534) before it starts',
   'document-repository-init': 'chowns the doc_repo_uploads volume for document-repository (uid 1000) before it starts',
   'backend-init':
-    'chowns the backend root-era volumes (backend_data, backend_uploads) for the uid-1000 backend before it starts'
+    'chowns the backend root-era volumes (backend_data, backend_uploads) AND the data/database_backups host bind for the uid-1000 backend before it starts',
+  'secrets-ssl-init':
+    'creates the secrets/ssl host bind on the gateway node and normalizes it to root:101 (keys 0640) before the edge nginx starts'
 };
 
 /**
@@ -188,6 +200,21 @@ function validateComposeNonRoot(composeText) {
           const templated = /\$\{?\w/.test(b.path);
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
           const authoredLocation = templated || resolved.startsWith('/') || resolved.startsWith('~/');
+          // a ONE-SHOT ROOT INIT MAY create the host path it then chowns —
+          // that is its contract (backend-init's database_backups mount,
+          // secrets-ssl-init's secrets/ssl mount): the root-owned state is
+          // transient by design and converged before the guarded service
+          // mounts it. The opt-out rule polices always-on services.
+          if (ONE_SHOT_ROOT_INIT[currentService]) {
+            continue;
+          }
+          // same doctrine for the guarded service itself: its bind may
+          // rely on the init's convergence (INIT_BACKED_BINDS) — the
+          // root-owned moment lives between CREATE and the init's
+          // completion, never once the service runs.
+          if (INIT_BACKED_BINDS[currentService]) {
+            continue;
+          }
           if (
             // a literal HOME-ROOTED source (~/genie/x, no data segment) is
             // deployment-authored too: whose home it lands in depends on who
@@ -1224,4 +1251,4 @@ function collectServiceNames(composeText) {
   return names;
 }
 
-module.exports = { validateComposeNonRoot, collectServiceNames, SELF_DROPPING, ONE_SHOT_ROOT_INIT };
+module.exports = { validateComposeNonRoot, collectServiceNames, SELF_DROPPING, ONE_SHOT_ROOT_INIT, INIT_BACKED_BINDS };

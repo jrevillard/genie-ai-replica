@@ -13,7 +13,8 @@ const {
   validateComposeNonRoot,
   collectServiceNames,
   SELF_DROPPING,
-  ONE_SHOT_ROOT_INIT
+  ONE_SHOT_ROOT_INIT,
+  INIT_BACKED_BINDS
 } = require('../validators/validate-compose-non-root');
 
 const COMPOSE_PATH = path.join(__dirname, '..', '..', '..', 'docker-compose.yaml');
@@ -60,6 +61,7 @@ describe('compose non-root contract (#1227)', () => {
         'postgres',
         'postgres-init',
         'redis-cache',
+        'secrets-ssl-init',
         'victorialogs',
         'victorialogs-init'
       ].sort()
@@ -67,8 +69,8 @@ describe('compose non-root contract (#1227)', () => {
   });
 
   test('no pinned user is root', () => {
-    const { violations } = validateComposeNonRoot('services:\n  backend:\n    user: "0:0"\n');
-    expect(violations.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+    const { violations } = validateComposeNonRoot('services:\n  svc:\n    user: "0:0"\n');
+    expect(violations.some((v) => v.includes('svc') && v.includes('is root'))).toBe(true);
   });
 
   test('a data bind WITH create_host_path: false is accepted', () => {
@@ -76,7 +78,7 @@ describe('compose non-root contract (#1227)', () => {
     // produce zero violations, so the gate cannot pass for a looser reason.
     const text = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -97,16 +99,32 @@ describe('compose non-root contract (#1227)', () => {
     expect(alwaysOn).toEqual([]);
   });
 
-  test('mutation: flipping the real file create_host_path to true trips the gate', () => {
-    // The gate exists for the REAL file's ${DATA_DIR:-./data} form — proving
-    // it on a synthetic literal path proves nothing. Mutate the actual
-    // committed content and watch the violation appear.
-    // replaceAll: the config binds share the spelling — flipping only the
-    // first occurrence would mute the wrong bind after their addition
-    const mutated = composeText.replaceAll('create_host_path: false', 'create_host_path: true');
-    expect(mutated).not.toBe(composeText);
-    const { violations } = validateComposeNonRoot(mutated);
-    expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+  test('mutation: a non-exempt service with a data bind without the opt-out trips the gate', () => {
+    // backend and nginx are INIT_BACKED (their init converges the bind
+    // before start) so the real file no longer carries create_host_path:
+    // false on them — flipping the remaining opt-outs (tracked config
+    // dirs, outside the rule) is a no-op. The rule still fires on ANY
+    // OTHER service: appending one to the real text must trip, proving
+    // the exemption does not leak to the whole file.
+    // inserted right after `services:` — the file ENDS on the top-level
+    // networks: section, and an appended key would land there, correctly
+    // invisible.
+    const rogue = composeText.replace(
+      'services:\n',
+      [
+        'services:',
+        '  rogue:',
+        '    user: "1000:1000"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ./data/rogue',
+        '        target: /rogue',
+        ''
+      ].join('\n')
+    );
+    expect(rogue).not.toBe(composeText);
+    const { violations } = validateComposeNonRoot(rogue);
+    expect(violations.some((v) => v.includes('rogue') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('mutation: a short-syntax data bind trips the gate', () => {
@@ -256,7 +274,7 @@ describe('compose non-root contract (#1227)', () => {
     // last-pushed source.
     const withBind = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -271,7 +289,7 @@ describe('compose non-root contract (#1227)', () => {
     const stray = withBind.replace('        bind:\n', '');
     expect(stray).not.toBe(withBind);
     const { violations } = validateComposeNonRoot(stray);
-    expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    expect(violations.some((v) => v.includes('svc') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('a commented long-syntax source is still enforced', () => {
@@ -298,7 +316,7 @@ describe('compose non-root contract (#1227)', () => {
     // previous one — and the previous entry must stay unopted-out.
     const text = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -313,7 +331,7 @@ describe('compose non-root contract (#1227)', () => {
     ].join('\n');
     const { violations } = validateComposeNonRoot(text);
     expect(violations).toEqual([
-      'backend: host bind "./data/database_backups" sits under the data directory without ' +
+      'svc: host bind "./data/database_backups" sits under the data directory without ' +
         '`create_host_path: false` — docker creates a missing source as root-owned'
     ]);
   });
@@ -335,7 +353,7 @@ describe('compose non-root contract (#1227)', () => {
     // land under the data-dir rule (conservative resolution).
     const braceless = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -344,7 +362,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v3 } = validateComposeNonRoot(braceless);
-    expect(v3.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    expect(v3.some((v) => v.includes('svc') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('mutations: numeric-zero uid and local-deploy shallow-replace cannot slip past the gate', () => {
@@ -373,7 +391,7 @@ describe('compose non-root contract (#1227)', () => {
     // binds like the docker socket are not data paths and stay out).
     const repointed = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -382,11 +400,11 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v1 } = validateComposeNonRoot(repointed);
-    expect(v1.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    expect(v1.some((v) => v.includes('svc') && v.includes('create_host_path: false'))).toBe(true);
 
     const handWritten = repointed.replace('${DATA_DIR:-/srv/genie}/database_backups', '/var/genie/data/logs');
     const { violations: v2 } = validateComposeNonRoot(handWritten);
-    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('mutations: short-syntax absolute data bind, dotted service names, named volume "data"', () => {
@@ -423,7 +441,7 @@ describe('compose non-root contract (#1227)', () => {
     // create_host_path demand on it.
     const namedVolume = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: volume',
@@ -439,7 +457,7 @@ describe('compose non-root contract (#1227)', () => {
     // named volume, not a host bind needing create_host_path.
     const lateVolume = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - source: data',
@@ -452,7 +470,7 @@ describe('compose non-root contract (#1227)', () => {
     // A commented opt-out is legal spelling (source: and user: tolerate it).
     const commentedOptOut = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -498,7 +516,7 @@ describe('compose non-root contract (#1227)', () => {
     // segment, no template) stays out.
     const templatedHome = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -507,7 +525,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v1 } = validateComposeNonRoot(templatedHome);
-    expect(v1.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+    expect(v1.some((v) => v.includes('svc') && v.includes('deployment-authored'))).toBe(true);
 
     const templatedHomeOpted = templatedHome.replace(
       '        target: /app/database_backups',
@@ -520,7 +538,7 @@ describe('compose non-root contract (#1227)', () => {
       'source: ~/data/database_backups'
     );
     const { violations: v2 } = validateComposeNonRoot(literalHomeData);
-    expect(v2.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('deployment-authored'))).toBe(true);
 
     const shortHomeData = [
       'services:',
@@ -548,20 +566,34 @@ describe('compose non-root contract (#1227)', () => {
       'source: ~/genie/database_backups'
     );
     const { violations: vHome } = validateComposeNonRoot(literalHomeNoData);
-    expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+    expect(vHome.some((v) => v.includes('svc') && v.includes('deployment-authored'))).toBe(true);
   });
 
-  test('pin: the secrets/ssl bind keeps its create_host_path opt-out', () => {
-    // The edge nginx bind is the file's last untracked host source —
-    // outside the data dir, so NEITHER contract half would flag its
-    // removal. A future edit deleting the opt-out (or reverting to short
-    // syntax) silently reintroduces docker's root-owned creation on a
-    // clean checkout. Pinned like the kong-logs claim.
-    const bindAt = composeText.indexOf('source: ./secrets/ssl');
-    expect(bindAt).toBeGreaterThan(-1);
-    const nginxBlock = composeText.slice(bindAt, bindAt + 300);
-    expect(nginxBlock).toContain('create_host_path: false');
+  test('pin: the secrets/ssl binds rely on the init convergence (INIT_BACKED)', () => {
+    // The nginx bind no longer carries create_host_path: false: docker
+    // creates a missing directory (root-owned, CREATE-time moment) and
+    // secrets-ssl-init — which gates nginx's START — normalizes it to
+    // root:101 before the edge ever mounts it. Pinned: the nginx bind
+    // keeps NO opt-out key, the init's own mount keeps the explicit
+    // opt-IN, and the exemption map names both services.
+    const nginxAt = composeText.indexOf('target: /etc/nginx/ssl');
+    expect(nginxAt).toBeGreaterThan(-1);
+    const nginxBind = composeText.slice(nginxAt - 300, nginxAt + 200);
+    expect(nginxBind).toContain('source: ./secrets/ssl');
+    // the guarded bind opts IN explicitly: long syntax without the key
+    // does NOT create a missing source (verified on compose v2.29.7) —
+    // the container would fail to create before the init ever ran.
+    expect(nginxBind).toContain('create_host_path: true');
+    const initMount = composeText.indexOf('source: ./secrets/ssl');
+    expect(initMount).toBeGreaterThan(-1);
+    const initBlock = composeText.slice(initMount, initMount + 200);
+    expect(initBlock).toContain('create_host_path: true');
+    // the INIT_BACKED exemption covers both consumers — without it the
+    // opt-in true would trip the data-dir rule demanding the false
+    // opt-out (the rule predates the init-backed doctrine).
     expect(composeText).not.toContain('./secrets/ssl:/etc/nginx/ssl');
+    expect(INIT_BACKED_BINDS.backend).toContain('backend-init');
+    expect(INIT_BACKED_BINDS.nginx).toContain('secrets-ssl-init');
   });
 
   test('mutations: commented service-local cap items keep the defaults', () => {
@@ -608,16 +640,11 @@ describe('compose non-root contract (#1227)', () => {
     // same spelling class as comments/flow bodies — without tolerance the
     // anchored service's body attributed to the PREVIOUS service
     // (innocent neighbor charged, backend skipped).
-    const anchored = [
-      'services:',
-      '  frontend:',
-      '    user: "101:101"',
-      '  backend: &backend',
-      '    user: root',
-      ''
-    ].join('\n');
+    const anchored = ['services:', '  frontend:', '    user: "101:101"', '  svc: &svc', '    user: root', ''].join(
+      '\n'
+    );
     const { violations: v2 } = validateComposeNonRoot(anchored);
-    expect(v2.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('is root'))).toBe(true);
   });
 
   test('mutations: a lone-genieai merge earns no base-anchor credit', () => {
@@ -693,7 +720,7 @@ describe('compose non-root contract (#1227)', () => {
     expect(flowDeploy).not.toBe(composeText);
     expect(validateComposeNonRoot(flowDeploy).violations).toEqual([]);
 
-    const flowUser = ['services:', '  backend: {user: "1000:1000"}', ''].join('\n');
+    const flowUser = ['services:', '  svc: {user: "1000:1000"}', ''].join('\n');
     expect(validateComposeNonRoot(flowUser).violations).toEqual([]);
 
     // QUOTED root pins in a flow body must still trip: the capture strips
@@ -713,11 +740,9 @@ describe('compose non-root contract (#1227)', () => {
     // a WHOLE-LIST volumes alias drops every bind from enforcement (neither
     // the block collector nor the flow collectors match) — demand it inline.
     const aliasVolumes = validateComposeNonRoot(
-      ['services:', '  backend:', '    user: "1000:1000"', '    volumes: *binds', ''].join('\n')
+      ['services:', '  svc:', '    user: "1000:1000"', '    volumes: *binds', ''].join('\n')
     );
-    expect(aliasVolumes.violations.some((v) => v.includes('backend') && v.includes('volumes: is a YAML alias'))).toBe(
-      true
-    );
+    expect(aliasVolumes.violations.some((v) => v.includes('svc') && v.includes('volumes: is a YAML alias'))).toBe(true);
 
     // a trailing COMMENT on a bare pin rode along once (`root # gw` was
     // neither 'root' nor numeric — fail-open). The capture truncates at
@@ -744,8 +769,8 @@ describe('compose non-root contract (#1227)', () => {
     // legal YAML, natural dedup spelling) once matched neither
     // serviceMatch alternation: no user: check, no binds, no alwaysOn
     // entry — the whole service was invisible.
-    const anchoredFlow = validateComposeNonRoot(['services:', '  backend: &b {user: root}', ''].join('\n'));
-    expect(anchoredFlow.violations.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+    const anchoredFlow = validateComposeNonRoot(['services:', '  svc: &b {user: root}', ''].join('\n'));
+    expect(anchoredFlow.violations.some((v) => v.includes('svc') && v.includes('is root'))).toBe(true);
 
     // the YAML-boolean spelling of the opt-out is legal compose-go and
     // must be recognized (a false-red once prescribed a fix the file
@@ -754,7 +779,7 @@ describe('compose non-root contract (#1227)', () => {
     const capitalFalse = validateComposeNonRoot(
       [
         'services:',
-        '  backend:',
+        '  svc:',
         '    user: "1000:1000"',
         '    volumes:',
         '      - type: bind',
@@ -771,7 +796,7 @@ describe('compose non-root contract (#1227)', () => {
     const capsFalse = validateComposeNonRoot(
       [
         'services:',
-        '  backend:',
+        '  svc:',
         '    user: "1000:1000"',
         '    volumes:',
         '      - type: bind',
@@ -797,7 +822,7 @@ describe('compose non-root contract (#1227)', () => {
     const aliasBind = validateComposeNonRoot(
       [
         'services:',
-        '  backend:',
+        '  svc:',
         '    user: "1000:1000"',
         '    volumes:',
         '      - type: bind',
@@ -808,9 +833,7 @@ describe('compose non-root contract (#1227)', () => {
       ].join('\n')
     );
     expect(
-      aliasBind.violations.some(
-        (v) => v.includes('backend') && v.includes('bind: options are an unresolvable YAML alias')
-      )
+      aliasBind.violations.some((v) => v.includes('svc') && v.includes('bind: options are an unresolvable YAML alias'))
     ).toBe(true);
 
     // a nested flow-map key named user: (an environment USER var) is NOT
@@ -829,11 +852,9 @@ describe('compose non-root contract (#1227)', () => {
     // a whole-entry alias inside a flow volumes LIST drops that bind from
     // every collector — demand it inline.
     const flowListAlias = validateComposeNonRoot(
-      ['services:', '  backend:', '    user: "1000:1000"', '    volumes: ["./data:/data", *binds]', ''].join('\n')
+      ['services:', '  svc:', '    user: "1000:1000"', '    volumes: ["./data:/data", *binds]', ''].join('\n')
     );
-    expect(flowListAlias.violations.some((v) => v.includes('backend') && v.includes('YAML alias or anchor'))).toBe(
-      true
-    );
+    expect(flowListAlias.violations.some((v) => v.includes('svc') && v.includes('YAML alias or anchor'))).toBe(true);
 
     // the flow deploy is still a SHALLOW replace: dropping mode from it
     // must trip, exactly like the block form
@@ -863,7 +884,7 @@ describe('compose non-root contract (#1227)', () => {
 
     const wrappedOpted = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes: [',
       '      {type: bind, source: ./data/database_backups, target: /app/database_backups, bind: {create_host_path: false}}',
@@ -910,7 +931,7 @@ describe('compose non-root contract (#1227)', () => {
     // must not defeat the opt-out demand.
     const templatedRelative = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -919,7 +940,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v1 } = validateComposeNonRoot(templatedRelative);
-    expect(v1.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+    expect(v1.some((v) => v.includes('svc') && v.includes('deployment-authored'))).toBe(true);
 
     const templatedRelativeOpted = templatedRelative.replace(
       '        target: /app/dumps',
@@ -935,11 +956,11 @@ describe('compose non-root contract (#1227)', () => {
       'source: "./data/my backups/dumps"'
     );
     const { violations: v2 } = validateComposeNonRoot(quotedSpace);
-    expect(v2.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('sits under the data directory'))).toBe(true);
 
     const dashQuotedSpace = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - source: "./data/other backups"',
@@ -948,7 +969,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v3 } = validateComposeNonRoot(dashQuotedSpace);
-    expect(v3.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+    expect(v3.some((v) => v.includes('svc') && v.includes('sits under the data directory'))).toBe(true);
 
     const quotedSpaceOpted = quotedSpace.replace(
       '        target: /app/dumps',
@@ -1034,7 +1055,7 @@ describe('compose non-root contract (#1227)', () => {
     // still demands the opt-out instead of silently skipping the rule.
     const blockScalar = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -1044,7 +1065,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v1 } = validateComposeNonRoot(blockScalar);
-    expect(v1.some((v) => v.includes('backend') && v.includes('create_host_path'))).toBe(true);
+    expect(v1.some((v) => v.includes('svc') && v.includes('create_host_path'))).toBe(true);
 
     const blockScalarOpted = blockScalar.replace(
       '        target: /app/database_backups',
@@ -1058,7 +1079,7 @@ describe('compose non-root contract (#1227)', () => {
     // exactly like its short-syntax sibling
     const parentEscape = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -1067,7 +1088,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v2 } = validateComposeNonRoot(parentEscape);
-    expect(v2.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('sits under the data directory'))).toBe(true);
 
     // a relative path WITHOUT a data segment and without a template stays
     // out (pre-existing host-relative path, same doctrine as absolute)
@@ -1201,7 +1222,7 @@ describe('compose non-root contract (#1227)', () => {
     // the entry boundary — it must not opt out the NEXT entry's bind.
     const leak = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -1213,7 +1234,7 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     const { violations: v2 } = validateComposeNonRoot(leak);
-    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('create_host_path: false'))).toBe(true);
 
     // An EXPLICIT cap_add: [] replaces the anchor's list (YAML merge
     // semantics) — the CHOWN invariant must trip, not inherit.
@@ -1238,16 +1259,12 @@ describe('compose non-root contract (#1227)', () => {
     // A commented volumes: key must not disable bind collection — the
     // data-dir bind behind it stays enforced.
     const commentedVolumes = composeText.replace(
-      '    volumes:\n      # Long syntax + create_host_path:false (#1227): docker silently creates',
-      '    volumes: # gateway logs\n      # Long syntax + create_host_path:false (#1227): docker silently creates'
+      '    volumes:\n      # create_host_path: true EXPLICIT (#1227)',
+      '    volumes: # gateway logs\n      # create_host_path: true EXPLICIT (#1227)'
     );
     expect(commentedVolumes).not.toBe(composeText);
-    // replaceAll: the file carries several opt-outs (frontend/keycloak
-    // config binds sit OUTSIDE the data-dir scope — flipping those is a
-    // no-op) — the backend's data-dir bind must trip by name
-    const flipped = commentedVolumes.replaceAll('create_host_path: false', 'create_host_path: true');
-    const { violations: v2 } = validateComposeNonRoot(flipped);
-    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    const { violations: v2 } = validateComposeNonRoot(commentedVolumes);
+    expect(v2.filter((v) => v.includes('create_host_path: false'))).toEqual([]);
 
     // Flow-style entries parse like block entries.
     const flow = [
@@ -1281,9 +1298,9 @@ describe('compose non-root contract (#1227)', () => {
 
     // A templated user pin could resolve to root — resolved conservatively
     // to root (the identity pin must be literal).
-    const templated = ['services:', '  backend:', '    user: "${BACKEND_UID:-0}"', ''].join('\n');
+    const templated = ['services:', '  svc:', '    user: "${BACKEND_UID:-0}"', ''].join('\n');
     const { violations: v2 } = validateComposeNonRoot(templated);
-    expect(v2.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+    expect(v2.some((v) => v.includes('svc') && v.includes('is root'))).toBe(true);
 
     // Triple-nested variable defaults strip from the innermost outward.
     const triple = [
@@ -1303,7 +1320,7 @@ describe('compose non-root contract (#1227)', () => {
     // spellings of an opted-out bind — no false violation.
     const flowBind = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -1316,7 +1333,7 @@ describe('compose non-root contract (#1227)', () => {
 
     const reindented = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes:',
       '      - type: bind',
@@ -1372,9 +1389,9 @@ describe('compose non-root contract (#1227)', () => {
     expect(v4.filter((v) => v.includes('otel-collector-init') && v.includes('is root'))).toEqual([]);
 
     // ...while the same pin on a REGULAR service still trips.
-    const explicitRootSvc = ['services:', '  backend:', '    user: root', ''].join('\n');
+    const explicitRootSvc = ['services:', '  svc:', '    user: root', ''].join('\n');
     const { violations: v5 } = validateComposeNonRoot(explicitRootSvc);
-    expect(v5.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+    expect(v5.some((v) => v.includes('svc') && v.includes('is root'))).toBe(true);
   });
 
   test('mutations: anchor mode flip and re-indented bind cannot slip past the gate', () => {
@@ -1434,7 +1451,7 @@ describe('compose non-root contract (#1227)', () => {
 
     const flowListOpted = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes: [{type: bind, source: ./data/database_backups, target: /app/database_backups, bind: {create_host_path: false}}]',
       ''
@@ -1444,10 +1461,10 @@ describe('compose non-root contract (#1227)', () => {
     // A QUOTED service key starts its own block — the quoted service's
     // user: root must be checked against ITSELF, not charged to the
     // previous service.
-    const quoted = ['services:', '  backend:', '    user: "1000:1000"', '  "kong":', '    user: root', ''].join('\n');
+    const quoted = ['services:', '  svc:', '    user: "1000:1000"', '  "kong":', '    user: root', ''].join('\n');
     const { violations: v2 } = validateComposeNonRoot(quoted);
     expect(v2.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
-    expect(v2.filter((v) => v.includes('backend') && v.includes('is root'))).toEqual([]);
+    expect(v2.filter((v) => v.includes('svc') && v.includes('is root'))).toEqual([]);
 
     // A deeper-indented SHORT bind is still collected.
     const deepShort = [
@@ -1482,7 +1499,7 @@ describe('compose non-root contract (#1227)', () => {
     // the compliant spelling — opt-out carried inline — stays clean
     const flowListOpted = [
       'services:',
-      '  backend:',
+      '  svc:',
       '    user: "1000:1000"',
       '    volumes: [{type: bind, source: ${DATA_DIR:-./data}/database_backups, target: /app/database_backups, bind: {create_host_path: false}}]',
       ''

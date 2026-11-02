@@ -22,23 +22,15 @@ single-host production deployments.
 
 ## Prerequisites
 
-Create the backend backup directory before the first `docker compose up`:
-its bind mount uses `create_host_path: false` (#1227), so a missing
-directory fails the backend loudly instead of being created root-owned.
-
-```bash
-mkdir -p data/database_backups
-# The backend runs as uid 1000 and must own the directory — your own
-# uid is rarely 1000 (chown needs root):
-sudo chown 1000:1000 data/database_backups
-```
-
-Upgrading an existing deployment with a pre-#1227 certificate pair?
-The edge nginx now runs as uid 101 and must READ the private key:
-
-```bash
-sudo chgrp 101 secrets/ssl/server.key && sudo chmod 0640 secrets/ssl/server.key
-```
+No manual directory pre-create is needed: at first `up`, compose
+creates the directories (explicit `create_host_path: true` on those
+binds) and the one-shot inits converge ownership before the guarded
+services start — `backend-init` hands `data/database_backups` to the
+backend's uid 1000, `secrets-ssl-init` normalizes `secrets/ssl` to
+`root:101` (keys `0640`, certs `0644`). Dropped a new certificate pair
+into `secrets/ssl` while the stack was down? Recreate the init once —
+`docker compose up --force-recreate secrets-ssl-init` — and it
+re-normalizes before the edge starts.
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself, and on the compose path

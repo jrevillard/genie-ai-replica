@@ -155,15 +155,11 @@ For **remote GPU topology** (AI services on a separate node) — see
 ## Step 4 — Bring the stack up
 
 Two host binds are `create_host_path: false` (#1227) and must pre-exist
-before the first `up` — the backend's backup bind (the backend runs as
-uid 1000) and the edge nginx's `secrets/ssl` (a missing one fails the
-service create loudly instead of docker silently creating it
-root-owned):
+is automated: `backend-init` creates and chowns `data/database_backups`
+at first up, and `secrets-ssl-init` creates `secrets/ssl` (root:101) —
+no manual pre-create step.
 
 ```bash
-mkdir -p data/database_backups secrets/ssl
-sudo chown 1000:1000 data/database_backups
-
 docker compose up -d
 docker compose ps
 ```

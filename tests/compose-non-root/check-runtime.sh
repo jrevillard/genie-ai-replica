@@ -30,7 +30,8 @@
 # it as OK); 3 = docker daemon unreachable; 4 = usage error. One-shot init
 # containers (arango-vector-db-init, victorialogs-init,
 # document-repository-init, backend-init, otel-collector-init,
-# postgres-init, kong-config, kong-migrations, db-migrations) have
+# secrets-ssl-init, postgres-init, kong-config, kong-migrations,
+# db-migrations) have
 # exited by the time this runs and are not inspected; their contract is
 # enforced by the static test + this sweep. keycloak-config is NOT in
 # that list: it ends in `exec sleep infinity` and runs permanently

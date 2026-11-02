@@ -825,6 +825,7 @@
         | reject('search', 'victorialogs-init')
         | reject('search', 'document-repository-init')
         | reject('search', 'backend-init')
+        | reject('search', 'secrets-ssl-init')
         | reject('search', '0/0')
         | select('search', '(^|\s)0/\d')
         | length == 0

@@ -60,22 +60,15 @@ DEPLOY_OPEA=0
 ### 0.3 Deploy Stack
 
 ```bash
-# data/database_backups must pre-exist: its bind is create_host_path:false
-# (#1227), so a missing directory fails the backend loudly instead of docker
-# silently creating it root-owned.
-mkdir -p data/database_backups
-# The backend runs as uid 1000 and must own the directory — your own
-# uid is rarely 1000 (chown needs root):
-sudo chown 1000:1000 data/database_backups
-# secrets/ssl must pre-exist too: the edge nginx bind is
-# create_host_path:false (the e2e job creates it). It stays EMPTY on the
-# self-signed path — the nginx entrypoint generates those inside the
-# container at /etc/nginx/certs. This directory holds certificates YOU
-# provide (mounted read-only) and the letsencrypt certbot's copies.
-mkdir -p secrets/ssl
-
 docker compose up -d
 ```
+
+No manual directory pre-create is needed: `backend-init` creates and
+chowns `data/database_backups` at first up, and `secrets-ssl-init`
+creates `secrets/ssl` (normalized root:101). `secrets/ssl` stays EMPTY
+on the self-signed path — the nginx entrypoint generates those inside
+the container at `/etc/nginx/certs`; the directory holds certificates
+YOU provide (mounted read-only) and the letsencrypt certbot's copies.
 
 Images are built automatically via `build:` directives in `docker-compose.yaml` — no manual build or registry needed.
 

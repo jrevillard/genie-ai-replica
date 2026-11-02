@@ -97,16 +97,9 @@ values with `grep ^KEY .env | cut -d= -f2-` instead.
 ## Step 2 — Start the dependency stack (no GPU)
 
 Two host binds are `create_host_path: false` (#1227) and must pre-exist
-on a clean clone (none of `data/` or `secrets/` is tracked in git) — a
-missing one fails the service create loudly instead of docker silently
-creating it root-owned:
-
-```bash
-mkdir -p data/database_backups secrets/ssl
-# the backend (uid 1000) must own its dump directory — your own uid is
-# rarely 1000 (chown needs root):
-sudo chown 1000:1000 data/database_backups
-```
+is automated: `backend-init` creates and chowns `data/database_backups`
+at first up and `secrets-ssl-init` creates `secrets/ssl` — no manual
+pre-create step, even on a clean clone.
 
 ```bash
 docker compose up -d \

@@ -46,17 +46,16 @@
 #   5. .env configured (see env template)
 # =============================================================================
 
-# Required directories on each target node (create before deploy):
+# Required directories on each target node:
 #
-# All nodes:
-#   ./data/database_backups     (Backend DB dumps; MUST pre-exist: the bind is
-#                               create_host_path:false, so a missing directory
-#                               fails the backend loudly instead of docker
-#                               silently creating it root-owned — #1227.
-#                               The backend runs as uid 1000 and must OWN it:
-#                               sudo chown 1000:1000 data/database_backups)
-#   ./data/huggingface          (TEI model cache, GPU nodes only)
-#   ./secrets/ssl/              (server.crt, server.key)
+# Created AND owned automatically at first up — no manual pre-create:
+#   ./data/database_backups     (backend-init hands it to uid 1000)
+#   ./secrets/ssl/              (secrets-ssl-init normalizes it to
+#                               root:101 — keys 0640, certs 0644)
+#
+# Still manual (GPU nodes only):
+#   ./data/huggingface          (TEI model cache — no init covers it; the
+#                               TEI images are profile-gated root users)
 #
 # Kong gateway logs are NOT on this list anymore (#1227): Kong logs to
 # stdout/stderr (fluentd driver) and the former /var/log/kong host bind made
@@ -400,6 +399,47 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Creates and normalizes the secrets/ssl HOST bind on the gateway node
+  # (#1227): docker creates a missing directory (root-owned) when THIS
+  # container mounts it with create_host_path: true, then the init hands
+  # it to root:101 — the state the edge's gid-101 nginx can read — and
+  # normalizes any provided certs (keys 0640, certs 0644) to the same
+  # shape the Ansible path's "Normalize SSL certificate ownership" task
+  # produces. nginx's depends_on gates its START on this init's success,
+  # so the edge never mounts a non-converged directory. Dedicated init
+  # rather than piggybacking otel-collector-init: a single
+  # responsibility per init, and the busy-writer honest limit (a
+  # letsencrypt certbot renewal writing during the sweep → exit 9 →
+  # bounded retry) is scoped to THIS service instead of re-looping the
+  # collector's queue chown.
+  secrets-ssl-init:
+    <<: *chown-init
+    # Gateway-only, global on that node, race-sized budget: same doctrine
+    # as the genieai-constrained inits, inlined (single consumer — no
+    # extension anchor for one service).
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
+    # One sweep: chown the tree (dir + files + symlinks) to root:101,
+    # pin the dir to 0750 (group r-x for gid 101), keys to 0640, other
+    # certs to 0644 — then verify group and key readability, exit 9 on
+    # any survivor (failed init = visible + retried by the bounded
+    # policy). ACME-challenge/temp dotfiles left alone: only named
+    # cert/key spellings get permission fixes.
+    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -name '*.key' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f ! -name '*.key' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name '*.key' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    volumes:
+      - type: bind
+        source: ./secrets/ssl
+        target: /ssl
+        bind:
+          create_host_path: true
+
   nginx:
     # Non-root (#1227): the edge runs as the image's nginx user (uid 101) and
     # listens on unprivileged in-container ports (8080/8443). 80/443 exist only
@@ -418,6 +458,8 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
+      secrets-ssl-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build: api-gateway-solution/nginx/
     image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
@@ -445,19 +487,21 @@ services:
       retries: 3
       start_period: 40s
     volumes:
-      # long syntax + create_host_path: false — the LAST host bind docker
-      # could silently create root-owned on a clean checkout (secrets/ssl
-      # is untracked). With the opt-out a missing directory FAILS THE
-      # SERVICE CREATE (the desired fail-fast): create it first — the
-      # Ansible path does, the compose docs list it, the e2e CI job
-      # mkdirs it. The directory mount still tracks inode changes from
-      # certbot renewals.
+      # create_host_path: true EXPLICIT (#1227): long syntax without the
+      # key does NOT create a missing source (verified on compose
+      # v2.29.7) — the edge container would fail to create on a clean
+      # checkout before secrets-ssl-init ever ran. The explicit true has
+      # compose create the directory (root-owned, CREATE-time moment)
+      # and secrets-ssl-init — which depends_on-gates this service's
+      # START — normalizes it to root:101 before the edge ever runs.
+      # Converged state, enforced by the runtime gate (rule 4). The
+      # directory mount still tracks inode changes from certbot renewals.
       - type: bind
         source: ./secrets/ssl
         target: /etc/nginx/ssl
         read_only: true
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: volume
         source: certbot-webroot
         target: /var/www/certbot
@@ -688,20 +732,23 @@ services:
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
-      # Long syntax + create_host_path:false (#1227): docker silently creates
-      # a missing bind source as ROOT-owned, which would lock the node user
-      # (1000) out of its backup dir. The Ansible deploy pre-creates the
-      # directory (deploy/ansible/deploy.yml); a bare `docker compose up` from
-      # a clean checkout must `mkdir -p data/database_backups` first - the
-      # failure is then loud instead of silently root-owned. Swarm caveat:
-      # swarmkit ignores bind options on `docker stack deploy`, so on the
-      # Swarm path the guarantee IS the Ansible pre-create task - keep the
-      # playbook task and this bind in step.
+      # create_host_path: true EXPLICIT (#1227): long syntax without the
+      # key does NOT create a missing source (verified on compose
+      # v2.29.7) — the backend container would fail to create on a clean
+      # checkout before backend-init ever ran. The explicit true has
+      # compose create the directory (root-owned, CREATE-time moment)
+      # and backend-init — which depends_on-gates this service's START —
+      # hands it to uid 1000 before the backend ever runs. Converged
+      # state, enforced by the runtime gate (rule 3 sweeps for
+      # non-uid-1000 files). Swarm caveat: swarmkit ignores bind options
+      # on `docker stack deploy`; on that path the ownership guarantee IS
+      # the Ansible handover — keep the playbook tasks and this bind in
+      # step.
       - type: bind
         source: ${DATA_DIR:-./data}/database_backups
         target: /app/database_backups
         bind:
-          create_host_path: false
+          create_host_path: true
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
@@ -1344,10 +1391,22 @@ services:
     # bounded policy), never a masked "nothing root-owned" behind a
     # discarded rc. DAC_OVERRIDE covers EACCES traversal; I/O errors
     # surface as failures.
-    command: ["sh", "-c", "for d in /app/data /app/Uploads; do find \"$$d\" ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
+    command: ["sh", "-c", "for d in /app/data /app/Uploads /fix-dumps; do find \"$$d\" ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
+      # The backend's dump-target HOST bind, chowned by this init: with
+      # create_host_path: true (this mount only) docker creates the
+      # missing directory at first up and the loop above hands it to
+      # uid 1000 before the backend starts — the guarded backend mount
+      # keeps create_host_path: false (fail-fast), and the manual
+      # mkdir/chown pre-create step the docs used to list is gone. The
+      # root-owned moment lasts seconds and only on a fresh checkout.
+      - type: bind
+        source: ./data/database_backups
+        target: /fix-dumps
+        bind:
+          create_host_path: true
 
   # Chowns the doc_repo_uploads volume to uid 1000 (#1227): deployments
   # that ran the root-era image hold a root-owned volume, and the now

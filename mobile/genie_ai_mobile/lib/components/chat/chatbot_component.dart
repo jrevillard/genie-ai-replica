@@ -1344,9 +1344,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
-        // The language the user reads. Without it the backend answers in
-        // English, whatever the interface language is.
+        // The SAME context the streaming path speaks: Quick Help sets
+        // _activeServiceLabels; sidebar sets the category. ENGLISH is the
+        // SSOT of the filter wire — chunk_labels carry the EN translation
+        // — so the localized name is display-only. Omitting the labels
+        // here sent the fallback path's question over the WHOLE corpus
+        // while the scope chip above promised a filtered one.
         context: QueryContext(
+          categoryLabel: _selectedCategoryNameEn.isNotEmpty
+              ? _selectedCategoryNameEn
+              : null,
+          serviceLabels: mergeServiceLabels(
+            _activeServiceLabels,
+            _sidebarServiceLabelsEn,
+          ),
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
         categoryId: _selectedCategoryId,

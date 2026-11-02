@@ -161,6 +161,7 @@ Future<void> pumpChatBot(
   List<Locale> supportedLocales = const [Locale('en')],
   Widget Function(Widget chatbot)? buildHome,
   ThemeData? theme,
+  QueriesApi? queriesApi,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -172,6 +173,8 @@ Future<void> pumpChatBot(
         chatHistoryApiProvider.overrideWithValue(
           ChatHistoryApi(ApiClient()..client = mock),
         ),
+        if (queriesApi != null)
+          queriesApiProvider.overrideWithValue(queriesApi),
       ],
       child: AnimatedBuilder(
         animation: I18nService(),

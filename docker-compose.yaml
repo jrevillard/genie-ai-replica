@@ -427,12 +427,13 @@ services:
         delay: 30s
         max_attempts: 60
     # One sweep: chown the tree (dir + files + symlinks) to root:101,
-    # pin the dir to 0750 (group r-x for gid 101), keys to 0640, other
+    # pin the dir to 0750 (group r-x for gid 101), KEY material to 0640,
     # certs to 0644 — then verify group and key readability, exit 9 on
     # any survivor (failed init = visible + retried by the bounded
-    # policy). ACME-challenge/temp dotfiles left alone: only named
-    # cert/key spellings get permission fixes.
-    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -name '*.key' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f ! -name '*.key' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name '*.key' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    # policy). Key detection is CONTENT-SHAPED, not just *.key: the
+    # Let's Encrypt spelling (privkey.pem) is a private key too, and a
+    # filename-only predicate once landed it world-readable 0644.
+    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -name '*.key' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name 'privkey*' -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f ! -name '*.key' ! -name 'privkey*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name 'privkey*' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -name '*.key' ! -perm 0640 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - type: bind
         source: ./secrets/ssl
@@ -1396,14 +1397,18 @@ services:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
       # The backend's dump-target HOST bind, chowned by this init: with
-      # create_host_path: true (this mount only) docker creates the
-      # missing directory at first up and the loop above hands it to
-      # uid 1000 before the backend starts — the guarded backend mount
-      # keeps create_host_path: false (fail-fast), and the manual
-      # mkdir/chown pre-create step the docs used to list is gone. The
-      # root-owned moment lasts seconds and only on a fresh checkout.
+      # create_host_path: true (this mount AND the backend's guarded
+      # mount — both explicit) compose creates the missing directory at
+      # CREATE time and the loop above hands it to uid 1000 before the
+      # depends_on-gated backend starts. The root-owned moment lasts
+      # seconds and only on a fresh checkout; the manual mkdir/chown
+      # pre-create step the docs used to list is gone.
       - type: bind
-        source: ./data/database_backups
+        # SAME source spelling as the backend's own mount (${DATA_DIR} —
+        # the hardcoded ./data once diverged on a DATA_DIR override: the
+        # init healed <repo>/data while compose root-created the real
+        # /srv/... source nobody ever chowned).
+        source: ${DATA_DIR:-./data}/database_backups
         target: /fix-dumps
         bind:
           create_host_path: true

@@ -240,10 +240,11 @@ workflow:
       done
     - docker network prune -f 2>/dev/null || true
     # No manual pre-create here anymore (#1227): backend-init creates and
-    # chowns data/database_backups at first up (its create_host_path:true
-    # mount), secrets-ssl-init does the same for secrets/ssl (root:101) —
-    # the guarded binds keep create_host_path:false and never see a
-    # root-owned state after init convergence.
+    # chowns data/database_backups at first up (both it and the guarded
+    # backend mount carry explicit create_host_path:true), secrets-ssl-init
+    # does the same for secrets/ssl (root:101) — the root-owned moment
+    # lives between CREATE and init completion, never once the gated
+    # services run.
   script:
     - cp env .env
     - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env

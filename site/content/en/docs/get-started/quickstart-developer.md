@@ -96,8 +96,8 @@ values with `grep ^KEY .env | cut -d= -f2-` instead.
 
 ## Step 2 — Start the dependency stack (no GPU)
 
-Two host binds are `create_host_path: false` (#1227) and must pre-exist
-is automated: `backend-init` creates and chowns `data/database_backups`
+The host binds that used to need a manual pre-create are automated:
+`backend-init` creates and chowns `data/database_backups`
 at first up and `secrets-ssl-init` creates `secrets/ssl` — no manual
 pre-create step, even on a clean clone.
 

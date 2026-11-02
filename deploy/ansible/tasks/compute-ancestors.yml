@@ -24,7 +24,7 @@
     # -path patterns, which find never matches — both prunes would die
     # silently (verified by execution).
     _fix_payload_data_chain: >-
-      {{ _fix_payload_data_chain | default([]) + [deploy_dir_resolved ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list)[0:idx + 1] | join('/')] }}
+      {{ (_fix_payload_data_chain | default([]) + [deploy_dir_resolved ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list)[0:idx + 1] | join('/')]) | unique }}
   vars:
     _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
   loop: "{{ range(1, _rel_parts | length + 1) | list }}"

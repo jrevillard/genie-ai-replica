@@ -592,8 +592,29 @@ describe('compose non-root contract (#1227)', () => {
     // opt-in true would trip the data-dir rule demanding the false
     // opt-out (the rule predates the init-backed doctrine).
     expect(composeText).not.toContain('./secrets/ssl:/etc/nginx/ssl');
-    expect(INIT_BACKED_BINDS.backend).toContain('backend-init');
-    expect(INIT_BACKED_BINDS.nginx).toContain('secrets-ssl-init');
+    expect(INIT_BACKED_BINDS.backend.reason).toContain('backend-init');
+    expect(INIT_BACKED_BINDS.nginx.reason).toContain('secrets-ssl-init');
+    // the exemption is per-bind: a second host bind on an init-backed
+    // service still demands the opt-out (an unconditional skip once let
+    // any future bind escape the rule entirely).
+    const secondBind = composeText.replace(
+      'services:',
+      [
+        'services:',
+        '  rogue:',
+        '    user: "1000:1000"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ./data/rogue',
+        '        target: /rogue',
+        ''
+      ].join('\n')
+    );
+    expect(
+      validateComposeNonRoot(secondBind).violations.some(
+        (v) => v.includes('rogue') && v.includes('create_host_path: false')
+      )
+    ).toBe(true);
   });
 
   test('mutations: commented service-local cap items keep the defaults', () => {

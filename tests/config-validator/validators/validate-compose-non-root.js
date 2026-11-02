@@ -47,8 +47,16 @@ const SELF_DROPPING = {
 // init has already handed it to the right owner before the service ever
 // runs. The runtime gate polices the CONVERGED state.
 const INIT_BACKED_BINDS = {
-  backend: 'backend-init creates and chowns data/database_backups before this service starts',
-  nginx: 'secrets-ssl-init creates and normalizes secrets/ssl (root:101) before this service starts'
+  backend: {
+    reason: 'backend-init creates and chowns data/database_backups before this service starts',
+    // the exemption is PER-BIND: only the init-backed source escapes the
+    // opt-out demand — a second host bind on the service still needs it
+    match: /database_backups$/
+  },
+  nginx: {
+    reason: 'secrets-ssl-init creates and normalizes secrets/ssl (root:101) before this service starts',
+    match: /^\.\/secrets\/ssl/
+  }
 };
 
 const ONE_SHOT_ROOT_INIT = {
@@ -208,11 +216,14 @@ function validateComposeNonRoot(composeText) {
           if (ONE_SHOT_ROOT_INIT[currentService]) {
             continue;
           }
-          // same doctrine for the guarded service itself: its bind may
-          // rely on the init's convergence (INIT_BACKED_BINDS) — the
+          // same doctrine for the guarded service itself: A BIND MATCHING
+          // THE INIT-BACKED PATH may rely on the init's convergence — the
           // root-owned moment lives between CREATE and the init's
-          // completion, never once the service runs.
-          if (INIT_BACKED_BINDS[currentService]) {
+          // completion, never once the service runs. Scoped per bind (an
+          // unconditional service-level skip once let a future second
+          // host bind on these services escape the rule entirely).
+          const backed = INIT_BACKED_BINDS[currentService];
+          if (backed && backed.match.test(b.path)) {
             continue;
           }
           if (

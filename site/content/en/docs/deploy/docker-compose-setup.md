@@ -30,7 +30,11 @@ backend's uid 1000, `secrets-ssl-init` normalizes `secrets/ssl` to
 `root:101` (keys `0640`, certs `0644`). Dropped a new certificate pair
 into `secrets/ssl` while the stack was down? Recreate the init once —
 `docker compose up --force-recreate secrets-ssl-init` — and it
-re-normalizes before the edge starts.
+re-normalizes before the edge starts. After the first `up` the
+directory is `root:101 0750` (the edge's gid 101 must traverse it), so
+provisioning certificates now needs sudo:
+`sudo cp server.crt server.key secrets/ssl/` — the init fixes their
+ownership and modes on the next recreate.
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself, and on the compose path

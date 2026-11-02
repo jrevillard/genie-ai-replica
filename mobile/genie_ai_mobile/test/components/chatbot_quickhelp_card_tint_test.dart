@@ -182,6 +182,38 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a dark broken card derives from its outline under the danger border',
+    (tester) async {
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, brokenConfig);
+      setupDarkTokens();
+      await pumpChatBot(
+        tester,
+        QuickHelpTreeMockClient(tree),
+        theme: ThemeManager().darkTheme,
+      );
+
+      // The dark BROKEN card derives from its outline too — the
+      // diagnosis surface keeps the deployment's hue at surface depth in
+      // both themes — and the DANGER border stays the failure's colour.
+      final tokens = ThemeManager().tokens;
+      final outline = ColorUtils.parseHex('#A9B6C2');
+      final caption = find.textContaining('no title in this language');
+      expect(caption, findsOneWidget);
+      final card = tester.widget<Card>(
+        find.ancestor(of: caption, matching: find.byType(Card)),
+      );
+      expect(
+        card.color,
+        HSLColor.fromColor(
+          outline,
+        ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor(),
+      );
+      expect((card.shape! as RoundedRectangleBorder).side.color, tokens.danger);
+    },
+  );
+
   testWidgets('a broken card keeps the declared tint under its danger border', (
     tester,
   ) async {

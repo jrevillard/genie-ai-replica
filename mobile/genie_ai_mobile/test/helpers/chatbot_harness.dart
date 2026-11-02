@@ -74,6 +74,13 @@ void mockChatbotConfigAsset(
   Uint8List configBytes, {
   Map<String, String> extraAssets = const {},
 }) {
+  // A re-mock in the same test replaces the served set: the PREVIOUS
+  // set's keys are evicted up front, so bytes a stale cache holds
+  // under a key the new handler no longer answers cannot resurface.
+  for (final key in _mockedExtraAssetKeys) {
+    rootBundle.evict(key);
+  }
+  _mockedExtraAssetKeys = extraAssets.keys.toSet();
   tester.binding.defaultBinaryMessenger.setMockMessageHandler(
     'flutter/assets',
     (ByteData? message) async {
@@ -88,7 +95,6 @@ void mockChatbotConfigAsset(
     },
   );
   rootBundle.evict('assets/config/genie-ai-config.json');
-  _mockedExtraAssetKeys = extraAssets.keys.toSet();
   for (final key in _mockedExtraAssetKeys) {
     rootBundle.evict(key);
   }

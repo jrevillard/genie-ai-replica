@@ -148,33 +148,28 @@ class QuickHelpCardStyles {
 /// fallback, never a dropped card.
 Color? parseStylesHexColor(dynamic value) {
   if (value is! String) return null;
-  // CSS trims surrounding whitespace; the hex digits alone remain.
-  // int.parse(radix: 16) accepts a sign character, so a malformed
-  // '#-fffffff' would parse to a garbage colour — the digits-only
-  // guard keeps the contract: unparseable means the null fallback.
-  final cleaned = value.trim().replaceAll('#', '');
+  // The CSS hex forms: optional surrounding whitespace, ONE leading
+  // '#', then hex digits only. A doubled hash or a bare digit run is
+  // an invalid CSS value — the browser drops it, so the mobile
+  // declines it too (the null fallback), and a sign character can
+  // never reach int.parse.
+  final trimmed = value.trim();
+  if (!trimmed.startsWith('#')) return null;
+  final cleaned = trimmed.substring(1);
   if (cleaned.isEmpty || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(cleaned)) {
     return null;
   }
   // #RGBA: each digit doubles, and the alpha still re-joins first.
   if (cleaned.length == 4) {
     final doubled = cleaned.split('').map((c) => c * 2).join();
-    try {
-      return Color(
-        int.parse(doubled.substring(6, 8) + doubled.substring(0, 6), radix: 16),
-      );
-    } on FormatException {
-      return null;
-    }
+    return Color(
+      int.parse(doubled.substring(6, 8) + doubled.substring(0, 6), radix: 16),
+    );
   }
   if (cleaned.length == 8) {
-    try {
-      return Color(
-        int.parse(cleaned.substring(6, 8) + cleaned.substring(0, 6), radix: 16),
-      );
-    } on FormatException {
-      return null;
-    }
+    return Color(
+      int.parse(cleaned.substring(6, 8) + cleaned.substring(0, 6), radix: 16),
+    );
   }
   return ColorUtils.parseHexNullable('#$cleaned');
 }
@@ -204,10 +199,11 @@ bool quickHelpIsComposerPlaced(Map<String, dynamic> button) {
 /// declared background is ignored — a pale step whose chroma cannot
 /// carry a hue at surface depth, and unreadable against the near-white
 /// dark foreground — and the card derives from the declared outline
-/// instead: the outline's colour at the LIVE surface token's lightness,
-/// the same derivation shape the web paints its dark cards with,
-/// without copying the web's constants. An undeclared field falls back
-/// to the surface token.
+/// instead: the outline's hue at the LIVE surface token's lightness —
+/// the derivation SHAPE the web paints its dark cards with, in HSL
+/// where the web works in oklch (so a chromatic outline's saturation
+/// differs from the web's chroma; the hue and the surface depth are
+/// the same). An undeclared field falls back to the surface token.
 Color quickHelpCardBackgroundFor(
   QuickHelpCardStyles styles,
   AppTokens tokens,

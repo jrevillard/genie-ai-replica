@@ -2363,6 +2363,19 @@ void main() {
       }, 'en');
       expect((signed['styles'] as QuickHelpCardStyles).outline, isNull);
 
+      // A doubled hash or a bare digit run is invalid CSS — the
+      // browser drops it, so the mobile declines it too.
+      final doubleHash = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': '##D9E2EA'},
+      }, 'en');
+      expect((doubleHash['styles'] as QuickHelpCardStyles).background, isNull);
+      final bare = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': 'D9E2EA'},
+      }, 'en');
+      expect((bare['styles'] as QuickHelpCardStyles).background, isNull);
+
       // The #RGBA shorthand doubles its digits, alpha last: #A9B6 is
       // RRGGBBAA AA99BB66, the blue-gray at alpha 0x66.
       final shorthand = parseQuickHelpButton({

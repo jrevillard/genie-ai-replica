@@ -1580,18 +1580,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
-  /// The Quick Help card's padding — the card scale's horizontal and
-  /// vertical step. The DS spacing scale has no 12 (xs=4, sm=8, md=16),
-  /// so the card names its own constant instead of repeating the raw
-  /// literal at each site that styles the card.
+  /// The card chrome's step: the off-scale 12 the DS spacing scale
+  /// cannot express (xs=4, sm=8, md=16) — the padding's horizontal
+  /// measure and the icon-to-title gap are the SAME design fact, one
+  /// constant.
+  static const double _quickHelpCardChromeStep = 12;
+
+  /// The Quick Help card's padding, on the chrome step.
   static const EdgeInsets _quickHelpCardPadding = EdgeInsets.symmetric(
-    horizontal: 12,
+    horizontal: _quickHelpCardChromeStep,
     vertical: DsSpacing.sm,
   );
 
-  /// The gap between the card's icon and its title — the same
-  /// off-scale 12 as the padding (no DsSpacing value equals it).
-  static const double _quickHelpCardHeaderGap = 12;
+  /// The gap between the card's icon and its title, on the chrome
+  /// step.
+  static const double _quickHelpCardHeaderGap = _quickHelpCardChromeStep;
 
   /// The container a Quick Help card renders in — the tile's and the
   /// broken row's shared chrome: a DsCard whose standard variant

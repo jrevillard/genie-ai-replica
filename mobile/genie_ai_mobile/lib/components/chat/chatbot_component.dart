@@ -597,11 +597,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // empty tree: every declared label reads as missing, and the
     // refusal would name a configuration problem that may not exist.
     // The outage is the CALLER's fact — the grid handles it through
-    // unavailableScopeFor, and the restore does the same.
+    // unavailableScopeFor, and the restore does the same: the button
+    // arm stamps the button's own unavailable verdict, and a
+    // button-less (reserved or merged) verdict routes through the
+    // same substitution — the outage caption, never a configuration
+    // one computed over the empty tree.
     if (_treeUnavailable && scope.quickHelpButtonId != null) {
       _activeQuickHelpScope = button != null
           ? QuickHelpScopeResolver.unavailableScopeFor(button)
-          : scope.quickHelpScopeState;
+          : unavailableVerdictForOutage(scope.quickHelpScopeState);
     } else {
       _activeQuickHelpScope = scope.quickHelpScopeState;
     }
@@ -2180,6 +2184,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // One read of the verdict the bar renders: the gate, the icon and
     // the caption below all follow it.
     final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;
+    // A restored BUTTON scope that is already broken at restore time —
+    // the tag names a live button, but the button's declared labels or
+    // category have left the hierarchy — is the same visible failure:
+    // the send guard would announce it at the first follow-up, and the
+    // bar names it now. Quiet during an outage, like the dead-tag
+    // caption: the grid already shows the unavailable verdict there.
+    final bool hasBrokenQuickHelpScope =
+        !_treeUnavailable &&
+        _activeQuickHelpScope != null &&
+        quickHelpScopeBroken(_activeQuickHelpScope!);
 
     // Wrap entire layout to detect taps outside input
     return GestureDetector(
@@ -2192,7 +2206,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           Column(
             children: [
               // Context Bar
-              if (_selectedCategoryName.isNotEmpty || hasDeadScopeTags)
+              if (_selectedCategoryName.isNotEmpty ||
+                  hasDeadScopeTags ||
+                  hasBrokenQuickHelpScope)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -2209,11 +2225,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       // cannot carry is a failure — the broken Quick Help
                       // cards' warning, not the hint bulb.
                       Icon(
-                        hasDeadScopeTags
+                        hasDeadScopeTags || hasBrokenQuickHelpScope
                             ? Icons.warning_amber_rounded
                             : Icons.lightbulb_outline,
                         size: 20,
-                        color: hasDeadScopeTags ? tokens.danger : tokens.accent,
+                        color: hasDeadScopeTags || hasBrokenQuickHelpScope
+                            ? tokens.danger
+                            : tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2248,6 +2266,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     'tags': _deadScopeTags.toSet().join(', '),
                                   },
                                 ),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: tokens.textXs,
+                                  color: tokens.danger,
+                                ),
+                              ),
+                            // The broken-button verdict the restore
+                            // already carries: the SAME caption the
+                            // send guard announces at the first
+                            // follow-up, named where the scope is
+                            // shown instead of as a one-shot toast.
+                            if (hasBrokenQuickHelpScope)
+                              Text(
+                                _quickHelpErrorCaption(_activeQuickHelpScope!),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontSize: tokens.textXs,
                                   color: tokens.danger,

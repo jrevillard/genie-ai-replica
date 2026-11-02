@@ -902,6 +902,32 @@ class ConversationScopeResolver {
   final QuickHelpScopeResolver _hierarchy;
   final Map<String, Map<String, dynamic>> _buttons;
 
+  /// The category the conversation was scoped by, in the web's own
+  /// precedence: the restore processes the saved tags IN ORDER (the
+  /// per-tag forEach) and the LAST category-carrying tag wins — a live
+  /// button's declared category sets it, a legacy `category.<id>` tag
+  /// sets it, the reserved just-chat tag sets nothing — and the
+  /// conversation's own edge ([categoryKey]) is the fallback no tag
+  /// overwrote. ONE walk for both restore branches, so a sidebar-scope
+  /// conversation and a button-scope one cannot read the same tag list
+  /// into two different categories.
+  String? _effectiveCategoryOf(List<String> tagList, String? categoryKey) {
+    String? effectiveCategory = categoryKey;
+    for (final tag in tagList) {
+      final taggedButton = tag == justChatTagId ? null : _buttons[tag];
+      if (taggedButton != null) {
+        final declared = quickHelpCategoryOf(taggedButton);
+        if (declared != null && declared.isNotEmpty) {
+          effectiveCategory = _hierarchy.categoryIdFor(declared);
+        }
+      } else if (tag.startsWith('category.')) {
+        final legacyId = tag.substring('category.'.length);
+        if (declaresCategoryScope(legacyId)) effectiveCategory = legacyId;
+      }
+    }
+    return effectiveCategory;
+  }
+
   /// The merged scope state of [buttons]: broken if ANY is, with the
   /// missing labels unioned and the flags OR-ed — one conversation, one
   /// verdict.
@@ -923,8 +949,16 @@ class ConversationScopeResolver {
   /// The scope of the conversation that carries [tags] and was asked in
   /// [categoryKey].
   ConversationScope resolve({List<dynamic>? tags, String? categoryKey}) {
+    // The tag side of the lookup speaks the SAME form the restore index
+    // keys: _jsTagForm, the web's serialization. A tags array can carry
+    // the NUMBERS themselves (a hand-edited row: a JSON `5.0`, an id
+    // above int64) — Dart's own toString ('5.0') would miss the index
+    // entry the web's tag ('5') matches, and the scope would fall to the
+    // sidebar branch and refuse the follow-up. A STRING tag is its own
+    // form: the pinned legacy shapes ('5.0', the old build's spelling)
+    // keep refusing exactly as they do now.
     final tagList = (tags ?? const <dynamic>[])
-        .map((tag) => tag.toString())
+        .map((tag) => _jsTagForm(tag) ?? 'null')
         .toList();
 
     // A Quick Help tag is the id of the button that produced the
@@ -948,7 +982,6 @@ class ConversationScopeResolver {
       // the web restores and answers.
       final button = tag == justChatTagId ? null : _buttons[tag];
       if (button == null && tag != justChatTagId) continue;
-      final category = button == null ? null : quickHelpCategoryOf(button);
       final buttonLabels = button == null
           ? const <String>[]
           : quickHelpServiceLabelsOf(button);
@@ -995,20 +1028,7 @@ class ConversationScopeResolver {
       // refuses on, read as the kept labels' exact complement so the
       // caption and the guard can never disagree about which tags died.
       final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
-      // The button's own category WINS; a button that declares NONE keeps
-      // the conversation's own edge — dropping it sent the follow-up
-      // unscoped (a silent widening) while the web kept the edge. The
-      // RESERVED scope binds to no button: a legacy 'category.<id>' tag
-      // beside it is then the only carrier of the saved category, and it
-      // wins over the edge the same way the sidebar branch lets it — the
-      // web's per-tag forEach keeps processing after the reserved chip.
-      // The configuration names its category; the hierarchy's own key is
-      // what the conversation's edge speaks.
-      final effectiveCategory = button == null
-          ? _legacyCategoryIdOf(tagList) ?? categoryKey
-          : category == null
-          ? categoryKey
-          : _hierarchy.categoryIdFor(category);
+      final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
@@ -1048,19 +1068,15 @@ class ConversationScopeResolver {
     // 'category.general' is the no-scope placeholder: it contributes
     // nothing. The legacy tag wins over the conversation's own edge —
     // it IS the scope the conversation was saved with.
-    final String? legacyCategoryId = _legacyCategoryIdOf(tagList);
     final sidebarTags = tagList
         .where((tag) => !tag.startsWith('category.'))
         .toList();
     final knownLabels = sidebarTags.where(_hierarchy.knowsLabel).toList();
+    final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
     return ConversationScope(
-      categoryId: legacyCategoryId ?? categoryKey,
-      categoryNameEn: _hierarchy.categoryEnLabel(
-        legacyCategoryId ?? categoryKey,
-      ),
-      categoryName: _hierarchy.categoryDisplayName(
-        legacyCategoryId ?? categoryKey,
-      ),
+      categoryId: effectiveCategory,
+      categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
+      categoryName: _hierarchy.categoryDisplayName(effectiveCategory),
       serviceLabelsEn: knownLabels,
       // The same labels, in their role: a sidebar scope's filter labels
       // ARE its sidebar labels — the chatbot reads one field instead of
@@ -1082,22 +1098,27 @@ class ConversationScopeResolver {
 List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
     tags.where((tag) => !kept.contains(tag)).toList();
 
-/// The category key a LEGACY `category.<id>` tag names — the old
-/// restore's spelling for a category-only scope, read from the FIRST
-/// such tag. Null when no tag names a category, or the placeholder
-/// 'category.general' does ('general' declares no scope). Every branch
-/// that can meet the tag reads this one rule: the sidebar branch gives
-/// it priority over the conversation's own edge — it IS the scope the
-/// conversation was saved with — and the reserved just-chat branch
-/// weights it the same, the way the web's per-tag forEach keeps
-/// processing after the reserved chip.
-String? _legacyCategoryIdOf(List<String> tagList) {
-  final match = RegExp(r'^category\.(.+)$').firstMatch(
-    tagList.firstWhere((tag) => tag.startsWith('category.'), orElse: () => ''),
-  );
-  return match != null && declaresCategoryScope(match.group(1))
-      ? match.group(1)
-      : null;
+/// The verdict a RESTORED scope installs during a hierarchy OUTAGE.
+///
+/// A restore that resolved while the tree was down carries a merged
+/// verdict computed over the resolver's EMPTY tree: every declared
+/// label reads as missing there, and replaying it would refuse the
+/// first follow-up with a configuration caption that may name labels
+/// that are alive. The outage is the verdict instead — the same
+/// substitution the grid makes per card (unavailableScopeFor): a broken
+/// verdict is re-stamped broken+unavailable with the missing-label list
+/// cleared, so the refusal names the outage. A verdict that declared
+/// nothing (nothing to verify) is handed back unchanged — it is healthy
+/// in an outage too — and a scope with no verdict at all stays null.
+Map<String, dynamic>? unavailableVerdictForOutage(Map<String, dynamic>? state) {
+  if (state == null) return null;
+  if (!(state['broken'] as bool? ?? false)) return state;
+  return const {
+    'broken': true,
+    'unavailable': true,
+    'missingLabels': <String>[],
+    'categoryMissing': false,
+  };
 }
 
 /// Whether a committed restore should be re-resolved now that a source it

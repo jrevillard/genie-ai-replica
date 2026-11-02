@@ -1555,7 +1555,7 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems[0].serviceKey).toBeNull();
     });
 
-    describe('a falsy JSON id — the cross-platform identity contract (#1244)', () => {
+    describe('a falsy JSON id — the cross-platform identity contract', () => {
       // A hand-edited configuration can declare `"id": 0` or `false`.
       // The web's identity rule (`button.id || title`) tests the RAW
       // value's truthiness; the mobile must read the same rule, or the

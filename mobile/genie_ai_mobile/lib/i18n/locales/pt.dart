@@ -1051,7 +1051,7 @@ const Map<String, dynamic> ptLocale = {
     "scopeNotNameable":
         "Problema de configuração: o escopo selecionado não tem nome em inglês na hierarquia de conhecimento, portanto o escopo da consulta não pode ser determinado. A consulta não foi enviada.",
     "scopeTagGone":
-        "Esta conversação foi guardada no âmbito \"{tags}\", que a hierarquia de conhecimento já não contém. As perguntas de seguimento são recusadas até que o contexto seja limpo.",
+        "Esta conversação foi guardada no âmbito \"{tags}\", que já não contém nem a hierarquia de conhecimento nem a configuração da Ajuda rápida. As perguntas de seguimento são recusadas até que o contexto seja limpo.",
     "justChat": "Só conversa",
     "queryContext": "Contexto da Consulta",
     "contextAdded": "Contexto adicionado à sua consulta",

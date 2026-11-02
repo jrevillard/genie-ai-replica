@@ -723,8 +723,6 @@
         # `docker compose -f docker-compose.resolved.yaml up` this file as
         # if it were the contract file — missing bind sources would be
         # root-created again.
-        # (docker compose config converts port integers to strings, which
-        # docker stack deploy rejects — see docker/cli#1073)
         docker compose \
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \

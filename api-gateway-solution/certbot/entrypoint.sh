@@ -63,6 +63,15 @@ check_existing_certs() {
     fi
 }
 
+# Normalize the deployed pair for the uid-101 edge: certs 0644, key 0640,
+# group 101 on both (the edge reads the key through the read-only bind).
+# Shared by the copy path AND the startup fix-up — one call site per
+# renewal path, so a mode/group edit cannot land on only one of them.
+normalize_cert_ownership() {
+    chmod 644 "${SECRETS_DIR}/server.crt" && chmod 640 "${SECRETS_DIR}/server.key" \
+        && chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
+}
+
 # Copy obtained/renewed certs from Let's Encrypt to secrets dir
 copy_certs() {
     if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
@@ -73,9 +82,7 @@ copy_certs() {
         rm -f "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
         cp "${CERT_DIR}/fullchain.pem" "${SECRETS_DIR}/server.crt"
         cp "${CERT_DIR}/privkey.pem" "${SECRETS_DIR}/server.key"
-        chmod 644 "${SECRETS_DIR}/server.crt"
-        chmod 640 "${SECRETS_DIR}/server.key"
-        chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
+        normalize_cert_ownership
         echo "Certificates copied to ${SECRETS_DIR}/"
         return 0
     else
@@ -148,9 +155,7 @@ fi
 # otherwise hold it back) is normalized here at startup — idempotent,
 # and a no-op whenever secrets-ssl-init already converged the tree.
 if [ -f "${SECRETS_DIR}/server.crt" ] && [ -f "${SECRETS_DIR}/server.key" ]; then
-    if chmod 644 "${SECRETS_DIR}/server.crt" \
-        && chmod 640 "${SECRETS_DIR}/server.key" \
-        && chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"; then
+    if normalize_cert_ownership; then
         echo "Certificate ownership normalized (group 101, key 0640)"
     else
         echo "WARNING: could not normalize certificate ownership — the edge will crash-loop if it cannot read the key"

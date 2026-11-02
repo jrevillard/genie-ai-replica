@@ -1230,6 +1230,21 @@ describe('compose non-root contract (#1227)', () => {
     expect(shellList).toEqual(Object.keys(SELF_DROPPING).sort());
   });
 
+  test('the Ansible replica gate rejects every one-shot init the validator knows', () => {
+    // deploy.yml's wait-until gate re-enumerates the init names by hand
+    // (a " 0/1" line for an exited one-shot is healthy, not failed).
+    // An init added to compose + validator but forgotten there wedges
+    // the deploy play until the stabilization timeout — loud, but it
+    // burns a full window and sends the operator hunting the wrong
+    // layer. Pin the Ansible copy to the validator's canonical set.
+    const deploy = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'deploy', 'ansible', 'deploy.yml'), 'utf-8');
+    const rejects = [...deploy.matchAll(/reject\('search', '([\w-]+)'\)/g)].map((m) => m[1]);
+    expect(rejects.length).toBeGreaterThan(0);
+    for (const init of Object.keys(ONE_SHOT_ROOT_INIT)) {
+      expect(rejects).toContain(init);
+    }
+  });
+
   test('secrets-ssl-init widens ONLY name-filtered cert spellings (deny-by-default pin)', () => {
     // The init's widening logic lives inside a shell one-liner no other
     // gate parses: jest stays 268-green and check-runtime.sh rule 4

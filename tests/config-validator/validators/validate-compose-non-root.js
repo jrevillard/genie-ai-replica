@@ -33,14 +33,6 @@ const SELF_DROPPING = {
   'redis-cache': 'redis:7-alpine entrypoint su-exec-execs as the redis user (uid 999)'
 };
 
-/**
- * One-shot init containers that legitimately run as root: their whole job is
- * to chown a NAMED volume for the unprivileged user of the service that
- * follows (the otel-collector-init convention). They write nothing
- * host-visible — named volumes are daemon-managed, not host paths — and they
- * are short-lived, so neither contract rule is broken. Anything in this list
- * must keep `cap_add: [CHOWN]` and a restart policy of `none`/`on-failure`.
- */
 // Services whose untracked host binds are converged by a ONE-SHOT ROOT
 // INIT that depends_on-gates their START: the bind may let docker create
 // a missing directory (root-owned, transient at CREATE time) because the
@@ -70,6 +62,15 @@ const INIT_BACKED_BINDS = {
   }
 };
 
+/**
+ * One-shot init containers that legitimately run as root: their whole job is
+ * to chown a NAMED volume (or normalize an init-created host bind) for the
+ * unprivileged service that follows (the otel-collector-init convention).
+ * They write nothing host-visible — named volumes are daemon-managed, not
+ * host paths — and they are short-lived, so neither contract rule is broken.
+ * Anything in this list must keep `cap_add: [CHOWN]` and a restart policy of
+ * `none`/`on-failure`.
+ */
 const ONE_SHOT_ROOT_INIT = {
   'otel-collector-init': 'chowns the otel-queue volume for the collector (uid 10001) before it starts',
   'arango-vector-db-init': 'chowns the arango_data AND arango_apps volumes for arangodb (uid 999) before it starts',
@@ -155,10 +156,7 @@ function validateComposeNonRoot(composeText) {
           // resolves conservatively to root: the identity pin is the
           // contract's primary rule and must be a literal — a
           // compose-legal default-to-root variable would ship as root.
-          if (
-            !ONE_SHOT_ROOT_INIT[currentService] &&
-            (uid === 'root' || Number(uid) === 0 || /[\x24]/.test(currentUser))
-          ) {
+          if (!ONE_SHOT_ROOT_INIT[currentService] && (uid === 'root' || Number(uid) === 0 || /[$]/.test(currentUser))) {
             violations.push(
               `${currentService}: \`user: ${currentUser}\` is root (or a templated pin that could resolve to root) — the contract forbids it`
             );
@@ -1097,26 +1095,22 @@ function validateComposeNonRoot(composeText) {
  * surface), so commas inside `${...}` nesting or quoted strings must not
  * split.
  */
-// Index of the flow-sequence CLOSING bracket, honoring quoted spans (and
-// backslash-escaped quotes): a ']' inside a quoted path once closed the
-// accumulation early and silently dropped every bind listed after it.
-function flowCloseIndex(buf) {
-  // strip '#'-to-EOL comments OUTSIDE quoted spans first: a comment
-  // carrying a quote or bracket once desynced the scan and the
-  // accumulation never closed (swallowing the list AND the next
-  // service's volumes block — a total fail-open, measured).
+// Strip '#'-to-EOL comments OUTSIDE quoted spans: a comment carrying a
+// quote or bracket once desynced both consumers of this pre-pass and
+// silently swallowed list content (a total fail-open, measured). Only
+// double-quoted YAML scalars escape ANY character — single-quoted have
+// none, and honoring \' there once desynced the passes about where the
+// span ends. Shared verbatim by flowCloseIndex and splitFlowItems (the
+// subtlest state machine in the file lives here, once).
+function stripCommentsOutsideQuotes(str) {
   let q = null;
   let stripped = '';
-  for (let i = 0; i < buf.length; i += 1) {
-    const ch = buf[i];
+  for (let i = 0; i < str.length; i += 1) {
+    const ch = str[i];
     if (q) {
       stripped += ch;
-      // same escape semantics as the scan pass below: only double-quoted
-      // YAML scalars escape ANY character — single-quoted have none, and
-      // honoring \' there once desynced the two passes about where the
-      // span ends
-      if (q === '"' && ch === '\\' && i + 1 < buf.length) {
-        stripped += buf[i + 1];
+      if (q === '"' && ch === '\\' && i + 1 < str.length) {
+        stripped += str[i + 1];
         i += 1;
         continue;
       }
@@ -1129,15 +1123,22 @@ function flowCloseIndex(buf) {
       continue;
     }
     if (ch === '#') {
-      while (i < buf.length && buf[i] !== '\n') i += 1;
+      while (i < str.length && str[i] !== '\n') i += 1;
       stripped += '\n';
       continue;
     }
     stripped += ch;
   }
-  buf = stripped;
-  q = null;
+  return stripped;
+}
+
+// Index of the flow-sequence CLOSING bracket, honoring quoted spans (and
+// backslash-escaped quotes): a ']' inside a quoted path once closed the
+// accumulation early and silently dropped every bind listed after it.
+function flowCloseIndex(buf) {
+  buf = stripCommentsOutsideQuotes(buf);
   let depth = 1; // the opening '[' precedes this buffer
+  let q = null;
   for (let i = 0; i < buf.length; i += 1) {
     const ch = buf[i];
     if (q) {
@@ -1165,35 +1166,7 @@ function flowCloseIndex(buf) {
 }
 
 function splitFlowItems(body) {
-  // strip '#'-to-EOL comments outside quoted spans first (same doctrine
-  // as flowCloseIndex — a comment once desynced the splitter)
-  let q0 = null;
-  let stripped = '';
-  for (let i = 0; i < body.length; i += 1) {
-    const ch = body[i];
-    if (q0) {
-      stripped += ch;
-      if (ch === '\\' && q0 === '"' && i + 1 < body.length) {
-        stripped += body[i + 1];
-        i += 1;
-        continue;
-      }
-      if (ch === q0) q0 = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      q0 = ch;
-      stripped += ch;
-      continue;
-    }
-    if (ch === '#') {
-      while (i < body.length && body[i] !== '\n') i += 1;
-      stripped += '\n';
-      continue;
-    }
-    stripped += ch;
-  }
-  body = stripped;
+  body = stripCommentsOutsideQuotes(body);
 
   const items = [];
   let depth = 0;

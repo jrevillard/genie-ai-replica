@@ -190,15 +190,12 @@ ansible-playbook -i localhost, "$TMP/degen.yml" > "$TMP/degen.log" 2>&1 ||
 # round-61 stray-chown class): '/' and '.' and a deploy_dir ancestor are
 # True, the supported external override and the default ./data are False.
 # The guard fact is EXTRACTED from no-root-data-migration.yml verbatim
-# (a copied expression would drift exactly like the command builders
-# did) and rendered against each misconfigured spelling: '/' and '.'
-# and a deploy_dir ancestor are True; the supported external override
-# and the default ./data are False.
-MIG2=deploy/ansible/tasks/no-root-data-migration.yml
+# (a copied expression would drift exactly like the command builders did).
+MIGRATION=deploy/ansible/tasks/no-root-data-migration.yml
 awk '/^    _data_dir_escaped: >-/{p=1} p{print} p && /regex_escape/{exit}' \
-  "$MIG2" > "$TMP/guard.frag"
+  "$MIGRATION" > "$TMP/guard.frag"
 grep -q '_data_dir_escaped' "$TMP/guard.frag" ||
-  fail "could not extract the _data_dir_escaped guard fact from $MIG2"
+  fail "could not extract the _data_dir_escaped guard fact from $MIGRATION"
 
 cat > "$TMP/guard.yml" <<YAML
 - hosts: localhost
@@ -266,7 +263,6 @@ PYEOF
 # surfaces --syntax-check never templates. Same doctrine: extract, render,
 # tokenize, execute.
 # ---------------------------------------------------------------------------
-MIGRATION=deploy/ansible/tasks/no-root-data-migration.yml
 awk '/^    _trio_probe_cmd: >-/{p=1} p{print} p && /-exec chown -h 1000/{exit}' \
   "$MIGRATION" > "$TMP/trio.frag"
 grep -q '_trio_probe_cmd' "$TMP/trio.frag" ||

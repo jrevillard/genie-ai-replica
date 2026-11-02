@@ -90,7 +90,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Get the authenticated user's profile (this triggers header extraction in the middleware)
 # First, find the user's _key by looking up the test user
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testuser@genie.local" \
+USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testuser@e2e.test" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make authenticated request to the user profile endpoint

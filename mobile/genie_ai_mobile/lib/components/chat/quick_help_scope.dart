@@ -1070,6 +1070,21 @@ bool quickHelpPressable(
       quickHelpTitleOf(button) != null;
 }
 
+/// Whether [button] carries no usable title — the card's OWN broken
+/// fact, judged without the hierarchy (an empty title is no title, the
+/// quickHelpTitleOf rule). The caption of the failure row and the
+/// broken verdict below read the SAME predicate, so a refusal the
+/// verdict gains cannot leave the caption silent.
+bool quickHelpTitleMissing(Map<String, dynamic> button) {
+  return quickHelpTitleOf(button) == null;
+}
+
+/// Whether [scope]'s own verdict names the card broken — the resolver's
+/// half of the broken verdict (the title half is [quickHelpTitleMissing]).
+bool quickHelpScopeBroken(Map<String, dynamic> scope) {
+  return scope['broken'] as bool? ?? false;
+}
+
 /// Whether the card must render as the visible failure — the grid's
 /// DISPLAY twin of the press gate (quickHelpPressable): every press
 /// refusal has a face. The scope verdict alone misses the title gate:
@@ -1084,8 +1099,33 @@ bool quickHelpCardBroken(
   Map<String, dynamic> button,
   Map<String, dynamic> scope,
 ) {
-  return (scope['broken'] as bool? ?? false) ||
-      quickHelpTitleOf(button) == null;
+  return quickHelpScopeBroken(scope) || quickHelpTitleMissing(button);
+}
+
+/// The cards split into the two layouts the overlay renders — the
+/// broken cards, each with the scope its caption names, and the
+/// healthy ones that stay grid tiles. ONE partition read by both
+/// halves of the overlay, on the [scopeFor] verdict the caller binds
+/// (the tree-unavailable rule is state the scope file does not own).
+({
+  List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
+  List<Map<String, dynamic>> healthy,
+})
+quickHelpPartitionButtons(
+  List<Map<String, dynamic>> buttons,
+  Map<String, dynamic> Function(Map<String, dynamic> button) scopeFor,
+) {
+  final broken = <(Map<String, dynamic>, Map<String, dynamic>)>[];
+  final healthy = <Map<String, dynamic>>[];
+  for (final button in buttons) {
+    final scope = scopeFor(button);
+    if (quickHelpCardBroken(button, scope)) {
+      broken.add((button, scope));
+    } else {
+      healthy.add(button);
+    }
+  }
+  return (broken: broken, healthy: healthy);
 }
 
 /// Whether the button's scope can be put on the wire.

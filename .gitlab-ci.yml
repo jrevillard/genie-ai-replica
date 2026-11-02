@@ -366,11 +366,29 @@ workflow:
     - *connect_compose_network
     - |
       # Use Docker service name for Keycloak OIDC compatibility.
-      if curl -sk -o /dev/null -w "%{http_code}" https://nginx/api/health 2>/dev/null | grep -qE "^[23]"; then
+      # curl's %{http_code} is 000 when no HTTP answer exists at all (DNS,
+      # connection refused, TLS) — labeled in words for the operator. The
+      # helper is defined here, before its first use, and shared with the
+      # Keycloak provisioning item below (GitLab concatenates the script
+      # items into one shell).
+      http_label() {
+        case "${1:-}" in
+          000) echo "000 (no HTTP response — connection-level failure)" ;;
+          "")  echo "none" ;;
+          *)   echo "$1" ;;
+        esac
+      }
+      # Bounded, with a cap loose enough for a slow-but-alive backend that is
+      # still warming up (a >30s health answer means the fallback is the
+      # better path anyway); a hung nginx must fall through to the NGINX_IP
+      # fallback instead of stalling the job.
+      HEALTH_CODE=$(curl -sk --connect-timeout 5 --max-time 30 -o /dev/null -w "%{http_code}" https://nginx/api/health 2>/dev/null || true)
+      case "$HEALTH_CODE" in *[!0-9]*|"") HEALTH_CODE="000" ;; esac
+      if printf '%s' "$HEALTH_CODE" | grep -qE "^[23]"; then
         echo "Nginx reachable via service name"
         E2E_BASE_URL="https://nginx"
       elif [ -n "$NGINX_IP" ]; then
-        echo "Falling back to NGINX_IP: ${NGINX_IP}"
+        echo "Falling back to NGINX_IP: ${NGINX_IP} (service-name health probe answered $(http_label "$HEALTH_CODE"))"
         E2E_BASE_URL="https://${NGINX_IP}"
       else
         echo "ERROR: Cannot reach nginx - neither service name nor IP"
@@ -393,71 +411,264 @@ workflow:
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
       ADMIN_TOKEN=""
       CLIENT_FOUND=""
+      TOKEN_STATUS=""
+      CLIENT_STATUS=""
+      TOKEN_ATTEMPTS=0
+      CLIENT_ATTEMPTS=0
+      TOKEN_FIRST_STATUS=""
+      TOKEN_BODY=""
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
-          ADMIN_TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
-            -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
+          TOKEN_ATTEMPTS=$((TOKEN_ATTEMPTS+1))
+          TOKEN_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+            -d "client_id=admin-cli" -d "username=admin" \
+            --data-urlencode "password=${KC_PWD}" -d "grant_type=password" || true)
+          TOKEN_STATUS=$(printf '%s' "$TOKEN_RESP" | tail -n1)
+          # If curl died before emitting the -w trailer, the last line is body
+          # text — only an all-digit status is a usable signal.
+          case "$TOKEN_STATUS" in ''|*[!0-9]*) TOKEN_STATUS="" ;; esac
+          [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
+          TOKEN_BODY=$(printf '%s' "$TOKEN_RESP" | sed '$d' | head -c 200)
+          ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
-          CLIENT_FOUND=$(curl -sk "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" \
+          CLIENT_ATTEMPTS=$((CLIENT_ATTEMPTS+1))
+          CLIENT_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+          CLIENT_STATUS=$(printf '%s' "$CLIENT_RESP" | tail -n1)
+          case "$CLIENT_STATUS" in ''|*[!0-9]*) CLIENT_STATUS="" ;; esac
+          CLIENT_FOUND=$(printf '%s' "$CLIENT_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, list) and d else '')" 2>/dev/null || true)
         fi
         if [ -n "$CLIENT_FOUND" ]; then
           echo "Keycloak ready (iteration ${i}/90) — genie-app client visible"
           break
         fi
-        echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
+        if [ -n "$ADMIN_TOKEN" ]; then
+          echo "Waiting for Keycloak via nginx/Kong... ($i/90) — genie-app client not visible yet (client lookup: HTTP $(http_label "$CLIENT_STATUS"))"
+        else
+          echo "Waiting for Keycloak via nginx/Kong... ($i/90) — admin token not obtained (HTTP $(http_label "$TOKEN_STATUS"))"
+        fi
         sleep 2
       done
+      if [ -z "$ADMIN_TOKEN" ]; then
+        echo "ERROR: master admin token never obtained via nginx/Kong after ${TOKEN_ATTEMPTS} token attempts (last token call: HTTP $(http_label "$TOKEN_STATUS"))."
+        if [ -n "$TOKEN_FIRST_STATUS" ] && [ "$TOKEN_FIRST_STATUS" != "$TOKEN_STATUS" ]; then
+          echo "The first attempt answered $(http_label "$TOKEN_FIRST_STATUS") — the per-iteration wait lines above show how the status evolved."
+        fi
+        if [ -n "$TOKEN_BODY" ]; then
+          echo "response body: ${TOKEN_BODY}"
+        fi
+        case "$TOKEN_STATUS" in
+          200)
+            echo "The endpoint answered HTTP 200 but the body contained no usable access_token — check for a proxy/SSO interception page in front of ${KC_URL}."
+            ;;
+          000|"")
+            echo "No HTTP answer from the auth path — check the Keycloak container and nginx/Kong routing first (credentials cannot be the cause when no response arrived)."
+            ;;
+          404|3*|5*)
+            echo "The auth path answered with a server or routing error (HTTP ${TOKEN_STATUS}) — check the Keycloak container health and the nginx/Kong routing; the credentials are not the first suspect."
+            ;;
+          429)
+            echo "The auth path is rate-limiting or has locked the admin account after repeated attempts (HTTP 429) — check nginx/Kong throttling settings and the Keycloak brute-force protector."
+            ;;
+          *)
+            echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."
+            ;;
+        esac
+        exit 1
+      fi
       if [ -z "$CLIENT_FOUND" ]; then
-        echo "ERROR: genie-app client not found via nginx/Kong after 180s"
+        echo "ERROR: genie-app client not found via nginx/Kong after ${CLIENT_ATTEMPTS} client lookups (last client lookup: HTTP $(http_label "$CLIENT_STATUS"))."
+        if [ "$CLIENT_STATUS" = "404" ]; then
+          echo "The admin API answered 404 — the genie realm import may not have completed or the /auth routing is wrong; the client configuration is not the first suspect."
+        fi
         exit 1
       fi
       # Create test user for E2E tests (required by loginViaUI).
       # Create-first: HTTP 201 = created, 409 = already exists (the body names
       # the conflict — username or email). exact=true on the lookup: ?username=
       # is a prefix search otherwise — a stray testuser2 would misdirect it.
-      testuser_id() {
-        USERS_JSON=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-        USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
+      TESTUSER_EMAIL='testuser@e2e.test'
+      TESTUSER_PWD='TestPass123!'
+      create_payload() {
+        python3 -c 'import json,sys; print(json.dumps({"username":"testuser","email":sys.argv[1],"emailVerified":True,"firstName":"Test","lastName":"User","enabled":True,"credentials":[{"type":"password","value":sys.argv[2],"temporary":False}]}))' "$TESTUSER_EMAIL" "$TESTUSER_PWD"
       }
-      CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-        -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' || true)
-      CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
-      CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
-      if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
-        echo "ERROR: testuser creation failed (HTTP ${CREATE_STATUS:-<none>})"
+      create_testuser() {
+        # Bounded transient retry (issue #1289 item 5): a connection-level
+        # answer (empty/000), 408/425/429 or a 5xx retries — the readiness
+        # loop above proves Keycloak answers, but a single call can still
+        # blip. A 201/409 or a definitive 4xx returns straight to the
+        # caller's convergence/verdict logic. Covering both call sites here
+        # also keeps the config-validator pin (exactly two standalone
+        # create_testuser calls) intact.
+        for CREATE_TRY in 1 2 3; do
+          CREATE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+            -d "$(create_payload)" || true)
+          CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
+          # A curl killed before the -w trailer leaves body text on the last
+          # line — only an all-digit status is a usable signal (same guard as
+          # the readiness loop above).
+          case "$CREATE_STATUS" in ''|*[!0-9]*) CREATE_STATUS="" ;; esac
+          CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+          case "$CREATE_STATUS" in
+            ''|000|408|425|429|5[0-9][0-9]) ;;
+            *) break ;;
+          esac
+          echo "testuser create attempt ${CREATE_TRY}/3: transient failure (HTTP $(http_label "$CREATE_STATUS"))"
+          if [ "$CREATE_TRY" -lt 3 ]; then
+            sleep 2
+          fi
+        done
+        case "$CREATE_STATUS" in
+          ''|000|408|425|429|5[0-9][0-9])
+            echo "transient failures persisted through all 3 create attempts (last HTTP $(http_label "$CREATE_STATUS"))"
+            ;;
+        esac
+      }
+      require_testuser_id() {
+        LOOKUP_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+        LOOKUP_STATUS=$(printf '%s' "$LOOKUP_RESP" | tail -n1)
+        case "$LOOKUP_STATUS" in ''|*[!0-9]*) LOOKUP_STATUS="" ;; esac
+        USERS_JSON=$(printf '%s' "$LOOKUP_RESP" | sed '$d')
+        # One parse emits "id|healthy": fixture-healthy = enabled,
+        # emailVerified, the fixture email, and no requiredActions all read
+        # true; only password drift is invisible to this lookup (and to any
+        # probe — the realm refuses direct access grants).
+        RESOLVED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print((u.get('id') + '|' + ('yes' if u.get('enabled') is True and u.get('emailVerified') is True and u.get('email') == sys.argv[1] and not u.get('requiredActions') else 'no')) if u and u.get('id') else '|')" "$TESTUSER_EMAIL" 2>/dev/null || true)
+        USER_ID=${RESOLVED%%|*}
+        USER_HEALTHY=${RESOLVED#*|}
+        if [ -z "$USER_ID" ]; then
+          echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200), lookup HTTP $(http_label "$LOOKUP_STATUS"))"
+          if [ "$CREATE_STATUS" = "409" ] && [ "$LOOKUP_STATUS" = "200" ]; then
+            echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
+          fi
+          exit 1
+        fi
+      }
+      die_bad_create() {
+        echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
         echo "response body: ${CREATE_BODY}"
-        exit 1
-      fi
-      if [ "$CREATE_STATUS" = "409" ]; then
-        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
-      else
-        echo "testuser created"
-      fi
-      testuser_id
-      if [ -z "$USER_ID" ]; then
-        echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
         if [ "$CREATE_STATUS" = "409" ]; then
-          echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+          echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
         fi
         exit 1
+      }
+      require_fixture_healthy() {
+        if [ "$USER_HEALTHY" != "yes" ]; then
+          echo "ERROR: the freshly provisioned testuser is not fixture-healthy (lookup HTTP $(http_label "$LOOKUP_STATUS")) — realm-level defaults are attaching state to new users; check the realm import (required actions, email verification)"
+          exit 1
+        fi
+      }
+      reset_payload() {
+        python3 -c 'import json,sys; print(json.dumps({"type":"password","value":sys.argv[1],"temporary":False}))' "$TESTUSER_PWD"
+      }
+      create_testuser
+      if [ "$CREATE_STATUS" = "409" ]; then
+        # A 409 is not done: the account may be stale — disabled, unverified
+        # email, a lingering required action, an old password from an older
+        # fixture revision — and every one of those fails the login-dependent
+        # specs far from the cause. The realm refuses direct access grants,
+        # so credential drift cannot be probed: the password is reset
+        # unconditionally via the documented reset-password endpoint. Drift
+        # in the login-visible state the lookup reads (enabled, verified
+        # email, fixture email, no required actions) means the account is
+        # deleted and
+        # recreated from the fixture payload; a user-level PUT is not used
+        # for that repair (the repo rule forbids partial user PUTs because
+        # they overwrite the credentials array, and credential handling on
+        # full PUTs is not a documented contract). Recreating replaces the
+        # Keycloak id, orphaning backend rows keyed to the previous
+        # identity — accepted on the drift path only, so the common retry
+        # against a healthy account keeps its id and its rows. The realm
+        # forbids duplicate emails, so a 409 with no resolvable testuser
+        # can only be a foreign owner of the fixture email — the resolution
+        # failure below names it.
+        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
+        require_testuser_id
+        recreate_from_scratch() {
+          create_testuser
+          if [ "$CREATE_STATUS" != "201" ]; then
+            die_bad_create
+          fi
+          require_testuser_id
+          require_fixture_healthy
+          VERDICT="testuser recreated (fixture state enforced)"
+        }
+        if [ "$USER_HEALTHY" = "yes" ]; then
+          RESET_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+            -d "$(reset_payload)" || true)
+          RESET_STATUS=$(printf '%s' "$RESET_RESP" | tail -n1)
+          case "$RESET_STATUS" in ''|*[!0-9]*) RESET_STATUS="" ;; esac
+          if [ "$RESET_STATUS" = "404" ]; then
+            echo "testuser vanished before the password reset (HTTP 404) — recreating from scratch"
+            recreate_from_scratch
+          elif [ "$RESET_STATUS" != "204" ]; then
+            echo "ERROR: testuser password reset failed (HTTP $(http_label "$RESET_STATUS")) — the stale password would fail every login-dependent spec"
+            echo "response body: $(printf '%s' "$RESET_RESP" | sed '$d' | head -c 200)"
+            exit 1
+          else
+            VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
+          fi
+        else
+          echo "testuser exists with drifted login state — deleting and recreating it"
+          # Serializing both .e2e_web_base consumers via resource_group
+          # e2e-runner is what keeps this delete+recreate free of a
+          # concurrent convergence; a third consumer of the base must keep
+          # that serialization or accept interleaved 404/409 failures.
+          DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+          DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
+          case "$DEL_STATUS" in ''|*[!0-9]*) DEL_STATUS="" ;; esac
+          DEL_BODY=$(printf '%s' "$DEL_RESP" | sed '$d' | head -c 200)
+          if [ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]; then
+            echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
+            echo "response body: ${DEL_BODY}"
+            exit 1
+          fi
+          if [ "$DEL_STATUS" = "404" ]; then
+            echo "testuser vanished between lookup and delete (HTTP 404) — recreating from scratch"
+          fi
+          recreate_from_scratch
+        fi
+      elif [ "$CREATE_STATUS" != "201" ]; then
+        die_bad_create
+      else
+        require_testuser_id
+        require_fixture_healthy
+        VERDICT="testuser created"
       fi
+      echo "$VERDICT"
       # Assign admin realm role to test user (required for document upload/delete)
-      ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
+      ROLES_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/roles" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+      ROLES_STATUS=$(printf '%s' "$ROLES_RESP" | tail -n1)
+      case "$ROLES_STATUS" in ''|*[!0-9]*) ROLES_STATUS="" ;; esac
+      ADMIN_ROLE=$(printf '%s' "$ROLES_RESP" | sed '$d' \
+        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" 2>/dev/null || true)
       if [ -n "$ADMIN_ROLE" ]; then
-        curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
+        ROLE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
           -H "Authorization: Bearer $ADMIN_TOKEN" \
           -H "Content-Type: application/json" \
-          -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testuser" || echo "WARNING: admin role assignment failed"
+          -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" || true)
+        ROLE_STATUS=$(printf '%s' "$ROLE_RESP" | tail -n1)
+        # Same digit-guard: a truncated answer is not an HTTP status.
+        case "$ROLE_STATUS" in ''|*[!0-9]*) ROLE_STATUS="" ;; esac
+        ROLE_BODY=$(printf '%s' "$ROLE_RESP" | sed '$d' | head -c 200)
+        case "$ROLE_STATUS" in
+          2[0-9][0-9])
+            echo "Assigned admin role to testuser (HTTP ${ROLE_STATUS})"
+            ;;
+          *)
+            echo "WARNING: admin role assignment failed (HTTP $(http_label "$ROLE_STATUS")) — document upload/delete tests will fail; body: ${ROLE_BODY:-none}"
+            ;;
+        esac
       else
-        echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
+        echo "WARNING: Could not resolve the admin role (roles lookup: HTTP $(http_label "$ROLES_STATUS")). Document upload/delete tests may fail."
       fi
       # The realm's web client must refuse direct access grants — assert it
       # for genie-app. The credentials are deliberately bogus: the refusal
@@ -482,7 +693,7 @@ workflow:
       for i in 1 2 3 4 5; do
         rm -f /tmp/ropc-probe-body.json
         ROPC_CURL_RC=0
-        ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
+        ROPC_STATUS=$(curl -sk --connect-timeout 5 --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
           -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?

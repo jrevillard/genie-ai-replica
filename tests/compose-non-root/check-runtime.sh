@@ -266,7 +266,9 @@ if [ -L "$backup_dir" ]; then
 fi
 if [ ! -d "$backup_dir" ]; then
   echo "BACKUP DIR MISSING: $backup_dir does not exist — the backend bind is"
-  echo "create_host_path:false, so on a RUNNING stack this directory must exist."
+  echo "create_host_path:true and backend-init converges it: on a RUNNING stack"
+  echo "a missing directory means this checkout never came up, or DATA_DIR here"
+  echo "does not match the DATA_DIR the stack was brought up with."
   echo "A skipped ownership check is never an OK."
   violations=$((violations + 1))
 else
@@ -296,14 +298,17 @@ fi
 # defect this sweep catches is a key WITHOUT group-read — the pre-#1227
 # root:root 0600 spelling that crash-loops the edge — plus any
 # world-unreadable leftover. On a RUNNING stack the directory must exist
-# (create_host_path:false): a missing dir is a violation, never a skip.
+# (the bind is create_host_path:true and secrets-ssl-init converges it):
+# a missing dir is a violation, never a skip.
 secrets_dir="${3:-./secrets/ssl}"
 if [ -L "$secrets_dir" ]; then
   secrets_dir="$(readlink -f "$secrets_dir")"
 fi
 if [ ! -d "$secrets_dir" ]; then
   echo "SECRETS DIR MISSING: $secrets_dir does not exist — the edge nginx bind is"
-  echo "create_host_path:false, so on a RUNNING stack this directory must exist."
+  echo "create_host_path:true and secrets-ssl-init converges it: on a RUNNING stack"
+  echo "a missing directory means this checkout never came up, or the sweep is"
+  echo "aimed at a different checkout than the running one."
   echo "A skipped readability check is never an OK."
   violations=$((violations + 1))
 else

@@ -1271,8 +1271,19 @@ describe('compose non-root contract (#1227)', () => {
     expect(widenArms.every((s) => s.includes("-name '*."))).toBe(true);
 
     // content verify: the widened (0644) set is grepped for private keys
+    // via find -exec {} + (space-y names reach grep as argv); the verdict
+    // comes from the verify FILE — the arm carries no || exit 9 because
+    // grep exits 1 on no-match and find -exec + propagates it.
     expect(cmd).toContain("grep -l 'BEGIN .*PRIVATE KEY'");
-    expect(cmd).toMatch(/grep -l 'BEGIN \.\*PRIVATE KEY' \$\(find \/ssl [^)]* -perm 0644\)/);
+    expect(cmd).toMatch(
+      /find \/ssl -mindepth 1 -type f -perm 0644 -exec grep -l 'BEGIN \.\*PRIVATE KEY' \{\} \+ > \/tmp\/verify 2>\/dev\/null; if \[ -s \/tmp\/verify \]; then exit 9; fi/
+    );
+    expect(cmd).not.toMatch(/\$\(/); // no command substitution: $(find) word-splits space-y names
+
+    // the sweep terminates in an explicit exit 0: a last statement whose
+    // rc is nonzero (grep no-match) would BE the init's exit and the
+    // compose depends_on gate would never open
+    expect(cmd.trim().endsWith('exit 0')).toBe(true);
   });
 
   test('mutations: source-first bind, cross-entry opt-out leak, explicit empty cap_add', () => {

@@ -1501,6 +1501,107 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// The icon-and-title row a Quick Help card leads with — the grid
+  /// tile's and the broken card row's shared header.
+  Widget _quickHelpCardHeader({
+    required bool broken,
+    required String iconAsset,
+    required String title,
+    required ThemeData theme,
+    required AppTokens tokens,
+  }) {
+    return Row(
+      children: [
+        _quickHelpCardIcon(
+          broken: broken,
+          iconAsset: iconAsset,
+          tokens: tokens,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: tokens.textXs,
+              color: tokens.fg,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The container a Quick Help card renders in — the tile's and the
+  /// broken row's shared chrome, differing only in border colour.
+  Widget _quickHelpCardShell({
+    required Color borderColor,
+    required AppTokens tokens,
+    EdgeInsetsGeometry? margin,
+    required Widget child,
+  }) {
+    return Container(
+      margin: margin,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(DsRadii.lg),
+        border: Border.all(color: borderColor),
+      ),
+      child: child,
+    );
+  }
+
+  /// The full-width row a BROKEN Quick Help card renders as, above the
+  /// healthy grid: the card's diagnosis at natural height. A broken
+  /// card cannot be used, so the row carries no gesture; its border
+  /// and warning icon name the failure at a glance, the caption names
+  /// it in words.
+  Widget _quickHelpBrokenCard({
+    required Map<String, dynamic> button,
+    required Map<String, dynamic> scope,
+    required ThemeData theme,
+    required AppTokens tokens,
+  }) {
+    return _quickHelpCardShell(
+      borderColor: tokens.danger,
+      margin: const EdgeInsets.only(bottom: quickHelpGridSpacing),
+      tokens: tokens,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _quickHelpCardHeader(
+            broken: true,
+            iconAsset: button['iconAsset']?.toString() ?? '',
+            title: quickHelpTitleOf(button) ?? '',
+            theme: theme,
+            tokens: tokens,
+          ),
+          // The caption's conditions are the broken verdict's OWN
+          // predicates (quickHelpTitleMissing, quickHelpScopeBroken) —
+          // a refusal the verdict gains cannot leave this caption
+          // silent. No line cap: the row's height follows the text,
+          // so the diagnosis stays whole where the fixed-aspect tile
+          // clipped it mid-glyph — at any font scale.
+          Text(
+            [
+              if (quickHelpTitleMissing(button))
+                tr('chatbot.quickHelpTitleMissing'),
+              if (quickHelpScopeBroken(scope)) _quickHelpErrorCaption(scope),
+            ].join(' '),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: tokens.textXs,
+              color: tokens.danger,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _quickHelpPressed(Map<String, dynamic> button) {
     // One predicate for the three press refusals — a broken scope (a
     // VISIBLE failure: the overlay caption names the problem), a scope
@@ -2420,147 +2521,100 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           _quickHelpLayout,
                         );
 
-                        return GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                childAspectRatio: aspectRatio,
-                                mainAxisSpacing: quickHelpGridSpacing,
-                                crossAxisSpacing: quickHelpGridSpacing,
-                              ),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            final String translatedTitle =
-                                quickHelpTitleOf(button) ?? '';
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
-                            final scope = _treeUnavailable
-                                ? QuickHelpScopeResolver.unavailableScopeFor(
-                                    button,
-                                  )
-                                : (_scopeResolver?.stateFor(button) ??
-                                      QuickHelpScopeResolver.pending);
-                            // The caption below names WHICH failure the
-                            // card carries. Its conditions read these two
-                            // hoisted facts; the verdict derives its own
-                            // copy through the same predicates
-                            // (quickHelpTitleOf, the scope's 'broken')
-                            // — keep the three in step.
-                            final bool scopeBroken =
-                                scope['broken'] as bool? ?? false;
-                            final bool titleMissing = translatedTitle.isEmpty;
-                            final broken = quickHelpCardBroken(button, scope);
+                        // The cards split ONCE per build, on the SAME
+                        // scope derivation for both halves: a broken
+                        // card — a scope the tree cannot verify, or a
+                        // card with no title — leaves the fixed-aspect
+                        // grid for a full-width row whose height
+                        // follows its text, because the tile's aspect
+                        // ratio gives its diagnosis caption a box
+                        // smaller than one line of text. The healthy
+                        // cards keep the compact grid.
+                        final (:broken, :healthy) = quickHelpPartitionButtons(
+                          _quickHelpButtons,
+                          (button) => _treeUnavailable
+                              ? QuickHelpScopeResolver.unavailableScopeFor(
+                                  button,
+                                )
+                              : (_scopeResolver?.stateFor(button) ??
+                                    QuickHelpScopeResolver.pending),
+                        );
 
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(DsRadii.lg),
-                                // A card the tap would silently refuse —
-                                // a broken scope, or one with no title —
-                                // is a VISIBLE failure: the caption below
-                                // names the configuration problem, and
-                                // the tap sends nothing.
-                                onTap: broken
-                                    ? null
-                                    : () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: tokens.surface,
-                                    borderRadius: BorderRadius.circular(
-                                      DsRadii.lg,
-                                    ),
-                                    border: Border.all(
-                                      color: broken
-                                          ? tokens.danger
-                                          : tokens.borderLight,
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          // ONE copy of the neutral help
-                                          // icon: the no-icon card, the
-                                          // loading placeholder and the
-                                          // failed asset all degrade to
-                                          // it.
-                                          _quickHelpCardIcon(
-                                            broken: broken,
-                                            iconAsset: iconAsset,
-                                            tokens: tokens,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              translatedTitle,
-                                              style: theme.textTheme.labelMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: tokens.textXs,
-                                                    color: tokens.fg,
-                                                  ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      if (broken)
-                                        Flexible(
-                                          // The tile's height is the
-                                          // grid's aspect ratio — the
-                                          // caption can never grow it —
-                                          // so a long caption (the
-                                          // outage text, two joined
-                                          // defects) must clamp instead
-                                          // of overflowing the tile. The
-                                          // clamp covers the caption
-                                          // only: at an extreme
-                                          // accessibility font scale the
-                                          // icon row alone can outgrow
-                                          // the tile, the grid's own
-                                          // fixed-aspect property long
-                                          // before this caption.
-                                          child: Text(
-                                            // The missing-title text
-                                            // first: the clamp below
-                                            // truncates what does not
-                                            // fit, and the config
-                                            // defect is the diagnosis
-                                            // that outlives a hierarchy
-                                            // outage (the outage text
-                                            // describes a state that
-                                            // recovery ends).
-                                            [
-                                              if (titleMissing)
-                                                tr(
-                                                  'chatbot.quickHelpTitleMissing',
-                                                ),
-                                              if (scopeBroken)
-                                                _quickHelpErrorCaption(scope),
-                                            ].join(' '),
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  fontSize: tokens.textXs,
-                                                  color: tokens.danger,
-                                                ),
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
+                        // ONE scroll view for rows and grid: an outage
+                        // breaks EVERY card, and a column of full-width
+                        // rows can exceed the viewport. The grid gives
+                        // up its own scrolling for the shared one.
+                        return SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final (button, scope) in broken)
+                                _quickHelpBrokenCard(
+                                  button: button,
+                                  scope: scope,
+                                  theme: theme,
+                                  tokens: tokens,
                                 ),
+                              GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: aspectRatio,
+                                      mainAxisSpacing: quickHelpGridSpacing,
+                                      crossAxisSpacing: quickHelpGridSpacing,
+                                    ),
+                                itemCount: healthy.length,
+                                itemBuilder: (context, index) {
+                                  final button = healthy[index];
+                                  final String translatedTitle =
+                                      quickHelpTitleOf(button) ?? '';
+                                  final String iconAsset =
+                                      button['iconAsset']?.toString() ?? '';
+
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        DsRadii.lg,
+                                      ),
+                                      onTap: () => _quickHelpPressed(button),
+                                      child: _quickHelpCardShell(
+                                        borderColor: tokens.borderLight,
+                                        tokens: tokens,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // The header is a FLEX
+                                            // child: at an extreme
+                                            // accessibility font scale
+                                            // its text alone can ask
+                                            // for more height than the
+                                            // fixed tile has, and the
+                                            // flex bound clips the
+                                            // header instead of the
+                                            // row forcing the column
+                                            // past the tile.
+                                            Flexible(
+                                              child: _quickHelpCardHeader(
+                                                broken: false,
+                                                iconAsset: iconAsset,
+                                                title: translatedTitle,
+                                                theme: theme,
+                                                tokens: tokens,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         );
                       },
                     ),

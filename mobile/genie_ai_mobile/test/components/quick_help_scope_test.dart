@@ -1338,6 +1338,75 @@ void main() {
     });
   });
 
+  group(
+    'quickHelpTitleMissing / quickHelpScopeBroken / quickHelpCardBroken',
+    () {
+      // The caption of a broken card names its failure through the SAME
+      // two predicates the broken verdict reads — a refusal the verdict
+      // gains cannot leave the caption silent (#1224).
+      test('an empty resolved title is a missing title', () {
+        expect(quickHelpTitleMissing({'resolvedTitle': 'Births'}), isFalse);
+        expect(quickHelpTitleMissing({'resolvedTitle': ''}), isTrue);
+        expect(quickHelpTitleMissing(<String, dynamic>{}), isTrue);
+      });
+
+      test('a scope without the broken key is not broken', () {
+        expect(quickHelpScopeBroken({'broken': true}), isTrue);
+        expect(quickHelpScopeBroken({'broken': false}), isFalse);
+        expect(quickHelpScopeBroken(<String, dynamic>{}), isFalse);
+      });
+
+      test('the broken verdict is the two predicates, either suffices', () {
+        final titled = {'resolvedTitle': 'Births'};
+        final titleless = {'resolvedTitle': ''};
+
+        expect(quickHelpCardBroken(titled, {'broken': false}), isFalse);
+        expect(quickHelpCardBroken(titleless, {'broken': false}), isTrue);
+        expect(quickHelpCardBroken(titled, {'broken': true}), isTrue);
+      });
+    },
+  );
+
+  group('quickHelpPartitionButtons', () {
+    Map<String, dynamic> scopeFor(Map<String, dynamic> button) =>
+        (button['scope'] as Map<String, dynamic>? ?? <String, dynamic>{});
+
+    test('a broken card leaves the grid WITH the scope its caption needs', () {
+      final healthyCard = {'id': 'a', 'resolvedTitle': 'Births'};
+      final brokenCard = {
+        'id': 'b',
+        'resolvedTitle': '',
+        'scope': {'broken': true},
+      };
+
+      final (:broken, :healthy) = quickHelpPartitionButtons([
+        healthyCard,
+        brokenCard,
+      ], scopeFor);
+
+      expect(broken, hasLength(1));
+      expect(broken.single.$1, same(brokenCard));
+      // The record carries the scope the row's caption reads.
+      expect(broken.single.$2, same(brokenCard['scope']));
+      expect(healthy, [healthyCard]);
+    });
+
+    test('an all-broken input leaves the grid empty, not absent', () {
+      final brokenCard = {
+        'id': 'b',
+        'resolvedTitle': '',
+        'scope': {'broken': true},
+      };
+
+      final (:broken, :healthy) = quickHelpPartitionButtons([
+        brokenCard,
+      ], scopeFor);
+
+      expect(healthy, isEmpty);
+      expect(broken, hasLength(1));
+    });
+  });
+
   /// A locale switch reloads the buttons with the new locale's titles: the
   /// context bar's title of an ACTIVE Quick Help scope must follow, and it
   /// follows by the button ID for an id'd button; a TITLE identity (an

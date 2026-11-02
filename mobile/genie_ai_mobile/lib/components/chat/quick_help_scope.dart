@@ -925,6 +925,13 @@ class ConversationScopeResolver {
   final QuickHelpScopeResolver _hierarchy;
   final Map<String, Map<String, dynamic>> _buttons;
 
+  /// The button a conversation tag binds to — the tag IS the button's
+  /// id, except the reserved just-chat tag, which binds to no button.
+  /// The one read behind the category walk and the scope loop, so the
+  /// two cannot drift about which tags name a button.
+  Map<String, dynamic>? _buttonTagFor(String tag) =>
+      tag == justChatTagId ? null : _buttons[tag];
+
   /// The category the conversation was scoped by, in the web's own
   /// precedence: the restore processes the saved tags IN ORDER (the
   /// per-tag forEach) and the LAST category-carrying tag wins — a live
@@ -937,7 +944,7 @@ class ConversationScopeResolver {
   String? _effectiveCategoryOf(List<String> tagList, String? categoryKey) {
     String? effectiveCategory = categoryKey;
     for (final tag in tagList) {
-      final taggedButton = tag == justChatTagId ? null : _buttons[tag];
+      final taggedButton = _buttonTagFor(tag);
       if (taggedButton != null) {
         // The web's restore gates the category on the RAW value's
         // JavaScript truthiness (`if (button.category)`) BEFORE any
@@ -1016,7 +1023,7 @@ class ConversationScopeResolver {
       // declares the entry. Falling to the sidebar branch would count it
       // as an unknown tag and refuse every follow-up on a conversation
       // the web restores and answers.
-      final button = tag == justChatTagId ? null : _buttons[tag];
+      final button = _buttonTagFor(tag);
       if (button == null && tag != justChatTagId) continue;
       final buttonLabels = button == null
           ? const <String>[]

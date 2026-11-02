@@ -2177,11 +2177,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // the tag names a live button, but the button's declared labels or
     // category have left the hierarchy — is the same visible failure:
     // the send guard would announce it at the first follow-up, and the
-    // bar names it now. An OUTAGE shows it too: the stamped verdict
-    // names the outage (never a configuration problem), and the grid
-    // that carries the verdict is hidden whenever the conversation
-    // carries saved history — suppression would leave the broken scope
-    // with no visible trace at all until the first refused send.
+    // restore names it — the outage verdict among them, which names the
+    // outage, never a configuration problem.
     final activeScope = _activeQuickHelpScope;
     final bool hasBrokenQuickHelpScope =
         activeScope != null && quickHelpScopeBroken(activeScope);

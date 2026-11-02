@@ -185,12 +185,10 @@ void main() {
   testWidgets(
     'an outage restore refuses the first send with the outage caption',
     (tester) async {
-      // A restore tagged ['just-chat', '<button>'] that resolved under a
-      // hierarchy outage carries a merged verdict computed over the EMPTY
-      // tree. Replaying it would refuse the follow-up with a
-      // configuration caption naming labels that may be alive; the
-      // re-stamped verdict names the outage instead — the caption the
-      // button-restore arm routes to.
+      // A restore tagged ['just-chat', '<button>'] resolved under a
+      // hierarchy outage carries the outage resolver's verdict — it
+      // names the outage (never a configuration caption computed over
+      // the empty tree) at the first refused send.
       final notifications = <String>[];
       final sub = NotificationService.events.listen(
         (event) => notifications.add(event.message),

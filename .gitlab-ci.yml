@@ -3733,19 +3733,29 @@ config:docs-links:
 # Regenerate the Dart OpenAPI client from the current backend sources and
 # diff it against the committed copy (scripts/generate-api-client.sh --check).
 # Fails the pipeline when mobile/genie_ai_mobile/openapi_client/ has drifted
-# from the backend spec (#1122). The dart generator emits deterministic output
+# from the backend spec — the drift class of the #1122 incident; the wiring
+# of this gate is #1220. The dart generator emits deterministic output
 # for the pinned generator version (openapitools.json) and never invokes a
 # Dart SDK, so no Flutter tooling is needed here — only a JRE for the
 # generator jar plus Node for the spec extraction.
 #
 # The paths whose change can move the committed client or the gate itself —
 # one list for the MR rule and the branch rule so they cannot drift apart.
+# The explicit .openapi-generator-ignore entry is belt-and-suspenders: the
+# **/* wildcard is documented to match dotfiles under the rules matcher's
+# File.fnmatch DOTMATCH dialect, but matcher dialects have differed across
+# GitLab subsystems before (see .claude/rules/CVE-REMEDIATION.md) and this
+# is the one dotfile a human hand-edits.
 .api_client_source_changes: &api_client_source_changes
-  [ "components/gov-chat-backend/**/*", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
+  [ "components/gov-chat-backend/**/*", "package.json", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
 
 config:api-client:
   extends: .node_base
   stage: config
+  variables:
+    # Single source for the wrapper pin: the install line and the cache key
+    # prefix below both expand it, so they cannot drift apart.
+    OPENAPI_GENERATOR_CLI_WRAPPER_VERSION: "2.42.0"
   # A drift gate is only useful while the pipeline is still cheap to
   # retry: start at launch instead of after the lint and test stages.
   needs: []
@@ -3763,7 +3773,7 @@ config:api-client:
     # not the others silently serves a stale wrapper from a warm cache. A
     # cache hit already holds the exact pinned wrapper — skip the install
     # (and its registry roundtrip) when the binary is present.
-    - '[ -x "${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin/openapi-generator-cli" ] || npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@2.42.0'
+    - '[ -x "${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin/openapi-generator-cli" ] || npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@${OPENAPI_GENERATOR_CLI_WRAPPER_VERSION}'
     - export PATH="${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin:$PATH"
     # The spec extraction executes only swagger-jsdoc (swagger-definition.js
     # and swagger-schemas.js have no npm requires of their own), so instead
@@ -3780,13 +3790,13 @@ config:api-client:
   script:
     - npm run api-client:check
   cache:
-    # prefix carries the wrapper pin: bumping @openapitools/... below must
-    # bump this too, or the [ -x ] guard keeps serving the old wrapper from
-    # the warm cache. Default save-on-success only — a failed run must not
-    # persist a half-downloaded jar (the wrapper treats any file in
-    # versions/ as downloaded and never re-fetches it).
+    # The prefix expands the same wrapper-pin variable as the install line:
+    # one bump moves both, and a warm cache can never serve an older
+    # wrapper than the pin. Default save-on-success only — a failed run
+    # must not persist a half-downloaded jar (the wrapper treats any file
+    # in versions/ as downloaded and never re-fetches it).
     - key:
-        prefix: openapi-tools-2.42.0
+        prefix: openapi-tools-${OPENAPI_GENERATOR_CLI_WRAPPER_VERSION}
         files:
           - openapitools.json
       paths:

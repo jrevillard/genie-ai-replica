@@ -15,7 +15,15 @@ URL at a single internal mirror.
 {{- define "genieai-umbrella.toolsInitContainer" -}}
 {{- $global := .Values.global | default dict -}}
 - name: tools
-  image: {{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1
+  {{- /* busybox, not curlimages/curl: the curl images ship layers whose
+  PAX headers carry the build host's overlayfs xattrs
+  (SCHILY.xattr.user.overlay.*, measured on 8.10.1 AND 8.14.1), and
+  storage stacks that refuse user.* setxattr (fuse-overlayfs in an
+  unprivileged nest — the class of venue this chart dev-deploys to)
+  fail the extraction with EPERM: ImagePullBackOff on every hook.
+  busybox:1.36 carries no such records (control-measured) and wget
+  covers every fetch here. */}}
+  image: {{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
   imagePullPolicy: IfNotPresent
   securityContext:
     allowPrivilegeEscalation: false
@@ -55,7 +63,7 @@ URL at a single internal mirror.
       # never block.
       fetch() {
         for i in 1 2 3; do
-          if curl -fsSL "$1" -o "$2"; then
+          if wget -q -O "$2" "$1"; then
             return 0
           fi
           rm -f "$2"

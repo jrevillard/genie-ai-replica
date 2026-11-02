@@ -486,7 +486,7 @@
         },
         "toolingImageRegistry": {
           "type": "string",
-          "description": "Registry for Helm hook Jobs and test pods that pull public Docker Hub images (alpine, python, curlimages/curl); empty = docker.io. Separate from the top-level imageRegistry, which scopes service images to the GitLab Container Registry."
+          "description": "Registry for Helm hook Jobs and test pods that pull public Docker Hub images (alpine, python, busybox); empty = docker.io. Separate from the top-level imageRegistry, which scopes service images to the GitLab Container Registry."
         },
         "kubeletToolsMirror": {
           "type": "string",

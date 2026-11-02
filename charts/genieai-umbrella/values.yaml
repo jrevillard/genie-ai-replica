@@ -44,7 +44,7 @@ global:
   # or arm64 to force a value.
   toolingArch: ""
   # Registry for Helm hook Jobs and test pods that pull public Docker
-  # Hub images (alpine, python, curlimages/curl). Separate from the
+  # Hub images (alpine, python, busybox). Separate from the
   # top-level `imageRegistry`, which scopes service images to the GitLab
   # Container Registry; tooling images are not republished there, so
   # they must keep their public registry. Empty = docker.io.

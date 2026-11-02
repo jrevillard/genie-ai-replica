@@ -766,6 +766,34 @@ describe('compose non-root contract (#1227)', () => {
       ].join('\n')
     );
     expect(capitalFalse.violations.some((v) => v.includes('without `create_host_path: false`'))).toBe(false);
+    // the YAML 1.1 all-caps boolean (FALSE) resolves to false in
+    // compose-go — the recognizer is case-complete, not [Ff]-only.
+    const capsFalse = validateComposeNonRoot(
+      [
+        'services:',
+        '  backend:',
+        '    user: "1000:1000"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ./data',
+        '        target: /data',
+        '        bind:',
+        '          create_host_path: FALSE',
+        ''
+      ].join('\n')
+    );
+    expect(capsFalse.violations.some((v) => v.includes('without `create_host_path: false`'))).toBe(false);
+
+    // a quoted value containing braces must not push the real pin to
+    // depth!=0 (the counter once counted braces inside quoted spans):
+    // the service failed "no user: declared" — loud, but prescribing an
+    // impossible fix for a present pin.
+    const quotedBraces = validateComposeNonRoot(
+      ['services:', '  backend: {command: "run {a} stage", user: "1000:1000"}', ''].join('\n')
+    );
+    expect(quotedBraces.violations.some((v) => v.includes('no `user:` declared'))).toBe(false);
+    expect(quotedBraces.violations.some((v) => v.includes('is root'))).toBe(false);
+
     const aliasBind = validateComposeNonRoot(
       [
         'services:',

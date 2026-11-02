@@ -505,6 +505,13 @@
       # a raw {{ data_dir }} join builds /opt/genieai//srv/... junk for an
       # absolute override and leaves the real bind source for docker to
       # root-create on the TEI node.
+      # ROOT (become_user) — NOT the play's ansible_user identity: on a
+      # FRESH host with a supported absolute override OUTSIDE deploy_dir
+      # (data_dir: /srv/genieai-data), the parent directory is root-owned
+      # 0755 and an ansible_user creation dies EACCES, aborting this play
+      # BEFORE the migration import (which runs later and creates the
+      # tree as root). Default ./data is unaffected either way.
+      become_user: root
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory

@@ -544,8 +544,12 @@ function validateComposeNonRoot(composeText) {
           // environment USER variable) is not the service pin — the
           // flat capture once turned {environment: {user: root}} into a
           // false "is root" violation on a legal file (verified). Only a
-          // depth-0 key is the pin.
-          const before = svcBody.slice(0, fu.index);
+          // depth-0 key is the pin. Quoted spans are STRIPPED before the
+          // brace count: a quoted value containing '{' or '}' once pushed
+          // the real pin to depth!=0 and the service failed with
+          // "no user: declared" — a loud false positive prescribing an
+          // impossible fix (the pin was present).
+          const before = svcBody.slice(0, fu.index).replace(/'[^']*'|"[^"]*"/g, '');
           const depth = (before.match(/\{/g) || []).length - (before.match(/\}/g) || []).length;
           if (depth === 0) {
             const rawVal = fu[1].trim();
@@ -825,7 +829,7 @@ function validateComposeNonRoot(composeText) {
         if (ft && ft[1] === 'bind' && fsrc) {
           binds.push({
             path: fsrc[1].trim(),
-            createHostPathFalse: /create_host_path:\s*[Ff]alse/.test(inner),
+            createHostPathFalse: /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(inner),
             shortSyntax: false
           });
           continue;
@@ -867,7 +871,7 @@ function validateComposeNonRoot(composeText) {
           const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
           binds.push({
             path: fsrc[1].trim(),
-            createHostPathFalse: /create_host_path:\s*[Ff]alse/.test(body),
+            createHostPathFalse: /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(body),
             shortSyntax: false
           });
         }
@@ -988,7 +992,7 @@ function validateComposeNonRoot(composeText) {
         inBindOpts = true;
         bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
         // flow form carries the opt-out inline: bind: {create_host_path: false}
-        if (bindFlow && /create_host_path:\s*[Ff]alse/.test(bindFlow[1])) {
+        if (bindFlow && /create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]/.test(bindFlow[1])) {
           if (bindOptsTarget !== null) {
             serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
             bindOptsTarget = null;
@@ -1000,7 +1004,7 @@ function validateComposeNonRoot(composeText) {
       }
       // indentation-flexible: a re-indented block is still the opts of the
       // bind: above it — exact-indent matching rejected legal spellings
-      const createFalse = line.match(/^ {10,}create_host_path:\s*[Ff]alse\s*(?:#.*)?$/);
+      const createFalse = line.match(/^ {10,}create_host_path:\s*[Ff][Aa][Ll][Ss][Ee]\s*(?:#.*)?$/);
       if (createFalse && inBindOpts) {
         if (bindOptsTarget !== null) {
           serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;

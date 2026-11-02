@@ -3741,7 +3741,7 @@ config:docs-links:
 # The paths whose change can move the committed client or the gate itself —
 # one list for the MR rule and the branch rule so they cannot drift apart.
 .api_client_source_changes: &api_client_source_changes
-  [ "components/gov-chat-backend/**/*", "mobile/genie_ai_mobile/openapi_client/**/*", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
+  [ "components/gov-chat-backend/**/*", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
 
 config:api-client:
   extends: .node_base
@@ -3750,17 +3750,19 @@ config:api-client:
   # retry: start at launch instead of after the lint and test stages.
   needs: []
   before_script:
-    # openapi-generator-cli is Java-based: a JRE for the generator jar, bash
-    # (the script is a bash script) and GNU diff (the staleness diff uses
-    # --exclude, which busybox diff lacks) for the check itself.
-    - apk add --no-cache bash diffutils openjdk17-jre-headless
+    # openapi-generator-cli is Java-based: a JRE for the generator jar (21 —
+    # the LTS with the longer alpine runway), bash (the script is a bash
+    # script) and GNU diff (the staleness diff uses --exclude, which busybox
+    # diff lacks) for the check itself.
+    - apk add --no-cache bash diffutils openjdk21-jre-headless
     # Install into the project dir (not -g) so the wrapper AND the generator
-    # jar it downloads land inside the cacheable path below. The wrapper is
-    # pinned too: it resolves the jar version from the tracked
-    # openapitools.json, but its own version must not drift under a cache
-    # key that never moves. A cache hit already holds that exact pinned
-    # wrapper — skip the install (and its registry roundtrip) when the
-    # binary is present.
+    # jar it downloads land inside the cacheable path below. The wrapper and
+    # the generator jar are one version pair: the jar version comes from the
+    # tracked openapitools.json, the wrapper pin lives on the install line
+    # below AND in the cache key prefix — a wrapper bump that moves one and
+    # not the others silently serves a stale wrapper from a warm cache. A
+    # cache hit already holds the exact pinned wrapper — skip the install
+    # (and its registry roundtrip) when the binary is present.
     - '[ -x "${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin/openapi-generator-cli" ] || npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli@2.42.0'
     - export PATH="${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin:$PATH"
     # The spec extraction executes only swagger-jsdoc (swagger-definition.js
@@ -3771,19 +3773,24 @@ config:api-client:
     # package.json dev tree — Playwright included). Node resolves the
     # require from the backend dir up to this root-level node_modules.
     - SWAGGER_JSDOC_VERSION=$(node -p "require('./components/gov-chat-backend/package.json').dependencies['swagger-jsdoc']")
-    - '[ -n "$SWAGGER_JSDOC_VERSION" ] || { echo "swagger-jsdoc is no longer a production dependency of components/gov-chat-backend — the version pin cannot be resolved"; exit 1; }'
+    # node -p prints the literal "undefined" (exit 0) for a moved dependency,
+    # so the guard must compare the string, not test emptiness.
+    - '[ "$SWAGGER_JSDOC_VERSION" != "undefined" ] || { echo "swagger-jsdoc is no longer a production dependency of components/gov-chat-backend — the version pin cannot be resolved"; exit 1; }'
     - npm install --omit=dev --no-save --no-package-lock --prefix ${CI_PROJECT_DIR} "swagger-jsdoc@${SWAGGER_JSDOC_VERSION}"
   script:
     - npm run api-client:check
   cache:
-    # when: always — the gate's red path (a stale client) must not discard
-    # the jar it just downloaded, or every push on the MR re-downloads it.
+    # prefix carries the wrapper pin: bumping @openapitools/... below must
+    # bump this too, or the [ -x ] guard keeps serving the old wrapper from
+    # the warm cache. Default save-on-success only — a failed run must not
+    # persist a half-downloaded jar (the wrapper treats any file in
+    # versions/ as downloaded and never re-fetches it).
     - key:
+        prefix: openapi-tools-2.42.0
         files:
           - openapitools.json
       paths:
         - .openapi-tools/
-      when: always
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       # The whole backend tree, not just the spec sources: the extraction

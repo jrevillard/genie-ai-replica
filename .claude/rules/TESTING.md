@@ -115,7 +115,7 @@ discover the compose project at runtime.
 ### Compose no-root runtime gate
 
 ```bash
-./tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
+./tests/compose-non-root/check-runtime.sh <compose-project> [data_dir] [secrets_dir]
 ```
 
 Asserts the #1227 no-root contract against a RUNNING stack: no uid-0

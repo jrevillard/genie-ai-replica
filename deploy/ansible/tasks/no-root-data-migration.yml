@@ -38,6 +38,22 @@
       {{ data_dir_resolved in ['/', '.']
          or (deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/')) }}
 
+- name: Fail loud on a parent-relative data_dir override (#1227)
+  # A '../'-prefixed spelling resolves through the formula to a host path
+  # OUTSIDE deploy_dir (../data -> <parent>/data) that is neither '/' nor
+  # '.' nor a deploy_dir ancestor — the escape guard lets it pass and the
+  # root tasks below would chown/create on an UNMANAGED host path on
+  # every deploy, silently. A one-character typo away from './data'; the
+  # supported overrides are absolute (or the ./data default), so this
+  # spelling is always a mistake — fail loud like the '~' assert above.
+  ansible.builtin.assert:
+    that: data_dir is not match('^\.\.')
+    fail_msg: >-
+      data_dir must be absolute (or the default ./data): a parent-relative
+      '../' override escapes deploy_dir and would make the root tasks act
+      on an unmanaged host path.
+    quiet: true
+
 - name: Fail loud on an unsupported ~-rooted data_dir override (#1227)
   # The header documents that ~ is NOT supported; without this assertion
   # it degraded SILENTLY: '~/genieai-data' fails the absolute test and

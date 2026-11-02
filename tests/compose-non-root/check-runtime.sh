@@ -39,7 +39,7 @@
 set -u
 
 if [ $# -lt 1 ]; then
-  echo "usage: check-runtime.sh <compose-project> [data_dir]" >&2
+  echo "usage: check-runtime.sh <compose-project> [data_dir] [secrets_dir]" >&2
   # usage errors get their own exit — 1 means CONTRACT VIOLATIONS
   exit 4
 fi
@@ -214,9 +214,11 @@ $containers
 EOF
 
 # --- 2. no root-owned file under the data directory ---------------------------
-# Scope mirrors the static half: the always-on contract. The starting
-# directory itself is root-owned by design (the Ansible loop creates the
-# parent), and data/huggingface belongs to the profile-gated GPU TEI
+# Scope mirrors the static half: the always-on contract. The sweep starts
+# at -mindepth 1: on an Ansible-managed host the data DIRECTORY ITSELF is
+# deliberately handed to ansible_user (the depth-0 handover) — root
+# ownership there is the root-era state the migration abolishes — and
+# data/huggingface belongs to the profile-gated GPU TEI
 # services, which the contract excludes. data/logs is pruned too: nothing
 # has mounted it since #1227 (every service logs to stdout), so it is not
 # a bind source — rule 2 exists to catch root-created bind sources, and a

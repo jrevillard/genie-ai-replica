@@ -1067,7 +1067,11 @@ function flowCloseIndex(buf) {
     const ch = buf[i];
     if (q) {
       stripped += ch;
-      if (ch === '\\' && buf[i + 1] === q) {
+      // same escape semantics as the scan pass below: only double-quoted
+      // YAML scalars escape ANY character — single-quoted have none, and
+      // honoring \' there once desynced the two passes about where the
+      // span ends
+      if (q === '"' && ch === '\\' && i + 1 < buf.length) {
         stripped += buf[i + 1];
         i += 1;
         continue;

@@ -594,9 +594,20 @@ describe('compose non-root contract (#1227)', () => {
     expect(composeText).not.toContain('./secrets/ssl:/etc/nginx/ssl');
     expect(INIT_BACKED_BINDS.backend.reason).toContain('backend-init');
     expect(INIT_BACKED_BINDS.nginx.reason).toContain('secrets-ssl-init');
-    // the exemption is per-bind: a second host bind on an init-backed
-    // service still demands the opt-out (an unconditional skip once let
-    // any future bind escape the rule entirely).
+    // the exemption is per-bind at BOTH layers: a second host bind on an
+    // init-backed service AND on an init itself still demands the opt-out
+    // (service-level skips once let any future bind escape the rule — the
+    // init-layer gap mutation-tested at 0 violations before this pin).
+    const initSecondBind = composeText.replace(
+      '        target: /fix-dumps\n',
+      '        target: /fix-dumps\n      - type: bind\n        source: ${DATA_DIR:-./data}/rogue\n        target: /rogue\n        bind:\n          create_host_path: true\n'
+    );
+    expect(initSecondBind).not.toBe(composeText);
+    expect(
+      validateComposeNonRoot(initSecondBind).violations.some(
+        (v) => v.includes('backend-init') && v.includes('create_host_path: false')
+      )
+    ).toBe(true);
     const secondBind = composeText.replace(
       'services:',
       [

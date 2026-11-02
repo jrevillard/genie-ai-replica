@@ -429,14 +429,15 @@ services:
     # One sweep: chown the tree (dir + files + symlinks) to root:101,
     # pin the dir to 0750 (group r-x for gid 101), then modes —
     # DENY-BY-DEFAULT: every file starts at key-tight 0640 and only the
-    # known CERT spellings (*.crt/*.cer/*.pem with no 'key' in the name —
-    # key.pem IS a key)
-    # widened to 0644. A deny-by-default inversion replaced the earlier
+    # known CERT spellings (*.crt/*.cer/*.pem with no 'key' in the
+    # name — key.pem IS a key) are widened to 0644. A final grep keeps
+    # the name-whitelist honest: any widened file whose CONTENT is a
+    # private key (private.pem-shaped, id_rsa.cer) fails the init. A deny-by-default inversion replaced the earlier
     # 'everything not *.key -> 0644' catch-all, which world-read any
     # key parked under a non-canonical name (key.pem, *.old, *.bak —
     # verified defect shape). Verify group + tight modes, exit 9 on any
     # survivor (failed init = visible + retried by the bounded policy).
-    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.crt' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.cer' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.pem' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -perm 0640 ! -perm 0644 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.crt' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.cer' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.pem' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -perm 0640 ! -perm 0644 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; grep -l 'BEGIN .*PRIVATE KEY' $(find /ssl -mindepth 1 -type f -perm 0644) > /tmp/verify 2>/dev/null && exit 9"]
     volumes:
       - type: bind
         source: ./secrets/ssl

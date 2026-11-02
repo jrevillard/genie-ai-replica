@@ -39,8 +39,9 @@ ownership and modes on the next recreate.
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
 error; the Ansible path normalizes this itself, and on the compose path
 `secrets-ssl-init` — NOT profile-gated — normalizes any provided pair
-on every up, so the manual `chgrp 101` above is only the fallback for
-a running stack you do not want to recreate.)
+on every up, so the manual fallback
+(`sudo chgrp 101 secrets/ssl/server.key secrets/ssl/server.crt && sudo chmod 0640 secrets/ssl/server.key`)
+is only for a running stack you do not want to recreate.)
 
 The key is readable by numeric group 101 (the nginx image's uid/gid —
 fixed upstream). On the HOST, check no untrusted account holds primary

@@ -56,6 +56,17 @@ const INIT_BACKED_BINDS = {
   nginx: {
     reason: 'secrets-ssl-init creates and normalizes secrets/ssl (root:101) before this service starts',
     match: /^\.\/secrets\/ssl/
+  },
+  // the INIT services themselves get the same per-bind scoping: an init
+  // may create the host path it then chowns (its contract) but a second
+  // host bind on it still demands the opt-out.
+  'backend-init': {
+    reason: 'the init creates and chowns the bind it serves',
+    match: /database_backups$/
+  },
+  'secrets-ssl-init': {
+    reason: 'the init creates and normalizes the bind it serves',
+    match: /^\.\/secrets\/ssl/
   }
 };
 
@@ -208,14 +219,6 @@ function validateComposeNonRoot(composeText) {
           const templated = /\$\{?\w/.test(b.path);
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
           const authoredLocation = templated || resolved.startsWith('/') || resolved.startsWith('~/');
-          // a ONE-SHOT ROOT INIT MAY create the host path it then chowns —
-          // that is its contract (backend-init's database_backups mount,
-          // secrets-ssl-init's secrets/ssl mount): the root-owned state is
-          // transient by design and converged before the guarded service
-          // mounts it. The opt-out rule polices always-on services.
-          if (ONE_SHOT_ROOT_INIT[currentService]) {
-            continue;
-          }
           // same doctrine for the guarded service itself: A BIND MATCHING
           // THE INIT-BACKED PATH may rely on the init's convergence — the
           // root-owned moment lives between CREATE and the init's

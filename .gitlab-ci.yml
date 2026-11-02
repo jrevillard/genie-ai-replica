@@ -3363,7 +3363,10 @@ test:flutter:
     # resolves its config, and a profile build of dev stays exempt (#1249).
     # FLAVOR is a compile-time constant, so each combination is a dedicated
     # test file invoked with its own defines; the zero-skip gate proves the
-    # case EXECUTED, for the same reason as the two runs above.
+    # case EXECUTED, for the same reason as the two runs above. A flavor
+    # that turns the flag on needs its own combination file plus one run,
+    # gate, marking pair and artifacts entry here — see
+    # lib/config/flavors/template.dart for the flavor-side checklist.
     - flutter test --machine --dart-define=dart.vm.product=true --dart-define=FLAVOR=dev test/config/keycloak_config_insecure_release_dev_test.dart > reports/flutter-guard-dev-machine.json 2>&1
     - cat reports/flutter-guard-dev-machine.json | tojunit --output reports/flutter-guard-dev-report.xml
     - grep -q '<testcase' reports/flutter-guard-dev-report.xml && ! grep -q '<skipped' reports/flutter-guard-dev-report.xml

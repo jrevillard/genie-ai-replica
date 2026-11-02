@@ -189,7 +189,10 @@ void main() {
       // against every config file in the tree rather than against the two
       // known ones: a new per-institution flavor is copied from the template
       // and lands in lib/config/flavors/, so it has to be covered by the same
-      // rule or it is not covered at all.
+      // rule or it is not covered at all. Updating this list is not enough
+      // for a flavor that turns the flag on: give it its own release guard
+      // test file and test:flutter invocation, like the dev and e2e ones
+      // (template.dart carries the full checklist).
       //
       // The files are read as source, not imported: a per-institution config
       // has a placeholder redirect scheme, which is not a valid reverse-domain

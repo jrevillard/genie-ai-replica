@@ -287,9 +287,9 @@
       # 'deploy_dir/.' prefix never matches find's -path patterns, so the
       # prune would silently disable ITSELF and the heal would chown -R
       # across the uid-1000 data handover. Skip the degenerate spelling —
-      # the data dir IS deploy_dir here, protected by the depth-0 handover
-      # in the migration tasks; the chain renders EMPTY and the prune-expr
-      # builder below emits the secrets-only prune (no leading -o).
+      # the chain renders EMPTY and the prune-expr builder below emits the
+      # database_backups + secrets arms (no leading -o), so the heal never
+      # crosses the uid-1000 handover the migration performs.
       when: (_rel_parts[0:idx + 1] | join('/')) != '.'
 
     - name: Build the find prune expression from the chain
@@ -308,12 +308,18 @@
         # argv token (find: "paths must precede expression") — proven by
         # rendering the builder and tokenizing the output.
         # An EMPTY chain (the degenerate data_dir == deploy_dir override)
-        # must render the secrets-only prune WITHOUT the leading -o —
-        # ' (  -o -path …' is a syntactically invalid find expression
-        # (binary operator -o with nothing before it, verified). The
-        # ternary emits the chain arms + separator only when arms exist.
+        # must render a VALID prune WITHOUT the leading -o — ' (  -o -path
+        # …' is a syntactically invalid find expression (binary operator
+        # -o with nothing before it, verified) — AND it must still exclude
+        # database_backups: with data_dir == deploy_dir the backend's
+        # uid-1000 dump dir sits at deploy_dir depth 1, inside the heal's
+        # sweep; a secrets-only prune would chown -R it to ansible_user
+        # while the migration's handover flips it back to 1000 in the same
+        # play — the two passes would fight on every deploy (and a running
+        # backend eats EACCES between them). The empty-chain arm therefore
+        # prunes database_backups + secrets.
         _fix_payload_prune_expr: >-
-          {{ ' ( ' ~ ((_fix_payload_data_chain | length > 0) | ternary(_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ') ~ ' -o ', '')) ~ '-path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
+          {{ ' ( ' ~ ((_fix_payload_data_chain | length > 0) | ternary(_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ') ~ ' -o ', '-path "' ~ data_dir_resolved ~ '/database_backups" -o ')) ~ '-path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:

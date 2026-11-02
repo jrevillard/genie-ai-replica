@@ -190,11 +190,17 @@ expr = open(os.path.join(tmp, "degen-rendered.txt")).read().strip()
 argv = shlex.split(expr)
 if "-o" in argv[:2] or not argv:
     print(f"degenerate prune expr renders a leading -o: {expr!r}", file=sys.stderr); sys.exit(1)
+# the empty chain must STILL exclude database_backups: with data_dir ==
+# deploy_dir the uid-1000 dump dir sits at deploy_dir depth 1, inside the
+# heal's sweep — a secrets-only prune lets the heal chown -R it while the
+# migration's handover flips it back (the passes would fight forever).
+if not any("database_backups" in t for t in argv):
+    print(f"degenerate prune expr lost the database_backups arm: {expr!r}", file=sys.stderr); sys.exit(1)
 probe = f'find "{tmp}/opt/genieai" -mindepth 1 {expr} -o ( ! -uid 12345 -print -quit )'
 r = subprocess.run(shlex.split(probe), capture_output=True, text=True)
 if r.returncode != 0:
     print(f"degenerate-shape probe rc={r.returncode} stderr={r.stderr.strip()[:200]}", file=sys.stderr); sys.exit(1)
-print(f"OK: degenerate data_dir==deploy_dir shape renders a valid secrets-only prune and executes")
+print(f"OK: degenerate data_dir==deploy_dir shape renders a valid database_backups+secrets prune and executes")
 PYEOF
 
 # ---------------------------------------------------------------------------
@@ -295,7 +301,9 @@ for label, cmd, needs in (("trio probe", probe_s, ("-H", "-uid", "1000", "-print
     if r.returncode != 0 or "WOULD-BE-HEALED" not in r.stdout:
         print(f"{label}: detection rc={r.returncode} out={r.stdout.strip()!r} "
               f"err={r.stderr.strip()[:120]!r}", file=sys.stderr); sys.exit(1)
+    if label == "trio probe":
+        hit = r.stdout.strip()
 
 print(f"OK: trio commands and data_dir_resolved formula render, tokenize and execute "
-      f"(probe hit={probe_s and 'WOULD-BE-HEALED'}; 5 formula spellings exact)")
+      f"(probe hit={hit}; 5 formula spellings exact)")
 PYEOF

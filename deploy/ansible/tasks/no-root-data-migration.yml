@@ -26,6 +26,23 @@
 # expand it at all, and compose would expand it as the invoking
 # ansible_user. Spell the override absolute.
 
+- name: Fail loud on an unsupported ~-rooted data_dir override (#1227)
+  # The header documents that ~ is NOT supported; without this assertion
+  # it degraded SILENTLY: '~/genieai-data' fails the absolute test and
+  # joins literally to deploy_dir/~  /genieai-data — the playbook would
+  # create, hand over and ship a directory literally named '~'. The other
+  # misconfigured spellings ('/', an ancestor, '..'-escaping chains,
+  # trailing slashes, the degenerate '.') all have explicit guards; this
+  # one gets the same loud failure instead of a wrong-path deploy.
+  ansible.builtin.assert:
+    that: data_dir is not match('^~')
+    fail_msg: >-
+      data_dir must be an absolute path: a '~'-rooted override is not
+      supported (the file module expands it as the become user, the find
+      probes never expand it, and compose would expand it as the invoking
+      ansible_user). Spell the override absolute.
+    quiet: true
+
 - name: Hand the data directory itself to ansible_user (depth 0, #1227)
   # Runs BEFORE the backup-dir creation below on BOTH placements, and it
   # must: the file module applies the leaf's owner to every MISSING

@@ -85,8 +85,12 @@ function validateComposeNonRoot(composeText) {
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
-    // wholesale re-indent trap (see the saw* declarations)
+    // wholesale re-indent trap (see the saw* declarations). The flag is
+    // CONSUMED here: flush() runs once per top-level key, and re-emitting
+    // the identical violation per flush buried the one actionable defect
+    // under N duplicate lines.
     if (inServices && !sawTwoSpaceService && sawDeepServiceKey) {
+      sawDeepServiceKey = false;
       violations.push(
         'services: no service key sits at 2-space indent while deeper keys exist — the block was re-indented and the line parser enforced nothing in it'
       );

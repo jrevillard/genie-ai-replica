@@ -996,7 +996,10 @@ class ConversationScopeResolver {
     // entry the web's tag ('5') matches, and the scope would fall to the
     // sidebar branch and refuse the follow-up. A STRING tag is its own
     // form: the pinned legacy shapes ('5.0', the old build's spelling)
-    // keep refusing exactly as they do now.
+    // keep refusing exactly as they do now. A JSON null element becomes
+    // the sentinel 'null' — an ordinary string that can never match the
+    // button index, so a hand-written null tag reads as one dead
+    // sidebar tag instead of crashing the caption.
     final tagList = (tags ?? const <dynamic>[])
         .map((tag) => _jsTagForm(tag) ?? 'null')
         .toList();

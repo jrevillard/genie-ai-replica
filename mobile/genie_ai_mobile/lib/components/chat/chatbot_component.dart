@@ -918,8 +918,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // scope while the fetches were pending — either way this restore
       // no longer owns the view.
       if (!mounted || seq != _loadSeq || scopeEpoch != _scopeEpoch) return;
+      // The outage resolver answers when the tree is DOWN — the same
+      // precedence the grid reads (_treeUnavailable first, never
+      // "resolver exists means healthy") — so a restore can never
+      // resolve against a stale tree.
+      final hierarchy = _treeUnavailable || _scopeResolver == null
+          ? QuickHelpScopeResolver.unavailable()
+          : _scopeResolver!;
       final scope = ConversationScopeResolver(
-        hierarchy: _scopeResolver ?? QuickHelpScopeResolver.unavailable(),
+        hierarchy: hierarchy,
         quickHelpButtons: _quickHelpButtons,
       ).resolve(tags: restoredTags, categoryKey: restoredCategoryKey);
       setState(() {

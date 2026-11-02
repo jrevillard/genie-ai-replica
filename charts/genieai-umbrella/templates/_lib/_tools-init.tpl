@@ -83,7 +83,15 @@ URL at a single internal mirror.
       # must therefore serve the .sha256 alongside the binary.
       fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" /tools/bin/kubectl
       fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl.sha256" /tools/bin/kubectl.sha256
-      (cd /tools/bin && sha256sum -c kubectl.sha256)
-      chmod +x /tools/bin/kubectl
+      # dl.k8s.io serves the checksum as a BARE hash (no filename
+      # field); mirrors may serve either shape — take the first field
+      # and build the checksum line ourselves. (First live pass caught
+      # the naive `sha256sum -c <file>` failing on every install.)
+      expected="$(awk '{print $1}' /tools/bin/kubectl.sha256 | head -n 1)"
+      if ! echo "$expected  kubectl" | sha256sum -c - >/dev/null 2>&1; then
+        echo "kubectl checksum mismatch against $BASE — refusing to use the download" >&2
+        exit 1
+      fi
       rm -f /tools/bin/kubectl.sha256
+      chmod +x /tools/bin/kubectl
 {{- end -}}

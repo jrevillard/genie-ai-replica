@@ -85,11 +85,12 @@ spec:
             # those mount points; without them freshclam + clamd fail with
             # EROFS on first write.
             readOnlyRootFilesystem: true
-            # Drop only the cap that grants raw-socket access. The
-            # entrypoint runs `chown -R clamav:clamav /var/lib/clamav`
-            # at startup, which needs CAP_CHOWN. Dropping ALL drops
-            # CHOWN too and the chown fails with EPERM (same fix as
-            # the factory default + frontend).
+            # The container runs /init-unprivileged as uid 1000:
+            # as a non-root process it holds no effective capabilities
+            # to begin with, and the unprivileged entrypoint chowns
+            # nothing (the volume fsGroup already grants the write).
+            # drop ALL therefore removes nothing the process used —
+            # it only guarantees that stays true.
             capabilities:
               drop: ["ALL"]
           volumeMounts:

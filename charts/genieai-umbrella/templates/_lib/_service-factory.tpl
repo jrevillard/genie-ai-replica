@@ -62,8 +62,11 @@ spec:
       # are removed: each service declares its own identity via
       # `securityContext` (container level) in values.yaml, pinned to
       # the USER its image ships (frontend 101, clamav 1000, backend
-      # 1000 — see #1227: every image now runs non-root by default
-      # and its Dockerfile pre-chowns the paths it writes).
+      # 1000, the OPEA wrappers' `user`). Some OPEA wrapper images
+      # ship no USER directive and run as root — the container-level
+      # drop below is safe on them (bare interpreters, no
+      # cap-dependent entrypoints); the non-root posture of the
+      # operator-managed tiers is tracked separately.
       #
       # `podSecurityContext` (e.g. fsGroup on documentRepository) is
       # merged into the same `securityContext:` block — emitting two
@@ -142,18 +145,16 @@ spec:
             {{- toYaml $svc.resources | nindent 12 }}
           securityContext:
             # Per-service `services.<svc>.securityContext` overrides
-            # entirely. The default below carries only the bits that
-            # are safe regardless of UID: no privilege escalation,
-            # nothing kept: since #1227 every service pins its full
-            # identity in values.yaml (runAsNonRoot + runAsUser +
-            # drop ALL) — each image runs non-root by default and its
-            # Dockerfile pre-chowns the paths it writes, so entrypoints
-            # no longer chown at startup and need no capabilities at
-            # all. seccomp RuntimeDefault rides along; it is what the
-            # `restricted` PodSecurity level requires, carried now so
-            # the flip (a deploy-overlay label, tracked in #1231) adds
-            # no chart work.
-            {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "seccompProfile" (dict "type" "RuntimeDefault") "capabilities" (dict "drop" (list "ALL"))) -}}
+            # entirely. The default below carries the bits that are
+            # safe regardless of UID: no privilege escalation, and no
+            # capabilities kept. Services pin their runAsUser to the
+            # USER their image ships; the OPEA wrappers run bare
+            # interpreters with no cap-dependent entrypoints, so drop
+            # ALL holds for the root-running ones too. seccomp is NOT
+            # set here — the pod-level block above already carries it
+            # for every container, and repeating it per container is
+            # dead YAML with a second placement to keep in sync.
+            {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL"))) -}}
             {{- toYaml $scc | nindent 12 }}
           {{- with $svc.volumeMounts }}
           volumeMounts:

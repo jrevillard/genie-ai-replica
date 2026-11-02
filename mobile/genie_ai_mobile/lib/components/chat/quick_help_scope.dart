@@ -590,7 +590,23 @@ class QuickHelpScopeResolver {
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
         return (name is String && name.isNotEmpty) ? name : null;
-      });
+      }),
+      _unavailable = false;
+
+  /// A resolver for a hierarchy OUTAGE — the fetch failed, the tree is
+  /// the caller's fact, and no button can be verified. Every stateFor
+  /// answers the unavailable verdict directly, so the verdict the
+  /// RESTORE replays (stateFor over this resolver) names the outage by
+  /// construction and no consumer has to re-stamp it.
+  QuickHelpScopeResolver.unavailable()
+    : _enLabels = const {},
+      _categoryLabelsEn = const {},
+      _categoryNames = const {},
+      _unavailable = true;
+
+  /// Whether this resolver was built for an outage: it names nothing,
+  /// and every verdict it produces says so.
+  final bool _unavailable;
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -745,6 +761,10 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
+    // An outage resolver cannot verify anything: the same verdict the
+    // grid renders (unavailableScopeFor), from the source of the truth
+    // instead of patched in by each consumer.
+    if (_unavailable) return unavailableScopeFor(button);
     final declared = quickHelpServiceLabelsOf(button);
     final missingLabels = declared
         .where((l) => !_enLabels.contains(l))
@@ -1111,29 +1131,6 @@ class ConversationScopeResolver {
 /// and the send guard read the same fact.
 List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
     tags.where((tag) => !kept.contains(tag)).toList();
-
-/// The verdict a RESTORED scope installs during a hierarchy OUTAGE.
-///
-/// A restore that resolved while the tree was down carries a merged
-/// verdict computed over the resolver's EMPTY tree: every declared
-/// label reads as missing there, and replaying it would refuse the
-/// first follow-up with a configuration caption that may name labels
-/// that are alive. The outage is the verdict instead — the same
-/// substitution the grid makes per card (unavailableScopeFor): a broken
-/// verdict is re-stamped broken+unavailable with the missing-label list
-/// cleared, so the refusal names the outage. A verdict that declared
-/// nothing (nothing to verify) is handed back unchanged — it is healthy
-/// in an outage too — and a scope with no verdict at all stays null.
-Map<String, dynamic>? unavailableVerdictForOutage(Map<String, dynamic>? state) {
-  if (state == null) return null;
-  if (!(state['broken'] as bool? ?? false)) return state;
-  return const {
-    'broken': true,
-    'unavailable': true,
-    'missingLabels': <String>[],
-    'categoryMissing': false,
-  };
-}
 
 /// Whether a committed restore should be re-resolved now that a source it
 /// depended on (the hierarchy, the config) settled.

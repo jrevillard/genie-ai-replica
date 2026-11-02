@@ -1597,38 +1597,47 @@ void main() {
     });
   });
 
-  group('unavailableVerdictForOutage', () {
-    test('a broken verdict is re-stamped as the outage', () {
-      // A restore resolved over the outage's EMPTY tree reads every
-      // declared label as missing — replaying that list would refuse the
-      // first follow-up with a configuration caption naming labels that
-      // may be alive. The outage is the verdict instead: broken stays,
-      // unavailable is set, the missing-label list is cleared.
-      final stamped = unavailableVerdictForOutage(const {
-        'broken': true,
-        'unavailable': false,
-        'missingLabels': <String>['Births'],
-        'categoryMissing': true,
+  group('QuickHelpScopeResolver.unavailable', () {
+    test('an outage resolver answers unavailableScopeFor at the source', () {
+      // The restore builds the outage resolver when the tree is down:
+      // every verdict it produces names the outage (never a
+      // configuration problem computed over an empty tree), and no
+      // consumer has to re-stamp it.
+      final outage = QuickHelpScopeResolver.unavailable();
+      final declared = outage.stateFor({
+        'id': 'civil',
+        'category': '2',
+        'serviceLabels': ['Births'],
       });
-      expect(stamped, isNotNull);
-      expect(stamped!['broken'], isTrue);
-      expect(stamped['unavailable'], isTrue);
-      expect(stamped['missingLabels'], isEmpty);
-      expect(stamped['categoryMissing'], isFalse);
+      expect(declared['broken'], isTrue);
+      expect(declared['unavailable'], isTrue);
+      expect(declared['missingLabels'], isEmpty);
+
+      // A card that declares no scope stays healthy — there is nothing
+      // the outage could deny.
+      final free = outage.stateFor({'id': 'free', 'serviceLabels': []});
+      expect(free['broken'], isFalse);
+      expect(free['unavailable'], isFalse);
     });
 
-    test('a healthy verdict and null pass through unchanged', () {
-      // A verdict that declared nothing is healthy in an outage too —
-      // there is nothing the tree could have verified — and a scope
-      // with no verdict at all stays null.
-      final healthy = const {
-        'broken': false,
-        'unavailable': false,
-        'missingLabels': <String>[],
-        'categoryMissing': false,
-      };
-      expect(unavailableVerdictForOutage(healthy), same(healthy));
-      expect(unavailableVerdictForOutage(null), isNull);
+    test('the merged restore verdict under outage ORs the flags', () {
+      // The ConversationScopeResolver merges per-button states; under
+      // the outage resolver a declared-scope button marks the merged
+      // verdict unavailable, a no-scope one does not.
+      final merged = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver.unavailable(),
+        quickHelpButtons: [
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ],
+      ).resolve(tags: const ['civil']);
+      expect(merged.quickHelpScopeState, isNotNull);
+      expect(merged.quickHelpScopeState!['broken'], isTrue);
+      expect(merged.quickHelpScopeState!['unavailable'], isTrue);
+      expect(merged.quickHelpScopeState!['missingLabels'], isEmpty);
     });
   });
 

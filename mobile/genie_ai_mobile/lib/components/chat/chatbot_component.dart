@@ -593,22 +593,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           : quickHelpTitleOf(button) ?? scope.categoryName ?? '';
     }
     _activeQuickHelpIdentity = scope.quickHelpButtonId;
-    // During a hierarchy OUTAGE the resolver was built over an
-    // empty tree: every declared label reads as missing, and the
-    // refusal would name a configuration problem that may not exist.
-    // The outage is the CALLER's fact — the grid handles it through
-    // unavailableScopeFor, and the restore does the same: the button
-    // arm stamps the button's own unavailable verdict, and a
-    // button-less (reserved or merged) verdict routes through the
-    // same substitution — the outage caption, never a configuration
-    // one computed over the empty tree.
-    if (_treeUnavailable && scope.quickHelpButtonId != null) {
-      _activeQuickHelpScope = button != null
-          ? QuickHelpScopeResolver.unavailableScopeFor(button)
-          : unavailableVerdictForOutage(scope.quickHelpScopeState);
-    } else {
-      _activeQuickHelpScope = scope.quickHelpScopeState;
-    }
+    // A restore resolved during a hierarchy OUTAGE carries a verdict
+    // the outage resolver produced (unavailableScopeFor at the source)
+    // — the refusal names the outage, never a configuration problem
+    // computed over an empty tree. No re-stamping here.
+    _activeQuickHelpScope = scope.quickHelpScopeState;
     // A Quick Help scope narrows the FIRST follow-up by its declared
     // labels (the mobile's one-turn scope); the sidebar labels that
     // were selected BESIDE it keep narrowing the whole conversation —
@@ -800,7 +789,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         tr('chatbot.quickHelpLabelGone', args: {'labels': missing.join(', ')}),
       );
     }
-    if (scope['categoryMissing'] as bool? ?? false) {
+    if (scope['categoryMissing'] == true) {
       parts.add(tr('chatbot.quickHelpCategoryGone'));
     }
     return parts.join(' ');
@@ -930,7 +919,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // no longer owns the view.
       if (!mounted || seq != _loadSeq || scopeEpoch != _scopeEpoch) return;
       final scope = ConversationScopeResolver(
-        hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),
+        hierarchy: _scopeResolver ?? QuickHelpScopeResolver.unavailable(),
         quickHelpButtons: _quickHelpButtons,
       ).resolve(tags: restoredTags, categoryKey: restoredCategoryKey);
       setState(() {
@@ -2193,9 +2182,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // that carries the verdict is hidden whenever the conversation
     // carries saved history — suppression would leave the broken scope
     // with no visible trace at all until the first refused send.
+    final activeScope = _activeQuickHelpScope;
     final bool hasBrokenQuickHelpScope =
-        _activeQuickHelpScope != null &&
-        quickHelpScopeBroken(_activeQuickHelpScope!);
+        activeScope != null && quickHelpScopeBroken(activeScope);
+    final bool showWarning = hasDeadScopeTags || hasBrokenQuickHelpScope;
 
     // Wrap entire layout to detect taps outside input
     return GestureDetector(
@@ -2208,9 +2198,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           Column(
             children: [
               // Context Bar
-              if (_selectedCategoryName.isNotEmpty ||
-                  hasDeadScopeTags ||
-                  hasBrokenQuickHelpScope)
+              if (_selectedCategoryName.isNotEmpty || showWarning)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -2227,13 +2215,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       // cannot carry is a failure — the broken Quick Help
                       // cards' warning, not the hint bulb.
                       Icon(
-                        hasDeadScopeTags || hasBrokenQuickHelpScope
+                        showWarning
                             ? Icons.warning_amber_rounded
                             : Icons.lightbulb_outline,
                         size: 20,
-                        color: hasDeadScopeTags || hasBrokenQuickHelpScope
-                            ? tokens.danger
-                            : tokens.accent,
+                        color: showWarning ? tokens.danger : tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2280,7 +2266,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             // shown instead of as a one-shot toast.
                             if (hasBrokenQuickHelpScope)
                               Text(
-                                _quickHelpErrorCaption(_activeQuickHelpScope!),
+                                _quickHelpErrorCaption(activeScope),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontSize: tokens.textXs,
                                   color: tokens.danger,

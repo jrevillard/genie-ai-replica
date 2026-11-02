@@ -22,7 +22,8 @@ URL at a single internal mirror.
   unprivileged nest — the class of venue this chart dev-deploys to)
   fail the extraction with EPERM: ImagePullBackOff on every hook.
   busybox:1.36 carries no such records (control-measured) and wget
-  covers every fetch here. */}}
+  covers every fetch here — with checksum verification, since wget
+  validates no certificates. */}}
   image: {{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
   imagePullPolicy: IfNotPresent
   securityContext:
@@ -76,6 +77,13 @@ URL at a single internal mirror.
       # downloading it paid a second external fetch — and a second
       # mirror requirement for air-gapped installs — for an unused
       # binary.
+      # busybox wget performs NO TLS certificate validation ("TLS
+      # certificate validation not implemented") — the checksum file is
+      # the endpoint-authenticity control, not the transport. The mirror
+      # must therefore serve the .sha256 alongside the binary.
       fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" /tools/bin/kubectl
+      fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl.sha256" /tools/bin/kubectl.sha256
+      (cd /tools/bin && sha256sum -c kubectl.sha256)
       chmod +x /tools/bin/kubectl
+      rm -f /tools/bin/kubectl.sha256
 {{- end -}}

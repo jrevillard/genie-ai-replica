@@ -345,8 +345,6 @@ class _DeadScopeMockClient extends http.BaseClient {
     final locale = request.url.queryParameters['locale'] ?? 'en';
     if (path.contains('/api/service-categories/categories')) {
       _treeRequestsByLocale[locale] = (_treeRequestsByLocale[locale] ?? 0) + 1;
-      // ignore: avoid_print
-      print('TREE-REQ #$locale ${_treeRequestsByLocale[locale]}');
       final failFirst = failFirstCounts[locale];
       if (failFirst != null && _treeRequestsByLocale[locale]! <= failFirst) {
         return httpResponseJson(<String, dynamic>{}, 500);

@@ -100,8 +100,11 @@ app.use((req, res, next) => {
   // (`/api/files/ingest-bundle/`) through the SAME route, but the exact
   // comparison below missed it — a ~42 MB bundle POSTed with a trailing
   // slash fell to the 10mb global parser and died with 413 (review
-  // 2026-10-29 round 3). Normalize trailing slashes before comparing.
-  if (req.method === 'POST' && req.path.replace(/\/+$/, '') === BUNDLE_INGEST_PATH) return next();
+  // 2026-10-29 round 3). Normalize trailing slashes before comparing —
+  // and lowercase the path: the router matches case-INsensitively, so
+  // `POST /API/files/INGEST-BUNDLE` reached the route while this exact
+  // comparison fed it to the 10mb global parser (review !622 round 11).
+  if (req.method === 'POST' && req.path.toLowerCase().replace(/\/+$/, '') === BUNDLE_INGEST_PATH) return next();
   return standardJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

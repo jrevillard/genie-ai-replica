@@ -46,6 +46,20 @@
                   <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
                 </a>
               </li>
+              <!-- Sidebar mirrors the tab rack 1:1 (David 2026-10-21: the
+                   Studio tab had no sidebar entry — clicking it left the
+                   menu with no active item). Rack position: after Document
+                   Management, before Database. Hidden with the OKF flag. -->
+              <li v-if="okfEnabled" class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'studio' }]"
+                  @click.prevent="setActiveTab('studio')"
+                >
+                  <i>🧪</i>
+                  <span>{{ translate('admin.tabs.studio', 'OKF Studio') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -95,6 +109,16 @@
               <li class="nav-item">
                 <a
                   href="#"
+                  :class="['nav-link', { active: activeTab === 'security' }]"
+                  @click.prevent="setActiveTab('security')"
+                >
+                  <i>🔒</i>
+                  <span>{{ translate('admin.tabs.security', 'Security') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
                   :class="['nav-link', { active: activeTab === 'users' }]"
                   @click.prevent="setActiveTab('users')"
                 >
@@ -102,14 +126,18 @@
                   <span>{{ translate('admin.userManagement', 'User Management') }}</span>
                 </a>
               </li>
-              <li class="nav-item">
+              <!-- Story 8-7 (David 2026-10-20): model configurations are a
+                   PLATFORM concern — the LAST Admin Dashboard tab, not a tab
+                   buried in the Testing Lab dialog. Rides the OKF flag (its
+                   storage/API live in okf-server). -->
+              <li v-if="okfEnabled" class="nav-item">
                 <a
                   href="#"
-                  :class="['nav-link', { active: activeTab === 'security' }]"
-                  @click.prevent="setActiveTab('security')"
+                  :class="['nav-link', { active: activeTab === 'models' }]"
+                  @click.prevent="setActiveTab('models')"
                 >
-                  <i>🔒</i>
-                  <span>{{ translate('admin.tabs.security', 'Security') }}</span>
+                  <i>🤖</i>
+                  <span>{{ translate('admin.tabs.models', 'Models') }}</span>
                 </a>
               </li>
             </ul>
@@ -396,6 +424,12 @@
                       {{ translate('admin.documents.title', 'Document Management') }}
                     </div>
                     <div class="card-actions">
+                      <!-- NOT OKF-gated (round 16, #80117): scheduling a
+                        website crawl is a pre-existing main capability —
+                        the button rendered unconditionally on main. Only
+                        the crawl→OKF CONVERSION the dialog then offers is
+                        flag-gated (inside AddFromLinkDialog), so a parked
+                        deployment keeps its crawl entry. -->
                       <DsButton variant="secondary" @click="addFromLink">
                         {{ translate('admin.documents.addLink', 'Add from Link') }}
                       </DsButton>
@@ -459,12 +493,59 @@
                         {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
                         ({{ selectedDocuments.length }})
                       </DsButton>
+                      <DsButton
+                        v-if="okfEnabled"
+                        variant="secondary"
+                        :disabled="!okfRepoGate.visible"
+                        :title="okfGateTitle"
+                        @click="onCreateOkfRepoFromSelection"
+                      >
+                        {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
+                      </DsButton>
                     </div>
                     <div v-if="showRetractButton" class="card-actions">
                       <DsButton variant="secondary" @click="handleBatchAction('retract')">
                         {{ translate('admin.documents.retractSelected', 'Retract Selected') }}
                         ({{ selectedDocuments.length }})
                       </DsButton>
+                    </div>
+                    <div v-if="showDeleteButton" class="card-actions">
+                      <!-- #1042 BATCH DELETE, AMENDED 2026-10-10 (live: David
+                           selected pending rows to clean up and the whole
+                           batch silently refused because ONE row had gone
+                           Ingesting — the only signal was a hover tooltip on
+                           a disabled button, read as "it failed"): the
+                           refusal is now a VISIBLE strip, and a selection
+                           with BOTH blocked and deletable rows deletes the
+                           deletable subset (the confirm says exactly what
+                           will be skipped). Full-disable only when NOTHING
+                           is deletable. -->
+                      <DsButton
+                        variant="danger"
+                        :disabled="!!deleteRefuseReason && !deletableSelection.length"
+                        :title="deleteRefuseReason"
+                        @click="handleBatchAction('delete')"
+                      >
+                        {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
+                        ({{
+                          deleteRefuseReason && deletableSelection.length
+                            ? deletableSelection.length
+                            : selectedDocuments.length
+                        }})
+                      </DsButton>
+                      <span v-if="deleteRefuseReason" class="delete-refuse-strip">
+                        {{
+                          deletableSelection.length
+                            ? translate(
+                                'admin.documents.deletePartialNotice',
+                                '{blocked} selected file(s) cannot be deleted ({reason}) — only the other {n} will be deleted.'
+                              )
+                                .replace('{blocked}', String(blockedSelection.length))
+                                .replace('{reason}', deleteRefuseReason)
+                                .replace('{n}', String(deletableSelection.length))
+                            : deleteRefuseReason
+                        }}
+                      </span>
                     </div>
                   </div>
 
@@ -587,6 +668,9 @@
                   </div>
                 </div>
 
+                <div v-if="activeTab === 'studio'" class="dashboard-card" style="grid-column: span 2">
+                  <OkfStudioTab ref="okfStudioTab" @studio-ready="flushPendingStudioEvents" />
+                </div>
                 <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
                     <div class="card-title">
@@ -1520,6 +1604,19 @@
                     </DsButton>
                   </div>
                 </div>
+
+                <!-- Story 8-7 (David 2026-10-20): the Models tab — the LAST
+                     Admin Dashboard tab. Named remote-model configurations are
+                     platform-level (tools-admin enforced server-side; the panel
+                     renders an honest access note for everyone else). -->
+                <div v-if="activeTab === 'models'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.tabs.models', 'Models') }}
+                    </div>
+                  </div>
+                  <OkfModelConfigPanel />
+                </div>
               </div>
             </DsTabs>
           </div>
@@ -1576,6 +1673,7 @@
 import serviceTreeService from '../services/serviceTreeService.js';
 import databaseOperationsService from '../services/databaseOperationsService';
 import adminDashboardService from '../services/adminDashboardService';
+import { isOkfEnabled } from '../utils/okfFlag';
 import OperationResultsModal from './OperationResultsModal.vue';
 import LogSearchDialog from './LogSearchDialog.vue';
 import UploadFilesDialog from './UploadFilesDialog.vue';
@@ -1590,6 +1688,7 @@ import DsSpinner from './ds/Spinner.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
+import { defineAsyncComponent } from 'vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
@@ -1597,6 +1696,15 @@ import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { themeManager } from '../utils/ThemeManager';
+
+// OKF HEAVY COMPONENTS — ASYNC (round 17, #80362): StudioTab and
+// ModelConfigPanel pull cytoscape, cytoscape-fcose, markdown-it,
+// highlight.js and gray-matter. Statically imported, a flag-OFF deployment
+// still downloaded and parsed those hundreds of KB at startup. Async
+// components load their chunk only on FIRST RENDER — both panes render
+// exclusively behind isOkfEnabled(), so the dark build never fetches them.
+const OkfStudioTab = defineAsyncComponent(() => import('./okf/StudioTab.vue'));
+const OkfModelConfigPanel = defineAsyncComponent(() => import('./okf/editor/ModelConfigPanel.vue'));
 
 // Shared empty named-params dict for translate() — a frozen module constant
 // so the default argument allocates once, not on every per-render call.
@@ -1618,10 +1726,11 @@ export default {
   components: {
     OperationResultsModal,
     LogSearchDialog,
+    OkfModelConfigPanel,
+    ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
-    ConfirmDialog, // REGISTER ConfirmDialog
     QueryInspector,
     DsButton,
     DsInput,
@@ -1630,6 +1739,7 @@ export default {
     DsStateDisplay,
     DsTabs,
     DsSelect,
+    OkfStudioTab,
     Loader2
   },
   emits: [],
@@ -1662,15 +1772,21 @@ export default {
 
       // Tab navigation
       activeTab: 'overview',
+      // Studio hand-off dispatches queued while the async StudioTab chunk is
+      // still loading — drained on its 'studio-ready' emit (round 18, #80478).
+      pendingStudioEvents: [],
       tabs: [
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
         { id: 'documents', label: 'Document Management' },
+        { id: 'studio', label: 'OKF Studio' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
         { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' }
+        { id: 'users', label: 'Users' },
+        // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
+        { id: 'models', label: 'Models' }
       ],
 
       // Loading state
@@ -1824,11 +1940,24 @@ export default {
         ? '\u2014'
         : `${this.metrics.errorRate}%`;
     },
+    // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
+    // the frontend entrypoint from OKF_ENABLED — the image default is DARK
+    // ('0' since the !622 wave-1 review; compose/ansible write it explicitly).
+    // Absent config = enabled, which is dev-server-only (`npm run serve` has
+    // no runtime config). Hides the OKF Studio and Models tabs (Query
+    // Inspector is platform tooling and stays — David's call 2026-10-21).
+    // Shared helper: the store registration and every gated surface read the
+    // same value, so the gating model cannot drift.
+    okfEnabled() {
+      return isOkfEnabled();
+    },
     adminTabs() {
-      return this.tabs.map((t) => ({
-        label: this.translate(`admin.tabs.${t.id}`, t.label),
-        value: t.id
-      }));
+      return this.tabs
+        .filter((t) => this.okfEnabled || (t.id !== 'studio' && t.id !== 'models'))
+        .map((t) => ({
+          label: this.translate(`admin.tabs.${t.id}`, t.label),
+          value: t.id
+        }));
     },
     keycloakAdminUrl() {
       const keycloakUrl = window.location.origin + '/auth/admin';
@@ -1955,9 +2084,118 @@ export default {
       );
 
       return !hasRetractedFile;
+    },
+    // #1042 BATCH DELETE: gate. Visible as soon as the steward picks any
+    // file — the disabled+title state carries INGESTED-blocked messages.
+    showDeleteButton() {
+      return this.selectedDocuments.length > 0;
+    },
+    // #1042 BATCH DELETE: refuse-reason string for the disabled button's
+    // hover title. Null = allowed; non-null = button greyed out, this
+    // string explains why in the UI's active locale. Counts the rejected
+    // files so the message is actionable.
+    deleteRefuseReason() {
+      if (this.selectedDocuments.length === 0) return null;
+      if (!this.blockedSelection.length) return null;
+      // Named-param interpolation (the post-merge translate() convention):
+      // the fallback path interpolates {count} itself, so a .replace chain
+      // would see its placeholder consumed first (round 11, merge fallout).
+      return this.translate(
+        'admin.documents.deleteRefuseReason',
+        '{count} file(s) are still ingested — retract them first.',
+        {
+          count: this.blockedSelection.length
+        }
+      );
+    },
+    /** 2026-10-10 (live): the selected rows that the delete gate BLOCKS
+     * (ingested/ingesting — deleting would orphan the served corpus). */
+    blockedSelection() {
+      if (this.selectedDocuments.length === 0) return [];
+      const ids = new Set(this.selectedDocuments);
+      return this.documents.filter((doc) => {
+        if (!ids.has(doc.file_id)) return false;
+        const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
+        // 'ingested with warnings' IS serving (the okfRepoGate serving-count
+        // and the row badge both treat it so) — deleting the files doc under
+        // a served corpus orphans the reference (review !622 round 10,
+        // #78744).
+        return s === 'ingested' || s === 'ingesting' || s === 'ingested with warnings';
+      });
+    },
+    /** 2026-10-10: the selected rows that ARE deletable — a mixed
+     * selection deletes this subset instead of refusing wholesale. */
+    deletableSelection() {
+      if (this.selectedDocuments.length === 0) return [];
+      const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
+      // Round 18 (#80486): blockedSelection only sees rows in the LOADED
+      // documents list — a blocked row hidden by the active search filter
+      // (or a stale selection) was counted deletable, the confirm dialog
+      // over-promised "N file(s) will be deleted" including it, and the
+      // server then refused it per-file (STILL_SERVING) as a "partial
+      // failure" the dialog said could not happen. Only ids the loaded
+      // list can vouch for count as deletable.
+      const loadedIds = new Set(this.documents.map((d) => d.file_id));
+      return this.selectedDocuments.filter((id) => loadedIds.has(id) && !blockedIds.has(id));
+    },
+
+    // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
+    // David 2026-09-14): INGESTED documents are now IMPORTABLE — the old
+    // alreadyIngested refusal is dropped. The prevention moved downstream to
+    // the OKF lifecycle: the new repo's `ingest` transition is refused
+    // (SOURCES_NOT_RETRACTED) while any source doc still serves the
+    // free-form corpus. The enabled-with-warning state surfaces that here.
+    // Remaining refusals: empty selection; a doc already sourced by ANOTHER
+    // OKF repo (okf_repo_id).
+    okfRepoGate() {
+      if (this.selectedDocuments.length === 0) {
+        return { visible: false, reasonKey: 'okf.docs.gate.emptySelection', warnKey: null };
+      }
+      const selectedKeys = new Set(this.selectedDocuments);
+      // selectedDocuments holds file_id's (the checkbox binds :value="doc.file_id")
+      // — matching on the Arango _key never matches (review !622 wave 2, #78639).
+      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc.file_id));
+      const alreadyOkf = selectedDocObjects.filter((doc) => doc.okf_repo_id);
+      if (alreadyOkf.length > 0) {
+        return { visible: false, reasonKey: 'okf.docs.gate.alreadyInOkf', warnKey: null };
+      }
+      const serving = selectedDocObjects.filter((doc) => {
+        const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
+        return s === 'ingesting' || s === 'ingested' || s === 'ingested with warnings';
+      });
+      return {
+        visible: true,
+        reasonKey: null,
+        warnKey: serving.length > 0 ? 'okf.docs.gate.servingWarn' : null,
+        servingCount: serving.length
+      };
+    },
+    okfGateTitle() {
+      if (this.okfRepoGate.reasonKey) return this.translate(this.okfRepoGate.reasonKey, '');
+      if (this.okfRepoGate.warnKey)
+        // ROUND 25 CORRECTION (review 83379): round 23's named-param call
+        // REGRESSED this tooltip. There are TWO servingWarn keys — the
+        // import-dialog one (:2508, plain {n}) and this GATE leaf, stored
+        // BRACE-ESCAPED ({'{'}n{'}'}) in all 14 locales and pinned that way
+        // by localeConsistency's DYNAMIC_COMPILED_KEYS since round 16. On an
+        // escaped leaf the compiled path renders the LITERAL text {n} — so
+        // the original .replace form was correct all along, and the named
+        // param fills nothing (named interpolation never touches the
+        // escaped-literal rendering), leaking "{n}" in every locale. Back to
+        // .replace — one regime, the leaf's pinned contract unchanged.
+        return this.translate(this.okfRepoGate.warnKey, '').replace('{n}', String(this.okfRepoGate.servingCount));
+      return '';
     }
   },
   watch: {
+    // Story 7.7 deep links: popup-card source links push ?tab=documents&file=
+    // — the watcher opens the SAME FileDetailsDialog the documents list uses.
+    '$route.query': {
+      handler(q) {
+        this.applyRouteQuery(q);
+      },
+      immediate: true
+    },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
       this.$forceUpdate();
@@ -2011,10 +2249,19 @@ export default {
 
     // Get current user data
     this.getCurrentUser();
+
+    // Crawl→OKF wizard hand-off relay (review !622 round 10, #78745): the
+    // crawl dialogs dispatch okf:create-from-crawl while the DOCUMENTS area
+    // is on screen, but the wizard listener lives in StudioTab — mounted only
+    // under the studio tab, so the event fired into the void. Relay it
+    // through the same switch-tab → nextTick dance
+    // onCreateOkfRepoFromSelection uses.
+    window.addEventListener('okf:create-from-crawl', this.relayCreateFromCrawl);
   },
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange);
+    window.removeEventListener('okf:create-from-crawl', this.relayCreateFromCrawl);
     // Cancel any in-flight search debounce so a timer firing after the
     // component unmounts doesn't call loadDocuments() on a destroyed
     // Vue instance (Vue 'target is readonly' warn + orphaned backend
@@ -2153,6 +2400,15 @@ export default {
 
     // Apply theme
     applyTheme(theme) {
+      // PERSIST ALWAYS (round 18, #80483): localStorage 'theme' — the only
+      // copy ThemeManager reads at boot — has exactly one writer: this
+      // method. The old same-theme early return (an echo-recursion guard)
+      // also skipped the MOUNT-time call, so a boot where the DOM indicator
+      // was set but storage was empty/cleared never persisted, and the next
+      // boot reverted to light even though the user had chosen dark. Echo
+      // protection now lives in handleThemeChange (the actual re-entry
+      // point); setTheme itself is idempotent.
+
       // Update local state
       this.currentTheme = theme;
 
@@ -2166,6 +2422,12 @@ export default {
     // Handle theme change event from other components
     handleThemeChange(event) {
       if (event.detail && event.detail.theme) {
+        // ECHO GUARD (stack-overflow fix 2026-09-09, moved here round 18
+        // #80483): themeManager.setTheme dispatches 'themeChange', which
+        // re-enters here. Dropping the echo — the same theme we just
+        // applied — breaks the cycle after exactly one bounce, while
+        // applyTheme stays free to persist at mount.
+        if (event.detail.theme === this.currentTheme) return;
         this.applyTheme(event.detail.theme);
       }
     },
@@ -3338,8 +3600,220 @@ export default {
             // User canceled, do nothing
           }
         });
+      } else if (action === 'delete') {
+        // #1042 BATCH DELETE, AMENDED 2026-10-10 (live): a selection mixing
+        // blocked rows (ingested/ingesting — they must be retracted first)
+        // with clean rows now deletes the CLEAN subset and says exactly
+        // what was skipped, instead of refusing the whole batch with a
+        // tooltip-only signal. All-blocked still refuses outright.
+        const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
+        const deletable = this.deletableSelection;
+        if (this.deleteRefuseReason && !deletable.length) {
+          // Nothing deletable — refuse clearly (the button is disabled too;
+          // this is the belt-and-braces path).
+          this.showNotification(this.deleteRefuseReason, 'error');
+          return;
+        }
+        const count = deletable.length;
+        this.showConfirmDialog({
+          title: this.translate('admin.documents.confirmDeleteTitle', 'Confirm Batch Deletion'),
+          message:
+            this.translate(
+              'admin.documents.confirmDeleteSelected',
+              `Are you sure you want to permanently delete {count} file(s)? This cannot be undone.`
+            ).replace('{count}', count) +
+            (blockedIds.size
+              ? ' ' +
+                this.translate(
+                  'admin.documents.confirmDeleteSkipped',
+                  '{count} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them.'
+                ).replace('{count}', String(blockedIds.size))
+              : ''),
+          confirmText: this.translate('admin.documents.delete', 'Delete'),
+          cancelText: this.translate('common.cancel', 'Cancel'),
+          onConfirm: async () => {
+            this.isLoading = true;
+            try {
+              // 2026-10-10: delete the CLEAN subset only — blocked rows stay
+              // selected (their refusal reason is visible on the strip).
+              const res = await documentFileService.deleteMultipleFiles(deletable);
+              const results = (res && res.results) || [];
+              const successCount = results.filter((r) => r.success).length;
+              const failed = results.filter((r) => !r.success);
+              const failureCount = failed.length;
+
+              if (failureCount === 0) {
+                this.showNotification(
+                  this.translate('admin.documents.deleteQueuedSuccess', '{count} file(s) deleted.').replace(
+                    '{count}',
+                    String(successCount)
+                  ),
+                  'success'
+                );
+                // Keep the blocked rows selected (they were NOT deleted);
+                // drop everything else.
+                this.selectedDocuments = [...blockedIds];
+              } else if (successCount === 0) {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate('admin.documents.deleteAllFailed', 'All {count} file(s) failed: {detail}')
+                    .replace('{count}', String(count))
+                    .replace('{detail}', detail),
+                  'error'
+                );
+                this.selectedDocuments = [...new Set([...failed.map((r) => r.fileId), ...blockedIds])];
+              } else {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.deletePartialFailure',
+                    '{successCount} of {count} deleted. Failed: {detail}'
+                  )
+                    .replace('{successCount}', String(successCount))
+                    .replace('{count}', String(count))
+                    .replace('{detail}', detail),
+                  'warning'
+                );
+                this.selectedDocuments = [...new Set([...failed.map((r) => r.fileId), ...blockedIds])];
+              }
+              try {
+                await this.loadDocuments();
+              } catch (reloadErr) {
+                console.warn('Reload after delete failed (toast already shown):', reloadErr);
+              }
+            } catch (error) {
+              // BUNDLE_PROTECTED surfaces server-side as 403 — surface the
+              // verbatim backend message so the steward knows the cause.
+              // httpService rejects with the PARSED envelope {status,
+              // statusText, data, message} — there is no `.response` on it
+              // (round 16, #80118: the axios-shape read left this branch
+              // dead and the steward got the generic error).
+              const code = error && error.data && (error.data.code || error.data.error);
+              const msg =
+                (error && error.data && (error.data.message || error.data.error)) ||
+                (error && error.message) ||
+                'unknown error';
+              this.showNotification(
+                code === 'BUNDLE_PROTECTED'
+                  ? msg
+                  : this.translate(
+                      'admin.documents.deleteQueuedError',
+                      'An error occurred during the batch deletion process.'
+                    ),
+                'error'
+              );
+              console.error('Batch delete error:', error);
+            } finally {
+              this.isLoading = false;
+            }
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          }
+        });
       }
       // You can add 'else if' blocks for other actions like 'delete' here
+    },
+
+    /**
+     * Story 3-6 entry point, per Amendment A decision #5 (David, 2026-09-27):
+     * "Create OKF repository" routes INTO THE WIZARD — the selection is
+     * preloaded into okf/selection.documents, the studio tab opens, and
+     * StudioTab seeds the wizard draft from the selection (Entry names the
+     * repo, Choose shows Documents preselected, Input carries the pick into
+     * Produce's conversion). The 7.7 import dialog path is retired here —
+     * one documents→repo path, the wizard.
+     */
+    /** Crawl→OKF hand-off relay (#78745): switch to the studio tab, wait the
+     * tick that lets StudioTab mount its wizard listener, then re-dispatch
+     * the event flagged so this relay never re-catches its own send.
+     * RELAY-MARKED ONLY (round 17, #80354): the AddFromLinkDialog still
+     * fires the LEGACY seed event — "pre-fill an already-open wizard,
+     * harmless no-op otherwise" per its own comment. Relaying that event
+     * teleported the steward out of Document Management into the 10-step
+     * wizard on every multi-page crawl, the opposite of harmless. Only
+     * events that carry the relay marker (or an explicit __wantsStudio
+     * flag) switch tabs; the legacy event stays a no-op. */
+    // ── STUDIO HAND-OFF DISPATCH (round 18, #80478) ────────────────────────
+    // OkfStudioTab is a defineAsyncComponent, and its pane mounts under
+    // v-if — on the FIRST activation of a session the chunk is not cached,
+    // so one $nextTick resolves before the component mounts and a dispatch
+    // fired there reaches zero listeners (selection lands in the store, the
+    // wizard never opens). StudioTab emits 'studio-ready' from mounted()
+    // once its listeners are registered; until then dispatches queue here
+    // and drain on that signal. A queued event is deferred, never lost.
+    dispatchWhenStudioReady(fire) {
+      // Ref present = the async component resolved AND mounted = listeners live.
+      if (this.$refs.okfStudioTab) fire();
+      else this.pendingStudioEvents.push(fire);
+    },
+    flushPendingStudioEvents() {
+      const queued = this.pendingStudioEvents;
+      this.pendingStudioEvents = [];
+      queued.forEach((fire) => fire());
+    },
+    async relayCreateFromCrawl(event) {
+      if (event && event.__okfRelayed) return;
+      // RELAY INTENT ONLY (#80466): a sender that wants the tab switch flags
+      // it (__wantsStudio). FileDetailsDialog's
+      // hand-off sets it; anything else is the legacy pre-fill
+      // event — StudioTab's already-open listener handles it or nobody does.
+      if (!event || !event.__wantsStudio) return;
+      // Flag guard (round 16, #80125): the relay is registered
+      // unconditionally, but with the flag parked the Studio pane's target
+      // module is not registered — switching the tab there renders a dead
+      // pane. Today every SENDER happens to be gated, but the relay must
+      // carry its own guard; the protection must not depend on the callers.
+      if (!isOkfEnabled()) return;
+      const detail = (event && event.detail) || {};
+      this.activeTab = 'studio';
+      this.dispatchWhenStudioReady(() => {
+        const relayed = new CustomEvent('okf:create-from-crawl', { detail });
+        relayed.__okfRelayed = true;
+        window.dispatchEvent(relayed);
+      });
+    },
+    async onCreateOkfRepoFromSelection() {
+      if (!this.okfRepoGate.visible) return;
+      // file_id, not the Arango _key — the selection holds file_id's and the
+      // studio's Produce leg routes conversions by file_id (review !622 wave 2,
+      // #78640: matching/mapping _key silently emptied the wizard's draft).
+      const keys = new Set(this.selectedDocuments);
+      const docs = this.documents.filter((doc) => keys.has(doc.file_id));
+      this.$store.commit('okf/setSelection', {
+        documents: docs.map((d) => ({ file_id: d.file_id, file_name: d.file_name }))
+      });
+      this.selectedDocuments = [];
+      this.activeTab = 'studio';
+      // Deferred via the ready handshake — see dispatchWhenStudioReady.
+      this.dispatchWhenStudioReady(() => {
+        window.dispatchEvent(new CustomEvent('okf:create-from-documents'));
+      });
+    },
+    /** Deep link (Story 7.7 provenance popup cards): ?tab=documents&file=<id>
+     * opens the Document Management tab with the FileDetailsDialog — the SAME
+     * details view used from the documents list. */
+    applyRouteQuery(q) {
+      if (!q) return;
+      // Deep links may only land on tabs this deployment actually offers —
+      // adminTabs is the flag-filtered rack, so a parked OKF flag also blocks
+      // ?tab=studio / ?tab=models from reopening the OKF panes (review !622
+      // wave 2, #78641: the raw assignment bypassed the flag entirely).
+      if (q.tab && this.adminTabs.some((t) => t.value === q.tab)) {
+        this.activeTab = q.tab;
+      }
+      if (q.tab === 'documents' && q.file) {
+        this.selectedFileId = q.file;
+        this.showDetailsDialog = true;
+        // One-shot deep link (David, 2026-09-14): scrub `file` from the URL
+        // immediately, so refreshing the app does NOT re-open the dialog —
+        // the dialog opening is a click-navigation effect, not URL state.
+        if (this.$router) {
+          const rest = Object.assign({}, q);
+          delete rest.file;
+          this.$router.replace({ query: rest }).catch(() => {});
+        }
+      }
     },
     // --- END: DOCUMENT METHODS ---
 
@@ -3462,6 +3936,15 @@ export default {
   padding: 0;
   box-sizing: border-box;
   font-family: var(--font-body);
+}
+
+/* 2026-10-10: the batch-delete refusal is a VISIBLE strip, not a tooltip
+   on a disabled button (the live "it failed" report). */
+.delete-refuse-strip {
+  align-self: center;
+  max-width: 40rem;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 /* Modal backdrop */

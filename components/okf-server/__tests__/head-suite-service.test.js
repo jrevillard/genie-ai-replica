@@ -30,10 +30,22 @@ jest.mock('../services/repository-service', () => ({
 jest.mock('../services/head-test-service', () => ({
   routingTest: jest.fn(),
   guardSuggestions: jest.fn(),
+  // #78665: runSuite prefetches the static per-row context through this
+  // export — the run tests below assert on routingTest behavior, not the
+  // sibling scan, so the default is an empty universe.
+  loadSiblings: jest.fn(async () => []),
   // 1-8g-b: the advisor's simulation embeds through the GATE's prefixed
   // contract now — the mock returns one vector per query by default.
   embedQueryBatch: jest.fn(async (queries) => ({
     vectors: queries.map(() => [0.1, 0.2, 0.3]),
+    prefixed: true,
+    model: 'test-model'
+  })),
+  // ROUND 23 (review 81251): the per-query Probe embeds through embedQuery
+  // — the single-query helper probeQueryLight itself uses (one contract,
+  // one vector space).
+  embedQuery: jest.fn(async () => ({
+    vector: [0.1, 0.2, 0.3],
     prefixed: true,
     model: 'test-model'
   }))
@@ -1837,6 +1849,10 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
         top_score: 0.83,
         verdict: 'answerable'
       });
+      // ROUND 23 (review 81271): the Probe embeds through the SINGLE-query
+      // gate helper — pinning it keeps the #80955 one-vector-space contract
+      // (a swap back to bare teiEmbed or the batch hand-roll fails here).
+      expect(headTestService.embedQuery).toHaveBeenCalledWith(query);
       // top_chunks are RERANK-ordered now (the rerank-best 0.83 leads,
       // not the vector-best 0.82) — the summary panel's order of truth
       expect(res.top_chunks[0].score).toBeCloseTo(0.83, 3);
@@ -1939,8 +1955,8 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
       process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
       const res = await svc.probeSuiteQuery('me', suite._key, { query: 'q' }, {});
       expect(res.verdict).toBe('unknown');
-      expect(res.note).toMatch(/HTTP 429 after 3 attempts/);
-      expect(global.fetch).toHaveBeenCalledTimes(3); // bounded — not an infinite loop
+      expect(res.note).toMatch(/HTTP 429 after 4 attempts/);
+      expect(global.fetch).toHaveBeenCalledTimes(4); // bounded — not an infinite loop
     } finally {
       global.fetch = realFetch;
       delete process.env.OKF_RERANK_ENDPOINT;

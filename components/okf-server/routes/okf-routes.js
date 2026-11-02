@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { requireScope } = require('../middleware/require-scope');
+const { requireScope, requireRepoScope } = require('../middleware/require-scope');
 const { requireRole } = require('../middleware/require-role');
 const retrievalConfigController = require('../controllers/retrieval-config-controller');
 const authzResolverController = require('../controllers/authz-resolver-controller');
@@ -72,7 +72,12 @@ const frontmatterService = require('../services/frontmatter-service');
 // minutes and can never fit a synchronous request — the gateway cuts the
 // browser long before any server-side timeout. 202 + poll, like every
 // other long-running Lab operation.
-router.post('/repos/:id/frontmatter/suggest', requireScope('admin'), async (req, res, next) => {
+// PER-REPO authz (round 21): these are repo-scoped operations under a
+// `/repos/:id/...` path — the round-20 global `requireScope('admin')` let
+// any admin-scoped caller into RESTRICTED repositories, unlike every other
+// per-repo route (repos-routes uses requireRepoScope). The param here is
+// `id`, not `repo_id`.
+router.post('/repos/:id/frontmatter/suggest', requireRepoScope('id', 'admin'), async (req, res, next) => {
   try {
     const job = frontmatterService.startSuggestTags(req.params.id, {});
     res.status(202).json({ repo_id: req.params.id, job_id: job.job_id, status: job.status });
@@ -80,7 +85,7 @@ router.post('/repos/:id/frontmatter/suggest', requireScope('admin'), async (req,
     next(err);
   }
 });
-router.get('/repos/:id/frontmatter/suggest/jobs/:jobId', requireScope('admin'), async (req, res, next) => {
+router.get('/repos/:id/frontmatter/suggest/jobs/:jobId', requireRepoScope('id', 'admin'), async (req, res, next) => {
   try {
     const job = frontmatterService.getSuggestJob(req.params.jobId);
     if (!job || job.repo_id !== req.params.id) {

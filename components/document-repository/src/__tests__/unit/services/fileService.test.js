@@ -428,8 +428,32 @@ describe('fileService', () => {
 
       const result = await fileService.deleteFile('file-123');
       expect(result).toBe(true);
-      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
       expect(fs.unlink).toHaveBeenCalledWith('./uploads/file-123.pdf');
+    });
+
+    it('refuses a still-serving document with a mapped 409 (#78744)', async () => {
+      // The serving guard mirrors the frontend blockedSelection list —
+      // 'ingested with warnings' IS serving (round-10 review, !622).
+      metadataService.getMetadataById.mockResolvedValue({
+        file_id: 'file-123',
+        file_name: 'test.pdf',
+        storage_path: './uploads/file-123.pdf',
+        dataprep: { status: 'Ingested with Warnings' }
+      });
+      // _terminateActiveCrawl runs BEFORE the guard — give it the same sane
+      // db stub the happy-path test uses.
+      const guardCursor = { next: jest.fn(), all: jest.fn().mockResolvedValue([]) };
+      fileService.getDb = jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue(guardCursor) });
+      let thrown = null;
+      try {
+        await fileService.deleteFile('file-123');
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeTruthy();
+      expect(thrown.statusCode).toBe(409);
+      expect(thrown.message).toContain('still serving');
+      expect(metadataService.deleteMetadata).not.toHaveBeenCalled();
     });
 
     it('should throw when file record not found', async () => {
@@ -897,6 +921,70 @@ describe('fileService', () => {
 
       const bindVars = mockDb.query.mock.calls[0][1];
       expect(bindVars.fileId).toBe('file-123');
+    });
+  });
+
+  // ROUND 23 (review 81273): the #80943 idempotency lookup's load-bearing
+  // AQL parts are pinned HERE — the route test (bundleIngest.test.js) mocks
+  // fileService wholesale and proves only the controller's decision. The
+  // pins: the is_bundle filter (without it a NON-bundle zip sharing
+  // repo_id+bundle_version is reused as 'the bundle'), and the sort on
+  // uploaded_date — the field the writers actually set (81380: the old
+  // uploaded_at sort was a no-op, newest-wins fell back to _key order and
+  // could hand back the OLDER zip).
+  describe('findBundleByRepoVersion', () => {
+    it('filters on is_bundle, sorts on the written timestamp field, binds both params', async () => {
+      const doc = {
+        file_id: 'fb-18',
+        file_name: 'demo.zip',
+        bundle_version: 18,
+        uploaded_date: '2026-11-01T00:00:00Z'
+      };
+      const mockCursor = { all: jest.fn().mockResolvedValue([doc]) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(mockCursor),
+        collection: jest.fn().mockReturnValue({ ensureIndex: jest.fn().mockResolvedValue({}) })
+      };
+      const { dbService } = require('../../__mocks__/shared-lib');
+      dbService.getConnection.mockResolvedValue(mockDb);
+      fileService._bundleIndexEnsured = false;
+
+      const found = await fileService.findBundleByRepoVersion('repo-1', 18);
+
+      const aql = mockDb.query.mock.calls[0][0];
+      expect(aql).toContain('f.is_bundle == true');
+      expect(aql).toContain('SORT f.uploaded_date DESC');
+      expect(aql).not.toContain('uploaded_at');
+      // ROUND 28 (review — ingest-bundle collision): the reuse lookup must
+      // only ever match PUBLISH-EXPORT bundles — a user-import doc under the
+      // same (repo_id, bundle_version) must be invisible to it, or a later
+      // publish retry adopts the user's zip (the substitution class the
+      // controller-side guard scoping fixed, re-entered through this lookup).
+      expect(aql).toContain("f.source == 'publish-export'");
+      expect(mockDb.query.mock.calls[0][1]).toEqual({ repoId: 'repo-1', v: 18 });
+      expect(found.file_id).toBe('fb-18');
+      expect(found.stored_at).toBe('2026-11-01T00:00:00Z');
+      // The lookup index (review 81260): ensured once, then cached.
+      expect(mockDb.collection).toHaveBeenCalledWith('files');
+      expect(mockDb.collection().ensureIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'persistent', fields: ['repo_id', 'bundle_version'] })
+      );
+      await fileService.findBundleByRepoVersion('repo-1', 18);
+      expect(mockDb.collection().ensureIndex).toHaveBeenCalledTimes(1);
+      fileService._bundleIndexEnsured = false;
+    });
+
+    it('returns null when no bundle doc matches', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(mockCursor),
+        collection: jest.fn().mockReturnValue({ ensureIndex: jest.fn().mockResolvedValue({}) })
+      };
+      const { dbService } = require('../../__mocks__/shared-lib');
+      dbService.getConnection.mockResolvedValue(mockDb);
+      fileService._bundleIndexEnsured = true; // already ensured this process
+
+      expect(await fileService.findBundleByRepoVersion('repo-1', 99)).toBeNull();
     });
   });
 });

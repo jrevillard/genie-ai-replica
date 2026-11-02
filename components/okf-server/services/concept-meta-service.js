@@ -20,7 +20,6 @@
 //    be silently un-blocked without a rescan, and indexed|failed transitions
 //    belong to the 2.9.4 worker alone.
 
-const axios = require('axios');
 const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const matter = require('gray-matter');
@@ -754,18 +753,24 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
   const headers = {};
   const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  const r = await axios.post(
+  // ROUND 23 (review 81255): this was the LAST raw-axios sibling of the
+  // adaptive client — the round-21 wave migrated topic-link-authoring with
+  // the comment "the last named straggler", and this call (same
+  // deploymentKey probe, same Authorization, same llm-url URL rule) was
+  // missed. One client: reasoning-model 400s negotiate here too.
+  const r = await require('./adaptive-llm-call').adaptiveChatCompletion({
     // Shared URL rule (services/llm-url.js): a versioned base keeps its
     // segment and takes /chat/completions; a bare host gets /v1 appended.
-    require('./llm-url').openAiChatUrl(rawBase),
-    {
+    url: require('./llm-url').openAiChatUrl(rawBase),
+    headers,
+    body: {
       model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 200,
       temperature: 0.0
     },
-    { timeout: chatTimeoutMs, headers }
-  );
+    timeoutMs: chatTimeoutMs
+  });
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }
 

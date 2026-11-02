@@ -1,8 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger } = require('../../shared-lib');
-const { dbService } = require('../../shared-lib');
+const { logger, dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler');
@@ -30,7 +29,15 @@ const CRAWL_KILL_POLL_MS = 500;
 // COLLECTION (errorNum 1203, "collection or view not found") and gateway
 // route-not-found — infrastructure faults that must be rethrown, not treated
 // as "job gone" (review 2026-10-29 round 3; mirrors crawlWorker.js).
-const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404 || e.code === 404);
+const isDocumentNotFound = (e) =>
+  !!e &&
+  (dbService._isExpectedAbsence(e) ||
+    // The HTTP-layer 404 shapes (statusCode on arangojs HTTP errors, code on
+    // driver errors) exist only on errors WITHOUT an Arango errorNum. An
+    // errorNum'd fault like 1203 (missing COLLECTION) is an infra error even
+    // when its HTTP code is 404 — rethrow, never "job gone" (review !622
+    // wave 2 / #78676: the unguarded arms re-admitted exactly that case).
+    (e.errorNum == null && (e.statusCode === 404 || e.code === 404)));
 
 class FileService {
   constructor() {
@@ -803,6 +810,23 @@ class FileService {
         throw new Error(`File record not found in database: ${fileId}`);
       }
 
+      // SERVING GUARD (review !622 round 10, #78744 — server mirror of the
+      // AdminDashboard blockedSelection list): a still-serving document must
+      // not lose its files doc + disk file while the served corpus references
+      // it. The frontend gate is UX; this is the contract.
+      const servingStatus =
+        file.dataprep &&
+        String(file.dataprep.status || '')
+          .toLowerCase()
+          .trim();
+      if (servingStatus === 'ingested' || servingStatus === 'ingesting' || servingStatus === 'ingested with warnings') {
+        const err = new Error(
+          `File ${fileId} is still serving the corpus (dataprep status: ${file.dataprep.status}) — retract it before deleting`
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
       // prepare file path for deletion
       const fileExtension = path.extname(file.file_name).slice(1);
       const fileNameOnDisk = file.file_id + '.' + fileExtension;
@@ -1026,6 +1050,70 @@ class FileService {
   // langdetect/allowlist/text-extraction (the bundle pipeline bypass).
   // The files doc carries graph_name + repo_id (metadataService.extractMetadata
   // persists them via the T5 fix).
+
+  /** Idempotency lookup for ingest-bundle (#80943): the stored zip for one
+   * (repo_id, bundle_version) — newest wins. null when none stored yet.
+   * Sort field (round 23, review 81380): the files docs carry
+   * `uploaded_date` (metadataService.extractMetadata), never `uploaded_at`
+   * — sorting on a field no writer sets made every row tie and the LIMIT 1
+   * fall back to Arango's _key order, so the "newest wins" could hand back
+   * the OLDER zip. `uploaded_date` is ISO-8601 UTC (toISOString), so
+   * lexicographic DESC is chronological — the timezone trap the :703
+   * comment avoided does not apply to an ISO string.
+   * Index (round 22 review 81260): the filter runs on every versioned
+   * publish-retry over a grow-only collection — a persistent index keeps
+   * it off the full scan. ensureIndex is idempotent; the flag keeps the
+   * DDL to one call per process. */
+  _bundleIndexEnsured = false;
+  async findBundleByRepoVersion(repoId, bundleVersion) {
+    const db = await dbService.getConnection();
+    if (!this._bundleIndexEnsured) {
+      try {
+        await db.collection('files').ensureIndex({
+          type: 'persistent',
+          fields: ['repo_id', 'bundle_version'],
+          name: 'idx_files_repo_id_bundle_version',
+          sparse: false
+        });
+        this._bundleIndexEnsured = true;
+      } catch (err) {
+        // A failed DDL must not take the lookup down — the query still
+        // works, just unindexed (logged, retried on the next call).
+        console.error('[FileService] bundle lookup index ensure failed:', err.message);
+      }
+    }
+    const rows = await (
+      await db.query(
+        // ROUND 28 (review — ingest-bundle collision): the reuse lookup must
+        // only ever match PUBLISH-EXPORT bundles. Without the source filter,
+        // a user-zip import that stored its own doc under the same
+        // (repo_id, bundle_version) could be adopted by a later publish
+        // retry — the same silent-substitution class the controller-side
+        // guard scoping fixed, re-entered through this lookup. Legacy docs
+        // (stored before `source` existed) have no source field and are
+        // missed by this filter: an interrupted-publish retry for such a
+        // version re-stores a second zip (the pre-#80943 behavior, rare and
+        // self-limiting — the upstream unchanged-fingerprint gate refuses
+        // normal same-version republishes anyway).
+        'FOR f IN files FILTER f.repo_id == @repoId && f.bundle_version == @v && f.is_bundle == true ' +
+          "&& f.source == 'publish-export' " +
+          'SORT f.uploaded_date DESC LIMIT 1 RETURN f',
+        { repoId, v: bundleVersion }
+      )
+    ).all();
+    const doc = rows[0];
+    return doc
+      ? {
+          file_id: doc.file_id || doc._key,
+          file_name: doc.file_name,
+          bundle_version: doc.bundle_version,
+          stored_at: doc.uploaded_date || doc._key,
+          graph_name: doc.graph_name,
+          repo_id: doc.repo_id
+        }
+      : null;
+  }
+
   async uploadBundle(buffer, bundleInfo = {}) {
     // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
     // the bundle file is associated with the OKF repo (repo_id + graph_name +
@@ -1067,6 +1155,10 @@ class FileService {
         graph_name: bundleInfo.graph_name,
         repo_id: bundleInfo.repo_id,
         bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null,
+        // ROUND 28 (review — ingest-bundle collision): the caller class rides
+        // the doc so the reuse lookup can tell publish-export zips from
+        // user-import zips (see findBundleByRepoVersion's source filter).
+        source: bundleInfo.source || null,
         ...(isBundle
           ? {
               is_bundle: true,
@@ -1097,3 +1189,7 @@ class FileService {
 }
 
 module.exports = new FileService();
+// Round 11 (!622): crawlWorker imports THE classifier instead of pasting a
+// twin — its private copy had already drifted (statusCode-only, no
+// errorNum guard) and re-admitted the 1203-infra-fault-as-"job gone" case.
+module.exports.isDocumentNotFound = isDocumentNotFound;

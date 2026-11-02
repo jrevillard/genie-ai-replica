@@ -51,7 +51,6 @@
  *   OKF_TOPIC_LINK_TIMEOUT_MS        per-call timeout (default 60000)
  */
 
-const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const modelCache = require('./vllm-model-cache');
@@ -242,18 +241,23 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   const headers = {};
   const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  const r = await axios.post(
+  // DW-437 (round 21): the last named straggler — this used to POST with raw
+  // axios while every other LLM leg rode adaptiveChatCompletion's param
+  // negotiation (a 400 that names a param drops exactly that param) and
+  // budget ladder. Same URL rule, same body — one client, not four.
+  const r = await require('./adaptive-llm-call').adaptiveChatCompletion({
     // Shared URL rule (services/llm-url.js) — versioned base or bare host.
-    require('./llm-url').openAiChatUrl(rawBase),
-    {
+    url: require('./llm-url').openAiChatUrl(rawBase),
+    headers,
+    body: {
       model,
       messages,
       temperature: 0.0,
       max_tokens: MAX_TOKENS,
       response_format: { type: 'json_object' }
     },
-    { timeout: chatTimeoutMs, headers }
-  );
+    timeoutMs: chatTimeoutMs
+  });
   return (r.data?.choices?.[0]?.message?.content || '').trim();
 }
 

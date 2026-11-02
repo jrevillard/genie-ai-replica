@@ -182,20 +182,54 @@ class HttpService {
       if (status === 401 && !originalRequest._retryCount) {
         originalRequest._retryCount = 1;
 
+        // A SERVER-SIDE failure on the retry (502/504/timeout/network) is NOT a
+        // dead session (David's 2026-10-11 logout: one transient failure threw
+        // the user to the login page and discarded a good session). Only a 401
+        // on the retried request may escalate to a redirect — and even then the
+        // stored user is checked first, so a live session is never discarded.
         try {
           const refreshedUser = await keycloakAuthService.signinSilent();
 
           if (refreshedUser?.access_token) {
             originalRequest.headers.Authorization = `Bearer ${refreshedUser.access_token}`;
-            return this.axios(originalRequest);
+            try {
+              return await this.axios(originalRequest);
+            } catch (retryError) {
+              // The retried request re-enters THIS interceptor: a second 401
+              // skips the refresh branch (._retryCount is set) and is
+              // normalized to the {status, ...} envelope — which carries NO
+              // .response. Read the status from both shapes, or the 401-on-
+              // retry case (the one the escalation below exists for) was
+              // unreachable and every retried 401 looked like a server-side
+              // problem (round 23, review 81378).
+              const retryStatus = retryError.response ? retryError.response.status : (retryError.status ?? null);
+              if (retryStatus !== 401) {
+                // Server-side problem: surface it verbatim. Redirecting here is
+                // how a gateway blip used to look like an expired session.
+                return Promise.reject(retryError);
+              }
+            }
           }
         } catch (refreshError) {
           console.error('[HttpService] Token refresh failed:', refreshError.message);
         }
 
-        // Refresh failed or no token — redirect to Keycloak login
-        if (typeof window !== 'undefined') {
-          await keycloakAuthService.login();
+        // The refresh yielded no usable token, or the retry came back 401 —
+        // the only two cases where the session may genuinely be gone. Check
+        // the STORED user before discarding it. The WHOLE escalation is
+        // guarded (round 16, #80131): a storage/session failure inside
+        // getUser()/login() must not replace the intended 401 rejection
+        // with an unrelated error shape — the caller always gets the
+        // {status, statusText, data, message} envelope below.
+        try {
+          const user = await keycloakAuthService.getUser();
+          if (!user || user.expired) {
+            if (typeof window !== 'undefined') {
+              await keycloakAuthService.login();
+            }
+          }
+        } catch (escalationError) {
+          console.error('[HttpService] Session escalation failed:', escalationError.message);
         }
 
         return Promise.reject({
@@ -220,17 +254,19 @@ class HttpService {
       // Emit user-facing error notification for all non-401 errors
       // (401 errors redirect to Keycloak login — the redirect IS the user feedback).
       // Callers may opt out with { silent: true } for probe-style lookups where a
-      // non-success response is an expected, handled outcome (e.g. crawl-job 404).
+      // non-success response is an expected, handled outcome (e.g. crawl-job 404,
+      // the OKF bundle manifest before the worker has settled it). Silent skips
+      // BOTH the toast and the console.error — the caller owns the outcome.
       if (!error.config?.silent) {
         notificationService.error(parsedError.message);
-      }
 
-      // Log only safe information (status, statusText, message) — NOT raw data or details
-      console.error('API response error:', {
-        status,
-        statusText,
-        message: parsedError.message
-      });
+        // Log only safe information (status, statusText, message) — NOT raw data or details
+        console.error('API response error:', {
+          status,
+          statusText,
+          message: parsedError.message
+        });
+      }
 
       return Promise.reject(errorData);
     } else if (error.request) {

@@ -119,7 +119,12 @@ describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25
         bundle_version: 1,
         is_bundle: true,
         originalFileName: 'demo-repo-v1.zip',
-        bundle: expect.any(String)
+        bundle: expect.any(String),
+        // ROUND 28 (review — ingest-bundle collision): the caller class must
+        // be declared — the doc-repo reuse guard fires ONLY for
+        // publish-export callers. Dropping this field silently re-opens the
+        // guard-skips-retry duplicate-zip path.
+        source: 'publish-export'
       }),
       expect.anything()
     );

@@ -54,6 +54,17 @@ jest.mock('../../services/serviceTreeService', () => ({
   }
 }));
 
+// Subject-area picker options (KH categories) — mocked so no network in jsdom.
+const mockLoadSubjectAreaOptions = jest.fn().mockResolvedValue([
+  { value: 'Water Supply', label: 'Water Supply' },
+  { value: 'Health Services', label: 'Health Services' }
+]);
+
+jest.mock('../../services/okfRepoOps', () => ({
+  __esModule: true,
+  default: { loadSubjectAreaOptions: (...a) => mockLoadSubjectAreaOptions(...a) }
+}));
+
 const mockNotificationSuccess = jest.fn();
 const mockNotificationError = jest.fn();
 const mockNotificationInfo = jest.fn();
@@ -73,6 +84,13 @@ jest.mock('../../eventBus', () => ({
     $off: jest.fn()
   }
 }));
+
+// Vuex dispatch for the OKF crawl→repo action (FileDetailsDialog
+// onCreateOkfFromCrawl → store 'okf/createFromCrawl'). Default: success.
+const mockStoreDispatch = jest.fn().mockResolvedValue({
+  ok: true,
+  repo: { repo_id: 'r-new', name: 'new-repo', concept_count: 1 }
+});
 
 jest.mock('../../config/oidcConfig', () => ({
   __esModule: true,
@@ -146,7 +164,8 @@ function createFileDetailsDialogWrapper(overrides = {}) {
         $store: {
           getters: {
             accessToken: 'mock-token-123'
-          }
+          },
+          dispatch: mockStoreDispatch
         },
         $router: { push: jest.fn() }
       },
@@ -294,6 +313,195 @@ describe('FileDetailsDialog', () => {
 
       const tabs = wrapper.vm.visibleTabs;
       expect(tabs.some((t) => t.value === 'ingestionLog')).toBe(false);
+    });
+
+    it('places Dashboard FIRST when crawlJob exists (crawl-created file)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      mockGetCrawlJob.mockResolvedValue({ status: 'Crawling' });
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+      wrapper.vm.crawlJob = { status: 'Crawling' };
+      await wrapper.vm.$nextTick();
+
+      const tabs = wrapper.vm.visibleTabs;
+      expect(tabs[0].value).toBe('dashboard');
+      expect(tabs[1].value).toBe('details');
+      expect(tabs[2].value).toBe('crawlLog');
+    });
+
+    it('keeps Details first when there is no crawl job (regular upload)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      mockGetCrawlJob.mockResolvedValue(null);
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+      await wrapper.vm.$nextTick();
+
+      const tabs = wrapper.vm.visibleTabs;
+      expect(tabs[0].value).toBe('details');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2026-09-01 — OKF crawl split footer + Dashboard-first tab after a crawl
+  // -------------------------------------------------------------------------
+  describe('OKF crawl split footer + Dashboard-first tab', () => {
+    // The footer is flag-gated (okfFlag fails CLOSED when a config exists
+    // without okfEnabled — jest setup.js always provides an APP_CONFIG), so
+    // this suite pins the flag ON explicitly: these tests exercise OKF
+    // surfaces that a flag-parked deployment legitimately hides.
+    beforeEach(() => {
+      window.APP_CONFIG = { ...window.APP_CONFIG, okfEnabled: '1' };
+    });
+    afterEach(() => {
+      delete window.APP_CONFIG.okfEnabled;
+    });
+
+    async function mountCrawlFile({ crawlStatus = 'Succeeded' } = {}) {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({ source_url: 'https://example.com/x', dataprep: { status: 'Pending' } })
+      );
+      mockGetCrawlJob.mockResolvedValue({ data: { status: crawlStatus, config: { url: 'https://example.com/x' } } });
+      const wrapper = createFileDetailsDialogWrapper();
+      // fetchData resolves across a few ticks (metadata → crawl-job lookup)
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      return wrapper;
+    }
+
+    it('auto-selects the Dashboard tab once when the file came from a crawl', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.crawlJob).toBeTruthy();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+    });
+
+    it('keeps Details selected for regular uploads (no crawl job)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.crawlJob).toBeNull();
+      expect(wrapper.vm.activeTab).toBe('details');
+    });
+
+    it('does not re-apply the Dashboard tab on a later refetch (locale change)', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+      // User switches to Details, then the locale watcher refetches
+      wrapper.vm.activeTab = 'details';
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.fetchData('test-file-123');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.activeTab).toBe('details');
+    });
+
+    it('renders the concept-split radios on the Dashboard tab after a succeeded crawl', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+
+      const footer = wrapper.find('.okf-split-footer');
+      expect(footer.exists()).toBe(true);
+
+      // THREE groups share the option styling: concept SPLIT (A/B/C),
+      // SUBJECT AREA (KH picker, David 2026-09-05) and concept
+      // CLASSIFICATION (heuristics/llm/hybrid).
+      const groups = wrapper.findAll('.okf-split-group');
+      expect(groups).toHaveLength(3);
+      expect(groups[0].find('.okf-split-title').text()).toContain('split');
+      expect(groups[1].find('.okf-split-title').text()).toContain('Subject area');
+      expect(groups[2].find('.okf-split-title').text().toLowerCase()).toContain('classification');
+
+      const splitOptions = groups[0].findAll('.okf-split-option');
+      expect(splitOptions).toHaveLength(3);
+      const splitRadios = splitOptions.map((o) => o.find('input[type="radio"]'));
+      expect(splitRadios[0].attributes('value')).toBe('B'); // per-page (recommended)
+      expect(splitRadios[0].element.disabled).toBe(false);
+      expect(splitRadios[1].attributes('value')).toBe('A'); // whole-crawl mega
+      expect(splitRadios[1].element.disabled).toBe(false);
+      expect(splitRadios[2].attributes('value')).toBe('C'); // LLM — deferred
+      expect(splitRadios[2].element.disabled).toBe(true);
+
+      const classOptions = groups[2].findAll('.okf-split-option');
+      expect(classOptions).toHaveLength(3);
+      const classRadios = classOptions.map((o) => o.find('input[type="radio"]'));
+      // ALL THREE strategies are selectable (David: Heuristics / LLM / Hybrid)
+      expect(classRadios.map((r) => r.attributes('value'))).toEqual(['heuristics', 'llm', 'hybrid']);
+      expect(classRadios.every((r) => !r.element.disabled)).toBe(true);
+      expect(classRadios[0].element.checked).toBe(true); // Heuristics default
+    });
+
+    it('requires a Subject Area before the crawl can become a repo, then rides the payload', async () => {
+      const wrapper = await mountCrawlFile();
+      await wrapper.vm.$nextTick(); // KH options load asynchronously
+      const createBtn = wrapper.findAll('button').find((b) => b.text().includes('Create OKF repository'));
+      // domain is immutable post-create — the button stays disabled until
+      // a KH category is picked (no silent 'General' birth).
+      expect(createBtn.attributes('disabled')).toBeDefined();
+      const opts = wrapper.findAll('.okf-domain-select option').map((o) => o.text());
+      expect(opts).toContain('Select a subject area…');
+      expect(opts).toContain('Water Supply');
+      wrapper.vm.okfDomain = 'Water Supply';
+      await wrapper.vm.$nextTick();
+      const createBtn2 = wrapper.findAll('button').find((b) => b.text().includes('Create OKF repository'));
+      expect(createBtn2.attributes('disabled')).toBeUndefined();
+      await wrapper.vm.onCreateOkfFromCrawl();
+      expect(mockStoreDispatch).toHaveBeenCalledWith(
+        'okf/createFromCrawl',
+        expect.objectContaining({ domain: 'Water Supply', splitMode: 'B', classification: 'heuristics' })
+      );
+    });
+
+    it('hides the split footer once the file is linked to an OKF repo', async () => {
+      const wrapper = await mountCrawlFile();
+      wrapper.vm.file = { ...wrapper.vm.file, okf_repo_id: 'r-existing' };
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.okf-split-footer').exists()).toBe(false);
+    });
+
+    it('splits mode B per page and mode A as one concept (okfSplitMode default B)', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.okfSplitMode).toBe('B');
+      const checked = wrapper.findAll('.okf-split-option input[type="radio"]').find((r) => r.element.checked);
+      expect(checked.attributes('value')).toBe('B');
+    });
+
+    it('classification defaults to heuristics and rides the create payload (David 2026-09-05)', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.okfClassification).toBe('heuristics');
+      // pick LLM-assisted — all three strategies are selectable
+      const llm = wrapper.findAll('.okf-split-option input[type="radio"]').find((r) => r.attributes('value') === 'llm');
+      await llm.setValue();
+      await wrapper.vm.onCreateOkfFromCrawl();
+      expect(mockStoreDispatch).toHaveBeenCalledWith(
+        'okf/createFromCrawl',
+        expect.objectContaining({ splitMode: 'B', classification: 'llm' })
+      );
+    });
+
+    it('success notice names the repo when the slug collided (name_adjusted)', async () => {
+      const wrapper = await mountCrawlFile();
+      mockStoreDispatch.mockResolvedValueOnce({ ok: true, repo: { repo_id: 'r1', name: 'x-2', name_adjusted: true } });
+      await wrapper.vm.onCreateOkfFromCrawl();
+      expect(mockStoreDispatch).toHaveBeenCalledWith(
+        'okf/createFromCrawl',
+        expect.objectContaining({ splitMode: 'B' })
+      );
+      const notice = mockEventBusEmit.mock.calls.map((c) => c[1]).find((p) => p && p.type === 'success');
+      expect(notice.message).toContain('x-2');
+    });
+
+    it('error notice when the store action reports failure', async () => {
+      const wrapper = await mountCrawlFile();
+      mockStoreDispatch.mockResolvedValueOnce({ ok: false, code: 'CREATE_FAILED' });
+      await wrapper.vm.onCreateOkfFromCrawl();
+      const notice = mockEventBusEmit.mock.calls.map((c) => c[1]).find((p) => p && p.type === 'error');
+      expect(notice).toBeTruthy();
     });
   });
 
@@ -678,6 +886,107 @@ describe('FileDetailsDialog', () => {
 
       const action = wrapper.vm.mainAction;
       expect(action.disabled).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 4e.5 — WS4 (David, 2026-09-25): bundle zip UI protection. Server-side
+  // WS2 (fileController.deleteFile) returns 403 BUNDLE_PROTECTED for Admin
+  // callers; this section locks down the UI equivalent so Delete + Retract
+  // are absent for bundle docs, and the OKF lifecycle badge is shown.
+  // -------------------------------------------------------------------------
+  describe('4e.5 — Bundle zip UI protection', () => {
+    it('hides the Delete button when is_bundle=true', async () => {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isBundle).toBe(true);
+      // The Delete button has v-if="!isBundle" — check the rendered DOM
+      // via the component's $refs / template compilation.
+      expect(wrapper.findAll('button').filter((b) => b.text().includes('Delete')).length).toBe(0);
+    });
+
+    it('suppresses the mainAction (no Retract button) when is_bundle=true', async () => {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      // WS4: bundle zips cannot be Retracted from the document management
+      // tab — OKF lifecycle owns their state. mainAction returns {} so no
+      // primary button is shown.
+      expect(wrapper.vm.isBundle).toBe(true);
+      expect(wrapper.vm.mainAction).toEqual({});
+    });
+
+    it('shows the OKF lifecycle badge for bundle docs', async () => {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      const badges = wrapper.findAll('.okf-file-bundle-badge');
+      expect(badges.length).toBe(1);
+      expect(badges.at(0).text()).toContain('managed by OKF lifecycle');
+    });
+
+    it('keeps Delete + Retract available for non-bundle docs (regression)', async () => {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: false,
+          dataprep: { status: 'Ingested' }
+        })
+      );
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: false,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isBundle).toBe(false);
+      // Non-bundle Ingested file: Delete button shown + mainAction is Retract.
+      expect(wrapper.findAll('button').filter((b) => b.text().includes('Delete')).length).toBeGreaterThan(0);
+      expect(wrapper.vm.mainAction.text).toContain('Retract');
+      expect(wrapper.findAll('.okf-file-bundle-badge').length).toBe(0);
     });
   });
 
@@ -1595,5 +1904,52 @@ describe('metadata editability on a degraded document', () => {
 
   it('still allows editing while a document is only pending', () => {
     expect(withStatus('Pending').vm.isMetadataEditable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 16, #80126 — the crawl-conversions strip must filter for THIS file
+// and for well-formed conversion envelopes, and sort by repo id. The store
+// map carries every crawl's conversion; an unfiltered (or shape-blind) read
+// rendered other files' conversions and crashed on conversion-less rows.
+// ---------------------------------------------------------------------------
+describe('FileDetailsDialog — fileConversions filter (#80126)', () => {
+  const withStoreConversions = (crawlConversions) =>
+    createFileDetailsDialogWrapper({
+      global: {
+        mocks: {
+          $store: {
+            getters: { accessToken: 'mock-token-123' },
+            dispatch: mockStoreDispatch,
+            state: { okf: { crawlConversions } }
+          }
+        }
+      }
+    });
+
+  it('keeps only THIS file’s conversions with a well-formed status', () => {
+    const wrapper = withStoreConversions({
+      a: { file_id: 'test-file-123', repo_id: 'repo-b', conversion: { status: 'done', pages_done: 3 } },
+      b: { file_id: 'OTHER-file', repo_id: 'repo-a', conversion: { status: 'done' } },
+      c: { file_id: 'test-file-123', repo_id: 'repo-c' }, // no conversion envelope
+      d: { file_id: 'test-file-123', repo_id: 'repo-d', conversion: { status: 7 } }, // non-string status
+      e: null // the worker's null placeholder rows
+    });
+    const rows = wrapper.vm.fileConversions;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ repo_id: 'repo-b', conversion: { status: 'done' } });
+  });
+
+  it('sorts multiple rows by repo id regardless of map insertion order', () => {
+    const wrapper = withStoreConversions({
+      x: { file_id: 'test-file-123', repo_id: 'zulu', conversion: { status: 'done' } },
+      y: { file_id: 'test-file-123', repo_id: 'alpha', conversion: { status: 'running' } }
+    });
+    expect(wrapper.vm.fileConversions.map((r) => r.repo_id)).toEqual(['alpha', 'zulu']);
+  });
+
+  it('an empty/missing store map degrades to an empty strip, never a crash', () => {
+    expect(withStoreConversions(undefined).vm.fileConversions).toEqual([]);
+    expect(withStoreConversions({}).vm.fileConversions).toEqual([]);
   });
 });

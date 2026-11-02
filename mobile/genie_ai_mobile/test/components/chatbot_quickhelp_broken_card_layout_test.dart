@@ -75,12 +75,6 @@ void main() {
 
   /// The phone-sized surface: at the desktop-sized default the tiles
   /// are wide enough to hide the defect the issue reports.
-  void usePhoneSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(360, 740);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-  }
-
   testWidgets(
     'a broken card leaves the grid and presents its diagnosis with real height',
     (tester) async {

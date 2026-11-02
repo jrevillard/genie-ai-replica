@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,46 +42,28 @@ void main() {
   setUp(resetChatbotTestState);
   tearDown(resetChatbotTestState);
 
-  void usePhoneSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(360, 740);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-  }
-
   bool isStringLoader(Widget w) =>
       w is SvgPicture && w.bytesLoader is SvgStringLoader;
 
   bool isAssetLoader(Widget w) =>
       w is SvgPicture && w.bytesLoader is SvgAssetLoader;
 
+  // The file-typed card's bundled asset, served by the mock: an
+  // unmocked asset load reports its failure AFTER the test completed
+  // (the errorBuilder answers the icon slot, but the framework still
+  // records the async exception).
+  const svgAssetKey = 'assets/config/quickhelp/just-chat.svg';
+  const svgBytes =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+      '<rect width="24" height="24"/></svg>';
+
   testWidgets('an inline icon renders from its markup string', (tester) async {
     usePhoneSurface(tester);
-    mockChatbotConfigAsset(tester, config);
-    // The file-typed card's bundled asset is served too: an unmocked
-    // asset load reports its failure AFTER the test completed (the
-    // errorBuilder answers the icon slot, but the framework still
-    // records the async exception) — serving the bytes keeps the
-    // failure list about what this suite asserts.
-    const svgAssetKey = 'assets/config/quickhelp/just-chat.svg';
-    const svgBytes =
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
-        '<rect width="24" height="24"/></svg>';
-    tester.binding.defaultBinaryMessenger.setMockMessageHandler(
-      'flutter/assets',
-      (ByteData? message) async {
-        if (message == null) return null;
-        final key = utf8.decode(message.buffer.asUint8List());
-        if (key == 'assets/config/genie-ai-config.json') {
-          return ByteData.sublistView(config);
-        }
-        if (key == svgAssetKey) {
-          return ByteData.sublistView(utf8.encode(svgBytes));
-        }
-        return null;
-      },
+    mockChatbotConfigAsset(
+      tester,
+      config,
+      extraAssets: {svgAssetKey: svgBytes},
     );
-    rootBundle.evict('assets/config/genie-ai-config.json');
-    rootBundle.evict(svgAssetKey);
     await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
     // The two cards carry exactly one icon each: the inline card's is

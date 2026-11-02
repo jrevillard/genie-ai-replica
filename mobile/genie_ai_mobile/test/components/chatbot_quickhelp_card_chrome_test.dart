@@ -35,12 +35,6 @@ void main() {
   setUp(resetChatbotTestState);
   tearDown(resetChatbotTestState);
 
-  void usePhoneSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(360, 740);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-  }
-
   testWidgets(
     "the tile chrome is a DsCard with the card scale's named constants",
     (tester) async {

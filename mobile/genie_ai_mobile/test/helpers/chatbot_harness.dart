@@ -54,23 +54,43 @@ Future<Uint8List> chatbotConfigBytesWithButtons(
   return Uint8List.fromList(utf8.encode(jsonEncode(config)));
 }
 
+/// The phone-sized surface the Quick Help layout tests mount on (360×
+/// 740 logical): at the desktop-sized default the tiles are wide
+/// enough to hide the defects the suites report.
+void usePhoneSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(360, 740);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 /// Serves the prepared configuration over the asset bundle's RAW
 /// messenger (a ByteData key in, a ByteData asset out — a MethodChannel
 /// mock never sees it). Every other key returns null, which degrades a
 /// card icon to its neutral fallback instead of failing the test. The
 /// bundle CACHES asset reads, so the eviction is what makes the mock
 /// visible.
-void mockChatbotConfigAsset(WidgetTester tester, Uint8List configBytes) {
+void mockChatbotConfigAsset(
+  WidgetTester tester,
+  Uint8List configBytes, {
+  Map<String, String> extraAssets = const {},
+}) {
   tester.binding.defaultBinaryMessenger.setMockMessageHandler(
     'flutter/assets',
     (ByteData? message) async {
       if (message == null) return null;
       final key = utf8.decode(message.buffer.asUint8List());
-      if (key != 'assets/config/genie-ai-config.json') return null;
-      return ByteData.sublistView(configBytes);
+      if (key == 'assets/config/genie-ai-config.json') {
+        return ByteData.sublistView(configBytes);
+      }
+      final extra = extraAssets[key];
+      if (extra == null) return null;
+      return ByteData.sublistView(utf8.encode(extra));
     },
   );
   rootBundle.evict('assets/config/genie-ai-config.json');
+  for (final key in extraAssets.keys) {
+    rootBundle.evict(key);
+  }
 }
 
 /// Tears the chatbot tests' singletons down: the font scale and theme

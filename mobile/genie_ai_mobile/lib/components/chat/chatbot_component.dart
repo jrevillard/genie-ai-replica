@@ -2741,9 +2741,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   final String inlineSvg =
                                       button['iconInlineSvg']?.toString() ?? '';
                                   final QuickHelpCardStyles cardStyles =
-                                      button['styles']
-                                          as QuickHelpCardStyles? ??
-                                      const QuickHelpCardStyles();
+                                      button['styles'] as QuickHelpCardStyles;
                                   final bool dark =
                                       Theme.of(context).brightness ==
                                       Brightness.dark;

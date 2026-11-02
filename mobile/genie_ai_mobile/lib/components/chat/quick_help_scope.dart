@@ -144,6 +144,14 @@ QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
   );
 }
 
+/// Whether [button] claims the composer placement — the web's strict
+/// `placement === 'composer'` compare, ONE copy beside the other
+/// config-vocabulary rules: a non-string placement is a tile, on both
+/// platforms.
+bool quickHelpIsComposerPlaced(Map<String, dynamic> button) {
+  return button['placement'] == 'composer';
+}
+
 /// The Quick Help section of a runtime configuration, parsed under
 /// [locale]: the grid layout and the loaded buttons. One resolve pass,
 /// the way the web runs it — the descent to `features.chat.quickHelp`

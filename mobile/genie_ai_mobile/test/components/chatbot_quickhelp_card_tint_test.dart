@@ -71,12 +71,6 @@ void main() {
   setUp(resetChatbotTestState);
   tearDown(resetChatbotTestState);
 
-  void usePhoneSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(360, 740);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-  }
-
   /// The Card the tile's shell renders — the resolved chrome.
   Card cardOf(WidgetTester tester, String title) {
     final inkWell = find.ancestor(

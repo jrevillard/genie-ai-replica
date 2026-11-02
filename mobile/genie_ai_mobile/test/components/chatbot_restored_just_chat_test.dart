@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';

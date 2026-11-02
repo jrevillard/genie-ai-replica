@@ -957,7 +957,15 @@ class ConversationScopeResolver {
       // other button tag is CONSUMED here (counted as a sidebar tag, it
       // read as a dropped label and refused the follow-up forever).
       final otherButtons = tagList
-          .where((other) => other != tag && _buttons.containsKey(other))
+          .where(
+            (other) =>
+                other != tag &&
+                // The reserved tag binds to no button — not even when the
+                // configuration still declares an entry with that id: its
+                // labels and verdict stay out of the union.
+                other != justChatTagId &&
+                _buttons.containsKey(other),
+          )
           .map((other) => _buttons[other]!)
           .toList();
       final labels = [

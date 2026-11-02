@@ -517,17 +517,29 @@ void main() {
       expect(scope.droppedTags, isEmpty);
     });
 
-    test('a duplicated just-chat tag counts once, and refuses nothing', () {
-      // The resolver keeps duplicate tags (the saved count feeds the
-      // send guard); a repeated RESERVED tag is still no scope — the
-      // second copy must not come back as a dropped tag.
+    test('a declared just-chat entry stays out of a mixed tag list', () {
+      // The reserved tag binds to NO button — not even when the config
+      // still declares an entry with that id. Its declared labels must
+      // not join the union a button tag's restore replays.
+      final declaringEntry = [
+        {
+          'id': 'civil',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+        {
+          'id': 'just-chat',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
       final scope = convResolver(
-        const [],
-      ).resolve(tags: const ['just-chat', 'just-chat'], categoryKey: '2');
+        declaringEntry,
+      ).resolve(tags: const ['civil', 'just-chat'], categoryKey: '2');
 
-      expect(scope.quickHelpButtonId, 'just-chat');
-      expect(scope.sidebarTagCount, 0);
-      expect(scope.droppedTags, isEmpty);
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.serviceLabelsEn, ['Births']);
+      expect(scope.quickHelpScopeState, isNotNull);
     });
 
     test('a web-saved numeric id tag restores the scope', () {

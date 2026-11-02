@@ -611,10 +611,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // scope carries the ones selected beside the button.
     _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
     // The tags the restore could not carry, named in the context bar.
-    // An outage's empty tree names every tag dropped: the caption stays
-    // quiet until a tree that can actually judge the tags is here (the
-    // re-resolve below re-applies it).
-    _deadScopeTags = _treeUnavailable ? const [] : scope.droppedTags;
+    // An OUTAGE of either source the restore resolved against names tags
+    // it cannot judge: an empty tree reads every label dropped, and an
+    // unreadable configuration loses the button index — a button id then
+    // falls to the sidebar branch and reads as a dead tag. The caption
+    // stays quiet (the outage is visible in the grid), and the recovery
+    // re-resolve re-applies the real verdict.
+    _deadScopeTags = _treeUnavailable || _quickHelpLoadFailed
+        ? const []
+        : scope.droppedTags;
     // How many sidebar tags the conversation was saved with: a tag
     // the hierarchy no longer carries is dropped from the labels, and
     // the send guard refuses it instead of letting it vanish.
@@ -2189,10 +2194,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   ),
                   child: Row(
                     children: [
+                      // The icon follows the caption: a scope the restore
+                      // cannot carry is a failure — the broken Quick Help
+                      // cards' warning, not the hint bulb.
                       Icon(
-                        Icons.lightbulb_outline,
+                        _deadScopeTags.isNotEmpty
+                            ? Icons.warning_amber_rounded
+                            : Icons.lightbulb_outline,
                         size: 20,
-                        color: tokens.accent,
+                        color: _deadScopeTags.isNotEmpty
+                            ? tokens.danger
+                            : tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(

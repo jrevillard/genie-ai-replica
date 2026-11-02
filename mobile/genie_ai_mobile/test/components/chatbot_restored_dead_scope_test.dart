@@ -1,6 +1,7 @@
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -74,6 +75,10 @@ void main() {
     // The caption reads as a failure: the same danger token the broken
     // Quick Help cards render their diagnosis in.
     expect(caption.style?.color, ThemeManager().tokens.danger);
+    // The bar's icon follows the caption — the broken cards' warning,
+    // not the hint bulb.
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.lightbulb_outline), findsNothing);
   });
 
   testWidgets('a live restore shows no caption', (tester) async {
@@ -87,6 +92,9 @@ void main() {
 
     expect(find.text('Context: Civil Registry'), findsOneWidget);
     expect(find.textContaining('no longer carries'), findsNothing);
+    // A live scope keeps the hint bulb.
+    expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
   });
 
   testWidgets('a dead tag with no live category edge still names itself', (
@@ -137,6 +145,41 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Context: Civil Registry'), findsOneWidget);
+      expect(find.textContaining('no longer carries'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a Quick Help config outage stays quiet and the recovery names the tag',
+    (tester) async {
+      // The tree loads but the CONFIG asset read fails: the restore
+      // loses the button index, and the button tag falls to the sidebar
+      // branch — naming it dead would misread a raw config id as a
+      // hierarchy change. The caption stays quiet (the title, judged by
+      // the healthy tree, stands); the recovery re-restores with the
+      // config back and names the genuinely absent tag.
+      final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+        'flutter/assets',
+        (ByteData? message) async {
+          if (message == null) return null;
+          final key = utf8.decode(message.buffer.asUint8List());
+          if (key != 'assets/config/genie-ai-config.json') return null;
+          return null; // the failed read
+        },
+      );
+      rootBundle.evict('assets/config/genie-ai-config.json');
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+      expect(find.text('Context: Civil Registry'), findsOneWidget);
+      expect(find.textContaining('no longer carries'), findsNothing);
+
+      mockChatbotConfigAsset(tester, configBytes);
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
       expect(find.textContaining('no longer carries'), findsOneWidget);
     },
   );
@@ -208,8 +251,7 @@ class _DeadScopeMockClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
-    final locale =
-        Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
+    final locale = request.url.queryParameters['locale'] ?? 'en';
     if (path.contains('/api/service-categories/categories')) {
       _treeRequests += 1;
       final failFirst = failFirstCounts[locale];

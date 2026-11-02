@@ -259,38 +259,12 @@
       ansible.builtin.set_fact:
         _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
 
-    - name: Build the data-dir exclusion chain (the dir + its ancestors)
-      # For ./data the chain is [deploy_dir/data]; for a nested absolute
-      # override (/opt/genieai/state/data) it is
-      # [deploy_dir/state, deploy_dir/state/data]; for an override OUTSIDE
-      # deploy_dir the intermediate spellings never match real children
-      # and prune to a harmless no-op.
-      # NO default() on the accumulator: the play var is initialized []
-      # in this play's vars, so a default would be dead code — and if the
-      # initializer were ever removed, a default([data_dir_resolved])
-      # seed would silently build [data_dir, …, data_dir] (the loop
-      # already emits the full dir as its final element). An undefined
-      # var here must be a LOUD template error instead.
-      ansible.builtin.set_fact:
-        # deploy_dir_resolved (group_vars), NOT raw deploy_dir: a
-        # trailing-slash override would embed '/opt/genieai//data' into the
-        # -path patterns, which find never matches — both prunes would die
-        # silently (verified by execution).
-        _fix_payload_data_chain: >-
-          {{ _fix_payload_data_chain + [deploy_dir_resolved ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list)[0:idx + 1] | join('/')] }}
-      vars:
-        _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
-      loop: "{{ range(1, _rel_parts | length + 1) | list }}"
-      loop_control:
-        index_var: idx
-      # A degenerate data_dir == deploy_dir override relpaths to '.': the
-      # 'deploy_dir/.' prefix never matches find's -path patterns, so the
-      # prune would silently disable ITSELF and the heal would chown -R
-      # across the uid-1000 data handover. Skip the degenerate spelling —
-      # the chain renders EMPTY and the prune-expr builder below emits the
-      # database_backups + secrets arms (no leading -o), so the heal never
-      # crosses the uid-1000 handover the migration performs.
-      when: (_rel_parts[0:idx + 1] | join('/')) != '.'
+    # The prefix chain (deploy_dir → data_dir) is derived ONCE in
+    # tasks/compute-ancestors.yml — the intermediate-ancestor handover in
+    # the shared migration tasks slices the SAME fact, so the payload
+    # prune list and the depth-0 ancestor handover cannot drift apart.
+    - name: Build the data-dir exclusion chain (shared derivation)
+      ansible.builtin.import_tasks: tasks/compute-ancestors.yml
 
     - name: Build the find prune expression from the chain
       ansible.builtin.set_fact:

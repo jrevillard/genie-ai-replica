@@ -315,11 +315,21 @@ workflow:
     # convergence (backend-init finishes first; victorialogs-init can run
     # minutes longer), and TESTING.md requires a converged stack.
     - |
+      INITS_TIMEOUT=0
       for i in $(seq 1 60); do
-        RUNNING_INITS=$(docker compose ps --status running --format '{{.Service}}' 2>/dev/null | grep -- '-init$' || true)
+        # 'running' AND 'restarting': an init sitting in bounded-restart
+        # backoff is not 'running' but the gate still inspects it — the
+        # wait covers both or it converges on iteration 1 and the gate
+        # reports a phantom UNINSPECTABLE violation.
+        RUNNING_INITS=$(docker compose ps --format '{{.Service}} {{.State}}' 2>/dev/null | awk '$2=="running" || $2=="restarting" {print $1}' | grep -- '-init$' || true)
         if [ -z "$RUNNING_INITS" ]; then echo "One-shot inits converged"; break; fi
         echo "Waiting for one-shot inits to converge: $RUNNING_INITS ($i/60)"; sleep 5
+        INITS_TIMEOUT=1
       done
+      if [ "$INITS_TIMEOUT" = "1" ] && [ -n "$RUNNING_INITS" ]; then
+        echo "INIT CONVERGENCE TIMEOUT after 300s: $RUNNING_INITS still active — the gate needs a converged stack (TESTING.md); fix the slow init instead of chasing a phantom root process."
+        exit 1
+      fi
     - bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"
   artifacts:
     when: always

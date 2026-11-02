@@ -326,12 +326,18 @@ else
     violations=$((violations + 1))
   fi
   rm -f "$find_err" "$find_out"
-  # the directory itself must grant gid-101 traverse+read (a root:root
-  # 0700 dir shadows even a correctly-owned key)
-  dir_bad=$(find "$secrets_dir" -maxdepth 0 ! -perm -0050 -print)
-  if [ -n "$dir_bad" ]; then
-    echo "SECRETS DIR NOT GROUP-TRAVERSABLE (needs group r-x for the gid-101 edge): $dir_bad"
-    violations=$((violations + 1))
+  # the directory itself must BE group-101 AND grant it traverse+read —
+  # but ONLY when there is something to read: an EMPTY directory (the
+  # self-signed path — the certs are generated inside the container)
+  # cannot crash-loop the edge on an unreadable key, and a developer
+  # checkout cannot chgrp a directory it does not own. A populated dir
+  # with a wrong group/mode is the crash-loop shape.
+  if [ -n "$(find "$secrets_dir" -type f -print -quit)" ]; then
+    dir_bad=$(find "$secrets_dir" -maxdepth 0 ! \( -perm -0050 -a -group 101 \) -print)
+    if [ -n "$dir_bad" ]; then
+      echo "SECRETS DIR NOT GROUP-TRAVERSABLE (needs group r-x for the gid-101 edge): $dir_bad"
+      violations=$((violations + 1))
+    fi
   fi
 fi
 

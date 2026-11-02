@@ -1,0 +1,40 @@
+---
+# compute-ancestors (#1227) — the ONE derivation of the deploy_dir →
+# data_dir prefix chain, imported by the manager play (before the payload
+# ownership pass consumes it) and by the shared migration tasks (the
+# intermediate-ancestor handover slices it). Previously derived TWICE by
+# two formulas tied together by a prose "keep the two in step" comment —
+# the drift class the extraction exists to kill. Consumers:
+#   _fix_payload_data_chain — [prefix_1, …, prefix_N] (prefix_N IS the
+#   data dir); the prune-expr builder and the ancestor handover both
+#   slice it.
+- name: Build the data-dir exclusion chain (the dir + its ancestors)
+  # For ./data the chain is [deploy_dir/data]; for a nested absolute
+  # override (/opt/genieai/state/data) it is
+  # [deploy_dir/state, deploy_dir/state/data]; for an override OUTSIDE
+  # deploy_dir the intermediate spellings never match real children
+  # and prune to a harmless no-op.
+  # default([]) is REQUIRED here: the manager play initializes the
+  # accumulator as a play var, the swarm_workers play does not — the
+  # shared file must be self-contained. (In the manager the default is
+  # dead code, harmless.)
+  ansible.builtin.set_fact:
+    # deploy_dir_resolved (group_vars), NOT raw deploy_dir: a
+    # trailing-slash override would embed '/opt/genieai//data' into the
+    # -path patterns, which find never matches — both prunes would die
+    # silently (verified by execution).
+    _fix_payload_data_chain: >-
+      {{ _fix_payload_data_chain | default([]) + [deploy_dir_resolved ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list)[0:idx + 1] | join('/')] }}
+  vars:
+    _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
+  loop: "{{ range(1, _rel_parts | length + 1) | list }}"
+  loop_control:
+    index_var: idx
+  # A degenerate data_dir == deploy_dir override relpaths to '.': the
+  # 'deploy_dir/.' prefix never matches find's -path patterns, so the
+  # prune would silently disable ITSELF and the heal would chown -R
+  # across the uid-1000 data handover. Skip the degenerate spelling —
+  # the chain renders EMPTY and the prune-expr builder emits the
+  # database_backups + secrets arms (no leading -o), so the heal never
+  # crosses the uid-1000 handover the migration performs.
+  when: (_rel_parts[0:idx + 1] | join('/')) != '.'

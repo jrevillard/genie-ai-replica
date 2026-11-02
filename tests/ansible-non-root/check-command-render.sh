@@ -36,11 +36,15 @@ grep -q '^    _fix_payload_data_chain: \[\]' "$TMP/vars.frag" ||
 grep -q '_fix_payload_ownership_cmd:' "$TMP/vars.frag" ||
   fail "could not extract _fix_payload_ownership_cmd from $DEPLOY"
 
-awk '/^    - name: Build the find prune expression/{exit} /^    - name: Build the data-dir exclusion chain/{p=1} p{print}' \
-  "$DEPLOY" > "$TMP/chain.frag"
+# the chain builder lives in tasks/compute-ancestors.yml (the ONE shared
+# derivation the migration's ancestor handover slices) — not in deploy.yml.
+# That file is a TASKS file (tasks at 0-indent); the render playbook needs
+# them at 4, so the fragment is re-indented after extraction.
+awk '/- name: Build the find prune expression/{exit} /- name: Build the data-dir exclusion chain/{p=1} p{print}' \
+  deploy/ansible/tasks/compute-ancestors.yml | sed 's/^/    /' > "$TMP/chain.frag"
 awk '/^    - name: Define deploy files/{exit} /^    - name: Build the find prune expression/{p=1} p{print}' \
   "$DEPLOY" > "$TMP/prune.frag"
-grep -q '_fix_payload_data_chain +' "$TMP/chain.frag" ||
+grep -q '_fix_payload_data_chain' "$TMP/chain.frag" ||
   fail "could not extract the chain-builder task from $DEPLOY"
 grep -q '_fix_payload_prune_expr' "$TMP/prune.frag" ||
   fail "could not extract the prune-expr task from $DEPLOY"

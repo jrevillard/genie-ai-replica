@@ -506,7 +506,10 @@ function validateComposeNonRoot(composeText) {
       // an unterminated spelling here left the WHOLE file unenforced
       // (vacuous green) or, for the top-level volumes: block, turned its
       // keys into userless 'services' (loud false positives)
-      inServices = /^services:\s*(?:#.*)?$/.test(trimmed) || /^"services":/.test(trimmed);
+      // the top-level key may be quoted either way ('services': is legal
+      // YAML compose accepts — only the double-quoted spelling was
+      // recognized once, leaving the gate silently vacuous on the file)
+      inServices = /^services:\s*(?:#.*)?$/.test(trimmed) || /^['"]services['"]:\s*(?:#.*)?$/.test(trimmed);
       continue;
     }
     // reserved top-level keys end the services scope
@@ -1210,7 +1213,7 @@ function collectServiceNames(composeText) {
       (line.match(/^[a-z][\w-]*:\s*(?:#.*)?$/) || line.match(/^["'][\w.-]+["']:\s*(?:#.*)?$/)) &&
       !line.startsWith(' ')
     ) {
-      inServices = /^services:\s*(?:#.*)?$/.test(line.trim()) || /^"services":/.test(line.trim());
+      inServices = /^services:\s*(?:#.*)?$/.test(line.trim()) || /^['"]services['"]:\s*(?:#.*)?$/.test(line.trim());
     } else if (inServices) {
       // same comment/flow/anchor tolerance as the main parser's service
       // detector — the two notions of "a service exists" must stay one

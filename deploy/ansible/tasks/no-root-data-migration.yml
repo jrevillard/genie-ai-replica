@@ -38,6 +38,11 @@
       {{ data_dir_resolved in ['/', '.']
          or (deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/')) }}
 
+- name: Build the data-dir exclusion chain (shared derivation)
+  # The manager play imports this BEFORE its payload pass; the worker
+  # path needs it here. Idempotent: re-setting the same fact.
+  ansible.builtin.import_tasks: tasks/compute-ancestors.yml
+
 - name: Fail loud on a parent-relative data_dir override (#1227)
   # A '../'-prefixed spelling resolves through the formula to a host path
   # OUTSIDE deploy_dir (../data -> <parent>/data) that is neither '/' nor
@@ -47,11 +52,17 @@
   # supported overrides are absolute (or the ./data default), so this
   # spelling is always a mistake — fail loud like the '~' assert above.
   ansible.builtin.assert:
-    that: data_dir is not match('^\.\.')
+    # ANY '..' PATH COMPONENT escapes deploy_dir through normpath, not
+    # just a leading one: './../data' and 'x/../../y' resolve outside too
+    # (verified) — the prefix-only '^\.\.' matcher once let them through
+    # to the root tasks below.
+    # search (NOT match): re.match anchors at position 0 and a leading
+    # './' hides the '/..' component from it
+    that: data_dir is not search('(^|/)\.\.(/|$)')
     fail_msg: >-
-      data_dir must be absolute (or the default ./data): a parent-relative
-      '../' override escapes deploy_dir and would make the root tasks act
-      on an unmanaged host path.
+      data_dir must be absolute (or the default ./data): a '..' path
+      component escapes deploy_dir and would make the root tasks act on
+      an unmanaged host path.
     quiet: true
 
 - name: Fail loud on an unsupported ~-rooted data_dir override (#1227)
@@ -115,29 +126,27 @@
   # UNDER an ancestor (deploy_dir/state/other) is never probed, healed or
   # swept — the ancestor's own ownership is enforced here, its other
   # children are the operator's tree.
-  # The range covers only INTERMEDIATE prefixes (idx 0..len-2): the last
-  # prefix IS the data dir, already handed over above; for a top-level
-  # data dir the range is empty. (Same prefix formula as the manager
-  # play's prune-chain builder — keep the two in step.)
+  # The loop slices the SHARED derivation (tasks/compute-ancestors.yml,
+  # imported above): [0:-1] = every prefix except the LAST, which IS the
+  # data dir already handed over above; for a top-level or degenerate
+  # data dir the chain renders one/zero entries and the slice is empty.
   become: true
   become_user: root
   ansible.builtin.file:
-    path: "{{ deploy_dir_resolved ~ '/' ~ (_rel_parts[0:idx + 1] | join('/')) }}"
+    path: "{{ item }}"
     state: directory
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
+  # An override OUTSIDE deploy_dir renders ..-prefixed chain entries; the
+  # prune builder treats them as harmless no-op find patterns, but THIS
+  # task acts through the file module, which NORMALIZES the joins —
+  # without this guard it would chown /opt, / and /srv to ansible_user
+  # (rendered and confirmed). parts[0] == '..' means EVERY entry escapes
+  # deploy_dir: skip the whole loop.
+  when: _rel_parts[0] != '..'
   vars:
     _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
-  loop: "{{ range(0, _rel_parts | length - 1) | list }}"
-  loop_control:
-    index_var: idx
-  # An override OUTSIDE deploy_dir relpaths to ../..-prefixed parts; the
-  # -path chain builder prunes to a harmless no-op there (find never
-  # matches ..-spells), but THIS task acts through the file module, which
-  # NORMALIZES the joins — without this guard it would chown /opt, / and
-  # /srv to ansible_user (rendered and confirmed). parts[0] == '..' means
-  # EVERY prefix escapes deploy_dir: skip the whole loop.
-  when: _rel_parts[0] != '..'
+  loop: "{{ _fix_payload_data_chain[0:-1] }}"
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left

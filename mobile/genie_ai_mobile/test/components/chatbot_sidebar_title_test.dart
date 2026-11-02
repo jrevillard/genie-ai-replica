@@ -60,6 +60,7 @@ void main() {
     _LocaleMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
   }) async {
+    mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(
       tester,
       mock,
@@ -75,22 +76,21 @@ void main() {
                   // The page's own mapping (main.dart's
                   // _onServiceSelected): display name and EN
                   // wire labels travel to the chat together.
+                  final serviceLabelsEn =
+                      (selection['serviceLabelsEn'] as List<dynamic>? ??
+                              const <dynamic>[])
+                          .map((e) => e.toString())
+                          .where((e) => e.isNotEmpty)
+                          .toList();
                   chatKey?.currentState?.setCategoryContext(
                     selection['category_id'] ?? selection['id'] ?? '',
                     selection['name'] ?? 'Unknown Service',
                     categoryNameEn:
                         selection['categoryNameEn']?.toString() ?? '',
-                    serviceLabelsEn:
-                        (selection['serviceLabelsEn'] as List<dynamic>? ??
-                                const <dynamic>[])
-                            .map((e) => e.toString())
-                            .where((e) => e.isNotEmpty)
-                            .toList(),
+                    serviceLabelsEn: serviceLabelsEn,
                     serviceCount:
                         (selection['serviceCount'] as num?)?.toInt() ??
-                        ((selection['serviceLabelsEn'] as List<dynamic>? ??
-                                const <dynamic>[])
-                            .length),
+                        serviceLabelsEn.length,
                   );
                 },
               ),
@@ -109,7 +109,6 @@ void main() {
         treesByLocale: {'en': enTree, 'es': esTree},
       );
       final chatKey = GlobalKey<ChatBotComponentState>();
-      mockChatbotConfigAsset(tester, configBytes);
       await pumpChatWithTree(tester, mock, chatKey: chatKey);
 
       // Pick the one labelled service: the context bar installs the
@@ -140,7 +139,6 @@ void main() {
     tester,
   ) async {
     final mock = _LocaleMockClient(treesByLocale: {'en': enTree, 'es': esTree});
-    mockChatbotConfigAsset(tester, configBytes);
     await pumpChatWithTree(tester, mock);
 
     // At mount the panel and the chatbot each fetch the 'en' tree.
@@ -165,7 +163,6 @@ void main() {
       statusByLocale: {'es': 503},
     );
     final chatKey = GlobalKey<ChatBotComponentState>();
-    mockChatbotConfigAsset(tester, configBytes);
     await pumpChatWithTree(tester, mock, chatKey: chatKey);
 
     await tester.tap(find.text('Civil Registry'));
@@ -204,7 +201,6 @@ void main() {
         holdFromCounts: {'es': 1},
       );
       final chatKey = GlobalKey<ChatBotComponentState>();
-      mockChatbotConfigAsset(tester, configBytes);
       await pumpChatWithTree(tester, mock, chatKey: chatKey);
 
       await tester.tap(find.text('Civil Registry'));
@@ -253,7 +249,6 @@ void main() {
         holdFromCounts: {'es': 2},
       );
       final chatKey = GlobalKey<ChatBotComponentState>();
-      mockChatbotConfigAsset(tester, configBytes);
       await pumpChatWithTree(tester, mock, chatKey: chatKey);
 
       await tester.tap(find.text('Civil Registry'));

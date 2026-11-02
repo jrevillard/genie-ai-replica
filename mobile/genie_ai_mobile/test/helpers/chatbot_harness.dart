@@ -110,9 +110,10 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
 ///
 /// [buildHome] replaces the default screen — a test that mounts its own
 /// widgets around the chatbot (a service tree panel above it) passes
-/// them here. It receives the MOUNTED chatbot, so the constructor's
-/// arguments stay in [chatBotUnderTest] and a builder that wants the
-/// chatbot under test mounts THIS widget — not a second copy. It is a
+/// them here. It receives the chatbot WIDGET to mount — the
+/// constructor's arguments stay in [chatBotUnderTest], and a builder
+/// that wants the chatbot under test mounts THIS widget, not a second
+/// copy. It is a
 /// BUILDER, not a widget: the harness rebuilds the
 /// screen on every locale change, and a widget instance reused across
 /// rebuilds is not rebuilt at all.

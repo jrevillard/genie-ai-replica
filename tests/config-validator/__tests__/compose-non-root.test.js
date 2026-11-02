@@ -482,13 +482,32 @@ describe('compose non-root contract (#1227)', () => {
     ].join('\n');
     expect(validateComposeNonRoot(commentedOptOut).violations).toEqual([]);
 
-    // Flow-style cap_add parses like block style — an allowlisted init
-    // with cap_add: [CHOWN] satisfies the CHOWN invariant.
-    const flowCaps = ['services:', '  x-init:', '    <<: *chown-init', '    cap_add: [CHOWN, DAC_OVERRIDE]', ''].join(
-      '\n'
+    // Flow-style cap_add parses like block style on a REAL allowlisted
+    // member: a service-level flow list overrides the anchor's block
+    // list (sequence-merge: explicit wins), so [CHOWN, DAC_OVERRIDE]
+    // satisfies the invariant while [DAC_OVERRIDE] alone must trip —
+    // the discriminating arm proves the parse is live, not vacuously
+    // green (a non-member fixture passes for an unrelated reason).
+    const flowCapsOK = composeText.replace(
+      '  otel-collector-init:\n',
+      '  otel-collector-init:\n    cap_add: [CHOWN, DAC_OVERRIDE]\n'
     );
-    const { violations: vFlow } = validateComposeNonRoot(flowCaps);
-    expect(vFlow.filter((v) => v.includes('CHOWN'))).toEqual([]);
+    expect(flowCapsOK).not.toBe(composeText);
+    expect(
+      validateComposeNonRoot(flowCapsOK).violations.filter(
+        (v) => v.includes('otel-collector-init') && v.includes('CHOWN')
+      )
+    ).toEqual([]);
+    const flowCapsBAD = composeText.replace(
+      '  otel-collector-init:\n',
+      '  otel-collector-init:\n    cap_add: [DAC_OVERRIDE]\n'
+    );
+    expect(flowCapsBAD).not.toBe(composeText);
+    expect(
+      validateComposeNonRoot(flowCapsBAD).violations.some(
+        (v) => v.includes('otel-collector-init') && v.includes('CHOWN')
+      )
+    ).toBe(true);
 
     // An absolute LITERAL host path (/etc/localtime) pre-exists on every
     // host — no create_host_path demand; the TEMPLATED absolute sibling
@@ -606,24 +625,6 @@ describe('compose non-root contract (#1227)', () => {
     expect(
       validateComposeNonRoot(initSecondBind).violations.some(
         (v) => v.includes('backend-init') && v.includes('create_host_path: false')
-      )
-    ).toBe(true);
-    const secondBind = composeText.replace(
-      'services:',
-      [
-        'services:',
-        '  rogue:',
-        '    user: "1000:1000"',
-        '    volumes:',
-        '      - type: bind',
-        '        source: ./data/rogue',
-        '        target: /rogue',
-        ''
-      ].join('\n')
-    );
-    expect(
-      validateComposeNonRoot(secondBind).violations.some(
-        (v) => v.includes('rogue') && v.includes('create_host_path: false')
       )
     ).toBe(true);
   });

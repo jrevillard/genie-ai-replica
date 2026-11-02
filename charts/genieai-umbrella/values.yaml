@@ -200,11 +200,14 @@ ingress:
   # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
   # the overlay sets http:// there or every login redirect mismatches.
   scheme: https
-  # Gateway API tier (Plan 6 Phase 2). Off by default: the laptop overlay
-  # reaches the stack through `kubectl port-forward` of the Envoy
-  # data-plane Service, which needs no Gateway. Turn this on when an
-  # Envoy Gateway (or any controller implementing the `envoy` class)
-  # fronts the release.
+  # Gateway API tier. Off by default: a deployment CAN reach the release
+  # without it, but by port-forwarding the individual Services (backend,
+  # keycloak) — the Envoy data-plane Service is NOT such a path: its
+  # proxy pods exist only once a Gateway reconciles (the controller
+  # provisions them from the CR), so port-forwarding Envoy presumes this
+  # tier. Turn it on when an Envoy Gateway (or any controller
+  # implementing the `envoy` class) fronts the release; the laptop
+  # overlay ships it on.
   enabled: false
   # GatewayClass the Gateway binds to. The controller that owns the class
   # is a cluster prerequisite (scripts/install-prereqs.sh installs Envoy

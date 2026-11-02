@@ -6,6 +6,10 @@ import '../keycloak_config.dart';
 // IMPORTANT: Also add an entry for this flavor to _flavorTable in
 // keycloak_config.dart, so getConfig() resolves it and the startup error
 // messages mention it.
+// If this flavor turns allowInsecureConnections on, also update the
+// expected list in test/config/keycloak_config_test.dart and add a release
+// guard test file + test:flutter invocation for it — see
+// test/config/keycloak_config_insecure_release_dev_test.dart.
 
 final config = KeycloakConfig(
   keycloakUrl: 'https://keycloak.<institution>.int',

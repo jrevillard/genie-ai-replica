@@ -460,6 +460,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpButtons,
           _activeQuickHelpIdentity,
         );
+
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
         }

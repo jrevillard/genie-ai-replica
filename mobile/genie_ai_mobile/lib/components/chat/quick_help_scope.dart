@@ -997,10 +997,16 @@ class ConversationScopeResolver {
       final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
-      // unscoped (a silent widening) while the web kept the edge.
+      // unscoped (a silent widening) while the web kept the edge. The
+      // RESERVED scope binds to no button: a legacy 'category.<id>' tag
+      // beside it is then the only carrier of the saved category, and it
+      // wins over the edge the same way the sidebar branch lets it — the
+      // web's per-tag forEach keeps processing after the reserved chip.
       // The configuration names its category; the hierarchy's own key is
       // what the conversation's edge speaks.
-      final effectiveCategory = category == null
+      final effectiveCategory = button == null
+          ? _legacyCategoryIdOf(tagList) ?? categoryKey
+          : category == null
           ? categoryKey
           : _hierarchy.categoryIdFor(category);
       return ConversationScope(
@@ -1042,16 +1048,7 @@ class ConversationScopeResolver {
     // 'category.general' is the no-scope placeholder: it contributes
     // nothing. The legacy tag wins over the conversation's own edge —
     // it IS the scope the conversation was saved with.
-    final legacyCategory = RegExp(r'^category\.(.+)$').firstMatch(
-      tagList.firstWhere(
-        (tag) => tag.startsWith('category.'),
-        orElse: () => '',
-      ),
-    );
-    final String? legacyCategoryId =
-        legacyCategory != null && declaresCategoryScope(legacyCategory.group(1))
-        ? legacyCategory.group(1)
-        : null;
+    final String? legacyCategoryId = _legacyCategoryIdOf(tagList);
     final sidebarTags = tagList
         .where((tag) => !tag.startsWith('category.'))
         .toList();
@@ -1084,6 +1081,24 @@ class ConversationScopeResolver {
 /// and the send guard read the same fact.
 List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
     tags.where((tag) => !kept.contains(tag)).toList();
+
+/// The category key a LEGACY `category.<id>` tag names — the old
+/// restore's spelling for a category-only scope, read from the FIRST
+/// such tag. Null when no tag names a category, or the placeholder
+/// 'category.general' does ('general' declares no scope). Every branch
+/// that can meet the tag reads this one rule: the sidebar branch gives
+/// it priority over the conversation's own edge — it IS the scope the
+/// conversation was saved with — and the reserved just-chat branch
+/// weights it the same, the way the web's per-tag forEach keeps
+/// processing after the reserved chip.
+String? _legacyCategoryIdOf(List<String> tagList) {
+  final match = RegExp(r'^category\.(.+)$').firstMatch(
+    tagList.firstWhere((tag) => tag.startsWith('category.'), orElse: () => ''),
+  );
+  return match != null && declaresCategoryScope(match.group(1))
+      ? match.group(1)
+      : null;
+}
 
 /// Whether a committed restore should be re-resolved now that a source it
 /// depended on (the hierarchy, the config) settled.

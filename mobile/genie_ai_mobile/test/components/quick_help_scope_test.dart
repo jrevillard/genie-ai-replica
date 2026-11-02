@@ -542,6 +542,25 @@ void main() {
       expect(scope.quickHelpScopeState, isNotNull);
     });
 
+    test('a legacy category tag beside just-chat carries the scope', () {
+      // The web's forEach keeps processing after the reserved chip: a
+      // legacy 'category.<id>' tag in the same list sets the saved
+      // category as the scope. The reserved branch binds to no button,
+      // so the legacy tag is the only carrier of that category — letting
+      // the partition swallow it would answer unfiltered a conversation
+      // saved with a scope (a silent widening).
+      final scope = convResolver(
+        const [],
+      ).resolve(tags: const ['just-chat', 'category.2']);
+
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+      expect(scope.serviceLabelsEn, isEmpty);
+      expect(scope.sidebarTagCount, 0);
+      expect(scope.droppedTags, isEmpty);
+    });
+
     test('a web-saved numeric id tag restores the scope', () {
       // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
       // is string-typed and the index keys the stringified id — the

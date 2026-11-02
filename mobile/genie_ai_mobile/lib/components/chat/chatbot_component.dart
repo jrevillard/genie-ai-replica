@@ -83,7 +83,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> get messages => _messages;
-  bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
@@ -1617,28 +1616,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
-  /// The surface a Quick Help card paints. In light mode a declared
-  /// `backgroundColor` paints as-is; in dark mode the declared
-  /// background is ignored — a pale step whose chroma cannot carry a
-  /// hue at surface depth, and unreadable against the near-white dark
-  /// foreground — and the card derives from the declared
-  /// `outlineColor` instead: the outline's colour at the LIVE surface
-  /// token's lightness, the same derivation shape the web paints its
-  /// dark cards with, without copying the web's constants. An
-  /// undeclared field falls back to the surface token.
-  Color _quickHelpCardBackground(
-    QuickHelpCardStyles? styles,
-    AppTokens tokens,
-    bool dark,
-  ) {
-    if (!dark) return styles?.background ?? tokens.surface;
-    final Color? outline = styles?.outline;
-    if (outline == null) return tokens.surface;
-    return HSLColor.fromColor(
-      outline,
-    ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor();
-  }
-
   /// The full-width row a BROKEN Quick Help card renders as, above the
   /// healthy grid: the card's diagnosis at natural height. A broken
   /// card cannot be used, so the row carries no gesture; its border
@@ -1655,7 +1632,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // itself in the danger BORDER (the web's .config-error overrides
     // only the border too); the surface keeps the deployment's colour.
     return _quickHelpCardShell(
-      background: _quickHelpCardBackground(
+      background: quickHelpCardBackgroundFor(
         button['styles'] as QuickHelpCardStyles,
         tokens,
         dark,
@@ -2238,6 +2215,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final theme = Theme.of(context);
     final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
+    // The Quick Help cards derive ONCE per build, before the overlay
+    // gate: the same scope derivation feeds both display halves, and
+    // the gate reads the derived lists — a broken composer-only
+    // configuration mounts (its diagnosis row has a channel), a
+    // healthy composer-only one does not (every entry targets a
+    // surface the platform lacks, and an empty overlay shell under the
+    // greeting would render the nothing the config asked for).
+    final (:broken, :healthy) = quickHelpPartitionButtons(
+      _quickHelpButtons,
+      (button) => _treeUnavailable
+          ? QuickHelpScopeResolver.unavailableScopeFor(button)
+          : (_scopeResolver?.stateFor(button) ??
+                QuickHelpScopeResolver.pending),
+    );
+    // The grid's source: the healthy TILE placements. A healthy
+    // composer-placed entry has no mobile surface.
+    final gridButtons = [
+      for (final button in healthy)
+        if (!quickHelpIsComposerPlaced(button)) button,
+    ];
     // One read of the verdict the bar renders: the gate, the icon and
     // the caption below all follow it.
     final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;
@@ -2642,19 +2639,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
           // Quick Help Overlay
           if (_showQuickHelpOverlay &&
-              // A composer-only configuration has NO mobile surface:
-              // every entry targets the composer the platform lacks,
-              // and an empty overlay shell under the greeting would
-              // render the nothing the config asked for.
-              _quickHelpButtons.any(
-                (button) =>
-                    !quickHelpIsComposerPlaced(button) ||
-                    // A composer entry with no title is broken in every
-                    // tree state: the overlay mounts so its diagnosis
-                    // row has a channel. (A scope-only breakage stays
-                    // hidden — the gate cannot consult the resolver.)
-                    quickHelpTitleMissing(button),
-              ) &&
+              (broken.isNotEmpty || gridButtons.isNotEmpty) &&
               _treeSettled)
             Container(
               color: tokens.bg,
@@ -2688,36 +2673,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           _quickHelpLayout,
                         );
 
-                        // The cards split ONCE per build, over the
-                        // FULL loaded list, on the SAME scope derivation
-                        // for both halves: a broken card — a scope the
-                        // tree cannot verify, or a card with no title —
-                        // leaves the fixed-aspect grid for a full-width
-                        // row whose height follows its text, because
-                        // the tile's aspect ratio gives its diagnosis
-                        // caption a box smaller than one line of text.
-                        // The healthy cards keep the compact grid.
-                        final (:broken, :healthy) = quickHelpPartitionButtons(
-                          _quickHelpButtons,
-                          (button) => _treeUnavailable
-                              ? QuickHelpScopeResolver.unavailableScopeFor(
-                                  button,
-                                )
-                              : (_scopeResolver?.stateFor(button) ??
-                                    QuickHelpScopeResolver.pending),
-                        );
-
                         // ONE scroll view for rows and grid: an outage
                         // breaks EVERY card, and a column of full-width
                         // rows can exceed the viewport. The grid gives
                         // up its own scrolling for the shared one.
-                        // The grid's source: the healthy TILE
-                        // placements. A healthy composer-placed entry
-                        // has no mobile surface.
-                        final gridButtons = [
-                          for (final button in healthy)
-                            if (!quickHelpIsComposerPlaced(button)) button,
-                        ];
                         return SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2760,7 +2719,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       button['iconInlineSvg']?.toString() ?? '';
                                   final QuickHelpCardStyles cardStyles =
                                       button['styles'] as QuickHelpCardStyles;
-                                  final bool dark = isDark;
 
                                   return Material(
                                     color: Colors.transparent,
@@ -2770,10 +2728,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       ),
                                       onTap: () => _quickHelpPressed(button),
                                       child: _quickHelpCardShell(
-                                        background: _quickHelpCardBackground(
+                                        background: quickHelpCardBackgroundFor(
                                           cardStyles,
                                           tokens,
-                                          dark,
+                                          isDark,
                                         ),
                                         borderColor:
                                             cardStyles.outline ??

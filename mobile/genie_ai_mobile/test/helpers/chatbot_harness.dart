@@ -88,7 +88,8 @@ void mockChatbotConfigAsset(
     },
   );
   rootBundle.evict('assets/config/genie-ai-config.json');
-  for (final key in extraAssets.keys) {
+  _mockedExtraAssetKeys = extraAssets.keys.toSet();
+  for (final key in _mockedExtraAssetKeys) {
     rootBundle.evict(key);
   }
 }
@@ -98,6 +99,12 @@ void mockChatbotConfigAsset(
 /// name the next test's mount), the locale, and the asset mock (the
 /// handler AND the bundle's CACHE of the mutated bytes — a later test
 /// reading the real asset must not get a cache hit serving them).
+/// The extra asset keys the LAST mockChatbotConfigAsset call served —
+/// the teardown evicts them, so a later test loading the same key
+/// without mocking it gets the degradation path, not the previous
+/// test's cached bytes.
+Set<String> _mockedExtraAssetKeys = <String>{};
+
 void resetChatbotTestState() {
   // ThemeManager persists every set through the shared_preferences
   // plugin; without an in-memory mock the unhandled MissingPluginException
@@ -109,6 +116,10 @@ void resetChatbotTestState() {
   TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
       .setMockMessageHandler('flutter/assets', null);
   rootBundle.evict('assets/config/genie-ai-config.json');
+  for (final key in _mockedExtraAssetKeys) {
+    rootBundle.evict(key);
+  }
+  _mockedExtraAssetKeys = <String>{};
 }
 
 /// The chatbot widget the harness mounts. Its constructor's arguments

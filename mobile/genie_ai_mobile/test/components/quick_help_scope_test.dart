@@ -2346,6 +2346,17 @@ void main() {
 
       // The 6-digit form parses as before; an unparseable value is a
       // null field, the token fallback.
+      // The #RGBA shorthand doubles its digits, alpha last: #A9B6 is
+      // RRGGBBAA AA99BB66, the blue-gray at alpha 0x66.
+      final shorthand = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#A9B6'},
+      }, 'en');
+      expect(
+        (shorthand['styles'] as QuickHelpCardStyles).outline,
+        const Color(0x66AA99BB),
+      );
+
       final plain = parseQuickHelpButton({
         ...shippedButton,
         'styles': {'backgroundColor': '#D9E2EA', 'outlineColor': 'nope'},

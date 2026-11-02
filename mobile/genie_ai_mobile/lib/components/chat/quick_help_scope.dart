@@ -1,6 +1,8 @@
 import 'dart:ui' show Color;
+import 'package:flutter/painting.dart' show HSLColor;
 
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
@@ -133,7 +135,8 @@ class QuickHelpCardStyles {
 }
 
 /// A colour in the styles block's own vocabulary — the web's CSS in its
-/// HEX forms only (#RGB, #RRGGBB, and #RRGGBBAA with the alpha LAST);
+/// HEX forms only (#RGB, #RGBA, #RRGGBB, and #RRGGBBAA with the alpha
+/// LAST);
 /// the shipped configurations are hex-only. A named colour or a
 /// functional notation (rgb()/hsl()/color-mix()) is NOT parsed — it is
 /// a null field and the token fallback paints, a divergence the
@@ -146,6 +149,17 @@ class QuickHelpCardStyles {
 Color? parseStylesHexColor(dynamic value) {
   if (value is! String) return null;
   final cleaned = value.replaceAll('#', '');
+  // #RGBA: each digit doubles, and the alpha still re-joins first.
+  if (cleaned.length == 4) {
+    final doubled = cleaned.split('').map((c) => c * 2).join();
+    try {
+      return Color(
+        int.parse(doubled.substring(6, 8) + doubled.substring(0, 6), radix: 16),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
   if (cleaned.length == 8) {
     try {
       return Color(
@@ -176,6 +190,28 @@ QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
 /// platforms.
 bool quickHelpIsComposerPlaced(Map<String, dynamic> button) {
   return button['placement'] == 'composer';
+}
+
+/// The surface a Quick Help card paints, from its declared tint. In
+/// light mode a declared background paints as-is; in dark mode the
+/// declared background is ignored — a pale step whose chroma cannot
+/// carry a hue at surface depth, and unreadable against the near-white
+/// dark foreground — and the card derives from the declared outline
+/// instead: the outline's colour at the LIVE surface token's lightness,
+/// the same derivation shape the web paints its dark cards with,
+/// without copying the web's constants. An undeclared field falls back
+/// to the surface token.
+Color quickHelpCardBackgroundFor(
+  QuickHelpCardStyles styles,
+  AppTokens tokens,
+  bool dark,
+) {
+  if (!dark) return styles.background ?? tokens.surface;
+  final Color? outline = styles.outline;
+  if (outline == null) return tokens.surface;
+  return HSLColor.fromColor(
+    outline,
+  ).withLightness(HSLColor.fromColor(tokens.surface).lightness).toColor();
 }
 
 /// The Quick Help section of a runtime configuration, parsed under

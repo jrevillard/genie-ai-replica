@@ -45,9 +45,21 @@ void main() {
     'placement': 'composer',
   };
 
+  // A composer-only entry whose declared scope the tree cannot
+  // verify: broken by the RESOLVER (the title is present), the case
+  // the gate's title check cannot see.
+  final scopeBrokenComposerCard = <String, dynamic>{
+    'id': 'scope-broken-composer-id',
+    'title': {'en': 'Just Chat'},
+    'category': '99',
+    'serviceLabels': ['Gone'],
+    'placement': 'composer',
+  };
+
   late Uint8List config;
   late Uint8List composerOnlyConfig;
   late Uint8List brokenComposerOnlyConfig;
+  late Uint8List scopeBrokenComposerOnlyConfig;
   late Uint8List brokenComposerConfig;
   setUpAll(() async {
     config = await chatbotConfigBytesWithButtons([
@@ -58,6 +70,9 @@ void main() {
     composerOnlyConfig = await chatbotConfigBytesWithButtons([composerCard]);
     brokenComposerOnlyConfig = await chatbotConfigBytesWithButtons([
       brokenComposerCard,
+    ]);
+    scopeBrokenComposerOnlyConfig = await chatbotConfigBytesWithButtons([
+      scopeBrokenComposerCard,
     ]);
     brokenComposerConfig = await chatbotConfigBytesWithButtons([
       brokenComposerCard,
@@ -123,6 +138,28 @@ void main() {
       // the diagnosis row has a channel.
       final caption = find.textContaining('no title in this language');
       expect(caption, findsOneWidget);
+      expect(
+        find.ancestor(of: caption, matching: find.byType(GridView)),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'a scope-broken composer-only configuration mounts its diagnosis row',
+    (tester) async {
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, scopeBrokenComposerOnlyConfig);
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
+
+      // The declared category/labels left the tree: the resolver
+      // verdict is broken, and the overlay mounts so the diagnosis row
+      // has a channel — the gate reads the derived partition, not a
+      // title heuristic.
+      final caption = find.textContaining('category no longer exists');
+      expect(caption, findsOneWidget);
+      // The diagnosis row is not a grid tile (the empty grid widget
+      // itself still mounts — the outage presentation's own shape).
       expect(
         find.ancestor(of: caption, matching: find.byType(GridView)),
         findsNothing,

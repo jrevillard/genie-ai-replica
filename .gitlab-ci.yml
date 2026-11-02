@@ -3740,7 +3740,9 @@ config:docs-links:
 config:api-client:
   extends: .node_base
   stage: config
-  dependencies: []
+  # A drift gate is only useful while the pipeline is still cheap to
+  # retry: start at launch instead of after the lint and test stages.
+  needs: []
   before_script:
     # openapi-generator-cli is Java-based: a JRE for the generator jar, bash
     # (the script is a bash script) and GNU diff (the staleness diff uses
@@ -3756,10 +3758,13 @@ config:api-client:
     # The spec extraction executes only swagger-jsdoc (swagger-definition.js
     # and swagger-schemas.js have no npm requires of their own), so instead
     # of a full backend npm ci (~500 MB of runtime deps) install that one
-    # package at the version the backend pins. Node resolves the require
-    # from the backend dir up to this root-level node_modules.
+    # package at the version the backend pins, into a --omit=dev root
+    # install (a plain named install also reifies this repo's root
+    # package.json dev tree — Playwright included). Node resolves the
+    # require from the backend dir up to this root-level node_modules.
     - SWAGGER_JSDOC_VERSION=$(node -p "require('./components/gov-chat-backend/package.json').dependencies['swagger-jsdoc']")
-    - npm install --no-save --no-package-lock --prefix ${CI_PROJECT_DIR} "swagger-jsdoc@${SWAGGER_JSDOC_VERSION}"
+    - '[ -n "$SWAGGER_JSDOC_VERSION" ] || { echo "swagger-jsdoc is no longer a production dependency of components/gov-chat-backend — the version pin cannot be resolved"; exit 1; }'
+    - npm install --omit=dev --no-save --no-package-lock --prefix ${CI_PROJECT_DIR} "swagger-jsdoc@${SWAGGER_JSDOC_VERSION}"
   script:
     - npm run api-client:check
   cache:
@@ -3784,7 +3789,16 @@ config:api-client:
         - "openapitools.json"
         - ".gitlab-ci.yml"
       when: on_success
+    # Same filter for branch pipelines (changes compares against the
+    # previous SHA on pushes; pipeline sources without one — schedules, web
+    # — run the job, which is what keeps validating main between merges).
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      changes:
+        - "components/gov-chat-backend/**/*"
+        - "mobile/genie_ai_mobile/openapi_client/**/*"
+        - "scripts/generate-api-client.sh"
+        - "openapitools.json"
+        - ".gitlab-ci.yml"
       when: on_success
 
 # Validate CHANGELOG.md has an entry for the version being released

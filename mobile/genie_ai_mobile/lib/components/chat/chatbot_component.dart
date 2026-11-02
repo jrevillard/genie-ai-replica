@@ -460,6 +460,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpButtons,
           _activeQuickHelpIdentity,
         );
+
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
         }
@@ -566,11 +567,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         : null;
     // The button the conversation's tag names — ONE lookup (the same
     // shared one the locale re-title reads), and both reads below
-    // (the title, the outage state) resolve the same entity.
-    final button = quickHelpButtonById(
-      _quickHelpButtons,
-      scope.quickHelpButtonId,
-    );
+    // (the title, the outage state) resolve the same entity. The
+    // RESERVED just-chat scope is titled and judged WITHOUT a button —
+    // the web builds its chip from the id alone — so the lookup is
+    // skipped here; the locale re-title, like the web's own chip-id
+    // remap, may still meet a config entry that declares the id.
+    final bool reservedJustChat = scope.quickHelpButtonId == justChatTagId;
+    final button = reservedJustChat
+        ? null
+        : quickHelpButtonById(_quickHelpButtons, scope.quickHelpButtonId);
     // An EMPTY title is no title (the same rule the locale re-title
     // applies): the saved category name is the fallback, never a blank
     // context bar. The install happens only when the title source MOVED —
@@ -583,8 +588,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // own id lookup right after this re-apply.
     final bool titleSourceMoved = previousSource != _restoredTitleSource;
     if (titleSourceMoved) {
-      _selectedCategoryName =
-          quickHelpTitleOf(button) ?? scope.categoryName ?? '';
+      _selectedCategoryName = reservedJustChat
+          ? tr('chatbot.justChat')
+          : quickHelpTitleOf(button) ?? scope.categoryName ?? '';
     }
     _activeQuickHelpIdentity = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an

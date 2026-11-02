@@ -1051,6 +1051,7 @@ const Map<String, dynamic> swLocale = {
         "Tatizo la usanidi: kipimo kilichochaguliwa hikija na jina la Kiingereza katika mpangilio wa maarifa, hivyo huwezi kufafanua upeo wa swali. Swali halikutumwa.",
     "scopeTagGone":
         "Mazungumzo hii yilihifadhiwa katika kipimo \"{tags}\", ambacho hakitumiki tena katika mpangilio wa maarifa. Maswali yafuatayo yanakataliwa hadi muktadha ufutwe.",
+    "justChat": "Mazungumzo tu",
     "queryContext": "Muktadha wa Swali",
     "contextAdded": "Muktadha umeongezwa kwenye swali lako",
     "contextRemoved": "Muktadha umeondolewa kwenye swali lako",

@@ -1022,6 +1022,108 @@ void main() {
     });
   });
 
+  group('ConversationScopeResolver droppedTags', () {
+    // The restore must NAME the tag the live hierarchy cannot carry —
+    // the fact the sidebarTagCount-vs-labels delta already refuses on
+    // silently. The tags themselves are the resolver's fact: only it
+    // knows which branch read them (a dead tag beside a live button tag
+    // is a different list walk than a dead tag of a button-less
+    // conversation).
+    final deadTree = <dynamic>[
+      {
+        'catKey': '2',
+        'name': 'Civil Registry',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'name': 'Births', 'nameEN': 'Births'},
+        ],
+      },
+    ];
+    final deadButtons = <Map<String, dynamic>>[
+      {
+        'id': 'civil',
+        'category': '2',
+        'serviceLabels': ['Births'],
+      },
+    ];
+
+    ConversationScopeResolver deadResolver() => ConversationScopeResolver(
+      hierarchy: QuickHelpScopeResolver(deadTree),
+      quickHelpButtons: deadButtons,
+    );
+
+    test('a tag the hierarchy cannot carry is named dead', () {
+      // The sidebar branch: an unknown button id, or a label renamed
+      // away — the tag restores as nothing, and the restore must say so.
+      final scope = deadResolver().resolve(
+        tags: ['Gone Service'],
+        categoryKey: '2',
+      );
+
+      expect(scope.droppedTags, ['Gone Service']);
+      expect(scope.sidebarTagCount, 1);
+      expect(scope.sidebarLabelsEn, isEmpty);
+    });
+
+    test('the id-less card title tag is named dead on restore', () {
+      // The press of an id-less card writes its TITLE as the tag; the
+      // restore resolves buttons by id only, so the title tag falls to
+      // the sidebar branch and reads as dead (the same verdict the
+      // refusal test above pins — named now, not just counted).
+      final idless = [
+        {
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver(deadTree),
+        quickHelpButtons: idless,
+      ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.droppedTags, ['Civil registry help']);
+    });
+
+    test('a dead tag beside a live button tag is named too', () {
+      final scope = deadResolver().resolve(
+        tags: ['civil', 'Gone Service'],
+        categoryKey: '2',
+      );
+
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.droppedTags, ['Gone Service']);
+      expect(scope.sidebarTagCount, 1);
+    });
+
+    test('a live restore names nothing dead', () {
+      final live = deadResolver().resolve(tags: ['Births'], categoryKey: '2');
+
+      expect(live.droppedTags, isEmpty);
+
+      final button = deadResolver().resolve(tags: ['civil'], categoryKey: '2');
+      expect(button.droppedTags, isEmpty);
+    });
+
+    test('the legacy category tags never read as dead', () {
+      // 'category.<id>' names the CATEGORY, not a label — a dead
+      // category there is the categoryMissing verdict, not a dropped
+      // tag. 'category.general' names nothing at all.
+      final legacy = deadResolver().resolve(
+        tags: ['category.2'],
+        categoryKey: '2',
+      );
+      expect(legacy.droppedTags, isEmpty);
+
+      final general = deadResolver().resolve(
+        tags: ['category.general'],
+        categoryKey: '2',
+      );
+      expect(general.droppedTags, isEmpty);
+    });
+  });
+
   group('shouldReResolveRestoredScope', () {
     test('a restore with NO tags still owns the re-resolve', () {
       // A conversation saved without a `tags` array restores a

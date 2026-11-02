@@ -1057,6 +1057,8 @@ const Map<String, dynamic> frLocale = {
         "Problème de configuration : la hiérarchie de connaissances n'a pas pu être chargée, le périmètre de ce bouton ne peut donc pas être vérifié. Ce bouton est inutilisable tant que la hiérarchie n'est pas disponible.",
     "scopeNotNameable":
         "Problème de configuration : le périmètre sélectionné ne porte pas de nom anglais dans la hiérarchie de connaissances, le périmètre de la requête ne peut donc pas être déterminé. La requête n'a pas été envoyée.",
+    "scopeTagGone":
+        "Cette conversation a été enregistrée dans le périmètre \"{tags}\", que la hiérarchie de connaissances ne contient plus. Les questions de suivi sont refusées jusqu'à ce que le contexte soit effacé.",
     "queryContext": "Contexte de la requête",
     "contextAdded": "Contexte ajouté à votre requête",
     "contextRemoved": "Contexte retiré de votre requête",

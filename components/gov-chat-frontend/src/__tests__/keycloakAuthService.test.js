@@ -714,36 +714,6 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
   });
 
-  it('a FREE lock with a fresh publication ADOPTS it — no fresh grant on a rotated-away token (round 23)', async () => {
-    // RESTORE the engine's (missing) Web Locks after this test — a lingering
-    // mock flips every later contention test onto the always-grant path.
-    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
-    Object.defineProperty(navigator, 'locks', {
-      configurable: true,
-      value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
-    });
-    try {
-      const holderUser = createMockUser({ access_token: 'holder-finished-token' });
-      // Stamp the publication 5 s AHEAD of the wall clock: the adoption gate
-      // is `entry.at >= startedAt`, and seeding at exactly Date.now() races
-      // the call's own startedAt capture by a millisecond (CI-only flake —
-      // locally the same tick won). A future stamp is always admissible to
-      // the gate and to the TTL cleanup.
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
-      mockGetUser.mockResolvedValue(null);
-      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
-      const user = await keycloakAuthService.signinSilent();
-      expect(user.access_token).toBe('holder-finished-token'); // adopted
-      expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
-      expect(mockStoreUser).toHaveBeenCalled();
-      const stored = mockStoreUser.mock.calls[mockStoreUser.mock.calls.length - 1][0];
-      expect(typeof stored.toStorageString).toBe('function'); // a REAL User — storeUser cannot throw
-    } finally {
-      if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
-      else delete navigator.locks;
-    }
-  });
-
   it('publication retention: the TTL cleanup drops a stale publication at renew entry, keeps a fresh one (round 23)', async () => {
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-ok' }));
@@ -769,6 +739,26 @@ describe('cross-tab renew lease (#80800)', () => {
     } finally {
       removeItem.mockRestore();
     }
+  });
+
+  it('LEASE path: a FREE lease with a fresh publication ADOPTS — no fresh grant (round 25 twin-miss, 83380)', async () => {
+    // The 81377 ordering fix landed on the Web-Locks path only; the lease
+    // fallback acquired the FREE lease first, skipped the publication loop,
+    // and burned a fresh grant on the rotated-away token. jsdom has no
+    // navigator.locks, so signinSilent takes renewViaLease — exactly the
+    // engine class the fallback exists for. Pre-fix, this test goes red:
+    // the grant runs and mockSigninSilent IS called.
+    delete navigator.locks;
+    const holderUser = createMockUser({ access_token: 'lease-holder-token' });
+    // +5s stamp: admissible to the startedAt gate without racing it (the
+    // same CI-flake rationale as the free-lock test above).
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('lease-holder-token'); // adopted
+    expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
+    expect(mockStoreUser).toHaveBeenCalled();
   });
 
   it('logout removes any publication from disk (round 23 retention)', async () => {
@@ -909,6 +899,33 @@ describe('cross-tab renew lease (#80800)', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    // ROUND 25 (review 83375): this test used to live OUTSIDE the describe
+    // — outside the afterEach that deletes navigator.locks — and paid an
+    // 8-line try/finally descriptor save/restore whose restore branch could
+    // never meaningfully fire (jsdom HAS no navigator.locks to restore).
+    // Inside the describe, the cleanup convention is the describe's own.
+    it('a FREE lock with a fresh publication ADOPTS it — no fresh grant on a rotated-away token (round 23)', async () => {
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
+      });
+      const holderUser = createMockUser({ access_token: 'holder-finished-token' });
+      // Stamp the publication 5 s AHEAD of the wall clock: the adoption gate
+      // is `entry.at >= startedAt`, and seeding at exactly Date.now() races
+      // the call's own startedAt capture by a millisecond (CI-only flake —
+      // locally the same tick won). A future stamp is always admissible to
+      // the gate and to the TTL cleanup.
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+      mockGetUser.mockResolvedValue(null);
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('holder-finished-token'); // adopted
+      expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
+      expect(mockStoreUser).toHaveBeenCalled();
+      const stored = mockStoreUser.mock.calls[mockStoreUser.mock.calls.length - 1][0];
+      expect(typeof stored.toStorageString).toBe('function'); // a REAL User — storeUser cannot throw
     });
   });
 });

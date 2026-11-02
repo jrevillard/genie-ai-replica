@@ -33,6 +33,14 @@ bool declaresCategoryScope(String? id) {
   return id != null && id.isNotEmpty && id != 'general';
 }
 
+/// The one RESERVED conversation tag: `just-chat`. A saved conversation
+/// carrying it was asked from the plain composer — a scope of NONE,
+/// unfiltered by design — and the restore keeps it even when the
+/// deployment's configuration dropped or hid the entry, because the
+/// scope it names does not depend on the config. The web's restore
+/// hardcodes the same id (ChatBotComponent.vue).
+const String justChatTagId = 'just-chat';
+
 /// The loaded shape of one Quick Help button, parsed from its config
 /// entry [btn] under [locale].
 ///
@@ -800,6 +808,7 @@ class ConversationScope {
     this.serviceLabelsEn = const <String>[],
     this.sidebarLabelsEn = const <String>[],
     this.sidebarTagCount = 0,
+    this.droppedTags = const <String>[],
     this.quickHelpButtonId,
     this.quickHelpScopeState,
   });
@@ -827,8 +836,15 @@ class ConversationScope {
   /// carried), never quietly vanish from it.
   final int sidebarTagCount;
 
+  /// The saved tags the live hierarchy can no longer carry — the ones
+  /// [sidebarTagCount] counts and the labels do not. The restore names
+  /// them in the context bar (the web restores them as unresolved
+  /// chips); empty when every saved tag still names something.
+  final List<String> droppedTags;
+
   /// The id of the Quick Help button that produced the conversation, when
-  /// it was one.
+  /// it was one — or the reserved [justChatTagId] for a conversation
+  /// asked from the plain composer, whose scope binds to no button.
   final String? quickHelpButtonId;
 
   /// The button's scope state against the LIVE hierarchy (the same map
@@ -847,8 +863,9 @@ class ConversationScope {
 /// A conversation carries the scope it was asked in: the Quick Help button
 /// that produced it — a Quick Help tag is the button ID (quickHelpButtonIdentity
 /// may carry a title for an id-less card, and the resolver matches IDS only,
-/// exactly as the web's own restore does) — or the ENGLISH labels of the
-/// sidebar scope it was narrowed by. The scope is only usable when the live
+/// exactly as the web's own restore does, with the one reserved [justChatTagId]
+/// restoring unfiltered regardless of the config) — or the ENGLISH labels of
+/// the sidebar scope it was narrowed by. The scope is only usable when the live
 /// hierarchy can still NAME it: a scope that cannot be named leaves the
 /// query unscoped, and an unscoped query answers from the whole corpus.
 class ConversationScopeResolver {
@@ -922,16 +939,33 @@ class ConversationScopeResolver {
     // button's scope alone would answer WIDER than the same conversation
     // does on the web.
     for (final tag in tagList) {
-      final button = _buttons[tag];
-      if (button == null) continue;
-      final category = quickHelpCategoryOf(button);
-      final buttonLabels = quickHelpServiceLabelsOf(button);
+      // The RESERVED just-chat tag: the button lookup is skipped for it —
+      // a scope of NONE does not depend on the configuration, so the tag
+      // restores as a Quick Help scope with NO button (no labels to
+      // replay, no verdict to judge) whether or not the config still
+      // declares the entry. Falling to the sidebar branch would count it
+      // as an unknown tag and refuse every follow-up on a conversation
+      // the web restores and answers.
+      final button = tag == justChatTagId ? null : _buttons[tag];
+      if (button == null && tag != justChatTagId) continue;
+      final category = button == null ? null : quickHelpCategoryOf(button);
+      final buttonLabels = button == null
+          ? const <String>[]
+          : quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
       // other button tag is CONSUMED here (counted as a sidebar tag, it
       // read as a dropped label and refused the follow-up forever).
       final otherButtons = tagList
-          .where((other) => other != tag && _buttons.containsKey(other))
+          .where(
+            (other) =>
+                other != tag &&
+                // The reserved tag binds to no button — not even when the
+                // configuration still declares an entry with that id: its
+                // labels and verdict stay out of the union.
+                other != justChatTagId &&
+                _buttons.containsKey(other),
+          )
           .map((other) => _buttons[other]!)
           .toList();
       final labels = [
@@ -946,17 +980,33 @@ class ConversationScopeResolver {
           .where(
             (other) =>
                 other != tag &&
+                // A second copy of the reserved tag (or one beside this
+                // scope's own button tag) is consumed the same way: it
+                // names NO scope and must not read as a dropped sidebar
+                // tag that refuses the follow-up.
+                other != justChatTagId &&
                 !_buttons.containsKey(other) &&
                 !other.startsWith('category.'),
           )
           .toList();
       final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
+      // The tags beside the button that the live hierarchy cannot name —
+      // the dropped half of the count-vs-labels delta the send guard
+      // refuses on, read as the kept labels' exact complement so the
+      // caption and the guard can never disagree about which tags died.
+      final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
-      // unscoped (a silent widening) while the web kept the edge.
+      // unscoped (a silent widening) while the web kept the edge. The
+      // RESERVED scope binds to no button: a legacy 'category.<id>' tag
+      // beside it is then the only carrier of the saved category, and it
+      // wins over the edge the same way the sidebar branch lets it — the
+      // web's per-tag forEach keeps processing after the reserved chip.
       // The configuration names its category; the hierarchy's own key is
       // what the conversation's edge speaks.
-      final effectiveCategory = category == null
+      final effectiveCategory = button == null
+          ? _legacyCategoryIdOf(tagList) ?? categoryKey
+          : category == null
           ? categoryKey
           : _hierarchy.categoryIdFor(category);
       return ConversationScope(
@@ -970,12 +1020,16 @@ class ConversationScopeResolver {
         // beside a Quick Help tag must refuse the follow-up, exactly as
         // it does when there is no Quick Help tag.
         sidebarTagCount: otherTags.length,
+        droppedTags: droppedTags,
         quickHelpButtonId: tag,
         // EVERY restored button's state, merged: the web checks every
         // chip at send, and a broken SECOND button must refuse here too
         // — carrying the first button's state alone sent the union
-        // including the dead labels, a silent abstention.
-        quickHelpScopeState: _mergedScopeState([button, ...otherButtons]),
+        // including the dead labels, a silent abstention. The reserved
+        // just-chat tag binds to no button and contributes no verdict.
+        quickHelpScopeState: button == null
+            ? (otherButtons.isEmpty ? null : _mergedScopeState(otherButtons))
+            : _mergedScopeState([button, ...otherButtons]),
       );
     }
 
@@ -994,16 +1048,7 @@ class ConversationScopeResolver {
     // 'category.general' is the no-scope placeholder: it contributes
     // nothing. The legacy tag wins over the conversation's own edge —
     // it IS the scope the conversation was saved with.
-    final legacyCategory = RegExp(r'^category\.(.+)$').firstMatch(
-      tagList.firstWhere(
-        (tag) => tag.startsWith('category.'),
-        orElse: () => '',
-      ),
-    );
-    final String? legacyCategoryId =
-        legacyCategory != null && declaresCategoryScope(legacyCategory.group(1))
-        ? legacyCategory.group(1)
-        : null;
+    final String? legacyCategoryId = _legacyCategoryIdOf(tagList);
     final sidebarTags = tagList
         .where((tag) => !tag.startsWith('category.'))
         .toList();
@@ -1022,8 +1067,37 @@ class ConversationScopeResolver {
       // re-deriving the fallback this used to force.
       sidebarLabelsEn: knownLabels,
       sidebarTagCount: sidebarTags.length,
+      // A tag that names nothing of the live hierarchy is dead: the
+      // restore names it, the way the web restores it as an unresolved
+      // chip. The kept labels' exact complement — one partition, so the
+      // caption and the guard can never disagree about which tags died.
+      droppedTags: _droppedTagsOf(sidebarTags, knownLabels),
     );
   }
+}
+
+/// The tags of [tags] the kept labels' complement names — the ONE
+/// dropped/kept partition behind both resolver branches, so a caption
+/// and the send guard read the same fact.
+List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
+    tags.where((tag) => !kept.contains(tag)).toList();
+
+/// The category key a LEGACY `category.<id>` tag names — the old
+/// restore's spelling for a category-only scope, read from the FIRST
+/// such tag. Null when no tag names a category, or the placeholder
+/// 'category.general' does ('general' declares no scope). Every branch
+/// that can meet the tag reads this one rule: the sidebar branch gives
+/// it priority over the conversation's own edge — it IS the scope the
+/// conversation was saved with — and the reserved just-chat branch
+/// weights it the same, the way the web's per-tag forEach keeps
+/// processing after the reserved chip.
+String? _legacyCategoryIdOf(List<String> tagList) {
+  final match = RegExp(r'^category\.(.+)$').firstMatch(
+    tagList.firstWhere((tag) => tag.startsWith('category.'), orElse: () => ''),
+  );
+  return match != null && declaresCategoryScope(match.group(1))
+      ? match.group(1)
+      : null;
 }
 
 /// Whether a committed restore should be re-resolved now that a source it

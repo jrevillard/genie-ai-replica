@@ -1050,6 +1050,9 @@ const Map<String, dynamic> stLocale = {
         "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
     "scopeNotNameable":
         "Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.",
+    "scopeTagGone":
+        "This conversation was saved in the scope \"{tags}\", which the knowledge hierarchy no longer carries. Follow-up questions are refused until the context is cleared.",
+    "justChat": "Puisano feela",
     "queryContext": "Moelelo oa Potso",
     "contextAdded": "Moelelo o kentsoe potsong ea hao",
     "contextRemoved": "Moelelo o tlositsoe potsong ea hao",

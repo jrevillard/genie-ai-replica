@@ -3,7 +3,6 @@
 // Minimal config via process.env with inline defaults (DRY: defaults in code, not env files).
 module.exports = {
   port: process.env.PORT || 3002,
-  nodeEnv: process.env.NODE_ENV || 'development',
   // PII sidecar (ADR-okf-004 rev) — internal container-to-container call,
   // same pattern as doc-repo -> dataprep. Fail-closed on the client side.
   piiService: {

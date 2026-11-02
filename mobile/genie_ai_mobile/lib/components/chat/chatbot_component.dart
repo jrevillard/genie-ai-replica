@@ -108,6 +108,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   List<String> _sidebarServiceLabelsEn = [];
   // How many services the sidebar selection named (labels or not).
   int _sidebarServiceCount = 0;
+  // The saved tags the live hierarchy can no longer carry — the tags a
+  // RESTORED conversation was saved with whose labels vanished. The count
+  // above already refuses the follow-up; this names the dead tags in the
+  // context bar (the web restores them as unresolved chips), instead of
+  // leaving the refusal's cause invisible until the first send. Quiet
+  // during a hierarchy outage (an empty tree names every tag dropped —
+  // a guess, and the outage is visible in the grid); the recovery
+  // re-resolve installs the real verdict.
+  List<String> _deadScopeTags = const [];
   // The live hierarchy, indexed once: the EN label vocabulary (what the
   // corpus filters on) and the categories, by key and by English name. Null
   // until the tree loads — then no button is judged broken, because a tree
@@ -451,6 +460,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpButtons,
           _activeQuickHelpIdentity,
         );
+
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
         }
@@ -557,11 +567,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         : null;
     // The button the conversation's tag names — ONE lookup (the same
     // shared one the locale re-title reads), and both reads below
-    // (the title, the outage state) resolve the same entity.
-    final button = quickHelpButtonById(
-      _quickHelpButtons,
-      scope.quickHelpButtonId,
-    );
+    // (the title, the outage state) resolve the same entity. The
+    // RESERVED just-chat scope is titled and judged WITHOUT a button —
+    // the web builds its chip from the id alone — so the lookup is
+    // skipped here; the locale re-title, like the web's own chip-id
+    // remap, may still meet a config entry that declares the id.
+    final bool reservedJustChat = scope.quickHelpButtonId == justChatTagId;
+    final button = reservedJustChat
+        ? null
+        : quickHelpButtonById(_quickHelpButtons, scope.quickHelpButtonId);
     // An EMPTY title is no title (the same rule the locale re-title
     // applies): the saved category name is the fallback, never a blank
     // context bar. The install happens only when the title source MOVED —
@@ -574,8 +588,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // own id lookup right after this re-apply.
     final bool titleSourceMoved = previousSource != _restoredTitleSource;
     if (titleSourceMoved) {
-      _selectedCategoryName =
-          quickHelpTitleOf(button) ?? scope.categoryName ?? '';
+      _selectedCategoryName = reservedJustChat
+          ? tr('chatbot.justChat')
+          : quickHelpTitleOf(button) ?? scope.categoryName ?? '';
     }
     _activeQuickHelpIdentity = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an
@@ -601,6 +616,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // scope's filter labels are its sidebar labels, a Quick Help
     // scope carries the ones selected beside the button.
     _sidebarServiceLabelsEn = scope.sidebarLabelsEn;
+    // The tags the restore could not carry, named in the context bar.
+    // The caption only states what a SETTLED source pair judged: an
+    // empty tree reads every label dropped, and a configuration with no
+    // successful parse yet — failed, or mid-read (the load resets its
+    // flag at START) — has no button index, so a live button id would
+    // fall to the sidebar branch and be captioned as a dead tag. The
+    // cache is the settled mark: set only by a parse that succeeded.
+    // The caption stays quiet (the outage is visible in the grid), and
+    // the recovery re-resolve re-applies the real verdict.
+    _deadScopeTags = _treeUnavailable || _cachedConfig == null
+        ? const []
+        : scope.droppedTags;
     // How many sidebar tags the conversation was saved with: a tag
     // the hierarchy no longer carries is dropped from the labels, and
     // the send guard refuses it instead of letting it vanish.
@@ -1448,6 +1475,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.
     _sidebarServiceCount = 0;
+    // A live press installs a scope that exists: the caption of the
+    // restored scope it replaces must not survive it.
+    _deadScopeTags = const [];
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
@@ -1472,6 +1502,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // The restored scope's category title left with the scope: whatever
     // replaces it names itself.
     _restoredTitleSource = null;
+    // Its dead tags' caption left with it too: a live selection, a new
+    // chat or a scope-less press carries nothing that died.
+    _deadScopeTags = const [];
   }
 
   /// The icon a Quick Help card shows: the warning of a broken scope,
@@ -2144,6 +2177,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final theme = Theme.of(context);
     final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
+    // One read of the verdict the bar renders: the gate, the icon and
+    // the caption below all follow it.
+    final bool hasDeadScopeTags = _deadScopeTags.isNotEmpty;
 
     // Wrap entire layout to detect taps outside input
     return GestureDetector(
@@ -2156,7 +2192,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           Column(
             children: [
               // Context Bar
-              if (_selectedCategoryName.isNotEmpty)
+              if (_selectedCategoryName.isNotEmpty || hasDeadScopeTags)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -2169,20 +2205,55 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   ),
                   child: Row(
                     children: [
+                      // The icon follows the caption: a scope the restore
+                      // cannot carry is a failure — the broken Quick Help
+                      // cards' warning, not the hint bulb.
                       Icon(
-                        Icons.lightbulb_outline,
+                        hasDeadScopeTags
+                            ? Icons.warning_amber_rounded
+                            : Icons.lightbulb_outline,
                         size: 20,
-                        color: tokens.accent,
+                        color: hasDeadScopeTags ? tokens.danger : tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: tokens.fg,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_selectedCategoryName.isNotEmpty)
+                              Text(
+                                "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: tokens.fg,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            // A restored conversation whose scope tag the
+                            // live hierarchy cannot carry names the tag
+                            // here — the same diagnosis-in-danger the
+                            // broken Quick Help cards render, and the fact
+                            // the send guard would only announce at the
+                            // first attempted follow-up.
+                            if (hasDeadScopeTags)
+                              Text(
+                                tr(
+                                  'chatbot.scopeTagGone',
+                                  // A display list: the saved tags may
+                                  // repeat (the count keeps them for the
+                                  // send guard), the diagnosis names each
+                                  // once.
+                                  args: {
+                                    'tags': _deadScopeTags.toSet().join(', '),
+                                  },
+                                ),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: tokens.textXs,
+                                  color: tokens.danger,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       DsButton(

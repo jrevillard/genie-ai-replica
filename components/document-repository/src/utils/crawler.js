@@ -474,7 +474,13 @@ class Crawler {
             logger.error('Seed URL rate limited immediately. Aborting.');
             throw new Error('Seed Rate Limited', { cause: e });
           }
-          if (this.isAborted || /killed/i.test(e.message) || e.message === 'MaxPagesReached') throw e;
+          // Round 20, #79190: an aborted crawl surfaces here as the RAW axios
+          // 'canceled' error — re-raise the canonical kill sentinel (matching
+          // the processWork arm above) so crawlWorker's
+          // error.message.includes('Killed') records a user-killed crawl as
+          // Killed, not Failed.
+          if (this.isAborted) throw new Error('Killed', { cause: e });
+          if (/killed/i.test(e.message) || e.message === 'MaxPagesReached') throw e;
           logger.error(`Failed to fetch seed URL ${url}: ${e.message}`);
         }
       }

@@ -18,8 +18,7 @@ const { logger } = require('../shared-lib/logger');
 const { writeAudit } = require('../services/audit-service');
 // Grammar + read verdict come from the SINGLE scope authority. Top-level is
 // safe: scope-authz-service imports nothing from THIS module (the grammar
-// lives there), so there is no cycle. parseOkfScope is re-exported below for
-// backward compatibility (2026-10-16 review fix — was a lazy require).
+// lives there), so there is no cycle.
 const { parseOkfScope, LEVEL_SATISFIES, deriveReadAuthz } = require('../services/scope-authz-service');
 
 function assertLevel(level) {
@@ -129,4 +128,4 @@ function requireRepoScope(repoParam = 'repo_id', level = 'admin') {
   };
 }
 
-module.exports = { requireScope, requireRepoScope, parseOkfScope };
+module.exports = { requireScope, requireRepoScope };

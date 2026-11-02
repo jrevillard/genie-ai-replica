@@ -187,3 +187,30 @@ def test_results_nan_metric_is_blank_cell():
     row = wb["Run_baseline"]
     by_name = {row.cell(row=2, column=c).value: row.cell(row=3, column=c).value for c in range(1, 40)}
     assert by_name["ragas_faithfulness"] in (None, "")  # blank cell either way
+
+
+def test_export_neutralizes_formula_injection():
+    # !622 round 21: openpyxl types '='-prefixed strings as FORMULAS — a
+    # curator query starting '=' would execute when the workbook opens in
+    # Excel/LibreOffice. The guard forces the string type with the content
+    # preserved byte-for-byte. Discriminator: with data_only=True a stored
+    # formula reads back as None (no cached value) — a forced string reads
+    # back as its text.
+    suite = _suite_fixture()
+    suite["entries"][0]["query"] = '=HYPERLINK("http://evil.example","click me")'
+    suite["entries"][0]["reference_answer"] = "=1+1"
+    data = xlsx_io.write_suite_workbook(suite["name"], suite["entries"])
+    wb = load_workbook(io.BytesIO(data), data_only=True)
+    ws = wb[xlsx_io.SUITE_SHEET]
+    queries = [ws.cell(row=r, column=3).value for r in range(2, ws.max_row + 1)]
+    answers = [ws.cell(row=r, column=4).value for r in range(2, ws.max_row + 1)]
+    assert queries[0] == '=HYPERLINK("http://evil.example","click me")'
+    assert answers[0] == "=1+1"
+
+    # The results workbook's Gold tab carries the same guard.
+    run = _run_fixture()
+    run["results"][0].setdefault("metrics", {})
+    data2 = xlsx_io.write_results_workbook(suite, [run])
+    wb2 = load_workbook(io.BytesIO(data2), data_only=True)
+    gold = wb2["Gold"]
+    assert gold.cell(row=2, column=3).value == '=HYPERLINK("http://evil.example","click me")'

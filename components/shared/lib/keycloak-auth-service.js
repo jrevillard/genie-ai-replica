@@ -144,7 +144,9 @@ async function init(idpUrl) {
   try {
     res = await fetch(discoveryUrl, { signal: controller.signal });
   } catch (err) {
-    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`, { cause: err });
+    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`, {
+      cause: err
+    });
   } finally {
     clearTimeout(discoveryTimer);
   }
@@ -185,13 +187,21 @@ async function init(idpUrl) {
       const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${realm}`;
       issuerMap.set(publicIssuerOverride, overrideJwks);
     }
-    if (process.env.KEYCLOAK_BROWSER_ISSUER) {
+    // KEYCLOAK_BROWSER_ISSUER is by definition the PRIMARY realm's
+    // browser-facing issuer — one env var, one issuer. Gate the alias on
+    // the realm actually being initialized: with KEYCLOAK_ADDITIONAL_REALMS,
+    // initAllRealms re-invokes this block per realm and the LAST realm's
+    // init would otherwise overwrite the shared alias with ITS override
+    // JWKS — every primary-realm browser token then verifies against the
+    // wrong realm's keys (mass 401s; the same clobber class the realm
+    // derivation above prevents). Review !622 round 11.
+    if (process.env.KEYCLOAK_BROWSER_ISSUER && realm === KEYCLOAK_REALM) {
       issuerMap.set(process.env.KEYCLOAK_BROWSER_ISSUER, overrideJwks);
     }
     logger.info(
       `[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} ` +
-      `(overrides discovery ${doc.jwks_uri}; ` +
-      `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
+        `(overrides discovery ${doc.jwks_uri}; ` +
+        `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
     );
   }
 

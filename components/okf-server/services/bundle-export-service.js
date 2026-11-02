@@ -155,7 +155,12 @@ async function exportBundle(repo, actor) {
           originalFileName: fileName,
           labels: repo.labels || [],
           bundle_version: bundleVersion,
-          is_bundle: true
+          is_bundle: true,
+          // ROUND 28 (review — ingest-bundle collision): declare the caller
+          // class — the doc-repo (repo_id, bundle_version) reuse guard is
+          // scoped to publish-export callers (the interrupted-publish retry
+          // is who it was built for).
+          source: 'publish-export'
         },
         { timeout: config.documentRepository.bundleStoreTimeoutMs }
       );

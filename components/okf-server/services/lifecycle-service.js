@@ -638,19 +638,41 @@ async function transition(repoId, action, actor, opts = {}) {
       // (no fingerprint to compare) so the FIRST publish always proceeds.
       const [liveFingerprint, currentFingerprint] = await Promise.all([
         versionService.currentFingerprint(repoId),
-        versionService.fingerprintOfCurrentVersion(repoId)
+        // Round 11: the repo's CURRENT version keys the manifest lookup —
+        // see fingerprintOfCurrentVersion (the bare-id lookup was dead).
+        versionService.fingerprintOfCurrentVersion(repoId, repo.version)
       ]);
+      // Round 20, #80801: set when the bypass below fires — the publish then
+      // COMPLETES repo.version instead of minting the next one (see the mint
+      // guard below).
+      let completingVersion = null;
       if (currentFingerprint && currentFingerprint === liveFingerprint) {
-        logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+        // Review !622 wave 2 (#78657): a publish that died BETWEEN mint and
+        // export leaves the fingerprint recorded on the minted version with
+        // no bundle artifact in the doc-repo. Treating that state as "no
+        // changes" deadlocked the retry — every re-publish answered 409 and
+        // the version never got its zip. The refusal is only true when the
+        // current version actually HAS its bundle; otherwise this call IS
+        // the retry — fall through and let the export run.
+        const currentHasBundle = (repo.bundles || []).some((b) => b && b.bundle_version === repo.version && b.file_id);
+        if (currentHasBundle) {
+          logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+            repo_id: repoId,
+            version: repo.version
+          });
+          throw new LifecycleError(
+            'PUBLISH_NO_CHANGES',
+            `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
+              'or retract and publish again to force a new version',
+            409
+          );
+        }
+        logger.warn('[OKF-PUBLISH] step=noop-guard bypassed (interrupted publish)', {
           repo_id: repoId,
-          version: repo.version
+          version: repo.version,
+          reason: 'fingerprint matches but the version has no bundle artifact — completing the interrupted publish'
         });
-        throw new LifecycleError(
-          'PUBLISH_NO_CHANGES',
-          `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
-            'or retract and publish again to force a new version',
-          409
-        );
+        completingVersion = repo.version;
       }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
@@ -670,10 +692,23 @@ async function transition(repoId, action, actor, opts = {}) {
       // through untouched). It bumps repo.version to N.
       // A recorded steward acknowledgement (pii_ack) waives the PII 'hit'
       // gate (reviewed public entities); a scanner 'error' still blocks.
-      logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
-      await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
-      logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
-      // Re-read the registry post-mint (version/okf_tag bumped).
+      //
+      // Round 20, #80801: an interrupted publish ALREADY minted this version
+      // — the manifest exists and carries the fingerprint the bypass matched.
+      // Minting again would bump the counter to N+1 and strand version N as
+      // an orphan manifest with no bundle, one publish burning TWO version
+      // numbers. Skip the mint and let the export below re-export the SAME
+      // version (exportBundle is idempotent per version). The mint gates
+      // passed when the manifest was first written and the fingerprint match
+      // proves the content unchanged, so re-running them would only re-assert
+      // the same snapshot.
+      if (completingVersion == null) {
+        logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
+        await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
+        logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
+      }
+      // Re-read the registry (post-mint version bump — or unchanged when
+      // completing an interrupted publish: the export then re-uses version N).
       const fresh = await loadRepo(db, repoId);
       // Export the bundle zip — THE repo+version artifact in the doc-repo.
       // A failure here fails the publish (lifecycle unchanged; retryable).
@@ -890,16 +925,32 @@ async function transition(repoId, action, actor, opts = {}) {
         );
       }
       logger.info('[OKF-PUBLISH] step=frontmatter gate OK', { repo_id: repoId });
+      // Round 21c (#80943): a retry of an INTERRUPTED publish reuses the
+      // already-stored zip (the doc-repo answers with the existing file for
+      // the same (repo_id, bundle_version)). ROUND 23 (review 81254): the
+      // double-append guard here was UNREACHABLE — the PUBLISH_NO_CHANGES
+      // gate refuses a publish whose current version is already listed with
+      // a file_id, and the interrupted-publish retry this path serves
+      // guarantees NO listing exists — so the guard's "already listed" arm
+      // was dead (and encoded a different predicate than the gate's).
+      // Deletion kills the dead-arm mutant with it; the single-listing
+      // property is owned by the state machine + the doc-repo's reuse.
+      // ROUND 25 (review 83373): the 4 identity fields were inlined TWICE
+      // (the bundles[] entry and the legacy single slot) — one literal, so
+      // a future field rename cannot drift between the two representations
+      // of one publish identity.
+      const bundleIdentity = {
+        file_id: bundle.file_id || null,
+        file_name: bundle.file_name,
+        bundle_version: bundle.bundle_version,
+        stored_at: bundle.stored_at
+      };
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
-        // APPEND the new bundle entry; never overwrite.
         bundles: [
           ...prevBundles,
           {
-            file_id: bundle.file_id || null,
-            file_name: bundle.file_name,
-            bundle_version: bundle.bundle_version,
-            stored_at: bundle.stored_at,
+            ...bundleIdentity,
             ingest_status: null,
             concepts_indexed: 0,
             concepts_failed: 0,
@@ -908,12 +959,7 @@ async function transition(repoId, action, actor, opts = {}) {
         ],
         // Keep the legacy single-slot field populated too — the worker's
         // getBundleFileId + the ingest guard at :532 read repo.bundle.file_id.
-        bundle: {
-          file_id: bundle.file_id || null,
-          file_name: bundle.file_name,
-          bundle_version: bundle.bundle_version,
-          stored_at: bundle.stored_at
-        },
+        bundle: bundleIdentity,
         ingested_at: null, // the NEW version is not serving until ingested
         ingested_version: null,
         rag_drain_active: false, // the drain served its purpose — the mint guaranteed all-indexed

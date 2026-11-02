@@ -43,7 +43,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const {
     ATTR_SERVICE_NAME,
     ATTR_SERVICE_VERSION,
-    ATTR_DEPLOYMENT_ENVIRONMENT
+    ATTR_DEPLOYMENT_ENVIRONMENT,
+    ATTR_SERVICE_NAMESPACE
   } = require('@opentelemetry/semantic-conventions');
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
   const { W3CTraceContextPropagator } = require('@opentelemetry/core');
@@ -102,6 +103,13 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const serviceName = process.env.SERVICE_NAME || 'genie-backend';
   const serviceVersion = process.env.npm_package_version || '1.0.0';
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
+  // service.namespace per the OBSERVABILITY.md identity contract — the Node
+  // services (backend, doc-repo, okf-server) all report under 'genie-core';
+  // the OPEA overlay (Python) uses 'genieai'. DW-429 (review !622 wave 2):
+  // this attribute went missing when the backend tracing was deduplicated
+  // into this shared module — without it the documented identity contract
+  // breaks for every consumer of this file.
+  const serviceNamespace = 'genie-core';
 
   // Create exporter — base URL from env var, append signal-specific path (aligned with OPEA tracing.py)
   const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318';
@@ -124,6 +132,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
       [ATTR_SERVICE_VERSION]: serviceVersion,
+      [ATTR_SERVICE_NAMESPACE]: serviceNamespace,
       // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
       // versions — use raw key as fallback.
       ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined

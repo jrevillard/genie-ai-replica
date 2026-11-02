@@ -1048,6 +1048,9 @@ const Map<String, dynamic> esLocale = {
         "Problema de configuración: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.",
     "scopeNotNameable":
         "Problema de configuración: el alcance seleccionado no tiene nombre en inglés en la jerarquía de conocimiento, por lo que no se puede determinar el alcance de la consulta. No se envió.",
+    "scopeTagGone":
+        "Esta conversación se guardó en el alcance \"{tags}\", que la jerarquía de conocimiento ya no contiene. Las preguntas de seguimiento se rechazan hasta que se borre el contexto.",
+    "justChat": "Solo chat",
     "queryContext": "Contexto de consulta",
     "contextAdded": "Contexto añadido a tu consulta",
     "contextRemoved": "Contexto eliminado de tu consulta",

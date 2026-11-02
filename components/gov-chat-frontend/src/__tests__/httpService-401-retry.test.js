@@ -172,6 +172,63 @@ describe('httpService 401 retry with signinSilent', () => {
     expect(mockSigninSilent).not.toHaveBeenCalled();
     expect(mockLogin).not.toHaveBeenCalled();
   });
+
+  // ROUND 25 (review 83384): the 81378 dual-shape retry-status read shipped
+  // with no test that exercises the RETRY rejecting — reverting to
+  // `retryError.response.status` kept every test above green. These two
+  // cases kill that revert: the retried request re-enters THIS interceptor
+  // and a second 401 comes back ENVELOPE-normalized (no .response).
+  function createEnvelopeError(status, data = {}) {
+    const error = new Error(`Request failed with status code ${status}`);
+    error.status = status;
+    error.statusText = status === 401 ? 'Unauthorized' : 'Bad Gateway';
+    error.data = data;
+    return error;
+  }
+
+  it('escalates when the RETRY rejects with an envelope-shaped 401 (no .response)', async () => {
+    const mockGetUser = require('@/services/keycloakAuthService').default.getUser;
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue({ access_token: 'refreshed-token' });
+    mockLogin.mockResolvedValue(undefined);
+    // The retry comes back 401 normalized to the {status, ...} envelope —
+    // the interceptor's own output shape, carrying NO .response.
+    mockAxiosInstance.mockRejectedValueOnce(createEnvelopeError(401, { message: 'session expired' }));
+
+    try {
+      await callResponseErrorHandler(401, { message: 'first 401' });
+    } catch {
+      // Expected — the escalation ran and the 401 envelope is re-rejected.
+    }
+
+    // The kill: with the dual-shape read reverted, retryStatus is undefined
+    // (envelope has no .response), the error is misread as server-side and
+    // surfaced verbatim — getUser is never consulted.
+    expect(mockGetUser).toHaveBeenCalledTimes(1);
+    expect(mockLogin).toHaveBeenCalled();
+  });
+
+  it('surfaces an envelope-shaped 502 retry verbatim without escalating', async () => {
+    const mockGetUser = require('@/services/keycloakAuthService').default.getUser;
+    mockGetUser.mockReset();
+    mockSigninSilent.mockResolvedValue({ access_token: 'refreshed-token' });
+    const gatewayBlip = createEnvelopeError(502, { message: 'gateway blip' });
+    mockAxiosInstance.mockRejectedValueOnce(gatewayBlip);
+
+    let caught = null;
+    try {
+      await callResponseErrorHandler(401, { message: 'first 401' });
+    } catch (e) {
+      caught = e;
+    }
+
+    // Server-side problem on the retry: surfaced VERBATIM (same error
+    // object), no session escalation.
+    expect(caught).toBe(gatewayBlip);
+    expect(mockGetUser).not.toHaveBeenCalled();
+    expect(mockLogin).not.toHaveBeenCalled();
+  });
 });
 
 describe('httpService error parsing and notifications', () => {

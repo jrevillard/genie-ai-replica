@@ -3730,6 +3730,54 @@ config:docs-links:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Regenerate the Dart OpenAPI client from the current backend sources and
+# diff it against the committed copy (scripts/generate-api-client.sh --check).
+# Fails the pipeline when mobile/genie_ai_mobile/openapi_client/ has drifted
+# from the backend spec — the exact regression #1122 fixed, which until now
+# was only detectable by hand. The dart generator emits deterministic output
+# for the pinned generator version (openapitools.json) and never invokes a
+# Dart SDK, so no Flutter tooling is needed here — only a JRE for the
+# generator jar plus Node for the spec extraction.
+config:api-client:
+  extends: .node_base
+  stage: config
+  before_script:
+    # openapi-generator-cli is Java-based; bookworm-free alpine JRE is enough
+    - apk add --no-cache openjdk17-jre-headless
+    # Install into the project dir (not -g) so the wrapper AND the generator
+    # jar it downloads (node_modules/@openapitools/.../versions/7.22.0.jar)
+    # land inside the cacheable path below.
+    - npm install --prefix ${CI_PROJECT_DIR}/.openapi-tools @openapitools/openapi-generator-cli
+    - export PATH="${CI_PROJECT_DIR}/.openapi-tools/node_modules/.bin:$PATH"
+    # The spec extraction needs swagger-jsdoc — a production dependency.
+    - cd components/gov-chat-backend && npm ci --omit=dev && cd ${CI_PROJECT_DIR}
+  script:
+    - npm run api-client:check
+  cache:
+    - key:
+        files:
+          - openapitools.json
+      paths:
+        - .openapi-tools/
+      fallback_keys:
+        - "openapi-tools-$CI_DEFAULT_BRANCH"
+        - "openapi-tools-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-backend/routes/**/*"
+        - "components/gov-chat-backend/swagger-definition.js"
+        - "components/gov-chat-backend/swagger-schemas.js"
+        - "components/gov-chat-backend/package.json"
+        - "components/gov-chat-backend/package-lock.json"
+        - "mobile/genie_ai_mobile/openapi_client/**/*"
+        - "scripts/generate-api-client.sh"
+        - "openapitools.json"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
   stage: config

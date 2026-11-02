@@ -3357,6 +3357,28 @@ test:flutter:
     - flutter test --machine --dart-define=dart.vm.profile=true test/config/keycloak_config_release_guard_test.dart > reports/flutter-profile-guard-machine.json 2>&1
     - cat reports/flutter-profile-guard-machine.json | tojunit --output reports/flutter-profile-guard-report.xml
     - grep -q '<testcase' reports/flutter-profile-guard-report.xml && ! grep -q '<skipped' reports/flutter-profile-guard-report.xml
+    # The insecure-release refusal — a release compilation of a flavor with
+    # allowInsecureConnections on (dev, e2e) fails at startup — and its
+    # controls: a release build of a deployment flavor (staging, itu) still
+    # resolves its config, and a profile build of dev stays exempt (#1249).
+    # FLAVOR is a compile-time constant, so each combination is a dedicated
+    # test file invoked with its own defines; the zero-skip gate proves the
+    # case EXECUTED, for the same reason as the two runs above.
+    - flutter test --machine --dart-define=dart.vm.product=true --dart-define=FLAVOR=dev test/config/keycloak_config_insecure_release_dev_test.dart > reports/flutter-guard-dev-machine.json 2>&1
+    - cat reports/flutter-guard-dev-machine.json | tojunit --output reports/flutter-guard-dev-report.xml
+    - grep -q '<testcase' reports/flutter-guard-dev-report.xml && ! grep -q '<skipped' reports/flutter-guard-dev-report.xml
+    - flutter test --machine --dart-define=dart.vm.product=true --dart-define=FLAVOR=e2e test/config/keycloak_config_insecure_release_e2e_test.dart > reports/flutter-guard-e2e-machine.json 2>&1
+    - cat reports/flutter-guard-e2e-machine.json | tojunit --output reports/flutter-guard-e2e-report.xml
+    - grep -q '<testcase' reports/flutter-guard-e2e-report.xml && ! grep -q '<skipped' reports/flutter-guard-e2e-report.xml
+    - flutter test --machine --dart-define=dart.vm.product=true --dart-define=FLAVOR=staging test/config/keycloak_config_deployment_release_staging_test.dart > reports/flutter-guard-staging-machine.json 2>&1
+    - cat reports/flutter-guard-staging-machine.json | tojunit --output reports/flutter-guard-staging-report.xml
+    - grep -q '<testcase' reports/flutter-guard-staging-report.xml && ! grep -q '<skipped' reports/flutter-guard-staging-report.xml
+    - flutter test --machine --dart-define=dart.vm.product=true --dart-define=FLAVOR=itu test/config/keycloak_config_deployment_release_itu_test.dart > reports/flutter-guard-itu-machine.json 2>&1
+    - cat reports/flutter-guard-itu-machine.json | tojunit --output reports/flutter-guard-itu-report.xml
+    - grep -q '<testcase' reports/flutter-guard-itu-report.xml && ! grep -q '<skipped' reports/flutter-guard-itu-report.xml
+    - flutter test --machine --dart-define=dart.vm.profile=true --dart-define=FLAVOR=dev test/config/keycloak_config_profile_dev_test.dart > reports/flutter-guard-profile-dev-machine.json 2>&1
+    - cat reports/flutter-guard-profile-dev-machine.json | tojunit --output reports/flutter-guard-profile-dev-report.xml
+    - grep -q '<testcase' reports/flutter-guard-profile-dev-report.xml && ! grep -q '<skipped' reports/flutter-guard-profile-dev-report.xml
     # The flavor run re-runs test/config/keycloak_config_test.dart, so it
     # produces the same suite name and the same testcase names as the full
     # run above. tojunit (junitreport_maintained) has no --suite-name, so the
@@ -3368,7 +3390,20 @@ test:flutter:
     - grep -q '\[mode=release\]' reports/flutter-release-guard-report.xml
     - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=profile] ${2}${3}}' reports/flutter-profile-guard-report.xml
     - grep -q '\[mode=profile\]' reports/flutter-profile-guard-report.xml
-    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml reports/flutter-release-guard-report.xml reports/flutter-profile-guard-report.xml
+    # The five combination runs above are also collected by the full-suite
+    # run (skipped there, executed here), so they get the same marking
+    # treatment: one tag per combination.
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release flavor=dev] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release flavor=dev] ${2}${3}}' reports/flutter-guard-dev-report.xml
+    - grep -q '\[mode=release flavor=dev\]' reports/flutter-guard-dev-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release flavor=e2e] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release flavor=e2e] ${2}${3}}' reports/flutter-guard-e2e-report.xml
+    - grep -q '\[mode=release flavor=e2e\]' reports/flutter-guard-e2e-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release flavor=staging] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release flavor=staging] ${2}${3}}' reports/flutter-guard-staging-report.xml
+    - grep -q '\[mode=release flavor=staging\]' reports/flutter-guard-staging-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=release flavor=itu] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=release flavor=itu] ${2}${3}}' reports/flutter-guard-itu-report.xml
+    - grep -q '\[mode=release flavor=itu\]' reports/flutter-guard-itu-report.xml
+    - perl -pi -e 's{(<testsuite\b[^>]*?\bname=")([^"]*)(")}{${1}[mode=profile flavor=dev] ${2}${3}}; s{(<testcase\b[^>]*?\bclassname=")([^"]*)(")}{${1}[mode=profile flavor=dev] ${2}${3}}' reports/flutter-guard-profile-dev-report.xml
+    - grep -q '\[mode=profile flavor=dev\]' reports/flutter-guard-profile-dev-report.xml
+    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml reports/flutter-flavor-report.xml reports/flutter-release-guard-report.xml reports/flutter-profile-guard-report.xml reports/flutter-guard-dev-report.xml reports/flutter-guard-e2e-report.xml reports/flutter-guard-staging-report.xml reports/flutter-guard-itu-report.xml reports/flutter-guard-profile-dev-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'
     - python3 -m venv /tmp/lcov-cov && . /tmp/lcov-cov/bin/activate && pip install lcov-cobertura && lcov_cobertura coverage/lcov.info --output reports/coverage-cobertura.xml
@@ -3380,6 +3415,11 @@ test:flutter:
         - mobile/genie_ai_mobile/reports/flutter-flavor-report.xml
         - mobile/genie_ai_mobile/reports/flutter-release-guard-report.xml
         - mobile/genie_ai_mobile/reports/flutter-profile-guard-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-guard-dev-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-guard-e2e-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-guard-staging-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-guard-itu-report.xml
+        - mobile/genie_ai_mobile/reports/flutter-guard-profile-dev-report.xml
       coverage_report:
         coverage_format: cobertura
         path: mobile/genie_ai_mobile/reports/coverage-cobertura.xml

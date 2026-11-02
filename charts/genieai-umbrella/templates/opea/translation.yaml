@@ -79,8 +79,10 @@ spec:
             {{- toYaml $tRes | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
-            seccompProfile:
-              type: RuntimeDefault
+            # seccomp lives at the POD level (see spec.securityContext
+            # above) and already covers this container — a container-
+            # level copy would be dead YAML with a second placement to
+            # keep in sync.
             capabilities:
               drop: ["ALL"]
           readinessProbe:

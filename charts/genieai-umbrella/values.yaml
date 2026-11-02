@@ -718,7 +718,7 @@ services:
     replicas: null
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
-    # Image USER is nginx (uid 101) since #1227. The Dockerfile pre-chowns
+    # Image USER is nginx (uid 101). The Dockerfile pre-chowns
     # every path the container writes (the runtime-config dir
     # /app/dist/runtime, the nginx temp dirs under /tmp), the nginx pid and
     # logs live in /tmp, and the rendered nginx.conf lands in /tmp — nothing

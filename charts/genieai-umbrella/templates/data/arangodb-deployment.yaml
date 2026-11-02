@@ -70,6 +70,11 @@ spec:
   # Secret name (kube-arangodb 1.4.5 BootstrapSpec). The referenced Secret
   # must carry basic-auth keys (`username`, `password`); without this wiring
   # the operator leaves the root password EMPTY (default `None`).
+  # Charset constraint: the db-migrations wait probe sends these
+  # credentials as busybox-wget userinfo and percent-encodes % @ : /
+  # — any other non-ASCII or control character in the password breaks
+  # that header. Keep the generated password alphanumeric-plus-safe
+  # punctuation, or extend the encoder.
   bootstrap:
     passwordSecretNames:
       root: arango-root-secret

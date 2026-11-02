@@ -90,8 +90,9 @@ spec:
           env:
             # The probe below must present the same credentials the migration
             # run itself uses: an auth-enabled ArangoDB (the default here)
-            # answers 401 to an anonymous /_api/version, and a `curl -sf`
-            # probe can then never see the 200 it waits for.
+            # answers 401 to an anonymous /_api/version, and an
+            # unauthenticated wget probe can then never see the 200 it
+            # waits for.
             - name: ARANGO_USER
               value: "root"
             - name: ARANGO_PASSWORD
@@ -105,11 +106,15 @@ spec:
             - |
               url="{{ include "genieai-umbrella.arangoURL" . }}/_api/version"
               # busybox wget has no --user/--password: the basic-auth pair
-              # rides in the userinfo form instead. A password carrying a
-              # raw @, : or / would need percent-encoding here — the
-              # chart-generated arango-root-secret never contains one.
+              # rides in the userinfo form instead (busybox wget decodes
+              # %XX escapes there). The root Secret is operator-provided
+              # (bootstrap.passwordSecretNames in the ArangoDeployment),
+              # so its charset is not ours to guarantee: encode the four
+              # userinfo-delimiter characters, % first.
               prefix="${url%%://*}"
-              authurl="${prefix}://${ARANGO_USER}:${ARANGO_PASSWORD}@${url#*://}"
+              upw="$ARANGO_USER:$ARANGO_PASSWORD"
+              upw="${upw//%/%25}"; upw="${upw//@/%40}"; upw="${upw//:/%3A}"; upw="${upw//\//%2F}"
+              authurl="${prefix}://${upw}@${url#*://}"
               i=0
               while [ "$i" -lt 100 ]; do
                 if wget -q -O /dev/null "$authurl" >/dev/null 2>&1; then

@@ -607,9 +607,13 @@ release URLs by default. For air-gapped / sovereign clusters, set
 `global.kubeletToolsMirror` to an internal mirror —
 `[http[s]://]host[:port 1-65535][/multi/segment/prefix]`, no trailing
 slash; the
-scheme is optional (scheme-less makes curl use plain HTTP against the
-local proxy) and the init container appends the well-known release path
-(`/release/v1.33.0/bin/linux/<arch>/kubectl`). The mirror must serve
+scheme is optional but LOWERCASE-only (busybox wget rejects
+mixed-case schemes; scheme-less makes wget use plain HTTP against the
+local proxy) and the init container appends the well-known release
+path (`/release/v1.33.0/bin/linux/<arch>/kubectl`) — plus the
+matching `.sha256`, which the init container verifies (busybox wget
+performs no TLS certificate validation, so the checksum is the
+authenticity control). The mirror must serve
 that path from its base URL — the chart does not fall back to upstream
 when the mirror is unreachable.
 

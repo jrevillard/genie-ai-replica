@@ -8,8 +8,27 @@ repo, the cluster and the CI pipeline. (The SDD ledgers under
 `.superpowers/sdd/` are working history on the author's machine, not
 contractual evidence — a fresh clone does not carry them.)
 
-## Current state (2026-10-30)
+## Current state (2026-11-02)
 
+- **The tooling images pull on xattr-refusing storage, and the
+  long-running tier drops ALL capabilities (0.2.142–0.2.147)** —
+  a dev venue of the fuse-overlayfs class spent a boot campaign
+  ImagePullBackOff'd on the install hooks: the curlimages/curl layers
+  carry the build host's overlayfs xattrs as PAX records (measured
+  fresh on 8.10.1 AND 8.14.1; curl/curl-container#55 corroborates the
+  failure mode). The five tooling pods now run busybox:1.36 — the
+  kubectl download verifies a sha256 (busybox wget validates NO
+  certificates, so the checksum is the authenticity control), the
+  db-migrations wait encodes the operator-provided basic-auth pair as
+  percent-escaped userinfo (proven end-to-end against a password
+  carrying @ : / %), and the helm-test helper parses the status from
+  wget -S. Two /code-review rounds rode on top: the security comments
+  follow the code (clamav, the factory identity claims), the
+  container-level seccomp duplicates are gone (the pod-level block is
+  the one load-bearing placement), and every rendered long-running
+  container now carries drop ALL (0.2.145). The restricted PSA flip
+  itself stays blocked on operator CRD surfaces — measured and
+  recorded in the #1231 issue.
 - **The OKF integration is complete and reviewed (0.2.131–0.2.136)** —
   the parity gate compares 311 variables across 16 service pairs with
   zero gaps, the whole-integration review's eight findings closed, the

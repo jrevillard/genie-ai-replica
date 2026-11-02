@@ -34,10 +34,12 @@ check() {
     path=/health
     expected=$3
   fi
-  # curl's %http_code already prints 000 on a connection failure; the
-  # extra `|| echo 000` appended a second one and the failure read
-  # "got 000000".
-  code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || true)
+  # busybox wget has no curl's -w '%{http_code}': the status rides in
+  # the `  HTTP/1.1 <code>` header line `wget -S` prints to stderr
+  # (measured live: a 200 parses to "200", a dead port leaves the
+  # capture empty). A connection failure therefore parses to nothing
+  # and reads as 000 — the same contract the curl form had.
+  code=$(wget -q -T 5 -S -O /dev/null "http://${host}:${port}${path}" 2>&1 | grep -oE 'HTTP/[0-9.]+ [0-9]+' | tail -1 | grep -oE '[0-9]+$' || true)
   code=${code:-000}
   if [ "$code" = "$expected" ]; then
     echo "PASS: ${host}:${port}${path} -> ${code}"

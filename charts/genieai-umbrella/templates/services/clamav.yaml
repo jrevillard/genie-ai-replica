@@ -91,7 +91,7 @@ spec:
             # CHOWN too and the chown fails with EPERM (same fix as
             # the factory default + frontend).
             capabilities:
-              drop: ["NET_RAW"]
+              drop: ["ALL"]
           volumeMounts:
             - name: tmp
               mountPath: /tmp

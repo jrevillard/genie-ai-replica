@@ -79,8 +79,10 @@ spec:
             {{- toYaml $tRes | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
-              drop: ["NET_RAW"]
+              drop: ["ALL"]
           readinessProbe:
             tcpSocket:
               port: 8888

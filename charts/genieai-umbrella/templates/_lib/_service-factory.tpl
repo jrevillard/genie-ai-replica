@@ -144,13 +144,16 @@ spec:
             # Per-service `services.<svc>.securityContext` overrides
             # entirely. The default below carries only the bits that
             # are safe regardless of UID: no privilege escalation,
-            # and only NET_RAW dropped from capabilities. Since #1227
-            # every service pins its full identity in values.yaml
-            # (runAsNonRoot + runAsUser + drop ALL) — each image runs
-            # non-root by default and its Dockerfile pre-chowns the
-            # paths it writes, so entrypoints no longer chown at
-            # startup and need no extra capabilities.
-            {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "NET_RAW"))) -}}
+            # nothing kept: since #1227 every service pins its full
+            # identity in values.yaml (runAsNonRoot + runAsUser +
+            # drop ALL) — each image runs non-root by default and its
+            # Dockerfile pre-chowns the paths it writes, so entrypoints
+            # no longer chown at startup and need no capabilities at
+            # all. seccomp RuntimeDefault rides along; it is what the
+            # `restricted` PodSecurity level requires, carried now so
+            # the flip (a deploy-overlay label, tracked in #1231) adds
+            # no chart work.
+            {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "seccompProfile" (dict "type" "RuntimeDefault") "capabilities" (dict "drop" (list "ALL"))) -}}
             {{- toYaml $scc | nindent 12 }}
           {{- with $svc.volumeMounts }}
           volumeMounts:

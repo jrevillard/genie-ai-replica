@@ -610,10 +610,12 @@ slash; the
 scheme is optional but LOWERCASE-only (busybox wget rejects
 mixed-case schemes; scheme-less makes wget use plain HTTP against the
 local proxy) and the init container appends the well-known release
-path (`/release/v1.33.0/bin/linux/<arch>/kubectl`) — plus the
-matching `.sha256`, which the init container verifies (busybox wget
-performs no TLS certificate validation, so the checksum is the
-authenticity control). The mirror must serve
+path (`/release/v1.33.0/bin/linux/<arch>/kubectl`). The init
+container verifies the download against the release's sha256, PINNED
+in the chart (busybox wget performs no TLS certificate validation and
+the CDN intermittently drops its handshakes — a fetched checksum file
+failed the install twice; the pinned literal needs no second fetch).
+The mirror must serve
 that path from its base URL — the chart does not fall back to upstream
 when the mirror is unreachable.
 

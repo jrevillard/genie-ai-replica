@@ -226,7 +226,10 @@ workflow:
       - runner_system_failure
       - unknown_failure
   before_script:
-    - apk add --no-cache docker-cli-compose curl
+    # bash: check-runtime.sh is a bash script — docker:24 ships only sh
+    # (verified: `command -v bash` empty in the image); without this the
+    # gate line exits 127 and the runtime contract is never enforced.
+    - apk add --no-cache bash docker-cli-compose curl
     # Authenticate to the GitLab registry so `docker compose pull` succeeds
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
@@ -236,6 +239,12 @@ workflow:
         docker compose -p "$p" down -v --remove-orphans 2>/dev/null || true
       done
     - docker network prune -f 2>/dev/null || true
+    # No manual pre-create here anymore (#1227): backend-init creates and
+    # chowns data/database_backups at first up (both it and the guarded
+    # backend mount carry explicit create_host_path:true), secrets-ssl-init
+    # does the same for secrets/ssl (root:101) — the root-owned moment
+    # lives between CREATE and init completion, never once the gated
+    # services run.
   script:
     - cp env .env
     - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env
@@ -292,6 +301,32 @@ workflow:
         sleep 5
       done
     - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    # #1227 runtime contract gate: sweep the LIVE stack — long-term root
+    # processes, init one-shot discipline, root-owned files on the host
+    # binds. The static suite cannot see any of this; without this call
+    # the runtime gate exists but nothing ever runs it. WAIT first: the
+    # one-shot root inits are contract-exempt ONLY as completed one-shots —
+    # a still-sweeping init container is a running uid-0 process and the
+    # gate would flag it. Backend health alone does not imply init
+    # convergence (backend-init finishes first; victorialogs-init can run
+    # minutes longer), and TESTING.md requires a converged stack.
+    - |
+      INITS_TIMEOUT=0
+      for i in $(seq 1 60); do
+        # 'running' AND 'restarting': an init sitting in bounded-restart
+        # backoff is not 'running' but the gate still inspects it — the
+        # wait covers both or it converges on iteration 1 and the gate
+        # reports a phantom UNINSPECTABLE violation.
+        RUNNING_INITS=$(docker compose ps --format '{{.Service}} {{.State}}' 2>/dev/null | awk '$2=="running" || $2=="restarting" {print $1}' | grep -- '-init$' || true)
+        if [ -z "$RUNNING_INITS" ]; then echo "One-shot inits converged"; break; fi
+        echo "Waiting for one-shot inits to converge: $RUNNING_INITS ($i/60)"; sleep 5
+        INITS_TIMEOUT=1
+      done
+      if [ "$INITS_TIMEOUT" = "1" ] && [ -n "$RUNNING_INITS" ]; then
+        echo "INIT CONVERGENCE TIMEOUT after 300s: $RUNNING_INITS still active — the gate needs a converged stack (TESTING.md); fix the slow init instead of chasing a phantom root process."
+        exit 1
+      fi
+    - bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"
   artifacts:
     when: always
     expire_in: 7 days
@@ -3051,11 +3086,18 @@ docs:validate:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
+    # Renders the #1227 payload probe/heal command builders through real
+    # ansible and executes the tokenized output — the two layers
+    # --syntax-check cannot see (it never templates set_fact values, and
+    # shlex splitting decides what find receives). Mutation-proven red on
+    # the paren-glue bug this closes.
+    - bash tests/ansible-non-root/check-command-render.sh
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "deploy/**/*"
         - "docs/**/*"
+        - "tests/ansible-non-root/**/*"
         - "CLAUDE.md"
         - ".gitlab-ci.yml"
       when: on_success

@@ -73,7 +73,7 @@ cd tests/config-validator && npm test                     # Environment variable
 cd mobile/genie_ai_mobile && flutter test                 # Flutter unit tests
 ```
 
-## Manual Gates (no CI job — run these yourself)
+## Manual Gates (thin or no CI coverage — run these yourself)
 
 The repo has no pipeline job that can exercise these paths, so they are
 **not** covered by `npm test` / `pytest` / lint. Treat them as required
@@ -111,6 +111,55 @@ Why it is a shell script and not Jest: it must start containers, inject a
 curl sidecar into the collector's netns (the collector image is
 distroless — no shell inside), `docker exec` into VictoriaLogs, and
 discover the compose project at runtime.
+
+### Compose no-root runtime gate
+
+```bash
+./tests/compose-non-root/check-runtime.sh <compose-project> [data_dir] [secrets_dir]
+```
+
+Asserts the #1227 no-root contract against a RUNNING stack: no uid-0
+process in any container (compose or swarm labels), no root-owned file
+under the data directory. Exit codes: 0 = contract holds, 1 = violation,
+2 = vacuous run (no container matched the project name — fix the name,
+never read a vacuous pass as OK), 3 = docker daemon unreachable (not a
+project-name problem), 4 = usage error (missing argument). **Run it on a CONVERGED stack** — all
+services healthy and the one-shot inits exited: right after an upgrade,
+a container sitting between its restart attempts is
+un-inspectable and an init mid-chown IS a root process by design, so a
+run inside that window exits 1 on a system that is converging normally.
+**Run it against the default-profile stack only**: the contract covers
+the always-on services, and profile-gated ones (opea/gpu-models/
+observability/okf — e.g. grafana, victoriametrics) intentionally run
+their upstream images' root users, so a stack started with
+`--profile observability` trips rule 1 by design.
+**Run it ON EVERY NODE of a multi-node swarm** — `docker ps` is
+daemon-local (cluster task views are `docker stack ps`/`docker service
+ps`), so each run's rule 1 sees only that node's containers, and rule 2
+sweeps the invoking host's data dir only — bind sources materialize per
+node: a manager-side run passes while a worker keeps a root-owned tree.
+**Run it as root or as the owner of the data directory** — the rules 2-3
+sweeps traverse the live tree; an unprivileged run over a legitimate
+0700 uid-1000 tree turns find's EACCES into a phantom violation.
+The static half runs in CI
+(`tests/config-validator` jest suite). The runtime half now has ONE CI
+invocation: `.e2e_integration_base` calls `check-runtime.sh` against the
+ephemeral CI stack right after it turns healthy (single node, core
+profile — the multi-node and observability caveats above still apply to
+local runs). Run it yourself after any change to `docker-compose.yaml`
+service identities, volumes or images, and on every node of a real
+swarm. The render+tokenize half of the ansible probe/heal commands runs
+in `docs:validate` (`tests/ansible-non-root/check-command-render.sh`).
+
+**Run it whenever you touch:**
+
+- `docker-compose.yaml` (a `user:`, a volume, a new service)
+- any Dockerfile `USER`/chown wiring
+- `tests/compose-non-root/check-runtime.sh` itself
+
+Why it is a shell script and not Jest: it inspects the host's docker
+daemon (container process tables) and the host filesystem of a running
+stack — neither exists inside Jest.
 
 > History: this test sat unwired and its assertions queried
 > `_msg:REDACTED`, which excludes exactly the unredacted rows it was

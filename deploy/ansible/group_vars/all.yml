@@ -8,6 +8,24 @@
 # =============================================================================
 deploy_dir: /opt/genieai
 data_dir: ./data
+# The effective data directory, resolved ONCE for every consumer (the
+# payload-ownership pass, the no-root migration): an absolute inventory
+# override passes through, a relative one joins deploy_dir; trailing
+# slashes are stripped and the path normalized so all consumers compare
+# the same spelling. A `~`-rooted override is unsupported (see
+# tasks/no-root-data-migration.yml for the three-context reasoning).
+data_dir_resolved: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
+
+# DECISION RULE for spellings in the deploy playbook: find -path / prune
+# patterns MUST use the *_resolved vars (a raw join embeds '//' that find
+# never matches — silent dead prunes); file-module and plain shell paths
+# tolerate the raw var (the module and the kernel normalize '//').
+# deploy_dir with the same normalization the data-dir formula applies to
+# its join: a trailing-slash inventory override (deploy_dir: /opt/genieai/)
+# must not leak into the payload prune builder — '-path /opt/genieai//data'
+# never matches in find (verified by execution) and BOTH payload exclusions
+# (the data chain and secrets/) die silently on every deploy.
+deploy_dir_resolved: "{{ deploy_dir | regex_replace('/+$', '') | normpath }}"
 
 # Runtime theme config directory on the host, bind-mounted read-only into the
 # frontend and Keycloak containers. Promoted to group_vars so both the
@@ -44,7 +62,15 @@ nvidia_hold_packages:
 # =============================================================================
 stack_name: genieai
 compose_file: docker-compose.yaml
-deploy_stabilization_timeout: 900
+# 4200s (70 min): must outlast the SEQUENTIAL worst case of the swarm
+# restart budgets the compose file gives on a root-era upgrade — the
+# one-shot chown init can burn its whole 60x30s budget racing the old
+# root-era container's writes before converging, and the follow-up
+# service then needs up to its OWN 60x30s budget to become healthy
+# (1800 + 1800 + margin). A 2100s budget could abort a deploy that was
+# converging normally inside the budgets the compose file sized; a
+# genuinely broken stack still fails the gate — just slower.
+deploy_stabilization_timeout: 4200
 deploy_opea: "1"
 enable_observability: "0"
 # OKF feature flag (2026-10-21): 0 parks the OKF stack (containers, Kong

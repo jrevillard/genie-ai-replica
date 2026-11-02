@@ -7,9 +7,27 @@ set -e
 CERT_PATH="/etc/nginx/certs"
 VOLUME_CERT_PATH="/etc/nginx/ssl"
 
+# Certificates must be readable by this container's uid (101 since #1227):
+# a root-owned 0600 key fails downstream with a misleading message (openssl
+# "Invalid private key format", or an unguarded set -e cp). Shared by the
+# first-run path AND the certbot reload loop.
+check_certs_readable() {
+    if [ ! -r "${VOLUME_CERT_PATH}/server.key" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.key is not readable by uid $(id -u)."
+        echo "Make it group-readable by the nginx group: chgrp 101 server.key && chmod 0640 server.key"
+        return 1
+    fi
+    if [ ! -r "${VOLUME_CERT_PATH}/server.crt" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.crt is not readable by uid $(id -u)."
+        return 1
+    fi
+}
+
 # Function to use volume-mounted certificates
 use_volume_certs() {
     echo "Using SSL certificates from volume mount..."
+
+    check_certs_readable || exit 1
 
     # Validate certificate format
     if ! openssl x509 -in "${VOLUME_CERT_PATH}/server.crt" -noout -text >/dev/null 2>&1; then
@@ -73,11 +91,13 @@ export NGINX_FRONTEND_PORT="${NGINX_FRONTEND_PORT:-8090}"
 export NGINX_PERMISSIONS_POLICY="${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}"
 export NGINX_HTTPS_PORT="${NGINX_HTTPS_PORT:-443}"
 
-# Render nginx config from template
+# Render nginx config from template. Non-root (#1227): conf.d is read-only
+# for uid 101, so the rendered server block lands in /tmp — the rootless main
+# config (nginx-rootless.conf) includes it from there.
 echo "Rendering nginx config from template..."
 envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_FRONTEND_HOST} ${NGINX_FRONTEND_PORT} ${NGINX_PERMISSIONS_POLICY} ${NGINX_HTTPS_PORT}' \
     < /etc/nginx/conf.d/default.conf.template \
-    > /etc/nginx/conf.d/default.conf
+    > /tmp/rendered-default.conf
 
 # Validate rendered config
 echo "Validating nginx configuration..."
@@ -107,13 +127,28 @@ while true; do
     # Flag is consumed by writing an empty file (certbot clears it after a delay).
     if [ -f /var/www/certbot/reload-nginx ]; then
         echo "Reload signal received from certbot, updating certificates..."
-        # Re-copy certificates from volume mount (nginx does not reload cert files on HUP)
+        # Re-copy certificates from volume mount (nginx does not reload cert files on HUP).
+        # Same readability guard as first-run: an unreadable rotated key
+        # must NOT kill PID 1 under set -e — keep serving the old certs.
         if [ -f "${VOLUME_CERT_PATH}/server.crt" ] && [ -f "${VOLUME_CERT_PATH}/server.key" ]; then
-            cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt"
-            cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key"
-            chmod 644 "${CERT_PATH}/server.crt"
-            chmod 600 "${CERT_PATH}/server.key"
-            echo "Certificates updated from volume mount"
+            if check_certs_readable; then
+                # The copy itself is guarded too: a failed cp/chmod
+                # (ENOSPC, EIO writing into /etc/nginx/certs) must keep
+                # PID 1 alive on the loaded certificates, same as an
+                # unreadable rotated key. A partial copy leaves a
+                # mismatched pair — nginx refuses the reload and keeps
+                # serving what it already has.
+                if cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt" \
+                    && cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key" \
+                    && chmod 644 "${CERT_PATH}/server.crt" \
+                    && chmod 600 "${CERT_PATH}/server.key"; then
+                    echo "Certificates updated from volume mount"
+                else
+                    echo "WARNING: certificate copy failed, keeping current certificates"
+                fi
+            else
+                echo "WARNING: rotated certificate unreadable, keeping current certificates"
+            fi
         fi
         nginx -s reload || echo "WARNING: nginx reload failed"
     fi

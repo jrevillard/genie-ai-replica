@@ -46,19 +46,28 @@
 #   5. .env configured (see env template)
 # =============================================================================
 
-# Required directories on each target node (create before deploy):
+# Required directories on each target node:
 #
-# All nodes:
-#   ./data/logs/kong            (Kong gateway logs)
-#   ./data/database_backups     (Backend DB dumps)
-#   ./data/huggingface          (TEI model cache, GPU nodes only)
-#   ./secrets/ssl/              (server.crt, server.key)
+# Created AND owned automatically at first up — no manual pre-create:
+#   ./data/database_backups     (backend-init hands it to uid 1000)
+#   ./secrets/ssl/              (secrets-ssl-init normalizes it to
+#                               root:101 — keys 0640, certs 0644)
+#
+# Still manual (GPU nodes only):
+#   ./data/huggingface          (TEI model cache — no init covers it; the
+#                               TEI images are profile-gated root users)
+#
+# Kong gateway logs are NOT on this list anymore (#1227): Kong logs to
+# stdout/stderr (fluentd driver) and the former /var/log/kong host bind made
+# docker create a root-owned data/logs/kong on first run.
+
 
 volumes:
   postgres_data:
   redis_data:
   doc_repo_uploads:
   arango_data: {}
+  arango_apps: {}
   hf_cache:
   backend_uploads:
   backend_data:
@@ -94,6 +103,107 @@ x-logging: &fluent-logging
     # project — `admin-logs-prd-document-repository` instead of just
     # `document-repository`).
     labels: "com.docker.compose.service,com.docker.compose.project"
+
+# Shared shape for the one-shot volume-chown init containers (#1227): they
+# exist to chown a named volume for the unprivileged service that follows,
+# so they run as root ON PURPOSE with exactly CHOWN (the chown) +
+# DAC_OVERRIDE (mid-sweep traversal of directories already chowned to the
+# target uid), stay one-shot (bounded retries), and never touch a host
+# path. Each instance adds only its command, volume and placement. The
+# no-root contract test enforces these invariants on every member of
+# ONE_SHOT_ROOT_INIT.
+x-chown-init: &chown-init
+  cap_drop:
+    - ALL
+  cap_add:
+    # CHOWN (the chown itself) + DAC_OVERRIDE (traversal): once the sweep
+    # has chowned a 0700 directory to the target uid, root with CHOWN only
+    # can no longer descend into it — find fails mid-traversal with
+    # 'Permission denied'. Every find's rc IS enforced (|| exit 9), so
+    # without this capability the truncation would still be caught — but
+    # as a FAILED init churning its whole retry budget on every attempt
+    # instead of a completed handover. DAC_OVERRIDE lets root read every
+    # directory until the verify passes (both capabilities verified live
+    # against nested 0700 fixtures).
+    - CHOWN
+    - DAC_OVERRIDE
+  security_opt:
+    - no-new-privileges:true
+  logging: *fluent-logging
+  image: busybox:1.38.0
+  # NO networks key: the sweep performs no network I/O. Without a declared
+  # network the init attaches the platform DEFAULT (compose: the project's
+  # default network; stack deploy: the stack's default overlay) instead of
+  # PINNING the named genieai_network overlay — a slow or failed
+  # genieai_network create on a node can no longer surface as an init
+  # failure that looks like a chown failure. The default attach itself is
+  # unavoidable without front-end-specific specs and is irrelevant to a
+  # chown-only one-shot.
+  # bounded self-heal on the compose front-end (deploy.restart_policy below
+  # covers swarm): a transient init failure retries instead of stranding
+  # the dependent services on a failed one-shot. The one-shot rule treats
+  # a BOUNDED retry as one-shot-in-spirit (it terminates); restart: always
+  # would be a permanent root container and still trips.
+  # The budget is sized for the UPGRADE RACE, not for a transient hiccup:
+  # during a root-era `docker compose up` the OLD root-era container keeps
+  # writing root-owned files into the shared named volume WHILE the init
+  # sweeps, so the strict verify trips exit 9 until the old container
+  # stops — the same window the follow-up services' 60x30s budgets were
+  # sized for. 3 attempts could exhaust inside that window and strand
+  # root-owned files with no automatic re-run (swarm never restarts an
+  # exhausted task).
+  restart: "on-failure:60"
+  deploy:
+    # mode: global (the otel-collector-init precedent): named volumes are
+    # node-local and swarm ignores depends_on, so a per-node init is the
+    # only way to guarantee the chown ran on every node the follow-up
+    # service can land on — including a swarm with more than one
+    # genieai-labeled node. Compose mode ignores this and runs the init
+    # once. Services whose follow-up is CONSTRAINED to
+    # node.labels.genieai == true restate that constraint in a local
+    # deploy: (shallow-replacing this map — mode and the bounded policy
+    # go with it) so the init skips nodes the service can never land on;
+    # otel-collector-init alone stays unconstrained, because
+    # otel-collector itself is global on every node.
+    mode: global
+    restart_policy:
+      # bounded self-heal (the one-shot rule's blessed form): a transient
+      # init failure (registry hiccup, EIO mid-sweep) retries instead of
+      # stranding the dependent services on a failed one-shot — condition
+      # "none" left a failed chown never-retried while the follow-up
+      # service burned its whole restart budget. Same upgrade-race sizing
+      # as the compose restart above: the old root-era container writes
+      # into the volume while the init sweeps, and an exhausted task is
+      # never re-run by swarm. HONEST LIMIT: on a continuously-written
+      # volume (victorialogs ingest, otel-queue) the old container only
+      # stops AFTER the init completes — a busy ingest can keep the
+      # verify tripping. If the budget exhausts, quiesce the writer and
+      # retry: `docker compose stop victorialogs otel-collector` (or
+      # `docker service update --force <stack>_<init>` on swarm).
+      condition: on-failure
+      delay: 30s
+      max_attempts: 60
+
+# Placement-scoped extension merged AHEAD of x-chown-init by the four
+# constrained inits via `<<: [*chown-init-genieai, *chown-init]` — in a
+# YAML sequence merge EARLIER maps take precedence, so THIS map's
+# deploy: (mode + the race-sized policy + the genieai constraint) wins
+# whole. One copy, or the four bounded policies drift.
+# Declared as a TOP-LEVEL sibling, NOT nested inside x-chown-init: a
+# nested anchor still leaves its key in the parent map, and every service
+# merging *chown-init would inherit a stray `x-chown-init-genieai:`
+# service-level key in the resolved config (docker compose config proves
+# it) — dead data on five service specs.
+x-chown-init-genieai: &chown-init-genieai
+  deploy:
+    mode: global
+    placement:
+      constraints:
+        - node.labels.genieai == true
+    restart_policy:
+      condition: on-failure
+      delay: 30s
+      max_attempts: 60
 
 services:
 
@@ -144,6 +254,9 @@ services:
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
+    # Run as the image's own kong user (uid 1001): migrations only touch the
+    # database - no privileged port, no host path (#1227 no-root contract).
+    user: kong
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
@@ -193,6 +306,8 @@ services:
       kong:
         condition: service_healthy
     build: api-gateway-solution/new-config/
+    # Pin the image's own USER (uid 1000) at compose level (#1227).
+    user: "1000:1000"
     image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     networks:
       - genieai_network
@@ -229,6 +344,13 @@ services:
       kong-migrations:
         condition: service_completed_successfully
     restart: unless-stopped
+    # Run as the image's own kong user (uid 1001). All Kong logs are wired to
+    # stdout/stderr (KONG_*_ACCESS_LOG / ERROR_LOG below) and the fluentd
+    # driver ships them, so the legacy /var/log/kong host bind is gone: docker
+    # silently creates a missing bind source as root-owned, which is exactly
+    # what produced the root-owned data/logs/kong directory of #1227.
+    # Pinned by name: the image's USER is the numeric source of truth.
+    user: kong
     image: kong:3.9.3
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
@@ -267,8 +389,6 @@ services:
     # Kong admin API - internal only (accessible via docker exec for post-deploy config)
     # ports:
     #   - "8001:8001"
-    volumes:
-      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong"
     deploy:
       replicas: 1
       placement:
@@ -279,15 +399,74 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Creates and normalizes the secrets/ssl HOST bind on the gateway node
+  # (#1227): docker creates a missing directory (root-owned) when THIS
+  # container mounts it with create_host_path: true, then the init hands
+  # it to root:101 — the state the edge's gid-101 nginx can read — and
+  # normalizes any provided certs (keys 0640, certs 0644) to the same
+  # shape the Ansible path's "Normalize SSL certificate ownership" task
+  # produces. nginx's depends_on gates its START on this init's success,
+  # so the edge never mounts a non-converged directory. Dedicated init
+  # rather than piggybacking otel-collector-init: a single
+  # responsibility per init, and the busy-writer honest limit (a
+  # letsencrypt certbot renewal writing during the sweep → exit 9 →
+  # bounded retry) is scoped to THIS service instead of re-looping the
+  # collector's queue chown.
+  secrets-ssl-init:
+    <<: *chown-init
+    # Gateway-only, global on that node, race-sized budget: same doctrine
+    # as the genieai-constrained inits, inlined (single consumer — no
+    # extension anchor for one service).
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
+    # One sweep: chown the tree (dir + files + symlinks) to root:101,
+    # pin the dir to 0750 (group r-x for gid 101), then modes —
+    # DENY-BY-DEFAULT: every file starts at key-tight 0640 and only the
+    # known CERT spellings (*.crt/*.cer/*.pem with no 'key' in the
+    # name — key.pem IS a key) are widened to 0644. A final grep keeps
+    # the name-whitelist honest: any widened file whose CONTENT is a
+    # private key (private.pem-shaped, id_rsa.cer) fails the init —
+    # fed through find -exec {} + so space-y names reach grep as argv,
+    # and the verdict is read from the verify FILE, never from an exit
+    # status: grep exits 1 on no-match, find -exec + propagates it, so
+    # this arm carries NO || exit 9 and the sweep terminates in an
+    # explicit exit 0 — the happy path must actually be reachable. A
+    # deny-by-default
+    # inversion replaced the earlier 'everything not *.key -> 0644'
+    # catch-all, which world-read any key parked under a
+    # non-canonical name (key.pem, *.old, *.bak — verified defect
+    # shape). Verify group + tight modes, exit 9 on any survivor
+    # (failed init = visible + retried by the bounded policy).
+    # SUBDIR modes: subdirectories are verified too (group 101 + group
+    # r-x) so an operator-staged 0700 subdir cannot hide its contents
+    # from the gid-101 edge behind a converged top level. Paren-free:
+    # \( is an unknown escape inside the double-quoted YAML scalar
+    # (parse error), so the De-Morgan pair is spelled as two arms.
+    command: ["sh", "-c", "mkdir -p /ssl || exit 9; chown -R -h 0:101 /ssl || exit 9; chmod 0750 /ssl || exit 9; find /ssl -mindepth 1 -type f -exec chmod 0640 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.crt' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.cer' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -mindepth 1 -type f -name '*.pem' ! -name '*key*' -exec chmod 0644 {} + || exit 9; find /ssl -maxdepth 0 ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -group 101 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type d ! -group 101 -print -quit > /tmp/verify 2>/dev/null || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type d ! -perm -0050 -print -quit > /tmp/verify 2>/dev/null || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f ! -perm 0640 ! -perm 0644 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; find /ssl -mindepth 1 -type f -perm 0644 -exec grep -l 'BEGIN .*PRIVATE KEY' {} + > /tmp/verify 2>/dev/null; if [ -s /tmp/verify ]; then exit 9; fi; exit 0"]
+    volumes:
+      - type: bind
+        source: ./secrets/ssl
+        target: /ssl
+        bind:
+          create_host_path: true
+
   nginx:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # Non-root (#1227): the edge runs as the image's nginx user (uid 101) and
+    # listens on unprivileged in-container ports (8080/8443). 80/443 exist only
+    # at host publication. The entrypoint renders config into /tmp and keeps
+    # its writable state (certs, pid, temp dirs) in nginx-owned paths.
+    # Pin the image's own nginx user by name - the Dockerfile USER stays
+    # the single source of the numeric identity (#1227).
+    user: nginx
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -296,15 +475,17 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
+      secrets-ssl-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build: api-gateway-solution/nginx/
     image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     ports:
-      - target: 80
+      - target: 8080
         published: ${NGINX_HTTP_PORT:-80}
         protocol: tcp
         mode: host
-      - target: 443
+      - target: 8443
         published: ${NGINX_HTTPS_PORT:-443}
         protocol: tcp
         mode: host
@@ -317,14 +498,31 @@ services:
       - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
       - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/ | grep -qE '^[23]' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     volumes:
-      - ./secrets/ssl:/etc/nginx/ssl:ro  # directory mount — tracks inode changes from certbot renewals
-      - certbot-webroot:/var/www/certbot:ro
+      # create_host_path: true EXPLICIT (#1227): long syntax without the
+      # key does NOT create a missing source (verified on compose
+      # v2.29.7) — the edge container would fail to create on a clean
+      # checkout before secrets-ssl-init ever ran. The explicit true has
+      # compose create the directory (root-owned, CREATE-time moment)
+      # and secrets-ssl-init — which depends_on-gates this service's
+      # START — normalizes it to root:101 before the edge ever runs.
+      # Converged state, enforced by the runtime gate (rule 4). The
+      # directory mount still tracks inode changes from certbot renewals.
+      - type: bind
+        source: ./secrets/ssl
+        target: /etc/nginx/ssl
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: certbot-webroot
+        target: /var/www/certbot
+        read_only: true
     networks:
       - genieai_network
     deploy:
@@ -334,8 +532,14 @@ services:
           - node.labels.gateway == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        # Race-sized like the gated services' budget: on the swarm path
+        # Ansible strips depends_on, so nginx's start is NOT gated on
+        # secrets-ssl-init — its uid-101 entrypoint exits on a
+        # non-converged key while the init churns through its own
+        # 30s x 60 budget; a 5s x 10 budget (~1 min) would exhaust and
+        # swarm never re-runs an exhausted task.
+        delay: 30s
+        max_attempts: 60
 
   # ===========================================================================
   # Let's Encrypt Certificate Management (optional)
@@ -383,18 +587,20 @@ services:
   # ===========================================================================
 
   frontend:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed.
+    # No cap_add since #1227: the service runs as the image's nginx user and
+    # needs no privilege manipulation.
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
     build: components/gov-chat-frontend/
+    # Non-root (#1227): the image's runtime user is nginx (uid 101) - its
+    # Dockerfile chowns the runtime-config dir and renders nginx.conf to /tmp.
+    # Pinned by name: the image's USER is the numeric source of truth.
+    user: nginx
     image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - PORT=8090
@@ -409,7 +615,18 @@ services:
       - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
       - VUE_APP_STREAM_IDLE_TIMEOUT_MS=${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}
     volumes:
-      - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
+      # Long syntax + create_host_path:false (#1227): the default lives in
+      # the repo; an operator override pointing at a not-yet-existing host
+      # path must fail the frontend loudly, not let docker create the
+      # source root-owned (which would break the uid-101 runtime config
+      # write). Swarm ignores bind options — there the config_bootstrap
+      # role seeds the directory.
+      - type: bind
+        source: ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}
+        target: /app/dist/config
+        read_only: true
+        bind:
+          create_host_path: false
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
@@ -487,6 +704,9 @@ services:
     build:
       context: .
       dockerfile: components/gov-chat-backend/Dockerfile.migrations
+    # Pin the image's node user (#1227) - Dockerfile.migrations sets USER node.
+    # Pinned by name: the image's USER is the numeric source of truth.
+    user: node
     image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     networks:
       - genieai_network
@@ -521,16 +741,37 @@ services:
         condition: service_healthy
       db-migrations:
         condition: service_completed_successfully
+      backend-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build:
       context: components/
       dockerfile: gov-chat-backend/Dockerfile
+    # Pin the image's node user, uid 1000 (Dockerfile sets USER node) (#1227).
+    # Pinned by name: the image's USER is the numeric source of truth.
+    user: node
     image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     # Swarm: internal only - access via Kong proxy
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
-      - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
+      # create_host_path: true EXPLICIT (#1227): long syntax without the
+      # key does NOT create a missing source (verified on compose
+      # v2.29.7) — the backend container would fail to create on a clean
+      # checkout before backend-init ever ran. The explicit true has
+      # compose create the directory (root-owned, CREATE-time moment)
+      # and backend-init — which depends_on-gates this service's START —
+      # hands it to uid 1000 before the backend ever runs. Converged
+      # state, enforced by the runtime gate (rule 3 sweeps for
+      # non-uid-1000 files). Swarm caveat: swarmkit ignores bind options
+      # on `docker stack deploy`; on that path the ownership guarantee IS
+      # the Ansible handover — keep the playbook tasks and this bind in
+      # step.
+      - type: bind
+        source: ${DATA_DIR:-./data}/database_backups
+        target: /app/database_backups
+        bind:
+          create_host_path: true
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
@@ -663,8 +904,13 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # document-repository/arango — on a root-era upgrade the backend
+        # starts while backend-init is still chowning (backend_uploads can
+        # be the largest root-era volume), and each EACCES crash burns one
+        # attempt. The budget must outlast the chown.
+        delay: 30s
+        max_attempts: 60
 
   okf-server:
     # OKF feature flag (merge prep 2026-10-21): OKF_ENABLED=1 activates the OKF
@@ -691,8 +937,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    volumes:
-      - "${DATA_DIR:-./data}/logs/okf-server:/app/logs"
+    # No host log bind (#1227): the shared logger is CONSOLE-ONLY (see
+    # components/shared/lib/logger.js), stdout is captured by the fluentd
+    # logging driver, and a data/logs bind would have docker recreate the
+    # directory root-owned (the same defect the kong logs bind had).
     # Allow okf-server to resolve NGINX_PUBLIC_DOMAIN to the Docker host so OIDC
     # discovery/JWKS fetches (KEYCLOAK_URL → public NGINX) reach the host-published 80/443.
     extra_hosts:
@@ -1127,16 +1375,83 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Chowns the backend's root-era named volumes to uid 1000 (#1227) — same
+  # upgrade migration as document-repository-init: deployments that ran the
+  # root-era backend hold root-owned files in backend_data and
+  # backend_uploads, which the now non-root backend could no longer write.
+  backend-init:
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
+    <<: [*chown-init-genieai, *chown-init]
+    # PER-VOLUME guard: the loop probes each volume independently, so a
+    # root-era file in ONE volume heals only that volume — an operator
+    # recovering one volume with `docker volume rm` leaves the other's
+    # ownership state untouched. Same targeted-chown doctrine the
+    # Ansible migration tasks state.
+    # Exit-status honesty: every find (probe and verify) has its exit
+    # status enforced (|| exit 9), so a FAILED chown (EIO, ENOENT
+    # mid-traversal) fails the whole init instead of being masked — a
+    # masked failure exited 0, passed service_completed_successfully, and
+    # left the backend starting against a partially root-owned volume
+    # with nothing to ever retry the chown.
+    # PROBE form (no marker): "a marker strands files written after the
+    # sweep under a permanent skip" — on a live root-era upgrade the old
+    # container keeps writing while the init chowns, and such a file would
+    # never be healed. Same doctrine as the Ansible migration tasks: find
+    # ! -user <target uid> (OWNERSHIP-TOTAL: a third-uid leftover — a
+    # manual recovery chown, uid drift from an older image — strands the
+    # service in an EACCES restart loop behind a green init), targeted -h
+    # chown, verify, exit nonzero if anything
+    # survived (a failed init is VISIBLE and retried by the bounded
+    # policy; the next deploy heals the rest).
+    # Every find runs with its EXIT STATUS checked (probe and verify both
+    # write to a temp file and fail the init on a nonzero rc): an EIO-class
+    # traversal failure yields a failed init (visible + retried by the
+    # bounded policy), never a masked "nothing root-owned" behind a
+    # discarded rc. DAC_OVERRIDE covers EACCES traversal; I/O errors
+    # surface as failures.
+    command: ["sh", "-c", "for d in /app/data /app/Uploads /fix-dumps; do find \"$$d\" ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/app/Uploads
+      # The backend's dump-target HOST bind, chowned by this init: with
+      # create_host_path: true (this mount AND the backend's guarded
+      # mount — both explicit) compose creates the missing directory at
+      # CREATE time and the loop above hands it to uid 1000 before the
+      # depends_on-gated backend starts. The root-owned moment lasts
+      # seconds and only on a fresh checkout; the manual mkdir/chown
+      # pre-create step the docs used to list is gone.
+      - type: bind
+        # SAME source spelling as the backend's own mount (${DATA_DIR} —
+        # the hardcoded ./data once diverged on a DATA_DIR override: the
+        # init healed <repo>/data while compose root-created the real
+        # /srv/... source nobody ever chowned).
+        source: ${DATA_DIR:-./data}/database_backups
+        target: /fix-dumps
+        bind:
+          create_host_path: true
+
+  # Chowns the doc_repo_uploads volume to uid 1000 (#1227): deployments
+  # that ran the root-era image hold a root-owned volume, and the now
+  # non-root document-repository would get EACCES on every upload.
+  document-repository-init:
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
+    <<: [*chown-init-genieai, *chown-init]
+    # PROBE form (no marker — see backend-init).
+    command: ["sh", "-c", "find /app/uploads ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    volumes:
+      - doc_repo_uploads:/app/uploads
+
   document-repository:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities at all.
+    # No cap_add (#1227): the service runs as the image's node user (1000)
+    # and cannot exercise any capability — the image's root-only setup
+    # paths are pre-chowned by document-repository-init.
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETUID
-      - SETGID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -1145,10 +1460,16 @@ services:
         condition: service_healthy
       keycloak-config:
         condition: service_healthy
+      document-repository-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build:
       context: components/
       dockerfile: document-repository/Dockerfile
+    # Non-root (#1227): the Dockerfile sets USER node and chowns the upload,
+    # ClamAV signature and socket dirs its entrypoint writes.
+    # Pinned by name: the image's USER is the numeric source of truth.
+    user: node
     image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       # Secrets (required, no defaults in code)
@@ -1218,23 +1539,33 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        # 60 attempts at 30s delay = a 30-minute budget: the first start
+        # after the #1227 migration can race a minutes-long initial chown
+        # -R of a large root-era volume (swarm has no depends_on, so the
+        # service starts while its init still runs); each EACCES crash
+        # burns one attempt, and the budget must outlast the chown, not
+        # convert a transient race into an unrecoverable outage.
+        delay: 30s
+        max_attempts: 60
 
   clamav:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed.
+    # No cap_add since #1227: the service runs as the image's clamav user
+    # through /init-unprivileged, which needs no privilege manipulation.
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETUID
-      - SETGID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Run as the image's own clamav user (uid 1000) - the image chowns its
+    # signature database to that user, so the entrypoint works unprivileged
+    # (#1227). Pinned by name: the image's USER is the numeric source of truth.
+    user: clamav
+    # The image's default /init (s6) prepares /run/clamav with a chown and
+    # therefore assumes root; /init-unprivileged is the image's own non-root
+    # path (freshclam-on-missing-db + clamd in the foreground) (#1227).
+    entrypoint: ["/init-unprivileged"]
     image: clamav/clamav:stable-debian
     # Internal only
     # ports:
@@ -1257,28 +1588,97 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Chowns the arango_data and arango_apps volumes to the unprivileged uid
+  # arango runs as (#1227). One-shot, runs as root ON PURPOSE (the chown IS
+  # the job) and writes nothing outside the named volumes — see the no-root
+  # contract test. Each run PROBES for root-owned paths (find -user root) and
+  # hands exactly those to the service uid — no marker file, so nothing
+  # written after the sweep is stranded under a permanent skip. BOTH
+  # front-ends only re-run this init when its container is RECREATED:
+  # compose keeps an exited-0 one-shot exited across unchanged `up`s, and
+  # swarm re-runs a task only when the service spec changes — a fresh
+  # root-era volume needs `docker compose up -d --force-recreate
+  # arango-vector-db-init` (compose) or `docker service update --force
+  # <stack>_<init>` (swarm).
+  arango-vector-db-init:
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
+    <<: [*chown-init-genieai, *chown-init]
+    # PER-VOLUME guard (same doctrine as backend-init): the loop probes
+    # each volume independently — a root-era file in one volume heals
+    # only that volume. Every find's exit status is enforced (see
+    # backend-init).
+    # PROBE form (no marker — see backend-init): targeted -h chown of
+    # whatever is root-owned, then verify.
+    command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" ! -user 999 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 999 -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" ! -user 999 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
+    volumes:
+      # nocopy is LOAD-BEARING in swarm mode: the arango image ships
+      # /var/lib/arangodb3{,-apps} as root:root 0775 (verified in-image),
+      # and docker's copy-on-empty-volume applies those attrs to the FIRST
+      # container that mounts a virgin volume — docker never copies again
+      # after that. Compose-up is shielded by ordering: depends_on holds
+      # the init (busybox, neither dir in its image) as that first
+      # mounter, so the copy burns harmlessly there and the init's chown
+      # survives (verified: the volume stays 999:999 through the arango
+      # mount). Swarm IGNORES depends_on — the arango task can mount the
+      # virgin volume first, leaving it root:root with the init already
+      # exited 0 and nothing to re-run: uid-999 arangod dies on the
+      # ENGINE file in a 60x30s crash loop (reproduced: arango alone on a
+      # virgin volume lands root:root and FATALs). nocopy makes the
+      # mount-order irrelevant. The other init-chowned volumes need no
+      # flag: their images ship the dirs already owned by the service
+      # uid (backend, document-repository) or not at all (otel-collector,
+      # victoria-logs) — a copy lands correctly owned wherever it fires.
+      - type: volume
+        source: arango_data
+        target: /var/lib/arangodb3
+        volume:
+          nocopy: true
+      - type: volume
+        source: arango_apps
+        target: /var/lib/arangodb3-apps
+        volume:
+          nocopy: true
+
   arango-vector-db:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities at all.
+    # No cap_add (#1227): the service runs as uid 999 with no privilege
+    # manipulation of its own (the image's root-only setup path is bypassed
+    # by arango-vector-db-init).
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Run as an unprivileged dedicated uid (#1227). The image ships no
+    # arangodb user and a root-owned data dir, so arango-vector-db-init chowns
+    # the named volume to 999 before this service starts.
+    user: "999:999"
     image: arangodb/arangodb:3.12.4
     ports:
       - target: 8529
         published: ${ARANGO_PORT:-8529}
         protocol: tcp
         mode: host
+    depends_on:
+      arango-vector-db-init:
+        condition: service_completed_successfully
     volumes:
-      - arango_data:/var/lib/arangodb3
+      # nocopy (long syntax): busybox ships neither dir today, but a
+      # root-owned copy-on-empty would undo this very init's chown before
+      # it ran — see arango-vector-db below for the full mechanism.
+      - type: volume
+        source: arango_data
+        target: /var/lib/arangodb3
+        volume:
+          nocopy: true
+      - type: volume
+        source: arango_apps
+        target: /var/lib/arangodb3-apps
+        volume:
+          nocopy: true
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
     command: ["--experimental-vector-index=true"]
@@ -1297,8 +1697,14 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        # 60 attempts at 30s delay = a 30-minute budget: the first start
+        # after the #1227 migration can race a minutes-long initial chown
+        # -R of a large root-era volume (swarm has no depends_on, so the
+        # service starts while its init still runs); each EACCES crash
+        # burns one attempt, and the budget must outlast the chown, not
+        # convert a transient race into an unrecoverable outage.
+        delay: 30s
+        max_attempts: 60
 
 
   # ===========================================================================
@@ -2260,6 +2666,13 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
+    # postgres package user (uid 999): the init only runs the psql client
+    # against the database over the network and writes nothing (#1227).
+    # Unlike the other pins, this one is NOT a restatement of an image
+    # USER: the postgres:16 base ships no USER (root by default) — the
+    # pin is the #1227 mandate itself, giving this one-shot the postgres
+    # uid for its network-client lifetime.
+    user: postgres
     build: configs/postgres/
     image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
@@ -2287,11 +2700,15 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
+    # No cap_add (#1227): the pinned identity is uid 1000, which cannot
+    # exercise CHOWN — the entries were dead hardening-data.
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
+    # The upstream image runs as uid 1000 (keycloak) with group 0 — mirrored
+    # here so compose and chart state the same identity (#1227). Pinned by
+    # name: the image's USER is the numeric source of truth.
+    user: "keycloak:root"
     image: quay.io/keycloak/keycloak:26.7.0
     # The upstream image ships an empty CMD (kc.sh prints its usage and exits
     # without a subcommand). The dropped custom image baked `start` via its
@@ -2341,7 +2758,18 @@ services:
       # ...) live inside jars, not in this directory, so the mount cannot
       # shadow them. The active theme is selected by KEYCLOAK_THEME (realm
       # import) or the realm's loginTheme/accountTheme/... settings.
-      - ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}:/opt/keycloak/themes:ro
+      # Same long-syntax + create_host_path:false contract as the frontend
+      # config bind (#1227): a missing override path fails loudly instead
+      # of being root-created (a bind mount never falls back to image
+      # contents, so the failure is the honest signal). Swarm caveat, same
+      # as the frontend bind: swarmkit ignores bind options — there the
+      # guarantee is pre-seeding every node's directory (config_bootstrap).
+      - type: bind
+        source: ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}
+        target: /opt/keycloak/themes
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s
@@ -2371,6 +2799,8 @@ services:
     build:
       context: configs/keycloak/
       dockerfile: Dockerfile.config-cli
+    # Pin the image's own USER (uid 65534) at compose level (#1227).
+    user: "65534:65534"
     image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - KEYCLOAK_URL=http://keycloak:8080
@@ -2458,28 +2888,19 @@ services:
   # In Swarm mode, depends_on is removed by Ansible — the Collector's
   # restart policy handles the race condition until init completes.
   otel-collector-init:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
-    # Exception: cap_add CHOWN — the init's only job is chown 10001 on /var/lib/otelcol;
-    # cap_drop ALL strips CAP_CHOWN, so we add it back scoped to this one-shot init.
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-    security_opt:
-      - no-new-privileges:true
-    image: busybox:1.38.0
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
+    # One-shot chown of the collector's queue volume for uid 10001, shared
+    # with the other volume-chown inits through the x-chown-init anchor
+    # (CHOWN + traversal DAC_OVERRIDE caps, one-shot on both front-ends, global mode
+    # so the chown has run on every node the collector can land on).
+    <<: *chown-init
+    # PROBE form (no marker — see backend-init), OWNERSHIP-TOTAL like
+    # every chown-init: otel's init REPLACED a working unconditional
+    # `chown -R 10001:10001` — the queue volume's contract was always
+    # "everything is 10001", and a third-uid leftover would strand the
+    # collector in an EACCES restart loop behind a green init.
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/otelcol ! -user 10001 -exec chown -h 10001:10001 {} + || exit 9; fi; find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - otel-queue:/var/lib/otelcol
-    networks:
-      - genieai_network
-    deploy:
-      # Global mode: runs once on every Swarm node (matches otel-collector's
-      # global placement) to set volume permissions before Collector starts.
-      # In compose mode, depends_on ensures ordering instead.
-      mode: global
-      restart_policy:
-        condition: none
 
   otel-collector:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
@@ -2488,6 +2909,10 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    # The upstream image runs as uid 10001 (otel); otel-collector-init chowns
+    # the queue volume to that uid. State it here so compose carries the
+    # identity explicitly (#1227).
+    user: "10001:10001"
     image: otel/opentelemetry-collector-contrib:0.152.0
     # Expose fluentforward receiver on localhost so the Docker daemon can
     # send container logs via the fluentd logging driver. Binding to
@@ -2536,8 +2961,12 @@ services:
       mode: global
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # arango/document-repository/backend/victoria-logs — the otel-queue
+        # file_storage (admin logs) can be the largest root-era volume, and
+        # the budget must outlast otel-collector-init's chown.
+        delay: 30s
+        max_attempts: 60
 
   victoriametrics:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
@@ -2573,6 +3002,19 @@ services:
         delay: 5s
         max_attempts: 5
 
+  # Chowns the vlogs-data volume to the unprivileged uid victoria-logs runs
+  # as (#1227). One-shot, runs as root ON PURPOSE (the chown IS the job) and
+  # writes nothing outside the named volume - see the no-root contract test.
+  victorialogs-init:
+    # Placement keeps this global init off nodes its service can never
+    # land on; sequence merge gives the anchor's deploy: precedence
+    # (doctrine lives once, at the x-chown-init-genieai anchor).
+    <<: [*chown-init-genieai, *chown-init]
+    # PROBE form (no marker — see backend-init).
+    command: ["sh", "-c", "find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs ! -user 65534 -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    volumes:
+      - vlogs-data:/var/lib/victoria-logs
+
   victorialogs:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -2581,11 +3023,17 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Non-root (#1227): run as uid 65534; victorialogs-init chowns the data
+    # volume before this service starts (depends_on below).
+    user: "65534:65534"
     image: victoriametrics/victoria-logs:v1.50.0
     command:
       - "--storageDataPath=/var/lib/victoria-logs"
       - "--retentionPeriod=${VICTORIALOGS_RETENTION:-30d}"
       - "--httpListenAddr=:9428"
+    depends_on:
+      victorialogs-init:
+        condition: service_completed_successfully
     volumes:
       - vlogs-data:/var/lib/victoria-logs
     healthcheck:
@@ -2604,8 +3052,13 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # arango/document-repository/backend — on a root-era upgrade
+        # victoria-logs (uid 65534) starts while victorialogs-init is
+        # still chowning (the admin-logs volume can be the largest); each
+        # EACCES crash burns one attempt. The budget must outlast the chown.
+        delay: 30s
+        max_attempts: 60
 
   victoriatraces:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed

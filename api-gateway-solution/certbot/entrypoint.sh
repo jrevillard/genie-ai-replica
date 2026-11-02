@@ -63,17 +63,26 @@ check_existing_certs() {
     fi
 }
 
+# Normalize the deployed pair for the uid-101 edge: certs 0644, key 0640,
+# group 101 on both (the edge reads the key through the read-only bind).
+# Shared by the copy path AND the startup fix-up — one call site per
+# renewal path, so a mode/group edit cannot land on only one of them.
+normalize_cert_ownership() {
+    chmod 644 "${SECRETS_DIR}/server.crt" && chmod 640 "${SECRETS_DIR}/server.key" \
+        && chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
+}
+
 # Copy obtained/renewed certs from Let's Encrypt to secrets dir
 copy_certs() {
     if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
         # Remove-then-copy: a plain cp over an existing file writes into its
-        # inode and inherits the previous (possibly non-root) ownership, which
-        # the cap-dropped nginx container cannot read.
+        # inode and inherits the previous ownership. The edge nginx runs as
+        # uid 101 (#1227) and reads these through the read-only bind, so the
+        # key must stay group-101-readable (0640), not root-only 0600.
         rm -f "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
         cp "${CERT_DIR}/fullchain.pem" "${SECRETS_DIR}/server.crt"
         cp "${CERT_DIR}/privkey.pem" "${SECRETS_DIR}/server.key"
-        chmod 644 "${SECRETS_DIR}/server.crt"
-        chmod 600 "${SECRETS_DIR}/server.key"
+        normalize_cert_ownership
         echo "Certificates copied to ${SECRETS_DIR}/"
         return 0
     else
@@ -138,6 +147,19 @@ if check_existing_certs; then
     echo "Skipping initial certificate request (valid certs already exist)"
 else
     request_certificate || true
+fi
+
+# Ownership fix-up on an existing pair: copy_certs only runs at
+# (re)issuance, so a pair the operator replaced while the stack was down
+# (certbot `restart` bypasses the depends_on health gate that would
+# otherwise hold it back) is normalized here at startup — idempotent,
+# and a no-op whenever secrets-ssl-init already converged the tree.
+if [ -f "${SECRETS_DIR}/server.crt" ] && [ -f "${SECRETS_DIR}/server.key" ]; then
+    if normalize_cert_ownership; then
+        echo "Certificate ownership normalized (group 101, key 0640)"
+    else
+        echo "WARNING: could not normalize certificate ownership — the edge will crash-loop if it cannot read the key"
+    fi
 fi
 
 # ---------------------------------------------------------------------------

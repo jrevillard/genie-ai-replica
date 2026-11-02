@@ -1,0 +1,18 @@
+---
+# payload-ownership-pass (#1227) — the probe/heal pass that relabels the
+# deploy payload to ansible_user, imported VERBATIM by the "Project sync
+# and directories" play once BEFORE the payload download and once AFTER
+# the archive extraction: extraction and get_url re-create root-era
+# ownership on every pass that ships files, so each pass re-probes.
+#
+# The behavioral skeleton lives in tasks/ownership-probe-heal.yml (ONE
+# copy shared with the backup-dir handover); this wrapper only binds the
+# payload's probe/heal commands (play vars, quoted and
+# trailing-slash-normalized — see their comments in deploy.yml).
+
+- name: Run the payload ownership probe/heal
+  ansible.builtin.import_tasks: tasks/ownership-probe-heal.yml
+  vars:
+    _trio_probe_cmd: "{{ _fix_payload_probe_cmd }}"
+    _trio_heal_cmd: "{{ _fix_payload_ownership_cmd }}"
+    _trio_label: payload heal

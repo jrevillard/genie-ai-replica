@@ -47,7 +47,7 @@ docker compose up -d
   - Environment: Connects to Postgres as dedicated `kong` user via `KONG_DB_PASSWORD`; logs to stdout/stderr; `KONG_DNS_STALE_TTL=5` for DNS cache mitigation.
   - Healthcheck: `kong health` (built-in CLI, checks DB and internal services).
   - Ports: Internal only (not exposed to host). Proxy listens on `8000` (HTTP) / `8443` (HTTPS) within Docker network. Admin API on `0.0.0.0:8001` (internal only, used by kong-config service).
-  - Volume: `./data/logs/kong` for logs.
+  - Logs go to stdout/stderr (fluentd driver) — no host log directory since #1227.
   - Config applied automatically by the `kong-config` init service on startup.
 
 - **kong-config**: Init container that applies Kong configuration.
@@ -58,17 +58,22 @@ docker compose up -d
   - Logs: `docker compose logs kong-config`.
 
 - **nginx**: NGINX reverse proxy.
-  - Image: `nginx:latest`.
-  - Ports: `80` (HTTP redirect), `443` (HTTPS).
+  - Image: built from `./nginx/Dockerfile` (`nginx:1.28-alpine` base).
+  - Ports: `8080` (HTTP redirect), `8443` (HTTPS) inside the container —
+    published on the host as `80`/`443` (#1227 non-root: unprivileged
+    listeners in-container, privileged ports only at host publication).
   - Environment: `NGINX_PUBLIC_DOMAIN`, `CSP_CONNECT_SRC`, `KONG_PROXY_HOST`, `NGINX_FRONTEND_HOST`, `NGINX_FRONTEND_PORT`.
-  - Volumes: `./nginx/conf` for templates, `./nginx/entrypoint.sh` for container startup.
+  - Mounts: `./secrets/ssl` (read-only certificates) and the
+    `certbot-webroot` volume; the templates and entrypoint are baked into
+    the image at build time (edit them in the repo and rebuild, not on the
+    host).
   - SSL: Volume-mounted from `./secrets/ssl/server.crt` and `server.key` (auto-generated self-signed in dev if not provided).
   - Depends on: `kong`.
 
 ### Networks and Volumes
 
 - **Network**: All services connected to `genieai_network` (overlay driver, attachable).
-- **Volumes**: `postgres_data` (shared Postgres), `./data/logs/kong` (Kong logs).
+- **Volumes**: `postgres_data` (shared Postgres). Kong logs to stdout — no host volume (#1227).
 
 ### Usage
 
@@ -224,7 +229,7 @@ The nginx entrypoint loads these files from `/etc/nginx/ssl/` inside the contain
 
 ```nginx
 server {
-    listen 443 ssl;
+    listen 8443 ssl;
     server_name _;
 
     ssl_certificate /etc/nginx/certs/server.crt;

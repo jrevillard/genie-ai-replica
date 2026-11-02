@@ -176,18 +176,29 @@ them. Swarm resolves bind mounts relative to where `docker stack deploy` runs
 relevant node:
 
 ```bash
-mkdir -p data/logs/kong data/logs/backend data/logs/doc-repo \
-         data/database_backups data/huggingface secrets/ssl
+# data/database_backups and secrets/ssl are created and owned
+# automatically at first up (backend-init / secrets-ssl-init on the
+# genieai / gateway nodes). data/huggingface has no init — pre-create
+# it on the GPU node (the TEI images are profile-gated root users).
+mkdir -p data/huggingface
 ```
 
 | Directory | Purpose | Which node |
 |---|---|---|
-| `data/logs/kong` | Kong gateway logs | `gateway=true` |
-| `data/logs/backend` | Backend API logs | `genieai=true` |
-| `data/logs/doc-repo` | Document Repository logs | `genieai=true` |
 | `data/database_backups` | Backend DB dumps | `genieai=true` |
 | `data/huggingface` | TEI model cache | `gpu=true` |
 | `secrets/ssl` | SSL certificates (read by NGINX) | `gateway=true` |
+
+On a multi-node deployment, list every worker under a `[swarm_workers]`
+group in the inventory: the Ansible pre-create play that keeps the
+backend's bind source from being created root-owned **only runs on nodes
+in that group** (the manager play covers the managers). A worker left out
+of the group gets no warning beyond a "no hosts matched" line, and
+swarmkit will silently create the missing bind source root-owned on it.
+
+There is no `data/logs/` since #1227: every service logs to stdout
+(shipped by the fluentd logging driver), and a missing bind source would
+be created root-owned on the node it lands on.
 
 Copy SSL certificates to the gateway node:
 

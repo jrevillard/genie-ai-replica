@@ -1059,6 +1059,7 @@ const Map<String, dynamic> frLocale = {
         "Problème de configuration : le périmètre sélectionné ne porte pas de nom anglais dans la hiérarchie de connaissances, le périmètre de la requête ne peut donc pas être déterminé. La requête n'a pas été envoyée.",
     "scopeTagGone":
         "Cette conversation a été enregistrée dans le périmètre \"{tags}\", que la hiérarchie de connaissances ne contient plus. Les questions de suivi sont refusées jusqu'à ce que le contexte soit effacé.",
+    "justChat": "Simple discussion",
     "queryContext": "Contexte de la requête",
     "contextAdded": "Contexte ajouté à votre requête",
     "contextRemoved": "Contexte retiré de votre requête",

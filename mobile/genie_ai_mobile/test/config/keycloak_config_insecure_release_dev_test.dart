@@ -22,7 +22,16 @@ void main() {
   test(
     'a release build of the "dev" flavor fails at startup',
     () {
-      expect(() => getConfig(), throwsA(isA<FlavorConfigError>()));
+      expect(
+        () => getConfig(),
+        throwsA(
+          isA<FlavorConfigError>().having(
+            (e) => e.message,
+            'message',
+            contains('allowInsecureConnections'),
+          ),
+        ),
+      );
     },
     skip: !kReleaseMode
         ? 'this case needs a release compilation: run this file with '

@@ -42,13 +42,28 @@ void main() {
   ];
 
   setUp(resetChatbotTestState);
-  tearDown(resetChatbotTestState);
+
+  /// The mock the CURRENT test mounted — the tearDown releases its held
+  /// responses even when an assertion failed before the test could.
+  _LocaleMockClient? activeMock;
+
+  tearDown(() {
+    resetChatbotTestState();
+    // A test that FAILED while a response was still held must not take
+    // the held fetches to its grave: an in-flight future never settles,
+    // the next pumpAndSettle hangs, and the one-line assertion failure
+    // that actually regressed is masked by a timeout. Releasing here is
+    // a no-op for tests that released their own holds.
+    activeMock?.releaseHeld();
+    activeMock = null;
+  });
 
   Future<void> pumpChatWithTree(
     WidgetTester tester,
     _LocaleMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
   }) async {
+    activeMock = mock;
     await pumpChatBot(
       tester,
       mock,

@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/quick_help_scope.dart';
 
@@ -2312,8 +2314,97 @@ void main() {
         expect(parsed['id'], 'just-chat');
         expect(parsed['resolvedTitle'], 'Just Chat');
         expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
+        expect(parsed['iconInlineSvg'], '');
       },
     );
+
+    test('an inline icon carries its markup instead of an asset key', () {
+      // The bundled schema's `type: "inline"` declares the SVG MARKUP
+      // as the value; the basename rule would turn it into a garbage
+      // asset key and degrade the card to its neutral icon. The markup
+      // is kept whole under iconInlineSvg; no asset is named.
+      const markup = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'inline', 'value': markup},
+      }, 'en');
+
+      expect(parsed['iconInlineSvg'], markup);
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('the styles vocabulary reads 8-digit hex in the web CSS order', () {
+      // Web CSS reads #RRGGBBAA — alpha LAST; Flutter's Color(int)
+      // reads AARRGGBB. The parse converts the web's form: #A9B6C280 is
+      // the blue-gray at alpha 0x80, not the olive the raw read gives.
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#A9B6C280'},
+      }, 'en');
+      final styles = parsed['styles'] as QuickHelpCardStyles;
+      expect(styles.outline, const Color(0x80A9B6C2));
+
+      // The 6-digit form parses as before; an unparseable value is a
+      // null field, the token fallback.
+      // Surrounding whitespace trims (CSS semantics); a sign
+      // character or any non-hex junk is the null fallback, never a
+      // garbage colour.
+      final trimmed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': ' #D9E2EA'},
+      }, 'en');
+      expect(
+        (trimmed['styles'] as QuickHelpCardStyles).background,
+        const Color(0xFFD9E2EA),
+      );
+      final signed = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#ffffff-f'},
+      }, 'en');
+      expect((signed['styles'] as QuickHelpCardStyles).outline, isNull);
+
+      // A doubled hash or a bare digit run is invalid CSS — the
+      // browser drops it, so the mobile declines it too.
+      final doubleHash = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': '##D9E2EA'},
+      }, 'en');
+      expect((doubleHash['styles'] as QuickHelpCardStyles).background, isNull);
+      final bare = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': 'D9E2EA'},
+      }, 'en');
+      expect((bare['styles'] as QuickHelpCardStyles).background, isNull);
+
+      // The #RGBA shorthand doubles its digits, alpha last: #A9B6 is
+      // RRGGBBAA AA99BB66, the blue-gray at alpha 0x66.
+      final shorthand = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'outlineColor': '#A9B6'},
+      }, 'en');
+      expect(
+        (shorthand['styles'] as QuickHelpCardStyles).outline,
+        const Color(0x66AA99BB),
+      );
+
+      final plain = parseQuickHelpButton({
+        ...shippedButton,
+        'styles': {'backgroundColor': '#D9E2EA', 'outlineColor': 'nope'},
+      }, 'en');
+      final plainStyles = plain['styles'] as QuickHelpCardStyles;
+      expect(plainStyles.background, const Color(0xFFD9E2EA));
+      expect(plainStyles.outline, isNull);
+    });
+
+    test('an inline icon with a non-string value declares no markup', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'inline', 'value': 42},
+      }, 'en');
+
+      expect(parsed['iconInlineSvg'], '');
+      expect(parsed['iconAsset'], '');
+    });
 
     test('a numeric category carries the form the web resolves', () {
       // The web resolves a numeric category reference with
@@ -2484,12 +2575,19 @@ void main() {
     });
 
     test('a count wider than the grid is bounded by the width', () {
-      // 500 columns on a 328px grid: the cap is width/10 = 32 — the
-      // highest count whose columns still have a positive extent beside
-      // the 10px spacing (32 columns leave 18px for the tiles).
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 32);
+      // 500 columns on a 328px grid: the cap is the integer division
+      // width ~/ spacing — the highest count whose columns still have
+      // a positive extent beside the spacing between them. Derived
+      // from the ONE spacing value, so a token retune moves the bound.
+      expect(
+        quickHelpGridColumns({'columns': 500}, maxWidth: 328),
+        328 ~/ quickHelpGridSpacing,
+      );
       expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 2);
+      expect(
+        quickHelpGridColumns({'columns': 500}, maxWidth: 25),
+        25 ~/ quickHelpGridSpacing,
+      );
     });
 
     test('a width without room for two columns degrades to one', () {
@@ -2573,6 +2671,47 @@ void main() {
 
       expect(buttons, isEmpty);
     });
+
+    test(
+      "the parse keeps every placement; the raw placement value is carried",
+      () {
+        // The parse is the LIST the restore and the re-title lookups
+        // index — the web keeps its composer-placed entries in that
+        // list too (tileButtons is display-only), so the parse keeps
+        // them as well. Routing OUT of the mobile's grid is a display
+        // rule (the widget tests hold it); the parse carries the raw
+        // value so the display rule can read the same strict compare
+        // the web's `placement === 'composer'` makes.
+        final (layout, buttons) = parseQuickHelpConfig({
+          'features': {
+            'chat': {
+              'quickHelp': {
+                'buttons': [
+                  {
+                    'id': 'just-chat',
+                    'title': {'en': 'Just Chat'},
+                    'placement': 'composer',
+                  },
+                  {
+                    'id': 'births',
+                    'title': {'en': 'Births'},
+                  },
+                  {
+                    'id': 'typo',
+                    'title': {'en': 'Typo'},
+                    'placement': true,
+                  },
+                ],
+              },
+            },
+          },
+        }, 'en');
+
+        expect(buttons.map((b) => b['id']), ['just-chat', 'births', 'typo']);
+        expect(buttons[0]['placement'], 'composer');
+        expect(buttons[2]['placement'], true);
+      },
+    );
 
     test('a missing or malformed container degrades to the empty section', () {
       for (final config in <Map<String, dynamic>>[

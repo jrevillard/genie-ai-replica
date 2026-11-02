@@ -1,4 +1,10 @@
+import 'dart:ui' show Color;
+import 'package:flutter/painting.dart' show HSLColor;
+
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
+import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 // The Quick Help rules, on both sides of the button: the SCOPE it claims
@@ -47,8 +53,9 @@ const String justChatTagId = 'just-chat';
 /// The shipped configurations declare the button's texts at the TOP
 /// level: `title` is a locale map (resolved here, once, like the
 /// welcome message), `icon` is an object whose `value` is a served
-/// path whose basename names the bundled asset, and `action` carries
-/// the visible and hidden texts. A button with no icon — or a
+/// path whose basename names the bundled asset (`type: "inline"`
+/// declares the markup itself, rendered from the string), and
+/// `action` carries the visible and hidden texts. A button with no icon — or a
 /// malformed one — carries NO asset: the card renders its neutral
 /// help icon, the way the web renders an empty image. A bare STRING
 /// where the label array belongs is wrapped as ONE label — the
@@ -65,11 +72,20 @@ Map<String, dynamic> parseQuickHelpButton(
   // a malformed file. A parsed-but-TITLE-LESS entry IS kept: the web
   // renders the same blank card and refuses its press.
   final iconMap = configMapOf(btn['icon']);
+  final dynamic rawIconValue = iconMap['value'];
+  // An `inline` icon's value IS the SVG markup — rendered directly from
+  // the string, no asset. The bundled schema documents the type; a
+  // markup STRING handed to the basename rule would become a garbage
+  // asset key and degrade the card to its neutral icon.
+  final bool iconInline = iconMap['type'] == 'inline' && rawIconValue is String;
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
   // garbage path the card cannot load.
-  final dynamic rawIconValue = iconMap['value'];
-  final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
+  final iconFile = iconInline
+      ? ''
+      : rawIconValue is String
+      ? rawIconValue.split('/').last
+      : '';
   final String iconAsset = iconFile.isNotEmpty
       ? 'assets/config/quickhelp/$iconFile'
       : '';
@@ -92,10 +108,118 @@ Map<String, dynamic> parseQuickHelpButton(
     'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
+    'iconInlineSvg': iconInline && rawIconValue.trim().isNotEmpty
+        ? rawIconValue
+        : '',
     'resolvedTitle': resolveConfigText(btn['title'], locale),
     'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
     'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
+    'styles': quickHelpCardStylesOf(btn),
+    // Kept RAW: the web routes on the truthiness-shaped strict compare
+    // (`placement === 'composer'`), which a stringified value would not
+    // mirror for non-string shapes.
+    'placement': btn['placement'],
   };
+}
+
+/// The card's declared tint — the per-button `styles` block every
+/// shipped configuration writes, hex-parsed. `background` paints the
+/// card's surface and `outline` its border; the web's third field
+/// (`hoverColor`) has NO mobile consumer — a touch card has no hover
+/// state, so the web's hover wash does not transfer.
+class QuickHelpCardStyles {
+  final Color? background;
+  final Color? outline;
+
+  const QuickHelpCardStyles({this.background, this.outline});
+}
+
+/// A colour in the styles block's own vocabulary — the web's CSS in its
+/// HEX forms only (#RGB, #RGBA, #RRGGBB, and #RRGGBBAA with the alpha
+/// LAST);
+/// the shipped configurations are hex-only. A named colour or a
+/// functional notation (rgb()/hsl()/color-mix()) is NOT parsed — it is
+/// a null field and the token fallback paints, a divergence the
+/// vocabulary does not pretend to cover. Flutter's Color(int)
+/// reads AARRGGBB, so an alpha-carrying declaration parsed naively
+/// becomes a different colour; every other parseHex caller keeps the
+/// Flutter order, so the conversion lives beside the only reader of the
+/// web's form. Anything unparseable is a null field — the token
+/// fallback, never a dropped card.
+Color? parseStylesHexColor(dynamic value) {
+  if (value is! String) return null;
+  // The CSS hex forms: optional surrounding whitespace, ONE leading
+  // '#', then hex digits only. A doubled hash or a bare digit run is
+  // an invalid CSS value — the browser drops it, so the mobile
+  // declines it too (the null fallback), and a sign character can
+  // never reach int.parse.
+  final trimmed = value.trim();
+  if (!trimmed.startsWith('#')) return null;
+  final cleaned = trimmed.substring(1);
+  if (cleaned.isEmpty || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(cleaned)) {
+    return null;
+  }
+  // #RGBA: each digit doubles, and the alpha still re-joins first.
+  if (cleaned.length == 4) {
+    final doubled = cleaned.split('').map((c) => c * 2).join();
+    return Color(
+      int.parse(doubled.substring(6, 8) + doubled.substring(0, 6), radix: 16),
+    );
+  }
+  if (cleaned.length == 8) {
+    return Color(
+      int.parse(cleaned.substring(6, 8) + cleaned.substring(0, 6), radix: 16),
+    );
+  }
+  return ColorUtils.parseHexNullable('#$cleaned');
+}
+
+/// The declared tint of [btn]'s `styles` block. A missing or malformed
+/// hex value is a NULL field — the card paints its token fallback, the
+/// way the web's `var(--qh-bg, var(--surface))` falls back per
+/// property; it never drops the card.
+QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
+  final styles = configMapOf(btn['styles']);
+  return QuickHelpCardStyles(
+    background: parseStylesHexColor(styles['backgroundColor']),
+    outline: parseStylesHexColor(styles['outlineColor']),
+  );
+}
+
+/// Whether [button] claims the composer placement — the web's strict
+/// `placement === 'composer'` compare, ONE copy beside the other
+/// config-vocabulary rules: a non-string placement is a tile, on both
+/// platforms.
+bool quickHelpIsComposerPlaced(Map<String, dynamic> button) {
+  return button['placement'] == 'composer';
+}
+
+/// The surface a Quick Help card paints, from its declared tint. In
+/// light mode a declared background paints as-is; in dark mode the
+/// declared background is ignored — a pale step whose chroma cannot
+/// carry a hue at surface depth, and unreadable against the near-white
+/// dark foreground — and the card derives from the declared outline
+/// instead: the outline's hue at the LIVE surface token's lightness —
+/// the derivation SHAPE the web paints its dark cards with, in HSL
+/// where the web works in oklch (so a chromatic outline's saturation
+/// differs from the web's chroma; the hue and the surface depth are
+/// the same). An undeclared field falls back to the surface token.
+Color quickHelpCardBackgroundFor(
+  QuickHelpCardStyles styles,
+  AppTokens tokens,
+  bool dark,
+) {
+  if (!dark) return styles.background ?? tokens.surface;
+  final Color? outline = styles.outline;
+  if (outline == null) return tokens.surface;
+  // The derived surface is a SYNTHESIS, not a declared background: it
+  // paints opaque (the web's oklch derivation carries the source's
+  // alpha, but a translucent card under the overlay's own background
+  // defeats the readability the derivation exists for).
+  return HSLColor.fromColor(outline)
+      .withLightness(HSLColor.fromColor(tokens.surface).lightness)
+      .toColor()
+      .withValues(alpha: 1.0);
 }
 
 /// The Quick Help section of a runtime configuration, parsed under
@@ -144,9 +268,11 @@ List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   return const <String>[];
 }
 
-/// The spacing between the grid's columns — the delegate's own
-/// crossAxisSpacing and the column bound's denominator are ONE value.
-const double quickHelpGridSpacing = 10;
+/// The spacing between the grid's tiles — the delegate's own main and
+/// cross axis spacing, the broken-card row's bottom margin and the
+/// column bound's denominator are ONE value: a DsSpacing token, not a
+/// hand-picked literal.
+const double quickHelpGridSpacing = DsSpacing.sm;
 
 /// The grid's column count, from the config's `layout` block, bounded
 /// by [maxWidth] (the width the grid is given). A malformed value — a

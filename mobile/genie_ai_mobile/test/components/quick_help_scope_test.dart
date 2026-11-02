@@ -500,6 +500,36 @@ void main() {
       expect(scope.droppedTags, isEmpty);
     });
 
+    test('a just-chat tag beside a button tag consumes it silently', () {
+      // The web restores EVERY tag as its own chip: a conversation
+      // carrying a button tag AND the reserved one answers with the
+      // button's scope — the reserved tag contributes no refusal. The
+      // reserved copy must not read as an unknown sidebar tag (a count
+      // without a label refuses the send).
+      final scope = convResolver().resolve(
+        tags: const ['civil', 'just-chat'],
+        categoryKey: '2',
+      );
+
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.serviceLabelsEn, ['Births']);
+      expect(scope.sidebarTagCount, 0);
+      expect(scope.droppedTags, isEmpty);
+    });
+
+    test('a duplicated just-chat tag counts once, and refuses nothing', () {
+      // The resolver keeps duplicate tags (the saved count feeds the
+      // send guard); a repeated RESERVED tag is still no scope — the
+      // second copy must not come back as a dropped tag.
+      final scope = convResolver(
+        const [],
+      ).resolve(tags: const ['just-chat', 'just-chat'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.sidebarTagCount, 0);
+      expect(scope.droppedTags, isEmpty);
+    });
+
     test('a web-saved numeric id tag restores the scope', () {
       // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
       // is string-typed and the index keys the stringified id — the

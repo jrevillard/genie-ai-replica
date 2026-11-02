@@ -972,6 +972,11 @@ class ConversationScopeResolver {
           .where(
             (other) =>
                 other != tag &&
+                // A second copy of the reserved tag (or one beside this
+                // scope's own button tag) is consumed the same way: it
+                // names NO scope and must not read as a dropped sidebar
+                // tag that refuses the follow-up.
+                other != justChatTagId &&
                 !_buttons.containsKey(other) &&
                 !other.startsWith('category.'),
           )

@@ -267,12 +267,26 @@ async function claimNextJob(db) {
   // prior claim. The kick path probes dataprep liveness for such rows — a live
   // task must not be raced by the WS5 retract + re-POST.
   rows[0].was_stale_reclaim = rows[0].worker_claimed_at != null;
-  await _stampClaim(db, rows[0].repo_id, rows[0].concept_id);
+  // Round 20, #80804: the stamp IS the claim. A row whose stamp failed is NOT
+  // this lane's — a 1200 write-conflict means another lane won it, a transient
+  // DB error leaves it claimable next cycle — and returning it would kick a row
+  // we do not own AND let the 429 un-claim below decrement an attempt that was
+  // never counted (the counter drifts below the truth and the poison-pill
+  // reaper fires late). Fail the claim instead: the row is never claimed.
+  if (!(await _stampClaim(db, rows[0].repo_id, rows[0].concept_id))) {
+    logger.warn('Ingest worker: claim stamp failed — row NOT claimed this cycle', {
+      repo_id: rows[0].repo_id,
+      concept_id: rows[0].concept_id
+    });
+    return null;
+  }
   return rows[0];
 }
 
-/** Stamp the claim on a claimed row (best-effort — a failed stamp must not
- * block the drain; the row simply keeps its previous claim state). */
+/** Stamp the claim on a claimed row. Returns true when the stamp landed,
+ * false when it failed — the caller then treats the row as NOT claimed, so
+ * every RETURNED job carries its counted attempt and _unclaimAttempt can
+ * only ever un-count a real stamp (round 20, #80804). */
 async function _stampClaim(db, repoId, conceptId) {
   try {
     await db.query(
@@ -286,8 +300,38 @@ async function _stampClaim(db, repoId, conceptId) {
     `,
       {}
     );
+    return true;
   } catch (err) {
-    logger.warn('Ingest worker: claim stamp failed (non-fatal)', { concept_id: conceptId, error: err.message });
+    logger.warn('Ingest worker: claim stamp failed (claim refused)', { concept_id: conceptId, error: err.message });
+    return false;
+  }
+}
+
+/** The claim stamp counted the attempt, but the kick was REFUSED (dataprep
+ * 429) — no ingest work happened. Un-count it while clearing the claim, so
+ * the poison-pill reaper (>= OKF_INGEST_WORKER_MAX_CLAIMS REAL attempts)
+ * cannot dead-letter healthy rows that merely bounced off a busy slot under
+ * routine cross-repo contention (review !622 wave 2, #78658). Same
+ * single-writer lane as the claim itself, so read-modify-write is safe.
+ * Round 20, #80804: both claim strategies now guarantee a returned job's
+ * attempt was STAMPED (fifo refuses the claim on a failed stamp; fair stamps
+ * inside the fused statement), so this decrement always un-counts a real
+ * increment — never a bare 0-row. */
+async function _unclaimAttempt(db, repoId, conceptId) {
+  try {
+    await db.query(
+      aql`
+      FOR m IN okf_concepts_meta
+        FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+        UPDATE m WITH {
+          worker_claimed_at: null,
+          ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
+        } IN okf_concepts_meta
+    `,
+      {}
+    );
+  } catch (err) {
+    logger.warn('Ingest worker: 429 unclaim failed (non-fatal)', { concept_id: conceptId, error: err.message });
   }
 }
 
@@ -533,7 +577,10 @@ async function _refreshRagIngestion(db, repoId) {
 async function waitForTerminal(db, repoId, conceptId, windowMs) {
   const deadline = Date.now() + (windowMs || JOB_TIMEOUT_MS());
   for (;;) {
-    await new Promise((r) => setTimeout(r, JOB_POLL_MS()));
+    // Read FIRST, sleep after (review !622 wave 2, #78660): the completion
+    // callback often lands before this poll starts — sleeping before the
+    // first read paid one full JOB_POLL_MS per concept for nothing
+    // (~1000×5s ≈ 83 min of pure added latency on a 1000-concept drain).
     const rows = await (
       await db.query(aql`
       FOR m IN okf_concepts_meta FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
@@ -550,6 +597,7 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
         last_error: row.last_error || null
       };
     if (Date.now() > deadline) return { status: 'timeout', chunk_count: 0 };
+    await new Promise((r) => setTimeout(r, JOB_POLL_MS()));
   }
 }
 
@@ -563,12 +611,6 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
 const _bundleFileCache = new Map(); // repo_id -> bundle file_id (one bundle per repo)
-/** Story #978 lifecycle: publish SUPERSEDES the old bundle zip — the worker's
- * cache must not keep pointing at a deleted doc (its ingestion-log mirror
- * would 404 forever). Called by bundle-export-service after a supersede. */
-function invalidateBundleCache(repoId) {
-  _bundleFileCache.delete(repoId);
-}
 async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
@@ -907,15 +949,11 @@ async function _processOneJob() {
         // never kicked — leaving the claim stamped would age it past the
         // reaper's grace window during a saturated multi-hour drain and get
         // the concept dead-lettered as "stuck" while perfectly healthy.
-        try {
-          await conceptMetaService.upsertConceptMeta(
-            job.repo_id,
-            { concept_id: conceptId, repo_id: job.repo_id },
-            { patch: { worker_claimed_at: null } }
-          );
-        } catch {
-          /* best-effort */
-        }
+        // Wave-2 review (#78658): the clear also UN-COUNTS the attempt — the
+        // claim stamped ingest_attempts+1 but no kick happened, and the
+        // poison-pill reaper would dead-letter the row after 8 mere slot-busy
+        // bounces.
+        await _unclaimAttempt(db, job.repo_id, conceptId);
         logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
           concept_id: conceptId,
           cooldown_ms: kick429CooldownMs()
@@ -1223,8 +1261,13 @@ async function _sweepOnce() {
       await authedAxios.post(`${config.documentRepository.url}/api/files/${f.file_id}/retract`, {}, { timeout: 30000 });
     } catch (err) {
       const status = err && err.response && err.response.status;
-      if (status !== 404 && status !== 500) {
-        logger.warn(`Ingest worker sweep: retract failed for ${f.file_id} (${err.message})`);
+      // Only 404 (= already retracted, nothing to retract) tolerates the
+      // REMOVE below. A 5xx is a REAL retract failure — dataprep/graph may
+      // still hold the chunks, and removing the tracking doc would orphan
+      // them with no owning document (review !622 wave 2, #78659: 500 used
+      // to be treated as "already gone"). Keep the row for the next sweep.
+      if (status !== 404) {
+        logger.warn(`Ingest worker sweep: retract failed for ${f.file_id} (${err.message}) — keeping the doc`);
         continue;
       }
       // already retracted / nothing to retract — still remove the doc below
@@ -1608,7 +1651,6 @@ module.exports = {
   _resetLaneCooldown,
   claimNextJob,
   getBundleFileId,
-  invalidateBundleCache,
   jobWindowMs,
   reapGraceMs
 };

@@ -207,11 +207,13 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import translateMixin from '../../../mixins/translateMixin';
 import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorDetail',
   components: { DsButton, DsCard, DsPill, DsStateDisplay },
+  mixins: [translateMixin],
   props: {
     query: { type: Object, required: true }
   },
@@ -272,9 +274,7 @@ export default {
       const text = scopeDisplayText(this.query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
       return text === null ? this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded') : text;
     },
-    translate(key, fallback, named) {
-      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
-    },
+    // translate comes from translateMixin (round 22) — see QueryInspectorList.
     formatTime(ts) {
       return ts ? new Date(ts).toLocaleString() : this.translate('admin.queryInspector.notAvailable', 'N/A');
     },

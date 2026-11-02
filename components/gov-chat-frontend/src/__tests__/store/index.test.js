@@ -135,4 +135,35 @@ describe('store/index.js', () => {
       expect(store.state.chatHistory).toBeDefined();
     });
   });
+
+  // OKF module registration gating (!622 review wave 1): the module is
+  // registered ONLY when the flag is on, so a parked flag leaves the store
+  // byte-identical to a pre-OKF build and nothing can dispatch into it.
+  describe('OKF module registration gating', () => {
+    afterEach(() => {
+      delete window.APP_CONFIG;
+      jest.resetModules();
+    });
+
+    it("registers okf when the flag is on ('1')", () => {
+      window.APP_CONFIG = { okfEnabled: '1' };
+      jest.resetModules();
+      const store = require('@/store/index').default;
+      expect(store.hasModule('okf')).toBe(true);
+    });
+
+    it("does NOT register okf when the flag is off ('0') — fail-closed", () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      jest.resetModules();
+      const store = require('@/store/index').default;
+      expect(store.hasModule('okf')).toBe(false);
+    });
+
+    it('registers okf when no runtime config exists (dev server)', () => {
+      delete window.APP_CONFIG;
+      jest.resetModules();
+      const store = require('@/store/index').default;
+      expect(store.hasModule('okf')).toBe(true);
+    });
+  });
 });

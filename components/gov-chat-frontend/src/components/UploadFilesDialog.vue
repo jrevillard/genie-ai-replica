@@ -51,6 +51,23 @@
       </div>
       <p class="form-hint">
         {{ translate('uploadDialog.allowedTypesLabel', 'Allowed types:') }} {{ allowedExtensions.join(', ') }}
+        <!-- The OKF-sentence of the tip is flag-gated (round 16, #80127):
+             this dialog is permanently visible while the Studio the copy
+             promises does not exist with OKF parked — advertise only what
+             the deployment can open. -->
+        <DsInfoTip
+          :text="
+            okfEnabled
+              ? translate(
+                  'uploadDialog.ragTip',
+                  'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+                )
+              : translate(
+                  'uploadDialog.ragTipNoOkf',
+                  'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+                )
+          "
+        />
       </p>
 
       <div v-if="files.length > 0" class="file-list-container">
@@ -86,12 +103,15 @@
 import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
 import { formatFileSize } from '../utils/fileUtils.js';
+import { isOkfEnabled } from '../utils/okfFlag.js';
 import DsButton from './ds/Button.vue';
+import DsInfoTip from './ds/InfoTip.vue';
 
 export default {
   name: 'UploadFilesDialog',
   components: {
-    DsButton
+    DsButton,
+    DsInfoTip
   },
   emits: ['close', 'files-uploaded'],
   data() {
@@ -103,6 +123,13 @@ export default {
       // MODIFIED per Spec 4.2
       allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt']
     };
+  },
+  computed: {
+    /** Shared flag helper (round 16, #80127): the tip's OKF sentence only
+     * renders when the deployment can actually open the Studio. */
+    okfEnabled() {
+      return isOkfEnabled();
+    }
   },
   methods: {
     formatFileSize,

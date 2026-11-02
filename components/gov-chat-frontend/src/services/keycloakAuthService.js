@@ -5,7 +5,7 @@
  * Tokens are stored in JavaScript memory only — never in localStorage, sessionStorage, or cookies.
  */
 
-import { UserManager } from 'oidc-client-ts';
+import { UserManager, User } from 'oidc-client-ts';
 import { jwtDecode } from 'jwt-decode';
 import oidcConfig from '@/config/oidcConfig';
 
@@ -14,6 +14,280 @@ let currentUser = null;
 const accessTokenCallbacks = new Set();
 let unsubscribeUserLoaded = null;
 let unsubscribeSilentRenewError = null;
+/** The ONE in-flight silent renew, shared by every caller (see signinSilent). */
+let renewInFlight = null;
+
+// ── CROSS-TAB RENEW (round 20 #80800 → round 21 #80864/#80876) ───────────────
+// The in-tab `renewInFlight` promise is one per JavaScript realm — one per
+// TAB — so the two-tab race the root-cause comment names needs a CROSS-tab
+// mechanism: with refresh_token_max_reuse=0 the second tab's concurrent
+// renew reuses a rotated token, is rejected, and after 3 such failures the
+// escalation path forces the very logout this fix exists to remove.
+//
+// Round 21 redesign — the round-20 lease had two holes:
+//  (1) NOT ATOMIC (#80864): localStorage has no compare-and-swap, and the
+//      write→read-back only proved WE were the last writer AT THE MOMENT WE
+//      READ — two tabs whose timers fire together could BOTH hold the lease
+//      and both rotate the refresh token. The PRIMARY mechanism is now the
+//      Web Locks API (`navigator.locks.request('genie-renew')`), the only
+//      genuinely atomic cross-tab claim; the localStorage lease survives as
+//      a FALLBACK for engines without Web Locks, hardened with a settle
+//      window (write, wait out RENEW_SETTLE_MS, re-read — a simultaneous
+//      claimant has already overwritten us by then, so only the LAST writer
+//      can still see its own tab id).
+//  (2) THE DONE-MARKER CARRIED NO TOKEN (#80876): the waiter's
+//      `manager.getUser()` reads THIS tab's per-tab oidc user store
+//      (sessionStorage by default — no shared `userStore` is configured), so
+//      a "done" flag made the waiter adopt its OWN STALE user: an access
+//      token about to 401 and a refresh token Keycloak had already
+//      invalidated — the forced logout, relocated to the waiter tab. The
+//      holder now PUBLISHES the minted user itself (RENEW_USER_KEY) before
+//      the done marker, and waiters adopt THAT (storeUser seeds their own
+//      per-tab store with the fresh tokens).
+// TTL-bounded either way: a holder that dies without releasing is taken
+// over after RENEW_LEASE_TTL_MS (a Web Lock held by a dead tab releases
+// automatically; the lease fallback uses the TTL takeover). Storage
+// failures degrade to the in-tab serialisation alone.
+const RENEW_LOCK_NAME = 'genie-renew';
+const RENEW_LEASE_KEY = 'genie.renew.lease';
+const RENEW_USER_KEY = 'genie.renew.user';
+const RENEW_LEASE_TTL_MS = 20000;
+const RENEW_WAIT_POLL_MS = 250;
+const RENEW_SETTLE_MS = 80;
+const RENEW_TAB_ID = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+
+function leaseHeldByOther() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    if (!raw) return false;
+    const lease = JSON.parse(raw);
+    return !!(lease && lease.tab !== RENEW_TAB_ID && Date.now() - lease.at < RENEW_LEASE_TTL_MS);
+  } catch {
+    return false;
+  }
+}
+
+async function acquireRenewLease() {
+  if (leaseHeldByOther()) return false;
+  try {
+    window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: RENEW_TAB_ID, at: Date.now() }));
+    // SETTLE WINDOW (round 21, #80864): localStorage has no compare-and-swap,
+    // and the round-20 immediate read-back only proved we were the last
+    // writer AT THE MOMENT WE READ — two tabs whose renew timers fire
+    // together could BOTH see their own tab id and both rotate the refresh
+    // token. Waiting out the settle window before re-reading means a
+    // simultaneous claimant has already overwritten us by the time we look;
+    // only the LAST writer can still see its own tab id. (Browsers with the
+    // Web Locks API never take this path — the lock is the atomic claim.)
+    await new Promise((resolve) => setTimeout(resolve, RENEW_SETTLE_MS));
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    const lease = raw ? JSON.parse(raw) : null;
+    return !lease || lease.tab === RENEW_TAB_ID;
+  } catch {
+    return true; // storage unavailable → the in-tab promise is all we have
+  }
+}
+
+function releaseRenewLease() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    if (!raw || (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(RENEW_LEASE_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** The holder publishes the minted user (#80876): a timestamp alone carries
+ * no token, and the waiter's own per-tab oidc store still holds its
+ * PRE-renew user. Same-origin localStorage is synchronous, so whoever
+ * observes the entry can always read the user.
+ * RETENTION (round 23, review of #80876): the entry carries the full minted
+ * tokens, so it must not outlive the handoff — clearStaleRenewPublication()
+ * bounds its disk lifetime to one renew window (RENEW_LEASE_TTL_MS) instead
+ * of forever. Concurrent waiters are safe: cleanup only removes entries the
+ * TTL has already made inadmissible to every reader (readPublishedRenew's
+ * startedAt gate is stricter than the TTL). */
+function publishRenewedUser(user) {
+  if (!user) return;
+  try {
+    const at = Date.now();
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at, user }));
+  } catch {
+    /* best-effort — waiters fall back to their own renew */
+  }
+}
+
+/** One guarded wipe of the publication — round 25 (review): the same 4-line
+ * try/removeItem was hand-rolled at three sites (logout + twice in
+ * clearStaleRenewPublication); kept-in-sync-by-discipline twins drift. */
+function clearRenewPublication() {
+  try {
+    window.localStorage.removeItem(RENEW_USER_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
+function clearStaleRenewPublication() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_USER_KEY);
+    if (!raw) return;
+    const entry = JSON.parse(raw);
+    if (entry && typeof entry.at === 'number' && Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
+      clearRenewPublication();
+    }
+  } catch {
+    /* a corrupt entry is worse than a stale one — drop it */
+    clearRenewPublication();
+  }
+}
+
+/** The waiter's side of the handoff: the publication newer than OUR wait's
+ * start, with a comfortably-future expires_at (the JSON round-trip drops
+ * the User class, so check the raw field — oidc stores it in seconds). */
+function readPublishedRenew(startedAt) {
+  try {
+    const raw = window.localStorage.getItem(RENEW_USER_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry || !(entry.at >= startedAt) || !entry.user) return null;
+    const exp = entry.user.expires_at;
+    if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
+    return entry.user;
+  } catch {
+    return null;
+  }
+}
+
+/** Adopt the holder's published user: seed THIS tab's per-tab oidc store
+ * (storeUser) so its next getUser returns the fresh tokens, then serve it.
+ * ROUND 23 (review of the adoption): the publication is a JSON round-trip —
+ * the User instance's methods are gone — and oidc-client-ts 3.5.0's
+ * storeUser calls user.toStorageString() internally, which THROWS on a
+ * plain object (the local catch swallowed it and the tab silently kept its
+ * stale store). Rehydrate a real User from the plain fields first. */
+async function adoptPublishedUser(manager, user) {
+  try {
+    await manager.storeUser(new User(user));
+  } catch {
+    /* keep the returned user even if the store write fails */
+  }
+  currentUser = user;
+  return user;
+}
+
+/** The RAW grant (#80941) — manager.signinSilent is the WRAPPED module
+ * function; calling it here would recurse into this very lease. Shared by
+ * every renewal tail (round 23: the grant+publish tail was pasted three
+ * times; one paste is how the next poll-semantics change lands everywhere). */
+async function runRawGrantAndPublish(manager) {
+  const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
+  if (user) currentUser = user;
+  publishRenewedUser(user);
+  return user;
+}
+
+/** One non-queueing Web-Lock probe: run `fn` under the lock if free, else
+ * null (ifAvailable:true never queues; a dead holder's lock releases
+ * automatically). */
+async function tryTakeLock(fn) {
+  return navigator.locks.request(RENEW_LOCK_NAME, { ifAvailable: true }, async (lock) => (lock ? fn() : null));
+}
+
+/** PRIMARY cross-tab mechanism (#80864): the Web Locks API — the only
+ * genuinely atomic cross-tab claim. ORDERING (round 23, review of the
+ * free-lock arm): a waiter can arrive AFTER the holder finished — the lock
+ * is free again, and its first `ifAvailable` probe would run a fresh grant
+ * with THIS tab's now-rotated-away refresh token while a perfectly good
+ * publication sits unread. So the publication is consulted BEFORE the first
+ * lock attempt (the startedAt gate keeps a publication from BEFORE this
+ * renew started inadmissible); only a miss falls through to taking the
+ * lock. Past the TTL with no publication the holder is wedged — bounded
+ * degradation: renew without the lock, the same trade the stale-lease
+ * takeover always made (a renew wedged >20s went nowhere). */
+async function renewViaWebLock(manager, startedAt) {
+  const renewOnce = () => runRawGrantAndPublish(manager);
+  const adoptedFirst = readPublishedRenew(startedAt);
+  if (adoptedFirst) return adoptPublishedUser(manager, adoptedFirst);
+  const held = await tryTakeLock(renewOnce);
+  if (held) return held;
+  while (Date.now() - startedAt < RENEW_LEASE_TTL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
+    const adopted = readPublishedRenew(startedAt);
+    if (adopted) return adoptPublishedUser(manager, adopted);
+    const got = await tryTakeLock(renewOnce);
+    if (got) return got;
+  }
+  return renewOnce();
+}
+
+/** FALLBACK for engines without Web Locks: the settle-window localStorage
+ * lease (see acquireRenewLease) + the same publication handoff. */
+async function renewViaLease(manager, startedAt) {
+  // ROUND 25 (review, twin-miss): the 81377 ordering fix landed on the
+  // Web-Locks path only. The same scenario kills here: the holder finished
+  // and released → the lease is FREE → acquiring first succeeds immediately
+  // and skips the publication-consulting loop entirely → a fresh grant runs
+  // on this tab's rotated-away refresh token. Read the publication BEFORE
+  // the first lease claim, exactly like renewViaWebLock.
+  const adoptedFirst = readPublishedRenew(startedAt);
+  if (adoptedFirst) return adoptPublishedUser(manager, adoptedFirst);
+  let held = await acquireRenewLease();
+  while (!held) {
+    if (Date.now() - startedAt > RENEW_LEASE_TTL_MS + RENEW_WAIT_POLL_MS) {
+      // The holder's lease is stale/dead — its renew went nowhere. Run our
+      // own (acquireRenewLease takes over an expired lease).
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
+    // After each wake: FIRST look for the holder's publication (the minted
+    // tokens, not just a timestamp — #80876), and only then try to take the
+    // lease — checking the lease first would grab it the moment the holder
+    // releases, without ever reading what it published.
+    const adopted = readPublishedRenew(startedAt);
+    if (adopted) return adoptPublishedUser(manager, adopted);
+    held = await acquireRenewLease();
+  }
+  return runRawGrantAndPublish(manager);
+}
+
+/** Round 21c (#80941): oidcConfig sets automaticSilentRenew: true, so
+ * oidc-client-ts's OWN SilentRenewService runs the access-token-expiry timer
+ * and calls userManager.signinSilent() DIRECTLY — a path that bypassed both
+ * the renewInFlight promise and the cross-tab lease, i.e. the timer-driven
+ * renew (the one that produced the measured 280-POST/two-tab incident) was
+ * never serialised. Wrapping the INSTANCE method routes that internal call
+ * through the module's signinSilent, so every renewal — timer, 401 retry,
+ * error-handler retry — contends for the same lease and adopts the same
+ * publication. The RAW grant is kept on the instance (__rawSigninSilent) for
+ * the wrapper's own renew paths; per-instance so a re-initialize wraps too. */
+function wrapManagerSignin(manager) {
+  // No early-return guard: both callers pass a freshly constructed
+  // UserManager, so the guard was unreachable — and its failure mode if a
+  // double-wrap ever DID happen is a deadlock (round 23: __rawSigninSilent
+  // would capture the already-wrapped arrow, renewOnce would re-enter the
+  // module signinSilent and await its own renewInFlight). The flag stays as
+  // a wrap marker for the tests.
+  manager.__rawSigninSilent = manager.signinSilent.bind(manager);
+  manager.signinSilent = (...args) => signinSilent(...args);
+  manager.__signinWrapped = true;
+  return manager;
+}
+
+/** ROUND 25 (review): the guarded release of both subscription handles was a
+ * verbatim 8-line copy shared by initialize()'s re-init path and logout() —
+ * the same commit's reserve()/assertFree() fix (82698) documents why
+ * kept-in-sync-by-discipline twins drift. One helper, one call per site. */
+function releaseManagerEvents() {
+  if (unsubscribeUserLoaded) {
+    unsubscribeUserLoaded();
+    unsubscribeUserLoaded = null;
+  }
+  if (unsubscribeSilentRenewError) {
+    unsubscribeSilentRenewError();
+    unsubscribeSilentRenewError = null;
+  }
+}
 
 /**
  * Initialize the OIDC service — creates UserManager, checks for existing session,
@@ -21,15 +295,64 @@ let unsubscribeSilentRenewError = null;
  * @returns {Promise<Object|null>} Existing user or null
  */
 async function initialize() {
-  userManager = new UserManager(oidcConfig);
+  // ROUND 23 (review): a re-initialize used to orphan the previous manager's
+  // event subscriptions — the module-level unsubscribe handles were
+  // overwritten without being called, so every re-init leaked a full set of
+  // addUserLoaded/addSilentRenewError listeners on a manager nothing else
+  // references. Release them before replacing the manager.
+  releaseManagerEvents();
+  userManager = wrapManagerSignin(new UserManager(oidcConfig));
+
+  // Bounded-renew state (round 17, #80353; reset widened round 18, #80469)
+  let consecutiveRenewFailures = 0;
+  const MAX_RENEW_FAILURES = 3;
 
   // Register silent renew event listeners
   unsubscribeUserLoaded = userManager.events.addUserLoaded((user) => {
     currentUser = user;
+    // A TIMER-driven successful renew also resets the failure counter (round
+    // 18, #80469): the documented invariant is "reset on any success", but
+    // only the error-handler's own retry reset it — three transient failures
+    // spread across days (sleep/wake, network switch) still escalated to the
+    // login check even though the last renewal succeeded.
+    consecutiveRenewFailures = 0;
     accessTokenCallbacks.forEach((cb) => cb(user));
   });
 
-  unsubscribeSilentRenewError = userManager.events.addSilentRenewError(() => {
+  // A FAILED RENEW IS NOT A DEAD SESSION (David's 2026-10-11 logout). This used
+  // to call login() unconditionally, so ONE rejected refresh in a burst threw
+  // the user to the login page and discarded a perfectly good session — which
+  // is exactly what happened mid-import while two tabs were racing. Retry
+  // through the shared renew; only a run of consecutive failures justifies a
+  // redirect.
+  // BOUNDED RETRIES (round 17, #80353): the comment used to say "Retry once"
+  // but nothing enforced it — a persistently failing grant re-raised
+  // silentRenewError, re-entered this handler, failed again… one renew every
+  // few seconds forever with no backoff. The counter below caps consecutive
+  // failures (reset on any success) and escalates through the same
+  // stored-user/login check as the 401 path.
+  unsubscribeSilentRenewError = userManager.events.addSilentRenewError(async () => {
+    try {
+      const user = await signinSilent();
+      if (user && !user.expired) {
+        consecutiveRenewFailures = 0; // recovered — the grant works again
+        return;
+      }
+    } catch (retryError) {
+      console.warn('[KeycloakAuth] Silent renew retry failed:', retryError?.message);
+    }
+    consecutiveRenewFailures += 1;
+    if (consecutiveRenewFailures < MAX_RENEW_FAILURES) return; // back off — let the next timer tick try
+    // Still failing after the cap: check whether the session is actually
+    // unusable before discarding it. A live, unexpired user is not a reason
+    // to log out — but stop re-arming the loop either way.
+    consecutiveRenewFailures = 0;
+    try {
+      const user = await getUser();
+      if (user && !user.expired) return;
+    } catch (escalationError) {
+      console.error('[KeycloakAuth] Session check after renew failures failed:', escalationError?.message);
+    }
     login();
   });
 
@@ -49,7 +372,7 @@ async function initialize() {
  */
 function getUserManager() {
   if (!userManager) {
-    userManager = new UserManager(oidcConfig);
+    userManager = wrapManagerSignin(new UserManager(oidcConfig));
   }
   return userManager;
 }
@@ -85,15 +408,11 @@ async function handleCallback() {
  * Redirect to Keycloak logout
  */
 async function logout() {
-  // Remove event listeners before clearing state
-  if (unsubscribeUserLoaded) {
-    unsubscribeUserLoaded();
-    unsubscribeUserLoaded = null;
-  }
-  if (unsubscribeSilentRenewError) {
-    unsubscribeSilentRenewError();
-    unsubscribeSilentRenewError = null;
-  }
+  // The publication carries full minted tokens — a logout must not leave
+  // one on disk (round 23 retention fix; the TTL cleanup misses a fresh
+  // publication, which a logout is exactly the wrong place to keep).
+  clearRenewPublication();
+  releaseManagerEvents();
 
   const manager = getUserManager();
   // Capture id_token before removeUser() clears stored user —
@@ -150,17 +469,47 @@ function isAuthenticated() {
  * @returns {Promise<Object|null>} Refreshed user or null if refresh failed
  */
 async function signinSilent() {
-  const manager = getUserManager();
-  try {
-    const user = await manager.signinSilent();
-    if (user) {
-      currentUser = user;
+  // SERIALISED (David's 2026-10-11 logout, root-caused from the Keycloak log):
+  // two browser tabs each renew on their own timer, and the realm runs
+  // refresh_token_max_reuse=0 + revoke_refresh_token=false — so every silent
+  // renew ROTATES the refresh token and a rotated/reused one is rejected. Two
+  // concurrent renews therefore race and kill the session they share. Measured
+  // live: 280 token POSTs in 59 seconds from two tabs, 5 rejected with
+  // "Session not active", then a forced logout. One shared in-flight promise
+  // means concurrent callers wait for ONE refresh instead of racing — WITHIN
+  // this tab; across tabs the localStorage lease above serialises it further
+  // (round 20, #80800: the module-scoped promise alone left the two-tab
+  // race — the measured one — unserialised).
+  if (renewInFlight) return renewInFlight;
+  // Bound the publication's disk lifetime (round 23 retention): a stale
+  // entry from a previous renew window is inadmissible to every reader, so
+  // dropping it at each renew entry costs nothing and leaves no tokens at
+  // rest past the TTL.
+  clearStaleRenewPublication();
+  renewInFlight = (async () => {
+    const manager = getUserManager();
+    // EVERY exit path — adopt, own-renew, rejection — must clear renewInFlight
+    // and release the lease: an adopt-path return that skips the finally
+    // would pin renewInFlight to a resolved promise forever, making every
+    // later renew in this tab return the stale one (caught by the lease
+    // tests).
+    try {
+      const startedAt = Date.now();
+      // Web Locks where the engine has them (atomic, #80864); settle-window
+      // localStorage lease otherwise. Both publish the minted user (#80876).
+      if (typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function') {
+        return await renewViaWebLock(manager, startedAt);
+      }
+      return await renewViaLease(manager, startedAt);
+    } catch (error) {
+      console.error('[KeycloakAuth] Error during silent renew:', error.message);
+      throw error;
+    } finally {
+      releaseRenewLease();
+      renewInFlight = null;
     }
-    return user;
-  } catch (error) {
-    console.error('[KeycloakAuth] Error during silent renew:', error.message);
-    throw error;
-  }
+  })();
+  return renewInFlight;
 }
 
 /**

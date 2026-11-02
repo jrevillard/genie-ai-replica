@@ -383,6 +383,21 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(authedAxios.post.mock.calls[0][2]).toEqual({ timeout: 30000 });
   });
 
+  test('the user-zip import declares source=user-import — it must never hit the doc-repo reuse guard (round 28)', async () => {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    zip.addFile('src.md', Buffer.from('# Src'));
+    await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
+    const body = authedAxios.post.mock.calls.find((c) => String(c[0]).includes('ingest-bundle'))[1];
+    // ROUND 28 (review — ingest-bundle collision): a user-zip import stores
+    // its OWN bytes even when the same (repo_id, bundle_version) already
+    // holds the publish zip. Dropping this field would let the (unscoped)
+    // guard silently substitute the publish zip for the user's bytes.
+    expect(body.source).toBe('user-import');
+    expect(body.is_bundle).toBe(true);
+    expect(body.bundle_version).toBe(3); // repo.version rides along (D-B)
+  });
+
   test('hard conformance error REJECTS the concept — recorded, never enqueued (Story 4.8-amend)', async () => {
     conformanceService.validateConcept.mockReturnValueOnce({
       issues: [{ code: 'MISSING_TYPE', severity: 'error' }],

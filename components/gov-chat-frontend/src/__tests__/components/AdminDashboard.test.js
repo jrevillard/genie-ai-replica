@@ -30,8 +30,20 @@ const mockGetUserStats = jest.fn().mockResolvedValue({
   activeUsers: 42,
   newUsers: 12,
   users: [
-    { _key: 'user-1', loginName: 'user1', fullName: 'User One', email: 'one@test.com', roles: [] },
-    { _key: 'user-2', loginName: 'user2', fullName: 'User Two', email: 'two@test.com', roles: [] }
+    {
+      _key: 'user-1',
+      loginName: 'user1',
+      fullName: 'User One',
+      email: 'one@test.com',
+      roles: []
+    },
+    {
+      _key: 'user-2',
+      loginName: 'user2',
+      fullName: 'User Two',
+      email: 'two@test.com',
+      roles: []
+    }
   ]
 });
 
@@ -51,8 +63,20 @@ const mockSearchLogs = jest.fn().mockResolvedValue([]);
 const mockSearchUsers = jest.fn().mockResolvedValue({
   data: {
     users: [
-      { _key: 'user-1', loginName: 'user1', fullName: 'User One', email: 'one@test.com', roles: [] },
-      { _key: 'user-2', loginName: 'user2', fullName: 'User Two', email: 'two@test.com', roles: [] }
+      {
+        _key: 'user-1',
+        loginName: 'user1',
+        fullName: 'User One',
+        email: 'one@test.com',
+        roles: []
+      },
+      {
+        _key: 'user-2',
+        loginName: 'user2',
+        fullName: 'User Two',
+        email: 'two@test.com',
+        roles: []
+      }
     ],
     total: 2
   }
@@ -106,6 +130,12 @@ jest.mock('../../services/documentFileService', () => ({
     success: true,
     successCount: 2,
     failureCount: 0,
+    results: []
+  }),
+  // #1042: batch delete — defaults to the all-success shape so existing
+  // tests pass; individual tests override to exercise partial/all-failure.
+  deleteMultipleFiles: jest.fn().mockResolvedValue({
+    success: true,
     results: []
   })
 }));
@@ -214,7 +244,7 @@ function createUnauthenticatedStore() {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
+function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extraStubs = {}) {
   const store = createAdminStore(storeOverrides);
   return mount(AdminDashboard, {
     global: {
@@ -251,7 +281,8 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
         AddFromLinkDialog: true,
         FileDetailsDialog: true,
         ConfirmDialog: true,
-        Loader2: true
+        Loader2: true,
+        ...extraStubs
       }
     }
   });
@@ -286,19 +317,79 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('initializes all eight admin tabs', () => {
+    it('initializes all ten admin tabs (OKF Studio next to Document Management; Models LAST)', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
+      // Story 3-7 fix (#977): OKF Studio tab moved to sit immediately after
+      // Document Management so the crawler→OKF workflow is a one-step click.
+      // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
       expect(tabIds).toEqual([
         'overview',
         'hierarchy',
         'documents',
+        'studio',
         'database',
         'logs',
         'queryInspector',
         'security',
-        'users'
+        'users',
+        'models'
       ]);
+    });
+
+    // David 2026-10-21: "the left sidebar menus need to be aligned with the
+    // tabs in the tab rack" — the Studio tab had NO sidebar entry (clicking it
+    // left the menu with no active item), and Settings listed users before
+    // security against the rack's order. The sidebar must navigate to every
+    // tab, in rack order.
+    // OKF feature flag (2026-10-21): OKF_ENABLED=0 parks the OKF surfaces —
+    // the Studio and Models tabs (rack + sidebar) disappear; Query Inspector
+    // is platform tooling and STAYS (David's call).
+    it('OKF flag off hides Studio and Models from rack and sidebar, keeps Query Inspector', async () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      try {
+        const wrapper = createAdminDashboardWrapper(
+          {},
+          {},
+          {
+            OkfStudioTab: true,
+            OkfModelConfigPanel: true,
+            QueryInspector: true
+          }
+        );
+        const tabIds = wrapper.vm.adminTabs.map((t) => t.value);
+        expect(tabIds).not.toContain('studio');
+        expect(tabIds).not.toContain('models');
+        expect(tabIds).toContain('queryInspector'); // platform tooling stays
+        expect(tabIds).toHaveLength(8);
+        const linkText = wrapper.findAll('.sidebar .nav-link').map((l) => l.text());
+        expect(linkText.join(' | ')).not.toContain('OKF Studio');
+        expect(linkText.join(' | ')).not.toContain('admin.tabs.models');
+        expect(wrapper.findAll('.sidebar .nav-link')).toHaveLength(8);
+      } finally {
+        delete window.APP_CONFIG;
+      }
+    });
+
+    it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
+      // The heavy tab panels (Studio fetches repos on mount, Models fetches
+      // configs, Inspector mounts its own store calls) are stubbed — this
+      // test is about the NAVIGATION surface, not the panels' payloads.
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {},
+        {
+          OkfStudioTab: true,
+          OkfModelConfigPanel: true,
+          QueryInspector: true
+        }
+      );
+      const links = wrapper.findAll('.sidebar .nav-link');
+      expect(links.length).toBe(wrapper.vm.tabs.length);
+      for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {
+        await links[i].trigger('click');
+        expect(wrapper.vm.activeTab).toBe(wrapper.vm.tabs[i].id);
+      }
     });
   });
 
@@ -386,7 +477,7 @@ describe('AdminDashboard', () => {
     it('adminTabs computed maps each tab to { label, value }', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabs = wrapper.vm.adminTabs;
-      expect(tabs.length).toBe(8);
+      expect(tabs.length).toBe(10);
       expect(tabs[0].value).toBe('overview');
       expect(tabs[0].label).toBe('System Health'); // translate() returns the fallback label from tabs data
       expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'string')).toBe(true);
@@ -584,7 +675,13 @@ describe('AdminDashboard', () => {
           catCode: 'taxes',
           name: 'Impuestos',
           nameEN: 'Taxes',
-          children: [{ _key: 'svc-1', name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]
+          children: [
+            {
+              _key: 'svc-1',
+              name: 'Declaración de impuestos',
+              nameEN: 'Tax Filing'
+            }
+          ]
         }
       ]);
 
@@ -596,9 +693,15 @@ describe('AdminDashboard', () => {
       // Localized and EN values differ on purpose: the rows must carry the
       // EN spelling the filter wire speaks, and a mapping that picked the
       // localized name would read 'Impuestos' here.
-      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({ _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({
+        _key: 'cat-1',
+        nameEN: 'Taxes'
+      });
       expect(wrapper.vm.knowledgeHierarchy[0].services).toHaveLength(1);
-      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({ _key: 'svc-1', nameEN: 'Tax Filing' });
+      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({
+        _key: 'svc-1',
+        nameEN: 'Tax Filing'
+      });
     });
 
     it('falls back to the payload name when the tree predates the nameEN field', async () => {
@@ -621,8 +724,14 @@ describe('AdminDashboard', () => {
       // it: the panel is fetched in English, so the payload's `name` IS
       // the English translation there. Same fallback the mobile collector
       // makes for the same deploy window.
-      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({ _key: 'cat-1', nameEN: 'Taxes' });
-      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({ _key: 'svc-1', nameEN: 'Tax Filing' });
+      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({
+        _key: 'cat-1',
+        nameEN: 'Taxes'
+      });
+      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({
+        _key: 'svc-1',
+        nameEN: 'Tax Filing'
+      });
     });
   });
 
@@ -836,7 +945,15 @@ describe('AdminDashboard', () => {
       mockGetSecurityDetails.mockReset();
       mockGetSecurityDetails.mockResolvedValue({
         lastScan: 'Never',
-        patternMatches: [{ type: 'attack_attempt', pattern: 'CSRF', occurrences: 1, sample: 'x', service: 'grafana' }]
+        patternMatches: [
+          {
+            type: 'attack_attempt',
+            pattern: 'CSRF',
+            occurrences: 1,
+            sample: 'x',
+            service: 'grafana'
+          }
+        ]
       });
       const wrapper = createAdminDashboardWrapper();
 
@@ -879,10 +996,24 @@ describe('AdminDashboard', () => {
         lastScan: '2026-09-08T10:00:00Z',
         vulnerabilities: { critical: 0, medium: 0, low: 0 },
         failedLoginDetails: [
-          { timestamp: '2026-09-08T10:00:00Z', level: 'ERROR', message: 'Invalid credentials' },
-          { timestamp: '2026-09-08T10:01:00Z', level: 'WARN', message: 'Repeated failures' }
+          {
+            timestamp: '2026-09-08T10:00:00Z',
+            level: 'ERROR',
+            message: 'Invalid credentials'
+          },
+          {
+            timestamp: '2026-09-08T10:01:00Z',
+            level: 'WARN',
+            message: 'Repeated failures'
+          }
         ],
-        suspiciousDetails: [{ timestamp: '2026-09-08T10:02:00Z', level: 'WARNING', message: 'Anomalous IP' }]
+        suspiciousDetails: [
+          {
+            timestamp: '2026-09-08T10:02:00Z',
+            level: 'WARNING',
+            message: 'Anomalous IP'
+          }
+        ]
       });
       const wrapper = createAdminDashboardWrapper();
 
@@ -890,11 +1021,23 @@ describe('AdminDashboard', () => {
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
-        { timestamp: '2026-09-08T10:00:00Z', type: 'ERROR', message: 'Invalid credentials' },
-        { timestamp: '2026-09-08T10:01:00Z', type: 'WARN', message: 'Repeated failures' }
+        {
+          timestamp: '2026-09-08T10:00:00Z',
+          type: 'ERROR',
+          message: 'Invalid credentials'
+        },
+        {
+          timestamp: '2026-09-08T10:01:00Z',
+          type: 'WARN',
+          message: 'Repeated failures'
+        }
       ]);
       expect(wrapper.vm.securityDetails.suspiciousDetails).toEqual([
-        { timestamp: '2026-09-08T10:02:00Z', type: 'WARNING', message: 'Anomalous IP' }
+        {
+          timestamp: '2026-09-08T10:02:00Z',
+          type: 'WARNING',
+          message: 'Anomalous IP'
+        }
       ]);
     });
 
@@ -907,7 +1050,13 @@ describe('AdminDashboard', () => {
         lastScan: '2026-09-08T11:00:00Z',
         vulnerabilities: { critical: 0, medium: 0, low: 0 },
         failedLoginDetails: [
-          { timestamp: '2026-09-08T11:00:00Z', message: JSON.stringify({ level: 'ERROR', message: 'Legacy failure' }) }
+          {
+            timestamp: '2026-09-08T11:00:00Z',
+            message: JSON.stringify({
+              level: 'ERROR',
+              message: 'Legacy failure'
+            })
+          }
         ],
         suspiciousDetails: []
       });
@@ -917,7 +1066,11 @@ describe('AdminDashboard', () => {
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
-        { timestamp: '2026-09-08T11:00:00Z', type: 'ERROR', message: 'Legacy failure' }
+        {
+          timestamp: '2026-09-08T11:00:00Z',
+          type: 'ERROR',
+          message: 'Legacy failure'
+        }
       ]);
     });
 
@@ -1081,7 +1234,11 @@ describe('AdminDashboard', () => {
 
     it('getStatusVariant renders a degraded document as a warning badge', () => {
       const wrapper = createAdminDashboardWrapper();
-      expect(wrapper.vm.getStatusVariant({ dataprep: { status: 'Ingested with Warnings' } })).toBe('warning');
+      expect(
+        wrapper.vm.getStatusVariant({
+          dataprep: { status: 'Ingested with Warnings' }
+        })
+      ).toBe('warning');
       // And a clean one is still the success badge, so the state means something.
       expect(wrapper.vm.getStatusVariant({ dataprep: { status: 'Ingested' } })).toBe('success');
     });
@@ -1133,7 +1290,11 @@ describe('AdminDashboard', () => {
     it('returns false when selected documents contain ingested status', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
@@ -1142,7 +1303,13 @@ describe('AdminDashboard', () => {
 
     it('returns true when selected documents are not ingested', () => {
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [{ _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ready' } }];
+      wrapper.vm.documents = [
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'ready' }
+        }
+      ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
       expect(wrapper.vm.showIngestButton).toBe(true);
@@ -1151,8 +1318,16 @@ describe('AdminDashboard', () => {
     it('returns false when any selected document has ingested status', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ready' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'ready' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1163,7 +1338,11 @@ describe('AdminDashboard', () => {
       // Regression for #832: dataprep.status persisted as 'Ingested' (Title Case).
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'Ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
@@ -1177,7 +1356,11 @@ describe('AdminDashboard', () => {
       // already-ingested file. This test would have caught that secondary bug.
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'Ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
@@ -1319,7 +1502,15 @@ describe('AdminDashboard', () => {
 
     it('stores search results and shows success notification', () => {
       const wrapper = createAdminDashboardWrapper();
-      const results = [{ id: 'log-1', message: 'test', level: 'INFO', time: '12:00', service: 'api' }];
+      const results = [
+        {
+          id: 'log-1',
+          message: 'test',
+          level: 'INFO',
+          time: '12:00',
+          service: 'api'
+        }
+      ];
       wrapper.vm.activeTab = 'logs';
       wrapper.vm.handleSearchResults(results);
 
@@ -1357,7 +1548,10 @@ describe('AdminDashboard', () => {
     it('extracts ERROR type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
       const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'ERROR', message: 'something went wrong' }));
-      expect(result).toEqual({ type: 'ERROR', message: 'something went wrong' });
+      expect(result).toEqual({
+        type: 'ERROR',
+        message: 'something went wrong'
+      });
     });
 
     it('extracts INFO type from JSON-encoded log entry', () => {
@@ -1515,12 +1709,16 @@ describe('AdminDashboard', () => {
       const wrapper = createAdminDashboardWrapper();
       expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'ingested' } })).toBe('Ingested');
       expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'Ingested' } })).toBe('Ingested');
-      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'Ingested with Warnings' } })).toBe(
-        'Ingested with Warnings'
-      );
-      expect(wrapper.vm.getDisplayStatus({ dataprep: { status: 'ingested with warnings' } })).toBe(
-        'Ingested with Warnings'
-      );
+      expect(
+        wrapper.vm.getDisplayStatus({
+          dataprep: { status: 'Ingested with Warnings' }
+        })
+      ).toBe('Ingested with Warnings');
+      expect(
+        wrapper.vm.getDisplayStatus({
+          dataprep: { status: 'ingested with warnings' }
+        })
+      ).toBe('Ingested with Warnings');
     });
 
     it('resolves each dataprep status through the real en catalogue', () => {
@@ -1565,7 +1763,11 @@ describe('AdminDashboard', () => {
         expect(wrapper.vm.getDisplayStatus({ dataprep: { status } })).toBe(label);
         // Case-insensitively too: the stored status is title-cased by dataprep
         // while the filter option is lower-case, and both reach this function.
-        expect(wrapper.vm.getDisplayStatus({ dataprep: { status: status.toUpperCase() } })).toBe(label);
+        expect(
+          wrapper.vm.getDisplayStatus({
+            dataprep: { status: status.toUpperCase() }
+          })
+        ).toBe(label);
       }
     });
 
@@ -1606,7 +1808,12 @@ describe('AdminDashboard', () => {
       // params — not render them empty (the #1130 regression).
       const { createI18n } = require('vue-i18n');
       const en = require('../../i18n/locales/en.js').default;
-      const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } });
+      const i18n = createI18n({
+        legacy: true,
+        locale: 'en',
+        fallbackLocale: 'en',
+        messages: { en }
+      });
       const wrapper = createAdminDashboardWrapper(
         {},
         {
@@ -1839,8 +2046,16 @@ describe('AdminDashboard', () => {
       const wrapper = createAdminDashboardWrapper();
       // Real-world shape: ArangoDB _key + semantic file_id are different.
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'retracted' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'retracted' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1861,8 +2076,16 @@ describe('AdminDashboard', () => {
     it('retract: passes file_id values to documentFileService.retractMultipleFiles', async () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'Ingested' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'Ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1878,6 +2101,143 @@ describe('AdminDashboard', () => {
       ]);
     });
 
+    // #1042 BATCH DELETE — the Delete Selected button (Document Management).
+    it('delete: passes file_id values to documentFileService.deleteMultipleFiles', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // All-success default: selection clears, success toast fires.
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+      expect(ok[1].message).toMatch(/deleted/i);
+      expect(wrapper.vm.selectedDocuments).toEqual([]);
+    });
+
+    it('delete: disabled with hover title when any selected file is ingested', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      expect(wrapper.vm.showDeleteButton).toBe(true);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/ingested/i);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      // Pure PENDING selection — button enabled, no refuse reason.
+      wrapper.vm.documents = [{ _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['a-1'];
+      expect(wrapper.vm.deleteRefuseReason).toBeNull();
+    });
+
+    // 2026-10-10 (live: David selected pending rows to clean up, ONE row had
+    // gone Ingesting, the whole batch silently refused via a tooltip-only
+    // disabled button — read as "it failed"): a MIXED selection deletes the
+    // clean subset and reports the skipped rows instead of refusing.
+    it('delete: a mixed selection deletes only the deletable rows and keeps the blocked selected', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'pending' } },
+        { _key: 'c', file_id: 'c-1', dataprep: { status: 'ingesting' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1', 'c-1'];
+      expect(wrapper.vm.deletableSelection).toEqual(['a-1', 'b-1']);
+      expect(wrapper.vm.blockedSelection.map((d) => d.file_id)).toEqual(['c-1']);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      // The confirm names what will be skipped.
+      expect(wrapper.vm.confirmDialogState.message).toMatch(/SKIPPED/i);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // Blocked row STAYS selected (it was not deleted); the deleted rows
+      // drop out.
+      expect(wrapper.vm.selectedDocuments).toEqual(['c-1']);
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+    });
+
+    it('delete: all-blocked still refuses outright', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'c', file_id: 'c-1', dataprep: { status: 'ingested' } }];
+      wrapper.vm.selectedDocuments = ['c-1'];
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+      expect(documentFileService.deleteMultipleFiles).not.toHaveBeenCalled();
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+    });
+
+    it('delete: 403 BUNDLE_PROTECTED surfaces the verbatim backend message', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      // httpService rejects with the PARSED envelope {status, statusText,
+      // data, message} — there is no `.response` on it (round 16, #80118).
+      // The old mock used the axios shape and so exercised a dead branch.
+      documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
+        status: 403,
+        statusText: 'Forbidden',
+        data: {
+          success: false,
+          code: 'BUNDLE_PROTECTED',
+          error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+          message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
+        },
+        message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
+      });
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'x', file_id: 'x-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['x-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+      // Verbatim backend message — not the generic deleteQueuedError
+      expect(err[1].message).toMatch(/OKF repository lifecycle/);
+    });
+
+    it('delete: a non-bundle envelope rejection falls back to the generic error', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
+        status: 500,
+        statusText: 'Internal Server Error',
+        data: { success: false, code: 'INTERNAL', message: 'boom' },
+        message: 'boom'
+      });
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'y', file_id: 'y-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['y-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+      // code !== BUNDLE_PROTECTED → the generic branch, never the raw 'boom'
+      expect(err[1].message).toMatch(/error occurred during the batch deletion/i);
+    });
+
     it('ingest all-failure: keeps failed selections, error toast, real failureCount', async () => {
       const documentFileService = require('../../services/documentFileService');
       documentFileService.ingestMultipleFiles.mockResolvedValueOnce({
@@ -1885,15 +2245,31 @@ describe('AdminDashboard', () => {
         successCount: 0,
         failureCount: 2,
         results: [
-          { fileId: '1774623200119_e9887fa8', success: false, error: 'File metadata not found' },
-          { fileId: '1774620171830_9589f57b', success: false, error: 'File metadata not found' }
+          {
+            fileId: '1774623200119_e9887fa8',
+            success: false,
+            error: 'File metadata not found'
+          },
+          {
+            fileId: '1774620171830_9589f57b',
+            success: false,
+            error: 'File metadata not found'
+          }
         ]
       });
 
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'retracted' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'retracted' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1916,14 +2292,26 @@ describe('AdminDashboard', () => {
         failureCount: 1,
         results: [
           { fileId: '1774623200119_e9887fa8', success: true },
-          { fileId: '1774620171830_9589f57b', success: false, error: 'File has already been ingested' }
+          {
+            fileId: '1774620171830_9589f57b',
+            success: false,
+            error: 'File has already been ingested'
+          }
         ]
       });
 
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'retracted' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'Ingested' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1952,8 +2340,16 @@ describe('AdminDashboard', () => {
 
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'retracted' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'retracted' }
+        }
       ];
       wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
@@ -1993,8 +2389,16 @@ describe('AdminDashboard', () => {
     it('populates selectedDocuments with file_id (not _key) on select-all', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
-        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+        {
+          _key: '39933124',
+          file_id: '1774623200119_e9887fa8',
+          dataprep: { status: 'retracted' }
+        },
+        {
+          _key: '39933120',
+          file_id: '1774620171830_9589f57b',
+          dataprep: { status: 'Ingested' }
+        }
       ];
 
       wrapper.vm.selectAllDocuments({ target: { checked: true } });
@@ -2039,6 +2443,181 @@ describe('AdminDashboard', () => {
       ];
       wrapper.vm.selectedDocuments = ['f1', 'f2'];
       expect(wrapper.vm.showRetractButton).toBe(false);
+    });
+  });
+
+  // okfRepoGate — Story 7.7 amendment: documents still serving the free-form
+  // corpus are ALLOWED into a new OKF repository (import succeeds; the new
+  // repo's own ingest is gated until they are retracted). Only empty
+  // selections and documents already sourced by ANOTHER OKF repo refuse.
+  // -----------------------------------------------------------------------
+  describe('okfRepoGate (Story 7.7 amendment)', () => {
+    // Real documents carry a numeric-ish Arango _key DISTINCT from file_id —
+    // the selection holds file_id's (checkbox :value), so the gate must match
+    // on file_id. The distinct _key is deliberate: it turns a regression back
+    // to _key-matching red (review !622 wave 2, #78639).
+    const doc = (fileId, status, okf_repo_id = null) => ({
+      _key: 'arango-' + fileId,
+      file_id: fileId,
+      okf_repo_id,
+      dataprep: { status }
+    });
+
+    async function gateWith(docs, selected) {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({ documents: docs, selectedDocuments: selected });
+      return wrapper.vm.okfRepoGate;
+    }
+
+    it('refuses an empty selection', async () => {
+      const gate = await gateWith([doc('f1', 'Pending')], []);
+      expect(gate).toMatchObject({
+        visible: false,
+        reasonKey: 'okf.docs.gate.emptySelection',
+        warnKey: null
+      });
+    });
+
+    it('refuses documents already sourced by another OKF repository', async () => {
+      const gate = await gateWith([doc('f1', 'Pending', 'r-other')], ['f1']);
+      expect(gate).toMatchObject({
+        visible: false,
+        reasonKey: 'okf.docs.gate.alreadyInOkf',
+        warnKey: null
+      });
+    });
+
+    it('ALLOWS ingested documents — visible with servingWarn and the count', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Ingested'), doc('f2', 'Ingested with Warnings'), doc('f3', 'Ingesting')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({
+        visible: true,
+        reasonKey: null,
+        warnKey: 'okf.docs.gate.servingWarn',
+        servingCount: 3
+      });
+    });
+
+    it('clean (not serving) selection → visible without a warning', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Pending'), doc('f2', 'Retracted'), doc('f3', 'Ingestion Error')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({
+        visible: true,
+        reasonKey: null,
+        warnKey: null,
+        servingCount: 0
+      });
+    });
+
+    it('gate title renders the servingWarn count through a real vue-i18n instance (escaped leaf, .replace regime)', async () => {
+      // ROUND 25 CORRECTION (review 83379/83383): the previous pin stubbed
+      // translate with its own template + its own .replace — it mirrored
+      // NEITHER real path and could not see the round-23 regression. The
+      // real regime: the GATE leaf okf.docs.gate.servingWarn is stored
+      // BRACE-ESCAPED in the shipped catalogue (pinned by
+      // localeConsistency's DYNAMIC_COMPILED_KEYS), so the compiled path
+      // renders the LITERAL text {n} and the component's .replace fills it.
+      // Drive the REAL vue-i18n + REAL en.js leaf (the :1804 pattern) and
+      // assert the rendered title — a named-param call would leak a literal
+      // "{n}" and fail this test, as it did in the shipped regression.
+      const { createI18n } = require('vue-i18n');
+      const en = require('../../i18n/locales/en.js').default;
+      const i18n = createI18n({
+        legacy: true,
+        locale: 'en',
+        fallbackLocale: 'en',
+        messages: { en }
+      });
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: (...args) => i18n.global.t(...args)
+          }
+        }
+      );
+      await wrapper.setData({
+        documents: [doc('f1', 'Ingested')],
+        selectedDocuments: ['f1']
+      });
+      const title = wrapper.vm.okfGateTitle;
+      expect(title).toContain('1 selected document(s) still serve');
+      expect(title).not.toContain('{n}');
+    });
+
+    it('onCreateOkfRepoFromSelection maps the pick by file_id, never the Arango _key (#78640)', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({
+        documents: [
+          {
+            _key: '101',
+            file_id: 'f-101',
+            file_name: 'a.pdf',
+            dataprep: { status: 'Pending' }
+          },
+          {
+            _key: '102',
+            file_id: 'f-102',
+            file_name: 'b.pdf',
+            dataprep: { status: 'Pending' }
+          }
+        ],
+        selectedDocuments: ['f-101']
+      });
+      // Spy on the REAL store — replacing $store would break the studio tab's
+      // mounted() dispatch when the tab flip mounts it. The slim test store
+      // has no okf module; register a stub so StudioDashboard's mounted()
+      // fetchRepos resolves instead of throwing.
+      wrapper.vm.$store.registerModule('okf', {
+        namespaced: true,
+        actions: { fetchRepos: () => Promise.resolve({ ok: true }) }
+      });
+      const commit = jest.spyOn(wrapper.vm.$store, 'commit');
+      await wrapper.vm.onCreateOkfRepoFromSelection();
+      expect(commit).toHaveBeenCalledWith('okf/setSelection', {
+        documents: [{ file_id: 'f-101', file_name: 'a.pdf' }]
+      });
+    });
+
+    it('?tab=studio cannot bypass a parked OKF flag; legitimate tabs still deep-link (#78641)', async () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      try {
+        const wrapper = createAdminDashboardWrapper({}, {}, { QueryInspector: true });
+        await wrapper.vm.applyRouteQuery({ tab: 'studio' });
+        expect(wrapper.vm.activeTab).not.toBe('studio');
+        await wrapper.vm.applyRouteQuery({ tab: 'documents' });
+        expect(wrapper.vm.activeTab).toBe('documents');
+      } finally {
+        delete window.APP_CONFIG;
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Story 7.7 deep link — one-shot: opens the FileDetailsDialog on click-
+  // navigation, then scrubs ?file= so a REFRESH does not re-open it.
+  // -----------------------------------------------------------------------
+  describe('applyRouteQuery deep link (one-shot)', () => {
+    it('opens the dialog and scrubs ?file= from the URL', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.$router = { replace: jest.fn().mockResolvedValue(undefined) };
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9', keep: 'x' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
+      expect(wrapper.vm.selectedFileId).toBe('f-9');
+      expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({
+        query: { tab: 'documents', keep: 'x' }
+      });
+    });
+
+    it('tolerates a missing router (unit contexts) without crashing', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
     });
   });
 });
@@ -2097,5 +2676,196 @@ describe('stat tile trends come from the payload, not from the template', () => 
 
   it('treats a non-numeric payload value as not computed', () => {
     expect(trendFor({ uptime: 'n/a' }, 'uptime', true)).toBeNull();
+  });
+});
+
+// ─── OKF hand-off relay + deep links (coverage: the must-increase rule) ────
+// ─── OKF hand-off relay + deep links (coverage: the must-increase rule) ────
+describe('AdminDashboard — crawl→OKF relay and route deep links', () => {
+  // StudioDashboard's mounted() needs the okf store module; these tests only
+  // exercise the dashboard's own tab switch + event relay, so stub it out.
+  const STUBS = { OkfStudioTab: true };
+
+  it('a ?tab=documents&file=<id> deep link opens the details dialog and scrubs the URL once', async () => {
+    const replace = jest.fn(() => Promise.resolve());
+    const wrapper = createAdminDashboardWrapper({}, { $router: { replace } }, STUBS);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-42' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.activeTab).toBe('documents');
+    expect(wrapper.vm.showDetailsDialog).toBe(true);
+    expect(wrapper.vm.selectedFileId).toBe('f-42');
+    // One-shot: the file param leaves the query so a refresh does not reopen
+    expect(replace).toHaveBeenCalledWith({ query: { tab: 'documents' } });
+    wrapper.unmount();
+  });
+
+  it('?tab=studio cannot reopen a flag-parked OKF pane (#78641)', async () => {
+    const prevConfig = window.APP_CONFIG;
+    window.APP_CONFIG = { okfEnabled: '0' }; // flag parked — the pane must stay closed
+    let wrapper;
+    try {
+      wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+      await wrapper.vm.$nextTick();
+      const before = wrapper.vm.activeTab;
+      wrapper.vm.applyRouteQuery({ tab: 'studio' });
+      expect(wrapper.vm.activeTab).toBe(before); // adminTabs has no studio → ignored
+      expect(wrapper.vm.showDetailsDialog).toBe(false);
+      // falsy q is a full no-op
+      wrapper.vm.applyRouteQuery(null);
+      expect(wrapper.vm.activeTab).toBe(before);
+    } finally {
+      wrapper.unmount();
+      window.APP_CONFIG = prevConfig;
+    }
+  });
+
+  it('relayCreateFromCrawl switches to studio and re-dispatches flagged so it never re-catches itself', async () => {
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
+    await wrapper.vm.relayCreateFromCrawl({
+      __wantsStudio: true, // explicit hand-off intent (round 17, #80354)
+      detail: { repo_id: 'r1', file_id: 'f1' }
+    });
+    expect(wrapper.vm.activeTab).toBe('studio');
+    // Round 18 (#80478): the dispatch is DEFERRED until OkfStudioTab emits
+    // studio-ready (the async chunk may still be loading on first
+    // activation — a single $nextTick fired with zero listeners). The stub
+    // never emits, so drain the queue the way the real component's
+    // 'studio-ready' handler would.
+    wrapper.vm.flushPendingStudioEvents();
+    const relayed = dispatch.mock.calls[0][0];
+    expect(relayed.type).toBe('okf:create-from-crawl');
+    expect(relayed.__okfRelayed).toBe(true);
+    expect(relayed.detail).toEqual({ repo_id: 'r1', file_id: 'f1' });
+    // its own relay is ignored outright
+    dispatch.mockClear();
+    await wrapper.vm.relayCreateFromCrawl({ __okfRelayed: true, detail: {} });
+    expect(dispatch).not.toHaveBeenCalled();
+    dispatch.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('the relay IGNORES the legacy unmarked seed event — no tab teleport on a plain crawl (round 17, #80354)', async () => {
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.activeTab = 'documents';
+    const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
+    // AddFromLinkDialog's seeding event carries detail but NO marker: it
+    // exists to pre-fill an ALREADY-OPEN wizard, not to switch tabs.
+    await wrapper.vm.relayCreateFromCrawl({ detail: { file_id: 'f9', url: 'https://x' } });
+    expect(wrapper.vm.activeTab).toBe('documents'); // stayed put
+    expect(dispatch).not.toHaveBeenCalled(); // nothing re-dispatched
+    dispatch.mockRestore();
+    wrapper.unmount();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 18 — Studio hand-off handshake (#80478), honest delete counts
+// (#80486), mount-time theme persistence (#80483)
+// ---------------------------------------------------------------------------
+describe('round 18 — studio hand-off + selection + theme', () => {
+  const STUBS = { OkfStudioTab: true, OkfModelConfigPanel: true, QueryInspector: true };
+
+  afterEach(() => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+  });
+
+  // #80478: OkfStudioTab is a defineAsyncComponent — on the FIRST activation
+  // the chunk is not cached and one $nextTick resolves before it mounts, so
+  // the hand-off events fired with zero listeners. Dispatches must QUEUE
+  // until the component emits studio-ready, then drain.
+  it('hand-off dispatches queue while the async Studio chunk has not mounted, then drain', async () => {
+    window.APP_CONFIG = { okfEnabled: '1' };
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
+    await wrapper.vm.relayCreateFromCrawl({ __wantsStudio: true, detail: { file_id: 'f1' } });
+    expect(wrapper.vm.activeTab).toBe('studio');
+    // The stubbed OkfStudioTab never emits studio-ready → still queued.
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(1);
+    // The component mounts and signals readiness → the queue drains.
+    wrapper.vm.flushPendingStudioEvents();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const evt = dispatch.mock.calls[0][0];
+    expect(evt.type).toBe('okf:create-from-crawl');
+    expect(evt.__okfRelayed).toBe(true);
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(0);
+    dispatch.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('a dispatch with the Studio tab already mounted fires immediately (no queue)', async () => {
+    window.APP_CONFIG = { okfEnabled: '1' };
+    // A TEMPLATE stub (not `true`) so the ref binding materialises once the
+    // v-if pane renders — $refs itself is not assignable from outside.
+    const wrapper = createAdminDashboardWrapper(
+      {},
+      {},
+      { ...STUBS, OkfStudioTab: { template: '<div class="studio-stub" />' } }
+    );
+    await wrapper.vm.$nextTick();
+    wrapper.vm.activeTab = 'studio';
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.$refs.okfStudioTab).toBeTruthy(); // mounted = listeners live
+    const fired = [];
+    wrapper.vm.dispatchWhenStudioReady(() => fired.push(1));
+    expect(fired).toHaveLength(1);
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  // #80486: blockedSelection only sees LOADED rows — a blocked row hidden by
+  // the active filter (or a stale id) must not be promised deletable.
+  it('deletableSelection counts only ids present in the loaded documents list', async () => {
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.documents = [
+      { file_id: 'ok', file_name: 'a.md', dataprep: { status: 'parsed' } },
+      // serving → blocked (present in the list)
+      { file_id: 'blocked', file_name: 'b.md', dataprep: { status: 'ingested' } },
+      // blocked but NOT in the loaded list (hidden by the search filter)
+      { file_id: 'hidden-blocked', file_name: 'c.md', dataprep: { status: 'ingested' } }
+    ];
+    wrapper.vm.selectedDocuments = ['ok', 'blocked', 'hidden-blocked', 'stale-id'];
+    // Hide c.md from the loaded list (the filter case): remove it.
+    wrapper.vm.documents = wrapper.vm.documents.filter((d) => d.file_id !== 'hidden-blocked');
+    expect(wrapper.vm.blockedSelection.map((d) => d.file_id)).toEqual(['blocked']);
+    expect(wrapper.vm.deletableSelection).toEqual(['ok']);
+    wrapper.unmount();
+  });
+
+  // #80483: localStorage 'theme' has exactly one writer — applyTheme. The old
+  // same-theme early return (the echo guard) also skipped the MOUNT-time
+  // call, so a boot with the DOM indicator set but storage empty never
+  // persisted and the NEXT boot reverted to light.
+  it('mount persists the DOM-indicated theme to localStorage', async () => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+    localStorage.clear();
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    expect(localStorage.getItem('theme')).toBe('dark');
+    document.documentElement.removeAttribute('data-theme');
+    wrapper.unmount();
+  });
+
+  it('the echo of an applied theme is dropped (no setTheme recursion)', async () => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+    localStorage.clear();
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    const before = localStorage.getItem('theme');
+    const setItem = jest.spyOn(Storage.prototype, 'setItem');
+    // themeManager.setTheme re-dispatches 'themeChange' with the theme it
+    // just applied — the echo must be dropped, not re-applied.
+    window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: before } }));
+    await wrapper.vm.$nextTick();
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+    wrapper.unmount();
   });
 });

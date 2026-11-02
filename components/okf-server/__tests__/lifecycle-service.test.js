@@ -528,7 +528,10 @@ describe('publish — mint + bundle export + serving cleared', () => {
   // minted v18/v19/v20 on Bali, each requeuing all 1001 meta rows for a
   // full re-drain while an ingest was running.
   test('a republish with UNCHANGED content is refused (PUBLISH_NO_CHANGES)', async () => {
-    seedRepo({ lifecycle_state: 'approve', version: 18 });
+    // The current version carries its bundle — a genuine nothing-changed
+    // republish (wave-2 #78657: the guard only fires when the version HAS
+    // its bundle artifact).
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 18, file_id: 'file-v18' }] });
     currentFingerprint.mockResolvedValueOnce('same-fp');
     fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
     await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
@@ -537,6 +540,62 @@ describe('publish — mint + bundle export + serving cleared', () => {
     });
     expect(mintVersion).not.toHaveBeenCalled();
     expect(exportBundle).not.toHaveBeenCalled();
+  });
+
+  test('an interrupted publish (fingerprint matches, NO bundle for the version) retries instead of 409 (#78657)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-18',
+      file_name: 'demo.zip',
+      bundle_version: 18
+    });
+    // The guard falls through: the publish COMPLETES instead of deadlocking on
+    // PUBLISH_NO_CHANGES. Round 20, #80801: it completes THE SAME version —
+    // v18's manifest already exists (it recorded the matched fingerprint), so
+    // the retry re-exports v18's bundle; minting v19 would strand v18 as a
+    // manifest with no bundle and burn two version numbers on one publish.
+    await lifecycleService.transition(REPO, 'publish', {});
+    expect(mintVersion).not.toHaveBeenCalled();
+    expect(exportBundle).toHaveBeenCalledWith(expect.objectContaining({ version: 18 }), expect.anything());
+    expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('publish');
+  });
+
+  // Round 21c (#80943): the interrupted publish left a zip in the doc-repo
+  // but NO bundles entry (death between store and merge). The retry re-uses
+  // the existing artifact (the doc-repo answers with the stored file for the
+  // same (repo_id, version)) and the merge lists it ONCE — no orphan, no
+  // duplicate Versions row. (A listing that ALREADY has the version + file
+  // hits the PUBLISH_NO_CHANGES guard instead — correct, so the only
+  // reachable merge carries a not-yet-listed version. ROUND 23 (81254):
+  // the in-path double-append guard was deleted as unreachable — this test
+  // pins the reachable path: ONE append with the reused artifact.)
+  test('an interrupted publish whose zip survived reuses it and lists the version once (#80943)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    // The bundles read (post-export) returns the v17 listing.
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [[{ bundle_version: 17, file_id: 'file-v17' }]]
+    });
+    // The doc-repo reuse: exportBundle comes back with the ALREADY-STORED
+    // file (post-#80943 the ingest-bundle handler returns the existing zip
+    // for the same (repo_id, bundle_version) instead of minting a duplicate).
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-18',
+      file_name: 'demo.zip',
+      bundle_version: 18,
+      reused: true
+    });
+    await lifecycleService.transition(REPO, 'publish', {});
+    const stored = mockDb._stores.okf_repositories[REPO].bundles;
+    expect(stored).toHaveLength(2); // v17 + v18 listed once
+    expect(stored.filter((b) => b.bundle_version === 18)).toHaveLength(1);
+    expect(mockDb._stores.okf_repositories[REPO].bundle.file_id).toBe('file-bundle-18');
+    expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('publish');
   });
 
   test('changed content republishes normally', async () => {

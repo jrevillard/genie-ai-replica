@@ -106,19 +106,28 @@ const isOkfServiceCaller = (req) => {
 
 // DW-426 (review 2026-10-29 round 3): ONE IN-list AQL replaces the per-file
 // getMetadataById loop (~N round-trips → 1).
+// Review !622 wave 2 (#78677): this guard now FAILS CLOSED — a failed lookup
+// throws, and the callers refuse the delete with 503 BUNDLE_GUARD_UNAVAILABLE.
+// "Not bundle-protected" is a claim that needs evidence; answering [] on a
+// transient Arango outage silently skipped the WS2 protection during exactly
+// the incident class it was built for.
 const bundleProtectedIds = async (fileIds) => {
-  try {
-    const db = await dbService.getConnection('files');
-    const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
-      ids: fileIds
-    });
-    return await cursor.all();
-  } catch {
-    // metadata lookup failed — degrade to "no protected ids" exactly as the
-    // per-file loop did (the delete path itself surfaces any actual error
-    // from the deletion)
-    return [];
-  }
+  const db = await dbService.getConnection('files');
+  const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
+    ids: fileIds
+  });
+  return await cursor.all();
+};
+
+// Shared refusal for the fail-closed guard: the protection could not be
+// evaluated, so the destructive mutation does not proceed.
+const bundleGuardUnavailable = (res, error) => {
+  logger.error('Bundle-protection lookup failed — refusing delete (fail-closed)', error);
+  return res.status(503).json({
+    success: false,
+    code: 'BUNDLE_GUARD_UNAVAILABLE',
+    error: 'Cannot confirm bundle protection right now — delete refused. Retry when the database is reachable.'
+  });
 };
 
 // Schema for file upload validation
@@ -811,7 +820,13 @@ class FileController {
       // delete them; every other caller gets an explicit 403 with
       // code=BUNDLE_PROTECTED so the UI can hide the action entirely.
       if (!isOkfServiceCaller(req)) {
-        const [protectedId] = await bundleProtectedIds([fileId]);
+        let protectedIds;
+        try {
+          protectedIds = await bundleProtectedIds([fileId]);
+        } catch (guardError) {
+          return bundleGuardUnavailable(res, guardError);
+        }
+        const [protectedId] = protectedIds;
         if (protectedId) {
           return res.status(403).json({
             success: false,
@@ -840,8 +855,11 @@ class FileController {
 
       // Kill-before-delete in progress or unconfirmed within the wait window —
       // the file is untouched; the client should retry shortly. Code per the
-      // kill-first contract ruling (#992).
-      if (error.message.includes('still stopping')) {
+      // kill-first contract ruling (#992). Optional-chained: a non-Error
+      // rejection (driver edge, thrown string) must fall through to the 500
+      // arm, not raise a TypeError inside the catch (review !622 wave 2,
+      // #78678).
+      if (error?.message?.includes('still stopping')) {
         return res.status(409).json({
           success: false,
           code: 'CRAWL_ACTIVE',
@@ -850,11 +868,22 @@ class FileController {
         });
       }
 
-      if (error.message.includes('not found')) {
+      if (error?.message?.includes('not found')) {
         return res.status(404).json({
           success: false,
           error: 'File not found',
           message: 'The requested file does not exist'
+        });
+      }
+
+      // The serving guard (#78744): a still-serving document refuses delete
+      // with a mapped 409, not a generic 500.
+      if (error?.statusCode === 409) {
+        return res.status(409).json({
+          success: false,
+          code: 'STILL_SERVING',
+          error: 'File is still serving the corpus',
+          message: error.message
         });
       }
 
@@ -886,7 +915,12 @@ class FileController {
       // the UI can surface the error clearly (partial-deletion is worse
       // than no-deletion for the bundle semantics).
       if (!isOkfServiceCaller(req)) {
-        const protectedIds = await bundleProtectedIds(fileIds);
+        let protectedIds;
+        try {
+          protectedIds = await bundleProtectedIds(fileIds);
+        } catch (guardError) {
+          return bundleGuardUnavailable(res, guardError);
+        }
         if (protectedIds.length > 0) {
           return res.status(403).json({
             success: false,
@@ -1352,7 +1386,17 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
-      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle } = req.body;
+      // Round 11 (!622): the app.js parser exemption matches this path
+      // case-sensitively while the Express router matches case-insensitively
+      // (POST /API/files/INGEST-BUNDLE gets NO parser at all), and a
+      // non-JSON Content-Type skips the route's own express.json — both
+      // leave req.body undefined. Destructuring it threw a generic 500
+      // ('Cannot destructure') instead of a clean 400.
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'a JSON request body is required' });
+      }
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle, source } =
+        req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1386,7 +1430,16 @@ class FileController {
         // Story 2.9.5-amend (2026-08-18): a ZIP BUNDLE file doc — the zip is the
         // ingestion INPUT, stored at 'Ingested' + is_bundle=true (never re-chunked;
         // its concepts are enqueued separately). The worker ignores it (non-Pending).
-        is_bundle: Joi.boolean().default(false)
+        is_bundle: Joi.boolean().default(false),
+        // ROUND 28 (review — ingest-bundle collision): WHO is storing this
+        // bundle. The (repo_id, bundle_version) reuse guard is an idempotency
+        // mechanism for the PUBLISH-export path's interrupted retry — it must
+        // never fire for a user-zip import, or the import silently receives
+        // the publish zip instead of storing its own bytes (silent data loss
+        // on the re-import-into-a-published-repo workflow). Explicit opt-in:
+        // reuse fires ONLY for 'publish-export'; both okf-server callers
+        // declare their source.
+        source: Joi.string().valid('publish-export', 'user-import').optional()
       });
       const { error, value } = schema.validate({
         bundle,
@@ -1396,7 +1449,8 @@ class FileController {
         labels,
         defer_kick,
         bundle_version,
-        is_bundle
+        is_bundle,
+        source
       });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
@@ -1416,18 +1470,54 @@ class FileController {
         });
       }
 
+      // IDEMPOTENT PER (repo_id, bundle_version) — PUBLISH-EXPORT CALLERS
+      // ONLY (!622 round 21c, #80943; scoped round 28, review: ingest-bundle
+      // collision). An interrupted publish that died between the zip store
+      // and the registry's bundles[] merge leaves a zip no registry entry
+      // references; the retry re-exported version N and APPENDED a second
+      // entry — and bundleProtectedIds makes the orphan undeletable. When
+      // this exact version already has a stored zip, return IT instead of
+      // minting a duplicate file (bundleProtectedIds still protects the
+      // reuse — the bundle is the same corpus fingerprint).
+      // The guard is ENDPOINT-GLOBAL no more: it previously also matched a
+      // USER-zip import that sent the same (repo_id, repo.version) — that
+      // caller received the PUBLISH zip while its own bytes were dropped,
+      // silently (silent data loss on the re-import-into-a-published-repo
+      // workflow). Reuse now requires the caller to declare
+      // source='publish-export'; findBundleByRepoVersion additionally
+      // filters to publish-export docs, so a post-import publish retry can
+      // never adopt the user's zip through the lookup either.
+      if (repo_id && value.bundle_version != null && value.source === 'publish-export') {
+        const existing = await fileService.findBundleByRepoVersion(repo_id, value.bundle_version);
+        if (existing) {
+          logger.info('ingest-bundle: reuse existing bundle for (repo_id, bundle_version)', {
+            repo_id,
+            bundle_version: value.bundle_version,
+            existing_file_id: existing.file_id
+          });
+          return res.status(200).json({
+            ...existing,
+            reused: true,
+            message: `bundle for version ${value.bundle_version} already stored — returning the existing file`
+          });
+        }
+      }
+
       // Decode base64 → buffer
       const buffer = Buffer.from(bundle, 'base64');
 
       // Store + ClamAV scan + files doc (graph_name + repo_id + bundle_version
-      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels)
+      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels;
+      // source identifies the caller class — publish-export vs user-import —
+      // so the reuse lookup can tell the two bundle families apart).
       const result = await fileService.uploadBundle(buffer, {
         originalFileName,
         graph_name,
         repo_id,
         bundle_version: value.bundle_version,
         labels: value.labels,
-        is_bundle: value.is_bundle
+        is_bundle: value.is_bundle,
+        source: value.source
       });
 
       // Fire-and-forget ingestion kick (does not block the 202). dataprep.status

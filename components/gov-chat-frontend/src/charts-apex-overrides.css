@@ -78,3 +78,38 @@
 .apexcharts-legend-text {
   color: inherit !important;
 }
+
+/* --- Tooltip: DEFAULT (non-custom) DOM ---
+ * The rules above were written for custom-renderer tooltips, whose HTML
+ * wraps everything in .apexcharts-tooltip-box (inverted fg/bg bubble).
+ * The DEFAULT tooltip apex renders has NO box wrapper, so those rules left
+ * it fully transparent with --bg-colored text sitting on the page's --bg
+ * background — near-invisible in BOTH light and dark mode (2026-10-19,
+ * RAGAS trend tooltip). :not(:has(.apexcharts-tooltip-box)) scopes the
+ * recovery to default-tooltip charts and leaves the custom renderers
+ * (SatisfactionHeatmap, CategoryDistributionChart) untouched. */
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--fg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-title {
+  background-color: var(--bg) !important;
+  color: var(--fg) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-text,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-y-group,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-text-y-label,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-text-y-value,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-text-z-label,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-text-z-value,
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-marker {
+  color: var(--fg) !important;
+}
+/* The blanket `* { background: transparent }` above also kills the series
+ * marker's inline series-colour square — restore a visible dot. */
+.apexcharts-tooltip:not(:has(.apexcharts-tooltip-box)) .apexcharts-tooltip-marker {
+  background-color: currentColor !important;
+}

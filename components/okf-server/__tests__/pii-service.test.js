@@ -1,6 +1,6 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 2.8 — PII client (fail-closed), precheck (advisory), service
+// Story 2.8 — PII client (fail-closed), service discovery: the sidecar is the only advisory path — pii-precheck removed as unwired dead code (!622 wave 2, #78673).
 // (scanConcept states, gate matrix, version record, doc refs), route.
 
 jest.mock('../shared-lib/db-connection-service', () => {
@@ -27,32 +27,6 @@ jest.mock('axios', () => ({
 }));
 
 const piiClient = require('../services/pii/pii-client');
-const { precheck } = require('../services/pii/pii-precheck');
-
-// ─── pii-precheck (advisory) ────────────────────────────────────────────────
-
-describe('pii-precheck (advisory, pure)', () => {
-  it('detects email + counts by type', () => {
-    const r = precheck('Contact a.b@x.org please');
-    expect(r.counts_by_type.EMAIL_ADDRESS).toBe(1);
-    expect(r.hits[0].type).toBe('EMAIL_ADDRESS');
-  });
-
-  it('Luhn-rejects non-credit-card digit runs', () => {
-    const r = precheck('ref 1234567812345678 end'); // not Luhn-valid
-    expect(r.counts_by_type.CREDIT_CARD).toBeUndefined();
-  });
-
-  it('detects a Luhn-valid card', () => {
-    const r = precheck('card 4111 1111 1111 1111 ok');
-    expect(r.counts_by_type.CREDIT_CARD).toBe(1);
-  });
-
-  it('clean text → no hits', () => {
-    expect(precheck('policy guidance text').hits).toEqual([]);
-  });
-});
-
 // ─── pii-client (fail-closed) ───────────────────────────────────────────────
 
 describe('pii-client (fail-closed)', () => {

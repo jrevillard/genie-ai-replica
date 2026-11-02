@@ -140,6 +140,39 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(stampCall.query).toContain('ingest_attempts');
   });
 
+  test('a FAILED claim stamp refuses the claim — no kick, no 429 un-count (#80804)', async () => {
+    // Round 20, #80804: the stamp IS the claim. When the stamp write fails
+    // (1200 write-conflict — another lane won the row — or a transient DB
+    // error) the row was never this lane's, so claimNextJob returns null and
+    // the cycle is idle. Before the fix the row was processed anyway and a
+    // later 429 decremented ingest_attempts that had never been incremented,
+    // drifting the counter below the truth so the poison-pill reaper fired
+    // late.
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        throw Object.assign(new Error('conflict'), { errorNum: 1200 });
+      }
+      return {
+        all: async () => [
+          { repo_id: REPO, concept_id: 'unstamped', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# u' }
+        ]
+      };
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    // No dataprep kick for a row this lane does not own...
+    expect(authedAxios.post).not.toHaveBeenCalled();
+    // ...and no un-claim decrement: nothing was ever counted.
+    const unclaimCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const s = String((q && q.query) || '');
+        return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
+      });
+    expect(unclaimCall).toBeUndefined();
+  });
+
   test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
     programQueries(
       [
@@ -203,12 +236,20 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // 2026-09-13): the row was claimed yet never kicked, and a stamped claim
     // left to age past the reaper's grace window during a saturated drain
     // gets a healthy concept dead-lettered as "stuck".
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1);
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
-      REPO,
-      { concept_id: 'a', repo_id: REPO },
-      { patch: { worker_claimed_at: null } }
-    );
+    // Wave-2 review (#78658): the clear UN-COUNTS the stamped attempt too —
+    // one AQL UPDATE that nulls the claim and decrements ingest_attempts, so
+    // the poison-pill reaper only ever sees REAL kicked attempts.
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    // aql documents expose the SQL on .query (positional binds in bindVars)
+    const unclaimCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const s = String((q && q.query) || '');
+        return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
+      });
+    expect(unclaimCall).toBeDefined();
+    expect(unclaimCall.query).toContain('- 1, 0)');
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
     // 429 LANE COOL-DOWN (incident 2026-09-28): the NEXT cycle must not claim
     // while the cool-down is armed — the old 1/sec hot loop across a saturated
     // queue kept the machine loaded enough to wedge Indonesia's settle. The
@@ -216,7 +257,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // only the lane pauses.
     const res2 = await worker._processOneJob();
     expect(res2).toEqual({ outcome: 'idle' });
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1); // no second claim/kick
+    // Wave-2 (#78658): the 429 path talks to the meta store through the ONE
+    // unclaim AQL — conceptMeta.upsertConceptMeta stays at ZERO calls, and
+    // still no second claim/kick after the cool-down armed.
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
@@ -451,6 +495,25 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
     // The loser's whole query aborted (nothing written) — the retry claims fine.
     expect(res.outcome).toBe('ingested');
     expect(res.concept_id).toBe('fc');
+  });
+
+  // Round 21 (#80918): the FAIR failure arm's OTHER exit — a non-1200 DB
+  // error means NOTHING was claimed (the fused statement aborted), so the
+  // lane must proceed with NO job and fire NO kick. Mutating the catch to
+  // fabricate a job on non-1200 would have passed before this existed.
+  test('non-1200 DB error on the fair claim → no job, no kick', async () => {
+    process.env.OKF_CLAIM_STRATEGY = 'fair';
+    programQueries(FAIR_ROW, [{ index_status: 'indexed', chunk_count: 1 }]);
+    const boom = new Error('collection not readable');
+    boom.errorNum = 403;
+    mockDb.query.mockRejectedValueOnce(boom);
+    // The error propagates (the poll loop's catch owns it) — the contract is
+    // that NO job is fabricated and NO kick fires.
+    await expect(worker._processOneJob()).rejects.toThrow('collection not readable');
+    // The kick (dataprep POST) never fired — nothing was claimed, so there
+    // is nothing to send.
+    const kickTexts = authedAxios.post.mock.calls.map((c) => String(c[0] || ''));
+    expect(kickTexts.some((u) => u.includes('/jobs'))).toBe(false);
   });
 
   test('fair-claim indexes exist in the ensured schema (db/collections.js)', () => {

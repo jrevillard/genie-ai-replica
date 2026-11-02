@@ -1043,7 +1043,7 @@ const Map<String, dynamic> idLocale = {
     "scopeNotNameable":
         "Masalah konfigurasi: cakupan yang dipilih tidak memiliki nama Inggris dalam hierarki pengetahuan, sehingga cakupan kueri tidak dapat ditentukan. Kueri tidak dikirim.",
     "scopeTagGone":
-        "Percakapan ini disimpan dengan cakupan \"{tags}\", yang tidak lagi ada dalam hierarki pengetahuan. Pertanyaan lanjutan ditolak sampai konteks dibersihkan.",
+        "Percakapan ini disimpan dengan cakupan \"{tags}\", yang tidak lagi ada baik dalam hierarki pengetahuan maupun dalam konfigurasi Bantuan Cepat. Pertanyaan lanjutan ditolak sampai konteks dibersihkan.",
     "justChat": "Obrolan saja",
     "queryContext": "Konteks Kueri",
     "contextAdded": "Konteks ditambahkan ke kueri Anda",

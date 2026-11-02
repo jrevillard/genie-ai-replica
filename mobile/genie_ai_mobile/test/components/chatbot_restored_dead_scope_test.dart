@@ -62,7 +62,7 @@ void main() {
     // caption NAMES the tag the hierarchy cannot carry.
     expect(find.text('Context: Civil Registry'), findsOneWidget);
     final caption = tester.widget<Text>(
-      find.textContaining('no longer carries'),
+      find.textContaining('carries any more'),
     );
     expect(caption.data, contains(deadTag));
     // The caption reads as a failure: the same danger token the broken
@@ -88,7 +88,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Context: Civil Registry'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
     // A live scope keeps the hint bulb.
     expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
@@ -117,7 +117,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Context:'), findsNothing);
-    expect(find.textContaining('no longer carries'), findsOneWidget);
+    expect(find.textContaining('carries any more'), findsOneWidget);
   });
 
   testWidgets(
@@ -140,13 +140,13 @@ void main() {
 
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
-      expect(find.textContaining('no longer carries'), findsNothing);
+      expect(find.textContaining('carries any more'), findsNothing);
 
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
 
       expect(find.text('Context: Civil Registry'), findsOneWidget);
-      expect(find.textContaining('no longer carries'), findsOneWidget);
+      expect(find.textContaining('carries any more'), findsOneWidget);
     },
   );
 
@@ -166,7 +166,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final caption = tester.widget<Text>(
-      find.textContaining('no longer carries'),
+      find.textContaining('carries any more'),
     );
     expect(caption.data, contains('"$deadTag"'));
     expect(caption.data, isNot(contains('$deadTag, $deadTag')));
@@ -193,12 +193,12 @@ void main() {
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
       expect(find.text('Context: Civil Registry'), findsOneWidget);
-      expect(find.textContaining('no longer carries'), findsNothing);
+      expect(find.textContaining('carries any more'), findsNothing);
 
       mockChatbotConfigAsset(tester, configBytes);
       await chatKey.currentState!.loadConversation('conv-1');
       await tester.pumpAndSettle();
-      expect(find.textContaining('no longer carries'), findsOneWidget);
+      expect(find.textContaining('carries any more'), findsOneWidget);
     },
   );
 
@@ -249,7 +249,7 @@ void main() {
     // Restore #1: both sources fail — the double outage, quiet.
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
 
     // Restore #2: the tree fetch (3rd) succeeds while the config read
     // is held. The restore parks on the held read — the load spinner
@@ -260,7 +260,7 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
     expect(find.textContaining('Context:'), findsNothing);
 
     // The read settles: the parse lands, the restore commits, and the
@@ -269,7 +269,7 @@ void main() {
     await loadFuture;
     await tester.pumpAndSettle();
     expect(find.text('Context: Civil Registry'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsOneWidget);
+    expect(find.textContaining('carries any more'), findsOneWidget);
   });
 
   testWidgets('a sidebar selection replaces the dead-scope caption', (
@@ -282,7 +282,7 @@ void main() {
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
-    expect(find.textContaining('no longer carries'), findsOneWidget);
+    expect(find.textContaining('carries any more'), findsOneWidget);
 
     // The user picks a live scope in the sidebar: the caption of the
     // scope it replaces must not survive it.
@@ -296,7 +296,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Context: Civil Registry'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
   });
 
   testWidgets('a card press replaces the dead-scope caption', (tester) async {
@@ -307,7 +307,7 @@ void main() {
 
     await chatKey.currentState!.loadConversation('conv-1');
     await tester.pumpAndSettle();
-    expect(find.textContaining('no longer carries'), findsOneWidget);
+    expect(find.textContaining('carries any more'), findsOneWidget);
 
     // The saved conversation carries no user messages, so the Quick
     // Help grid is up: pressing a LIVE card installs its scope.
@@ -315,7 +315,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Context: Births Card'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
   });
 }
 

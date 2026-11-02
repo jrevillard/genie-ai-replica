@@ -379,7 +379,7 @@ void main() {
       // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR
       // branch there. The restore index must skip falsy raw ids for the
       // same verdict — an index that kept '0' would reinstate a Quick
-      // Help scope the web refuses (#1244).
+      // Help scope the web refuses.
       final falsy = [
         {
           'id': 0,
@@ -428,6 +428,131 @@ void main() {
       expect(floatScope.quickHelpButtonId, isNull);
       expect(floatScope.sidebarTagCount, 1);
       expect(floatScope.serviceLabelsEn, isEmpty);
+    });
+
+    test('a NUMBER tag carries the JS form at the lookup', () {
+      // The saved tags array can carry the NUMBERS themselves (a
+      // hand-edited row: the web saves `5` where a hand edit writes
+      // `[5.0]`), and Dart's own toString of the decoded double appends
+      // '.0' where the index keys the JS serialization. The tag side of
+      // the lookup speaks the index's form, so the number resolves —
+      // a raw toString would miss the index and refuse the follow-up.
+      final buttons = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(buttons).resolve(tags: const [5.0]);
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+
+      // Above the int64 range the decoded double is what both platforms
+      // hold for a JSON float; its JS form is the plain digits.
+      final huge = [
+        {
+          'id': 1e19,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final hugeScope = convResolver(huge).resolve(tags: const [1e19]);
+      expect(hugeScope.quickHelpButtonId, '10000000000000000000');
+      expect(hugeScope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a legacy category tag beside a button tag sets the category', () {
+      // The web's restore walks the tags in order and the LAST
+      // category-carrying tag wins. A legacy 'category.<id>' tag beside
+      // a button that declares NONE is then the carrier of the saved
+      // category — the old first-match return dropped it and answered
+      // from the conversation's edge (or nothing) instead.
+      final buttons = [
+        {
+          'id': 'civil',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(
+        buttons,
+      ).resolve(tags: const ['civil', 'category.2'], categoryKey: '9');
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+    });
+
+    test('a side button declares its category over the edge', () {
+      // The reserved just-chat branch unions the other buttons' labels
+      // AND reads their declared categories the way the web's per-tag
+      // forEach does: a button chip sets currentCategoryId there. The
+      // conversation's own edge ('9') is the fallback no tag overwrote.
+      final buttons = [
+        {
+          'id': 'civil',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(
+        buttons,
+      ).resolve(tags: const ['just-chat', 'civil'], categoryKey: '9');
+      expect(scope.quickHelpButtonId, 'just-chat');
+      expect(scope.serviceLabelsEn, ['Births']);
+      expect(scope.categoryId, '2');
+    });
+
+    test('the last category-carrying tag wins, in saved order', () {
+      // The web processes tags in ORDER with last-wins: a later legacy
+      // tag overwrites an earlier button's category. The walk reads the
+      // same order, so the same saved row names the same category on
+      // both platforms.
+      final buttons = [
+        {
+          'id': 'civil',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(
+        buttons,
+      ).resolve(tags: const ['civil', 'category.Taxes']);
+      expect(scope.categoryId, 'Taxes');
+
+      final reversed = convResolver(
+        buttons,
+      ).resolve(tags: const ['category.Taxes', 'civil']);
+      expect(reversed.categoryId, '2');
+    });
+
+    test('a falsy raw category declares none, as on the web', () {
+      // The web's restore gates a button's category on its RAW
+      // JavaScript truthiness (`if (button.category)`): a hand-edited
+      // config declaring `category: 0` contributes no category there.
+      // The parse stringifies the reference ('0'), which would read as
+      // a declaration — the walk gates on the raw value the parse kept.
+      final parsed = parseQuickHelpButton({
+        'id': 'zero-cat',
+        'category': 0,
+        'serviceLabels': ['Births'],
+      }, 'en');
+      final scope = convResolver([
+        parsed,
+      ]).resolve(tags: const ['zero-cat'], categoryKey: '2');
+      expect(scope.quickHelpButtonId, 'zero-cat');
+      expect(scope.categoryId, '2');
+    });
+
+    test('a general placeholder and the reserved tag set no category', () {
+      // 'category.general' declares NO scope (the placeholder a
+      // category-less selection is stored under), and the reserved
+      // just-chat tag binds to no button — neither overwrites the
+      // conversation's own edge.
+      final scope = convResolver().resolve(
+        tags: const ['just-chat', 'category.general'],
+        categoryKey: '2',
+      );
+      expect(scope.categoryId, '2');
     });
 
     test('a web-saved just-chat tag answers unfiltered without the entry', () {
@@ -1472,6 +1597,50 @@ void main() {
     });
   });
 
+  group('QuickHelpScopeResolver.unavailable', () {
+    test('an outage resolver answers unavailableScopeFor at the source', () {
+      // The restore builds the outage resolver when the tree is down:
+      // every verdict it produces names the outage (never a
+      // configuration problem computed over an empty tree), and no
+      // consumer has to re-stamp it.
+      final outage = QuickHelpScopeResolver.unavailable();
+      final declared = outage.stateFor({
+        'id': 'civil',
+        'category': '2',
+        'serviceLabels': ['Births'],
+      });
+      expect(declared['broken'], isTrue);
+      expect(declared['unavailable'], isTrue);
+      expect(declared['missingLabels'], isEmpty);
+
+      // A card that declares no scope stays healthy — there is nothing
+      // the outage could deny.
+      final free = outage.stateFor({'id': 'free', 'serviceLabels': []});
+      expect(free['broken'], isFalse);
+      expect(free['unavailable'], isFalse);
+    });
+
+    test('the merged restore verdict under outage ORs the flags', () {
+      // The ConversationScopeResolver merges per-button states; under
+      // the outage resolver a declared-scope button marks the merged
+      // verdict unavailable, a no-scope one does not.
+      final merged = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver.unavailable(),
+        quickHelpButtons: [
+          {
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ],
+      ).resolve(tags: const ['civil']);
+      expect(merged.quickHelpScopeState, isNotNull);
+      expect(merged.quickHelpScopeState!['broken'], isTrue);
+      expect(merged.quickHelpScopeState!['unavailable'], isTrue);
+      expect(merged.quickHelpScopeState!['missingLabels'], isEmpty);
+    });
+  });
+
   group('conversationScopeTags', () {
     test('a Quick Help scope travels as the button id, beside the sidebar', () {
       // Both scopes must survive the save: the web writes one tag per
@@ -1532,7 +1701,7 @@ void main() {
       // (`if (!button.id) return true`): 0 and false are NO id there, so
       // two id-0 cards stay two cards. Deduping on the stringified form
       // would drop the second and give the platforms a different card
-      // count for the same file (#1244).
+      // count for the same file.
       final zero = {
         'id': 0,
         'serviceLabels': ['Births'],
@@ -2042,7 +2211,7 @@ void main() {
       // value's JavaScript truthiness BEFORE any stringification. A
       // stringified-first read turns 0 into '0' — a truthy non-empty
       // string — and the two platforms would then save DIFFERENT tags
-      // for the same card (#1244). A string '0' or a numeric 5 IS a
+      // for the same card. A string '0' or a numeric 5 IS a
       // real id (truthy raw values).
       expect(
         quickHelpButtonIdentity({'id': 0, 'resolvedTitle': 'Card'}),
@@ -2176,7 +2345,7 @@ void main() {
       // The identity rule (the web's `id || title`) must see the JSON
       // value the configuration wrote: a parse that stringifies first
       // turns 0 into '0' and loses the falsiness the rule reads
-      // (#1244). The end-to-end half proves the REAL pipeline — parse
+      // The end-to-end half proves the REAL pipeline — parse
       // then identity — carries the title the web carries for this
       // card, not the stringified '0'.
       final parsed = parseQuickHelpButton({...shippedButton, 'id': 0}, 'en');

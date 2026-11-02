@@ -85,7 +85,10 @@ Map<String, dynamic> parseQuickHelpButton(
     // The category is an EQUALITY read — but against the form the WEB
     // resolves: a numeric reference carries JavaScript's serialization
     // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
-    // the mobile renders the card broken.
+    // the mobile renders the card broken. The RAW value is kept beside
+    // it: the web's restore gates the category on its truthiness
+    // (`if (button.category)`), which a stringified '0' would flip.
+    'categoryRaw': btn['category'],
     'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
@@ -587,7 +590,23 @@ class QuickHelpScopeResolver {
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
         return (name is String && name.isNotEmpty) ? name : null;
-      });
+      }),
+      _unavailable = false;
+
+  /// A resolver for a hierarchy OUTAGE — the fetch failed, the tree is
+  /// the caller's fact, and no button can be verified. Every stateFor
+  /// answers the unavailable verdict directly, so the verdict the
+  /// RESTORE replays (stateFor over this resolver) names the outage by
+  /// construction and no consumer has to re-stamp it.
+  QuickHelpScopeResolver.unavailable()
+    : _enLabels = const {},
+      _categoryLabelsEn = const {},
+      _categoryNames = const {},
+      _unavailable = true;
+
+  /// Whether this resolver was built for an outage: it names nothing,
+  /// and every verdict it produces says so.
+  final bool _unavailable;
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -742,6 +761,10 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
+    // An outage resolver cannot verify anything: the same verdict the
+    // grid renders (unavailableScopeFor), from the source of the truth
+    // instead of patched in by each consumer.
+    if (_unavailable) return unavailableScopeFor(button);
     final declared = quickHelpServiceLabelsOf(button);
     final missingLabels = declared
         .where((l) => !_enLabels.contains(l))
@@ -902,6 +925,49 @@ class ConversationScopeResolver {
   final QuickHelpScopeResolver _hierarchy;
   final Map<String, Map<String, dynamic>> _buttons;
 
+  /// The button a conversation tag binds to — the tag IS the button's
+  /// id, except the reserved just-chat tag, which binds to no button.
+  /// The one read behind the category walk and the scope loop, so the
+  /// two cannot drift about which tags name a button.
+  Map<String, dynamic>? _buttonTagFor(String tag) =>
+      tag == justChatTagId ? null : _buttons[tag];
+
+  /// The category the conversation was scoped by, in the web's own
+  /// precedence: the restore processes the saved tags IN ORDER (the
+  /// per-tag forEach) and the LAST category-carrying tag wins — a live
+  /// button's declared category sets it, a legacy `category.<id>` tag
+  /// sets it, the reserved just-chat tag sets nothing — and the
+  /// conversation's own edge ([categoryKey]) is the fallback no tag
+  /// overwrote. ONE walk for both restore branches, so a sidebar-scope
+  /// conversation and a button-scope one cannot read the same tag list
+  /// into two different categories.
+  String? _effectiveCategoryOf(List<String> tagList, String? categoryKey) {
+    String? effectiveCategory = categoryKey;
+    for (final tag in tagList) {
+      final taggedButton = _buttonTagFor(tag);
+      if (taggedButton != null) {
+        // The web's restore gates the category on the RAW value's
+        // JavaScript truthiness (`if (button.category)`) BEFORE any
+        // stringification: a falsy raw category (0, false, '') declares
+        // none. The parse keeps the raw value beside its string form
+        // for exactly this gate; a map with no raw record (a hand-built
+        // fixture) falls back to the string form's non-emptiness.
+        final raw = taggedButton['categoryRaw'];
+        final declared = quickHelpCategoryOf(taggedButton);
+        final declaresCategory = raw != null
+            ? configTruthy(raw)
+            : (declared != null && declared.isNotEmpty);
+        if (declaresCategory) {
+          effectiveCategory = _hierarchy.categoryIdFor(declared);
+        }
+      } else if (tag.startsWith('category.')) {
+        final legacyId = tag.substring('category.'.length);
+        if (declaresCategoryScope(legacyId)) effectiveCategory = legacyId;
+      }
+    }
+    return effectiveCategory;
+  }
+
   /// The merged scope state of [buttons]: broken if ANY is, with the
   /// missing labels unioned and the flags OR-ed — one conversation, one
   /// verdict.
@@ -923,9 +989,23 @@ class ConversationScopeResolver {
   /// The scope of the conversation that carries [tags] and was asked in
   /// [categoryKey].
   ConversationScope resolve({List<dynamic>? tags, String? categoryKey}) {
+    // The tag side of the lookup speaks the SAME form the restore index
+    // keys: _jsTagForm, the web's serialization. A tags array can carry
+    // the NUMBERS themselves (a hand-edited row: a JSON `5.0`, an id
+    // above int64) — Dart's own toString ('5.0') would miss the index
+    // entry the web's tag ('5') matches, and the scope would fall to the
+    // sidebar branch and refuse the follow-up. A STRING tag is its own
+    // form: the pinned legacy shapes ('5.0', the old build's spelling)
+    // keep refusing exactly as they do now. A JSON null element becomes
+    // the sentinel 'null' — an ordinary string that can never match the
+    // button index, so a hand-written null tag reads as one dead
+    // sidebar tag instead of crashing the caption.
     final tagList = (tags ?? const <dynamic>[])
-        .map((tag) => tag.toString())
+        .map((tag) => _jsTagForm(tag) ?? 'null')
         .toList();
+    // The category the conversation was scoped by: read ONCE over the
+    // whole tag list (the web's last-wins forEach), never per tag.
+    final effectiveCategory = _effectiveCategoryOf(tagList, categoryKey);
 
     // A Quick Help tag is the id of the button that produced the
     // conversation: the button is looked up by that id, and its own scope
@@ -946,9 +1026,8 @@ class ConversationScopeResolver {
       // declares the entry. Falling to the sidebar branch would count it
       // as an unknown tag and refuse every follow-up on a conversation
       // the web restores and answers.
-      final button = tag == justChatTagId ? null : _buttons[tag];
+      final button = _buttonTagFor(tag);
       if (button == null && tag != justChatTagId) continue;
-      final category = button == null ? null : quickHelpCategoryOf(button);
       final buttonLabels = button == null
           ? const <String>[]
           : quickHelpServiceLabelsOf(button);
@@ -995,20 +1074,6 @@ class ConversationScopeResolver {
       // refuses on, read as the kept labels' exact complement so the
       // caption and the guard can never disagree about which tags died.
       final droppedTags = _droppedTagsOf(otherTags, sidebarLabels);
-      // The button's own category WINS; a button that declares NONE keeps
-      // the conversation's own edge — dropping it sent the follow-up
-      // unscoped (a silent widening) while the web kept the edge. The
-      // RESERVED scope binds to no button: a legacy 'category.<id>' tag
-      // beside it is then the only carrier of the saved category, and it
-      // wins over the edge the same way the sidebar branch lets it — the
-      // web's per-tag forEach keeps processing after the reserved chip.
-      // The configuration names its category; the hierarchy's own key is
-      // what the conversation's edge speaks.
-      final effectiveCategory = button == null
-          ? _legacyCategoryIdOf(tagList) ?? categoryKey
-          : category == null
-          ? categoryKey
-          : _hierarchy.categoryIdFor(category);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
@@ -1048,19 +1113,14 @@ class ConversationScopeResolver {
     // 'category.general' is the no-scope placeholder: it contributes
     // nothing. The legacy tag wins over the conversation's own edge —
     // it IS the scope the conversation was saved with.
-    final String? legacyCategoryId = _legacyCategoryIdOf(tagList);
     final sidebarTags = tagList
         .where((tag) => !tag.startsWith('category.'))
         .toList();
     final knownLabels = sidebarTags.where(_hierarchy.knowsLabel).toList();
     return ConversationScope(
-      categoryId: legacyCategoryId ?? categoryKey,
-      categoryNameEn: _hierarchy.categoryEnLabel(
-        legacyCategoryId ?? categoryKey,
-      ),
-      categoryName: _hierarchy.categoryDisplayName(
-        legacyCategoryId ?? categoryKey,
-      ),
+      categoryId: effectiveCategory,
+      categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
+      categoryName: _hierarchy.categoryDisplayName(effectiveCategory),
       serviceLabelsEn: knownLabels,
       // The same labels, in their role: a sidebar scope's filter labels
       // ARE its sidebar labels — the chatbot reads one field instead of
@@ -1081,24 +1141,6 @@ class ConversationScopeResolver {
 /// and the send guard read the same fact.
 List<String> _droppedTagsOf(List<String> tags, List<String> kept) =>
     tags.where((tag) => !kept.contains(tag)).toList();
-
-/// The category key a LEGACY `category.<id>` tag names — the old
-/// restore's spelling for a category-only scope, read from the FIRST
-/// such tag. Null when no tag names a category, or the placeholder
-/// 'category.general' does ('general' declares no scope). Every branch
-/// that can meet the tag reads this one rule: the sidebar branch gives
-/// it priority over the conversation's own edge — it IS the scope the
-/// conversation was saved with — and the reserved just-chat branch
-/// weights it the same, the way the web's per-tag forEach keeps
-/// processing after the reserved chip.
-String? _legacyCategoryIdOf(List<String> tagList) {
-  final match = RegExp(r'^category\.(.+)$').firstMatch(
-    tagList.firstWhere((tag) => tag.startsWith('category.'), orElse: () => ''),
-  );
-  return match != null && declaresCategoryScope(match.group(1))
-      ? match.group(1)
-      : null;
-}
 
 /// Whether a committed restore should be re-resolved now that a source it
 /// depended on (the hierarchy, the config) settled.

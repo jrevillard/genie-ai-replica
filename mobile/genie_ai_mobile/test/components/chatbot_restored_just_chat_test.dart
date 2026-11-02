@@ -63,7 +63,7 @@ void main() {
     expect(find.text('Context: Just Chat'), findsOneWidget);
     // The scope is not a failure: no dead-tag caption, no warning icon
     // — the follow-ups answer unfiltered, as on the web.
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
     expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
     expect(
@@ -89,7 +89,7 @@ void main() {
     // restored scope.)
     expect(find.text('Context: Just Chat'), findsOneWidget);
     expect(find.text('Context: Composer'), findsNothing);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
   });
 
   testWidgets('the reserved scope shows without a category edge', (
@@ -110,7 +110,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Context: Just Chat'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
   });
 
   testWidgets(
@@ -147,7 +147,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Context: Just Chat'), findsOneWidget);
-      expect(find.textContaining('no longer carries'), findsNothing);
+      expect(find.textContaining('carries any more'), findsNothing);
       expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
     },
   );
@@ -186,7 +186,7 @@ void main() {
       // same title text, so the BAR is asserted by its full es string.
       expect(find.text('Contexto: Composer'), findsOneWidget);
       expect(find.textContaining('Just Chat'), findsNothing);
-      expect(find.textContaining('no longer carries'), findsNothing);
+      expect(find.textContaining('carries any more'), findsNothing);
     },
   );
 
@@ -215,7 +215,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Just Chat'), findsOneWidget);
-    expect(find.textContaining('no longer carries'), findsNothing);
+    expect(find.textContaining('carries any more'), findsNothing);
   });
 }
 

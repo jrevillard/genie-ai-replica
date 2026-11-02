@@ -9,7 +9,6 @@ import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
-import '../helpers/theme_helper.dart';
 
 // The sidebar scope's context-bar title across a locale switch. The title
 // is the JOIN of the localized service names the panel installed it with,
@@ -43,15 +42,8 @@ void main() {
     },
   ];
 
-  setUp(() {
-    resetThemeManager();
-  });
-
-  tearDown(() {
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
-  });
+  setUp(resetChatbotTestState);
+  tearDown(resetChatbotTestState);
 
   Future<void> pumpChatWithTree(
     WidgetTester tester,
@@ -63,7 +55,7 @@ void main() {
       mock,
       chatKey: chatKey,
       supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
-      buildHome: (key) => Scaffold(
+      buildHome: (chatbot) => Scaffold(
         body: Column(
           children: [
             SizedBox(
@@ -73,7 +65,7 @@ void main() {
                   // The page's own mapping (main.dart's
                   // _onServiceSelected): display name and EN
                   // wire labels travel to the chat together.
-                  key?.currentState?.setCategoryContext(
+                  chatKey?.currentState?.setCategoryContext(
                     selection['category_id'] ?? selection['id'] ?? '',
                     selection['name'] ?? '',
                     categoryNameEn:
@@ -90,7 +82,7 @@ void main() {
                 },
               ),
             ),
-            Expanded(child: chatBotUnderTest(key)),
+            Expanded(child: chatbot),
           ],
         ),
       ),
@@ -297,6 +289,13 @@ class _LocaleMockClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    // Only the categories endpoint is answered: every other request the
+    // mount issues (a chat-history fetch) gets the clean 404 the other
+    // chatbot mocks return — not the tree, which would parse as the
+    // wrong type, and not a count in requestsByLocale.
+    if (!request.url.path.contains('/api/service-categories/categories')) {
+      return httpResponseJson(<String, dynamic>{}, 404);
+    }
     debugPrint('[MOCK] ${request.method} ${request.url.path}');
     final locale =
         Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';

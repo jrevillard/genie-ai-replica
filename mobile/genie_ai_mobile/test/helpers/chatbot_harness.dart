@@ -110,16 +110,17 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
 ///
 /// [buildHome] replaces the default screen — a test that mounts its own
 /// widgets around the chatbot (a service tree panel above it) passes
-/// them here, and wraps the chatbot with [chatBotUnderTest] so the
-/// constructor's arguments stay in this file. It is a BUILDER, not a
-/// widget: the harness rebuilds the screen on every locale change, and
-/// a widget instance reused across rebuilds is not rebuilt at all.
+/// them here. It receives the MOUNTED chatbot, so the constructor's
+/// arguments stay in [chatBotUnderTest] and a builder cannot mount a
+/// second copy. It is a BUILDER, not a widget: the harness rebuilds the
+/// screen on every locale change, and a widget instance reused across
+/// rebuilds is not rebuilt at all.
 Future<void> pumpChatBot(
   WidgetTester tester,
   http.BaseClient mock, {
   GlobalKey<ChatBotComponentState>? chatKey,
   List<Locale> supportedLocales = const [Locale('en')],
-  Widget Function(GlobalKey<ChatBotComponentState>? key)? buildHome,
+  Widget Function(Widget chatbot)? buildHome,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -143,7 +144,7 @@ Future<void> pumpChatBot(
             GlobalCupertinoLocalizations.delegate,
           ],
           home:
-              buildHome?.call(chatKey) ??
+              buildHome?.call(chatBotUnderTest(chatKey)) ??
               Scaffold(body: chatBotUnderTest(chatKey)),
         ),
       ),

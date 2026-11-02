@@ -740,6 +740,51 @@ describe('compose non-root contract (#1227)', () => {
     const flowAnchor = validateComposeNonRoot(['services:', '  kong: {user: &a root}', ''].join('\n'));
     expect(flowAnchor.violations.some((v) => v.includes('kong') && v.includes('YAML alias or anchor'))).toBe(true);
 
+    // an anchored service key WITH a flow body (svc: &b {user: root} —
+    // legal YAML, natural dedup spelling) once matched neither
+    // serviceMatch alternation: no user: check, no binds, no alwaysOn
+    // entry — the whole service was invisible.
+    const anchoredFlow = validateComposeNonRoot(['services:', '  backend: &b {user: root}', ''].join('\n'));
+    expect(anchoredFlow.violations.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+
+    // the YAML-boolean spelling of the opt-out is legal compose-go and
+    // must be recognized (a false-red once prescribed a fix the file
+    // already had); an ALIASED bind options map is unresolvable — the
+    // dedicated alias diagnostic, not the missing-opt-out one.
+    const capitalFalse = validateComposeNonRoot(
+      [
+        'services:',
+        '  backend:',
+        '    user: "1000:1000"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ./data',
+        '        target: /data',
+        '        bind:',
+        '          create_host_path: False',
+        ''
+      ].join('\n')
+    );
+    expect(capitalFalse.violations.some((v) => v.includes('without `create_host_path: false`'))).toBe(false);
+    const aliasBind = validateComposeNonRoot(
+      [
+        'services:',
+        '  backend:',
+        '    user: "1000:1000"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ./data',
+        '        target: /data',
+        '        bind: *opts',
+        ''
+      ].join('\n')
+    );
+    expect(
+      aliasBind.violations.some(
+        (v) => v.includes('backend') && v.includes('bind: options are an unresolvable YAML alias')
+      )
+    ).toBe(true);
+
     // a nested flow-map key named user: (an environment USER var) is NOT
     // the service pin — the depth-aware capture must not raise a false
     // "is root" on a legal spelling.

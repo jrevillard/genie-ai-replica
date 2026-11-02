@@ -16,6 +16,10 @@ data_dir: ./data
 # tasks/no-root-data-migration.yml for the three-context reasoning).
 data_dir_resolved: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
 
+# DECISION RULE for spellings in the deploy playbook: find -path / prune
+# patterns MUST use the *_resolved vars (a raw join embeds '//' that find
+# never matches — silent dead prunes); file-module and plain shell paths
+# tolerate the raw var (the module and the kernel normalize '//').
 # deploy_dir with the same normalization the data-dir formula applies to
 # its join: a trailing-slash inventory override (deploy_dir: /opt/genieai/)
 # must not leak into the payload prune builder — '-path /opt/genieai//data'

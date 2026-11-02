@@ -526,7 +526,9 @@ function validateComposeNonRoot(composeText) {
     // The body's user: pin is parsed (a compliant flow service otherwise
     // reported 'no user: declared'); the REST of a flow-map body is
     // line-parser-unreachable (extracted finding #1274).
-    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{(.*)\}|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
+    const serviceMatch = line.match(
+      /^ {2}["']?([\w.-]+)["']?:\s*(?:&[\w-]+\s*)?(?:\{(.*)\}|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/
+    );
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
@@ -823,7 +825,7 @@ function validateComposeNonRoot(composeText) {
         if (ft && ft[1] === 'bind' && fsrc) {
           binds.push({
             path: fsrc[1].trim(),
-            createHostPathFalse: /create_host_path:\s*false/.test(inner),
+            createHostPathFalse: /create_host_path:\s*[Ff]alse/.test(inner),
             shortSyntax: false
           });
           continue;
@@ -865,7 +867,7 @@ function validateComposeNonRoot(composeText) {
           const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
           binds.push({
             path: fsrc[1].trim(),
-            createHostPathFalse: /create_host_path:\s*false/.test(body),
+            createHostPathFalse: /create_host_path:\s*[Ff]alse/.test(body),
             shortSyntax: false
           });
         }
@@ -971,11 +973,22 @@ function validateComposeNonRoot(composeText) {
       }
       const bindKey = line.match(/^ {8,}bind:\s*(?:#.*)?$/);
       const bindFlow = line.match(/^ {8,}bind:\s*\{(.*)\}\s*(?:#.*)?$/);
+      // an ALIASED bind options map is unresolvable for a line parser:
+      // reporting the missing-opt-out message would send the operator to
+      // "fix" an opt-out the alias may well carry — the conservative
+      // alias doctrine every other unresolvable spelling follows.
+      if (/^ {8,}bind:\s*[*&][\w-]+\s*(?:#.*)?$/.test(line)) {
+        violations.push(
+          `${currentService}: bind: options are an unresolvable YAML alias or anchor — inline them so create_host_path stays enforced`
+        );
+        inBindOpts = false;
+        continue;
+      }
       if (bindKey || bindFlow) {
         inBindOpts = true;
         bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
         // flow form carries the opt-out inline: bind: {create_host_path: false}
-        if (bindFlow && /create_host_path:\s*false/.test(bindFlow[1])) {
+        if (bindFlow && /create_host_path:\s*[Ff]alse/.test(bindFlow[1])) {
           if (bindOptsTarget !== null) {
             serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
             bindOptsTarget = null;
@@ -987,7 +1000,7 @@ function validateComposeNonRoot(composeText) {
       }
       // indentation-flexible: a re-indented block is still the opts of the
       // bind: above it — exact-indent matching rejected legal spellings
-      const createFalse = line.match(/^ {10,}create_host_path:\s*false\s*(?:#.*)?$/);
+      const createFalse = line.match(/^ {10,}create_host_path:\s*[Ff]alse\s*(?:#.*)?$/);
       if (createFalse && inBindOpts) {
         if (bindOptsTarget !== null) {
           serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
@@ -1080,7 +1093,7 @@ function collectServiceNames(composeText) {
     } else if (inServices) {
       // same comment/flow/anchor tolerance as the main parser's service
       // detector — the two notions of "a service exists" must stay one
-      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
+      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:&[\w-]+\s*)?(?:\{.*|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
       if (m) names.add(m[1]);
     }
   }

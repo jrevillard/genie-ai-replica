@@ -75,8 +75,11 @@
   # supported spelling and still passes (it is neither '/' nor a parent).
   vars:
     _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
+  # data_dir_resolved renders '.' for data_dir: '/' (the formula strips
+  # the slash then normpath('') = '.') — a bare '/' comparison would let
+  # BOTH guarded tasks run against the module cwd (reproduced).
   when:
-    - data_dir_resolved != '/'
+    - data_dir_resolved not in ['/', '.']
     - not _data_ancestor_of_deploy
 
 - name: Hand the data directory's intermediate ancestors to ansible_user (depth 0, #1227)
@@ -136,8 +139,11 @@
     group: "1000"
   vars:
     _data_ancestor_of_deploy: "{{ deploy_dir_resolved is match(data_dir_resolved | regex_escape ~ '/') }}"
+  # data_dir_resolved renders '.' for data_dir: '/' (the formula strips
+  # the slash then normpath('') = '.') — a bare '/' comparison would let
+  # BOTH guarded tasks run against the module cwd (reproduced).
   when:
-    - data_dir_resolved != '/'
+    - data_dir_resolved not in ['/', '.']
     - not _data_ancestor_of_deploy
 
 - name: Hand the backup directory to the backend uid (#1227)

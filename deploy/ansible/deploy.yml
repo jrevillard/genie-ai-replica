@@ -287,7 +287,9 @@
       # 'deploy_dir/.' prefix never matches find's -path patterns, so the
       # prune would silently disable ITSELF and the heal would chown -R
       # across the uid-1000 data handover. Skip the degenerate spelling —
-      # the seed data_dir_resolved already in the chain IS the data dir.
+      # the data dir IS deploy_dir here, protected by the depth-0 handover
+      # in the migration tasks; the chain renders EMPTY and the prune-expr
+      # builder below emits the secrets-only prune (no leading -o).
       when: (_rel_parts[0:idx + 1] | join('/')) != '.'
 
     - name: Build the find prune expression from the chain
@@ -305,8 +307,13 @@
         # shlex-splits its string, and a glued '(-path' would arrive as ONE
         # argv token (find: "paths must precede expression") — proven by
         # rendering the builder and tokenizing the output.
+        # An EMPTY chain (the degenerate data_dir == deploy_dir override)
+        # must render the secrets-only prune WITHOUT the leading -o —
+        # ' (  -o -path …' is a syntactically invalid find expression
+        # (binary operator -o with nothing before it, verified). The
+        # ternary emits the chain arms + separator only when arms exist.
         _fix_payload_prune_expr: >-
-          {{ ' ( ' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
+          {{ ' ( ' ~ ((_fix_payload_data_chain | length > 0) | ternary(_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ') ~ ' -o ', '')) ~ '-path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:

@@ -221,7 +221,11 @@ if [ ! -d "$DATA_DIR" ]; then
 else
   find_err=$(mktemp)
   find_out=$(mktemp)
-  find "$DATA_DIR" -mindepth 1 \( -path "$DATA_DIR/huggingface" -o -path "$DATA_DIR/logs" \) -prune -o -uid 0 -print >"$find_out" 2>"$find_err"
+  # -user 0, not -uid 0: busybox find has no -uid (the only find inside
+  # the docker:24 CI image — verified) and the parse failure counts as a
+  # violation, making the gate unpassable on CI. -user takes a numeric id
+  # on both busybox and GNU find.
+  find "$DATA_DIR" -mindepth 1 \( -path "$DATA_DIR/huggingface" -o -path "$DATA_DIR/logs" \) -prune -o -user 0 -print >"$find_out" 2>"$find_err"
   find_rc=$?
   if [ $find_rc -ne 0 ]; then
     echo "FIND FAILED in $DATA_DIR (rc=$find_rc — the sweep did not complete; the unchecked remainder is not a pass)"
@@ -258,7 +262,9 @@ if [ ! -d "$backup_dir" ]; then
 else
   find_err=$(mktemp)
   find_out=$(mktemp)
-  find "$backup_dir" ! -uid 1000 -print > "$find_out" 2>"$find_err"
+  # ! -user 1000, not ! -uid 1000: busybox find (the CI image's only find)
+  # has no -uid — same reason as the rule-2 sweep above.
+  find "$backup_dir" ! -user 1000 -print > "$find_out" 2>"$find_err"
   find_rc=$?
   if [ -s "$find_err" ] || [ $find_rc -ne 0 ]; then
     echo "FIND ERRORS while sweeping $backup_dir (untraversable paths are NOT checked):"

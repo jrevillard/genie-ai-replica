@@ -132,9 +132,17 @@ if not hit or "/data/" in hit or "/secrets/" in hit:
     print(f"probe detection: first hit {hit!r} — expected a non-pruned path", file=sys.stderr); sys.exit(1)
 
 # The heal must TARGET the non-pruned depth-1 entries (print instead of
-# chown): data/ and secrets/ must be absent from its sweep.
+# chown): data/ and secrets/ must be absent from its sweep. The rewrite
+# is ASSERTED to have matched: a silent no-op would run the REAL heal
+# form (whose chown fails here — rendercheck is not a host user) and the
+# assertions below would pass on a command that validates nothing.
 heal_sweep = heal_s.replace("-exec chown -R -h rendercheck:rendercheck {} +", "-print")
+if heal_sweep == heal_s:
+    print("heal sweep rewrite no-op — the heal chown spelling drifted; update this assertion",
+          file=sys.stderr); sys.exit(1)
 r = subprocess.run(shlex.split(heal_sweep), capture_output=True, text=True)
+if r.returncode != 0:
+    print(f"heal sweep rc={r.returncode} stderr={r.stderr.strip()[:200]}", file=sys.stderr); sys.exit(1)
 targets = [l for l in r.stdout.splitlines() if l.strip()]
 if any("/data" in t or "/secrets" in t for t in targets):
     print(f"heal sweep targets pruned trees: {targets}", file=sys.stderr); sys.exit(1)
@@ -143,6 +151,47 @@ if not targets:
 
 print(f"OK: probe/heal render, tokenize ({len(shlex.split(probe_s))} argv tokens) and execute; "
       f"probe hit={hit}; heal targets={targets}")
+PYEOF
+
+# ---------------------------------------------------------------------------
+# 4b. The degenerate data_dir == deploy_dir override: the chain renders
+# EMPTY (the '.' spelling is skipped) and the prune-expr builder must emit
+# the secrets-only prune WITHOUT a leading -o ('( -o -path …' is an
+# invalid find expression — verified). The builder is the same extracted
+# fragment, rendered against an explicitly-empty chain.
+# ---------------------------------------------------------------------------
+cat > "$TMP/degen.yml" <<YAML
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    deploy_dir: $TMP/opt/genieai/
+    deploy_dir_resolved: $TMP/opt/genieai
+    data_dir_resolved: $TMP/opt/genieai
+    _fix_payload_data_chain: []
+  tasks:
+$(cat "$TMP/prune.frag")
+    - name: Persist the degenerate prune expr
+      ansible.builtin.copy:
+        content: "{{ _fix_payload_prune_expr }}\n"
+        dest: $TMP/degen-rendered.txt
+YAML
+ansible-playbook -i localhost, "$TMP/degen.yml" > "$TMP/degen.log" 2>&1 ||
+  { tail -20 "$TMP/degen.log" >&2; fail "degenerate-shape render run failed"; }
+
+python3 - "$TMP" <<'PYEOF'
+import shlex, subprocess, sys, os
+
+tmp = sys.argv[1]
+expr = open(os.path.join(tmp, "degen-rendered.txt")).read().strip()
+argv = shlex.split(expr)
+if "-o" in argv[:2] or not argv:
+    print(f"degenerate prune expr renders a leading -o: {expr!r}", file=sys.stderr); sys.exit(1)
+probe = f'find "{tmp}/opt/genieai" -mindepth 1 {expr} -o ( ! -uid 12345 -print -quit )'
+r = subprocess.run(shlex.split(probe), capture_output=True, text=True)
+if r.returncode != 0:
+    print(f"degenerate-shape probe rc={r.returncode} stderr={r.stderr.strip()[:200]}", file=sys.stderr); sys.exit(1)
+print(f"OK: degenerate data_dir==deploy_dir shape renders a valid secrets-only prune and executes")
 PYEOF
 
 # ---------------------------------------------------------------------------

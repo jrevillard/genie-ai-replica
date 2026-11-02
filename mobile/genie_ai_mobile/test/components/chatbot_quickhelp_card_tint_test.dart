@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 import '../helpers/theme_helper.dart';
@@ -94,7 +93,7 @@ void main() {
     (tester) async {
       usePhoneSurface(tester);
       mockChatbotConfigAsset(tester, tintedConfig);
-      await pumpChatBot(tester, _TreeMockClient(tree));
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
       final tokens = ThemeManager().tokens;
 
@@ -124,7 +123,7 @@ void main() {
       setupDarkTokens();
       await pumpChatBot(
         tester,
-        _TreeMockClient(tree),
+        QuickHelpTreeMockClient(tree),
         theme: ThemeManager().darkTheme,
       );
 
@@ -149,19 +148,4 @@ void main() {
       expect(outlineShape.side.color, outline);
     },
   );
-}
-
-class _TreeMockClient extends http.BaseClient {
-  _TreeMockClient(this.tree);
-
-  final List<dynamic> tree;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

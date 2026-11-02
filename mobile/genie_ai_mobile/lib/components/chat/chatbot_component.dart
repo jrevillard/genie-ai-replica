@@ -1587,7 +1587,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// literal at each site that styles the card.
   static const EdgeInsets _quickHelpCardPadding = EdgeInsets.symmetric(
     horizontal: 12,
-    vertical: 8,
+    vertical: DsSpacing.sm,
   );
 
   /// The gap between the card's icon and its title — the same
@@ -1611,6 +1611,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       margin: margin,
       child: DsCard(
         variant: DsCardVariant.standard,
+        // Flush: the old hand-rolled Container carried no margin, and
+        // Card's own 4-side default would slip an unmeasured gap into
+        // the grid's spacing and the broken row's.
+        margin: EdgeInsets.zero,
         padding: _quickHelpCardPadding,
         overrideBg: background,
         overrideBorderColor: borderColor,
@@ -1619,23 +1623,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
-  /// The surface a Quick Help card paints. A declared `backgroundColor`
-  /// paints as-is in light mode; a declared `outlineColor` alone (the
-  /// shape the shipped configurations actually declare — the
-  /// background is a pale step whose chroma cannot carry a hue on a
-  /// dark surface) names the dark surface's HUE: the outline's colour
-  /// at the LIVE surface token's lightness, the same derivation shape
-  /// the web paints its dark cards with, without copying the web's
-  /// constants. An undeclared field falls back to the surface token.
+  /// The surface a Quick Help card paints. In light mode a declared
+  /// `backgroundColor` paints as-is; in dark mode the declared
+  /// background is ignored — a pale step whose chroma cannot carry a
+  /// hue at surface depth, and unreadable against the near-white dark
+  /// foreground — and the card derives from the declared
+  /// `outlineColor` instead: the outline's colour at the LIVE surface
+  /// token's lightness, the same derivation shape the web paints its
+  /// dark cards with, without copying the web's constants. An
+  /// undeclared field falls back to the surface token.
   Color _quickHelpCardBackground(
     QuickHelpCardStyles? styles,
     AppTokens tokens,
     bool dark,
   ) {
-    final Color? background = styles?.background;
-    if (background != null || !dark) {
-      return background ?? tokens.surface;
-    }
+    if (!dark) return styles?.background ?? tokens.surface;
     final Color? outline = styles?.outline;
     if (outline == null) return tokens.surface;
     return HSLColor.fromColor(
@@ -2364,7 +2366,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         child: Row(
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
-                            const SizedBox(width: _quickHelpCardHeaderGap),
+                            const SizedBox(width: 12),
                             Text(
                               _isStreaming
                                   ? tr('chatbot.generating')
@@ -2618,7 +2620,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 _sendMessage(_inputController.text),
                           ),
                         ),
-                        const SizedBox(width: _quickHelpCardHeaderGap),
+                        const SizedBox(width: 12),
                         DsButton(
                           iconOnly: true,
                           icon: Icons.send,
@@ -2672,6 +2674,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           _quickHelpLayout,
                         );
 
+                        // The composer-placed entries never RENDER on
+                        // the mobile — no composer surface, and both
+                        // display halves are tiles — but they STAY in
+                        // the loaded list: the restore and the re-title
+                        // lookups index the full parse output, the way
+                        // the web's restore reads its full button list.
+                        // Strict STRING equality, the web's
+                        // `placement === 'composer'`: a non-string
+                        // placement renders.
+                        final displayButtons = [
+                          for (final button in _quickHelpButtons)
+                            if (button['placement'] != 'composer') button,
+                        ];
                         // The cards split ONCE per build, on the SAME
                         // scope derivation for both halves: a broken
                         // card — a scope the tree cannot verify, or a
@@ -2682,7 +2697,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         // smaller than one line of text. The healthy
                         // cards keep the compact grid.
                         final (:broken, :healthy) = quickHelpPartitionButtons(
-                          _quickHelpButtons,
+                          displayButtons,
                           (button) => _treeUnavailable
                               ? QuickHelpScopeResolver.unavailableScopeFor(
                                   button,

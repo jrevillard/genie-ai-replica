@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -87,7 +86,7 @@ void main() {
     (tester) async {
       usePhoneSurface(tester);
       mockChatbotConfigAsset(tester, mixedConfig);
-      await pumpChatBot(tester, _TreeMockClient(tree));
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
       // The title-missing card is broken: its caption names the config
       // defect. The healthy card is not broken and carries no caption.
@@ -131,7 +130,10 @@ void main() {
       mockChatbotConfigAsset(tester, pairConfig);
       // A tree the fetch refuses: every scope is unverifiable, every
       // card broken.
-      await pumpChatBot(tester, _TreeMockClient(tree, categoriesStatus: 500));
+      await pumpChatBot(
+        tester,
+        QuickHelpTreeMockClient(tree, categoriesStatus: 500),
+      );
 
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
@@ -159,7 +161,10 @@ void main() {
       // fontScale = fontSize / 50 → 100 renders text at 2.0×.
       ThemeManager().setFontSize(100.0);
       mockChatbotConfigAsset(tester, pairConfig);
-      await pumpChatBot(tester, _TreeMockClient(tree, categoriesStatus: 500));
+      await pumpChatBot(
+        tester,
+        QuickHelpTreeMockClient(tree, categoriesStatus: 500),
+      );
 
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
@@ -182,7 +187,7 @@ void main() {
     // throw a RenderFlex overflow.
     ThemeManager().setFontSize(150.0);
     mockChatbotConfigAsset(tester, singleConfig);
-    await pumpChatBot(tester, _TreeMockClient(tree));
+    await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
     // The build survived: no overflow exception surfaced.
     expect(tester.takeException(), isNull);
@@ -197,20 +202,4 @@ void main() {
       findsWidgets,
     );
   });
-}
-
-class _TreeMockClient extends http.BaseClient {
-  _TreeMockClient(this.tree, {this.categoriesStatus = 200});
-
-  final List<dynamic> tree;
-  final int categoriesStatus;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, categoriesStatus);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

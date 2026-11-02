@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -84,7 +83,7 @@ void main() {
     );
     rootBundle.evict('assets/config/genie-ai-config.json');
     rootBundle.evict(svgAssetKey);
-    await pumpChatBot(tester, _TreeMockClient(tree));
+    await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
     // The two cards carry exactly one icon each: the inline card's is
     // a string-loaded SVG picture (the declared markup, not the
@@ -105,19 +104,4 @@ void main() {
     expect(cardIconOf('Inline Card', isStringLoader), findsOneWidget);
     expect(cardIconOf('File Card', isAssetLoader), findsOneWidget);
   });
-}
-
-class _TreeMockClient extends http.BaseClient {
-  _TreeMockClient(this.tree);
-
-  final List<dynamic> tree;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

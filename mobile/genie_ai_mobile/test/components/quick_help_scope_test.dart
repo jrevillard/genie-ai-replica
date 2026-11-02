@@ -2608,14 +2608,15 @@ void main() {
     });
 
     test(
-      'a composer-placed card is dropped from the grid; any other placement stays a tile',
+      "the parse keeps every placement; the raw placement value is carried",
       () {
-        // The web routes `placement: "composer"` entries into its
-        // welcome composer and keeps them out of `tileButtons`; the
-        // mobile has no composer surface, so the entry is dropped. The
-        // web's strict string compare (`placement === 'composer'`)
-        // keeps a NON-STRING placement a tile — mirrored here with the
-        // truthy non-string value the config typo class produces.
+        // The parse is the LIST the restore and the re-title lookups
+        // index — the web keeps its composer-placed entries in that
+        // list too (tileButtons is display-only), so the parse keeps
+        // them as well. Routing OUT of the mobile's grid is a display
+        // rule (the widget tests hold it); the parse carries the raw
+        // value so the display rule can read the same strict compare
+        // the web's `placement === 'composer'` makes.
         final (layout, buttons) = parseQuickHelpConfig({
           'features': {
             'chat': {
@@ -2631,11 +2632,6 @@ void main() {
                     'title': {'en': 'Births'},
                   },
                   {
-                    'id': 'misplaced',
-                    'title': {'en': 'Misplaced'},
-                    'placement': 'tile',
-                  },
-                  {
                     'id': 'typo',
                     'title': {'en': 'Typo'},
                     'placement': true,
@@ -2646,7 +2642,9 @@ void main() {
           },
         }, 'en');
 
-        expect(buttons.map((b) => b['id']), ['births', 'misplaced', 'typo']);
+        expect(buttons.map((b) => b['id']), ['just-chat', 'births', 'typo']);
+        expect(buttons[0]['placement'], 'composer');
+        expect(buttons[2]['placement'], true);
       },
     );
 

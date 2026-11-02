@@ -155,6 +155,25 @@ Future<void> pumpChatBot(
   await tester.pumpAndSettle();
 }
 
+/// The tree-answer mock client the Quick Help grid tests share: the
+/// categories endpoint answers with [tree] at [categoriesStatus],
+/// every other path 404s.
+class QuickHelpTreeMockClient extends http.BaseClient {
+  QuickHelpTreeMockClient(this.tree, {this.categoriesStatus = 200});
+
+  final List<dynamic> tree;
+  final int categoriesStatus;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final path = request.url.path;
+    if (path.contains('/api/service-categories/categories')) {
+      return httpResponseJson(tree, categoriesStatus);
+    }
+    return httpResponseJson(<String, dynamic>{}, 404);
+  }
+}
+
 /// The JSON response every chatbot test's mock client answers with —
 /// one encoding of the shape (JSON body, content-type header).
 http.StreamedResponse httpResponseJson(Object? body, int status) {

@@ -6,7 +6,6 @@ import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -47,7 +46,7 @@ void main() {
     (tester) async {
       usePhoneSurface(tester);
       mockChatbotConfigAsset(tester, config);
-      await pumpChatBot(tester, _TreeMockClient(tree));
+      await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
       final tokens = ThemeManager().tokens;
       final tile = find.ancestor(
@@ -65,15 +64,16 @@ void main() {
       expect(shell.overrideBg, tokens.surface);
       expect(shell.overrideBorderColor, tokens.borderLight);
 
-      final shape =
-          tester
-                  .widget<Card>(
-                    find.descendant(of: tile, matching: find.byType(Card)),
-                  )
-                  .shape!
-              as RoundedRectangleBorder;
+      final card = tester.widget<Card>(
+        find.descendant(of: tile, matching: find.byType(Card)),
+      );
+      final shape = card.shape! as RoundedRectangleBorder;
       expect(shape.borderRadius, BorderRadius.circular(DsRadii.lg));
       expect(shape.side.color, tokens.borderLight);
+      // Flush: the grid's spacing and the broken row's margin are the
+      // ONE spacing value — Card's own 4-side default would slip an
+      // unmeasured gap in.
+      expect(card.margin, EdgeInsets.zero);
 
       // The card scale's padding — the named constant's value, 12/8.
       final padding = tester.widget<Padding>(
@@ -108,19 +108,4 @@ void main() {
       expect(delegate.crossAxisSpacing, DsSpacing.sm);
     },
   );
-}
-
-class _TreeMockClient extends http.BaseClient {
-  _TreeMockClient(this.tree);
-
-  final List<dynamic> tree;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

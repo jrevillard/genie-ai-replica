@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -59,7 +58,7 @@ void main() {
   ) async {
     usePhoneSurface(tester);
     mockChatbotConfigAsset(tester, config);
-    await pumpChatBot(tester, _TreeMockClient(tree));
+    await pumpChatBot(tester, QuickHelpTreeMockClient(tree));
 
     // The two tile cards made the grid.
     expect(
@@ -81,19 +80,4 @@ void main() {
     // surface, no leftover text.
     expect(find.text('Just Chat'), findsNothing);
   });
-}
-
-class _TreeMockClient extends http.BaseClient {
-  _TreeMockClient(this.tree);
-
-  final List<dynamic> tree;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

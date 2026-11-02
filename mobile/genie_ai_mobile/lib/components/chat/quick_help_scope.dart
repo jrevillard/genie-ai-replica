@@ -113,6 +113,10 @@ Map<String, dynamic> parseQuickHelpButton(
     'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
     'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
     'styles': quickHelpCardStylesOf(btn),
+    // Kept RAW: the web routes on the truthiness-shaped strict compare
+    // (`placement === 'composer'`), which a stringified value would not
+    // mirror for non-string shapes.
+    'placement': btn['placement'],
   };
 }
 
@@ -162,14 +166,6 @@ QuickHelpCardStyles quickHelpCardStylesOf(Map<String, dynamic> btn) {
       // The web filters on JS truthiness (`!button.hidden`): a
       // truthy value of any type hides the card on both platforms.
       if (configTruthy(entry['hidden'])) continue;
-      // The web routes `placement: "composer"` entries OUT of its tile
-      // grid into the welcome composer (ChatBotComponent.vue's
-      // `tileButtons` keeps every entry whose placement is not the
-      // composer). The mobile has NO composer surface: the entry is
-      // dropped here, never duplicated as a tile. Strict STRING
-      // equality — the web's `=== 'composer'` — so a non-string
-      // placement stays a tile on both platforms.
-      if (entry['placement'] == 'composer') continue;
       buttons.add(parseQuickHelpButton(entry, locale));
     }
   }

@@ -144,13 +144,16 @@ async function generateSuite(body) {
   // the repo accumulates suites — 150s timed out on a busy repo (measured
   // 2026-10-31: the suite completed at ~170s with neg=11/pos=3 AFTER the
   // poll had already given up and mis-reported "count controls {}").
-  return pollJobDoc(`${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, {
-    tries: 120,
+  return pollJobDoc(
+    `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`,
+    120,
     // keep-waiting signal: the minted-key envelope ({suite_key,
-    // status:'generating'}) — anything else carrying a suite_key is terminal.
-    terminal: (got) => !!(got && got.suite_key && got.status !== 'generating'),
-    timeout: { suite_key: key, status: 'timeout' }
-  });
+    // status:'generating'}) — anything else carrying a suite_key is
+    // terminal, INCLUDING a failed generation doc (returned so the
+    // caller's check reports the failure rather than spinning).
+    (got) => !!(got && got.suite_key && got.status !== 'generating'),
+    { suite_key: key, status: 'timeout' }
+  );
 }
 
 // 1-8g-v / 1-8g-advisor: the suite RUN, the batch EXPLAIN and the ADVISOR are
@@ -374,7 +377,7 @@ async function refreshUserToken() {
   SUITE_KEY = gen.suite_key;
   const negs = (gen.payload && gen.payload.negative) || [];
   const byCls = negs.reduce((m, q) => ((m[q.cls] = (m[q.cls] || 0) + 1), m), {});
-  check('suite: generated', !!SUITE_KEY, `key=${SUITE_KEY}`);
+  check('suite: generated', !!SUITE_KEY && gen.status !== 'failed', `key=${SUITE_KEY} status=${gen.status}`);
   check('suite: count controls honored', byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2, JSON.stringify(byCls));
 
   // 6. run the suite (1-8g-v: async — POST answers {run_key, status:'running'})

@@ -75,6 +75,68 @@ describe('POST /api/okf/internal/concepts/:concept_id/status (Story 4.8-amend)',
     expect(edgeService.writeRepoConceptEdges).not.toHaveBeenCalled();
   });
 
+  // #1389 — dataprep's degraded-but-stored verdict used to fall through both
+  // dispatch arms: no transition, a misleading "callback applied" INFO, then a
+  // 30-min lane spin, a re-kick that re-ingested the same concept, and a
+  // reaper dead-letter at 8 attempts (live: Quran Core EN froze at 6321/6352
+  // while six lanes churned). The warning verdict is SUCCESS: indexed + edges
+  // + the warning carried on the row.
+  test('Ingested with Warnings → indexed + index_warning + edges written (#1389)', async () => {
+    const res = await request(createApp())
+      .post('/api/okf/internal/concepts/warn_concept/status')
+      .set('x-okf-internal-secret', 'test-secret')
+      .send({ file_id: 'warn_concept', status: 'Ingested with Warnings', chunk_count: 1 });
+    expect(res.status).toBe(200);
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      'r1',
+      { concept_id: 'warn_concept', repo_id: 'r1' },
+      expect.objectContaining({
+        patch: expect.objectContaining({ index_status: 'indexed', index_warning: 'Ingested with Warnings' })
+      })
+    );
+    expect(edgeService.writeRepoConceptEdges).toHaveBeenCalledWith('r1', 'warn_concept', expect.objectContaining({ file_id: 'warn_concept' }));
+  });
+
+  test('a later clean Ingested clears index_warning', async () => {
+    const res = await request(createApp())
+      .post('/api/okf/internal/concepts/warn_concept/status')
+      .set('x-okf-internal-secret', 'test-secret')
+      .send({ file_id: 'warn_concept', status: 'Ingested', chunk_count: 3 });
+    expect(res.status).toBe(200);
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      'r1',
+      { concept_id: 'warn_concept', repo_id: 'r1' },
+      expect.objectContaining({ patch: expect.objectContaining({ index_status: 'indexed', index_warning: null }) })
+    );
+  });
+
+  test('an UNMAPPED status warns loudly naming the status and writes NO transition (#1389 contract-drift guard)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const res = await request(createApp())
+      .post('/api/okf/internal/concepts/odd_concept/status')
+      .set('x-okf-internal-secret', 'test-secret')
+      .send({ file_id: 'odd_concept', status: 'Partially Digestested', chunk_count: 0 });
+    expect(res.status).toBe(200);
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    expect(edgeService.writeRepoConceptEdges).not.toHaveBeenCalled();
+    const warnText = logger.warn.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(warnText).toContain("UNMAPPED status 'Partially Digestested'");
+    expect(warnText).toContain('Contract drift');
+  });
+
+  test('Retracted mid-re-drive stays a quiet no-op (no transition, no unmapped WARN)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const res = await request(createApp())
+      .post('/api/okf/internal/concepts/rx_concept/status')
+      .set('x-okf-internal-secret', 'test-secret')
+      .send({ file_id: 'rx_concept', status: 'Retracted', chunk_count: 0 });
+    expect(res.status).toBe(200);
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    const warnText = logger.warn.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(warnText).not.toContain('UNMAPPED status');
+    expect(edgeService.writeRepoConceptEdges).not.toHaveBeenCalled();
+  });
+
   test('missing/invalid internal secret → 401 (fail-closed)', async () => {
     const noHeader = await request(createApp())
       .post('/api/okf/internal/concepts/x/status')

@@ -194,7 +194,22 @@ async function conceptStatus(req, res) {
       await transitionBundle(repo_id, 'Ingesting');
       return res.status(200).json({ success: true, transient: true });
     }
-    if (st === 'ingested') {
+    // 'Ingested with Warnings' is dataprep's degraded-but-stored verdict
+    // (genieai_dataprep_arangodb.py sets it when degraded_phases is non-empty):
+    // chunks ARE stored and retrievable, the degradation is a quality warning,
+    // not a failure. Live-caught 2026-11-03 on Quran Core EN (#1389): this
+    // status fell through BOTH dispatch arms — no transition, a misleading
+    // "callback applied" INFO — so the claiming lane's terminal poll spanned
+    // its whole 30-min window, re-claimed, RE-KICKED (dataprep re-ingested the
+    // same concept, doubling LLM/embed cost), and the attempt counter climbed
+    // until the stuck-parsed reaper dead-lettered the row at 8. Six lanes
+    // churning pinned the repo's in-flight count, the fair pick's oldest-head
+    // tiebreak then starved the repo while its sibling drained. Handle it as
+    // success-with-warning: 'indexed' + the same post-index edge write, with
+    // the warning carried on the row (index_warning; cleared by a later clean
+    // ingest) so the degradation stays visible in the meta/UI surface.
+    const isWarning = st === 'ingested with warnings';
+    if (st === 'ingested' || isWarning) {
       await conceptMetaService.upsertConceptMeta(
         repo_id,
         { concept_id, repo_id },
@@ -202,7 +217,8 @@ async function conceptStatus(req, res) {
           patch: {
             index_status: 'indexed',
             last_good_index_at: new Date().toISOString(),
-            chunk_count: chunk_count != null ? chunk_count : null
+            chunk_count: chunk_count != null ? chunk_count : null,
+            index_warning: isWarning ? status : null
           }
         }
       );
@@ -229,6 +245,23 @@ async function conceptStatus(req, res) {
             last_error: detail ? `${status}: ${detail}` : `${status} (chunks=${chunk_count ?? 0})`
           }
         }
+      );
+    } else if (st === 'retracted') {
+      // The worker's own re-drive flow sends retract → re-kick under one
+      // claim; dataprep's 'Retracted' callback for the retract leg carries no
+      // transition the meta row should take at this point (the row is parsed
+      // mid-flow). Documented no-op — QUIET, unlike the unknown arm below:
+      // a re-drive fires one of these per cycle, and a WARN here would spam
+      // every churned cycle.
+      logger.info('Concept status callback: Retracted mid-re-drive (no transition)', { repo_id, concept_id });
+    } else {
+      // #1389 lesson: the old fall-through accepted ANY unknown status with a
+      // misleading "callback applied" INFO and 200 — dataprep's vocabulary
+      // gained 'Ingested with Warnings' and the drain silently spun. An
+      // unmapped status is a CONTRACT DRIFT: say so loudly and name it.
+      logger.warn(
+        `Concept status callback: UNMAPPED status '${status}' — no meta transition; the claiming lane's terminal wait will spin until its window. Contract drift between dataprep and okf-server.`,
+        { repo_id, concept_id, status, chunk_count }
       );
     }
     // Bundle state machine: close the bundle when its last concept settles.

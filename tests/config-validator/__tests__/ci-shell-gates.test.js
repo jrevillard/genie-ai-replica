@@ -7,12 +7,10 @@ const ROOT = path.resolve(__dirname, '../../..');
 const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 
 // The shell-syntax gate (#1306, #1322): every multiline script item embedded
-// in .gitlab-ci.yml is shell-extracted and parsed with `bash -n`. Nothing
-// else in the pipeline parses that shell — the pipeline lint validates YAML
-// structure only — so a stray `done` or an unbalanced quote ships green
-// until the first merge train (measured on !674). The fixtures below pin
-// the extraction shapes the file uses today; an unhandled shape fails
-// loudly instead of silently leaving shell unextracted.
+// in .gitlab-ci.yml is shell-extracted and parsed with `bash -n`. The full
+// rationale lives in the extractor's header comment (extract-ci-shell.js);
+// the fixtures below pin the extraction shapes and the fail-loud contract
+// for shapes the extractor does not understand.
 
 const FIXTURE = `
 .node_base:
@@ -45,7 +43,8 @@ describe('ci shell gate: extraction', () => {
     expect(plain).toBeDefined();
     expect(plain.owner).toBe('job-one');
     expect(plain.key).toBe('script');
-    expect(plain.startLine).toBeGreaterThan(0);
+    // Exact pin: the bash -n failure line mapping depends on this number.
+    expect(plain.startLine).toBe(8);
   });
 
   test('extracts literal block scalar items verbatim', () => {
@@ -72,9 +71,27 @@ describe('ci shell gate: extraction', () => {
     expect(blocks.some((b) => b.text.includes('when: never'))).toBe(false);
   });
 
-  test('an unhandled script shape is reported as an error, not skipped', () => {
-    const inline = 'job:\n  script: npm test\n';
-    const { errors } = extractCiShellBlocks(inline);
+  test('extracts an inline scalar value (script: npm test)', () => {
+    const content = 'job:\n  script: npm test\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].text).toBe('npm test');
+    expect(blocks[0].startLine).toBe(2);
+  });
+
+  test('extracts a key-level alias (script: *anchor)', () => {
+    const content = ['.shared: &shared', '  - echo from anchor', '', 'job:', '  script: *shared'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    const anchored = blocks.find((b) => b.text === 'echo from anchor');
+    expect(anchored).toBeDefined();
+    expect(anchored.owner).toBe('.shared');
+  });
+
+  test('an unhandled script shape (unknown tag) is reported as an error, not skipped', () => {
+    const tagged = 'job:\n  script: !reference [.x]\n';
+    const { errors } = extractCiShellBlocks(tagged);
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain('script');
   });

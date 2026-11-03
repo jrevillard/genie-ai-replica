@@ -467,3 +467,76 @@ describe('POST /api/service-categories/init', () => {
     expect(response.status).toBe(404);
   });
 });
+
+// ============================================================
+// Error-path contract: the remaining catch blocks forward to the
+// global error middleware (which renders typed statusCode), instead
+// of answering a flat local 500.
+// ============================================================
+describe('error-path status contract', () => {
+  const typedError = (message, statusCode) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+  };
+
+  it.each([
+    ['GET', '/api/service-categories/categories', 'getAllCategoriesWithServices'],
+    ['GET', '/api/service-categories/categories/detailed', 'getAdminAllCategoriesWithServices'],
+    ['GET', '/api/service-categories/cat-1/translations', 'getCategoryTranslations'],
+    ['GET', '/api/service-categories/services/svc-1/translations', 'getServiceTranslations'],
+    ['GET', '/api/service-categories/search?query=health', 'searchCategoriesAndServices'],
+    ['DELETE', '/api/service-categories/cat-1', 'deleteCategory']
+  ])('%s %s renders a typed status instead of a flat 500', async (method, path, methodName) => {
+    serviceCategoryService[methodName].mockRejectedValue(typedError('gone wrong', 503));
+    if (methodName === 'deleteCategory') {
+      serviceCategoryService.categoryExists.mockResolvedValue(true);
+    }
+
+    const response = await request(app)[method.toLowerCase()](path).set('Authorization', `Bearer ${validToken}`);
+
+    expect(response.status).toBe(503);
+    expect(serviceCategoryService[methodName]).toHaveBeenCalled();
+  });
+});
+
+// ============================================================
+// Factory statefulness: each factory call returns its OWN router,
+// routing to ITS service instance (a module-level router would stack
+// both mounts' routes on one router whose handlers close over the
+// first service).
+// ============================================================
+describe('routes factory', () => {
+  it('returns an independent router per call, each bound to its own service', async () => {
+    const buildRoutes = require('../../routes/service-category-routes');
+    const express = require('express');
+
+    const makeService = (label) => ({
+      getAllCategoriesWithServices: jest.fn().mockResolvedValue([{ catKey: label }]),
+      keycloakAuthMiddleware: undefined
+    });
+    const serviceA = makeService('A');
+    const serviceB = makeService('B');
+
+    const routerA = buildRoutes(serviceA);
+    const routerB = buildRoutes(serviceB);
+    expect(routerA).not.toBe(routerB);
+
+    const appA = express();
+    const appB = express();
+    appA.use('/api/service-categories', routerA);
+    appB.use('/api/service-categories', routerB);
+
+    const [resA, resB] = await Promise.all([
+      request(appA).get('/api/service-categories/categories').set('Authorization', `Bearer ${validToken}`),
+      request(appB).get('/api/service-categories/categories').set('Authorization', `Bearer ${validToken}`)
+    ]);
+
+    expect(resA.status).toBe(200);
+    expect(resB.status).toBe(200);
+    expect(resA.body).toEqual([{ catKey: 'A' }]);
+    expect(resB.body).toEqual([{ catKey: 'B' }]);
+    expect(serviceA.getAllCategoriesWithServices).toHaveBeenCalledTimes(1);
+    expect(serviceB.getAllCategoriesWithServices).toHaveBeenCalledTimes(1);
+  });
+});

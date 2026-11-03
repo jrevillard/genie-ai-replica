@@ -645,9 +645,10 @@ String? quickHelpCategoryOf(Map<String, dynamic> button) =>
 /// disagree about the value itself, and a web-saved conversation
 /// carries the imprecise tag and misses this platform's index. A
 /// configuration with an id that large is not one the platforms can
-/// agree on at all; the durable answer is normalizing the tag at the
-/// save/restore boundary on both platforms, tracked beside the
-/// numeric-tag contract.
+/// agree on at all: the tag FORM is the same on both platforms (each
+/// writes the string form at the conversation boundary, and each restore
+/// reads the string form), so what stays unmatched is the VALUE the two
+/// decoders produced — no boundary rule can close that band.
 String? _jsTagForm(dynamic raw) {
   if (raw == null) return null;
   if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {

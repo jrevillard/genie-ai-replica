@@ -1029,6 +1029,17 @@ container_scanning:
     paths:
       - reports/contract-report.xml
 
+# Merge trains run the LIGHT gate only (lint/test/config on the merged
+# result — the train's unique value: validating the merged content BEFORE
+# the merge). The heavy families below skip trains entirely: they validated
+# the branch tip at the last push, and the post-merge `main` pipeline
+# rebuilds+scans the exact merged SHA anyway (it produces the promoted
+# images). Running the heavy set on the train tripled every merge — head +
+# train + main, three identical runs on the same tree (observed 2026-11-03).
+.train_skip: &train_skip
+  if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+  when: never
+
 contract:retriever-arango:
   <<: *contract_template
   needs:
@@ -1041,6 +1052,7 @@ contract:retriever-arango:
     # budget lives in `contract:dataprep-arango`.
     CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1069,6 +1081,7 @@ contract:reranker:
     # ServiceType.RERANK enum, opea_telemetry decorator.
     CONTRACT_TEST_PATTERN: "test_contract_reranker.py"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1093,6 +1106,7 @@ contract:dataprep-arango:
     # Dataprep-capable suite: ingest smoke + ingest budget (chunker-dependent).
     CONTRACT_TEST_PATTERN: "test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget test_contract_http_budget.py"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1127,6 +1141,7 @@ contract:chatqna-server:
     # the test fails for a reason that has nothing to do with the image.
     CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
   rules:
+    - *train_skip
     # The monthly forced rebuild is the event most likely to shift the base
     # image or the comps layout the /home/user/comps import path rests on —
     # the contract lane must run then, not only on path-matching MRs.
@@ -1174,6 +1189,7 @@ contract:unit:
     paths:
       - reports/contract-report.xml
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1198,6 +1214,7 @@ build:frontend:
     CONTEXT: "components/gov-chat-frontend/"
     DOCKERFILE: "components/gov-chat-frontend/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1222,6 +1239,7 @@ scan:frontend:
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1247,6 +1265,7 @@ promote:frontend:
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1272,6 +1291,7 @@ build:backend:
     CONTEXT: "components/"
     DOCKERFILE: "components/gov-chat-backend/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1296,6 +1316,7 @@ scan:backend:
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1321,6 +1342,7 @@ promote:backend:
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1346,6 +1368,7 @@ build:okf-server:
     CONTEXT: "components/"
     DOCKERFILE: "components/okf-server/Dockerfile"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1372,6 +1395,7 @@ scan:okf-server:
   variables:
     IMAGE_NAME: "genie-ai-okf-server"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1395,6 +1419,7 @@ promote:okf-server:
   variables:
     IMAGE_NAME: "genie-ai-okf-server"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1418,6 +1443,7 @@ build:pii-service:
     CONTEXT: "components/pii-service/"
     DOCKERFILE: "components/pii-service/Dockerfile"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1445,6 +1471,7 @@ scan:pii-service:
   variables:
     IMAGE_NAME: "genie-ai-pii-service"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1468,6 +1495,7 @@ promote:pii-service:
   variables:
     IMAGE_NAME: "genie-ai-pii-service"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1525,6 +1553,7 @@ build:ragas-service:
     CONTEXT: "components/ragas-service/"
     DOCKERFILE: "components/ragas-service/Dockerfile"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1548,6 +1577,7 @@ scan:ragas-service:
   variables:
     IMAGE_NAME: "genie-ai-ragas-service"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1571,6 +1601,7 @@ promote:ragas-service:
   variables:
     IMAGE_NAME: "genie-ai-ragas-service"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1627,6 +1658,7 @@ build:db-migrations:
     CONTEXT: "."
     DOCKERFILE: "components/gov-chat-backend/Dockerfile.migrations"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1651,6 +1683,7 @@ scan:db-migrations:
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1676,6 +1709,7 @@ promote:db-migrations:
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1701,6 +1735,7 @@ build:document-repository:
     CONTEXT: "components/"
     DOCKERFILE: "components/document-repository/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1725,6 +1760,7 @@ scan:document-repository:
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1750,6 +1786,7 @@ promote:document-repository:
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1775,6 +1812,7 @@ build:nginx:
     CONTEXT: "api-gateway-solution/nginx/"
     DOCKERFILE: "api-gateway-solution/nginx/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1799,6 +1837,7 @@ scan:nginx:
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1824,6 +1863,7 @@ promote:nginx:
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1849,6 +1889,7 @@ build:kong-config:
     CONTEXT: "api-gateway-solution/new-config/"
     DOCKERFILE: "api-gateway-solution/new-config/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1873,6 +1914,7 @@ scan:kong-config:
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1898,6 +1940,7 @@ promote:kong-config:
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1923,6 +1966,7 @@ build:chatqna-server:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1947,6 +1991,7 @@ scan:chatqna-server:
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1972,6 +2017,7 @@ promote:chatqna-server:
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1997,6 +2043,7 @@ build:dataprep-arango:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2040,6 +2087,7 @@ smoke:dataprep-arango:
       echo "Smoke-testing imports in $REGISTRY_REF"
       docker run --rm --entrypoint python "$REGISTRY_REF" -c "import docling; from docling_core.types.legacy_doc.base import BaseText; print('docling legacy_doc OK'); import comps.dataprep.src.integrations.genieai_dataprep_arangodb; print('genieai_dataprep_arangodb import OK')"
   rules:
+    - *train_skip
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2064,6 +2112,7 @@ scan:dataprep-arango:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2089,6 +2138,7 @@ promote:dataprep-arango:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2114,6 +2164,7 @@ build:retriever-arango:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2138,6 +2189,7 @@ scan:retriever-arango:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2163,6 +2215,7 @@ promote:retriever-arango:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2188,6 +2241,7 @@ build:reranker:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2212,6 +2266,7 @@ scan:reranker:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2237,6 +2292,7 @@ promote:reranker:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2262,6 +2318,7 @@ build:embedding:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2286,6 +2343,7 @@ scan:embedding:
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2311,6 +2369,7 @@ promote:embedding:
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2336,6 +2395,7 @@ build:textgen:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2360,6 +2420,7 @@ scan:textgen:
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2385,6 +2446,7 @@ promote:textgen:
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2410,6 +2472,7 @@ build:postgres-init:
     CONTEXT: "configs/postgres/"
     DOCKERFILE: "configs/postgres/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2434,6 +2497,7 @@ scan:postgres-init:
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2459,6 +2523,7 @@ promote:postgres-init:
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2484,6 +2549,7 @@ build:keycloak-config:
     CONTEXT: "configs/keycloak/"
     DOCKERFILE: "configs/keycloak/Dockerfile.config-cli"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2508,6 +2574,7 @@ scan:keycloak-config:
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2533,6 +2600,7 @@ promote:keycloak-config:
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2558,6 +2626,7 @@ build:tempo-proxy:
     CONTEXT: "tools/tempo-proxy/"
     DOCKERFILE: "tools/tempo-proxy/Dockerfile"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2582,6 +2651,7 @@ scan:tempo-proxy:
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2607,6 +2677,7 @@ promote:tempo-proxy:
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
+    - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

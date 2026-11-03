@@ -291,12 +291,13 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Password: `TestPass123!`
 
 This payload matches the venue fixture defined in
-`tests/e2e/helpers/e2e-fixtures.js`. The provisioning script below
-converges an existing account's password and login-visible state
-(enabled, verified, no required action) and its realm roles — the email
-is deliberately NOT rewritten (the login reads the username, not the
-email), so an account created with a previous fixture revision keeps its
-old address.
+`tests/e2e/helpers/e2e-fixtures.js`. On the already-exists path the
+provisioning script below resets the account's password and asserts its
+login-visible state (enabled, verified, no required action — failing
+loudly on drift instead of repairing it) and assigns its realm roles.
+The email is deliberately NOT rewritten (the login reads the username,
+not the email), so an account created with a previous fixture revision
+keeps its old address.
 
 #### 0.8b Provision the venue test users (all Playwright suites prerequisite)
 
@@ -304,9 +305,8 @@ All three venue users are provisioned through one script over the
 `ensureUser` helper (`tests/e2e/helpers/keycloak-admin.js`):
 
 - `testuser` — the primary login user (chat + documents suites). Carries
-  the `admin` realm role: the documents suites drive the upload/delete
-  surfaces, which the document-repository restricts to the `admin` realm
-  role (`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design.
+  the `admin` realm role in parity with the former inline CI assignment;
+  the documents suites themselves authenticate as `testadmin`.
 - `testadmin` — the admin-surface login (`tests/e2e/admin/`).
 - `testplain` — carries **no role granting admin access** — the non-admin
   side of the `requireAdmin` contract.

@@ -3287,7 +3287,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // call present but after the Playwright item runs every spec against
     // whatever fixtures the realm happens to carry.
     expect(invocation).toBeGreaterThan(-1);
-    expect(invocation).toBeLessThan(section.indexOf('npx playwright test'));
+    const suites = section.indexOf('npx playwright test');
+    // A named guard: if the invocation line itself is reworded or removed,
+    // the failure must say so, not masquerade as an ordering violation.
+    if (suites === -1) {
+      throw new Error('the Playwright invocation line was reworded or removed in .e2e_web_base');
+    }
+    expect(invocation).toBeLessThan(suites);
     // The deleted inline mechanism must not grow back beside the helper:
     // these names existed only in the bash convergence this pin replaced.
     expect(section).not.toContain('create_testuser');
@@ -3329,16 +3335,32 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(chatbot).not.toContain('TestAdmin123!');
     expect(chatbot).not.toContain('TestPlain123!');
     const fixturePasswords = ['TestPass123!', 'TestAdmin123!', 'TestPlain123!'];
+    const assertNoFixturePassword = (label, source) => {
+      for (const password of fixturePasswords) {
+        if (source.includes(password)) {
+          throw new Error(`${label} carries the fixture password ${password} — derive it from the fixtures module`);
+        }
+      }
+    };
+    // The helpers beside the fixtures module too — chatbot re-exports, the
+    // rest must derive.
+    const helpersDir = path.join(ROOT, 'tests/e2e/helpers');
+    for (const name of fs.readdirSync(helpersDir)) {
+      if (!name.endsWith('.js') || name === 'e2e-fixtures.js') continue;
+      assertNoFixturePassword(`helpers/${name}`, fs.readFileSync(path.join(helpersDir, name), 'utf-8'));
+    }
     const specDirs = ['chatbot', 'documents', 'admin', 'epic1', 'epic3'];
     for (const dir of specDirs) {
       const dirPath = path.join(ROOT, 'tests/e2e', dir);
       for (const name of fs.readdirSync(dirPath)) {
         if (!name.endsWith('.js')) continue;
-        const source = fs.readFileSync(path.join(dirPath, name), 'utf-8');
-        for (const password of fixturePasswords) {
-          expect(source).not.toContain(password);
-        }
+        assertNoFixturePassword(`${dir}/${name}`, fs.readFileSync(path.join(dirPath, name), 'utf-8'));
       }
+    }
+    // The top-level suite specs the train also runs.
+    for (const name of fs.readdirSync(path.join(ROOT, 'tests/e2e'))) {
+      if (!name.endsWith('.spec.js')) continue;
+      assertNoFixturePassword(name, fs.readFileSync(path.join(ROOT, 'tests/e2e', name), 'utf-8'));
     }
   });
 });

@@ -374,6 +374,11 @@
     "victoriametrics": "the chart's metrics store is a vmoperator VMSingle custom resource",
     "victoriatraces": "the chart's trace store is a vmoperator VMSingle custom resource",
     "vllm": "the chart's in-cluster LLM is a vLLM Deployment configured through the OPEA tier's values",
-    "vllm-translation-guardrail": "the chart's translation model belongs to the OPEA tier and is configured through the tier's values"
+    "vllm-translation-guardrail": "the chart's translation model belongs to the OPEA tier and is configured through the tier's values",
+    "arango-vector-db-init": "one-shot chown of the ArangoDB data volumes to uid 999 — the chart's ArangoDB is a kube-arangodb operator custom resource whose storage the operator owns; there is no chart-side container to pair",
+    "backend-init": "one-shot chown of the backend volumes (data, Uploads, database_backups) to uid 1000 for the compose non-root posture (#1227) — the chart grants the same write access with fsGroup on the pod, which the kubelet applies at mount time; there is no init service to pair",
+    "document-repository-init": "one-shot chown of the uploads volume to uid 1000 (#1227) — same as backend-init, the chart covers it with fsGroup on the pod",
+    "secrets-ssl-init": "one-shot re-permission of the host ./secrets/ssl tree to root:101 for the gid-101 nginx edge — the chart's edge is Envoy Gateway with cert-manager TLS; there is no ssl tree and no nginx to own it",
+    "victorialogs-init": "one-shot chown of the VictoriaLogs data volume to uid 65534 — the chart's log store is a vmoperator VMSingle custom resource whose storage the operator owns"
   }
 }

@@ -1884,7 +1884,13 @@ export default {
         // card, on either platform.
         .filter((button, _index, all) => {
           if (!button.id) return true;
-          if (all.some((b, i) => i < _index && b.id === button.id)) {
+          // The dedupe keys on the id's STRING form: a hand-edited
+          // configuration can declare the "same" id in two JSON types
+          // (`5` and `"5"`), and the raw `===` kept both cards while the
+          // mobile's string key collapsed them — one file, two card
+          // counts. The falsy gate stays raw (#1244): a card with no
+          // truthy id is never a duplicate of anything.
+          if (all.some((b, i) => i < _index && b.id && String(b.id) === String(button.id))) {
             console.warn(
               `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
             );
@@ -1909,7 +1915,13 @@ export default {
           return {
             service: title,
             serviceLabels: explicitLabels,
-            serviceKey: button.id || title,
+            // The tag the conversation saves: the id in its STRING form —
+            // the shape the mobile has always written, so a numeric id
+            // saves the same tag on both platforms and a saved
+            // conversation restores on both. The RAW truthiness read
+            // stays (#1244): a falsy id (0, '', null) keeps the TITLE as
+            // the identity.
+            serviceKey: button.id ? String(button.id) : title,
             textKey: button.title,
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
@@ -2606,7 +2618,15 @@ export default {
               );
               return;
             }
-            const button = this.quickHelpButtons.find((candidate) => candidate.id === tag);
+            // The compare reads the STRING forms of both sides: a
+            // mobile-saved '5' matches a numeric 5 the same way an old
+            // web-saved raw 5 does. The FALSY gate is the #1244 rule
+            // intact — a raw-0 card never matches a '0' tag (its
+            // identity is the title), and a title tag never matches an
+            // id-only lookup.
+            const button = this.quickHelpButtons.find(
+              (candidate) => candidate.id && String(candidate.id) === String(tag)
+            );
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

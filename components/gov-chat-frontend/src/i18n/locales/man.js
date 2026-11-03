@@ -1291,7 +1291,7 @@ export default {
     quickHelpTitleMissing:
       'Configuration problem: this button has no title in this language. This button cannot be used until its configuration is updated.',
     quickHelpScopeUnavailable:
-      "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+      "Temporarily unavailable: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
     scopeNotNameable:
       'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
     placeholder: 'I la ñiningo nyining jang...',

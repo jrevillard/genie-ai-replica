@@ -108,6 +108,22 @@ describe('Locale consistency', () => {
     expect(dupMap).toEqual({});
   });
 
+  test('the outage caption does not borrow the configuration-problem lead', () => {
+    // An outage of the knowledge hierarchy is NOT a configuration
+    // problem — its caption must not open with the lead the three
+    // configuration captions share (the localized text before the first
+    // colon; zh uses the full-width colon). The lead is DERIVED per
+    // locale from a sibling caption, so a reword of the shared lead
+    // keeps this green while an unavailable caption regressing onto it
+    // goes red in exactly the locale that regressed.
+    const bad = localeFiles.filter((locale) => {
+      const chatbot = getLocaleData(locale).chatbot;
+      const configLead = chatbot.quickHelpLabelGone.split(/[:：]/)[0];
+      return chatbot.quickHelpScopeUnavailable.startsWith(configLead);
+    });
+    expect(bad).toEqual([]);
+  });
+
   // PLACEHOLDER GUARD (David, 2026-09-30, "Step of 10"; re-inked 2026-10-09;
   // widened round 16, #80122). translateMixin does RAW message lookup (no
   // vue-i18n compilation), so a replace()-consumed okf.* key must carry the

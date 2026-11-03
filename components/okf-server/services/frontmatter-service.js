@@ -529,6 +529,23 @@ function extractJson(content, opts = {}) {
 // blew straight past the cap.
 const TEI_EMBED_CHUNK = 32;
 
+/** True when `host` sits on the deployment's OWN host (scheme+host+port of
+ * deploymentVllmBase()) — the shared-gateway topology where one GPU host
+ * serves the LLM and the TEI embed endpoints. Origin-only on purpose: the
+ * LLM legs' sameEndpoint rule is path-aware (a /vN version prefix names the
+ * same server), but the embed leg's credential decision must not care which
+ * PATH on the gateway the TEI lives at. Malformed input → false (no
+ * credential: the consequence is a 401, never a leak). */
+function sameOriginWithDeployment(host) {
+  try {
+    const a = new URL(String(host || ''));
+    const b = new URL(modelCache.deploymentVllmBase());
+    return a.protocol === b.protocol && a.host === b.host;
+  } catch {
+    return false;
+  }
+}
+
 async function teiEmbed(inputs) {
   const list = Array.isArray(inputs) ? inputs : [inputs];
   if (!list.length) return [];
@@ -542,8 +559,25 @@ async function teiEmbed(inputs) {
   // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
   // reranker uses at line 1432).
   const headers = { 'Content-Type': 'application/json' };
-  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || modelCache.deploymentKey();
-  if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
+  // Credential scoping (#1201): explicit TEI credentials (HF_TOKEN /
+  // HUGGINGFACEHUB_API_TOKEN) go to ANY TEI host — that is what they name.
+  // The DEPLOYMENT bearer applies only when the TEI host is the deployment's
+  // OWN host (scheme+host+port of deploymentVllmBase(): the shared-gateway
+  // topology, where one GPU host serves /llm AND /embed — the bearer was
+  // accepted there because the VALUE matched, a coincidence of the local
+  // build, not a contract). A third-party TEI gets NO Authorization header,
+  // so the GPU key can never leave the deployment by accident of a fallback
+  // chain. NOTE: deliberately NOT credentialForBase — its sameEndpoint rule
+  // is path-aware (/embed vs /llm are different paths on the SAME gateway
+  // host), which is right for model-name scoping and wrong for credential
+  // scoping on the embed leg.
+  const teiKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || '';
+  let bearer = teiKey;
+  if (!bearer) {
+    const depKey = modelCache.deploymentKey();
+    if (depKey && sameOriginWithDeployment(TEI_EMBED_HOST)) bearer = depKey;
+  }
+  if (bearer) headers.Authorization = 'Bearer ' + bearer;
   const decode = (resp) => {
     // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
     const out = resp.data && (resp.data.data || resp.data.embeddings || resp.data);

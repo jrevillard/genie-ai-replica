@@ -81,6 +81,7 @@
               <li class="nav-item">
                 <a
                   href="#"
+                  data-test-id="admin-logs-link"
                   :class="['nav-link', { active: activeTab === 'logs' }]"
                   @click.prevent="setActiveTab('logs')"
                 >
@@ -152,7 +153,7 @@
           </div>
 
           <div class="quick-stats">
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-system-uptime">
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
@@ -162,7 +163,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-avg-response-time">
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
@@ -176,7 +177,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-error-rate">
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
@@ -186,7 +187,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-monthly-active-users">
               <div class="stat-title">
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>
@@ -235,7 +236,12 @@
                   </div>
 
                   <div class="resource-usage">
-                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                    <div
+                      v-for="resource in resourceUsage"
+                      :key="resource.id"
+                      class="usage-item"
+                      :data-test-id="`usage-${resource.id}`"
+                    >
                       <div class="usage-header">
                         <div class="usage-label">{{ resource.label }}</div>
                         <div class="usage-value">{{ resource.value }}%</div>
@@ -745,7 +751,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-errors-card">
                     <h3 class="summary-title">
                       <span class="status-indicator error"></span>
                       {{ translate('admin.logsSection.errorLogs', 'Error Logs') }} ({{
@@ -781,7 +787,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-warnings-card">
                     <h3 class="summary-title">
                       <span class="status-indicator warning"></span>
                       {{ translate('admin.logsSection.warningLogs', 'Warning Logs') }} ({{

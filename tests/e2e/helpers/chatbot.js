@@ -14,6 +14,14 @@ const TEST_ADMIN_USER = {
   password: 'TestAdmin123!'
 };
 
+// A user with NO realm roles — the non-admin side of the admin-surface
+// authz specs (requireAdmin must answer 403). Provisioned alongside
+// testuser/testadmin by the same venues (CI e2e setup and Phase 0).
+const TEST_PLAIN_USER = {
+  username: 'testplain',
+  password: 'TestPlain123!'
+};
+
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when
 // the environment configures BASE_URL with a trailing '/'.
@@ -288,5 +296,6 @@ module.exports = {
   saveChat,
   TEST_USER,
   TEST_ADMIN_USER,
+  TEST_PLAIN_USER,
   BASE_URL
 };

@@ -2382,6 +2382,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(targets).toEqual([
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
+      'tests/e2e/admin/**/*',
+      'tests/e2e/chatbot/**/*',
+      'tests/e2e/documents/**/*',
       'tests/e2e/helpers/**/*',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);

@@ -1851,6 +1851,22 @@ describe('ChatBotComponent', () => {
         }
       };
 
+      // One name, two cards: the id-less card is titled like the OTHER
+      // card's id. A malformed configuration — but one where the tag
+      // names two cards, so it names none.
+      const collidingIdentityCards = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
+                { title: 'registry-help', serviceLabels: ['Potato'] }
+              ]
+            }
+          }
+        }
+      };
+
       const treeWithTomatoAndPotato = [
         {
           catKey: '2',
@@ -1925,18 +1941,7 @@ describe('ChatBotComponent', () => {
 
       it('an identity TWO cards claim restores NOTHING — a visible refusal, not a wrong scope', async () => {
         const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [
-                  { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
-                  { title: 'registry-help', serviceLabels: ['Potato'] }
-                ]
-              }
-            }
-          }
-        });
+        loadConfig.mockResolvedValue(collidingIdentityCards);
 
         mockLiveTree(treeWithTomatoAndPotato);
         const wrapper = createChatBotWrapper();
@@ -1967,18 +1972,7 @@ describe('ChatBotComponent', () => {
 
       it('pressing a card whose identity another card claims installs THAT card', async () => {
         const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [
-                  { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
-                  { title: 'registry-help', serviceLabels: ['Potato'] }
-                ]
-              }
-            }
-          }
-        });
+        loadConfig.mockResolvedValue(collidingIdentityCards);
 
         mockLiveTree(treeWithTomatoAndPotato);
         const wrapper = createChatBotWrapper();

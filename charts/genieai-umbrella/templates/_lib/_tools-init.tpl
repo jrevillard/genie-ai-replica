@@ -12,19 +12,27 @@ The kubeletToolsMirror values key lets air-gapped clusters point the
 URL at a single internal mirror.
 */}}
 
-{{- define "genieai-umbrella.toolsInitContainer" -}}
-{{- $global := .Values.global | default dict -}}
-- name: tools
-  {{- /* busybox, not curlimages/curl: the curl images ship layers whose
-  PAX headers carry the build host's overlayfs xattrs
+{{- /*
+  toolingImage — the one image every hook, wait-probe and helm-test
+  pod runs on. busybox, not curlimages/curl: the curl images ship
+  layers whose PAX headers carry the build host's overlayfs xattrs
   (SCHILY.xattr.user.overlay.*, measured on 8.10.1 AND 8.14.1), and
   storage stacks that refuse user.* setxattr (fuse-overlayfs in an
   unprivileged nest — the class of venue this chart dev-deploys to)
   fail the extraction with EPERM: ImagePullBackOff on every hook.
-  busybox:1.36 carries no such records (control-measured) and wget
-  covers every fetch here — with checksum verification, since wget
-  validates no certificates. */}}
-  image: {{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
+  busybox:1.36 carries no such records (control-measured); it runs no
+  TLS certificate validation, so downloads verify against pinned
+  checksums where authenticity matters (the kubectl fetch below).
+*/}}
+{{- define "genieai-umbrella.toolingImage" -}}
+{{- $global := .Values.global | default dict -}}
+{{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
+{{- end -}}
+
+{{- define "genieai-umbrella.toolsInitContainer" -}}
+{{- $global := .Values.global | default dict -}}
+- name: tools
+  image: {{ include "genieai-umbrella.toolingImage" . }}
   imagePullPolicy: IfNotPresent
   securityContext:
     allowPrivilegeEscalation: false
@@ -92,12 +100,12 @@ URL at a single internal mirror.
         *) echo "no pinned kubectl checksum for arch $ARCH" >&2; exit 1 ;;
       esac
       fetch "$BASE/release/v1.33.0/bin/linux/$ARCH/kubectl" /tools/bin/kubectl
-      # sha256sum -c resolves the checksum line's filename against the
-      # CURRENT DIRECTORY — the binary lives in /tools/bin and the init
-      # cwd does not, so the verify runs from there. (The live pass
-      # caught this: every install failed with a checksum mismatch on
-      # bytes that were perfectly fine.)
-      if ! (cd /tools/bin && echo "$expected  kubectl" | sha256sum -c - >/dev/null 2>&1); then
+      # Compare hex digests directly: busybox `sha256sum -c` resolves
+      # the checksum line's filename against the CURRENT DIRECTORY, and
+      # the init container's cwd is not /tools/bin (the live pass caught
+      # installs failing checksums on perfectly fine bytes).
+      actual="$(sha256sum /tools/bin/kubectl | cut -d' ' -f1)"
+      if [ "$actual" != "$expected" ]; then
         echo "kubectl checksum mismatch against $BASE — refusing to use the download" >&2
         exit 1
       fi

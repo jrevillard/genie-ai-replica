@@ -552,10 +552,14 @@ expect_fail "a kubeletToolsMirror with a scheme-position colon" \
 # topology); and scheme-ful with both. Uppercase schemes are NOT in
 # the grammar: busybox wget rejects them outright, so the schema
 # rejects the value at render instead of letting a "passing" mirror
-# fail every hook fetch after install. The schema cases above pin only
+# fail every hook fetch after install. The schema cases in this block pin only
 # the key name — helm's schema error embeds the whole pattern, so a
 # clause-specific needle would pin the pattern TEXT and break on every
 # refinement; the inputs are the discrimination.
+
+expect_fail "an uppercase-scheme mirror is rejected at render (busybox wget parses lowercase schemes only)" \
+  "kubeletToolsMirror" \
+  $(valid_flags) --set 'global.kubeletToolsMirror=HTTPS://mirror.internal:8443'
 expect_render_contains \
   "a scheme-less host:port mirror reaches the init shell verbatim" \
   'BASE="mirror.internal:8443"' \
@@ -590,10 +594,6 @@ expect_render_contains \
   "a scheme-ful multi-segment mirror reaches the init shell verbatim" \
   'BASE="https://nexus.internal/repository/k8s-releases"' \
   $(valid_flags) --set global.kubeletToolsMirror=https://nexus.internal/repository/k8s-releases
-
-expect_fail "an uppercase-scheme mirror is rejected at render (busybox wget parses lowercase schemes only)" \
-  "kubeletToolsMirror" \
-  $(valid_flags) --set 'global.kubeletToolsMirror=HTTPS://mirror.internal:8443'
 
 expect_fail "a mirror with a trailing slash (it would double the appended path's slash)" \
   "kubeletToolsMirror" \

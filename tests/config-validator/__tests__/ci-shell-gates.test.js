@@ -172,11 +172,20 @@ describe('ci shell gate: bash -n', () => {
 
   test('missing bash fails loudly instead of passing vacuously', () => {
     // Determinism: a gate that cannot run must not read as green.
-    expect(() =>
-      checkShellSyntax([{ owner: 'j', key: 'script', startLine: 1, text: 'echo hi' }], {
-        bashPath: '/nonexistent/bash'
-      })
-    ).toThrow(/bash/);
+    jest.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
+      error: Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }),
+      status: null,
+      signal: null,
+      stderr: '',
+      stdout: ''
+    });
+    try {
+      expect(() => checkShellSyntax([{ owner: 'j', key: 'script', startLine: 1, text: 'echo hi' }])).toThrow(
+        /cannot run bash/
+      );
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 
   test('an abnormal bash exit with empty stderr still names the failure', () => {

@@ -7,13 +7,12 @@
 
 const childProcess = require('child_process');
 
-function checkShellSyntax(blocks, opts = {}) {
-  const bashPath = opts.bashPath || 'bash';
+function checkShellSyntax(blocks) {
   const errors = [];
   for (const block of blocks) {
-    const run = childProcess.spawnSync(bashPath, ['-n'], { input: block.text, encoding: 'utf8' });
+    const run = childProcess.spawnSync('bash', ['-n'], { input: block.text, encoding: 'utf8' });
     if (run.error) {
-      throw new Error(`cannot run ${bashPath} -n: ${run.error.message}`);
+      throw new Error(`cannot run bash -n: ${run.error.message}`);
     }
     if (run.status !== 0) {
       // bash reports line numbers relative to the extracted text; map the

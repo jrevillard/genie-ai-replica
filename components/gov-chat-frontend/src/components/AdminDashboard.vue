@@ -1790,6 +1790,10 @@ export default {
 
       // State for loading translations
       isTranslationsLoading: false,
+      // Generation counter for edit-form translation fetches: two rapid
+      // showEditForm calls race, and the SLOWER fetch must not populate,
+      // flag or unblock the form the newer fetch already answered.
+      hierarchyTranslationsSeq: 0,
       // The current edit form's translation load FAILED. The backend's
       // update path treats `translations: []` as clear-all, so a save from
       // a form whose rows never loaded would silently wipe every existing
@@ -3170,6 +3174,9 @@ export default {
     },
 
     showAddCategoryForm() {
+      // A failed translation load belongs to the edit form it happened in:
+      // a create form opened afterwards must be savable.
+      this.translationsLoadFailed = false;
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3185,6 +3192,9 @@ export default {
     },
 
     showAddServiceForm(category) {
+      // Same reset as showAddCategoryForm: the flag belongs to the edit
+      // form it was raised in.
+      this.translationsLoadFailed = false;
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3223,6 +3233,7 @@ export default {
       // Step 2: Fetch the translations asynchronously
       this.isTranslationsLoading = true;
       this.translationsLoadFailed = false;
+      const loadSeq = ++this.hierarchyTranslationsSeq;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
@@ -3231,6 +3242,12 @@ export default {
         } else {
           // Call the service method for services
           fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key);
+        }
+
+        // A newer showEditForm superseded this fetch: neither its rows nor
+        // its failure belong to the form now open.
+        if (loadSeq !== this.hierarchyTranslationsSeq) {
+          return;
         }
 
         // Filter out the English ('en') translation from the results
@@ -3247,6 +3264,11 @@ export default {
         // Step 4: Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch {
+        // The same staleness rule: a superseded fetch must not block the
+        // newer edit's save.
+        if (loadSeq !== this.hierarchyTranslationsSeq) {
+          return;
+        }
         // The service layer rethrows failed translation loads (a silent []
         // here would render an editable empty-rows form whose next save
         // wipes every existing translation). The form stays open but the
@@ -3261,7 +3283,11 @@ export default {
           this.hierarchyForm.translations.push({ lang: '', text: '' });
         }
       } finally {
-        this.isTranslationsLoading = false;
+        // Only the fetch the form currently waits on may clear the
+        // loading state.
+        if (loadSeq === this.hierarchyTranslationsSeq) {
+          this.isTranslationsLoading = false;
+        }
       }
     },
 

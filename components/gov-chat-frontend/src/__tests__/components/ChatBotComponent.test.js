@@ -1989,6 +1989,33 @@ describe('ChatBotComponent', () => {
         expect(mockSubmitQueryStream).toHaveBeenCalledTimes(1);
       });
 
+      it('an id-less card pressed again after a language switch is still the same card — the scope says so', async () => {
+        // The card's title is its identity, and the title changes with
+        // the language. What does not change is the scope it declares:
+        // the labels and the category are what the dedupe reads when the
+        // identity cannot survive the switch — the repeat press stays a
+        // no-op instead of asking the card's hidden prompt twice.
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = await mountWithButtons([
+          { title: { en: 'Advisory', es: 'Asesoría' }, serviceLabels: ['Tomato'] }
+        ]);
+        const vm = wrapper.vm;
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
+
+        vm.currentLocale = 'es';
+        vm.applyQuickHelpButtons();
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Asesoría');
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
+
+        // The press is a no-op: the chip the user installed keeps its
+        // title, its scope, and its armed prompt.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].service).toBe('Advisory');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
+      });
+
       it('two id-less cards sharing a TITLE are still two cards — the second press installs the pressed card', async () => {
         mockLiveTree(treeWithTomatoAndPotato);
         const wrapper = await mountWithButtons([
@@ -2036,19 +2063,60 @@ describe('ChatBotComponent', () => {
         expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
       });
 
-      it('re-titles an id-less chip from ITS OWN card', async () => {
+      it('an id-less chip keeps the title it was pressed with across a language switch', async () => {
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons(twoIdLessCards);
+        const wrapper = await mountWithButtons([
+          { title: { en: 'Card One', es: 'Uno' }, serviceLabels: ['Tomato'] },
+          { title: { en: 'Card Two', es: 'Dos' }, serviceLabels: ['Potato'] }
+        ]);
         const vm = wrapper.vm;
 
+        // Pressed under the Spanish title...
+        vm.currentLocale = 'es';
+        vm.applyQuickHelpButtons();
         vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
         const chip = vm.selectedContextItems[0];
+        expect(chip.service).toBe('Dos');
 
-        // The locale re-title looks the card up by its identity: a raw id
-        // compare matched an UNDEFINED id against the FIRST id-less card
-        // and re-titled the chip from that card — a chip wearing another
-        // card's name.
-        expect(vm.quickHelpTitleFor(chip, 'en')).toBe('Card Two');
+        // ...and the interface moves to English: the cards re-resolve,
+        // the chip's identity — the Spanish title — names no card under
+        // the new language, and the chip keeps the title it was pressed
+        // with. (The old raw-id compare re-titled the chip from the FIRST
+        // id-less card — a chip wearing another card's name; an
+        // implementation that re-titles from the card's own EN title
+        // fails here too.)
+        vm.currentLocale = 'en';
+        vm.applyQuickHelpButtons();
+        expect(vm.quickHelpTitleFor(chip, 'en')).toBe('Dos');
+      });
+
+      it('a title identity cannot be checked while the hierarchy is down — the scope refuses rather than choosing', async () => {
+        const serviceTreeService = require('../../services/serviceTreeService');
+        // The tree is down at the mount and down again at the restore's
+        // bounded retry; each failure settles.
+        serviceTreeService.getAllCategories
+          .mockRejectedValueOnce(new Error('hierarchy down'))
+          .mockRejectedValueOnce(new Error('hierarchy down'));
+
+        const wrapper = await mountWithButtons([{ title: 'Crops', serviceLabels: ['Tomato'] }]);
+        const vm = wrapper.vm;
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Crops']
+        });
+        await vm.loadExistingConversation('c1');
+
+        // Whether 'Crops' is also a sidebar label is unknowable with the
+        // tree down, and the restore does not choose: the scope is
+        // refused visibly, like a tag that names nothing.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.selectedContextItems[0].identityRefused).toBe(true);
+        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
       });
     });
 

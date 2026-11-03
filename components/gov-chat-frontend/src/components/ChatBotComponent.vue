@@ -2143,19 +2143,33 @@ export default {
       // card the user pressed rather than keeping the other one's scope.
       const pressedIdentity = quickHelpIdentityOf(rawOption);
       const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
-      const existingIdx = this.selectedContextItems.findIndex(
-        (item) =>
-          item.source === QUICK_HELP_SOURCE &&
-          quickHelpIdentityOf(item) === pressedIdentity &&
+      const existingIdx = this.selectedContextItems.findIndex((item) => {
+        if (item.source !== QUICK_HELP_SOURCE) return false;
+        if (quickHelpIdentityOf(item) === pressedIdentity) {
           // An identity TWO cards claim cannot be told apart by it alone:
           // the card's own fingerprint can (its title and its declared
           // labels). Two cards indistinguishable in every way are one
           // card to the user — the repeat press stays a no-op instead of
           // asking the question twice or keeping the other card's scope.
-          (!identityIsAmbiguous ||
+          return (
+            !identityIsAmbiguous ||
             (item.service === rawOption.service &&
-              JSON.stringify(item.serviceLabels || []) === JSON.stringify(rawOption.serviceLabels || [])))
-      );
+              JSON.stringify(item.serviceLabels || []) === JSON.stringify(rawOption.serviceLabels || []))
+          );
+        }
+        // A card WITHOUT an id carries no identity that survives a
+        // language switch — its title is its identity, and the title
+        // changes with the language. The SCOPE it declares is what says
+        // "this is the card I pressed": the English labels and the
+        // category, the locale-independent fields. Without this, the
+        // repeat press of the same tile re-installs the chip and asks
+        // its hidden prompt twice.
+        return (
+          rawOption.id == null &&
+          (item.serviceLabels || []).join('|') === (rawOption.serviceLabels || []).join('|') &&
+          (item.category || 'general') === (rawOption.category || 'general')
+        );
+      });
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
@@ -2790,8 +2804,13 @@ export default {
             // one. An ID identity is opaque: it names a card and nothing
             // else, so the card keeps the precedence the id-only lookup
             // always had.
+            // And when the hierarchy could not be consulted at all, the
+            // question has no answer: the sidebar branch refuses for the
+            // same reason, so the title identity refuses with it instead
+            // of quietly choosing the card.
             const namesALabel = this.enLabelDisplayNames.has(tag);
-            if (ambiguous || (button && !button.id && namesALabel)) {
+            const hierarchyUsable = this.serviceCategoriesStatus === 'loaded';
+            if (ambiguous || (button && !button.id && (namesALabel || !hierarchyUsable))) {
               // The tag names NO card it can be restored as. The scope
               // cannot be carried: the send refuses it visibly, the way
               // a tag that names nothing is refused.

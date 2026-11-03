@@ -2287,6 +2287,20 @@ services:
       retries: 10
       start_period: 120s
     deploy:
+      # SINGLE-REPLICA CONTRACT (#1247): keep dataprep at exactly ONE replica.
+      # `docker service scale ...=2` and rolling `docker service update` both
+      # silently break correctness — no error is raised anywhere:
+      # - the in-memory active_ingestion_tasks registry (ingest 409
+      #   idempotency, kill_ingest, task_status) is per-process — a second
+      #   replica 404s/misses tasks owned by the first;
+      # - boot-time recovery releases ALL doc-repo rows stuck in 'Ingesting'
+      #   except the booting replica's OWN live tasks (excludeFileIds) — a
+      #   second booting replica releases a live ingest on the first and the
+      #   re-ingest guard accepts the re-kick → the same file ingests twice;
+      # - the ingest flock slot pool lives in the container's own /tmp —
+      #   slots are not shared across replicas.
+      # A multi-replica-safe (Redis/ArangoDB-backed) registry is a separate,
+      # much larger effort — do not scale this service until it exists.
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:

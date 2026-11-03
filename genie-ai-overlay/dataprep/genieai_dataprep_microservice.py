@@ -780,6 +780,19 @@ async def retract_file(payload: DocRepoRetractPayload):
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     logger.info("GENIE Dataprep Microservice is starting...")
+    # SINGLE-REPLICA CONTRACT (#1247): every replica logs this at boot, so a
+    # deployment scaled beyond one replica shows N copies of it in the logs
+    # (VictoriaLogs) — the only signal the service itself can emit; it has no
+    # access to the Swarm task count. The per-process behaviours named in the
+    # docker-compose.yaml deploy block (active_ingestion_tasks registry,
+    # boot-time stuck-'Ingesting' recovery, /tmp flock slot pool) are only
+    # correct while exactly ONE dataprep replica runs.
+    logger.warning(
+        "dataprep assumes exactly ONE replica (deploy.replicas in docker-compose.yaml): "
+        "the ingestion task registry, the stuck-'Ingesting' startup recovery and the "
+        "flock ingest slot pool are per-process. Scaling beyond 1 replica breaks them "
+        "silently — double ingests, cross-replica status release."
+    )
     base.create_upload_folder(upload_folder)
     app = base.opea_microservices["opea_service@dataprep"]
 

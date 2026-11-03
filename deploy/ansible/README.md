@@ -346,6 +346,15 @@ Set in `group_vars/<env>/vars.yml`:
 | `dataprep_chunk_overlap` | `50` | Overlap between chunks (characters) |
 | `dataprep_max_concurrent_batches` | `1` | Max concurrent processing batches |
 
+> **Single-replica contract (#1247):** the dataprep service must run exactly ONE
+> replica. Its ingestion task registry (ingest 409 idempotency, `kill_ingest`,
+> `task_status`), the boot-time stuck-`Ingesting` recovery and the flock ingest
+> slot pool are all per-process. Scaling beyond one replica (`docker service
+> scale`, or editing `replicas` in the compose deploy block) or a rolling
+> `docker service update` booting a replacement while an ingest is in flight
+> breaks them silently — double ingests and cross-replica status release. Do
+> not scale dataprep until a multi-replica-safe (shared-state) registry exists.
+
 ### Label Selector Prompt
 
 | Variable | Default | Description |

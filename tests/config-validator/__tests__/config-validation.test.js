@@ -2471,10 +2471,17 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // literal here; it matches the shape and is rejected by the detector,
   // while a derived garbage path fails the existence stat — either way the
   // call is gated loud, never silently consumed.
-  const LIT_SRC = '\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`(?:[^`\\\\]|\\\\.)*`';
-  // Same fragment for RELATIVE specifiers: the leading `.` sits inside the
-  // quotes (it is the first character of the specifier string value).
-  const DOT_LIT_SRC = '\'\\.(?:[^\'\\\\]|\\\\.)*\'|"\\.(?:[^"\\\\]|\\\\.)*"|`\\.(?:[^`\\\\]|\\\\.)*`';
+  const LIT_ARM = (q) => `${q}(?:[^${q}\\\\]|\\\\.)*${q}`;
+  const LIT_SRC = ["'", '"', '`'].map(LIT_ARM).join('|');
+  // The leading `.` sits inside the quotes (it is the first character of
+  // the specifier string value), so it is inserted after each arm's
+  // opening delimiter — derived, never a second hand-maintained copy.
+  const DOT_LIT_SRC = ["'", '"', '`']
+    .map((q) => {
+      const arm = LIT_ARM(q);
+      return arm.slice(0, 1) + '\\.' + arm.slice(1);
+    })
+    .join('|');
   // Node resolves the STRING VALUE, not the source text: escapes written in
   // the literal ('./it\'s.js') are already resolved before require runs.
   const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
@@ -2517,8 +2524,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const queue = [];
     // One enqueue path for both consumption shapes: the visited set (the
     // sources map) doubles as the cycle guard, and the read happens once.
+    // Non-JS consumed files (a JSON fixture a require or join lands on)
+    // still count as consumption — the caller adds their glob — but carry
+    // no JS to walk, and running the #1325 detector over data-file prose
+    // would only fabricate findings.
     const visitFile = (resolved) => {
       if (sources.has(resolved)) return;
+      if (!/\.[cm]?js$/.test(resolved)) return;
       sources.set(resolved, io.read(resolved));
       queue.push(resolved);
     };
@@ -2928,6 +2940,32 @@ describe('e2e merge-train changes filters (#1264)', () => {
       // The escape must be RESOLVED, not carried: the unescape gate below
       // mutates UNESCAPE away and expects exactly this file to go missing.
       expect(derived.files.map((f) => f.file)).toContain("tests/e2e/lib/it's.js");
+    });
+
+    test('a non-relative specifier is not derived even when a same-named file exists', () => {
+      const tree = {
+        'tests/e2e/documents/x.spec.js': "const p = require('helpers');",
+        'tests/e2e/documents/helpers.js': 'module.exports = {};'
+      };
+      const derived = deriveConsumed(
+        [{ file: 'tests/e2e/documents/x.spec.js', source: tree['tests/e2e/documents/x.spec.js'] }],
+        memIo(tree)
+      );
+      expect(derived.globs).toEqual([]);
+      expect(derived.files).toHaveLength(1);
+    });
+
+    test('a join landing on a non-JS file adds the glob but is not walked or scanned', () => {
+      const tree = {
+        'tests/e2e/documents/x.spec.js': "const e = path.join(__dirname, 'expected.json');",
+        'tests/e2e/documents/expected.json': '{ "note": "mention require(x) here" }'
+      };
+      const derived = deriveConsumed(
+        [{ file: 'tests/e2e/documents/x.spec.js', source: tree['tests/e2e/documents/x.spec.js'] }],
+        memIo(tree)
+      );
+      expect(derived.globs).toEqual(['tests/e2e/documents/**/*']);
+      expect(derived.files).toHaveLength(1);
     });
 
     test('a directory-index require resolves through the index.js rule', () => {

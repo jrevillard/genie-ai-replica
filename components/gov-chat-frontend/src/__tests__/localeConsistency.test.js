@@ -112,15 +112,27 @@ describe('Locale consistency', () => {
     // An outage of the knowledge hierarchy is NOT a configuration
     // problem — its caption must not open with the lead the three
     // configuration captions share (the localized text before the first
-    // colon; zh uses the full-width colon). The lead is DERIVED per
-    // locale from a sibling caption, so a reword of the shared lead
-    // keeps this green while an unavailable caption regressing onto it
-    // goes red in exactly the locale that regressed.
-    const bad = localeFiles.filter((locale) => {
+    // colon; zh uses the full-width colon). Both halves are checked per
+    // locale: the three configuration captions still SHARE one lead
+    // (else the derived reference is meaningless), and the outage
+    // caption does not open with it — a regression names the locale.
+    const bad = [];
+    for (const locale of localeFiles) {
       const chatbot = getLocaleData(locale).chatbot;
-      const configLead = chatbot.quickHelpLabelGone.split(/[:：]/)[0];
-      return chatbot.quickHelpScopeUnavailable.startsWith(configLead);
-    });
+      const leadOf = (s) => s.split(/[:：]/)[0];
+      const configLeads = [
+        chatbot.quickHelpLabelGone,
+        chatbot.quickHelpCategoryGone,
+        chatbot.quickHelpTitleMissing
+      ].map(leadOf);
+      if (new Set(configLeads).size !== 1) {
+        bad.push(`${locale}: the configuration captions do not share one lead: ${configLeads.join(' | ')}`);
+        continue;
+      }
+      if (chatbot.quickHelpScopeUnavailable.startsWith(configLeads[0])) {
+        bad.push(`${locale}: the outage caption borrows the configuration-problem lead`);
+      }
+    }
     expect(bad).toEqual([]);
   });
 

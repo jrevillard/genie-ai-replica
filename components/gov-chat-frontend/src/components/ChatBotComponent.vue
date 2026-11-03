@@ -558,6 +558,37 @@ function quickHelpContextItem(button) {
   };
 }
 
+// The string-form identity rule (#1290), ONE copy: the tag a Quick Help
+// button saves, and the match rule the dedupe and the restore read. All
+// three call the same pair so they cannot drift — a save writing a tag
+// the dedupe would have collapsed, or a restore accepting a spelling
+// the save no longer produces.
+//
+// The id types that CAN carry an identity are the JSON scalars: a
+// hand-edited configuration can declare an array or an object id, and
+// coercing one (`String([5])` === `'5'`) would dedupe it into — or
+// restore it as — a numeric-5 card the raw `===` kept apart. A
+// non-scalar id declares nothing: it falls back to the title, the same
+// "names no button" verdict the web has always given such tags.
+function isScalarId(id) {
+  return typeof id === 'string' || typeof id === 'number' || typeof id === 'boolean';
+}
+
+// The tag a button saves: the id in its STRING form, the shape the
+// mobile has always written, behind #1244's raw-truthiness gate — a
+// falsy id (0, '', null) keeps the TITLE as the identity.
+function quickHelpTagOf(id, title) {
+  return id && isScalarId(id) ? String(id) : title;
+}
+
+// Whether a saved tag matches a button's id: both sides read as
+// strings, so a mobile-saved '5' matches a numeric 5 the same way an
+// old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
+// card never matches a '0' tag (its identity is the title).
+function quickHelpTagMatches(candidateId, tag) {
+  return Boolean(candidateId) && isScalarId(candidateId) && String(candidateId) === String(tag);
+}
+
 // Tight-list renderer override: chat-tuned model output puts a parent
 // label and its nested sub-list on adjacent lines in the markdown source,
 // but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
@@ -1890,7 +1921,7 @@ export default {
           // mobile's string key collapsed them — one file, two card
           // counts. The falsy gate stays raw (#1244): a card with no
           // truthy id is never a duplicate of anything.
-          if (all.some((b, i) => i < _index && b.id && String(b.id) === String(button.id))) {
+          if (all.some((b, i) => i < _index && quickHelpTagMatches(b.id, button.id))) {
             console.warn(
               `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
             );
@@ -1921,7 +1952,7 @@ export default {
             // conversation restores on both. The RAW truthiness read
             // stays (#1244): a falsy id (0, '', null) keeps the TITLE as
             // the identity.
-            serviceKey: button.id ? String(button.id) : title,
+            serviceKey: quickHelpTagOf(button.id, title),
             textKey: button.title,
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
@@ -2624,9 +2655,7 @@ export default {
             // intact — a raw-0 card never matches a '0' tag (its
             // identity is the title), and a title tag never matches an
             // id-only lookup.
-            const button = this.quickHelpButtons.find(
-              (candidate) => candidate.id && String(candidate.id) === String(tag)
-            );
+            const button = this.quickHelpButtons.find((candidate) => quickHelpTagMatches(candidate.id, tag));
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

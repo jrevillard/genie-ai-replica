@@ -1698,6 +1698,76 @@ describe('ChatBotComponent', () => {
         await vm.loadExistingConversation('c2');
         expect(vm.selectedContextItems[0].source).toBe('quickHelp');
       });
+
+      it('a sidebar tag that spells a numeric button id restores the BUTTON — the mobile precedence', async () => {
+        // A tree service whose EN name is the decimal spelling of a
+        // numeric button id makes '5' a valid tag for BOTH restore
+        // branches. The button lookup runs FIRST on the string forms,
+        // so the button wins — the same first-wins verdict the mobile's
+        // string-keyed restore index gives the same conversation.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+
+        const tree = [{ catKey: '2', name: 'Cinq', nameEN: '5', children: [] }];
+        mockLiveTree(tree);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['5']
+        });
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].service).toBe('Five');
+      });
+
+      it('a non-scalar id declares nothing — it is not collapsed into a scalar twin', async () => {
+        // Coercing an array id would fold `["5"]`/`[5]` into the numeric
+        // 5 card (`String([5]) === '5'`) — a hand-edited config's garbage
+        // id would steal — or restore as — a real card's identity. A
+        // non-scalar id declares nothing: it keeps its own card and
+        // saves the title, the same "names no button" verdict such tags
+        // have always gotten on restore.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] },
+                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] }
+                ]
+              }
+            }
+          }
+        });
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons).toHaveLength(2);
+        expect(vm.quickHelpButtons[0].service).toBe('Array');
+        // The array card saves its TITLE — not a tag that collides with
+        // the numeric card's '5'.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Array');
+        expect(vm.quickHelpButtons[1].serviceKey).toBe('5');
+      });
     });
 
     it('restores a sidebar scope as its EN label when the tree confirms it', async () => {

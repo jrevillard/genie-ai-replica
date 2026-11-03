@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The OKF knowledge-base documentation ships on the docs site** — the architecture overview, deployment/configuration guides (OKF variables, access control, the OKF Studio walkthrough) and the full ADR series behind the OKF pillar that landed dark in the previous releases. The feature itself remains disabled by default (`OKF_ENABLED=0`); the flip is a per-deployment decision.
 - **dataprep logs its single-replica contract at boot.** Every dataprep replica emits a WARNING line at startup stating that scaling beyond one replica silently breaks ingestion (per-process task registry, boot-time recovery, slot pool). The line is always-on: on a healthy deployment it appears once per boot/restart. Detection guidance for a mis-scaled deployment is in the scaling docs.
+
 ### Changed
 
 - **The knowledge hierarchy write endpoints now reject a translation entry they cannot store instead of ignoring it.** An entry that does not carry a language code and a translation now answers `400` with the reason; the accepted payload is unchanged, each entry still carries `languageCode` and `translation`.

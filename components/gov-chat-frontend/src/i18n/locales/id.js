@@ -1307,7 +1307,7 @@ export default {
     quickHelpTitleMissing:
       'Masalah konfigurasi: tombol ini tidak memiliki judul dalam bahasa ini. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
     quickHelpScopeUnavailable:
-      'Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.',
+      'Sementara tidak tersedia: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.',
     scopeNotNameable:
       'Masalah konfigurasi: cakupan yang dipilih tidak memiliki nama Inggris dalam hierarki pengetahuan, sehingga cakupan kueri tidak dapat ditentukan. Kueri tidak dikirim.',
     placeholder: 'Ketik pertanyaan Anda di sini...',

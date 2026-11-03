@@ -205,6 +205,34 @@ async function createChatBotWrapperAsync(tree, storeOverrides = {}) {
   return wrapper;
 }
 
+// One stubs block for every mount factory in this file.
+function chatbotStubs() {
+  return {
+    ChatResponseFeedbackDialog: true,
+    ModalDialog: true,
+    RightSideBarComponent: true,
+    ConfirmDialog: true,
+    DsPill: true,
+    DsButton: {
+      template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+      props: ['disabled', 'variant', 'small', 'tag']
+    },
+    DsCard: true,
+    DsInput: {
+      template:
+        '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @keydown.enter="$emit(\'enter\')" />',
+      props: ['modelValue', 'placeholder', 'disabled', 'type'],
+      emits: ['update:modelValue', 'enter']
+    },
+    DsSelect: true,
+    Brain: true,
+    Loader2: true,
+    Plus: true,
+    Save: true,
+    FileText: true
+  };
+}
+
 function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderStubDefaultSlot = false } = {}) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
@@ -221,30 +249,7 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderSt
         // the component's locale watchers run.
         $i18n: reactive({ locale: 'en' })
       },
-      stubs: {
-        ChatResponseFeedbackDialog: true,
-        ModalDialog: true,
-        RightSideBarComponent: true,
-        ConfirmDialog: true,
-        DsPill: true,
-        DsButton: {
-          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-          props: ['disabled', 'variant', 'small', 'tag']
-        },
-        DsCard: true,
-        DsInput: {
-          template:
-            '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @keydown.enter="$emit(\'enter\')" />',
-          props: ['modelValue', 'placeholder', 'disabled', 'type'],
-          emits: ['update:modelValue', 'enter']
-        },
-        DsSelect: true,
-        Brain: true,
-        Loader2: true,
-        Plus: true,
-        Save: true,
-        FileText: true
-      }
+      stubs: chatbotStubs()
     }
   });
 }
@@ -1557,12 +1562,11 @@ describe('ChatBotComponent', () => {
 
     describe('a falsy JSON id — the cross-platform identity contract', () => {
       // A hand-edited configuration can declare `"id": 0` or `false`.
-      // The web's identity rule (`button.id || title`) tests the RAW
-      // value's truthiness; the mobile must read the same rule, or the
-      // two platforms save different tags for the same card and no
-      // cross-platform restore matches. These tests pin the WEB half of
-      // the contract (the mobile's live beside the mobile identity
-      // rules); the web's own behaviour here is unchanged.
+      // The identity rule tests the RAW value's truthiness (#1244): a
+      // falsy id means the TITLE is the identity, on both platforms.
+      // These tests pin the WEB half of that contract; the mobile's
+      // live beside the mobile identity rules.
+      afterEach(resetQuickHelpButtons);
       const falsyIdConfig = {
         features: {
           chat: {
@@ -1642,7 +1646,7 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].unresolved).toBe(true);
       });
 
-      it('saves and restores a numeric id RAW — in its own JSON type only', async () => {
+      it('saves the STRING tag the mobile saves for a numeric id, and restores both spellings', async () => {
         const loadConfig = require('../../config-loader').default;
         loadConfig.mockResolvedValue({
           features: {
@@ -1659,31 +1663,122 @@ describe('ChatBotComponent', () => {
         const vm = wrapper.vm;
         await vm.loadQuickHelpButtons();
 
-        // The identity is the RAW number — not a stringified '5'.
-        expect(vm.quickHelpButtons[0].serviceKey).toBe(5);
+        // The identity is the id's STRING form at the save/restore
+        // boundary: the shape the mobile writes, so a saved conversation
+        // restores on both platforms.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
 
         const chatHistoryService = require('../../services/chatHistoryService');
-        // The web's own tag (the raw number) restores.
+        // The mobile's stringified tag restores — the cross-platform
+        // case this boundary exists for.
         chatHistoryService.getConversation.mockResolvedValueOnce({
           _key: 'c1',
           title: 'Saved chat',
           messages: [],
-          tags: [5]
+          tags: ['5']
         });
         await vm.loadExistingConversation('c1');
         expect(vm.selectedContextItems[0].source).toBe('quickHelp');
 
-        // The mobile's stringified tag cannot — the one-way break of the
-        // same root cause, tracked separately from #1244: a mobile-saved
-        // numeric-id conversation restores unscoped here.
+        // An OLD conversation that saved the raw number still restores:
+        // the stringified compare keeps the pre-existing web tags
+        // readable.
         chatHistoryService.getConversation.mockResolvedValueOnce({
           _key: 'c2',
           title: 'Saved chat 2',
           messages: [],
-          tags: ['5']
+          tags: [5]
         });
         await vm.loadExistingConversation('c2');
-        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+      });
+
+      it('a sidebar tag that spells a numeric button id restores the BUTTON, not a sidebar scope', async () => {
+        // The button lookup runs first, so a tag that spells a numeric
+        // id restores the button whose id it spells.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+
+        const tree = [{ catKey: '2', name: 'Cinq', nameEN: '5', children: [] }];
+        mockLiveTree(tree);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['5']
+        });
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].service).toBe('Five');
+      });
+
+      it('a non-scalar id declares nothing — it is not collapsed into a scalar twin', async () => {
+        // Coercing an array id would fold `["5"]`/`[5]` into the numeric
+        // 5 card (`String([5]) === '5'`) — a hand-edited config's garbage
+        // id would steal — or restore as — a real card's identity. A
+        // non-scalar id declares nothing: it keeps its own card and
+        // saves the title, the same "names no button" verdict such tags
+        // have always gotten on restore.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] },
+                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] }
+                ]
+              }
+            }
+          }
+        });
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons).toHaveLength(2);
+        expect(vm.quickHelpButtons[0].service).toBe('Array');
+        // The array card saves its TITLE — not a tag that collides with
+        // the numeric card's '5'.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Array');
+        expect(vm.quickHelpButtons[1].serviceKey).toBe('5');
+
+        // The same config in the other order: the scalar gate covers
+        // BOTH sides of the dedupe compare, so the array card is not
+        // dropped as a "duplicate" of the numeric one either way.
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] },
+                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] }
+                ]
+              }
+            }
+          }
+        });
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons).toHaveLength(2);
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
+        expect(vm.quickHelpButtons[1].serviceKey).toBe('Array');
       });
     });
 
@@ -3226,6 +3321,38 @@ describe('ChatBotComponent', () => {
       // a click would put on the wire.
       expect(vm.quickHelpButtons[0].service).toBe('First');
       expect(vm.quickHelpButtons[0].serviceLabels).toEqual(['Births']);
+    });
+
+    it('two cards whose ids differ only in JSON type keep ONE — the string key', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A hand-edited configuration can declare the "same" id in two
+      // JSON types (`5` and `"5"`). The raw `===` dedupe kept BOTH cards
+      // while the mobile's string key collapsed them — one file, two
+      // card counts — and both cards would now stringify to the SAME
+      // conversation tag. The dedupe keys on the string form: one card,
+      // the first, on both platforms.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 5, title: { en: 'Numeric' }, category: '2', serviceLabels: ['Births'] },
+                { id: '5', title: { en: 'String' }, category: '2', serviceLabels: ['No Such Service'] }
+              ]
+            }
+          }
+        }
+      };
+
+      vm.applyQuickHelpButtons();
+
+      expect(vm.quickHelpButtons).toHaveLength(1);
+      expect(vm.quickHelpButtons[0].service).toBe('Numeric');
+      // The surviving card saves the string tag — the one shape both
+      // platforms write for a numeric id.
+      expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
     });
 
     it('a hidden card sharing an id never lends its title to the surviving chip', async () => {
@@ -5163,6 +5290,47 @@ describe('ChatBotComponent', () => {
       expect(card.attributes('style') || '').not.toContain('--qh-bg');
     });
   });
+
+  describe('Quick Help grid card render', () => {
+    const iconButton = {
+      id: 'civil',
+      title: { en: 'Apply for ID' },
+      icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+      category: null
+    };
+
+    afterEach(resetQuickHelpButtons);
+
+    it('renders what the configuration names: the resolved title and the icon', async () => {
+      // The #1124 regression class, web half: a grid read re-pointed at a
+      // key the parse does not populate renders a BLANK card while every
+      // state test stays green. These are the widget-level reads — what
+      // the card SHOWS, not the state behind it.
+      const wrapper = await mountWithButtons([iconButton], { renderStubDefaultSlot: true });
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      // The label is the RESOLVED title (button.service), not a raw key.
+      expect(card.find('.quick-help-text').text()).toBe('Apply for ID');
+      // The icon binds the configured asset.
+      expect(card.find('img.quick-help-icon').attributes('src')).toBe('/config/quickhelp/identity-civil.svg');
+    });
+
+    it('a healthy card without a configured icon renders no broken-state icon', async () => {
+      // An unconfigured icon is not a BROKEN card: the scope verdict (the
+      // only thing that swaps in the error icon) does not read the icon.
+      const wrapper = await mountWithButtons(
+        [{ id: 'no-icon', title: { en: 'No Icon' }, icon: undefined, category: null }],
+        { renderStubDefaultSlot: true }
+      );
+
+      const card = wrapper.find('.quick-help-item');
+      expect(card.exists()).toBe(true);
+      expect(card.classes()).not.toContain('config-error');
+      expect(wrapper.find('.config-error-icon').exists()).toBe(false);
+      expect(card.find('.quick-help-text').text()).toBe('No Icon');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -5198,25 +5366,7 @@ function createChatBotWrapperWithI18n(
   return mount(ChatBotComponent, {
     global: {
       plugins: [store, i18n],
-      stubs: {
-        ChatResponseFeedbackDialog: true,
-        ModalDialog: true,
-        RightSideBarComponent: true,
-        ConfirmDialog: true,
-        DsPill: true,
-        DsButton: {
-          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-          props: ['disabled', 'variant', 'small', 'tag']
-        },
-        DsCard: true,
-        DsInput: true,
-        DsSelect: true,
-        Brain: true,
-        Loader2: true,
-        Plus: true,
-        Save: true,
-        FileText: true
-      }
+      stubs: chatbotStubs()
     }
   });
 }

@@ -2464,24 +2464,19 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // ONE string-literal policy for the whole guard: a quoted literal whose
   // content may carry the OTHER quote styles and backslash escapes, never
   // an unescaped copy of its own delimiter. The derivation regexes and the
-  // #1325 detector below all consume this fragment — a single policy point,
-  // because the review that surfaced the interpolated-join gap found the
-  // quote/interpolation rules had already drifted between independently
-  // maintained copies. Backtick interpolation (${...}) is NOT part of a
-  // literal here; it matches the shape and is rejected by the detector,
-  // while a derived garbage path fails the existence stat — either way the
-  // call is gated loud, never silently consumed.
-  const LIT_ARM = (q) => `${q}(?:[^${q}\\\\]|\\\\.)*${q}`;
-  const LIT_SRC = ["'", '"', '`'].map(LIT_ARM).join('|');
+  // #1325 detector below all consume this fragment — the derivation and
+  // the detector must agree on the literal shape set, or a call shape one
+  // accepts and the other misses re-opens a silent coverage hole. Backtick
+  // interpolation (${...}) is NOT part of a literal here; it matches the
+  // shape and is rejected by the detector, while a derived garbage path
+  // fails the existence stat — either way the call is gated loud, never
+  // silently consumed.
+  const LIT_ARM = (q, dot) => `${q}${dot ? '\\.' : ''}(?:[^${q}\\\\]|\\\\.)*${q}`;
+  const LIT_SRC = ["'", '"', '`'].map((q) => LIT_ARM(q)).join('|');
   // The leading `.` sits inside the quotes (it is the first character of
   // the specifier string value), so it is inserted after each arm's
   // opening delimiter — derived, never a second hand-maintained copy.
-  const DOT_LIT_SRC = ["'", '"', '`']
-    .map((q) => {
-      const arm = LIT_ARM(q);
-      return arm.slice(0, 1) + '\\.' + arm.slice(1);
-    })
-    .join('|');
+  const DOT_LIT_SRC = ["'", '"', '`'].map((q) => LIT_ARM(q, true)).join('|');
   // Node resolves the STRING VALUE, not the source text: escapes written in
   // the literal ('./it\'s.js') are already resolved before require runs.
   const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
@@ -2518,7 +2513,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // inside the call likewise. Chains anchored on __filename or
     // import.meta.url are not derived — no spec uses them; they belong to
     // the same documented-limits family.
-    const joinRe = new RegExp('path\\.(?:join|resolve)\\(\\s*__dirname((?:\\s*,\\s*(?:' + LIT_SRC + '))+)\\s*\\)', 'g');
+    const joinRe = new RegExp(
+      'path\\.(?:join|resolve)\\s*\\(\\s*__dirname((?:\\s*,\\s*(?:' + LIT_SRC + '))+)\\s*\\)',
+      'g'
+    );
+    const segmentRe = new RegExp(LIT_SRC, 'g');
     const globs = new Set();
     const sources = new Map();
     const queue = [];
@@ -2527,10 +2526,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Non-JS consumed files (a JSON fixture a require or join lands on)
     // still count as consumption — the caller adds their glob — but carry
     // no JS to walk, and running the #1325 detector over data-file prose
-    // would only fabricate findings.
+    // would only fabricate findings. The JS spellings mirror the testMatch
+    // shape set: Playwright transpiles jsx/tsx helpers like js ones.
     const visitFile = (resolved) => {
       if (sources.has(resolved)) return;
-      if (!/\.[cm]?js$/.test(resolved)) return;
+      if (!/\.[cm]?[jt]sx?$/.test(resolved)) return;
       sources.set(resolved, io.read(resolved));
       queue.push(resolved);
     };
@@ -2549,7 +2549,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
         visitFile(resolved);
       }
       for (const match of source.matchAll(joinRe)) {
-        const segments = [...match[1].matchAll(new RegExp(LIT_SRC, 'g'))].map((m) => UNESCAPE(m[0]));
+        const segments = [...match[1].matchAll(segmentRe)].map((m) => UNESCAPE(m[0]));
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
         const st = io.stat(resolved);
         if (!st) continue;
@@ -2604,7 +2604,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
         findings.push('non-literal specifier in a require/import call');
       }
     }
-    const dirnameStartRe = /path\.(?:join|resolve)\(\s*__dirname/g;
+    const dirnameStartRe = /path\.(?:join|resolve)\s*\(\s*__dirname/g;
     const SEGMENT = new RegExp('^\\s*,\\s*(' + LIT_SRC + ')');
     for (const match of source.matchAll(dirnameStartRe)) {
       let rest = source.slice(match.index + match[0].length);
@@ -2622,11 +2622,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
   // directory boundary, a sibling `X-v2/` is not covered — an exact entry
   // stays exact). Playwright's default testMatch glob
-  // `*.(spec|test).?(c|m)[jt]s?(x)` accepts an optional .cjs/.mjs module
-  // prefix AND s-less spellings (.spec.j, .test.mj, …) — the selection
-  // regex below mirrors that shape set exactly (the config test pins that
-  // the default is still in force), so every spelling Playwright would run
-  // counts as executed.
+  // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
+  // t, then a REQUIRED s (the trailing ? quantifies only the x), then
+  // optional x — the selection regex below mirrors that shape set exactly
+  // (the config test pins that the default is still in force), so every
+  // spelling Playwright would run counts as executed and none it would
+  // not.
   const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
@@ -2639,7 +2640,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // units below pin the boundary and the testMatch shapes on synthetic
   // listings, the real-tree pin above anchors them to the actual invocation.
   const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => /\.(?:spec|test)\.[cm]?[jt]s?x?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
+    files.filter((f) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
@@ -2727,34 +2728,20 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
     // The selection regex must accept exactly the shape set of Playwright's
     // default testMatch glob `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m
-    // module prefix, then j or t, then optional s, then optional x — which
-    // includes s-less spellings (.spec.j, .test.mj, …) a spec could use and
-    // Playwright would still run. A spelling Playwright runs but the
-    // selection drops would execute in the real invocation while staying
-    // invisible to the derivation.
-    test.each([
-      '.j',
-      '.js',
-      '.jx',
-      '.jsx',
-      '.ts',
-      '.tsx',
-      '.t',
-      '.tx',
-      '.mjs',
-      '.cjs',
-      '.mts',
-      '.cts',
-      '.mj',
-      '.mtx',
-      '.cjx',
-      '.ctx',
-      '.mt'
-    ])('spelling x.spec%s matches the default testMatch shape set', (ext) => {
-      expect(scanTargets([`tests/e2e/chatbot/x.spec${ext}`], GLOBS)).toEqual([`tests/e2e/chatbot/x.spec${ext}`]);
-    });
+    // module prefix, then j or t, then the literal s (required — the `?`
+    // quantifies only the trailing x), then optional x. A spelling
+    // Playwright runs but the selection drops would execute in the real
+    // invocation while staying invisible to the derivation; a spelling the
+    // selection accepts but Playwright does not run would derive an anchor
+    // demand for files that never execute.
+    test.each(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts'])(
+      'spelling x.spec%s matches the default testMatch shape set',
+      (ext) => {
+        expect(scanTargets([`tests/e2e/chatbot/x.spec${ext}`], GLOBS)).toEqual([`tests/e2e/chatbot/x.spec${ext}`]);
+      }
+    );
 
-    test.each(['', '.m', '.mx', '.cx', '.jm', '.jst', '.jstx', '.mjx2', '.bak', '.js.bak', '.spec'])(
+    test.each(['', '.j', '.jx', '.t', '.tx', '.mj', '.mtx', '.cjx', '.ctx', '.mt', '.m', '.mx', '.cx', '.jm'])(
       'spelling x.spec%s falls outside the default testMatch shape set',
       (ext) => {
         expect(scanTargets([`tests/e2e/chatbot/x.spec${ext}`], GLOBS)).toEqual([]);
@@ -2790,9 +2777,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
     });
 
     // A closing */ on a line that starts with // must clear the block
-    // state: with the whole-line filter running first, the closer never
-    // reached the block handler and every later line collapsed to '' — the
-    // config pins above would false-pass on drifted text.
+    // state — otherwise every later line collapses to '' and the config
+    // pins above read stripped text that hides the drift they check for.
     test('a block closed by a // line still clears the block state', () => {
       expect(
         stripJsComments(['const a = 1; /* drifted:', '// end */', "testDir: './tests/e2e'", '// testMatch'])
@@ -2865,7 +2851,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // refactor to make them reachable.
     const memIo = (tree) => ({
       stat: (candidate) => (tree[candidate] ? { isFile: () => true, isDirectory: () => false } : null),
-      read: (file) => tree[file]
+      read: (file) => {
+        if (!tree[file]) throw new Error(`read outside the synthetic tree: ${file}`);
+        return tree[file];
+      }
     });
 
     // One row per specifier spelling the scanner accepts; the next accepted
@@ -3049,6 +3038,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['concatenated require', "const h = require('../helpers/' + name);"],
       ['variable dynamic import', 'const y = import(dynamicName);'],
       ['interpolated join segment', "const d = path.join(__dirname, '..', locale);"],
+      ['spaced join with a variable segment', 'const d = path.join (__dirname, locale);'],
       ['interpolated backtick join segment', 'const d = path.join(__dirname, `../${locale}`);'],
       ['call argument after a literal join segment', "const d = path.join(__dirname, '..', dirName());"],
       // Over-capture is deliberate: a string merely mentioning a call shape

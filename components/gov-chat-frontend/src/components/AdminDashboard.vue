@@ -420,7 +420,12 @@
                       <div class="form-actions">
                         <DsButton
                           variant="primary"
-                          :disabled="!hierarchyForm.nameEN || isSavingHierarchyItem || isTranslationsLoading"
+                          :disabled="
+                            !hierarchyForm.nameEN ||
+                            isSavingHierarchyItem ||
+                            isTranslationsLoading ||
+                            translationsLoadFailed
+                          "
                           @click="saveHierarchyItem"
                         >
                           {{ translate('admin.buttons.save', 'Save') }}
@@ -1785,6 +1790,12 @@ export default {
 
       // State for loading translations
       isTranslationsLoading: false,
+      // The current edit form's translation load FAILED. The backend's
+      // update path treats `translations: []` as clear-all, so a save from
+      // a form whose rows never loaded would silently wipe every existing
+      // translation. While this is true, Save is disabled and the save
+      // action refuses to run.
+      translationsLoadFailed: false,
       // Dedicated to the hierarchy form: the dashboard-wide isLoading is
       // shared by unrelated operations, so gating the Save button on it
       // disabled the form during a log/security scan and let one
@@ -3211,6 +3222,7 @@ export default {
 
       // Step 2: Fetch the translations asynchronously
       this.isTranslationsLoading = true;
+      this.translationsLoadFailed = false;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
@@ -3235,6 +3247,11 @@ export default {
         // Step 4: Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch {
+        // The service layer rethrows failed translation loads (a silent []
+        // here would render an editable empty-rows form whose next save
+        // wipes every existing translation). The form stays open but the
+        // save is blocked until the load succeeds.
+        this.translationsLoadFailed = true;
         this.showNotification(
           this.translate('admin.hierarchy.loadTranslationsError', 'Failed to load translations.'),
           'error'
@@ -3258,6 +3275,7 @@ export default {
 
     closeHierarchyForm() {
       this.hierarchyForm.visible = false;
+      this.translationsLoadFailed = false;
       this.originalHierarchyFormState = null;
     },
 
@@ -3286,6 +3304,20 @@ export default {
     },
 
     async saveHierarchyItem() {
+      // --- 0. LOAD GATE ---
+      // The update path is delete-then-rebuild on the backend: a payload
+      // whose rows came from a FAILED load (effectively []) would be read
+      // as a deliberate clear-all. Creating is safe — nothing exists to
+      // wipe — but an edit must not save until its translations loaded.
+      const isEditMode = this.hierarchyForm.mode === 'editCategory' || this.hierarchyForm.mode === 'editService';
+      if (isEditMode && this.translationsLoadFailed) {
+        this.showNotification(
+          this.translate('admin.hierarchy.translationsNotLoaded', 'Translations not loaded — reload before saving.'),
+          'error'
+        );
+        return;
+      }
+
       // --- 1. VALIDATION ---
       // Normalize rows once: only string lang/text survive (legacy docs can hold
       // nulls or numbers), trimmed, empties dropped. The service layer maps the

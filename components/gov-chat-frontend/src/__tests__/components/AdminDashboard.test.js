@@ -3012,4 +3012,101 @@ describe('round 18 — studio hand-off + selection + theme', () => {
     setItem.mockRestore();
     wrapper.unmount();
   });
+  // -----------------------------------------------------------------------
+  // #1318 — a FAILED translation load must never reach the backend as
+  // `translations: []`: the update path treats [] as clear-all, so the
+  // next save would silently wipe every existing translation.
+  // -----------------------------------------------------------------------
+  describe('translation load-failure gate', () => {
+    function mountEditingService(translations) {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+      mockEventBusEmit.mockClear();
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations,
+        parentId: null
+      };
+      return { wrapper, treeMock };
+    }
+
+    it('saveHierarchyItem refuses to save an edit whose translations failed to load', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.translationsLoadFailed = true;
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).not.toHaveBeenCalled();
+      const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      const errorToast = emissions.find(([, p]) => p.type === 'error');
+      expect(errorToast).toBeTruthy();
+      expect(errorToast[1].message).toBe('Translations not loaded — reload before saving.');
+    });
+
+    it('the gate applies to both edit modes', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.hierarchyForm.mode = 'editCategory';
+      wrapper.vm.translationsLoadFailed = true;
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateCategory).not.toHaveBeenCalled();
+    });
+
+    it('a create is never gated (nothing exists to wipe)', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      treeMock.createService.mockClear();
+      wrapper.vm.hierarchyForm.mode = 'createService';
+      wrapper.vm.hierarchyForm.parentId = 'cat-1';
+      wrapper.vm.translationsLoadFailed = true;
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.createService).toHaveBeenCalledWith('cat-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Nom' }]
+      });
+    });
+
+    it('showEditForm sets the flag when the load rejects and clears it on success', async () => {
+      const treeMock = require('../../services/serviceTreeService');
+      const wrapper = createAdminDashboardWrapper();
+
+      treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('load blip'));
+      await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.translationsLoadFailed).toBe(true);
+
+      treeMock.getServiceTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'Déclaration' }]);
+      await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.translationsLoadFailed).toBe(false);
+
+      wrapper.unmount();
+    });
+
+    it('the Save button is disabled while the failed-load flag holds', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.activeTab = 'hierarchy';
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [],
+        parentId: null
+      };
+      wrapper.vm.translationsLoadFailed = true;
+      await wrapper.vm.$nextTick();
+
+      const saveButton = wrapper.findAll('button').find((b) => b.text().trim() === 'Save');
+      expect(saveButton).toBeTruthy();
+      expect(saveButton.attributes('disabled')).toBeDefined();
+      wrapper.unmount();
+    });
+  });
 });

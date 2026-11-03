@@ -163,9 +163,12 @@ export default {
       const response = await httpService.get(`service-categories/${categoryId}/translations`);
       return response.data || [];
     } catch (error) {
+      // A FAILED load must surface as a rejection, never as []: an empty
+      // array would render an editable empty-rows form and the next save
+      // would wipe every existing translation (the caller treats [] as
+      // clear-all). The edit form catches the rejection and blocks the save.
       console.error(`Error fetching translations for category ${categoryId}:`, error);
-      // Return an empty array on failure so the UI doesn't break
-      return [];
+      throw error;
     }
   },
 
@@ -180,8 +183,9 @@ export default {
       const response = await httpService.get(`service-categories/services/${serviceId}/translations`);
       return response.data || [];
     } catch (error) {
+      // Same contract as getCategoryTranslations: a failed load rejects.
       console.error(`Error fetching translations for service ${serviceId}:`, error);
-      return [];
+      throw error;
     }
   },
 

@@ -160,12 +160,10 @@ describe('serviceTreeService', () => {
       expect(result).toEqual([{ lang: 'FR', text: 'Citoyenneté' }]);
     });
 
-    it('returns [] on API failure', async () => {
+    it('rethrows on API failure (a silent [] would let the next save wipe the translations)', async () => {
       mockGet.mockRejectedValue(new Error('Server error'));
 
-      const result = await serviceTreeService.getCategoryTranslations('cat-1');
-
-      expect(result).toEqual([]);
+      await expect(serviceTreeService.getCategoryTranslations('cat-1')).rejects.toThrow('Server error');
     });
   });
 
@@ -184,12 +182,10 @@ describe('serviceTreeService', () => {
       expect(result).toEqual([{ lang: 'FR', text: 'Passeport' }]);
     });
 
-    it('returns [] on API failure', async () => {
+    it('rethrows on API failure (a silent [] would let the next save wipe the translations)', async () => {
       mockGet.mockRejectedValue(new Error('Server error'));
 
-      const result = await serviceTreeService.getServiceTranslations('svc-1');
-
-      expect(result).toEqual([]);
+      await expect(serviceTreeService.getServiceTranslations('svc-1')).rejects.toThrow('Server error');
     });
   });
 

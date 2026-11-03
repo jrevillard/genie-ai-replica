@@ -253,10 +253,15 @@ helm_install_operator() {
   # its failure: a FULL `helm repo update` exits nonzero when ANY
   # repository in the helm config is unreachable, and under set -e that
   # aborted the whole script mid-run on flaky-egress windows. helm
-  # install refreshes the target index itself, so the scoped update is
-  # a latency optimization, not a correctness step (issue #1378).
-  helm repo update "${repo_name}" >/dev/null 2>&1 \
-    || log "helm repo update ${repo_name} failed (unreachable?) — helm install refreshes the index itself"
+  # install refreshes the target index itself when the cached index is
+  # missing, so the scoped update is a latency optimization, not a
+  # correctness step (issue #1378) — but a STALE cache is only healed by
+  # this update, which is why the failure keeps naming its cause: helm's
+  # own stderr lands in the log line.
+  local err
+  if ! err=$(helm repo update "${repo_name}" 2>&1); then
+    log "helm repo update ${repo_name} failed (unreachable?) — helm install refreshes the index itself; last line: ${err##*$'\n'}"
+  fi
   helm install "${release}" "${repo_name}/${chart}" \
     --version "${version}" \
     --namespace "${ns}" --create-namespace=false \
@@ -416,9 +421,12 @@ install_grafana_operator() {
   log "grafana-operator ${GRAFANA_OPERATOR_VERSION}: helm install"
   helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
   # Same scoped-and-tolerated update as helm_install_operator (issue #1378):
-  # a full update under set -e died on ANY unreachable repo.
-  helm repo update grafana >/dev/null 2>&1 \
-    || log "helm repo update grafana failed (unreachable?) — helm install refreshes the index itself"
+  # a full update under set -e died on ANY unreachable repo; helm's stderr
+  # lands in the log line when it fires.
+  local err
+  if ! err=$(helm repo update grafana 2>&1); then
+    log "helm repo update grafana failed (unreachable?) — helm install refreshes the index itself; last line: ${err##*$'\n'}"
+  fi
   helm install "${release}" grafana/grafana-operator \
     --version "${GRAFANA_OPERATOR_VERSION}" \
     --namespace "${ns}" --create-namespace=false \

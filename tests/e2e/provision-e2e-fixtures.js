@@ -2,7 +2,7 @@
 /**
  * Provision the E2E venue fixtures (testuser, testadmin, testplain).
  *
- * testuser is the primary login user (chat + documents suites); testadmin
+ * testuser is the primary login user (the chat suites); testadmin
  * and testplain serve the admin surface — an admin-role login and a
  * role-less one (the backend gate answers 403 for the latter). The helper
  * converges an existing account (password reset, fixture-health check,

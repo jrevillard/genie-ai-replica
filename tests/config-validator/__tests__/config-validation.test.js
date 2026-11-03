@@ -3283,16 +3283,18 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
     const invocation = section.indexOf('node tests/e2e/provision-e2e-fixtures.js');
-    // Provisioning must run BEFORE the suites — a reorder that leaves the
-    // call present but after the Playwright item runs every spec against
-    // whatever fixtures the realm happens to carry.
-    expect(invocation).toBeGreaterThan(-1);
+    // Named guards: if either anchor line is reworded or removed, the
+    // failure must say so, not masquerade as an ordering violation.
+    if (invocation === -1) {
+      throw new Error('the venue-fixture provisioning invocation is gone from .e2e_web_base');
+    }
     const suites = section.indexOf('npx playwright test');
-    // A named guard: if the invocation line itself is reworded or removed,
-    // the failure must say so, not masquerade as an ordering violation.
     if (suites === -1) {
       throw new Error('the Playwright invocation line was reworded or removed in .e2e_web_base');
     }
+    // Provisioning must run BEFORE the suites — a reorder that leaves the
+    // call present but after the Playwright item runs every spec against
+    // whatever fixtures the realm happens to carry.
     expect(invocation).toBeLessThan(suites);
     // The deleted inline mechanism must not grow back beside the helper:
     // these names existed only in the bash convergence this pin replaced.
@@ -3307,11 +3309,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // The CI venue's email domain is part of the fixture contract (the
     // docs phases and the CI job must agree on it).
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
-    // The documents suites drive ADMIN_ONLY surfaces — the primary login
-    // user must carry the admin realm role. The role is asserted INSIDE
-    // the testuser entry ([^}] cannot cross the object's closing brace),
-    // so dropping testuser's own role line fails even though testadmin's
-    // identical-looking entry would satisfy a bare containment check.
+    // The admin realm role is part of the pinned fixture contract (parity
+    // with the former inline CI assignment; its disposition is #1402). It
+    // is asserted INSIDE the testuser entry ([^}] cannot cross the
+    // object's closing brace), so dropping testuser's own role line fails
+    // even though testadmin's identical-looking entry would satisfy a
+    // bare containment check.
     expect(fixtures).toMatch(/username: 'testuser',[^}]*realmRoles: \['admin'\]/);
     expect(fixtures).toContain("username: 'testadmin'");
     expect(fixtures).toContain("username: 'testplain'");
@@ -3325,15 +3328,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
     // No venue-fixture password literal may reappear beside or after the
-    // fixtures module: the helpers and the spec directories this campaign
-    // converged must derive their credentials from it. Scoped, NOT a
-    // blanket scan: epic2's k1/i1 specs mint tokens for their own
-    // ephemeral self-created users (noroles-e2e, genie2's testuser2) and
-    // legitimately carry their own password literals.
-    const chatbot = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/chatbot.js'), 'utf-8');
-    expect(chatbot).not.toContain('TestPass123!');
-    expect(chatbot).not.toContain('TestAdmin123!');
-    expect(chatbot).not.toContain('TestPlain123!');
+    // fixtures module: the helpers and the spec directories must derive
+    // their credentials from it. Scoped, NOT a blanket scan: epic2's k1/i1
+    // specs mint tokens for their own ephemeral self-created users
+    // (noroles-e2e, genie2's testuser2) and legitimately carry their own
+    // password literals — that directory stays outside the scan until
+    // those specs are consolidated.
     const fixturePasswords = ['TestPass123!', 'TestAdmin123!', 'TestPlain123!'];
     const assertNoFixturePassword = (label, source) => {
       for (const password of fixturePasswords) {
@@ -3342,16 +3342,22 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         }
       }
     };
-    // The helpers beside the fixtures module too — chatbot re-exports, the
+    // The helpers beside the fixtures module — chatbot re-exports, the
     // rest must derive.
     const helpersDir = path.join(ROOT, 'tests/e2e/helpers');
     for (const name of fs.readdirSync(helpersDir)) {
       if (!name.endsWith('.js') || name === 'e2e-fixtures.js') continue;
       assertNoFixturePassword(`helpers/${name}`, fs.readFileSync(path.join(helpersDir, name), 'utf-8'));
     }
-    const specDirs = ['chatbot', 'documents', 'admin', 'epic1', 'epic3'];
+    // The spec directories — okf included (it joins the train in MR2;
+    // its specs create their own users today). A stale entry fails with
+    // a named error instead of a raw ENOENT.
+    const specDirs = ['chatbot', 'documents', 'admin', 'okf', 'epic1', 'epic3'];
     for (const dir of specDirs) {
       const dirPath = path.join(ROOT, 'tests/e2e', dir);
+      if (!fs.existsSync(dirPath)) {
+        throw new Error(`the credential scan lists tests/e2e/${dir}, which no longer exists — update the scan`);
+      }
       for (const name of fs.readdirSync(dirPath)) {
         if (!name.endsWith('.js')) continue;
         assertNoFixturePassword(`${dir}/${name}`, fs.readFileSync(path.join(dirPath, name), 'utf-8'));

@@ -304,7 +304,7 @@ keeps its old address.
 All three venue users are provisioned through one script over the
 `ensureUser` helper (`tests/e2e/helpers/keycloak-admin.js`):
 
-- `testuser` — the primary login user (chat + documents suites). Carries
+- `testuser` — the primary login user (the chat suites). Carries
   the `admin` realm role in parity with the former inline CI assignment;
   the documents suites themselves authenticate as `testadmin`.
 - `testadmin` — the admin-surface login (`tests/e2e/admin/`).

@@ -1324,7 +1324,8 @@ describe('ChatBotComponent', () => {
               buttons: [
                 { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
                 { id: 'flagged', title: 'Flagged', hidden: true, category: '2' },
-                { id: 'plain', title: 'Plain', category: '3' }
+                { id: 'plain', title: 'Plain', category: '3' },
+                { title: { en: 'Titled hidden card' }, hidden: 'yes', category: '4' }
               ]
             }
           }
@@ -1351,6 +1352,9 @@ describe('ChatBotComponent', () => {
       expect(hiddenWarnings.length).toBeGreaterThan(0);
       expect(String(hiddenWarnings[0][0])).toContain('quoted');
       expect(String(hiddenWarnings[0][0])).toContain('string ("false")');
+      // A card with no id is named by its RESOLVED title: the raw title
+      // is a locale map, and the report printed "[object Object]".
+      expect(hiddenWarnings.some((call) => String(call[0]).includes('Titled hidden card'))).toBe(true);
 
       warn.mockRestore();
     });

@@ -1950,8 +1950,12 @@ export default {
           // it REPORTS the typo, because a card that silently vanishes
           // leaves no trace of the configuration mistake that hid it.
           if (button.hidden !== undefined && button.hidden !== null && typeof button.hidden !== 'boolean') {
+            // The button is NAMED in the report: its id when it declares
+            // one, its resolved title otherwise (the raw title is a
+            // locale map, which would print as "[object Object]").
+            const name = button.id || resolveConfigText(button.title, locale) || '(untitled)';
             console.warn(
-              `[ChatBotComponent] Quick Help button "${button.id || button.title}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
+              `[ChatBotComponent] Quick Help button "${name}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
             );
           }
           return !button.hidden;

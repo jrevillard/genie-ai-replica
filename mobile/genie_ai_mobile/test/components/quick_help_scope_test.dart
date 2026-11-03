@@ -2231,7 +2231,7 @@ void main() {
       expect(quickHelpDeclaresScope(button), isTrue);
     });
 
-    test("a raw '0' STRING category declares a scope — JS truthiness", () {
+    test("a raw '0' STRING category declares a category — JS truthiness", () {
       // The falsy set is null/false/0/''; the non-empty STRING '0' is
       // truthy in JavaScript and declares a category on both platforms.
       expect(

@@ -174,7 +174,10 @@ void main() {
             bad.add('$code: no outage caption');
             continue;
           }
-          if (outage.trim().startsWith(configLeads.first.trim())) {
+          // The comparison is case-insensitive: a locale that reworded
+          // only the CASE of the borrowed lead still borrows it.
+          final lead = configLeads.first.trim().toLowerCase();
+          if (outage.trim().toLowerCase().startsWith(lead)) {
             bad.add(
               '$code: the outage caption borrows the configuration-problem lead',
             );

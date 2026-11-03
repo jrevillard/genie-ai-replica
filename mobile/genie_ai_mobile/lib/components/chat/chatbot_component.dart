@@ -43,6 +43,15 @@ typedef _RestoredTitleSource = ({
   String? key,
 });
 
+/// The overlay's broken/healthy split: the diagnosis rows with their
+/// verdicts, and the healthy buttons. ONE spelling — the memo field,
+/// the partition method and the build-site fallback must name the same
+/// shape.
+typedef _QuickHelpPartition = ({
+  List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
+  List<Map<String, dynamic>> healthy,
+});
+
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
   final VoidCallback onRefreshSidebar;
@@ -203,14 +212,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // marker (the same drift marker the buttons' reload tracks). While the
   // overlay is open, every build of the chat screen re-ran the resolver
   // walk per button; with the memo the walk runs when one of those
-  // inputs moves and a rebuild without one is a record read.
-  (List<Map<String, dynamic>>, QuickHelpScopeResolver?, bool, String?)?
-  _quickHelpPartitionKey;
+  // inputs moves and a rebuild without one is a field read — the hit
+  // path compares fields without building anything.
   ({
-    List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
-    List<Map<String, dynamic>> healthy,
+    List<Map<String, dynamic>> buttons,
+    QuickHelpScopeResolver? resolver,
+    bool unavailable,
+    String? locale,
+    _QuickHelpPartition partition,
   })?
-  _quickHelpPartitionCache;
+  _quickHelpPartitionMemo;
 
   // The locale the sidebar scope's title was last re-fetched under — the
   // drift marker the same way _quickHelpButtonsLocale is one, scoped to
@@ -506,34 +517,37 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     widget.onChatStateChanged?.call();
   }
 
-  /// The overlay's broken/healthy split, memoized (see the cache fields
+  /// The overlay's broken/healthy split, memoized (see the memo field
   /// beside the locale marker): the walk runs when the buttons, the
   /// resolver, the outage flag or the locale moved; a rebuild without
-  /// such a move reads the record.
-  ({
-    List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
-    List<Map<String, dynamic>> healthy,
-  })
-  _quickHelpOverlayPartition() {
-    final key = (
-      _quickHelpButtons,
-      _scopeResolver,
-      _treeUnavailable,
-      _quickHelpButtonsLocale,
-    );
-    final cached = _quickHelpPartitionCache;
-    if (cached != null && key == _quickHelpPartitionKey) {
-      return cached;
+  /// such a move reads the record, compared field-wise so the hit path
+  /// builds nothing.
+  _QuickHelpPartition _quickHelpOverlayPartition() {
+    final memo = _quickHelpPartitionMemo;
+    final buttons = _quickHelpButtons;
+    final resolver = _scopeResolver;
+    final unavailable = _treeUnavailable;
+    final locale = _quickHelpButtonsLocale;
+    if (memo != null &&
+        identical(memo.buttons, buttons) &&
+        identical(memo.resolver, resolver) &&
+        memo.unavailable == unavailable &&
+        memo.locale == locale) {
+      return memo.partition;
     }
     final partition = quickHelpPartitionButtons(
-      _quickHelpButtons,
-      (button) => _treeUnavailable
+      buttons,
+      (button) => unavailable
           ? QuickHelpScopeResolver.unavailableScopeFor(button)
-          : (_scopeResolver?.stateFor(button) ??
-                QuickHelpScopeResolver.pending),
+          : (resolver?.stateFor(button) ?? QuickHelpScopeResolver.pending),
     );
-    _quickHelpPartitionKey = key;
-    _quickHelpPartitionCache = partition;
+    _quickHelpPartitionMemo = (
+      buttons: buttons,
+      resolver: resolver,
+      unavailable: unavailable,
+      locale: locale,
+      partition: partition,
+    );
     return partition;
   }
 
@@ -1130,15 +1144,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription = null;
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
-    // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
-    // Either constitutes a context-filtered query. The category id
-    // speaks its own truthiness: '' (the clear's payload) and the
-    // 'general' placeholder name NO scope — the one predicate every
-    // scope rule shares.
-    final hasContext =
-        declaresCategoryScope(_selectedCategoryId) ||
-        _activeServiceLabels.isNotEmpty ||
-        _sidebarServiceLabelsEn.isNotEmpty;
+    // The scope facts this query carries — ONE copy shared with the
+    // fallback path (queryScopeFacts): Quick Help sets
+    // _activeServiceLabels; sidebar sets the category; the category id
+    // speaks its own truthiness ('' and 'general' name NO scope).
+    final facts = queryScopeFacts(
+      categoryId: _selectedCategoryId,
+      categoryNameEn: _selectedCategoryNameEn,
+      serviceLabels: _activeServiceLabels,
+      sidebarServiceLabels: _sidebarServiceLabelsEn,
+    );
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -1146,19 +1161,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sessionId': sessionId,
         if (_currentConversationId != null)
           'conversationId': _currentConversationId,
-        if (hasContext) ...{
+        if (facts.hasContext) ...{
           'messages': messagesForApi,
           'context': {
             // ENGLISH is the SSOT of the filter wire: chunk_labels carry the
             // EN translation, so the query speaks EN. The localized name is
             // display-only.
-            'categoryLabel': _selectedCategoryNameEn.isNotEmpty
-                ? _selectedCategoryNameEn
-                : null,
-            'serviceLabels': mergeServiceLabels(
-              _activeServiceLabels,
-              _sidebarServiceLabelsEn,
-            ),
+            'categoryLabel': facts.categoryLabelEn,
+            'serviceLabels': facts.serviceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
           'contextOption': 'conversation-with-context-labels',
@@ -1382,15 +1392,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final queriesApi = ref.read(queriesApiProvider);
 
-      // The SAME scope predicate the streaming path speaks: a selection
-      // of any shape makes this a conversation-with-context-labels
-      // query, whose payload is the one that carries the labels. The
-      // category id's truthiness is the shared predicate — '' (the
-      // clear's payload) names NO scope.
-      final hasContext =
-          declaresCategoryScope(_selectedCategoryId) ||
-          _activeServiceLabels.isNotEmpty ||
-          _sidebarServiceLabelsEn.isNotEmpty;
+      // The SAME scope facts the streaming path speaks — ONE copy shared
+      // by both send paths (queryScopeFacts): Quick Help sets
+      // _activeServiceLabels; sidebar sets the category; the category id
+      // speaks its own truthiness ('' and 'general' name NO scope).
+      final facts = queryScopeFacts(
+        categoryId: _selectedCategoryId,
+        categoryNameEn: _selectedCategoryNameEn,
+        serviceLabels: _activeServiceLabels,
+        sidebarServiceLabels: _sidebarServiceLabelsEn,
+      );
 
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
@@ -1404,23 +1415,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
-        // The SAME context the streaming path speaks: Quick Help sets
-        // _activeServiceLabels; sidebar sets the category. ENGLISH is the
-        // SSOT of the filter wire — chunk_labels carry the EN translation
-        // — so the localized name is display-only. Omitting the labels
-        // here sent the fallback path's question over the WHOLE corpus
-        // while the scope chip above promised a filtered one.
+        // Omitting the labels here sent the fallback path's question over
+        // the WHOLE corpus while the scope chip above promised a filtered
+        // one. ENGLISH stays the SSOT of the filter wire — the localized
+        // name is display-only.
         context: QueryContext(
-          categoryLabel: _selectedCategoryNameEn.isNotEmpty
-              ? _selectedCategoryNameEn
-              : null,
-          serviceLabels: mergeServiceLabels(
-            _activeServiceLabels,
-            _sidebarServiceLabelsEn,
-          ),
+          categoryLabel: facts.categoryLabelEn,
+          serviceLabels: facts.serviceLabels,
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
-        contextOption: hasContext
+        contextOption: facts.hasContext
             ? ApiQueriesPostRequestContextOptionEnum
                   .conversationWithContextLabels
             : ApiQueriesPostRequestContextOptionEnum.singleMessage,

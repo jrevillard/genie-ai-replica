@@ -1388,6 +1388,30 @@ bool quickHelpScopeIsNameable(
   return resolver?.categoryLabelEn(button) != null;
 }
 
+/// The scope facts a query carries onto the wire: whether the selection
+/// declares a scope at all, the category's ENGLISH label, and the merged
+/// service labels. ONE copy for both send paths — the streaming request
+/// and the fallback's generated request each encode these into their own
+/// transport, and a rule kept in two hand-synced copies is the drift that
+/// sent the fallback's question over the whole corpus while the chip
+/// promised a filtered one.
+({bool hasContext, String? categoryLabelEn, List<String> serviceLabels})
+queryScopeFacts({
+  String? categoryId,
+  String? categoryNameEn,
+  List<String> serviceLabels = const <String>[],
+  List<String> sidebarServiceLabels = const <String>[],
+}) {
+  final labels = mergeServiceLabels(serviceLabels, sidebarServiceLabels);
+  return (
+    hasContext: declaresCategoryScope(categoryId) || labels.isNotEmpty,
+    // The empty name is no name: the clear's payload and a scope the
+    // hierarchy could not EN-name both go out as null.
+    categoryLabelEn: categoryNameEn?.isNotEmpty == true ? categoryNameEn : null,
+    serviceLabels: labels,
+  );
+}
+
 /// Whether the query can carry the selection's scope.
 ///
 /// A selection that declares NO scope asks an unscoped question — the

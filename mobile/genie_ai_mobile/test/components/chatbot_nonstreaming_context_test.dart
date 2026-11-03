@@ -92,22 +92,18 @@ void main() {
   );
 }
 
-/// The tree endpoint plus a CAPTURING queries endpoint: every
-/// /api/queries POST body is recorded verbatim and answered with one
-/// 201 query (the shape `_sendNonStreaming` reads).
-class _QueriesCapturingMockClient extends http.BaseClient {
-  _QueriesCapturingMockClient(this.tree, this.bodies);
+/// The harness tree client extended with a CAPTURING queries endpoint:
+/// every /api/queries POST body is recorded verbatim and answered with
+/// one 201 query (the shape `_sendNonStreaming` reads); the tree route
+/// and the 404 fallback stay in the harness's ONE copy.
+class _QueriesCapturingMockClient extends QuickHelpTreeMockClient {
+  _QueriesCapturingMockClient(super.tree, this.bodies);
 
-  final List<dynamic> tree;
   final List<String> bodies;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      return httpResponseJson(tree, 200);
-    }
-    if (path.endsWith('/api/queries')) {
+    if (request.url.path.endsWith('/api/queries')) {
       bodies.add(utf8.decode((request as http.Request).bodyBytes));
       return httpResponseJson(<String, dynamic>{
         'queryId': 'q-1',
@@ -115,6 +111,6 @@ class _QueriesCapturingMockClient extends http.BaseClient {
         'metadata': <String, dynamic>{'sources': <dynamic>[]},
       }, 201);
     }
-    return httpResponseJson(<String, dynamic>{}, 404);
+    return super.send(request);
   }
 }

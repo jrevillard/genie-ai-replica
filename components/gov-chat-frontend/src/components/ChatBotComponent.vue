@@ -546,6 +546,22 @@ function categoryOnlyItem(category, displayName) {
   };
 }
 
+// A scope restored from a saved tag that names no label: a sidebar
+// label the hierarchy no longer carries (serviceKey null, the scope
+// refused), or an identity two Quick Help cards claim (the same shape,
+// the same refusal). The chip shows the name the tag spells, the wire
+// carries no label, and the send refuses the scope visibly. ONE copy of
+// the shape, so the two callers cannot drift apart.
+function restoredScopeItem(service, serviceKey, category) {
+  return {
+    service,
+    serviceKey,
+    category,
+    unresolved: serviceKey === null,
+    selected: true
+  };
+}
+
 function quickHelpContextItem(button) {
   return {
     service: button.service,
@@ -631,12 +647,6 @@ function quickHelpIdentityOf(card) {
 function quickHelpVerdictForIdentity(buttons, identity) {
   const claimants = buttons.filter((button) => button && quickHelpIdentityOf(button) === identity);
   return { card: claimants.length === 1 ? claimants[0] : null, ambiguous: claimants.length > 1 };
-}
-
-// The identity a saved tag names, read as the string it was saved as.
-// Null names NO card: the tag is not a scalar, so it carries no identity.
-function quickHelpTagIdentity(tag) {
-  return isScalarId(tag) ? String(tag) : null;
 }
 
 // Tight-list renderer override: chat-tuned model output puts a parent
@@ -1962,28 +1972,28 @@ export default {
       // A button that declares no label contributes no label of its own: the
       // request is then scoped by the category label alone, which the backend
       // resolves against the live hierarchy like any other label.
+      // The hidden flag is a BOOLEAN (#1208). A hand-edited configuration
+      // that writes it as a string says nothing about what the operator
+      // meant — and the flag's TRUTHINESS decides: "false" is a
+      // non-empty string, so the card DISAPPEARS. The mobile reads the
+      // flag the same way (the parity is deliberate), so the web does
+      // not change what the flag does — it REPORTS the typo, because a
+      // card that silently vanishes leaves no trace of the
+      // configuration mistake that hid it. The report is its own pass:
+      // the filter below stays a pure filter.
+      buttons.forEach((button) => {
+        if (button.hidden == null || typeof button.hidden === 'boolean') return;
+        // The button is NAMED in the report by the same rule that names
+        // it everywhere else (quickHelpTagOf): its id when it declares
+        // one, its resolved title otherwise (the raw title is a locale
+        // map, which would print as "[object Object]").
+        const name = quickHelpTagOf(button.id, resolveConfigText(button.title, locale)) || '(untitled)';
+        console.warn(
+          `[ChatBotComponent] Quick Help button "${name}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
+        );
+      });
       this.quickHelpButtons = buttons
-        .filter((button) => {
-          // The hidden flag is a BOOLEAN (#1208). A hand-edited
-          // configuration that writes it as a string says nothing about
-          // what the operator meant — and the flag's TRUTHINESS decides:
-          // "false" is a non-empty string, so the card DISAPPEARS. The
-          // mobile reads the flag the same way (the parity is
-          // deliberate), so the web does not change what the flag does —
-          // it REPORTS the typo, because a card that silently vanishes
-          // leaves no trace of the configuration mistake that hid it.
-          if (button.hidden !== undefined && button.hidden !== null && typeof button.hidden !== 'boolean') {
-            // The button is NAMED in the report by the same rule that
-            // names it everywhere else (quickHelpTagOf): its id when it
-            // declares one, its resolved title otherwise (the raw title
-            // is a locale map, which would print as "[object Object]").
-            const name = quickHelpTagOf(button.id, resolveConfigText(button.title, locale)) || '(untitled)';
-            console.warn(
-              `[ChatBotComponent] Quick Help button "${name}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
-            );
-          }
-          return !button.hidden;
-        })
+        .filter((button) => !button.hidden)
         // The id is the button's IDENTITY — the conversation tag carries
         // it, the restore resolves it, the grid's verdict keys on it. Two
         // cards with one id cannot both be honoured: keeping both made
@@ -2115,10 +2125,11 @@ export default {
       // card the user pressed rather than keeping the other one's scope.
       const pressedIdentity = quickHelpIdentityOf(rawOption);
       const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
-      const existingIdx = this.selectedContextItems.findIndex(
-        (item) =>
-          item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity && !identityIsAmbiguous
-      );
+      const existingIdx = identityIsAmbiguous
+        ? -1
+        : this.selectedContextItems.findIndex(
+            (item) => item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity
+          );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
@@ -2740,10 +2751,10 @@ export default {
             // an id (whose identity is its title) restores its own scope
             // instead of falling through to the sidebar branch and
             // becoming a label chip.
-            const { card: button, ambiguous } = quickHelpVerdictForIdentity(
-              this.quickHelpButtons,
-              quickHelpTagIdentity(tag)
-            );
+            // The tag is read as the string it was saved as; a tag that
+            // is not a scalar carries no identity and names no card.
+            const tagIdentity = isScalarId(tag) ? String(tag) : null;
+            const { card: button, ambiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, tagIdentity);
             if (ambiguous) {
               // TWO cards claim this identity — an id-less card titled
               // like another card's id. The tag names NO card: restoring
@@ -2751,13 +2762,9 @@ export default {
               // in, silently. The scope cannot be carried: the send
               // refuses it visibly, the way a tag that names nothing is
               // refused.
-              restoredContextItems.push({
-                service: this.displayNameForEnLabel(tag) || tag,
-                serviceKey: null,
-                category: this.currentCategoryId || 'general',
-                unresolved: true,
-                selected: true
-              });
+              restoredContextItems.push(
+                restoredScopeItem(this.displayNameForEnLabel(tag) || tag, null, this.currentCategoryId || 'general')
+              );
               return;
             }
             if (button) {
@@ -2795,19 +2802,19 @@ export default {
             // identity). The chip shows the localized name the tree carries
             // for it; the wire carries the EN one.
             const enLabel = this.enLabelDisplayNames.has(tag) ? tag : null;
-            restoredContextItems.push({
-              service: this.displayNameForEnLabel(enLabel || tag) || tag,
-              serviceKey: enLabel,
-              category: this.currentCategoryId || 'general',
-              // A tag that names NOTHING anymore is a SAVED SCOPE that
-              // cannot be carried. The 'general' placeholder below would
-              // exempt it from the unnamed-item rule, and the send would
-              // quietly drop the scope it stood for the moment another
-              // item provided a filter. The flag names it for the guard:
-              // no partial drop, the send refuses.
-              unresolved: enLabel === null,
-              selected: true
-            });
+            // A tag that names NOTHING anymore is a SAVED SCOPE that
+            // cannot be carried. The 'general' placeholder below would
+            // exempt it from the unnamed-item rule, and the send would
+            // quietly drop the scope it stood for the moment another
+            // item provided a filter. The builder's flag names it for
+            // the guard: no partial drop, the send refuses.
+            restoredContextItems.push(
+              restoredScopeItem(
+                this.displayNameForEnLabel(enLabel || tag) || tag,
+                enLabel,
+                this.currentCategoryId || 'general'
+              )
+            );
           });
         } else if (this.currentCategoryId) {
           // The scope of this item IS the category — 'category.<id>' is

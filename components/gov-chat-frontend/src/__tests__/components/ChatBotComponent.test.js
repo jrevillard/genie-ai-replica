@@ -1316,26 +1316,13 @@ describe('ChatBotComponent', () => {
 
     it('a "hidden" flag that is not a boolean is REPORTED, and its truthiness still decides (#1208)', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const loadConfig = require('../../config-loader').default;
-      loadConfig.mockResolvedValue({
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
-                { id: 'flagged', title: 'Flagged', hidden: true, category: '2' },
-                { id: 'plain', title: 'Plain', category: '3' },
-                { title: { en: 'Titled hidden card' }, hidden: 'yes', category: '4' }
-              ]
-            }
-          }
-        }
-      });
-
-      const wrapper = createChatBotWrapper();
+      const wrapper = await mountWithButtons([
+        { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
+        { id: 'flagged', title: 'Flagged', hidden: true, category: '2' },
+        { id: 'plain', title: 'Plain', category: '3' },
+        { title: { en: 'Titled hidden card' }, hidden: 'yes', category: '4' }
+      ]);
       const vm = wrapper.vm;
-
-      await vm.loadQuickHelpButtons();
 
       // The truthiness decides, on both platforms: a quoted "false" is a
       // non-empty string, so the card is HIDDEN — the mobile reads the
@@ -1838,36 +1825,20 @@ describe('ChatBotComponent', () => {
       // on reload.
       afterEach(resetQuickHelpButtons);
 
-      const twoIdLessCards = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { title: 'Card One', serviceLabels: ['Tomato'] },
-                { title: 'Card Two', serviceLabels: ['Potato'] }
-              ]
-            }
-          }
-        }
-      };
+      const twoIdLessCards = [
+        { title: 'Card One', serviceLabels: ['Tomato'] },
+        { title: 'Card Two', serviceLabels: ['Potato'] }
+      ];
 
       // One name, two cards: the id-less card is titled like the OTHER
       // card's id. A malformed configuration — but one where the tag
       // names two cards, so it names none. The name is ALSO a live
       // hierarchy label, so the sidebar branch COULD restore a scope
       // under it: the refusal has to beat that.
-      const collidingIdentityCards = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
-                { title: 'Crops', serviceLabels: ['Potato'] }
-              ]
-            }
-          }
-        }
-      };
+      const collidingIdentityCards = [
+        { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
+        { title: 'Crops', serviceLabels: ['Potato'] }
+      ];
 
       const treeWithTomatoAndPotato = [
         {
@@ -1882,21 +1853,9 @@ describe('ChatBotComponent', () => {
       ];
 
       it('restores the scope of a card without an id from the title tag it saved', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [{ title: 'Card Zero', serviceLabels: ['Tomato'] }]
-              }
-            }
-          }
-        });
-
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons([{ title: 'Card Zero', serviceLabels: ['Tomato'] }]);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         // The card declares no id: its identity is its own title — the
         // very string the card saves.
@@ -1922,13 +1881,9 @@ describe('ChatBotComponent', () => {
       });
 
       it('pressing a second card without an id installs THAT card', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(twoIdLessCards);
-
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons(twoIdLessCards);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
         vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
@@ -1942,13 +1897,9 @@ describe('ChatBotComponent', () => {
       });
 
       it('an identity TWO cards claim restores NOTHING — a visible refusal, not a wrong scope', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(collidingIdentityCards);
-
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons(collidingIdentityCards);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         // The id-less card is titled like the OTHER card's id: one
         // string, two cards.
@@ -1976,13 +1927,9 @@ describe('ChatBotComponent', () => {
       });
 
       it('pressing a card whose identity another card claims installs THAT card', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(collidingIdentityCards);
-
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons(collidingIdentityCards);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
         vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
@@ -1996,13 +1943,9 @@ describe('ChatBotComponent', () => {
       });
 
       it('re-titles an id-less chip from ITS OWN card', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(twoIdLessCards);
-
         mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons(twoIdLessCards);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
         const chip = vm.selectedContextItems[0];

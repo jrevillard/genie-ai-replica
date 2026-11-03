@@ -1330,9 +1330,9 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons.map((b) => b.id)).toEqual(['plain']);
 
       // But the typo is REPORTED: a card that silently disappears leaves
-      // no trace of the configuration mistake that hid it. (The buttons
-      // are applied once per load — the mount's and the explicit call's —
-      // so the report follows the load, not the card.)
+      // no trace of the configuration mistake that hid it. (The report
+      // follows the configuration load, not the card — the buttons are
+      // applied again on every language switch.)
       const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
       expect(hiddenWarnings.length).toBeGreaterThan(0);
       // The report NAMES the offending button and the offending value:

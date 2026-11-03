@@ -22,7 +22,8 @@ void main() {
 
   // The two cards the test taps: an id-less scoped one and an id'd one,
   // neither carrying an action, so a press installs the scope without
-  // sending a question.
+  // sending a question. The third declares a NUMERIC id — the shape the
+  // cross-platform tag contract names.
   final twoCards = <Map<String, dynamic>>[
     {
       'title': {'en': 'Registry Card'},
@@ -32,6 +33,12 @@ void main() {
     {
       'id': 'births-id',
       'title': {'en': 'Births Card'},
+      'category': '2',
+      'serviceLabels': ['Births'],
+    },
+    {
+      'id': 5.0,
+      'title': {'en': 'Numeric Card'},
       'category': '2',
       'serviceLabels': ['Births'],
     },
@@ -88,6 +95,29 @@ void main() {
     expect(mock.conversationTags.first, ['Registry Card']);
     expect(mock.conversationTags.last, ['births-id']);
     expect(mock.categoryIds.every((id) => id == '2'), isTrue);
+  });
+
+  testWidgets('a NUMERIC id is saved in the string form the web reads back', (
+    tester,
+  ) async {
+    // The cross-platform tag contract: the conversation tag carries the
+    // id in the form JavaScript serializes it — a JSON 5.0 becomes '5',
+    // never Dart's '5.0'. The web now saves the same string form, so a
+    // conversation saved here restores on the web and a web-saved one
+    // restores here. The tag is asserted at the HTTP boundary, so the
+    // whole path is covered: tap, install, save.
+    final mock = _ConversationMockClient(tree);
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockChatbotConfigAsset(tester, configBytes);
+    await pumpChat(tester, mock, chatKey: chatKey);
+
+    await tester.tap(find.text('Numeric Card'));
+    await tester.pumpAndSettle();
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    expect(mock.conversationTags, hasLength(1));
+    expect(mock.conversationTags.single, ['5']);
   });
 }
 

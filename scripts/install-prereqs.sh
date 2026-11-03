@@ -102,22 +102,6 @@ ensure_namespace() {
 
 install_keycloak_operator() {
   local ns="keycloak-system"
-  # Size the operator for a constrained/nested node: the upstream manifest
-  # ships 450Mi with 5 s probes, and the watch-all JVM (four informers, the
-  # repair below blanks the namespace envs) OOMs (exit 137, ~35 s) before
-  # the startup probe can ever succeed — the deployment never becomes Ready
-  # and every later script run re-times out on it. 2Gi/1Gi with 180 s/120 s
-  # probe delays boots it comfortably. Idempotent; also repairs out-of-band
-  # drift (a bare re-apply of the upstream kustomization restores 450Mi).
-  keycloak_operator_runtime() {
-    kubectl -n "${ns}" patch deploy keycloak-operator --type=json -p='[
-      {"op":"remove","path":"/spec/template/spec/containers/0/startupProbe"},
-      {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/initialDelaySeconds","value":180},
-      {"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/initialDelaySeconds","value":120},
-      {"op":"replace","path":"/spec/template/spec/containers/0/resources/requests/memory","value":"1Gi"},
-      {"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"2Gi"}
-    ]' || warn "could not patch keycloak-operator runtime sizing (deployment absent?)"
-  }
   # Pre-flight: a keycloak-operator left anywhere OUTSIDE this script's
   # namespace would fight this one over the same CRs once both watch all
   # namespaces. The upstream kustomize default lands it in `keycloak`;
@@ -131,40 +115,81 @@ install_keycloak_operator() {
     printf 'ERROR: keycloak-operator found in namespace "%s" (not installed by this script). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "${stray_ns}" "${ns}" >&2
     exit 1
   fi
-  if kubectl get namespace "${ns}" >/dev/null 2>&1 && \
-     kubectl get deployment keycloak-operator -n "${ns}" >/dev/null 2>&1; then
-    log "keycloak-operator ${KC_OPERATOR_VERSION}: already present"
-  else
-    ensure_namespace "${ns}"
-    # Official modern Keycloak 26+ operator (Quarkus-based, v2beta1 CRDs).
-    # Installed via Kustomize from keycloak/k8s-resources — NOT the archived
-    # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
-    # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
-    # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
-    #
-    # The upstream kustomization pins namespace `keycloak`; a local overlay
-    # with a `namespace:` field overrides it (top-level wins) so every
-    # namespaced object — Deployment, ServiceAccount, RoleBindings, subjects
-    # included — lands in keycloak-system. One leak: the upstream
-    # ClusterRoleBinding is cluster-scoped and the namespace transformer
-    # does not touch its subject, so its subject is patched below — on
-    # every run, not only at install.
-    log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize overlay (ref=${KC_OPERATOR_VERSION} of keycloak-k8s-resources, ns=${ns})"
-    local overlay
-    overlay=$(mktemp -d)
-    cat > "${overlay}/kustomization.yaml" <<EOF
+  # Official modern Keycloak 26+ operator (Quarkus-based, v2beta1 CRDs).
+  # Installed via Kustomize from keycloak/k8s-resources — NOT the archived
+  # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
+  # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
+  # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
+  #
+  # The overlay is applied on EVERY invocation, fresh install or not:
+  # kubectl apply is idempotent, and this is the drift-repair mechanism —
+  # a bare re-apply of the upstream kustomization (450Mi, watch-current,
+  # unsized) is undone by the next run of this block. The runtime patch
+  # below rides the same overlay so the FIRST ReplicaSet is born correctly
+  # sized (no crash-loop pod on fresh install, one rollout, not three).
+  #
+  # The upstream kustomization pins namespace `keycloak`; a local overlay
+  # with a `namespace:` field overrides it (top-level wins) so every
+  # namespaced object — Deployment, ServiceAccount, RoleBindings, subjects
+  # included — lands in keycloak-system. One leak: the upstream
+  # ClusterRoleBinding is cluster-scoped and the namespace transformer
+  # does not touch its subject, so its subject is patched below — on
+  # every run, not only at install.
+  ensure_namespace "${ns}"
+  log "keycloak-operator ${KC_OPERATOR_VERSION}: apply Kustomize overlay (ref=${KC_OPERATOR_VERSION} of keycloak-k8s-resources, ns=${ns})"
+  local overlay
+  overlay=$(mktemp -d)
+  cat > "${overlay}/kustomization.yaml" <<EOF
 namespace: ${ns}
 resources:
   - github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}
+patches:
+  - path: operator-runtime.yaml
 EOF
-    if ! kubectl apply -k "${overlay}"; then
-      rm -rf "${overlay}"
-      return 1
-    fi
+  # Size the operator for a constrained/nested node: the upstream manifest
+  # ships 450Mi of memory with a startupProbe window of ~35 s (3 × 10 s + 5),
+  # and the watch-all JVM (four informers, the envs below blanked) OOMs
+  # (exit 137) around that mark — the deployment never becomes Ready and
+  # every later script run re-times out on it. 1Gi/2Gi boots it comfortably;
+  # failureThreshold 30 widens the startup window to ~305 s so a slow boot
+  # on a nested node still gets a time-based escape instead of a liveness
+  # kill loop. liveness/readiness stay at upstream 5 s: liveness only starts
+  # once startup succeeds, and a failing readiness during boot is harmless
+  # (readiness never kills). Strategic-merge patch: fields not named here
+  # (probe httpGets, CPU, upstream envs) pass through unchanged; the env
+  # list merges by name so these four blank the JOSDK_WATCH_CURRENT values.
+  cat > "${overlay}/operator-runtime.yaml" <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-operator
+spec:
+  template:
+    spec:
+      containers:
+        - name: keycloak-operator
+          resources:
+            requests:
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+          startupProbe:
+            failureThreshold: 30
+          env:
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKCONTROLLER_NAMESPACES
+              value: ""
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES
+              value: ""
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES
+              value: ""
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES
+              value: ""
+EOF
+  if ! kubectl apply -k "${overlay}"; then
     rm -rf "${overlay}"
-    keycloak_operator_runtime
-    wait_deploy_ready "${ns}" "keycloak-operator"
+    return 1
   fi
+  rm -rf "${overlay}"
   # Everything below is idempotent and runs on EVERY invocation so
   # out-of-band drift (e.g. someone re-applies the upstream kustomization
   # bare, or a subject namespace drifts) is repaired on the next run.
@@ -204,12 +229,6 @@ subjects:
     namespace: ${ns}
 EOF
   done
-  kubectl -n "${ns}" set env deploy/keycloak-operator \
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKCONTROLLER_NAMESPACES= \
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES= \
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES= \
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES=
-  keycloak_operator_runtime
   wait_deploy_ready "${ns}" "keycloak-operator"
 }
 

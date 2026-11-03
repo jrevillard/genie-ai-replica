@@ -37,7 +37,7 @@ that matches whatever origin the page was served from. */ -}}
 -}}
 {{- $existing := index $vals.services.frontend "env" | default dict -}}
 {{- $existingRows := include "genieai-umbrella.envMapRows" $existing | fromJsonArray -}}
-{{- $_ := set $vals.services.frontend "env" (concat $urls $existingRows) -}}
+{{- $_ := set $vals.services.frontend "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $existingRows | toJson) | fromJsonArray) -}}
 {{- $ctx := dict "name" "frontend" "component" "frontend" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

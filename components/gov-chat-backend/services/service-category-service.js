@@ -172,6 +172,32 @@ class ServiceCategoryService {
   }
 
   /**
+   * Rebuilds the non-English translations of an owner (category or service):
+   * removes every existing non-EN row of that owner, then saves the new set.
+   * The caller has already validated the entries (shape, duplicates, EN)
+   * BEFORE any mutation — this helper must only ever see valid rows.
+   * @param {Object} collection - The ArangoDB translation collection handle.
+   * @param {String} fkField - The foreign-key field name ('serviceCategoryId' or 'serviceId').
+   * @param {String} ownerKey - The _key of the owning category or service.
+   * @param {Array} translations - Validated {languageCode, translation} entries.
+   */
+  async _rebuildTranslations(collection, fkField, ownerKey, translations) {
+    await this.db.query(aql`
+      FOR trans IN ${collection}
+        FILTER trans[${fkField}] == ${ownerKey}
+        FILTER trans.languageCode != 'EN'
+        REMOVE trans IN ${collection}
+    `);
+
+    for (const trans of translations) {
+      await collection.save(this._buildTranslationDoc(ownerKey, fkField, trans), {
+        overwrite: true
+      });
+    }
+    logger.info(`Rebuilt ${translations.length} translations for ${fkField} ${ownerKey}`);
+  }
+
+  /**
    * Updates a single service and its translations.
    * @param {String} serviceKey - The _key of the service to update.
    * @param {Object} payload - The service data { nameEN, translations }.
@@ -206,23 +232,11 @@ class ServiceCategoryService {
       await this.services.update(serviceKey, { nameEN });
 
       // 3. Clear old non-English translations and save the new set. The
-      // REMOVE only runs when the payload carries a translations array —
+      // rebuild only runs when the payload carries a translations array —
       // an omitted field means "leave the translations untouched" (an
       // explicit empty array is the clear-all), matching the category path.
       if (payload.translations) {
-        await this.db.query(aql`
-        FOR trans IN serviceTranslations
-          FILTER trans.serviceId == ${serviceKey}
-          FILTER trans.languageCode != 'EN'
-          REMOVE trans IN serviceTranslations
-      `);
-
-        for (const trans of payload.translations) {
-          await this.serviceTranslations.save(this._buildTranslationDoc(serviceKey, 'serviceId', trans), {
-            overwrite: true
-          });
-        }
-        logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
+        await this._rebuildTranslations(this.serviceTranslations, 'serviceId', serviceKey, payload.translations);
       }
 
       return { _key: serviceKey, status: 'updated' };
@@ -898,26 +912,15 @@ class ServiceCategoryService {
       // 2b. Keep nameEN in sync on the parent category document
       await this.serviceCategories.update(categoryKey, { nameEN });
 
-      // 3. Update/create the other translations
+      // 3. Update/create the other translations (same rebuild as the
+      // service path)
       if (payload.translations) {
-        // For simplicity, we can remove old translations and add the new set.
-        // A more complex implementation could merge changes.
-        await this.db.query(aql`
-        FOR trans IN serviceCategoryTranslations
-          FILTER trans.serviceCategoryId == ${categoryKey}
-          FILTER trans.languageCode != 'EN'
-          REMOVE trans IN serviceCategoryTranslations
-      `);
-
-        for (const trans of payload.translations) {
-          await this.serviceCategoryTranslations.save(
-            this._buildTranslationDoc(categoryKey, 'serviceCategoryId', trans),
-            {
-              overwrite: true
-            }
-          );
-        }
-        logger.info(`Processed ${payload.translations.length} additional translations for category ${categoryKey}`);
+        await this._rebuildTranslations(
+          this.serviceCategoryTranslations,
+          'serviceCategoryId',
+          categoryKey,
+          payload.translations
+        );
       }
 
       return { _key: categoryKey, status: 'updated' };

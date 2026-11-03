@@ -78,6 +78,13 @@ being set would fail this assertion on every default render.
       "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN"
       "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT"
       "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
+{{- /* Snapshot the INLINE-fixed names BEFORE the envSecrets rows are
+appended below: the collision check near the Job's env block compares a
+declared envSecrets row against these — a secret-backed row is a normal
+way to feed a placeholder, it is only a bug when it re-names a variable
+the Job already fixes inline (that row would duplicate the name under
+SSA's name-keyed env merge). */ -}}
+{{- $fixedEnvVars := $known -}}
 {{- /* The rows go through the VALIDATION helper, not straight from
 the values: a malformed row (a scalar, a typo'd key) would otherwise
 crash this template with a raw Go-template error before the guard
@@ -339,7 +346,16 @@ spec:
             # Secret-backed parameters, one row per operator-declared
             # entry. The rows are VALIDATED by the helper (a typo'd key
             # would render `name: null` and the API server would reject
-            # the whole Job at apply time).
+            # the whole Job at apply time), and a row naming one of the
+            # Job's FIXED variables fails the render here: the Job env
+            # list is not deduped (the collision is a caller bug, not a
+            # merge to resolve), and SSA would reject the duplicate
+            # name at install anyway (issue #1362's failure class).
+            {{- range $row := ($convergence.envSecrets | default list) -}}
+            {{- if has $row.envVar $fixedEnvVars -}}
+            {{- fail (printf "convergence envSecrets row %q names one of the Job's fixed variables — remove the row, the Job's own value is the contract" $row.envVar) -}}
+            {{- end -}}
+            {{- end -}}
             {{- include "genieai-umbrella.convergenceEnvSecretRows" ($convergence.envSecrets | default list) | nindent 12 }}
           volumeMounts:
             - name: realm

@@ -880,6 +880,70 @@ TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 TRANSLATION_MSG_OVERHEAD_CHARS = 20
 
 
+def _select_history_within_budget(history: list, max_translation_chars: int, path: str) -> list:
+    """The messages of ``history`` that fit the character budget.
+
+    One rule, two callers: the translator (which forwards the history to
+    the translation model) and the passthrough (which flattens an already
+    English history in place). The retriever must see the same turns
+    whichever language the query is written in, so both keep the same
+    messages — the newest first, so an overflowing conversation loses its
+    oldest turns and keeps its recent ones. A newest message that alone
+    exceeds the whole budget keeps its tail, truncated to the budget, so
+    the retrieval query carries the end of the turn instead of an empty
+    string.
+
+    ``path`` names the caller in the truncation metric and in the log line.
+    """
+    current_chars = 0
+    messages_to_process = []
+    newest_truncated = False
+    for message in reversed(history):
+        if logflag:
+            logger.debug(f"Examining message: {message}")
+        # .get, not [:]: request validation permits a message with no
+        # content key, and a malformed message must not crash the
+        # turn — it counts as empty, exactly as the flatten below
+        # reads it.
+        message_chars = len(message.get("content", ""))
+        if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+            if not messages_to_process:
+                # Even the newest message exceeds the whole budget:
+                # keep its tail instead of dropping it, so the
+                # retrieval query carries the end of the turn (its
+                # newest text) instead of an empty string. The
+                # message dict is copied: the request's history must
+                # stay untouched.
+                tail_chars = max_translation_chars - TRANSLATION_MSG_OVERHEAD_CHARS
+                content = message.get("content", "")[-tail_chars:] if tail_chars > 0 else ""
+                messages_to_process.append({**message, "content": content})
+                newest_truncated = True
+            break
+        messages_to_process.append(message)
+        current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
+    messages_to_process.reverse()
+    dropped_messages = len(history) - len(messages_to_process)
+    if newest_truncated or dropped_messages:
+        history_truncation_total.add(1, {"path": path})
+    if dropped_messages:
+        logger.warning(
+            "Chat history truncated (path=%s): budget_chars=%s kept_messages=%s dropped_messages=%s",
+            path,
+            max_translation_chars,
+            len(messages_to_process),
+            dropped_messages,
+        )
+    if newest_truncated:
+        logger.warning(
+            "Newest history message exceeds the translation budget (path=%s, budget_chars=%s); "
+            "keeping its last %s characters.",
+            path,
+            max_translation_chars,
+            len(messages_to_process[-1].get("content", "")),
+        )
+    return messages_to_process
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -3978,53 +4042,10 @@ class ChatQnAService:
             flattened_history_string = history
         else:
             max_translation_chars = _get_max_translation_chars()
-            current_chars = 0
-            messages_to_process = []
-            newest_truncated = False
             if logflag:
                 logger.debug(f"Processing translation for history with {len(history)} messages.")
 
-            for message in reversed(history):
-                if logflag:
-                    logger.debug(f"Examining message: {message}")
-                # .get, not [:]: request validation permits a message with no
-                # content key, and a malformed message must not crash the
-                # turn — it counts as empty, exactly as the flatten below
-                # reads it.
-                message_chars = len(message.get("content", ""))
-                if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
-                    if not messages_to_process:
-                        # Even the newest message exceeds the whole budget:
-                        # keep its tail instead of dropping it, so the
-                        # retrieval query carries the end of the turn (its
-                        # newest text) instead of an empty string. The
-                        # message dict is copied: the request's history must
-                        # stay untouched.
-                        tail_chars = max_translation_chars - TRANSLATION_MSG_OVERHEAD_CHARS
-                        content = message.get("content", "")[-tail_chars:] if tail_chars > 0 else ""
-                        messages_to_process.append({**message, "content": content})
-                        newest_truncated = True
-                    break
-                messages_to_process.append(message)
-                current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
-            messages_to_process.reverse()
-            dropped_messages = len(history) - len(messages_to_process)
-            if newest_truncated or dropped_messages:
-                history_truncation_total.add(1, {"path": "translation"})
-            if dropped_messages:
-                logger.warning(
-                    "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
-                    max_translation_chars,
-                    len(messages_to_process),
-                    dropped_messages,
-                )
-            if newest_truncated:
-                logger.warning(
-                    "Newest history message exceeds the translation budget (budget_chars=%s); "
-                    "keeping its last %s characters.",
-                    max_translation_chars,
-                    len(messages_to_process[-1].get("content", "")),
-                )
+            messages_to_process = _select_history_within_budget(history, max_translation_chars, "translation")
             if not messages_to_process:
                 # An empty history: nothing to translate, nothing to keep —
                 # the caller's regex finds no user message in an empty blob.
@@ -4587,11 +4608,17 @@ class ChatQnAService:
             )
             # Already English, or no source language to translate from:
             # flatten without translation. Same recipe as the translator's
-            # flatten, so the two differ only in the words.
+            # flatten, so the two differ only in the words — and the same
+            # budget, so the retriever sees the same turns of the
+            # conversation whichever language the query is written in.
             if isinstance(full_chat_history, str):
                 translated_history_string = full_chat_history
             else:
-                translated_history_string = _flatten_history_string(full_chat_history)
+                max_translation_chars = _get_max_translation_chars()
+                messages_to_process = _select_history_within_budget(
+                    full_chat_history, max_translation_chars, "passthrough"
+                )
+                translated_history_string = _flatten_history_string(messages_to_process)
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")

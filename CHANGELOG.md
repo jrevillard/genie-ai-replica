@@ -117,6 +117,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The web's Quick Help outage caption no longer opens with "Configuration problem:".** The caption shown when the knowledge hierarchy could not be loaded — on the card, on the restored scope's chip and in the send-refusal toast — attributed the outage to the configuration, pointing the operator at the wrong thing; the code and tests already treat an outage as explicitly NOT a configuration problem. The lead is reworded to a temporary-unavailability phrasing in all 14 locales; the sentence body is unchanged. (Web half of #1355; the mobile app's strings stay its own. !694)
 
+- **The conversation the retriever sees no longer depends on the language the
+  question was asked in.** A chat in a non-English language had its history
+  translated within the translation budget — the oldest turns of a long
+  conversation were dropped when it did not fit — while the same chat in
+  English forwarded the whole conversation to the retriever. The same
+  conversation therefore retrieved different documents and gave the answer a
+  different amount of context depending on the language it was written in.
+  Both paths now keep the same turns (the newest ones, within the same
+  character budget), so the retriever reads the same conversation whichever
+  language it arrived in. The budget is the translation one (2,000 characters,
+  or what the discovered translation window allows), so a deployment that
+  wants a deeper context raises the translation window
+  (`VLLM_TRANSLATION_MAX_MODEL_LEN`); the English-path truncation is counted
+  on the same history-truncation metric, under the `passthrough` label.
+  Chatqna only. (#1242)
+
 ### Added
 
 - **Benchmark rerank batches run in parallel — `OKF_RAGAS_RERANK_CONCURRENCY` (8-7).** The benchmark retrieval leg sends its candidate pool to the reranker in batches of 32, sequentially — at a raised candidate pool (192) that is 6 sequential round trips per question, and the retrieval leg of a 100-question suite measured ~1h50m, ~90 minutes of it rerank transport. The batch calls are independent (the reranker scores query–text pairs; results reassemble by index), so they now run up to `OKF_RAGAS_RERANK_CONCURRENCY` at a time (default **3**, clamp 1–8, read per call) — same scores at any value, purely transport. Measured effect at 192/100 questions: the rerank leg drops from ~90 min to ~30 min. The global in-flight ceiling is `OKF_RAGAS_RUN_CONCURRENCY` × this value (6 at the defaults) — raise on an idle GPU, set `1` when a benchmark shares the GPU with live chat traffic. Landed in all four sites (compose, `env`, Ansible `env.j2`, config-validator).

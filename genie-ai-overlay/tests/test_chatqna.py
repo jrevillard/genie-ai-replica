@@ -4723,18 +4723,21 @@ class TestAbstentionDefault:
 # ===========================================================================
 # Query-translation status on the response and the orchestrate span
 # ===========================================================================
-async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None):
+async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None, captured=None):
     """Drive handle_request end to end with the history translation mocked.
 
     `history_status` is the (text, status) tuple the history-translation
     helper reports; None leaves the real helper in place (used by the
     passthrough cases, which never reach it). `messages` overrides the
     request's message list; None keeps the Spanish-query default.
+    `captured` is filled with the genie_params the pipeline was called with.
     """
     svc.user_profile_client = MagicMock()
     svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
 
     async def fake_schedule(**_kwargs):
+        if captured is not None:
+            captured.update(_kwargs.get("genie_params") or {})
         return (
             {
                 "retriever": {"retrieved_docs": []},
@@ -4867,6 +4870,44 @@ async def test_the_query_translation_status_reaches_the_orchestrate_span(capture
     status = orchestrate.attributes[A["rag_translation_query_status"]]
     assert status == "fallback_timeout"
     assert status in QUERY_TRANSLATION_STATUSES
+
+
+@pytest.mark.asyncio
+async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is_written_in():
+    """The history the retriever is fed must not depend on the query's
+    language: the English passthrough keeps the turns the translator would
+    have kept, so the same conversation retrieves the same documents in
+    every language."""
+    svc = create_chatqna_service()
+    messages = [
+        {"role": "user", "content": "oldest question " + "x" * 40},
+        {"role": "assistant", "content": "old answer " + "y" * 40},
+        {"role": "user", "content": "newest question " + "z" * 20},
+    ]
+    captured = {}
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+        patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=150),
+    ):
+        await _full_flow_payload(svc, stream=False, language="en", messages=messages, captured=captured)
+        await svc._get_translated_history_string(messages, source_lang_code="es")
+
+    passthrough_history = captured["full_chat_history_string"]
+    sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+    assert "newest question" in passthrough_history
+    assert "oldest question" not in passthrough_history
+    # The translator forwards the very same turns.
+    assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
 
 
 # ===========================================================================

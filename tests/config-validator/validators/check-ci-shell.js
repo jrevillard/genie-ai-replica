@@ -18,10 +18,14 @@
 const childProcess = require('child_process');
 
 function checkShellSyntax(blocks) {
-  // Group blocks the way the runner concatenates them: per script value.
+  // Group blocks the way the runner concatenates them: before_script and
+  // script are ONE shell file per job, after_script runs separately.
+  // Boundaries still accepted as limits: extends-inherited scripts and
+  // alias-spliced anchor bodies are checked as their own groups, so a
+  // construct spanning those joins is (rarely) a false failure.
   const groups = new Map();
   for (const block of blocks) {
-    const groupKey = `${block.owner}\u0000${block.key}`;
+    const groupKey = `${block.owner}\u0000${block.key === 'after_script' ? 'after_script' : 'script-group'}`;
     if (!groups.has(groupKey)) {
       groups.set(groupKey, []);
     }

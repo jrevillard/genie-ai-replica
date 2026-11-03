@@ -27,7 +27,10 @@
 // does not understand is shell the gate does not see, and it must fail
 // loudly.
 
-const KEY_RE = new RegExp('^(\\s+)(script|before_script|after_script):\\s*(.*)$');
+// Script keys sit directly under a top-level job, at indent 1-2 — never
+// deeper. A deeper `script:` line is a custom variable or example text
+// (legal GitLab, data, never a job script), and must not be extracted.
+const KEY_RE = new RegExp('^( {1,2})(script|before_script|after_script):\\s*(.*)$');
 // Column-0 key, optionally carrying a YAML anchor token: `.name: &anchor`.
 // The key may itself contain colons (namespaced jobs: `config:validate:`),
 // so the class is only bounded by whitespace and comments — a valueless
@@ -35,16 +38,23 @@ const KEY_RE = new RegExp('^(\\s+)(script|before_script|after_script):\\s*(.*)$'
 // an inline value fails the match and is handled by DATA_SCALAR_RE.
 const TOP_KEY_RE = /^([^\s#][^#]*):\s*(?:&(\S+)\s*)?(?:#.*)?$/;
 const ITEM_RE = /^(\s*)-\s+(.*)$/;
-// `|`, `|-`, `|2`, `|2-`, `>-`, ... — the block scalar styles with their
-// optional indentation indicator and chomping modifier, in either order.
-const BLOCK_SCALAR_RE = /^[|>](?:\d[+-]?|[+-]?\d?)$/;
+// The block scalar header grammar after the `|`/`>` style char: optional
+// indentation indicator and chomping modifier in either order, then an
+// optional comment. One shared fragment — BLOCK_SCALAR_RE and
+// DATA_SCALAR_RE must not drift.
+const BLOCK_SCALAR_TAIL = '(?:\\d[+-]?|[+-]?\\d?)';
+const BLOCK_SCALAR_RE = new RegExp(`^[|>]${BLOCK_SCALAR_TAIL}(?:\\s+#.*)?$`);
 const ALIAS_RE = /^\*(\S+)(?:\s+#.*)?$/;
 // A key of any indent opening a block scalar value — data, never shell,
 // unless the key is a script key (handled first). Quoted single-line
 // values are not matched: they have no body to skip.
-const DATA_SCALAR_RE = /^(\s*)([^#\s][^:]*):\s*(?:&\S+\s+)?[|>](?:\d[+-]?|[+-]?\d?)\s*(?:#.*)?$/;
+const DATA_SCALAR_RE = new RegExp(`^(\\s*)([^#\\s][^:]*):\\s*(?:&\\S+\\s+)?[|>]${BLOCK_SCALAR_TAIL}\\s*(?:#.*)?$`);
 const ANCHOR_TOKEN_RE = /^&(\S+)\s*/;
 const FLOW_VALUE_RE = /^[[{]/;
+// An empty flow collection (`script: []`, `before_script: []`) is a legal
+// GitLab value meaning "no shell" — a no-op, not an unhandled shape.
+const EMPTY_FLOW_SEQ_RE = /^\[\s*\]$/;
+const EMPTY_FLOW_MAP_RE = /^\{\s*\}$/;
 
 // YAML strips a block scalar's indentation relative to its first non-blank
 // line before handing the text to bash, so the gate strips the same amount
@@ -130,13 +140,19 @@ function extractCiShellBlocks(content) {
         continue;
       }
       const dashIndent = itemMatch[1].length;
-      const itemText = itemMatch[2];
+      let itemText = itemMatch[2];
       if (itemText.startsWith('!')) {
         // YAML tag (e.g. `- !reference [...]`): not shell, and not a shape
         // this parser models — loud error, never a silent coverage gap.
         errors.push({ line: i + 1, message: `unhandled ${key} item shape (YAML tag): "${itemText}"` });
         i += 1;
         continue;
+      }
+      // An anchor token on the item (`- &first echo hi`): legal YAML,
+      // irrelevant to what runs — strip it and parse what follows.
+      const anchorToken = itemText.match(ANCHOR_TOKEN_RE);
+      if (anchorToken) {
+        itemText = itemText.slice(anchorToken[0].length).trim();
       }
       const alias = itemText.match(ALIAS_RE);
       if (alias) {
@@ -230,9 +246,14 @@ function extractCiShellBlocks(content) {
       // anchor's definition.
       resolveAlias(keyAlias[1], i + 1);
       i += 1;
+    } else if (EMPTY_FLOW_SEQ_RE.test(rest) || EMPTY_FLOW_MAP_RE.test(rest)) {
+      // `script: []` / `before_script: []` — a legal no-op (the documented
+      // idiom to cancel an inherited default): no shell, nothing to check.
+      i += 1;
     } else if (FLOW_VALUE_RE.test(rest)) {
-      // A flow sequence/mapping (`script: ["echo a", "done"]`): items the
-      // parser does not model — loud error, never a silent coverage gap.
+      // A non-empty flow sequence/mapping (`script: ["echo a", "done"]`):
+      // items the parser does not model — loud error, never a silent
+      // coverage gap.
       errors.push({ line: i + 1, message: `unhandled ${key} value shape (flow collection): "${rest}"` });
       i += 1;
     } else if (rest.startsWith('!')) {

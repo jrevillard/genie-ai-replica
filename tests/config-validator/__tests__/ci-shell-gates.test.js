@@ -285,6 +285,56 @@ describe('ci shell gate: runtime-accurate checking', () => {
     expect(blocks[0].startLine).toBe(4);
     expect(blocks[0].text).toBe('echo a');
   });
+
+  test('an anchor token on a script item is stripped, not parsed as shell', () => {
+    const content = 'job:\n  script:\n    - &first echo hi\n    - echo hi\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi', 'echo hi']);
+  });
+
+  test('a block scalar header may carry a trailing comment', () => {
+    const item = 'job:\n  script:\n    - | # run the loop\n      echo a\n';
+    const itemParsed = extractCiShellBlocks(item);
+    expect(itemParsed.errors).toEqual([]);
+    expect(itemParsed.blocks.map((b) => b.text)).toEqual(['echo a']);
+
+    const key = 'job:\n  script: | # run the loop\n    echo a\n';
+    const keyParsed = extractCiShellBlocks(key);
+    expect(keyParsed.errors).toEqual([]);
+    expect(keyParsed.blocks.map((b) => b.text)).toEqual(['echo a']);
+  });
+
+  test('a variable named script is data, not a script key', () => {
+    const content = ['job:', '  variables:', '    script: echo "unterminated', '  script:', '    - echo real'].join(
+      '\n'
+    );
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo real']);
+    expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('empty flow collections are a legal no-op (no shell)', () => {
+    const content = 'job:\n  before_script: []\n  script: {}\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toEqual([]);
+  });
+
+  test('before_script and script are one runtime shell — a construct spanning them parses', () => {
+    const content = 'job:\n  before_script:\n    - echo "start\n  script:\n    - end"\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('after_script is a separate shell from script', () => {
+    const content = 'job:\n  script:\n    - echo "open\n  after_script:\n    - echo still-open"\n';
+    const { blocks } = extractCiShellBlocks(content);
+    const errors = checkShellSyntax(blocks);
+    expect(errors).toHaveLength(2); // each is unterminated on its own
+  });
 });
 
 describe('ci shell gate: the real .gitlab-ci.yml', () => {

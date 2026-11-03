@@ -672,11 +672,58 @@ String? quickHelpIdOf(Map<String, dynamic>? button) {
   return _jsTagForm(raw);
 }
 
+/// The category value [button] declares — the RAW config value, kept
+/// beside its string form by the parse. ONE accessor: every rule that
+/// reads a category reads it HERE, so no rule judges the stringified
+/// form by a rule the web applies to the RAW one. A map with no raw
+/// record (a hand-built fixture) falls back to the string form it
+/// carries — the same fallback the parse's own 'categoryRaw' key would
+/// have supplied.
+dynamic quickHelpCategoryRawOf(Map<String, dynamic> button) =>
+    button['categoryRaw'] ?? button['category'];
+
+/// Whether [button] DECLARES a category AT ALL — the web's restore gate
+/// (`if (button.category)`): the RAW value's JavaScript truthiness
+/// ([configTruthy]). A falsy raw category (`0`, `false`, `''`) declares
+/// none, and its stringified `'0'` must not resurrect it — the web reads
+/// the value BEFORE any stringification, and a rule that judged the
+/// string form would answer the opposite.
+///
+/// ONE copy of the question "does this card carry a category?" — the
+/// restored-category walk reads it, and the web's own restore answers it
+/// the same way, so a falsy numeric category leaves the restored scope on
+/// the conversation's own edge.
+bool quickHelpDeclaresCategory(Map<String, dynamic> button) =>
+    configTruthy(quickHelpCategoryRawOf(button));
+
+/// Whether [value] names a category scope — the web's `declaresCategoryScope`
+/// rule (`id != null && id !== '' && id !== 'general'`), read on the RAW
+/// value: a numeric 0 still NAMES a scope there (the web's strict
+/// compares let it through — a hand-edited `category: 0` is
+/// declared-and-broken, the VISIBLE failure direction), while '' and the
+/// 'general' placeholder name none.
+bool _declaresCategoryScopeValue(dynamic value) {
+  if (value == null) return false;
+  if (value == '') return false;
+  if (value == 'general') return false;
+  return true;
+}
+
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
+///
+/// The category half is the web's OWN scope rule, read on the RAW value
+/// ([_declaresCategoryScopeValue]) — the web judges the raw category there,
+/// so a hand-edited `category: 0` answers exactly as it does on the web.
+/// This is the web's SECOND question, not the restore's: the restore asks
+/// whether a category is PRESENT ([quickHelpDeclaresCategory]) and the
+/// verdict asks whether one is NAMED. The web keeps both questions apart
+/// (its restore gates on truthiness, its verdict on the scope rule), so
+/// the mobile keeps them apart too — on ONE shared read of the raw value,
+/// so the two answers can never come from two different strings.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return declaresCategoryScope(quickHelpCategoryOf(button)) ||
+  return _declaresCategoryScopeValue(quickHelpCategoryRawOf(button)) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
@@ -1075,16 +1122,11 @@ class ConversationScopeResolver {
         // The web's restore gates the category on the RAW value's
         // JavaScript truthiness (`if (button.category)`) BEFORE any
         // stringification: a falsy raw category (0, false, '') declares
-        // none. The parse keeps the raw value beside its string form
-        // for exactly this gate; a map with no raw record (a hand-built
-        // fixture) falls back to the string form's non-emptiness.
-        final raw = taggedButton['categoryRaw'];
-        final declared = quickHelpCategoryOf(taggedButton);
-        final declaresCategory = raw != null
-            ? configTruthy(raw)
-            : (declared != null && declared.isNotEmpty);
-        if (declaresCategory) {
-          effectiveCategory = _hierarchy.categoryIdFor(declared);
+        // none. quickHelpDeclaresCategory is that ONE gate.
+        if (quickHelpDeclaresCategory(taggedButton)) {
+          effectiveCategory = _hierarchy.categoryIdFor(
+            quickHelpCategoryOf(taggedButton),
+          );
         }
       } else if (tag.startsWith('category.')) {
         final legacyId = tag.substring('category.'.length);

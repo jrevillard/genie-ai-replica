@@ -4,12 +4,14 @@ Agent-facing conventions for the Playwright suite in `tests/e2e/`. Read this bef
 writing or changing any spec, helper, or capture script in this directory.
 
 **Operator directive (2026-11-03, issue #1377): E2E tests must be deterministic.**
+Rule below is that directive, expanded.
+
+## Determinism
+
 No fallback paths, no catch-and-continue, no retry loops that mask a real failure,
 no best-effort degradation. We know what the test must do — assert EXACTLY that.
 Any deviation from the expected behaviour is a FAIL, with the actual observed value
 in the error (never silently tolerated).
-
-## Rule 1 — Determinism
 
 - **Assert exactly.** Every step of the expected behaviour has an assertion. If the
   test may proceed without asserting, the missing assertion is a bug in the test.
@@ -24,14 +26,12 @@ in the error (never silently tolerated).
   failing cleanup that reports exactly what it could not remove; warn-and-continue
   is permitted only for a leftover state the next test's seed provably makes
   impossible, and the warning must name the leftover state.
-- **Timeouts fail, never hang.** Use explicit bounds. A wait that expires is a
-  failure — never followed by "continue anyway".
 - **Wait for conditions, not durations.** No `waitForTimeout`, no fixed `sleep`:
   a fixed sleep is slow on a fast machine and flaky on a slow one. Wait on the
   observable condition (`waitForSelector`, `expect.poll`, `waitForURL`,
-  `waitForResponse`) with a hard `timeout` that fails on expiry. If no observable
-  condition exists, the test (or the app under test) needs one — a sleep is not
-  the fix.
+  `waitForResponse`) with a hard `timeout`; a wait that expires is a failure,
+  never followed by "continue anyway". If no observable condition exists, the
+  test (or the app under test) needs one — a sleep is not the fix.
 - **Fixed, isolated seed data.** Each test creates the state it needs with known
   values and unique keys (usernames, file names, conversation titles), and removes
   it deterministically. No reliance on order of execution, on data left by a
@@ -60,12 +60,10 @@ reference; do not duplicate or restate them here or in specs.
 |------|----------|
 | `*.spec.js`, `chatbot/`, `documents/`, `okf/` | Feature specs (Playwright) |
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
-| `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin helpers |
+| `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers |
 | `fixtures/` | Fixed seed files for upload tests |
 | `capture-dashboard.js` | Dashboard screenshot capture script (not a spec) |
 
-Config: `playwright.config.js` at repo root — `baseURL: process.env.BASE_URL ||
-'https://localhost'`, `retries: 0` and `workers: 1` (determinism is enforced here:
-do not add retries or parallelism to paper over a flake — fix the test),
-`timeout: 60000` per test, `expect.timeout: 15000`, `actionTimeout: 15000`,
-`ignoreHTTPSErrors`, `bypassCSP`.
+Config: `playwright.config.js` at repo root. `retries: 0` and `workers: 1` are
+deliberate — determinism is enforced there; do not add retries or parallelism to
+paper over a flake, fix the test. Current timeouts and base URL: read the config.

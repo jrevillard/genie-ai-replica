@@ -168,13 +168,11 @@ stack — neither exists inside Jest.
 
 ## E2E Determinism
 
-E2E tests (and their provisioning/readiness shell in `docs/e2e-tests/`) must be
-deterministic: no fallback paths, no catch-and-continue, no retry loops that mask a
-real failure, no best-effort degradation. Assert exactly the expected behaviour; any
-deviation is a FAIL carrying the observed value in the error. Waits are explicit
-wait-for-condition with a hard bound — expiry fails (never `waitForTimeout` or fixed
-`sleep`), and seed data is fixed and isolated per test. Full rules and the suite
-layout: `tests/e2e/CLAUDE.md`.
+E2E tests (and the provisioning/readiness shell in `docs/e2e-tests/`) must be
+deterministic — exact assertions only, no fallback paths or swallowed failures,
+waits as explicit wait-for-condition with a hard bound, fixed and isolated seed
+data. Any deviation is a FAIL. Full rules and suite layout:
+`tests/e2e/CLAUDE.md`.
 
 ## CI Pipeline
 

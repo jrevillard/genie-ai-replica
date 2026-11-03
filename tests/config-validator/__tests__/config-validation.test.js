@@ -2409,8 +2409,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // arbitrates. The transitive walk needs to read helper sources, so the
   // whole IO surface is one injectable object: the derivation units pin the
   // walk on synthetic two-directory chains that cannot exist on the real
-  // tree. stat returns the stat or null (containment is part of the
-  // contract); read returns the file text.
+  // tree. stat returns the stat or null, read throws outside tests/e2e —
+  // containment is part of BOTH halves' contract; read returns the file
+  // text.
   const REAL_IO = {
     stat: (candidate) => {
       if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) return null;
@@ -2420,7 +2421,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
         return null;
       }
     },
-    read: (file) => fs.readFileSync(path.join(ROOT, file), 'utf-8')
+    read: (file) => {
+      if (!file.startsWith(`${TESTS_E2E_ROOT}/`)) {
+        throw new Error(`read outside ${TESTS_E2E_ROOT}: ${file}`);
+      }
+      return fs.readFileSync(path.join(ROOT, file), 'utf-8');
+    }
   };
 
   // Resolve a specifier the way Node does for these CJS specs: as-is, with
@@ -2455,6 +2461,24 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const isCovered = (anchorPaths, entry) =>
     anchorPaths.some((p) => p === entry || (p.endsWith('/**/*') && entry.startsWith(`${p.slice(0, -5)}/`)));
 
+  // ONE string-literal policy for the whole guard: a quoted literal whose
+  // content may carry the OTHER quote styles and backslash escapes, never
+  // an unescaped copy of its own delimiter. The derivation regexes and the
+  // #1325 detector below all consume this fragment — a single policy point,
+  // because the review that surfaced the interpolated-join gap found the
+  // quote/interpolation rules had already drifted between independently
+  // maintained copies. Backtick interpolation (${...}) is NOT part of a
+  // literal here; it matches the shape and is rejected by the detector,
+  // while a derived garbage path fails the existence stat — either way the
+  // call is gated loud, never silently consumed.
+  const LIT_SRC = '\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`(?:[^`\\\\]|\\\\.)*`';
+  // Same fragment for RELATIVE specifiers: the leading `.` sits inside the
+  // quotes (it is the first character of the specifier string value).
+  const DOT_LIT_SRC = '\'\\.(?:[^\'\\\\]|\\\\.)*\'|"\\.(?:[^"\\\\]|\\\\.)*"|`\\.(?:[^`\\\\]|\\\\.)*`';
+  // Node resolves the STRING VALUE, not the source text: escapes written in
+  // the literal ('./it\'s.js') are already resolved before require runs.
+  const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
+
   // Extract the consumed paths from the executed specs AND the files they
   // transitively require (#1326, #1344): consumption introduced inside a
   // helper — a refactor moving shared logic into a new directory required
@@ -2463,28 +2487,31 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // through their resolved relative specifiers; the visited set doubles as
   // the cycle guard. Two consumption shapes per file: relative require/
   // import specifiers and path.join(__dirname, ...) / path.resolve(
-  // __dirname, ...) string-literal segment chains. Candidates are dropped
-  // unless they resolve inside tests/e2e to something that exists on disk —
-  // the regexes over-capture (comments naming real files, dead references)
-  // and the filesystem arbitrates. Over-capture is the conservative
-  // direction for a trigger guard: more anchor coverage, never a silent
-  // loss of coverage, and it fails the exact pin loudly. Computed
-  // (non-literal) arguments match nothing here — the shape detector below
-  // fails loudly when one appears, so this walk never sees the family.
+  // __dirname, ...) string-literal segment chains (both built on LIT_SRC
+  // above). Candidates are dropped unless they resolve inside tests/e2e to
+  // something that exists on disk — the regexes over-capture (comments
+  // naming real files, dead references) and the filesystem arbitrates.
+  // Over-capture is the conservative direction for a trigger guard: more
+  // anchor coverage, never a silent loss of coverage, and it fails the
+  // exact pin loudly. Computed (non-literal) arguments match nothing here
+  // (or resolve to nothing) — the shape detector below fails loudly when
+  // one appears, so this walk never sees the family ungated.
   const deriveConsumed = (specFiles, io = REAL_IO) => {
-    // Specifier shapes consumed — quotes are unenforced in tests/e2e (no
-    // ESLint config covers the tree), so all three quote styles pair via
-    // the backreference; require( takes spaced and .resolve spellings and
-    // import( the spaced one; `from`, dynamic import() and bare
-    // side-effect imports land in the same alternation.
-    const specifierRe = /(?:(?:require(?:\.resolve)?)\s*\(\s*|\bimport\s*\(?\s*|\bfrom\s*)(['"`])(\.[^'"`]*)\1/g;
-    // Same shape tolerance as the specifiers for __dirname chains: all
-    // three quote styles, any spacing. A join carrying a non-literal
-    // argument is not matched at all (the detector below gates it); an
-    // inline comment inside the call likewise. Chains anchored on
-    // __filename or import.meta.url are not derived — no spec uses them;
-    // they belong to the same documented-limits family.
-    const joinRe = /path\.(?:join|resolve)\(\s*__dirname((?:\s*,\s*(['"`])[^'"`]*\2)+)\s*\)/g;
+    // Specifier shapes consumed — require( takes spaced and .resolve
+    // spellings, import( the spaced one, and `from`, dynamic import() and
+    // bare side-effect imports land in the same alternation; the literal
+    // itself is the shared LIT_SRC policy (must start with `.` = relative).
+    const specifierRe = new RegExp(
+      '(?:(?:require(?:\\.resolve)?)\\s*\\(\\s*|\\bimport\\s*\\(?\\s*|\\bfrom\\s*)(' + DOT_LIT_SRC + ')',
+      'g'
+    );
+    // Same literal policy for __dirname chains: any spacing, two or more
+    // `, 'segment'` pairs. A join carrying a non-literal argument is not
+    // matched at all (the detector below gates it); an inline comment
+    // inside the call likewise. Chains anchored on __filename or
+    // import.meta.url are not derived — no spec uses them; they belong to
+    // the same documented-limits family.
+    const joinRe = new RegExp('path\\.(?:join|resolve)\\(\\s*__dirname((?:\\s*,\\s*(?:' + LIT_SRC + '))+)\\s*\\)', 'g');
     const globs = new Set();
     const sources = new Map();
     const queue = [];
@@ -2504,13 +2531,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
       const source = sources.get(file);
       const dir = path.posix.dirname(file);
       for (const match of source.matchAll(specifierRe)) {
-        const resolved = resolveSpecifier(dir, match[2], io);
+        const resolved = resolveSpecifier(dir, UNESCAPE(match[1]), io);
         if (!resolved) continue;
         globs.add(toAnchorPath(resolved, false));
         visitFile(resolved);
       }
       for (const match of source.matchAll(joinRe)) {
-        const segments = [...match[1].matchAll(/(['"`])([^'"`]*)\1/g)].map((m) => m[2]);
+        const segments = [...match[1].matchAll(new RegExp(LIT_SRC, 'g'))].map((m) => UNESCAPE(m[0]));
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
         const st = io.stat(resolved);
         if (!st) continue;
@@ -2539,35 +2566,39 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // silent coverage hole. require( / require.resolve( / import( must carry
   // exactly one string literal (template literals with interpolation
   // included in the forbidden family); path.join(__dirname, ...)/resolve
-  // must carry only string-literal segments. The detector runs on raw text
-  // (no comment stripping — stripping could truncate a string containing
-  // `//` and FABRICATE a finding, worse than over-capture) and over-captures
-  // on purpose: prose mentioning a call shape reads as consumption — loud
-  // is the safe direction. Matching is quote-aware instead of
-  // first-paren-delimited so a literal carrying `)` (a file named
-  // `doc(v2)`) is not misread as the call's end.
-  // The literal must be the WHOLE argument: the closing paren anchors the
-  // end, so `require('../x' + y)` cannot pass as a literal prefix match.
-  const LITERAL_ARG = /^\s*(['"`])([^'"`]*)\1\s*\)/;
+  // must carry only string-literal segments — both built on the shared
+  // LIT_SRC policy above, so the quote/escape rules cannot drift between
+  // the derivation and this detector. The detector runs on raw text (no
+  // comment stripping — stripping could truncate a string containing `//`
+  // and FABRICATE a finding, worse than over-capture) and over-captures on
+  // purpose: prose mentioning a call shape reads as consumption — loud is
+  // the safe direction. Matching is delimiter-aware instead of
+  // first-paren-delimited: a literal carrying `)` (a file named `doc(v2)`)
+  // is not misread as the call's end, and a literal carrying ANOTHER quote
+  // style (`require("./user's-data.js")`) is not misread as terminated
+  // early. The literal must be the WHOLE argument: the closing paren
+  // anchors the end, so `require('../x' + y)` cannot pass as a literal
+  // prefix match.
+  const LITERAL_ARG = new RegExp('^\\s*(' + LIT_SRC + ')\\s*\\)');
   const findNonLiteralConsumption = (source) => {
     const findings = [];
+    const interpolated = (literal) => literal.startsWith('`') && literal.includes('${');
     // Same word-boundary discipline as the specifier regex: a method named
     // require/import (x.import(...) / foo.require(...)) is not consumption.
     const callStartRe = /(?<![\w.$])(?:require(?:\.resolve)?|import)\s*\(/g;
     for (const match of source.matchAll(callStartRe)) {
       const m = LITERAL_ARG.exec(source.slice(match.index + match[0].length));
-      // Template interpolation stays in the forbidden family even though
-      // the quote class above matches backtick literals.
-      if (!m || (m[1] === '`' && m[2].includes('${'))) {
+      if (!m || interpolated(m[1])) {
         findings.push('non-literal specifier in a require/import call');
       }
     }
     const dirnameStartRe = /path\.(?:join|resolve)\(\s*__dirname/g;
-    const SEGMENT = /^\s*,\s*(['"`])[^'"`]*\1/;
+    const SEGMENT = new RegExp('^\\s*,\\s*(' + LIT_SRC + ')');
     for (const match of source.matchAll(dirnameStartRe)) {
       let rest = source.slice(match.index + match[0].length);
       let segment;
       while ((segment = SEGMENT.exec(rest))) {
+        if (interpolated(segment[1])) break;
         rest = rest.slice(segment[0].length);
       }
       if (!/^\s*\)/.test(rest)) findings.push('non-literal segment in a path.join(__dirname, ...) call');
@@ -2879,6 +2910,26 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ]);
     });
 
+    test('a literal carrying another quote style or an escape is still consumed', () => {
+      const tree = {
+        'tests/e2e/documents/x.spec.js': 'const a = require("../lib/user\'s-data.js");',
+        "tests/e2e/lib/user's-data.js": 'module.exports = {};',
+        'tests/e2e/documents/y.spec.js': "const b = require('../lib/it\\'s.js');",
+        "tests/e2e/lib/it's.js": 'module.exports = {};'
+      };
+      const derived = deriveConsumed(
+        [
+          { file: 'tests/e2e/documents/x.spec.js', source: tree['tests/e2e/documents/x.spec.js'] },
+          { file: 'tests/e2e/documents/y.spec.js', source: tree['tests/e2e/documents/y.spec.js'] }
+        ],
+        memIo(tree)
+      );
+      expect(derived.globs).toEqual(['tests/e2e/lib/**/*']);
+      // The escape must be RESOLVED, not carried: the unescape gate below
+      // mutates UNESCAPE away and expects exactly this file to go missing.
+      expect(derived.files.map((f) => f.file)).toContain("tests/e2e/lib/it's.js");
+    });
+
     test('a directory-index require resolves through the index.js rule', () => {
       const tree = {
         'tests/e2e/documents/x.spec.js': "const l = require('../lib');",
@@ -2960,6 +3011,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['concatenated require', "const h = require('../helpers/' + name);"],
       ['variable dynamic import', 'const y = import(dynamicName);'],
       ['interpolated join segment', "const d = path.join(__dirname, '..', locale);"],
+      ['interpolated backtick join segment', 'const d = path.join(__dirname, `../${locale}`);'],
       ['call argument after a literal join segment', "const d = path.join(__dirname, '..', dirName());"],
       // Over-capture is deliberate: a string merely mentioning a call shape
       // reads as consumption — loud is the safe direction for a trigger guard.
@@ -2977,6 +3029,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['join on a variable anchor', 'const f = path.join(FIXTURES_DIR, fileName);'],
       ['require with a paren inside the literal', "const h = require('./a(1)b.js');"],
       ['join with a paren inside a literal segment', "const d = path.join(__dirname, 'doc(v2)');"],
+      ['apostrophe inside a double-quoted require', 'const h = require("./user\'s-data.js");'],
+      ['escaped quote inside a require', "const h = require('./it\\'s.js');"],
+      ['apostrophe inside a join segment', 'const d = path.join(__dirname, "user\'s docs");'],
       ['string mentioning require without call args', "const s = 'see require docs';"]
     ])('does not flag the %s shape', (_name, source) => {
       expect(findNonLiteralConsumption(source)).toEqual([]);

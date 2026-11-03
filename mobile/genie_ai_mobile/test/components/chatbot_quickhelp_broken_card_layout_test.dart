@@ -88,9 +88,9 @@ void main() {
       expect(caption, findsOneWidget);
 
       // The diagnosis is NOT a fixed-aspect grid tile: the caption
-      // lives outside the GridView, whose cells cannot grow with it.
+      // lives outside the sliver grid, whose cells cannot grow with it.
       expect(
-        find.ancestor(of: caption, matching: find.byType(GridView)),
+        find.ancestor(of: caption, matching: find.byType(SliverGrid)),
         findsNothing,
       );
 
@@ -110,7 +110,7 @@ void main() {
       expect(
         find.ancestor(
           of: find.text('Births Card'),
-          matching: find.byType(GridView),
+          matching: find.byType(SliverGrid),
         ),
         findsOneWidget,
       );
@@ -132,15 +132,17 @@ void main() {
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
       expect(
-        find.ancestor(of: caption, matching: find.byType(GridView)),
+        find.ancestor(of: caption, matching: find.byType(SliverGrid)),
         findsNothing,
       );
       // The grid still exists for the healthy case, but hosts no card:
-      // a card the outage broke is not a fixed-aspect tile anymore.
-      expect(find.byType(GridView), findsOneWidget);
+      // a card the outage broke is not a fixed-aspect tile anymore. An
+      // EMPTY sliver grid paints nothing — the default finders treat it
+      // as offstage — so this half must include the invisible slivers.
+      expect(find.byType(SliverGrid, skipOffstage: false), findsOneWidget);
       expect(
         find.descendant(
-          of: find.byType(GridView),
+          of: find.byType(SliverGrid, skipOffstage: false),
           matching: find.text('Births Card'),
         ),
         findsNothing,

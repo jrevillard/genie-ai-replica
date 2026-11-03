@@ -161,6 +161,8 @@ Future<void> pumpChatBot(
   List<Locale> supportedLocales = const [Locale('en')],
   Widget Function(Widget chatbot)? buildHome,
   ThemeData? theme,
+  QueriesApi? queriesApi,
+  bool settle = true,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -172,6 +174,8 @@ Future<void> pumpChatBot(
         chatHistoryApiProvider.overrideWithValue(
           ChatHistoryApi(ApiClient()..client = mock),
         ),
+        if (queriesApi != null)
+          queriesApiProvider.overrideWithValue(queriesApi),
       ],
       child: AnimatedBuilder(
         animation: I18nService(),
@@ -189,7 +193,9 @@ Future<void> pumpChatBot(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  }
 }
 
 /// The tree-answer mock client the Quick Help grid tests share: the

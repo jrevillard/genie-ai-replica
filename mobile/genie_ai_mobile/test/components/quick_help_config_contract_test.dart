@@ -128,20 +128,22 @@ void main() {
     String sourceOf() =>
         File('lib/components/chat/chatbot_component.dart').readAsStringSync();
 
-    /// The GRID's card only: from the file's single `GridView.builder(`
-    /// to the next section marker. Bounded on both ends, because the
-    /// dialogs below the grid read their own maps and are not this
-    /// contract.
+    /// The GRID's card only: from the file's single
+    /// `final button = gridButtons[index];` — the lazy sliver grid's
+    /// tile read (the diagnosis rows build from `broken[index]`, never
+    /// from `gridButtons`) — to the next section marker. Bounded on
+    /// both ends, because the dialogs below the grid read their own
+    /// maps and are not this contract.
     String gridCode() {
       final source = sourceOf();
-      final start = source.indexOf('GridView.builder(');
+      final start = source.indexOf('final button = gridButtons[index];');
       expect(
         start,
         greaterThanOrEqualTo(0),
         reason: 'the grid is gone from the widget',
       );
       expect(
-        source.indexOf('GridView.builder(', start + 1),
+        source.indexOf('final button = gridButtons[index];', start + 1),
         -1,
         reason: 'a second grid exists - the guard must name its own',
       );

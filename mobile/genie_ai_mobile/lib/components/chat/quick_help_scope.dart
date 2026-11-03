@@ -1344,16 +1344,22 @@ bool quickHelpCardBroken(
   return quickHelpScopeBroken(scope) || quickHelpTitleMissing(button);
 }
 
-/// The cards split into the two layouts the overlay renders — the
-/// broken cards, each with the scope its caption names, and the
-/// healthy ones that stay grid tiles. ONE partition read by both
-/// halves of the overlay, on the [scopeFor] verdict the caller binds
-/// (the tree-unavailable rule is state the scope file does not own).
-({
+/// The overlay's broken/healthy split: the diagnosis rows with their
+/// verdicts, and the healthy buttons that stay grid tiles. ONE
+/// spelling, owned beside the partition — the widget's memo field, its
+/// partition method and its build-site fallback must all name this
+/// shape.
+typedef QuickHelpPartition = ({
   List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
   List<Map<String, dynamic>> healthy,
-})
-quickHelpPartitionButtons(
+});
+
+/// The cards split into the two layouts the overlay renders — the
+/// broken cards, each with the scope its caption names, and the
+/// healthy ones. ONE partition read by both halves of the overlay, on
+/// the [scopeFor] verdict the caller binds (the tree-unavailable rule
+/// is state the scope file does not own).
+QuickHelpPartition quickHelpPartitionButtons(
   List<Map<String, dynamic>> buttons,
   Map<String, dynamic> Function(Map<String, dynamic> button) scopeFor,
 ) {
@@ -1388,6 +1394,30 @@ bool quickHelpScopeIsNameable(
   return resolver?.categoryLabelEn(button) != null;
 }
 
+/// The scope facts a query carries onto the wire: whether the selection
+/// declares a scope at all, the category's ENGLISH label, and the merged
+/// service labels. ONE copy for both send paths — the streaming request
+/// and the fallback's generated request each encode these into their own
+/// transport, and a rule kept in two hand-synced copies is the drift that
+/// sent the fallback's question over the whole corpus while the chip
+/// promised a filtered one.
+({bool hasContext, String? categoryLabelEn, List<String> serviceLabels})
+queryScopeFacts({
+  String? categoryId,
+  String? categoryNameEn,
+  List<String> serviceLabels = const <String>[],
+  List<String> sidebarServiceLabels = const <String>[],
+}) {
+  final labels = mergeServiceLabels(serviceLabels, sidebarServiceLabels);
+  return (
+    hasContext: declaresCategoryScope(categoryId) || labels.isNotEmpty,
+    // The empty name is no name: the clear's payload and a scope the
+    // hierarchy could not EN-name both go out as null.
+    categoryLabelEn: categoryNameEn?.isNotEmpty == true ? categoryNameEn : null,
+    serviceLabels: labels,
+  );
+}
+
 /// Whether the query can carry the selection's scope.
 ///
 /// A selection that declares NO scope asks an unscoped question — the
@@ -1408,15 +1438,24 @@ bool scopeCanGoOnTheWire({
   // refuses the tap: replaying the dead labels would filter on labels no
   // chunk carries — a silent abstention instead of a named failure.
   if (quickHelpScopeBroken) return false;
-  final labels = mergeServiceLabels(serviceLabels, sidebarServiceLabels);
+  final facts = queryScopeFacts(
+    categoryId: categoryId,
+    categoryNameEn: categoryNameEn,
+    serviceLabels: serviceLabels,
+    sidebarServiceLabels: sidebarServiceLabels,
+  );
   // An EMPTY category id declares nothing: the context bar's X clears the
   // selection with one, and an empty id is not a scope. Reading it as one
   // would refuse every question the user asks afterwards. 'general' is
   // the placeholder a category-less selection is stored under — it names
-  // no category, on either platform.
+  // no category, on either platform. The two shared legs come from the
+  // ONE spelling the send paths read (queryScopeFacts), so the guard and
+  // the payloads cannot disagree on what declares a scope.
   final hasScope =
-      declaresCategoryScope(categoryId) ||
-      labels.isNotEmpty ||
+      facts.hasContext ||
+      // The guard's OWN third leg: a selection that picked services it
+      // cannot name yet (a count the labels do not carry) is a scope the
+      // refusal must describe — the payloads never see it.
       sidebarServiceCount > 0;
   if (!hasScope) return true;
   // A PICKED service must carry its own ENGLISH name: the category does
@@ -1428,7 +1467,7 @@ bool scopeCanGoOnTheWire({
     return false;
   }
   return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
-      labels.isNotEmpty;
+      facts.serviceLabels.isNotEmpty;
 }
 
 /// The labels a request carries: the Quick Help card's declared labels

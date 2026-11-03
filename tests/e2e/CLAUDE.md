@@ -47,6 +47,25 @@ and are fixed there, not by mass-rewriting unrelated specs in a feature MR. Any
 code you touch or add must comply; do not copy a violating pattern from a
 neighbouring file.
 
+## Locating application elements
+
+A test locates an application element only through a test handle the
+application declares — a `data-test-id` attribute in the Vue app. Never
+through a CSS class, a DOM structure or an i18n label.
+
+The rule, its rationale and the Flutter counterpart (`Key` in the patrol
+suite): `.claude/rules/E2E-TESTING.md`.
+
+```js
+// yes
+page.locator('[data-test-id="stat-system-uptime"]')
+// no
+page.locator('.stat-card .stat-value')
+```
+
+If the element you need carries no handle, add one to the component that
+renders it (`data-test-id="..."`) — an inert attribute, no behaviour change.
+
 ## Execution order and phase conventions
 
 The three execution-order conventions — Test Step Format, Variable Naming, URL
@@ -58,12 +77,44 @@ reference; do not duplicate or restate them here or in specs.
 
 | Path | Contents |
 |------|----------|
-| `*.spec.js`, `chatbot/`, `documents/`, `okf/` | Feature specs (Playwright) |
+| `*.spec.js`, `chatbot/`, `documents/`, `admin/`, `okf/` | Feature specs (Playwright) |
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
+| `helpers/admin-fixtures.js` | The admin-surface fixture definitions (username, email, password, realm roles) |
+| `provision-admin-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
 | `fixtures/` | Fixed seed files for upload tests |
 | `capture-dashboard.js` | Dashboard screenshot capture script (not a spec) |
 
 Config: `playwright.config.js` at repo root. `retries: 0` and `workers: 1` are
 deliberate — determinism is enforced there; do not add retries or parallelism to
 paper over a flake, fix the test. Current timeouts and base URL: read the config.
+
+## Running
+
+```bash
+# from the repository root (playwright resolves from the root node_modules)
+npm install && npx playwright install chromium
+BASE_URL=https://localhost npx playwright test tests/e2e/<area>/ --project=chromium
+```
+
+`BASE_URL` points at the stack's edge; it defaults to `https://localhost`.
+The specs log in through the browser (`loginViaUI`) — the realm refuses
+direct access grants, so a minted token gives an API call a token, not a
+page a session.
+
+## Fixtures
+
+The admin-surface fixtures are defined once, in `tests/e2e/helpers/admin-fixtures.js`,
+and provisioned by `tests/e2e/provision-admin-fixtures.js` — the CI e2e job
+and the Phase 0 procedure (`docs/e2e-tests/00-clean-start.md`) both run it,
+so a credential is written in one place. The helper converges an existing
+account (password reset, fixture-health check, role assignment) instead of
+failing.
+
+## CI
+
+`e2e:playwright` runs on **merge trains** and scheduled pipelines only
+(`CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"`), so a plain MR pipeline
+does not execute the Playwright stage. The executed set is pinned by
+`tests/config-validator/` — adding a spec directory to the invocation
+means adding it there too.

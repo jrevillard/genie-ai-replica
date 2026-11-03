@@ -50,20 +50,20 @@ test.describe('Admin overview failure states', () => {
 
     // The visible failure — the notification the component raises from
     // its catch path.
-    const errorToast = page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT });
+    const errorToast = page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT });
     await expect(errorToast).toBeVisible();
 
     // Never a silent blank: the dashboard shell and the four stat tiles
     // still render around the failure (tiles keep their last/initial
     // values — the failure surface is the toast, not a broken page).
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
-    await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
+    await expect(page.locator('[data-test-id^="stat-"]')).toHaveCount(4);
   });
 
   test('recovers on the next successful load after a 503', async ({ page }) => {
     // First load fails.
     await openAdminWithFailure(page, 503, 'SERVICE_UNAVAILABLE', 'Temporarily unavailable');
-    await expect(page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT })).toBeVisible();
+    await expect(page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT })).toBeVisible();
 
     await page.unroute('**/api/admin/system-health');
 
@@ -97,7 +97,7 @@ test.describe('Admin overview failure states', () => {
     // Recovery: the dashboard renders the successful load's payload and
     // the component reports no failure any more.
     await expect(page.locator('[data-test-id="stat-system-uptime"] .stat-value')).toHaveText('42.42%');
-    await expect(page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT })).toHaveCount(0);
+    await expect(page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT })).toHaveCount(0);
     expect(recovery.calls).toBeGreaterThanOrEqual(1);
   });
 });

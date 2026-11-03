@@ -58,7 +58,7 @@ test.describe('Admin route authorization', () => {
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
     // The four overview stat tiles render (real backend data — values are
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
-    await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
+    await expect(page.locator('[data-test-id^="stat-"]')).toHaveCount(4);
     await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeEnabled();
     expect(health.records.length).toBeGreaterThanOrEqual(1);
     expect(health.records.every((r) => r.status === 200)).toBe(true);

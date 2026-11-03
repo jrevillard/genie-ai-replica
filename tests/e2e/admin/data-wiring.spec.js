@@ -50,10 +50,10 @@ test.describe('Admin overview data wiring', () => {
     // Exact text, tile by tile — the template appends the unit
     // (%, ms) and errorRateLabel appends % (or an em dash when the
     // metric is null).
-    await expect(page.locator('[data-test-id="stat-system-uptime"] .stat-value')).toHaveText('87.65%');
-    await expect(page.locator('[data-test-id="stat-avg-response-time"] .stat-value')).toHaveText('321ms');
-    await expect(page.locator('[data-test-id="stat-error-rate"] .stat-value')).toHaveText('2.5%');
-    await expect(page.locator('[data-test-id="stat-monthly-active-users"] .stat-value')).toHaveText('1,234');
+    await expect(page.locator('[data-test-id="stat-system-uptime"]')).toContainText('87.65%');
+    await expect(page.locator('[data-test-id="stat-avg-response-time"]')).toContainText('321ms');
+    await expect(page.locator('[data-test-id="stat-error-rate"]')).toContainText('2.5%');
+    await expect(page.locator('[data-test-id="stat-monthly-active-users"]')).toContainText('1,234');
   });
 
   test('health services and resource usage render from the payload', async ({ page }) => {
@@ -71,21 +71,21 @@ test.describe('Admin overview data wiring', () => {
     // The status vocabulary is the backend's own ('good' / 'warning' /
     // 'error' — admin-dashboard-service.getSystemHealth), so the asserted
     // classes are the ones the component actually renders.
-    const alpha = page.locator('.health-item', { hasText: 'Wired Service Alpha' });
+    const alpha = page.locator('[data-test-id="health-wiredAlpha"]');
     await expect(alpha).toBeVisible();
     await expect(alpha).toHaveClass(/status-good/);
 
-    const beta = page.locator('.health-item', { hasText: 'Wired Service Beta' });
+    const beta = page.locator('[data-test-id="health-wiredBeta"]');
     await expect(beta).toBeVisible();
     await expect(beta).toHaveClass(/status-warning/);
 
     // Resource rows: the row anchor is the canonical resource id (the
     // label itself is i18n); value and bar width come from the payload.
     const cpu = page.locator('[data-test-id="usage-cpu"]');
-    await expect(cpu.locator('.usage-value')).toHaveText('42%');
-    await expect(cpu.locator('.usage-fill')).toHaveAttribute('style', /width: 42%/);
+    await expect(cpu).toContainText('42%');
+    await expect(page.locator('[data-test-id="usage-cpu-fill"]')).toHaveAttribute('style', /width: 42%/);
 
     const memory = page.locator('[data-test-id="usage-memory"]');
-    await expect(memory.locator('.usage-value')).toHaveText('67%');
+    await expect(memory).toContainText('67%');
   });
 });

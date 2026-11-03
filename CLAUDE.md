@@ -195,6 +195,7 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 - **Config validation**: `tests/config-validator/` validates env variable coverage
 
 → Full commands, patterns, CI details: `.claude/rules/TESTING.md`
+→ How an E2E test locates an application element (`data-test-id` in the web app, `Key` in the Flutter app): `.claude/rules/E2E-TESTING.md`
 
 **Visible behaviour** has its own rules, per client — read the one that matches what you are changing:
 

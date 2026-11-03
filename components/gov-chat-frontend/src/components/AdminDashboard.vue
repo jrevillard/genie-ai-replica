@@ -221,6 +221,7 @@
                       v-for="service in healthServices"
                       :key="service.name"
                       :class="['health-item', `status-${service.status}`]"
+                      :data-test-id="`health-${service.id}`"
                     >
                       <div :class="['status-badge', `badge-${service.status}`]"></div>
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
@@ -249,6 +250,7 @@
                       <div class="usage-bar">
                         <div
                           :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]"
+                          :data-test-id="`usage-${resource.id}-fill`"
                           :style="{ width: `${resource.value}%` }"
                         ></div>
                       </div>
@@ -770,15 +772,19 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
+                          <tr
+                            v-for="(log, index) in errorLogsSummary"
+                            :key="'error-' + index"
+                            :data-test-id="`log-row-${log.service}`"
+                          >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count">{{ log.count }}</td>
+                            <td class="log-count" :data-test-id="`log-count-${log.service}`">{{ log.count }}</td>
                           </tr>
                           <tr v-if="errorLogsSummary.length === 0">
-                            <td colspan="3" class="empty-logs">
+                            <td colspan="3" class="empty-logs" data-test-id="logs-errors-empty">
                               {{ translate('admin.logsSection.noErrorLogs', 'No error logs recorded today.') }}
                             </td>
                           </tr>
@@ -806,15 +812,19 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
+                          <tr
+                            v-for="(log, index) in warningLogsSummary"
+                            :key="'warning-' + index"
+                            :data-test-id="`log-row-${log.service}`"
+                          >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count">{{ log.count }}</td>
+                            <td class="log-count" :data-test-id="`log-count-${log.service}`">{{ log.count }}</td>
                           </tr>
                           <tr v-if="warningLogsSummary.length === 0">
-                            <td colspan="3" class="empty-logs">
+                            <td colspan="3" class="empty-logs" data-test-id="logs-warnings-empty">
                               {{ translate('admin.logsSection.noWarningLogs', 'No warning logs recorded today.') }}
                             </td>
                           </tr>

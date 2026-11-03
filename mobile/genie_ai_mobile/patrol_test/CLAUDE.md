@@ -78,6 +78,27 @@ void main() {
 }
 ```
 
+## Locating Widgets
+
+A patrol test locates a widget ONLY through a `Key` the application
+declares — never through a visible label, a widget type or a position.
+The web side of the same rule (a `data-test-id` attribute in the Vue
+app) is stated in `.claude/rules/E2E-TESTING.md`.
+
+```dart
+// yes
+await $.find.byKey(const Key('confirm-dialog-confirm-btn'));
+
+// no — locale, presentation, structure
+await $.find.text('Confirm');
+await $.find.byType(ElevatedButton);
+```
+
+The app already declares the keys the specs need
+(`Key('main_chat_bot')`, `ValueKey('confirm-dialog-*')`,
+`ValueKey('language-selector')`). A widget a spec needs but that carries
+no key gets one, in the widget that owns it.
+
 ## Test Files
 
 | File | Purpose |

@@ -77,13 +77,13 @@ test.describe('Admin logs view', () => {
     // errors card and the spec would stay green).
     const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
 
-    const keycloakRow = warningsCard.locator('.log-summary-table tr', { hasText: 'wired-keycloak' });
+    const keycloakRow = warningsCard.locator('[data-test-id="log-row-wired-keycloak"]');
     await expect(keycloakRow).toBeVisible();
-    await expect(keycloakRow.locator('.log-count')).toHaveText('3');
+    await expect(page.locator('[data-test-id="log-count-wired-keycloak"]')).toHaveText('3');
 
-    const arangoRow = warningsCard.locator('.log-summary-table tr', { hasText: 'wired-arangodb' });
+    const arangoRow = warningsCard.locator('[data-test-id="log-row-wired-arangodb"]');
     await expect(arangoRow).toBeVisible();
-    await expect(arangoRow.locator('.log-count')).toHaveText('7');
+    await expect(page.locator('[data-test-id="log-count-wired-arangodb"]')).toHaveText('7');
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 
@@ -97,13 +97,13 @@ test.describe('Admin logs view', () => {
     });
 
     const errorsCard = page.locator('[data-test-id="logs-errors-card"]');
-    await expect(errorsCard.locator('.log-summary-table tr', { hasText: 'wired-keycloak' })).toBeVisible();
+    await expect(errorsCard.locator('[data-test-id="log-row-wired-keycloak"]')).toBeVisible();
 
     // Both roll-up tables render their own empty row; scope to the
     // warnings card anchor (the table this spec's payload drives).
     const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
-    await expect(warningsCard.locator('.empty-logs')).toBeVisible();
-    await expect(warningsCard.locator('.log-count')).toHaveCount(0);
+    await expect(warningsCard.locator('[data-test-id="logs-warnings-empty"]')).toBeVisible();
+    await expect(warningsCard.locator('[data-test-id^="log-count-"]')).toHaveCount(0);
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 });

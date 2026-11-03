@@ -3989,6 +3989,35 @@ config:docs-links:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# The e2e provisioning-block stub-curl harness (#1337): executes the
+# Keycloak provisioning/readiness script item of .e2e_web_base under a
+# scripted stub curl — the guard semantics (retry classes, honest-status
+# echoes, loud failures) become regression-proofed instead of eyeballed.
+# Provenance: the scratch version caught a real bug the code review missed
+# during #1289 (see tests/ci-provisioning/README.md).
+config:provisioning-harness:
+  image: python:3.11-slim
+  stage: config
+  dependencies: []
+  before_script:
+    - pip install --cache-dir .cache/pip pyyaml
+  cache:
+    - key: provisioning-harness-pyyaml
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - provisioning-harness-
+  script:
+    - bash tests/ci-provisioning/run.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "tests/ci-provisioning/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Regenerate the Dart OpenAPI client from the current backend sources and
 # diff it against the committed copy (scripts/generate-api-client.sh --check).
 # Fails the pipeline when mobile/genie_ai_mobile/openapi_client/ has drifted

@@ -13,7 +13,7 @@ Compose service carries two tuning knobs and a readiness endpoint. */ -}}
     "image" (dict "repository" "genie-ai-pii-service" "tag" "main")
     "port" 8000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
-    "env" (concat $piiTuningEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $piiTuningEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/ready" "port" 8000) "initialDelaySeconds" 20 "periodSeconds" 30 "failureThreshold" 4)
       "liveness"  (dict "httpGet" (dict "path" "/ready" "port" 8000) "initialDelaySeconds" 120 "periodSeconds" 30 "failureThreshold" 3)

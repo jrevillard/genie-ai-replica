@@ -153,7 +153,7 @@ chart correct until that lands. */ -}}
     "workingDir" "/app/ChatQnA"
     "port" 8888
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 120 "periodSeconds" 15)
       "liveness"  (dict "exec" (dict "command" (list "sh" "-c" "kill -0 1")) "initialDelaySeconds" 180 "periodSeconds" 30)

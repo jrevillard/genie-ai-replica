@@ -92,7 +92,7 @@
     "image" (dict "repository" "genie-ai-retriever-arango" "tag" "main")
     "port" 7000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
-    "env" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 60 "periodSeconds" 30)

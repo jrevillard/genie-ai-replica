@@ -37,7 +37,7 @@ judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
     "image" (dict "repository" "genie-ai-ragas-service" "tag" "main")
     "port" 8090
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
-    "env" (concat $ragasEnv $internalSecretEnv $gpuSecretEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $ragasEnv $internalSecretEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "volumes" (list (dict "name" "ragas-llm-cache" "persistentVolumeClaim" (dict "claimName" "ragas-llm-cache")))
     "volumeMounts" (list (dict "name" "ragas-llm-cache" "mountPath" "/tmp/ragas-llm-cache"))
     "probes" (dict

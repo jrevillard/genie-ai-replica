@@ -344,7 +344,22 @@ Set in `group_vars/<env>/vars.yml`:
 | `dataprep_chunk_size_txt` | `1000` | Chunk size for TXT documents (characters) |
 | `dataprep_chunk_size_md` | `1000` | Chunk size for Markdown documents (characters) |
 | `dataprep_chunk_overlap` | `50` | Overlap between chunks (characters) |
-| `dataprep_max_concurrent_batches` | `1` | Max concurrent processing batches |
+| `dataprep_max_concurrent_batches` | `20` | Max concurrent LLM label batches (code default 20) |
+
+> **Single-replica contract (#1247):** when enabled (`DEPLOY_OPEA=1`), the
+> dataprep service runs at most ONE replica. Its ingestion task registry
+> (ingest 409 idempotency, `kill_ingest`, `task_status`), the boot-time
+> stuck-`Ingesting` recovery and the flock ingest slot pool are all
+> per-process. Scaling beyond one replica (`docker service scale`, or editing
+> `replicas` in the compose deploy block) breaks them silently — double
+> ingests and cross-replica status release. A normal single-replica rolling
+> update is safe by design: Swarm's stop-first order (no `update_config` in
+> the compose deploy block) stops the old task before the replacement boots,
+> and the boot-time recovery releases the orphaned ingest row. Do not scale
+> dataprep: multi-replica-safe shared state for all three behaviours (task
+> registry, recovery ownership, slot pool) is the prerequisite for scaling
+> (#1390), and nothing enforces the limit today — scaling silently breaks
+> ingestion correctness.
 
 ### Label Selector Prompt
 

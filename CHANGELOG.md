@@ -10,9 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **The OKF knowledge-base documentation ships on the docs site** — the architecture overview, deployment/configuration guides (OKF variables, access control, the OKF Studio walkthrough) and the full ADR series behind the OKF pillar that landed dark in the previous releases. The feature itself remains disabled by default (`OKF_ENABLED=0`); the flip is a per-deployment decision.
+- **dataprep logs its single-replica contract at boot.** Every dataprep replica emits a WARNING line at startup stating that scaling beyond one replica silently breaks ingestion (per-process task registry, boot-time recovery, slot pool). The line is always-on: on a healthy deployment it appears once per boot/restart. Detection guidance for a mis-scaled deployment is in the scaling docs.
+
 ### Changed
 
 - **The knowledge hierarchy write endpoints now reject a translation entry they cannot store instead of ignoring it.** An entry that does not carry a language code and a translation now answers `400` with the reason; the accepted payload is unchanged, each entry still carries `languageCode` and `translation`.
+- **dataprep is documented as single-replica by contract** (#1247). Its ingestion task registry, boot-time recovery and ingest slot pool are per-process; scaling beyond one replica silently breaks them. The contract is now stated where replicas are declared (docker-compose.yaml deploy block), in the Ansible deploy README, and in the operator scaling docs — which previously instructed `docker service scale ...=2` verbatim. Enforcement (a shared-state registry) is tracked separately.
+- **The Ansible README's `dataprep_max_concurrent_batches` default is corrected from `1` to `20`** — the code default (was already 20 since the labelling-bottleneck fix). A deployer who copied `1` from the old README into `vars.yml` was silently throttling ingestion to one concurrent label batch.
 - **The documented `Event` contract no longer conflates the request wire with the stored document.** The shared `Event` schema described both the POST `/api/analytics/events` request body and the persisted ArangoDB document, with `eventData` and `data` carrying the same description — a client author could not tell which spelling the wire wanted, and a request sending `data` was silently stored as `{}`. The contract is now split:
   - `EventRequest` (required `eventType`, optional `eventData`) annotates the request body.
   - `Event` keeps only the stored document shape.

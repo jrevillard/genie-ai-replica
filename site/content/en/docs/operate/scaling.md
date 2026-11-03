@@ -41,7 +41,8 @@ watch.
 | **Stateless** | `backend`, `frontend`, `kong`, `otel-collector` | Yes (freely, except `otel-collector`) | Add replicas behind the same Kong route; `otel-collector` is `mode: global` (one replica per Swarm node — do not override) |
 | **Stateful — single-writer** | `arango-vector-db`, `postgres`, `redis-cache` | Single instance by design | HA needs external/managed service |
 | **Stateful — sticky** | `document-repository`, `keycloak` | Keycloak: clustering mode. Doc-repo: shared volume (NFS, EFS) | Uploads are volume-bound |
-| **AI — GPU-bound** | `vllm`, `embedding`, `reranker`, `retriever-arango-service`, `dataprep-arango-service`, `chatqna-xeon-backend-server`, `translation`, `textgen` | Per-GPU budget | One replica per GPU; concurrent requests contend |
+| **AI — GPU-bound** | `vllm`, `embedding`, `reranker`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `translation`, `textgen` | Per-GPU budget | One replica per GPU; concurrent requests contend |
+| **AI — single-replica** | `dataprep-arango-service` | **No** | Single-replica contract (#1247): per-process task registry, boot recovery and slot pool break silently beyond one replica — see the Dataprep section |
 | **Observability — storage-bound** | `victoriametrics`, `victorialogs`, `victoriatraces` | Per storage | Retention/size tradeoff (see env vars) |
 
 ## Stateless services
@@ -151,8 +152,11 @@ GPU services ship a single replica per GPU node. The compose uses two
 templates: `replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}` for the
 heavyweight services (`vllm`, `vllm-translation-guardrail`, `translation`, `tei`,
 `tei_reranker`) and `replicas: ${DEPLOY_OPEA:-1}` for the lighter OPEA
-wrappers (`textgen`, `embedding`, `reranker`, `dataprep-arango-service`,
-`retriever-arango-service`, `chatqna-xeon-backend-server`). Each replica
+wrappers (`textgen`, `embedding`, `reranker`,
+`retriever-arango-service`, `chatqna-xeon-backend-server` — dataprep uses
+the same expression but is NOT in this scaling group: it is single-replica
+by contract regardless of GPU budget, see the Dataprep section below).
+Each replica
 pins to one GPU; concurrent requests share the KV cache on vLLM and contend
 for TEI worker threads on the embedding/reranker containers.
 
@@ -179,15 +183,25 @@ Caveats:
 
 ### Dataprep (`dataprep-arango-service`)
 
-```bash
-docker service scale genieai_dataprep-arango-service=2
-```
+**Do not scale dataprep — single-replica contract (#1247).** Its ingestion
+task registry (ingest 409 idempotency, `kill_ingest`, `task_status`), the
+boot-time stuck-`Ingesting` recovery and the flock ingest slot pool are all
+per-process. A second replica breaks them silently: double ingests,
+cross-replica status release — this covers Swarm's `docker service scale`,
+compose-mode `docker compose up -d --scale dataprep-arango-service=N`, and
+editing `replicas` in the compose deploy block. Each replica also logs a
+line at boot stating this contract — more than one boot line for dataprep
+at the same time means the deployment is mis-scaled (restart churn also
+repeats the line — correlate by container id and timestamp, not by line
+count alone). dataprep still pins to the GPU-labelled node
+(`node.labels.gpu == true` placement constraint), so it occupies a slot of
+the GPU node's capacity budget even though it does not scale with it.
 
-Caveats:
+To raise ingestion throughput on the single replica (each lever multiplies
+the load on the vLLM that labelling shares with chat answering — size
+against the model's headroom, especially on a shared GPU):
 
-- Each replica runs labelling LLM calls against vLLM — multiple replicas
-  multiply vLLM load (see `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`).
-- **Per-replica concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
+- **Label-batch concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
   `20`, raised from `5` after the labelling-bottleneck fix).
 - **Batch size**: `DATAPREP_LLM_LABEL_BATCH_SIZE` (default `4`) — chunks
   per labelling call. Larger batches amortise the call overhead but stretch
@@ -308,7 +322,7 @@ patterns in [Stateful — single-writer](#stateful--single-writer) and
 | Keycloak login slow | Auth DB CPU-bound | Scale Postgres or move to managed |
 | `victorialogs` disk filling | Retention too long | Lower `VICTORIALOGS_RETENTION` or add storage |
 | `chatqna` 500s | Downstream (retriever/reranker) saturated | Scale downstream; chatqna is stateless |
-| Dataprep ingest slow | vLLM labelling bottleneck | Raise `DATAPREP_MAX_CONCURRENT_BATCHES`, then scale dataprep |
+| Dataprep ingest slow | vLLM labelling bottleneck | Raise `DATAPREP_MAX_CONCURRENT_BATCHES` — dataprep cannot be scaled (single-replica contract, #1247) |
 
 ## Rollback
 

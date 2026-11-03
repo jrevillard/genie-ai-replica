@@ -3347,7 +3347,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('TOKEN_REJECT_RUN');
     expect(section).toContain('definitively rejected');
-    expect(section).toContain("Check KEYCLOAK_ADMIN_PASSWORD");
+    expect(section).toContain('Check KEYCLOAK_ADMIN_PASSWORD');
     // The threshold itself is pinned: a drift to a larger value would
     // silently restore the burn-the-budget behavior the fail-fast exists
     // to remove.

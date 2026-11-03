@@ -2287,6 +2287,29 @@ services:
       retries: 10
       start_period: 120s
     deploy:
+      # SINGLE-REPLICA CONTRACT (#1247): when enabled, dataprep runs at most
+      # ONE replica (DEPLOY_OPEA=0 legitimately turns the service off; never
+      # scale beyond 1). Two live replicas silently break correctness — no
+      # error is raised anywhere:
+      # - the in-memory active_ingestion_tasks registry (ingest 409
+      #   idempotency, kill_ingest, task_status) is per-process — a second
+      #   replica 404s/misses tasks owned by the first;
+      # - boot-time recovery releases ALL doc-repo rows stuck in 'Ingesting'
+      #   except the booting replica's OWN live tasks (excludeFileIds; OKF
+      #   bundle-zip docs are excluded on the doc-repo side) — a
+      #   second booting replica releases a live ingest on the first and the
+      #   re-ingest guard accepts the re-kick → the same file ingests twice;
+      # - the ingest flock slot pool lives in the container's own /tmp —
+      #   slots are not shared across replicas.
+      # A normal single-replica rolling update is safe BY DESIGN: this block
+      # sets no update_config, so Swarm's stop-first order kills the old task
+      # (its ingest row is orphaned) before the replacement boots, and the
+      # #610 boot recovery then releases the orphaned row — that recovery is
+      # exactly this scenario's handler. Only a second LIVE replica triggers
+      # the hazards above.
+      # Multi-replica-safe shared state for ALL three behaviours (task
+      # registry, recovery ownership, slot pool) is the prerequisite for
+      # scaling (#1390).
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:

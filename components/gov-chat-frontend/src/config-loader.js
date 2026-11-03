@@ -43,8 +43,9 @@ let config = { ...defaults };
  * only the draft identifier. Validating therefore means running the
  * document's schema over the document itself.
  *
- * A document with no `$schema` cannot be checked and is accepted as-is —
- * a schema-less config is a legacy config, not a broken one.
+ * A document with no top-level `properties` carries no schema to compile
+ * and is accepted as-is — a schema-less config is a legacy config, not a
+ * broken one.
  */
 const validateConfig = (data) => {
   if (!data || typeof data !== 'object' || !data.properties) return true;
@@ -64,6 +65,46 @@ const validateConfig = (data) => {
     .map((issue) => `  ${issue.instancePath || '<root>'} ${issue.message}`)
     .join('\n');
   throw new Error(`genie-ai-config.json failed schema validation:\n${details}`);
+};
+
+/**
+ * The Quick Help button contract (#1238): every button carries a
+ * non-blank string `id`, and no two buttons share one. The id is the
+ * button's ONLY identity — the tag a saved conversation carries and the
+ * key the restore reads — so a button without one, or two buttons with
+ * the same one, cannot be honoured; the earlier title-fallback identity
+ * made a card's tag change with the interface language.
+ *
+ * Checked on every load, independently of the JSON schema: a document
+ * with no top-level `properties` skips the schema validation but not
+ * this contract.
+ *
+ * Exported so the build-time contract test
+ * (src/__tests__/config-quickhelp-contract.test.js) enforces the SAME
+ * rules on the files that ship — one copy of the contract, not two.
+ */
+const validateQuickHelpButtons = (data) => {
+  const buttons = data?.features?.chat?.quickHelp?.buttons;
+  if (buttons == null) return;
+  if (!Array.isArray(buttons)) {
+    throw new Error('genie-ai-config.json: features.chat.quickHelp.buttons must be an array of buttons.');
+  }
+
+  const seen = new Map();
+  for (const [index, button] of buttons.entries()) {
+    const id = button?.id;
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new Error(
+        `genie-ai-config.json: Quick Help button #${index} has no valid "id" — every button must carry a non-blank string id (the id is the button's identity: it is the tag a saved conversation carries and the key the restore reads).`
+      );
+    }
+    if (seen.has(id)) {
+      throw new Error(
+        `genie-ai-config.json: Quick Help button #${index} duplicates the id "${id}" of button #${seen.get(id)} — ids must be unique.`
+      );
+    }
+    seen.set(id, index);
+  }
 };
 
 async function loadConfig() {
@@ -86,6 +127,7 @@ async function loadConfig() {
     // main.js awaits loadConfig() before createApp(), so throwing leaves
     // the app unmounted and the error visible in the console.
     validateConfig(data);
+    validateQuickHelpButtons(data);
     config = { ...config, ...data };
   }
 
@@ -149,4 +191,4 @@ async function loadConfig() {
 }
 
 export { loadConfig as default };
-export { config };
+export { config, validateQuickHelpButtons };

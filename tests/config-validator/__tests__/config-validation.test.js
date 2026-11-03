@@ -3111,7 +3111,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // Entries the jobs deploy or consume from this checkout — the component
   // trees the stack runs, the compose file, the env template, the Keycloak
   // tree (see the anchor bullet in .gitlab-ci.yml for the baked/bind-mount
-  // split) and the collector config. Not derivable from the Playwright
+  // split), the collector config, and the provisioning script the e2e job
+  // runs with node before Playwright starts. Not derivable from the Playwright
   // invocation; a cleanup pruning one of them re-silences the train trigger
   // silently. This list is pinned EXHAUSTIVE by the reverse-containment
   // test below: an entry that loses its justification must be removed here
@@ -3126,6 +3127,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     'package-lock.json',
     'docker-compose.yaml',
     'env',
+    'tests/e2e/provision-admin-fixtures.js',
     'configs/keycloak/**/*',
     'configs/otel/otel-collector-config.yaml'
   ];

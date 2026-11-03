@@ -1045,7 +1045,7 @@ const Map<String, dynamic> esLocale = {
     "quickHelpTitleMissing":
         "Problema de configuración: este botón no tiene título en este idioma. Este botón no se puede usar hasta que su configuración se actualice.",
     "quickHelpScopeUnavailable":
-        "Problema de configuración: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.",
+        "No disponible temporalmente: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.",
     "scopeNotNameable":
         "Problema de configuración: el alcance seleccionado no tiene nombre en inglés en la jerarquía de conocimiento, por lo que no se puede determinar el alcance de la consulta. No se envió.",
     "scopeTagGone":

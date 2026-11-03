@@ -1054,7 +1054,7 @@ const Map<String, dynamic> frLocale = {
     "quickHelpTitleMissing":
         "Problème de configuration : ce bouton n'a pas de titre dans cette langue. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
     "quickHelpScopeUnavailable":
-        "Problème de configuration : la hiérarchie de connaissances n'a pas pu être chargée, le périmètre de ce bouton ne peut donc pas être vérifié. Ce bouton est inutilisable tant que la hiérarchie n'est pas disponible.",
+        "Indisponible temporairement : la hiérarchie de connaissances n'a pas pu être chargée, le périmètre de ce bouton ne peut donc pas être vérifié. Ce bouton est inutilisable tant que la hiérarchie n'est pas disponible.",
     "scopeNotNameable":
         "Problème de configuration : le périmètre sélectionné ne porte pas de nom anglais dans la hiérarchie de connaissances, le périmètre de la requête ne peut donc pas être déterminé. La requête n'a pas été envoyée.",
     "scopeTagGone":

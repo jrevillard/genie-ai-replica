@@ -3282,7 +3282,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
 
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('node tests/e2e/provision-e2e-fixtures.js');
+    const invocation = section.indexOf('node tests/e2e/provision-e2e-fixtures.js');
+    // Provisioning must run BEFORE the suites — a reorder that leaves the
+    // call present but after the Playwright item runs every spec against
+    // whatever fixtures the realm happens to carry.
+    expect(invocation).toBeGreaterThan(-1);
+    expect(invocation).toBeLessThan(section.indexOf('npx playwright test'));
     // The deleted inline mechanism must not grow back beside the helper:
     // these names existed only in the bash convergence this pin replaced.
     expect(section).not.toContain('create_testuser');

@@ -207,13 +207,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
   // The overlay's broken/healthy split, memoized against the inputs it
   // reads: the button list (identity — a reload replaces it), the
-  // resolver (identity — a tree fetch or retry replaces it), the outage
-  // flag (the resolver's null is not the outage's fact), and the locale
-  // marker (the same drift marker the buttons' reload tracks). While the
-  // overlay is open, every build of the chat screen re-ran the resolver
-  // walk per button; with the memo the walk runs when one of those
-  // inputs moves and a rebuild without one is a field read — the hit
-  // path compares fields without building anything.
+  // resolver (identity — a tree fetch or retry replaces it), and the
+  // outage flag (the resolver's null is not the outage's fact). The
+  // locale marker is the fourth leg ONLY for symmetry with the buttons
+  // loader: verdicts are locale-independent, so a marker move without a
+  // button-list replacement (the failed-load catch) merely re-walks for
+  // a result guaranteed identical. While the overlay is open, every
+  // build of the chat screen re-ran the resolver walk per button; with
+  // the memo the walk runs when one of those inputs moves and a rebuild
+  // without one is a field read — the hit path compares fields without
+  // building anything.
   ({
     List<Map<String, dynamic>> buttons,
     QuickHelpScopeResolver? resolver,
@@ -1158,6 +1161,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription = null;
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
+    final facts = _wireScopeFacts;
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -1165,14 +1169,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sessionId': sessionId,
         if (_currentConversationId != null)
           'conversationId': _currentConversationId,
-        if (_wireScopeFacts.hasContext) ...{
+        if (facts.hasContext) ...{
           'messages': messagesForApi,
           'context': {
             // ENGLISH is the SSOT of the filter wire: chunk_labels carry the
             // EN translation, so the query speaks EN. The localized name is
             // display-only.
-            'categoryLabel': _wireScopeFacts.categoryLabelEn,
-            'serviceLabels': _wireScopeFacts.serviceLabels,
+            'categoryLabel': facts.categoryLabelEn,
+            'serviceLabels': facts.serviceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
           // The mode token comes from the generated contract, ONE spelling
@@ -1401,6 +1405,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final queriesApi = ref.read(queriesApiProvider);
 
+      final facts = _wireScopeFacts;
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
         messages: messagesForApi
@@ -1418,18 +1423,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // once sent the fallback's question over the WHOLE corpus while
         // the scope chip above promised a filtered one. ENGLISH stays the
         // SSOT of the filter wire — the localized name is display-only —
-        // and an UNSCOPED query carries NO labels, the same body the
-        // streaming path posts for the identical state.
+        // and an UNSCOPED query carries NO labels. The bodies are not
+        // byte-identical (the generated DTO always emits its null/empty
+        // keys where the streaming map omits them); they are
+        // SEMANTICALLY equal because the backend reads a label list only
+        // when its length is > 0.
         context: QueryContext(
-          categoryLabel: _wireScopeFacts.hasContext
-              ? _wireScopeFacts.categoryLabelEn
-              : null,
-          serviceLabels: _wireScopeFacts.hasContext
-              ? _wireScopeFacts.serviceLabels
-              : const [],
+          categoryLabel: facts.hasContext ? facts.categoryLabelEn : null,
+          serviceLabels: facts.hasContext ? facts.serviceLabels : const [],
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
-        contextOption: _wireScopeFacts.hasContext
+        contextOption: facts.hasContext
             ? ApiQueriesPostRequestContextOptionEnum
                   .conversationWithContextLabels
             : ApiQueriesPostRequestContextOptionEnum.singleMessage,

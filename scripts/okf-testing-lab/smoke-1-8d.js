@@ -111,10 +111,7 @@ async function cleanup() {
   const errs = [];
   try {
     if (ADMIN_TOKEN && CLIENT_UUID && ROPC_WAS === false) {
-      await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
-        token: ADMIN_TOKEN,
-        json: { directAccessGrantsEnabled: false }
-      });
+      await setRopc(false);
       console.log('[cleanup] ROPC reverted');
     }
   } catch (e) {
@@ -147,15 +144,13 @@ async function generateSuite(body) {
   // the repo accumulates suites — 150s timed out on a busy repo (measured
   // 2026-10-31: the suite completed at ~170s with neg=11/pos=3 AFTER the
   // poll had already given up and mis-reported "count controls {}").
-  for (let i = 0; i < 120; i++) {
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((r) => setTimeout(r, 2500));
-    // eslint-disable-next-line no-await-in-loop
-    const got = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
-    if (got.error === 'TOKEN_INVALID') await refreshUserToken();
-    else if (got.suite_key && got.status !== 'generating') return got;
-  }
-  return { suite_key: key, status: 'timeout' };
+  return pollJobDoc(`${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, {
+    tries: 120,
+    // keep-waiting signal: the minted-key envelope ({suite_key,
+    // status:'generating'}) — anything else carrying a suite_key is terminal.
+    terminal: (got) => !!(got && got.suite_key && got.status !== 'generating'),
+    timeout: { suite_key: key, status: 'timeout' }
+  });
 }
 
 // 1-8g-v / 1-8g-advisor: the suite RUN, the batch EXPLAIN and the ADVISOR are
@@ -175,21 +170,24 @@ function runDocTerminal(got) {
   return got.status !== 'running';
 }
 
-/** ONE poll loop (round 23, review 82699): waitForRunDoc and
- * waitForAdvisorJob were verbatim twins — GET → runDocTerminal →
- * TOKEN_INVALID refresh → 2.5 s sleep → timeout — differing only in URL and
- * default tries. The TOKEN_INVALID handling had to land in every copy once
- * already; the next poll-semantics change lands exactly here. */
-async function pollJobDoc(url, tries) {
+/** ONE poll loop (round 23, review 82699; generalized for generateSuite in
+ * the /simplify round): waitForRunDoc, waitForAdvisorJob and generateSuite
+ * were three copies of GET → terminal? → TOKEN_INVALID refresh → 2.5 s
+ * sleep → timeout, differing only in URL, tries, the terminal predicate and
+ * the timeout envelope. The TOKEN_INVALID handling and every future
+ * poll-semantics change land exactly here. runDocTerminal is the default
+ * predicate (job docs); generateSuite passes its envelope predicate and
+ * carries its suite_key into the timeout envelope. */
+async function pollJobDoc(url, tries, terminal = runDocTerminal, timeout = { status: 'timeout' }) {
   for (let i = 0; i < tries; i++) {
     // eslint-disable-next-line no-await-in-loop
     const got = j(await req('GET', url, { token: USER_TOKEN }));
-    if (runDocTerminal(got)) return got;
+    if (terminal(got)) return got;
     if (got && got.error === 'TOKEN_INVALID') await refreshUserToken();
     // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 2500));
   }
-  return { status: 'timeout' };
+  return timeout;
 }
 
 async function waitForRunDoc(suiteKey, runKey, leg = 'runs', tries = 200) {
@@ -203,6 +201,32 @@ async function waitForAdvisorJob(jobKey, tries = 240) {
   return pollJobDoc(`${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor/jobs/${jobKey}`, tries);
 }
 
+// The three HTTP shapes behind every ROPC window in this file — the boot
+// flow (conditional enable, restore-if-it-was-on) and refreshUserToken
+// (unconditional, force-disable in finally) keep their own control flow on
+// top of these.
+async function mintMasterToken() {
+  const mt = j(
+    await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
+      form: { client_id: 'admin-cli', username: 'admin', password: ADMIN_PW, grant_type: 'password' }
+    })
+  );
+  return mt.access_token || '';
+}
+async function setRopc(enabled) {
+  return req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
+    token: ADMIN_TOKEN,
+    json: { directAccessGrantsEnabled: enabled }
+  });
+}
+async function ropcPasswordGrant() {
+  return j(
+    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
+      form: { grant_type: 'password', client_id: CLIENT_ID, username: SMOKE_USER, password: SMOKE_PW }
+    })
+  );
+}
+
 // The smoke user's access token outlives its ~5-min lifespan on long runs
 // (the advisor alone can take minutes). Re-acquire it through the same
 // ROPC enable → token → REVERT window the boot flow uses — never left on.
@@ -213,22 +237,11 @@ async function refreshUserToken() {
   // token — re-mint it first, or the ROPC enable PUT below silently 401s and
   // the password grant fails while the smoke believes it refreshed (the
   // 2026-10-31 round-20 run: 8 minutes of advisor-poll 401s, no log line).
-  const mt = j(
-    await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
-      form: { client_id: 'admin-cli', username: 'admin', password: ADMIN_PW, grant_type: 'password' }
-    })
-  );
-  if (mt.access_token) ADMIN_TOKEN = mt.access_token;
-  await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
-    token: ADMIN_TOKEN,
-    json: { directAccessGrantsEnabled: true }
-  });
+  const mt = await mintMasterToken();
+  if (mt) ADMIN_TOKEN = mt;
+  await setRopc(true);
   try {
-    const ut = j(
-      await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
-        form: { grant_type: 'password', client_id: CLIENT_ID, username: SMOKE_USER, password: SMOKE_PW }
-      })
-    );
+    const ut = await ropcPasswordGrant();
     if (ut.access_token) {
       USER_TOKEN = ut.access_token;
       console.log('  [auth] user token refreshed');
@@ -238,23 +251,16 @@ async function refreshUserToken() {
       console.error(`  [auth] REFRESH FAILED: ${JSON.stringify(ut).slice(0, 160)}`);
     }
   } finally {
-    await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
-      token: ADMIN_TOKEN,
-      json: { directAccessGrantsEnabled: false }
-    });
+    await setRopc(false);
   }
 }
 
 (async () => {
   console.log('== Story 1-8d live smoke against ' + API_BASE + ' ==');
   // 1. master admin token
-  const mt = j(
-    await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
-      form: { client_id: 'admin-cli', username: 'admin', password: ADMIN_PW, grant_type: 'password' }
-    })
-  );
-  if (!mt.access_token) throw new Error('master token failed');
-  ADMIN_TOKEN = mt.access_token;
+  const mt = await mintMasterToken();
+  if (!mt) throw new Error('master token failed');
+  ADMIN_TOKEN = mt;
   console.log('[1] master admin token ok');
 
   // 2. throwaway tools-admin user
@@ -321,22 +327,12 @@ async function refreshUserToken() {
   CLIENT_UUID = clients[0] && clients[0].id;
   ROPC_WAS = !!(clients[0] && clients[0].directAccessGrantsEnabled);
   if (!ROPC_WAS) {
-    const en = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
-      token: ADMIN_TOKEN,
-      json: { directAccessGrantsEnabled: true }
-    });
+    const en = await setRopc(true);
     if (en.status !== 204) throw new Error('ROPC enable failed');
   }
-  const ut = j(
-    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
-      form: { grant_type: 'password', client_id: CLIENT_ID, username: SMOKE_USER, password: SMOKE_PW }
-    })
-  );
+  const ut = await ropcPasswordGrant();
   if (!ROPC_WAS) {
-    await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
-      token: ADMIN_TOKEN,
-      json: { directAccessGrantsEnabled: false }
-    });
+    await setRopc(false);
     ROPC_WAS = false;
   }
   if (!ut.access_token) throw new Error('user token failed');

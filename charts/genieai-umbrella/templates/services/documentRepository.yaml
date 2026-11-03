@@ -110,9 +110,11 @@ Service, same address the backend is given. */ -}}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $existingEnv := index $vals.services.documentRepository "env" | default dict -}}
 {{- $existingRows := include "genieai-umbrella.envMapRows" $existingEnv | fromJsonArray -}}
-{{- /* The operator's rows come LAST: a container env list applies in
-order, so the last row for a name wins and the operator's value
-overrides the one the chart derives. */ -}}
+{{- /* The operator's rows come LAST and envRowsDedupe keeps ONE row per
+name (the last wins): helm-controller applies with server-side apply,
+which merges `env` as a list of dicts keyed by `name` — a duplicate name
+is a hard install error there, not the last-wins merge plain kubectl
+performs (issue #1362). */ -}}
 {{- $_ := set $vals.services.documentRepository "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $existingRows | toJson) | fromJsonArray) -}}
 {{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

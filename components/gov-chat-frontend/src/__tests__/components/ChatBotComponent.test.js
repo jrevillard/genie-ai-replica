@@ -1343,6 +1343,23 @@ describe('ChatBotComponent', () => {
       warn.mockRestore();
     });
 
+    it('the non-boolean "hidden" report fires ONCE per button, not per locale switch', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const wrapper = await mountWithButtons([{ id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' }]);
+      const vm = wrapper.vm;
+
+      // The apply re-runs on every locale switch; one typo must stay one
+      // console line, not one line per switch.
+      await vm.applyQuickHelpButtons();
+      await vm.applyQuickHelpButtons();
+      await vm.applyQuickHelpButtons();
+
+      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
+      expect(hiddenWarnings.length).toBe(1);
+
+      warn.mockRestore();
+    });
+
     it('loadQuickHelpButtons reads serviceLabels and keeps the button id as the service key', async () => {
       const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({

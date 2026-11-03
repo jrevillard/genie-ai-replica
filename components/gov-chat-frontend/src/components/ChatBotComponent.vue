@@ -710,6 +710,10 @@ export default {
       serviceCategoriesStatus: 'loading',
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
+      // The button ids whose non-boolean "hidden" flag was already reported
+      // (one console warning per button per session — the apply re-runs on
+      // mount and on every locale switch).
+      quickHelpHiddenReported: [],
       // The in-flight load of the Quick Help configuration. A restore that
       // runs while it is pending must wait for it, otherwise the tag of a
       // saved conversation is looked up in an empty button list.
@@ -1893,9 +1897,13 @@ export default {
       // not change what the flag does — it REPORTS the typo, because a
       // card that silently vanishes leaves no trace of the
       // configuration mistake that hid it. The report is its own pass:
-      // the filter below stays a pure filter.
+      // the filter below stays a pure filter. One report per button per
+      // session: the apply re-runs on mount and on every locale switch,
+      // and a typo must not turn into N identical console lines.
       buttons.forEach((button) => {
         if (button.hidden == null || typeof button.hidden === 'boolean') return;
+        if (this.quickHelpHiddenReported.includes(button.id)) return;
+        this.quickHelpHiddenReported.push(button.id);
         // The button is NAMED in the report by its id — the identity the
         // loader's gate guarantees every button carries.
         console.warn(

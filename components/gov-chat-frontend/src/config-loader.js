@@ -43,8 +43,9 @@ let config = { ...defaults };
  * only the draft identifier. Validating therefore means running the
  * document's schema over the document itself.
  *
- * A document with no `$schema` cannot be checked and is accepted as-is —
- * a schema-less config is a legacy config, not a broken one.
+ * A document with no top-level `properties` carries no schema to compile
+ * and is accepted as-is — a schema-less config is a legacy config, not a
+ * broken one.
  */
 const validateConfig = (data) => {
   if (!data || typeof data !== 'object' || !data.properties) return true;
@@ -75,8 +76,12 @@ const validateConfig = (data) => {
  * made a card's tag change with the interface language.
  *
  * Checked on every load, independently of the JSON schema: a document
- * that carries no `$schema` skips the schema validation but not this
- * contract.
+ * with no top-level `properties` skips the schema validation but not
+ * this contract.
+ *
+ * Exported so the build-time contract test
+ * (src/__tests__/config-quickhelp-contract.test.js) enforces the SAME
+ * rules on the files that ship — one copy of the contract, not two.
  */
 const validateQuickHelpButtons = (data) => {
   const buttons = data?.features?.chat?.quickHelp?.buttons;
@@ -88,7 +93,7 @@ const validateQuickHelpButtons = (data) => {
   const seen = new Map();
   for (const [index, button] of buttons.entries()) {
     const id = button?.id;
-    if (typeof id !== 'string' || id === '') {
+    if (typeof id !== 'string' || id.trim() === '') {
       throw new Error(
         `genie-ai-config.json: Quick Help button #${index} has no valid "id" — every button must carry a non-empty string id (the id is the button's identity: it is the tag a saved conversation carries and the key the restore reads).`
       );
@@ -186,4 +191,4 @@ async function loadConfig() {
 }
 
 export { loadConfig as default };
-export { config };
+export { config, validateQuickHelpButtons };

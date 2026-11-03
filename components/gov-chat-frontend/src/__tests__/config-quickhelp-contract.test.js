@@ -5,8 +5,10 @@
 // carries and the key the restore reads — so every button must carry a
 // non-empty string id, and no two buttons may share one. The loader
 // (src/config-loader.js, validateQuickHelpButtons) enforces the contract
-// at runtime; this test enforces it on the files that ship, so a config
-// that would be refused at boot fails the build instead.
+// at runtime; this test calls that SAME exported validator on the files
+// that ship, so a config that would be refused at boot fails the build
+// instead — and the two gates can never drift apart, because they are
+// one copy of the rules.
 //
 // Both sources are walked on purpose: the web serves its configs from
 // public/config/ while the mobile app bundles its own under
@@ -15,6 +17,8 @@
 
 const fs = require('fs');
 const path = require('path');
+
+const { validateQuickHelpButtons } = require('../config-loader');
 
 const SOURCES = [
   {
@@ -31,7 +35,16 @@ const SOURCES = [
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
-const quickHelpButtons = (doc) => doc?.features?.chat?.quickHelp?.buttons;
+const assertFileHonoursContract = (dir, name) => {
+  try {
+    validateQuickHelpButtons(readJson(path.join(dir, name)));
+  } catch (error) {
+    // Re-label the runtime message with the offending FILE — the runtime
+    // always reads /config/genie-ai-config.json, the build walks every
+    // shipped variant.
+    throw new Error(`${name}: ${error.message}`, { cause: error });
+  }
+};
 
 describe('Quick Help button contract across every shipped configuration', () => {
   it('walks both platform sources', () => {
@@ -54,24 +67,7 @@ describe('Quick Help button contract across every shipped configuration', () => 
         .sort();
 
       for (const name of files) {
-        const doc = readJson(path.join(source.dir, name));
-        const buttons = quickHelpButtons(doc) || [];
-        const seen = new Map();
-
-        for (const [index, button] of buttons.entries()) {
-          const id = button?.id;
-          if (typeof id !== 'string' || id === '') {
-            throw new Error(
-              `${name}: Quick Help button #${index} has no valid "id" — every button must carry a non-empty string id.`
-            );
-          }
-          if (seen.has(id)) {
-            throw new Error(
-              `${name}: Quick Help button #${index} duplicates the id "${id}" of button #${seen.get(id)}.`
-            );
-          }
-          seen.set(id, index);
-        }
+        assertFileHonoursContract(source.dir, name);
       }
     }
   );

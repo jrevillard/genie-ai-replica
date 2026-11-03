@@ -438,8 +438,8 @@ describe('loadConfig', () => {
       await expect(loadConfig()).resolves.toBeDefined();
     });
 
-    it('rejects a button whose id is missing, empty, or not a string', async () => {
-      const cases = [{}, { id: '' }, { id: 5 }, { id: null }, { id: ['x'] }];
+    it('rejects a button whose id is missing, empty, blank, or not a string', async () => {
+      const cases = [{}, { id: '' }, { id: '  ' }, { id: '\t' }, { id: 5 }, { id: null }, { id: ['x'] }];
       for (const buttons of cases.map((b) => [b])) {
         global.fetch.mockResolvedValueOnce({
           ok: true,
@@ -465,8 +465,9 @@ describe('loadConfig', () => {
     });
 
     it('gates a document that carries no schema at all', async () => {
-      // A legacy config without a `$schema` skips the schema validation
-      // by design — the Quick Help contract is not skipped with it.
+      // A legacy config with no top-level `properties` skips the schema
+      // validation by design — the Quick Help contract is not skipped
+      // with it.
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ features: { chat: { quickHelp: { buttons: [{ title: { en: 'No id' } }] } } } })

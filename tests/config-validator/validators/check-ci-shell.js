@@ -5,13 +5,13 @@
 // thrown error, never an empty result: a gate that cannot run must not
 // read as green.
 
-const { spawnSync } = require('child_process');
+const childProcess = require('child_process');
 
 function checkShellSyntax(blocks, opts = {}) {
   const bashPath = opts.bashPath || 'bash';
   const errors = [];
   for (const block of blocks) {
-    const run = spawnSync(bashPath, ['-n'], { input: block.text, encoding: 'utf8' });
+    const run = childProcess.spawnSync(bashPath, ['-n'], { input: block.text, encoding: 'utf8' });
     if (run.error) {
       throw new Error(`cannot run ${bashPath} -n: ${run.error.message}`);
     }
@@ -21,11 +21,13 @@ function checkShellSyntax(blocks, opts = {}) {
       const stderr = (run.stderr || '').trim();
       const rel = stderr.match(/line (\d+)/);
       const at = rel ? ` (file line ${block.startLine + Number(rel[1]) - 1})` : '';
+      const first =
+        stderr.split('\n')[0] || `bash -n exited abnormally (status ${run.status}, signal ${run.signal || 'none'})`;
       errors.push({
         owner: block.owner,
         key: block.key,
         startLine: block.startLine,
-        message: `${stderr.split('\n')[0]}${at}`
+        message: `${first}${at}`
       });
     }
   }

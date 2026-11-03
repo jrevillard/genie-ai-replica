@@ -78,6 +78,58 @@ describe('ci shell gate: extraction', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain('script');
   });
+
+  test('extracts a same-indent YAML sequence (dash at the key indent)', () => {
+    const content = 'job:\n  script:\n  - echo hi\n  - echo bye\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi', 'echo bye']);
+  });
+
+  test('extracts a key-level block scalar (script: |)', () => {
+    const content = 'job:\n  script: |\n    echo one\n    echo two\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].text).toBe('echo one\necho two');
+    expect(blocks[0].owner).toBe('job');
+  });
+
+  describe('anchor definitions + alias items', () => {
+    const ALIAS = [
+      '.net_setup: &net_setup',
+      '  - |',
+      '    docker network connect "$NET" || true',
+      '    echo connected',
+      '',
+      'job:',
+      '  script:',
+      '    - echo before',
+      '    - *net_setup',
+      '    - echo after'
+    ].join('\n');
+
+    test('the anchor body is shell-extracted at its definition', () => {
+      const { blocks, errors } = extractCiShellBlocks(ALIAS);
+      expect(errors).toEqual([]);
+      const anchored = blocks.find((b) => b.text.includes('docker network connect'));
+      expect(anchored).toBeDefined();
+      expect(anchored.owner).toBe('.net_setup');
+    });
+
+    test('a stray done inside the anchor body fails the gate', () => {
+      const broken = ALIAS.replace('echo connected', 'done\necho connected');
+      const { blocks } = extractCiShellBlocks(broken);
+      expect(checkShellSyntax(blocks)).toHaveLength(1);
+    });
+
+    test('an alias to an unknown anchor is a loud error', () => {
+      const unknown = 'job:\n  script:\n    - *nope\n';
+      const { errors } = extractCiShellBlocks(unknown);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain('nope');
+    });
+  });
 });
 
 describe('ci shell gate: bash -n', () => {
@@ -108,6 +160,22 @@ describe('ci shell gate: bash -n', () => {
         bashPath: '/nonexistent/bash'
       })
     ).toThrow(/bash/);
+  });
+
+  test('an abnormal bash exit with empty stderr still names the failure', () => {
+    jest.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
+      status: null,
+      signal: 'SIGSEGV',
+      stderr: '',
+      stdout: ''
+    });
+    try {
+      const errors = checkShellSyntax([{ owner: 'j', key: 'script', startLine: 1, text: 'echo hi' }]);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toMatch(/abnormal/);
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 });
 

@@ -196,6 +196,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   //          a keyboard opening must not re-read the asset.
   String? _quickHelpButtonsLocale;
 
+  // The overlay's broken/healthy split, memoized against the inputs it
+  // reads: the button list (identity — a reload replaces it), the
+  // resolver (identity — a tree fetch or retry replaces it), the outage
+  // flag (the resolver's null is not the outage's fact), and the locale
+  // marker (the same drift marker the buttons' reload tracks). While the
+  // overlay is open, every build of the chat screen re-ran the resolver
+  // walk per button; with the memo the walk runs when one of those
+  // inputs moves and a rebuild without one is a record read.
+  (List<Map<String, dynamic>>, QuickHelpScopeResolver?, bool, String?)?
+  _quickHelpPartitionKey;
+  ({
+    List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
+    List<Map<String, dynamic>> healthy,
+  })?
+  _quickHelpPartitionCache;
+
   // The locale the sidebar scope's title was last re-fetched under — the
   // drift marker the same way _quickHelpButtonsLocale is one, scoped to
   // its own fetch. A null marker names the state before any fetch: a
@@ -488,6 +504,37 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _showQuickHelpOverlay = !hasInteraction;
     });
     widget.onChatStateChanged?.call();
+  }
+
+  /// The overlay's broken/healthy split, memoized (see the cache fields
+  /// beside the locale marker): the walk runs when the buttons, the
+  /// resolver, the outage flag or the locale moved; a rebuild without
+  /// such a move reads the record.
+  ({
+    List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
+    List<Map<String, dynamic>> healthy,
+  })
+  _quickHelpOverlayPartition() {
+    final key = (
+      _quickHelpButtons,
+      _scopeResolver,
+      _treeUnavailable,
+      _quickHelpButtonsLocale,
+    );
+    final cached = _quickHelpPartitionCache;
+    if (cached != null && key == _quickHelpPartitionKey) {
+      return cached;
+    }
+    final partition = quickHelpPartitionButtons(
+      _quickHelpButtons,
+      (button) => _treeUnavailable
+          ? QuickHelpScopeResolver.unavailableScopeFor(button)
+          : (_scopeResolver?.stateFor(button) ??
+                QuickHelpScopeResolver.pending),
+    );
+    _quickHelpPartitionKey = key;
+    _quickHelpPartitionCache = partition;
+    return partition;
   }
 
   void _scrollToBottom({bool animated = true}) {
@@ -2243,13 +2290,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       :broken,
       :healthy,
     ) = _showQuickHelpOverlay && _quickHelpButtons.isNotEmpty
-        ? quickHelpPartitionButtons(
-            _quickHelpButtons,
-            (button) => _treeUnavailable
-                ? QuickHelpScopeResolver.unavailableScopeFor(button)
-                : (_scopeResolver?.stateFor(button) ??
-                      QuickHelpScopeResolver.pending),
-          )
+        ? _quickHelpOverlayPartition()
         : (
             broken: <(Map<String, dynamic>, Map<String, dynamic>)>[],
             healthy: <Map<String, dynamic>>[],
@@ -2702,100 +2743,110 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
                         // ONE scroll view for rows and grid: an outage
                         // breaks EVERY card, and a column of full-width
-                        // rows can exceed the viewport. The grid gives
-                        // up its own scrolling for the shared one.
-                        return SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final (button, scope) in broken)
-                                _quickHelpBrokenCard(
-                                  button: button,
-                                  scope: scope,
-                                  theme: theme,
-                                  tokens: tokens,
-                                  dark: isDark,
+                        // rows can exceed the viewport. The slivers keep
+                        // the shared scroll AND a lazy viewport: a
+                        // shrinkWrap grid inside this scroll view built
+                        // and laid out EVERY tile on every frame, where
+                        // the sliver grid builds only what the viewport
+                        // (plus its cache extent) needs.
+                        return CustomScrollView(
+                          slivers: [
+                            for (final (button, scope) in broken)
+                              SliverToBoxAdapter(
+                                // The broken card fills the width the
+                                // way the stretch column did: a loose
+                                // cross-axis constraint would shrink-wrap
+                                // it.
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: _quickHelpBrokenCard(
+                                    button: button,
+                                    scope: scope,
+                                    theme: theme,
+                                    tokens: tokens,
+                                    dark: isDark,
+                                  ),
                                 ),
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: crossAxisCount,
-                                      childAspectRatio: aspectRatio,
-                                      mainAxisSpacing: quickHelpGridSpacing,
-                                      crossAxisSpacing: quickHelpGridSpacing,
-                                    ),
-                                // The grid renders the healthy TILE
-                                // placements only — a healthy
-                                // composer-placed entry has no mobile
-                                // surface (a BROKEN composer entry keeps
-                                // its diagnosis row above the grid: a
-                                // broken card is a VISIBLE failure, and
-                                // the surface it has nowhere to occupy
-                                // does not change the failure the row
-                                // names).
-                                itemCount: gridButtons.length,
-                                itemBuilder: (context, index) {
-                                  final button = gridButtons[index];
-                                  final String translatedTitle =
-                                      quickHelpTitleOf(button) ?? '';
-                                  final String iconAsset =
-                                      button['iconAsset']?.toString() ?? '';
-                                  final String inlineSvg =
-                                      button['iconInlineSvg']?.toString() ?? '';
-                                  final QuickHelpCardStyles cardStyles =
-                                      button['styles'] as QuickHelpCardStyles;
-
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        DsRadii.lg,
-                                      ),
-                                      onTap: () => _quickHelpPressed(button),
-                                      child: _quickHelpCardShell(
-                                        background: quickHelpCardBackgroundFor(
-                                          cardStyles,
-                                          tokens,
-                                          isDark,
-                                        ),
-                                        borderColor:
-                                            cardStyles.outline ??
-                                            tokens.borderLight,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // The header is a FLEX
-                                            // child: at an extreme
-                                            // accessibility font scale
-                                            // its text alone can ask
-                                            // for more height than the
-                                            // fixed tile has, and the
-                                            // flex bound clips the
-                                            // header instead of the
-                                            // row forcing the column
-                                            // past the tile.
-                                            Flexible(
-                                              child: _quickHelpCardHeader(
-                                                broken: false,
-                                                iconAsset: iconAsset,
-                                                inlineSvg: inlineSvg,
-                                                title: translatedTitle,
-                                                theme: theme,
-                                                tokens: tokens,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
                               ),
-                            ],
-                          ),
+                            SliverGrid(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    childAspectRatio: aspectRatio,
+                                    mainAxisSpacing: quickHelpGridSpacing,
+                                    crossAxisSpacing: quickHelpGridSpacing,
+                                  ),
+                              // The grid renders the healthy TILE
+                              // placements only — a healthy
+                              // composer-placed entry has no mobile
+                              // surface (a BROKEN composer entry keeps
+                              // its diagnosis row above the grid: a
+                              // broken card is a VISIBLE failure, and
+                              // the surface it has nowhere to occupy
+                              // does not change the failure the row
+                              // names).
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final button = gridButtons[index];
+                                final String translatedTitle =
+                                    quickHelpTitleOf(button) ?? '';
+                                final String iconAsset =
+                                    button['iconAsset']?.toString() ?? '';
+                                final String inlineSvg =
+                                    button['iconInlineSvg']?.toString() ?? '';
+                                final QuickHelpCardStyles cardStyles =
+                                    button['styles'] as QuickHelpCardStyles;
+
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.lg,
+                                    ),
+                                    onTap: () => _quickHelpPressed(button),
+                                    child: _quickHelpCardShell(
+                                      background: quickHelpCardBackgroundFor(
+                                        cardStyles,
+                                        tokens,
+                                        isDark,
+                                      ),
+                                      borderColor:
+                                          cardStyles.outline ??
+                                          tokens.borderLight,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // The header is a FLEX
+                                          // child: at an extreme
+                                          // accessibility font scale
+                                          // its text alone can ask
+                                          // for more height than the
+                                          // fixed tile has, and the
+                                          // flex bound clips the
+                                          // header instead of the
+                                          // row forcing the column
+                                          // past the tile.
+                                          Flexible(
+                                            child: _quickHelpCardHeader(
+                                              broken: false,
+                                              iconAsset: iconAsset,
+                                              inlineSvg: inlineSvg,
+                                              title: translatedTitle,
+                                              theme: theme,
+                                              tokens: tokens,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }, childCount: gridButtons.length),
+                            ),
+                          ],
                         );
                       },
                     ),

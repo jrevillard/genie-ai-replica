@@ -97,10 +97,10 @@ void main() {
       // by.
       final delegate =
           tester
-                  .widget<GridView>(
+                  .widget<SliverGrid>(
                     find.ancestor(
                       of: find.text('Births Card'),
-                      matching: find.byType(GridView),
+                      matching: find.byType(SliverGrid),
                     ),
                   )
                   .gridDelegate

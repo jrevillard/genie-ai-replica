@@ -187,10 +187,13 @@ the backend's translation endpoint is what declares one. */ -}}
 {{- $secretEnv = concat $secretEnv $translationSecrets -}}
 {{- $existing := index $backendVals.services.backend "env" | default dict -}}
 {{- $existingRows := include "genieai-umbrella.envMapRows" $existing | fromJsonArray -}}
-{{- /* The operator's rows come LAST: a container env list applies in order,
-so the last row for a name wins and the operator's value overrides the
-one the chart derives. */ -}}
-{{- $_ := set $backendVals.services.backend "env" (concat $urls $secretEnv $existingRows) -}}
+{{- /* The operator's rows come LAST and envRowsDedupe keeps ONE row per
+name (the last wins): helm-controller applies with server-side apply,
+which merges `env` as a list of dicts keyed by `name` — a duplicate name
+is a hard install error there, not the last-wins merge plain kubectl
+performs, so the documented "the operator's value wins" override needs
+the dedupe, not just ordering. */ -}}
+{{- $_ := set $backendVals.services.backend "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $existingRows | toJson) | fromJsonArray) -}}
 {{- $ctx := dict "name" "backend" "component" "backend" "Values" $backendVals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

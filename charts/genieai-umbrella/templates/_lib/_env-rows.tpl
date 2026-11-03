@@ -194,6 +194,30 @@ Usage: {{ include "genieai-umbrella.convergenceEnvSecretRows" .Values.data.keycl
 {{- join "\n" $out -}}
 {{- end -}}
 
+{{- define "genieai-umbrella.envRowsDedupe" -}}
+{{- /* Input: a JSON ARRAY of env rows. Output: the same rows with ONE
+entry per `name` — the LAST row for a name wins, emitted at the first
+occurrence's position. Every env-merge concat site in the chart runs
+through this before the rows reach the container. helm-controller
+installs HelmReleases with server-side apply, and SSA merges `env` as a
+list of dicts keyed by `name`: two rows sharing a name are a hard error
+there, not the last-wins merge a plain `kubectl apply` performs — so the
+documented "the operator's value wins" override is unreachable without
+this dedupe (issue #1362: a derived CORS_ALLOWED_ORIGINS plus an
+operator override for the same name failed the install). */ -}}
+{{- $rows := . | fromJsonArray -}}
+{{- $byName := dict -}}
+{{- $order := list -}}
+{{- range $rows -}}
+{{- $name := .name -}}
+{{- if not (hasKey $byName $name) -}}{{- $order = append $order $name -}}{{- end -}}
+{{- $_ := set $byName $name . -}}
+{{- end -}}
+{{- $out := list -}}
+{{- range $order -}}{{- $out = append $out (index $byName .) -}}{{- end -}}
+{{- $out | toJson -}}
+{{- end -}}
+
 {{- define "genieai-umbrella.boolEnvValue" -}}
 {{- $v := .value -}}
 {{- if kindIs "invalid" $v -}}{{- $v = .default -}}{{- end -}}

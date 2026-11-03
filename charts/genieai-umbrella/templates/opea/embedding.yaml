@@ -31,7 +31,7 @@ byte-identical to one without it. */ -}}
     "image" (dict "repository" "genie-ai-embedding" "tag" "main")
     "port" 6000
     "resources" (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "1Gi"))
-    "env" (concat $urls $secretEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)

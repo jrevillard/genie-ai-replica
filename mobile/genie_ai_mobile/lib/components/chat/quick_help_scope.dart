@@ -1344,16 +1344,22 @@ bool quickHelpCardBroken(
   return quickHelpScopeBroken(scope) || quickHelpTitleMissing(button);
 }
 
-/// The cards split into the two layouts the overlay renders — the
-/// broken cards, each with the scope its caption names, and the
-/// healthy ones that stay grid tiles. ONE partition read by both
-/// halves of the overlay, on the [scopeFor] verdict the caller binds
-/// (the tree-unavailable rule is state the scope file does not own).
-({
+/// The overlay's broken/healthy split: the diagnosis rows with their
+/// verdicts, and the healthy buttons that stay grid tiles. ONE
+/// spelling, owned beside the partition — the widget's memo field, its
+/// partition method and its build-site fallback must all name this
+/// shape.
+typedef QuickHelpPartition = ({
   List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
   List<Map<String, dynamic>> healthy,
-})
-quickHelpPartitionButtons(
+});
+
+/// The cards split into the two layouts the overlay renders — the
+/// broken cards, each with the scope its caption names, and the
+/// healthy ones. ONE partition read by both halves of the overlay, on
+/// the [scopeFor] verdict the caller binds (the tree-unavailable rule
+/// is state the scope file does not own).
+QuickHelpPartition quickHelpPartitionButtons(
   List<Map<String, dynamic>> buttons,
   Map<String, dynamic> Function(Map<String, dynamic> button) scopeFor,
 ) {

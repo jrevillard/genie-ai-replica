@@ -85,7 +85,9 @@ void main() {
       final second = capturedBodies(bodies).last;
       final cleared = second['context'] as Map<String, dynamic>;
       expect(cleared['serviceLabels'], isEmpty);
-      expect(cleared['categoryLabel'], anyOf(isNull, isEmpty));
+      // The documented contract: the clear's payload goes out as NULL —
+      // a present-but-empty name is not the unscoped shape.
+      expect(cleared['categoryLabel'], isNull);
       // The cleared scope is an unscoped query — the plain mode.
       expect(second['contextOption'], 'single-message');
     },

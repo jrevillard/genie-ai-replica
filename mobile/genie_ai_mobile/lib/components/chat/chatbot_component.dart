@@ -43,15 +43,6 @@ typedef _RestoredTitleSource = ({
   String? key,
 });
 
-/// The overlay's broken/healthy split: the diagnosis rows with their
-/// verdicts, and the healthy buttons. ONE spelling — the memo field,
-/// the partition method and the build-site fallback must name the same
-/// shape.
-typedef _QuickHelpPartition = ({
-  List<(Map<String, dynamic>, Map<String, dynamic>)> broken,
-  List<Map<String, dynamic>> healthy,
-});
-
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
   final VoidCallback onRefreshSidebar;
@@ -209,20 +200,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // reads: the button list (identity — a reload replaces it), the
   // resolver (identity — a tree fetch or retry replaces it), and the
   // outage flag (the resolver's null is not the outage's fact). The
-  // locale marker is the fourth leg ONLY for symmetry with the buttons
-  // loader: verdicts are locale-independent, so a marker move without a
-  // button-list replacement (the failed-load catch) merely re-walks for
-  // a result guaranteed identical. While the overlay is open, every
-  // build of the chat screen re-ran the resolver walk per button; with
-  // the memo the walk runs when one of those inputs moves and a rebuild
-  // without one is a field read — the hit path compares fields without
-  // building anything.
+  // locale marker is deliberately NOT a key: verdicts are
+  // locale-independent and the titles live in the button maps, so the
+  // only marker move without a button-list replacement (the failed-load
+  // catch) could only trigger a re-walk for a result guaranteed
+  // identical. While the overlay is open, every build of the chat
+  // screen re-ran the resolver walk per button; with the memo the walk
+  // runs when one of those inputs moves and a rebuild without one is a
+  // field read — the hit path compares fields without building
+  // anything.
   ({
     List<Map<String, dynamic>> buttons,
     QuickHelpScopeResolver? resolver,
     bool unavailable,
-    String? locale,
-    _QuickHelpPartition partition,
+    QuickHelpPartition partition,
   })?
   _quickHelpPartitionMemo;
 
@@ -525,17 +516,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// resolver, the outage flag or the locale moved; a rebuild without
   /// such a move reads the record, compared field-wise so the hit path
   /// builds nothing.
-  _QuickHelpPartition _quickHelpOverlayPartition() {
+  QuickHelpPartition _quickHelpOverlayPartition() {
     final memo = _quickHelpPartitionMemo;
     final buttons = _quickHelpButtons;
     final resolver = _scopeResolver;
     final unavailable = _treeUnavailable;
-    final locale = _quickHelpButtonsLocale;
     if (memo != null &&
         identical(memo.buttons, buttons) &&
         identical(memo.resolver, resolver) &&
-        memo.unavailable == unavailable &&
-        memo.locale == locale) {
+        memo.unavailable == unavailable) {
       return memo.partition;
     }
     final partition = quickHelpPartitionButtons(
@@ -548,7 +537,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       buttons: buttons,
       resolver: resolver,
       unavailable: unavailable,
-      locale: locale,
       partition: partition,
     );
     return partition;

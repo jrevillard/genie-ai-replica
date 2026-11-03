@@ -237,11 +237,14 @@ class ServiceCategoryService {
    * `code: 404` but no HTTP statusCode, so the global error middleware would
    * answer 500) into a typed NotFoundError. Non-absence errors propagate.
    *
-   * The verdict keys on the ArangoDB error number, NOT on the HTTP status:
-   * a missing COLLECTION also answers 404 (errorNum 1203), and reporting
-   * that as "no such document" would render a broken deployment as an empty
-   * result. This mirrors the canonical classifier in
-   * components/shared/lib/db-connection-service.js (_isExpectedAbsence).
+   * The verdict comes from the ArangoDB error number, NOT from the HTTP
+   * status: a missing COLLECTION also answers 404 (errorNum 1203), and
+   * reporting that as "no such document" would render a broken deployment
+   * as an empty result. The rules below mirror the canonical classifier
+   * (`_isExpectedAbsence` in components/shared/lib/db-connection-service.js)
+   * exactly: 1202 (row absent) and 1204 (no match) are absence, the 3.12
+   * simple-query 'no match' shape is absence too, and anything else is a
+   * real fault.
    * @param {Object} collection - The ArangoDB collection handle.
    * @param {String} key - The document _key.
    * @param {String} label - Resource label for the error message.
@@ -252,15 +255,13 @@ class ServiceCategoryService {
     try {
       document = await collection.document(key);
     } catch (error) {
-      // Absence is classified by the ArangoDB error number, not by the HTTP
-      // status: 1202 (row absent) and 1204 (no match) are absence, while
-      // 1203 (COLLECTION absent) also carries HTTP 404 but is a real fault
-      // — reporting it as "no such document" would render a broken
-      // deployment as an empty result. An error carrying no errorNum at
-      // all (a raw HTTP failure) falls back to the status. This mirrors
-      // the canonical classifier in
-      // components/shared/lib/db-connection-service.js (_isExpectedAbsence).
-      const isAbsent = error.errorNum != null ? error.errorNum === 1202 || error.errorNum === 1204 : error.code === 404;
+      const message = String(error.message || '')
+        .trim()
+        .toLowerCase();
+      const isAbsent =
+        error.errorNum === 1202 ||
+        error.errorNum === 1204 ||
+        (message === 'no match' && (error.errorNum === 404 || error.errorNum == null));
       if (isAbsent) {
         throw new NotFoundError(`${label} ${key} not found`);
       }

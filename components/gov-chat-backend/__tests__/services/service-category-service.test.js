@@ -292,6 +292,36 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow('Not found');
     });
 
+    it('maps the ArangoDB 3.12 "no match" absence to a typed NotFoundError', async () => {
+      // The simple-query API answers errorNum 404 with the message 'no
+      // match' (3.11 answered 1204) — the canonical classifier treats it
+      // as an absence, and so must this one.
+      const noMatch = Object.assign(new Error('no match'), { code: 404, errorNum: 404 });
+      mockServices.document.mockRejectedValue(noMatch);
+
+      try {
+        await service.updateServiceWithTranslations('missing', { nameEN: 'Test' });
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
+    });
+
+    it('does not report a missing collection as a missing document', async () => {
+      // 1203 also carries HTTP 404 but is a real fault: a broken
+      // deployment must not render as an empty result.
+      const missingCollection = Object.assign(new Error('collection not found'), { code: 404, errorNum: 1203 });
+      mockServices.document.mockRejectedValue(missingCollection);
+
+      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.toThrow(
+        'collection not found'
+      );
+      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.not.toMatchObject({
+        name: 'NotFoundError'
+      });
+    });
+
     it('rejects non-string translation values before mutating', async () => {
       await expect(
         service.updateServiceWithTranslations('svc-1', {

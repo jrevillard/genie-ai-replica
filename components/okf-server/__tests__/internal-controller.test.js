@@ -94,7 +94,11 @@ describe('POST /api/okf/internal/concepts/:concept_id/status (Story 4.8-amend)',
         patch: expect.objectContaining({ index_status: 'indexed', index_warning: 'Ingested with Warnings' })
       })
     );
-    expect(edgeService.writeRepoConceptEdges).toHaveBeenCalledWith('r1', 'warn_concept', expect.objectContaining({ file_id: 'warn_concept' }));
+    expect(edgeService.writeRepoConceptEdges).toHaveBeenCalledWith(
+      'r1',
+      'warn_concept',
+      expect.objectContaining({ file_id: 'warn_concept' })
+    );
   });
 
   test('a later clean Ingested clears index_warning', async () => {

@@ -138,14 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode (`CONTEXT_OPTION=single-message`) sends the current question as a plain
   string, and the chatqna history translator had no character budget on that
   shape: a question longer than the translation window was sent whole to the
-  translation model, and the refusal it got back was swallowed into a silent
-  fallback — the untranslated question was embedded into the English embedding
-  space, the retriever looked for the wrong documents, and the turn was
-  answered from them. An oversized question is now refused before the model is
-  asked, and the refusal is answered with the same HTTP 422
-  (`translation_input_too_long`) the translated-reply path already returns, so
-  the caller sees one contract; the refused turn is counted on the
-  chat-requests metric. The multi-message shape keeps its documented
+  translation model, and the refusal that came back was reported as a fallback
+  instead of failing the turn — the untranslated question was embedded into
+  the English embedding space, the retriever looked for the wrong documents,
+  and the turn was answered from them. An oversized question is now refused
+  before the model is asked, and the refusal is answered with the same HTTP
+  422 (`translation_input_too_long`) the translated-reply path already
+  returns, so the caller sees one contract; the refused turn is counted on
+  the chat-requests metric. The multi-message shape keeps its documented
   fallback (the history is normalized for the retriever, never shown).
   Chatqna only; needs single-message mode and a question longer than the
   translation budget (2,000 characters, or what the discovered translation

@@ -197,6 +197,9 @@ import DsInfoTip from '../ds/InfoTip.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
+// #80931: the create-failure message is the SHARED composer (same as the
+// wizard's Entry step — one tested owner).
+import { describeCreateFailure } from './steps/failureMessages';
 import OkfRepoEditorShell from './editor/RepoEditorShell.vue';
 
 export default {
@@ -479,23 +482,17 @@ export default {
       });
       this.creating = false;
       if (!result.ok) {
-        // Round 20 (#80123): the repo EXISTS server-side but its index
-        // skeleton failed to import — say THAT, not a blind "failed" (a
-        // retry mints a second repo; the first is already on the dashboard).
-        if (result.repo) {
-          this.createError = this.translate(
-            'okf.create.indexImportFailed',
-            'The repository was created, but its starter index could not be imported. Open it from the dashboard to continue.'
-          );
-          return;
-        }
-        this.createError =
-          result.code === 'DUPLICATE_REPO'
-            ? this.translate(
-                'okf.create.duplicate',
-                'A repository with this name already exists - open it from the dashboard or pick another name.'
-              )
-            : result.message || this.translate('okf.create.failed', 'Repository creation failed');
+        // The message is the SHARED composer (#80931 — same as the wizard's
+        // Entry step). Round 20 (#80123): a result carrying `repo` means the
+        // repo EXISTS server-side but its index skeleton failed to import —
+        // say THAT, not a blind "failed" (a retry mints a second repo; the
+        // first is already on the dashboard); DUPLICATE_REPO points at the
+        // existing repo.
+        console.debug('[StudioTab] createRepo failed', {
+          code: (result && result.code) || '',
+          has_repo: !!(result && result.repo)
+        });
+        this.createError = describeCreateFailure(result, this.translate);
         return;
       }
       const repo = result.repo;

@@ -42,7 +42,8 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
   };
 
   it('threads graph_name into the dataprep payload (7th key)', async () => {
-    fileController._getFileBase64 = jest.fn().mockResolvedValue({ file: okfFile, base64String: 'YjY0' });
+    fileController._getFileAndPath = jest.fn().mockResolvedValue({ file: okfFile, filePath: '/uploads/file-1.md' });
+    fileController._readFileBase64 = jest.fn().mockResolvedValue('YjY0');
     axios.post.mockResolvedValue({ data: { success: true, chunk_count: 3 } });
 
     const result = await fileController._ingestFileById('file-1');
@@ -61,7 +62,8 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
 
   it('sends graphName null for legacy free-form files (backward compat — existing routes unaffected)', async () => {
     const legacyFile = { ...okfFile, graph_name: null, repo_id: null, labels: ['Healthcare'] };
-    fileController._getFileBase64 = jest.fn().mockResolvedValue({ file: legacyFile, base64String: 'YjY0' });
+    fileController._getFileAndPath = jest.fn().mockResolvedValue({ file: legacyFile, filePath: '/uploads/file-1.md' });
+    fileController._readFileBase64 = jest.fn().mockResolvedValue('YjY0');
     axios.post.mockResolvedValue({ data: { success: true } });
 
     await fileController._ingestFileById('file-1');
@@ -73,7 +75,10 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
 
   it('does not re-ingest an already-ingested file', async () => {
     const ingestedFile = { ...okfFile, dataprep: { status: 'Ingested' } };
-    fileController._getFileBase64 = jest.fn().mockResolvedValue({ file: ingestedFile, base64String: 'YjY0' });
+    fileController._getFileAndPath = jest
+      .fn()
+      .mockResolvedValue({ file: ingestedFile, filePath: '/uploads/file-1.md' });
+    fileController._readFileBase64 = jest.fn().mockResolvedValue('YjY0');
 
     const result = await fileController._ingestFileById('file-1');
 

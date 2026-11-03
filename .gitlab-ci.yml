@@ -14,6 +14,10 @@ stages:
 
 variables:
   FLUTTER_VERSION: "3.41.7"
+  # Anti-drift pins for the Python test lanes (review 84594): one source of
+  # truth — a version bump edits these two lines, not three jobs.
+  RUFF_VERSION: "0.16.3"
+  PYTEST_VERSION: "9.1.1"
   FLUTTER_ARCHIVE: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
   # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
@@ -99,7 +103,6 @@ variables:
   # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
   #   never shipped or executed in production).
   # - _bmad-output/**: generated BMAD planning/implementation/spec artifacts.
-  # - update_quickhelp.js: repo-root dev script (hardcoded locale paths), never shipped.
   # NOTE: gemnasium (dependency scanning) does NOT honor this var — see DS_EXCLUDED_PATHS
   # below. Secret Detection is intentionally NOT excluded (SECRET_DETECTION_EXCLUDED_PATHS
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
@@ -119,8 +122,7 @@ variables:
     .claude/**,
     .agents/**,
     _bmad/**,
-    _bmad-output/**,
-    update_quickhelp.js
+    _bmad-output/**
   # --- Dependency Scanning exclusions (gemnasium + gemnasium-python) ---
   # Comma-separated pathspec list, honored by both analyzers. Without these
   # excludes, gemnasium-python entered _bmad/scripts/setup.py on job 93669
@@ -413,6 +415,26 @@ workflow:
           *)   echo "$1" ;;
         esac
       }
+      # Shared response parsing, same concatenation contract as http_label
+      # (the Keycloak provisioning item below uses them): curl captures the
+      # response with -w '\n%{http_code}', so the status is the last line and
+      # the body is everything before it.
+      resp_status() {
+        local s
+        s=$(printf '%s' "$1" | tail -n1)
+        # If curl died before emitting the -w trailer, the last line is body
+        # text — only an all-digit status is a usable signal.
+        case "$s" in ''|*[!0-9]*) s="" ;; esac
+        printf '%s' "$s"
+      }
+      resp_body() {
+        printf '%s' "$1" | sed '$d' | head -c 200
+      }
+      # TESTUSER_EMAIL is defined by the provisioning item below; function
+      # bodies resolve variables at call time.
+      email_conflict_hint() {
+        echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
+      }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
       # better path anyway); a hung nginx must fall through to the NGINX_IP
@@ -458,12 +480,9 @@ workflow:
           TOKEN_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
             -d "client_id=admin-cli" -d "username=admin" \
             --data-urlencode "password=${KC_PWD}" -d "grant_type=password" || true)
-          TOKEN_STATUS=$(printf '%s' "$TOKEN_RESP" | tail -n1)
-          # If curl died before emitting the -w trailer, the last line is body
-          # text — only an all-digit status is a usable signal.
-          case "$TOKEN_STATUS" in ''|*[!0-9]*) TOKEN_STATUS="" ;; esac
+          TOKEN_STATUS=$(resp_status "$TOKEN_RESP")
           [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
-          TOKEN_BODY=$(printf '%s' "$TOKEN_RESP" | sed '$d' | head -c 200)
+          TOKEN_BODY=$(resp_body "$TOKEN_RESP")
           ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
         fi
@@ -471,8 +490,7 @@ workflow:
           CLIENT_ATTEMPTS=$((CLIENT_ATTEMPTS+1))
           CLIENT_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
             -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-          CLIENT_STATUS=$(printf '%s' "$CLIENT_RESP" | tail -n1)
-          case "$CLIENT_STATUS" in ''|*[!0-9]*) CLIENT_STATUS="" ;; esac
+          CLIENT_STATUS=$(resp_status "$CLIENT_RESP")
           CLIENT_FOUND=$(printf '%s' "$CLIENT_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, list) and d else '')" 2>/dev/null || true)
         fi
@@ -542,12 +560,8 @@ workflow:
           CREATE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
             -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
             -d "$(create_payload)" || true)
-          CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
-          # A curl killed before the -w trailer leaves body text on the last
-          # line — only an all-digit status is a usable signal (same guard as
-          # the readiness loop above).
-          case "$CREATE_STATUS" in ''|*[!0-9]*) CREATE_STATUS="" ;; esac
-          CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+          CREATE_STATUS=$(resp_status "$CREATE_RESP")
+          CREATE_BODY=$(resp_body "$CREATE_RESP")
           case "$CREATE_STATUS" in
             ''|000|408|425|429|5[0-9][0-9]) ;;
             *) break ;;
@@ -566,8 +580,7 @@ workflow:
       require_testuser_id() {
         LOOKUP_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
           -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-        LOOKUP_STATUS=$(printf '%s' "$LOOKUP_RESP" | tail -n1)
-        case "$LOOKUP_STATUS" in ''|*[!0-9]*) LOOKUP_STATUS="" ;; esac
+        LOOKUP_STATUS=$(resp_status "$LOOKUP_RESP")
         USERS_JSON=$(printf '%s' "$LOOKUP_RESP" | sed '$d')
         # One parse emits "id|healthy": fixture-healthy = enabled,
         # emailVerified, the fixture email, and no requiredActions all read
@@ -579,7 +592,7 @@ workflow:
         if [ -z "$USER_ID" ]; then
           echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200), lookup HTTP $(http_label "$LOOKUP_STATUS"))"
           if [ "$CREATE_STATUS" = "409" ] && [ "$LOOKUP_STATUS" = "200" ]; then
-            echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
+            email_conflict_hint
           fi
           exit 1
         fi
@@ -588,7 +601,7 @@ workflow:
         echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
         echo "response body: ${CREATE_BODY}"
         if [ "$CREATE_STATUS" = "409" ]; then
-          echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
+          email_conflict_hint
         fi
         exit 1
       }
@@ -637,14 +650,13 @@ workflow:
           RESET_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
             -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
             -d "$(reset_payload)" || true)
-          RESET_STATUS=$(printf '%s' "$RESET_RESP" | tail -n1)
-          case "$RESET_STATUS" in ''|*[!0-9]*) RESET_STATUS="" ;; esac
+          RESET_STATUS=$(resp_status "$RESET_RESP")
           if [ "$RESET_STATUS" = "404" ]; then
             echo "testuser vanished before the password reset (HTTP 404) — recreating from scratch"
             recreate_from_scratch
           elif [ "$RESET_STATUS" != "204" ]; then
             echo "ERROR: testuser password reset failed (HTTP $(http_label "$RESET_STATUS")) — the stale password would fail every login-dependent spec"
-            echo "response body: $(printf '%s' "$RESET_RESP" | sed '$d' | head -c 200)"
+            echo "response body: $(resp_body "$RESET_RESP")"
             exit 1
           else
             VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
@@ -657,9 +669,8 @@ workflow:
           # that serialization or accept interleaved 404/409 failures.
           DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
             -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-          DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
-          case "$DEL_STATUS" in ''|*[!0-9]*) DEL_STATUS="" ;; esac
-          DEL_BODY=$(printf '%s' "$DEL_RESP" | sed '$d' | head -c 200)
+          DEL_STATUS=$(resp_status "$DEL_RESP")
+          DEL_BODY=$(resp_body "$DEL_RESP")
           if [ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]; then
             echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
             echo "response body: ${DEL_BODY}"
@@ -681,8 +692,7 @@ workflow:
       # Assign admin realm role to test user (required for document upload/delete)
       ROLES_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/roles" \
         -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-      ROLES_STATUS=$(printf '%s' "$ROLES_RESP" | tail -n1)
-      case "$ROLES_STATUS" in ''|*[!0-9]*) ROLES_STATUS="" ;; esac
+      ROLES_STATUS=$(resp_status "$ROLES_RESP")
       ADMIN_ROLE=$(printf '%s' "$ROLES_RESP" | sed '$d' \
         | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" 2>/dev/null || true)
       if [ -n "$ADMIN_ROLE" ]; then
@@ -690,10 +700,8 @@ workflow:
           -H "Authorization: Bearer $ADMIN_TOKEN" \
           -H "Content-Type: application/json" \
           -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" || true)
-        ROLE_STATUS=$(printf '%s' "$ROLE_RESP" | tail -n1)
-        # Same digit-guard: a truncated answer is not an HTTP status.
-        case "$ROLE_STATUS" in ''|*[!0-9]*) ROLE_STATUS="" ;; esac
-        ROLE_BODY=$(printf '%s' "$ROLE_RESP" | sed '$d' | head -c 200)
+        ROLE_STATUS=$(resp_status "$ROLE_RESP")
+        ROLE_BODY=$(resp_body "$ROLE_RESP")
         case "$ROLE_STATUS" in
           2[0-9][0-9])
             echo "Assigned admin role to testuser (HTTP ${ROLE_STATUS})"
@@ -901,7 +909,6 @@ semgrep-sast:
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
   #   **/seed-*.js — seed scripts (data fixtures for a fresh database)
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
-  #   update_quickhelp.js — generated help text
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
   #   .claude/**, .agents/**, _bmad/**, _bmad-output/** — agent tooling and
   #     generated BMAD artifacts, never shipped
@@ -1651,7 +1658,7 @@ test:pii-service:
   stage: test
   image: python:3.11-slim
   before_script:
-    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff pytest
+    - pip install --no-cache-dir -r components/pii-service/requirements.txt "ruff==${RUFF_VERSION}" "pytest==${PYTEST_VERSION}"
     - python -m spacy download en_core_web_md
   script:
     - cd components/pii-service
@@ -1754,7 +1761,7 @@ test:ragas-service:
   stage: test
   image: python:3.11-slim
   before_script:
-    - pip install --no-cache-dir -r components/ragas-service/requirements.txt ruff pytest
+    - pip install --no-cache-dir -r components/ragas-service/requirements.txt "ruff==${RUFF_VERSION}" "pytest==${PYTEST_VERSION}"
   script:
     - cd components/ragas-service
     - ruff check app.py ragas_engine.py xlsx_io.py tests/
@@ -2968,7 +2975,10 @@ lint:python:
   stage: lint
   interruptible: true
   before_script:
-    - pip install --cache-dir .cache/pip ruff
+    # Same pin the test lanes carry: an unpinned ruff here floats with upstream
+    # releases, so a new minor's default rules fail the lane with zero repo
+    # changes.
+    - pip install --cache-dir .cache/pip "ruff==${RUFF_VERSION}"
   cache:
     - key: lint-python-ruff
       paths:
@@ -3996,7 +4006,7 @@ docs:build:
       changes:
         - site/**/*
         - .gitlab-ci.yml
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         - site/**/*
         - .gitlab-ci.yml
@@ -4019,4 +4029,4 @@ pages:
       - public
   rules:
     # Publish to GitLab Pages on the default branch only.
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

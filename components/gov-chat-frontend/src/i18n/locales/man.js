@@ -1419,6 +1419,19 @@ export default {
     alt: 'Yele'
   },
   details: {
+    crawl: {
+      seconds: 'seconds',
+      autoRefreshEvery: 'Auto-refresh bera kungo',
+      refreshNow: 'Refresh yan',
+      crawlRate: 'Crawl fitiyo',
+      queueSize: 'Queue kungo',
+      errorRate: 'Error fitiyo',
+      pagesProcessed: 'Pages dala',
+      depth: 'Depth',
+      internalLinks: 'Internal links',
+      externalLinks: 'External links',
+      totalFetched: 'Total fetched'
+    },
     loading: 'Fayil Kibaro ka looti...',
     title: 'Fayil Kibaroo',
     close: 'A dade',
@@ -1437,6 +1450,7 @@ export default {
     uploadDate: 'Yele Lung',
     hash: 'SHA256 Has',
     tabs: {
+      dashboard: 'Dasboodoo',
       details: 'Kibaroo',
       ingestionLog: 'Dung Log',
       detailsHint:
@@ -1627,8 +1641,14 @@ export default {
       adminOnly: 'Model konfigurasyonu platform admin role lafiya.'
     },
     versions: {
+      ingestFailed: 'failed',
+      ingestPartialFailed: 'partial',
+      ingestCompleted: 'ingested',
+      bundleMissing: 'zip missing',
+      bundleDownload: 'Download zip',
       bundle: 'Bulo',
       col: {
+        ingest: 'Ingest',
         concepts: 'Miroolu',
         curator: 'Juubelaa',
         minted: 'Daa',
@@ -1646,6 +1666,10 @@ export default {
       title: 'Berolu'
     },
     shell: {
+      sourceDocument: 'Source document kungo',
+      size: 'Size',
+      type: 'Type',
+      crawlSeed: 'Crawl seed',
       back: 'Dashboard an Studio',
       building: 'A bering loo…',
       buildingHint: 'Peba in jikin eo ej pād ilo wāween jerbal',
@@ -1657,6 +1681,7 @@ export default {
       export: 'Export .zip',
       logs: 'Loguolu',
       pii: {
+        reviewHint: 'Click flagged file kutu ke correct a editor kono:',
         ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
         note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
@@ -1740,6 +1765,9 @@ export default {
       failed: 'Importoo ti damina ke. Dokuumalu etale ka ñining tugung.'
     },
     editor: {
+      resizeMeta: 'Drag ka metadata panel kungo fiti yo',
+      resizeTip: 'Drag ka fiti yo — double click kutu ke wow',
+      resizeRail: 'Drag ka file list kungo fiti yo',
       addConcept: {
         bodyLabel: 'Markdown (likūt ak kōjparok bwe en ejjel̦o̦k)',
         bodyPh: '# Bōroji\n\nLikūt markdown ijin - frontmatter enaj make koba.',
@@ -1798,6 +1826,16 @@ export default {
         grantedGroupNotice: 'Grupu duna — kada membro sim aseeg ku login pruksimu.'
       },
       autocorrect: {
+        applyingProgress: 'Applying {done} / {total} yan…',
+        stop: 'Stop yan',
+        stopped: 'Stop ya — {n} concept bin apply bifo stop.',
+        sheetShowing: 'Showing {shown} of {total} concept yan.',
+        sheetApplyCoversAll: 'Apply fixes go cover all.',
+        sheetShowMore: 'Show more',
+        sheetFilter: 'Filter by concept id',
+        applySummary: 'Applied {n} fix yan.',
+        applyFailed: 'Applied {n} fix yan — {f} concept FAIL. Click «Apply fixes» blo try gen.',
+        failuresMore: 'and {n} more yan',
         blankBefore: '(fende mang soto)',
         blankBadge: 'ejjel̦o̦k frontmatter — aolepen peba',
         applyField: 'A ke',
@@ -1998,6 +2036,7 @@ export default {
         note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
+        inProgress: 'Publishing waa — bundle export ani transfer ka kutu ke…',
         body: 'Publishing ej kōm̦m̦an v{n} im kakkwon bundle "{file}" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.',
         confirm: 'A ke',
         title: 'A ke'
@@ -2479,6 +2518,10 @@ export default {
         cloneFailed: 'Cloneoo filita — ñining tugung.'
       },
       input: {
+        clsHybrid: 'Hybrid',
+        clsLlm: 'LLM classification',
+        clsHeur: 'Heuristics (fast, LLM te a nyanga)',
+        classification: 'Classification strategy',
         title: 'Kōdāl̦o̦k ko',
         documents: 'Kāālet peba ko rej aikuj jino laajrak in un ko.',
         crawl: 'Kāālet website ko kwonañin crawl iie.',
@@ -2511,6 +2554,7 @@ export default {
         cloned: 'Nying repository clone ye — a topicolu be o kono saaying. Curate taa ka u etale.'
       },
       produce: {
+        labelFailed: 'Conversion failed',
         title: 'Kōm̦m̦an un ko',
         hint: 'Kōmij riiti jikin ko am im kōpooj un ko.',
         progress: 'Ri-kōm̦m̦an ej jerbal...',
@@ -2559,6 +2603,7 @@ export default {
         loadFailed: 'Labelu saaying looti ti ben.'
       },
       curate: {
+        labHint: 'Build routing head from saved tags and test am — no publish needed.',
         embedHint:
           'Topic kiling etale ani a improvement: kumaa fix, a type ani Knowledge-Hierarchy label set, topic kafu wala fiti. I fixu ninyu bee, assistantoo na u cite koto.',
         noRepo: 'Repository ti je saaying — Entry murung ka kura dada wala kili ceng folo.',
@@ -2599,6 +2644,10 @@ export default {
         versionSummary: 'Versionu {n} · labang v{latest}'
       },
       publish: {
+        frontmatterPending: 'Frontmatter tagu draft te nyanga',
+        frontmatterPartial: 'Frontmatter tagu — review ka kutu de',
+        frontmatterOk: 'Frontmatter tagu approved waa',
+        frontmatterServing: 'Frontmatter tags set',
         title: 'Sigura i kaba',
         hint: 'Nying repository review a ready. Publish jang ti abada ke — dashboard kono approval lafiya submit, koto dashboard wala editor kono approve ani publish.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
@@ -2731,8 +2780,6 @@ export default {
       saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
     },
     validation: {
-      piiRescanTimeout:
-        'Re-scan eo jen kabun jen 15 minute — e tatae Pacific server-ewaam. Ejjab men in loss; ejjamȯk ikijen ijen minit in juōn.',
       healthAria: 'Menin: {pct} percent, {n} issue',
       frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
       none: 'Ejjel̦o̦k',
@@ -2833,6 +2880,7 @@ export default {
         'Serveroo re-scan accept nga run id ti jaabi, o la a progress track ti be run. Haya ti report ke.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'vanished',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',
@@ -2991,8 +3039,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'RAGAS Benchmarks',
-        models: 'Models'
+        ragas: 'RAGAS Benchmarks'
       },
       head: {
         dim: 'Dimensions',
@@ -3083,6 +3130,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Loading the suite…',
         generate: 'Generate test suite',
         generateTip:
           'LLMoo bɛ querylu sili batch 30 class kili la — askoo min ba (100+), a bɛ kɛ miniti fuu. Suiteoo na jang ani Saved suites kono landing ni a benta.',

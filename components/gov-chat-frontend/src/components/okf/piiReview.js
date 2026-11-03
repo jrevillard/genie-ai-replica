@@ -49,6 +49,16 @@ export const PII_VARIANT = {
   [PII_CLEAN]: 'success'
 };
 
+/**
+ * CEILING for FOLLOWING a repo-wide PII re-scan (#80488/#80774/#80929 — the
+ * one shared copy for both pollers): a server run wedged at status 'running'
+ * (worker crash without reaping) must not re-arm the poll timer forever. Past
+ * this horizon the UI stops following the run with a readable timeout; the
+ * server-side run itself is untouched. Same horizon class as the store's
+ * pollJob PII actions (15 min).
+ */
+export const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
+
 /** The PII vocabulary the concept projection actually carries. */
 function bucket(state) {
   if (state === 'hit') return 'hit';

@@ -131,6 +131,43 @@ describe('graph-lifecycle-service (versioned serving graph)', () => {
     expect(mockDb.createGraph).not.toHaveBeenCalled();
   });
 
+  test('promoteGraph tolerates the edge rewrite hitting MISSING collections (1203 — the settle wedge, 2026-11-03)', async () => {
+    // A never-ingested repo (every concept failed before dataprep created
+    // anything): the endpoint rewrite queries edge collections that DO NOT
+    // exist, and ArangoDB raises 1203 'collection or view not found' — the
+    // COLLECTION-level absence, a different errorNum than the document-level
+    // isArangoNotFound covers. Missing that spelling threw every settle of a
+    // fully-failed first drain: the drain flag stuck true, re-ingest 409'd on
+    // the same flag, the repo bricked for recovery. The rewrite must treat
+    // collection absence as the fresh-graph case its continue was written
+    // for. (The test above passes vacuously against this shape — the mock's
+    // query never raised the error production raises; this one pins it.)
+    // Reject ONLY the edge-rewrite queries (FOR e IN ...) — the other queries
+    // in the flow target okf_concepts_meta, which always exists.
+    const missing1203 = Object.assign(
+      new Error('collection or view not found: name: OKF_kenya-government-services_v2_HAS_SOURCE'),
+      { errorNum: 1203 }
+    );
+    mockDb.query.mockImplementation((q) => {
+      const text = typeof q === 'string' ? q : q && q.query ? String(q.query) : '';
+      if (text.includes('FOR e IN')) return Promise.reject(missing1203);
+      return Promise.resolve({ all: async () => [] });
+    });
+    const out = await promoteGraph(repoDoc({ lifecycle_state: 'publish' }));
+    expect(out).toBe('OKF_kenya-government-services_v2'); // the settle can complete
+
+    // A genuine fault (not absence) on the rewrite still propagates.
+    mockDb.query.mockImplementation((q) => {
+      const text = typeof q === 'string' ? q : q && q.query ? String(q.query) : '';
+      if (text.includes('FOR e IN')) {
+        return Promise.reject(Object.assign(new Error('arango gateway 503'), { errorNum: 503 }));
+      }
+      return Promise.resolve({ all: async () => [] });
+    });
+    const err = await promoteGraph(repoDoc({ lifecycle_state: 'publish' })).catch((e) => e);
+    expect(err.errorNum).toBe(503);
+  });
+
   test('GRAPH_NAME_CONFLICT: a foreign graph owns the target name → 409, stores untouched', async () => {
     const DRAFT = 'OKF_kenya-government-services_v3';
     seedGraph(DRAFT);

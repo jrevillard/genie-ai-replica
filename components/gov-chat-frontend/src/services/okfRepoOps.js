@@ -11,6 +11,11 @@
  *   applyLabel        — Knowledge-Hierarchy label write for one concept
  *   splitModeConcepts — crawler split modes (re-exported for reuse)
  *
+ * PARTIAL CREATE (#1350): when a repo is minted but its content import
+ * fails, the error is promoted to the typed INDEX_IMPORT_FAILED contract
+ * (stable code + the created repo as a first-class field) — see
+ * promoteToPartialCreate.
+ *
  * Pure orchestration over the service layer — no Vuex, no components — so
  * any UI can drive it.
  */
@@ -32,6 +37,42 @@ export function slugifyConcept(input) {
       .replace(/^-|-$/g, '')
       .slice(0, 80) || 'concept'
   );
+}
+
+/**
+ * The PARTIAL-CREATE contract (#1350 review closeout): the repository was MINTED
+ * server-side but its content import (index skeleton, zip bundle) failed.
+ * The three layers that read it — okfRepoOps → the store's create actions →
+ * the create UIs (Entry step, StudioTab dialog) — agree on ONE discriminator:
+ * the stable INDEX_IMPORT_FAILED code, with the created repo carried as a
+ * FIRST-CLASS `repo` field of the envelope (open it instead of retrying —
+ * a retry mints a SECOND repo). Before this contract the error object was
+ * mutated with an undocumented `repo` field the consumers had to re-detect
+ * by presence; a consumer reading `code` learned nothing.
+ */
+export const INDEX_IMPORT_FAILED = 'INDEX_IMPORT_FAILED';
+
+/**
+ * Promote a transport error to the partial-create contract above. The error
+ * is annotated IN PLACE — every field the service layers attached (status,
+ * message, ...) survives for upstream diagnostics — and the promotion is
+ * logged structurally: this is a partial SUCCESS (the repo exists and stays
+ * openable), not a plain failure, and the record must show both halves.
+ */
+function promoteToPartialCreate(err, repo, stage) {
+  const transportCode = err && err.code;
+  if (err && typeof err === 'object') {
+    err.code = INDEX_IMPORT_FAILED;
+    err.repo = repo;
+  }
+  console.warn('[okfRepoOps] repo minted but its content import failed — the repo stays openable', {
+    code: INDEX_IMPORT_FAILED,
+    stage,
+    repo_id: (repo && repo.repo_id) || null,
+    transport_code: transportCode || null,
+    transport_message: (err && err.message) || null
+  });
+  return err;
 }
 
 /**
@@ -165,11 +206,12 @@ export async function createRepo({ name, domain }) {
   } catch (err) {
     // The repo EXISTS server-side (round 16, #80123) — a bare CREATE_FAILED
     // here reads as "nothing happened", the user retries, and the first
-    // repo lingers as an orphan draft card with no index concept. Attach
-    // the created repo exactly like importRepoZip does, so the wizard can
-    // offer "open it" instead of a blind retry.
-    err.repo = repo;
-    throw err;
+    // repo lingers as an orphan draft card with no index concept. Round 30
+    // (#1350): the partial result is the TYPED contract — the stable
+    // INDEX_IMPORT_FAILED code with the created repo as a first-class
+    // `repo` field — not an ad-hoc field mutation the consumers had to
+    // re-detect by presence.
+    throw promoteToPartialCreate(err, repo, 'index_skeleton');
   }
   return repo;
 }
@@ -404,8 +446,10 @@ export async function importRepoZip({ file, name, domain, classification }) {
   try {
     await importZipIntoRepo({ repoId: repo.repo_id, file, classification });
   } catch (err) {
-    err.repo = repo; // the repo exists — the caller can still open it in the editor
-    throw err;
+    // Same typed contract as createRepo above (#1350): the bundle repo
+    // exists server-side — the caller can still open it in the editor
+    // instead of re-importing over it.
+    throw promoteToPartialCreate(err, repo, 'zip_import');
   }
   return repo;
 }

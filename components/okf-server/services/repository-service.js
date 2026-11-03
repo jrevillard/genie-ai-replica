@@ -64,6 +64,12 @@ const HEAD_REBUILD_BUDGET_MS = 5000;
 const FRONTMATTER_HISTORY_LIMIT = 10;
 
 // ArangoDB error codes used for control flow.
+// Absence-classifier twin 3 of 3 — the LAX legacy one (review 84589).
+// bare-404 and /not found/i count here, which the strict rule in
+// okf-server/services/arango-errors.js (control-flow owner; shared/lib
+// db-connection-service.js is the log-severity twin) deliberately refuses.
+// Kept for the registry CRUD paths' back-stop semantics; see the twins
+// comment there for the lockstep-edit rule and the #1350 unification item.
 const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
 const ARANGO_UNIQUE_VIOLATION = (err) =>
   err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);

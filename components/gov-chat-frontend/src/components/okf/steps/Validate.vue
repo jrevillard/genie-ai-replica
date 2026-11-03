@@ -238,7 +238,7 @@
         {{
           topicLinksBusy
             ? translate('okf.validation.action.working', 'Working…')
-            : translate('okf.validation.action.topicLinks', 'Cross-link topics')
+            : translate('okf.validation.topicLinks.title', 'Cross-link topics')
         }}
       </DsButton>
     </div>
@@ -374,6 +374,9 @@ import DsButton from '../../ds/Button.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import OkfPiiOccurrences from '../editor/PiiOccurrences.vue';
+// #80929: the rescan-follow horizon is SHARED with the editor's rescan
+// control (editor/PiiRepoRescan.vue) — one constant, one 15-minute answer.
+import { PII_RESCAN_MAX_MS } from '../piiReview';
 import translateMixin from '../../../mixins/translateMixin';
 
 // #1039 near-duplicate preview: how much of each member's body to render.
@@ -383,11 +386,6 @@ const PREVIEW_CHARS = 1500;
 // round-trip per concept), so the panel polls. Same cadence as the topic-link
 // run: fast enough that the bar moves, slow enough not to hammer the API.
 const PII_RESCAN_POLL_MS = 3000;
-// CEILING (round 19, #80774): a run wedged at status 'running' (worker
-// crash without reaping) re-arms the 3s timer forever otherwise — the same
-// dead-end class the store's pollJob ceilings exist to remove. Same 15-min
-// horizon as the editor's rescan control and pollJob's PII actions.
-const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
 
 // Per-type explanation tips (#1039): what the check looks at and why it
 // matters for RAG accuracy — one sentence a steward can act on.
@@ -832,8 +830,11 @@ export default {
         if (this._piiRescanDeadline && Date.now() > this._piiRescanDeadline) {
           this.piiRescanBusy = false;
           this._piiRescanTimer = null;
+          // #80929: REUSES the editor control's key (okf.editor.piiRescan.
+          // timeout) — the sentence was a byte-identical second copy of it,
+          // and every translation change would have had to land twice.
           this.piiRescanError = this.translate(
-            'okf.validation.piiRescanTimeout',
+            'okf.editor.piiRescan.timeout',
             'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.'
           );
           return;

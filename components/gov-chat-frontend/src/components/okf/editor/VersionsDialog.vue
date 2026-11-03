@@ -125,7 +125,7 @@ export default {
         { key: 'concept_count', label: this.translate('okf.versions.col.concepts', 'Concepts') },
         { key: 'minted', label: this.translate('okf.versions.col.minted', 'Minted') },
         // WS4 (David, 2026-09-25): per-version bundle download link.
-        { key: 'bundle', label: this.translate('okf.versions.col.bundle', 'Bundle') },
+        { key: 'bundle', label: this.translate('okf.versions.bundle', 'Bundle') },
         // Per-version ingest outcome (completed / partial-failed / failed).
         { key: 'ingest', label: this.translate('okf.versions.col.ingest', 'Ingest') }
       ]

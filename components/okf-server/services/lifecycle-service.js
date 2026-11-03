@@ -168,7 +168,7 @@ async function sourcesBusyBlocker(repo) {
   const sources = (repo && Array.isArray(repo.source_documents) && repo.source_documents) || [];
   if (sources.length === 0) return null;
   const { authedAxios } = require('./service-token');
-  const docRepoConfig = require('../config');
+  const config = require('../config');
   // Shared doc-repo envelope unwrap — lazy like every HTTP dep here (a
   // top-level producer-service require drags the ingest/pii client chain into
   // partial-mock test contexts that do not carry its config).
@@ -177,10 +177,9 @@ async function sourcesBusyBlocker(repo) {
   for (const s of sources) {
     if (!s || !s.file_id) continue;
     try {
-      const res = await authedAxios.get(
-        `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`,
-        { timeout: 5000 }
-      );
+      const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`, {
+        timeout: 5000
+      });
       // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
       // shapes (producer-service.docRepoFileOf) so the gate sees the REAL
       // dataprep.status (a misread would silently fail-open the
@@ -644,8 +643,12 @@ async function transition(repoId, action, actor, opts = {}) {
       ]);
       // Round 20, #80801: set when the bypass below fires — the publish then
       // COMPLETES repo.version instead of minting the next one (see the mint
-      // guard below).
-      let completingVersion = null;
+      // guard below). A boolean, not the version number (review !622, #80935):
+      // the VALUE was never read — the export version comes from `fresh`, the
+      // re-read registry — so the variable only ever answered one question
+      // ("must the mint be skipped?"). Keeping the number invited the next
+      // edit to feed it to the export and silently publish the wrong version.
+      let isCompletingInterruptedPublish = false;
       if (currentFingerprint && currentFingerprint === liveFingerprint) {
         // Review !622 wave 2 (#78657): a publish that died BETWEEN mint and
         // export leaves the fingerprint recorded on the minted version with
@@ -672,7 +675,7 @@ async function transition(repoId, action, actor, opts = {}) {
           version: repo.version,
           reason: 'fingerprint matches but the version has no bundle artifact — completing the interrupted publish'
         });
-        completingVersion = repo.version;
+        isCompletingInterruptedPublish = true;
       }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
@@ -702,7 +705,7 @@ async function transition(repoId, action, actor, opts = {}) {
       // passed when the manifest was first written and the fingerprint match
       // proves the content unchanged, so re-running them would only re-assert
       // the same snapshot.
-      if (completingVersion == null) {
+      if (!isCompletingInterruptedPublish) {
         logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
         await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
         logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });

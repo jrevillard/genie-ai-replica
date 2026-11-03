@@ -169,6 +169,38 @@ describe('!1072 — a document miss is an expected outcome, not an error', () =>
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  it("the ArangoDB 3.12 firstExample miss (errorNum 404 + 'no match') emits NO error and is still re-thrown", async () => {
+    // LIVE-REPRODUCED on the local build (Quran Core import, 2026-11-02): the
+    // 3.12 server answers a simple-API miss with errorNum 404 / 'no match' —
+    // the 3.11 server answered 1204. Expected-absence must cover the shape or
+    // every miss logs at warn/error and buries real faults again.
+    const serverMiss = Object.assign(new Error('no match'), {
+      errorNum: 404,
+      code: 404,
+      name: 'ArangoError'
+    });
+    await expect(svc._executeWithRetry('default', thrower(serverMiss), 'collection.firstExample')).rejects.toBe(
+      serverMiss
+    );
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('a bare errorNum 404 WITHOUT the no-match message stays a real fault — warn + error severity kept', async () => {
+    // The masking guard: 404 alone is what route/collection faults echo; only
+    // the server's own 'no match' errorMessage upgrades it to expected absence.
+    const routeFault = Object.assign(new Error('unknown path'), {
+      errorNum: 404,
+      code: 404,
+      name: 'ArangoError'
+    });
+    await expect(svc._executeWithRetry('default', thrower(routeFault), 'collection.firstExample')).rejects.toBe(
+      routeFault
+    );
+    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
   it('1203 collection-not-found STILL logs at error — it is a real fault', async () => {
     // The one that looks like the others (both carry code 404) and is not. A
     // missing collection is a configuration/infrastructure fault and must stay

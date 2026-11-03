@@ -24,6 +24,7 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     // The authedAxios egress allowlist validates origins against the SAME
     // env the config module reads — the tests' http://docrepo URLs need it.
     process.env.DOCUMENT_REPOSITORY_URL = 'http://docrepo';
+    delete process.env.DATAPREP_URL;
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
     delete process.env.KEYCLOAK_URL;
@@ -31,6 +32,7 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
   afterEach(() => {
     delete process.env.KC_OKF_SERVER_CLIENT_ID;
     delete process.env.KC_OKF_SERVER_CLIENT_SECRET;
+    delete process.env.DATAPREP_URL;
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
     delete process.env.KEYCLOAK_URL;
@@ -191,5 +193,58 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     await expect(freshAuthed.get('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
       /not the configured document repository/
     );
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // REGRESSION #1358 (live 2026-11-03): the wave-2 allowlist admitted ONLY the
+  // document-repository origin, but the ingest drain's three dataprep calls
+  // (liveness probe, pre-POST retract, concept POST) route through authedAxios
+  // and target config.dataprep.url — every ingest cycle aborted at step 0 and
+  // no image built after 2026-10-29 could move a single concept. The worker
+  // suite mocks authedAxios at the boundary, so the red never surfaced there:
+  // these tests exercise the REAL guard with the EXACT url strings the worker
+  // builds, on both config paths (env override and compose default).
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('egress guard admits the dataprep service (#1358)', () => {
+    test('a dataprep URL passes the guard via the DATAPREP_URL env override and reaches axios', async () => {
+      process.env.DATAPREP_URL = 'http://dataprep:5000';
+      axios.post.mockResolvedValue({ data: { access_token: 'tok-dp', expires_in: 3600 } });
+      await expect(
+        authedAxios.post('http://dataprep:5000/v1/dataprep/task_status', { fileId: 'f1' })
+      ).resolves.toBeDefined();
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://dataprep:5000/v1/dataprep/task_status',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    test('the drain still fail-closes a third-party origin AFTER the widening', async () => {
+      process.env.DATAPREP_URL = 'http://dataprep:5000';
+      await expect(authedAxios.get('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+        /document repository or dataprep service/
+      );
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    test('the worker-built dataprep URLs pass the REAL guard on compose defaults (no env overrides)', async () => {
+      delete process.env.DATAPREP_URL;
+      delete process.env.DOCUMENT_REPOSITORY_URL;
+      jest.resetModules();
+      const fresh = require('../services/service-token');
+      const freshConfig = require('../config');
+      const dp = freshConfig.dataprep.url;
+      const dr = freshConfig.documentRepository.url;
+      // The three drain URLs exactly as ingestWorker.js builds them (:159/:873/:921).
+      expect(() => fresh._assertAllowedUrl(`${dp}/v1/dataprep/task_status`)).not.toThrow();
+      expect(() => fresh._assertAllowedUrl(`${dp}/v1/dataprep/retract_file`)).not.toThrow();
+      expect(() => fresh._assertAllowedUrl(`${dp}${freshConfig.dataprep.ingestPath}`)).not.toThrow();
+      // The doc-repo side of the same worker file keeps passing too (:619/:637/:1261).
+      expect(() => fresh._assertAllowedUrl(`${dr}/api/files?repo_id=r&is_bundle=true&limit=1`)).not.toThrow();
+      expect(() => fresh._assertAllowedUrl(`${dr}/api/files/b/ingestion-log`)).not.toThrow();
+      expect(() => fresh._assertAllowedUrl(`${dr}/api/files/b/retract`)).not.toThrow();
+      // And a foreign origin still fails on the same config instance.
+      expect(() => fresh._assertAllowedUrl('http://evil.example.com/x')).toThrow(/dataprep service/);
+    });
   });
 });

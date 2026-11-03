@@ -10,6 +10,16 @@ from. This section is for the people who **own and curate that content** —
 knowledge managers, domain experts, and administrators — not developers of the
 pipeline internals.
 
+There are two ways knowledge enters the pipeline:
+
+- **Documents** — upload files through the admin UI or API; the pipeline
+  parses, chunks, labels and embeds them into the shared corpus.
+- **OKF repositories** — curated *concept documents* (Markdown with
+  frontmatter and links) organized into versioned repositories, created and
+  maintained in the [OKF Studio](/docs/knowledge-base/okf-studio/), each
+  publishing as its own retrieval graph with tag-driven routing and
+  per-repository [access control](/docs/knowledge-base/access-control/).
+
 If you want to understand *how retrieval works under the hood*, read the
 [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) section first. This section is about
 the **operational** side: how documents get in, how they are processed, how to
@@ -19,6 +29,9 @@ organise and maintain them, and what makes content retrieve well.
 
 - [Ingestion]({{< relref "ingestion" >}}) — the upload → scan → chunk → label →
   embed → store pipeline, supported formats, and size limits.
+- [Access control]({{< relref "access-control" >}}) — who can query which OKF
+  repository: the default-open read model, Keycloak scopes, the write-side
+  rules, and the planned admin facility.
 - [Document lifecycle]({{< relref "document-lifecycle" >}}) — upload, processing
   states, updating, and retracting documents.
 - [Labelling & taxonomy]({{< relref "labelling-taxonomy" >}}) — how chunks are
@@ -30,6 +43,17 @@ organise and maintain them, and what makes content retrieve well.
 - [Ingestion log reference]({{< relref "ingestion-log" >}}) — pointer to the
   canonical Operations → Ingestion log page: schema, endpoints, canonical
   message strings, and the debugging playbook.
+- [OKF Studio]({{< relref "okf-studio" >}}) — the dashboard, wizard and editor
+  for creating, curating, securing and publishing OKF repositories.
+- [Testing Lab]({{< relref "testing-lab" >}}) — testing a repository's routing
+  before it serves: the vectorized head, suites and analytics, the advisor,
+  and RAGAS benchmarks.
+- [Model configurations]({{< relref "models" >}}) — the Admin Dashboard's
+  Models tab: named remote-model endpoints for judging, generation, curation
+  and tagging.
+- [From Documents & Crawls]({{< relref "documents-to-okf" >}}) — how document
+  management feeds OKF repositories: the crawl dashboard, the Create-OKF
+  entry points, and bundle protection.
 
 ## How documents flow through the system
 

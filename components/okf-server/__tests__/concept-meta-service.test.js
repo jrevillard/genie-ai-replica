@@ -406,6 +406,36 @@ describe('concept-meta-service — real-arangojs no-match tolerance (smoke-test 
     expect(Object.values(mockDb._stores.okf_concepts_meta).length).toBe(1);
   });
 
+  it('treats the ArangoDB 3.12 firstExample miss (errorNum 404 + "no match") as absent → creates the doc', async () => {
+    // LIVE-REPRODUCED on the local build (Quran Core import, 2026-11-02): the
+    // 3.12 server reimplemented the simple-query API and answers its miss with
+    // errorNum 404 / errorMessage 'no match' — the 3.11 server answered 1204.
+    // The strict classifier refused to trust a bare 404 (a missing collection
+    // carries 404 too), so every concept's existence check threw and ALL
+    // 6351 imports failed at step 4b. Both halves together ARE absence.
+    const col = mockDb.collection('okf_concepts_meta');
+    const serverMiss = new Error('no match');
+    serverMiss.errorNum = 404;
+    serverMiss.code = 404;
+    serverMiss.name = 'ArangoError';
+    col.firstExample.mockRejectedValueOnce(serverMiss);
+    const result = await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    expect(result.action).toBe('created');
+    expect(Object.values(mockDb._stores.okf_concepts_meta).length).toBe(1);
+  });
+
+  it('a bare errorNum 404 WITHOUT the no-match message stays a real fault — does not mask', async () => {
+    // The masking guard: 404 alone is what route/collection faults echo. Only
+    // the server's own 'no match' errorMessage upgrades it to "absent".
+    const col = mockDb.collection('okf_concepts_meta');
+    const routeFault = new Error('unknown path');
+    routeFault.errorNum = 404;
+    routeFault.code = 404;
+    routeFault.name = 'ArangoError';
+    col.firstExample.mockRejectedValueOnce(routeFault);
+    await expect(conceptMeta.upsertConceptMeta('r1', parsedInput())).rejects.toThrow('unknown path');
+  });
+
   it('surfaces a TRANSIENT firstExample error (not a no-match) — does not mask', async () => {
     const col = mockDb.collection('okf_concepts_meta');
     const transient = new Error('connection reset');
@@ -899,5 +929,147 @@ describe('ensureSummary — model-id resolution (!631 policy)', () => {
     // floor (a 1 ms timeout would fail non-retriably on a healthy endpoint).
     expect(postTimeout).toBeLessThanOrEqual(5000);
     expect(postTimeout).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live-caught on the Quran Core import (2026-11-02): the apply loop silently
+// skipped 785 consecutive concepts when the row lookup answered not-found
+// mid-run (the very next request applied 784 of the same rows — zero code
+// change between), and rule 4 proposed fm.status='draft' for 6,350 concepts
+// whose lifecycle_status is 'stable' (the import model never writes the
+// legacy top-level status). The plan mirrors the lifecycle; the run retries
+// a transient miss once and REPORTS what still failed.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('autocorrectRepo — rule 4 mirrors the lifecycle, failures are reported (Quran 2026-11-02)', () => {
+  const { planAutocorrectForConcept } = conceptMeta;
+  beforeEach(() => mockDb._reset());
+
+  // The mock's col.save auto-keys by doc._key || repo_id — three concepts
+  // seeded through the service would all land under one 'r1' key and
+  // overwrite each other (the planner then plans nothing). Seed raw rows with
+  // distinct keys and hand the planner its snapshot via the query mock.
+  function seedRows() {
+    mockDb._stores.okf_concepts_meta = {};
+    const mk = (cid) => {
+      const doc = {
+        _key: 'k-' + cid,
+        repo_id: 'r1',
+        concept_id: cid,
+        path: cid + '.md',
+        frontmatter: { title: cid.toUpperCase() },
+        body: '# ' + cid,
+        lifecycle_status: 'draft',
+        content_hash: 'h-' + cid,
+        index_status: 'parsed',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z'
+      };
+      mockDb._stores.okf_concepts_meta[doc._key] = doc;
+      return doc;
+    };
+    const docs = [mk('a'), mk('b'), mk('c')];
+    mockDb.query.mockResolvedValueOnce({ all: async () => docs.map((d) => ({ ...d })) });
+    return docs;
+  }
+
+  it('a row whose state is already recorded (lifecycle) gets NO status proposal', () => {
+    // buildMetaDoc writes lifecycle_status and never top-level status; the
+    // drain wipes fm.status on every re-upsert. Proposing fm.status whenever
+    // it is absent re-listed the whole corpus (Quran: 6,351 rows) forever —
+    // a row with a lifecycle has its state recorded; leave it alone.
+    const plan = planAutocorrectForConcept({ frontmatter: { title: 'T', type: 'topic' }, lifecycle_status: 'stable' });
+    expect(plan.changes.find((c) => c.field === 'status')).toBeUndefined();
+    expect(plan.warnings.find((w) => w.rule === 'INVALID_STATUS')).toBeUndefined();
+  });
+
+  it('proposes draft only when the row has NO status anywhere', () => {
+    const plan = planAutocorrectForConcept({ frontmatter: { title: 'T', type: 'topic' } });
+    const status = plan.changes.find((c) => c.field === 'status');
+    expect(status).toBeDefined();
+    expect(status.after).toBe('draft');
+  });
+
+  it('a legacy top-level status also satisfies the rule (no proposal)', () => {
+    const plan = planAutocorrectForConcept({ frontmatter: { title: 'T', type: 'topic' }, status: 'draft' });
+    expect(plan.changes.find((c) => c.field === 'status')).toBeUndefined();
+    expect(plan.warnings.find((w) => w.rule === 'INVALID_STATUS')).toBeUndefined();
+  });
+
+  it('never clobbers a frontmatter status that is already present', () => {
+    const plan = planAutocorrectForConcept({
+      frontmatter: { title: 'T', type: 'topic', status: 'stable' },
+      lifecycle_status: 'draft'
+    });
+    expect(plan.changes.find((c) => c.field === 'status')).toBeUndefined();
+    expect(plan.warnings.find((w) => w.rule === 'INVALID_STATUS')).toBeUndefined();
+  });
+
+  it('an invalid lifecycle mirror is a WARNING, not a proposal (retired stays retired)', () => {
+    const plan = planAutocorrectForConcept({
+      frontmatter: { title: 'T', type: 'topic' },
+      lifecycle_status: 'retired'
+    });
+    expect(plan.changes.find((c) => c.field === 'status')).toBeUndefined();
+    expect(plan.warnings.find((w) => w.rule === 'INVALID_STATUS')).toBeDefined();
+  });
+
+  it('one concept failing does NOT abort the apply — it is counted and named', async () => {
+    const docs = seedRows();
+    const col = mockDb.collection('okf_concepts_meta');
+    // Capture the IMPLEMENTATION, not the jest.fn: calling the captured fn
+    // object from inside a new mockImplementation recurses into itself
+    // (Maximum call stack size exceeded on every concept).
+    const origImpl = col.update.getMockImplementation();
+    const bKey = docs.find((d) => d.concept_id === 'b')._key;
+    try {
+      col.update.mockImplementation(async (key, patch) => {
+        if (key === bKey) throw new Error('write storm: transient fault');
+        return origImpl(key, patch);
+      });
+      const result = await conceptMeta.autocorrectRepo('r1', false);
+      expect(result.applied).toBe(2);
+      expect(result.failed).toBe(1);
+      expect(result.failures).toEqual([{ concept_id: 'b', error: expect.stringContaining('transient fault') }]);
+      // The survivors really landed:
+      const store = mockDb._stores.okf_concepts_meta;
+      expect(store['k-a'].frontmatter.type).toBe('topic');
+      expect(store['k-c'].frontmatter.type).toBe('topic');
+    } finally {
+      col.update.mockImplementation(origImpl);
+    }
+  });
+
+  it('a transient lookup miss retries once and lands (the 785-skip class)', async () => {
+    seedRows();
+    const col = mockDb.collection('okf_concepts_meta');
+    const realFirstExample = col.firstExample;
+    try {
+      // First attempt: the exact 3.12 shape a simple-query miss answers —
+      // classified expected-absence, patchConceptFields returns null, and the
+      // OLD code recorded nothing. The retry must recover it.
+      col.firstExample.mockImplementationOnce(async () => {
+        const e = new Error('no match');
+        e.errorNum = 404;
+        e.code = 404;
+        throw e;
+      });
+      const result = await conceptMeta.autocorrectRepo('r1', false);
+      expect(result.failed).toBe(0);
+      expect(result.applied).toBe(3);
+      expect(result.failures).toEqual([]);
+    } finally {
+      col.firstExample = realFirstExample;
+    }
+  });
+
+  it('an absent row is reported, not silently skipped', async () => {
+    const docs = seedRows();
+    // Remove one row so its patch lookup genuinely misses twice.
+    delete mockDb._stores.okf_concepts_meta[docs.find((d) => d.concept_id === 'b')._key];
+    const result = await conceptMeta.autocorrectRepo('r1', false);
+    expect(result.failed).toBe(1);
+    expect(result.failures[0].concept_id).toBe('b');
+    expect(result.failures[0].error).toMatch(/not found/);
   });
 });

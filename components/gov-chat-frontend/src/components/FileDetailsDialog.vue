@@ -217,7 +217,9 @@
               <div class="auto-refresh">
                 <div class="toggle-wrapper">
                   <input id="auto-refresh-toggle" v-model="isAutoRefreshEnabled" type="checkbox" />
-                  <label for="auto-refresh-toggle">Auto-refresh every</label>
+                  <label for="auto-refresh-toggle">{{
+                    translate('details.crawl.autoRefreshEvery', 'Auto-refresh every')
+                  }}</label>
                 </div>
                 <DsInput
                   v-model.number="dashboardRefreshInterval"
@@ -226,7 +228,7 @@
                   class="small-input"
                   :disabled="!isAutoRefreshEnabled"
                 />
-                <span class="text-sm">seconds</span>
+                <span class="text-sm">{{ translate('details.crawl.seconds', 'seconds') }}</span>
               </div>
               <DsButton
                 variant="secondary"
@@ -235,13 +237,13 @@
                 @click="refreshDashboardData"
               >
                 <DsSpinner v-if="isRefreshingDashboard" size="sm" />
-                Refresh Now
+                {{ translate('details.crawl.refreshNow', 'Refresh Now') }}
               </DsButton>
             </div>
 
             <div class="dashboard-grid">
               <div class="stat-card">
-                <div class="stat-label">Crawl Rate</div>
+                <div class="stat-label">{{ translate('details.crawl.crawlRate', 'Crawl Rate') }}</div>
                 <div class="stat-value text-primary">
                   {{ crawlStats.crawlRate }}
                   <span class="unit">pgs/sec</span>
@@ -249,12 +251,12 @@
               </div>
 
               <div class="stat-card">
-                <div class="stat-label">Queue Size</div>
+                <div class="stat-label">{{ translate('details.crawl.queueSize', 'Queue Size') }}</div>
                 <div class="stat-value">{{ crawlStats.queueSize }}</div>
               </div>
 
               <div class="stat-card" :class="{ 'bg-danger-light': crawlStats.errorRate > 5 }">
-                <div class="stat-label">Error Rate</div>
+                <div class="stat-label">{{ translate('details.crawl.errorRate', 'Error Rate') }}</div>
                 <div class="stat-value" :class="crawlStats.errorRate > 5 ? 'text-danger' : 'text-success'">
                   {{ crawlStats.errorRate }}%
                 </div>
@@ -267,7 +269,7 @@
 
             <div class="progress-section">
               <div class="progress-header">
-                <span class="progress-label">Pages Processed</span>
+                <span class="progress-label">{{ translate('details.crawl.pagesProcessed', 'Pages Processed') }}</span>
                 <span class="progress-fraction">{{ crawlStats.processed }} / {{ crawlStats.limit }}</span>
               </div>
               <div class="progress-bar-bg">
@@ -277,19 +279,19 @@
 
             <div class="efficiency-grid">
               <div class="eff-item">
-                <span class="eff-label">Depth</span>
+                <span class="eff-label">{{ translate('details.crawl.depth', 'Depth') }}</span>
                 <span class="eff-val">{{ crawlStats.currentDepth }} / {{ crawlStats.maxDepth }}</span>
               </div>
               <div class="eff-item">
-                <span class="eff-label">Internal Links</span>
+                <span class="eff-label">{{ translate('details.crawl.internalLinks', 'Internal Links') }}</span>
                 <span class="eff-val">{{ crawlStats.linksInternal }}</span>
               </div>
               <div class="eff-item">
-                <span class="eff-label">External Links</span>
+                <span class="eff-label">{{ translate('details.crawl.externalLinks', 'External Links') }}</span>
                 <span class="eff-val">{{ crawlStats.linksExternal }}</span>
               </div>
               <div class="eff-item">
-                <span class="eff-label">Total Fetched</span>
+                <span class="eff-label">{{ translate('details.crawl.totalFetched', 'Total Fetched') }}</span>
                 <span class="eff-val">{{ crawlStats.totalCrawled }}</span>
               </div>
             </div>
@@ -709,7 +711,7 @@ export default {
       // keep the previous Details-first order.
       const tabs = [];
       if (this.crawlJob) {
-        tabs.push({ value: 'dashboard', label: 'Dashboard' });
+        tabs.push({ value: 'dashboard', label: this.translate('details.tabs.dashboard', 'Dashboard') });
       }
       tabs.push({ value: 'details', label: this.translate('details.tabs.details', 'Details') });
       if (this.crawlJob) {
@@ -990,6 +992,22 @@ export default {
       // "Repositories from this crawl" status list (store-driven, polled).
       // The same file can be converted MULTIPLE times — every click creates
       // a NEW, uniquely-named repo, each with its own status bar.
+      // ATTRIBUTION (#79896): this mutation is initiated by THE STEWARD
+      // clicking this button — never by the system. The synthetic
+      // 'crawler-to-okf' sub that used to ride the actor hint (x-actor-sub)
+      // would attribute the repository creation to a principal that is not a
+      // person (okf-server's own audit trail already reads the JWT principal
+      // via req.user, so the hint is the only channel that lied). Forward the
+      // real signed-in sub — the same source every sibling dialog reads — and
+      // omit the hint entirely when the session carries no user, so nothing
+      // synthetic is ever written into the actor position.
+      const currentUser = this.$store.getters.currentUser;
+      const actorSub = (currentUser && currentUser.sub) || '';
+      console.debug('[FileDetailsDialog] crawl→OKF conversion attributed to', {
+        actor_sub: actorSub || null,
+        file_id: fileId,
+        crawl_job_id: crawlJobId
+      });
       try {
         const result = await this.$store.dispatch('okf/createFromCrawl', {
           fileId,
@@ -999,7 +1017,7 @@ export default {
           splitMode: this.okfSplitMode,
           classification: this.okfClassification,
           domain: this.okfDomain,
-          actor: { sub: 'crawler-to-okf' }
+          actor: actorSub ? { sub: actorSub } : {}
         });
         if (!result || !result.ok) {
           this.showNotification(

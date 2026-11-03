@@ -34,14 +34,63 @@
  * reported to every caller as "no row" — an outage silently rendered as an
  * empty result. 1203 is excluded below, and the status is used only as a
  * fallback for driver errors that carry no errorNum at all.
+ *
+ * ARANGODB 3.12 (Quran Core import, 2026-11-02, live-reproduced on the local
+ * build): the 3.12 server reimplemented the simple-query API, and a
+ * firstExample miss now answers errorNum **404** with errorMessage 'no match'
+ * — the 3.11 server answered errorNum 1204 for the SAME call (the shape the
+ * fixtures above pin). errorNum 404 alone is NOT trusted — a missing
+ * collection or a wrong route can carry it too — so the verdict needs BOTH
+ * the echoed 404 AND the server's own 'no match' errorMessage. 1203 keeps its
+ * own errorNum and stays excluded.
  */
+// ABSENCE-CLASSIFIER TWINS (review 84589): this file (strict predicates,
+// errorNum enumerated) is encoding 1 of 3. Encoding 2:
+// shared/lib/db-connection-service.js _isExpectedAbsence — same contract,
+// owns the LOG-SEVERITY decision. Encoding 3: repository-service.js
+// ARANGO_NOT_FOUND / notFoundAsNull — the OLDER, LAXER control-flow twin
+// (bare 404 and /not found/i count); kept deliberately for the registry CRUD
+// paths, but its laxity is exactly what the strict rule refuses. An ArangoDB
+// message change needs ALL THREE lockstep edits — unification tracked on
+// #1350.
 const ABSENT_ERROR_NUMS = new Set([1202, 1204]);
+const ABSENT_404_MESSAGE = 'no match';
 
 function isArangoNotFound(err) {
   if (!err) return false;
-  if (err.errorNum != null) return ABSENT_ERROR_NUMS.has(err.errorNum);
+  if (err.errorNum != null) {
+    if (ABSENT_ERROR_NUMS.has(err.errorNum)) return true;
+    // The 3.12 simple-API miss: errorNum 404 + the server's own 'no match'.
+    // Both halves required — a bare 404 errorNum (route/collection faults)
+    // stays a real fault.
+    if (
+      err.errorNum === 404 &&
+      String(err.message || '')
+        .trim()
+        .toLowerCase() === ABSENT_404_MESSAGE
+    ) {
+      return true;
+    }
+    return false;
+  }
   // No errorNum (raw HTTP, or a driver-level error): fall back to the status.
   return err.code === 404 || err.statusCode === 404;
+}
+
+/** COLLECTION-level absence (errorNum 1203 — arangojs COLLECTION_NOT_FOUND,
+ * also VIEW_NOT_FOUND): the named collection or view does not exist.
+ * Deliberately NOT part of isArangoNotFound: for the document-absent call
+ * sites a missing collection is a FAULT (the masking this file's header
+ * warns about), so 1203 stays excluded there. This twin exists for the call
+ * sites where collection absence is an EXPECTED state — the graph endpoint
+ * rewrite over a fresh / never-ingested repo's not-yet-created edge
+ * collections is the live case. Verified live (2026-11-03, the settle wedge):
+ * a query naming a missing collection raises ArangoError errorNum 1203,
+ * message 'collection or view not found'. THE CALL SITE decides whether
+ * collection absence is expected (continue) or a fault (throw) — this
+ * predicate only classifies. */
+function isArangoCollectionNotFound(err) {
+  return !!(err && err.errorNum === 1203);
 }
 
 /** Unique-constraint violation (errorNum 1210/1185 or HTTP 409) — the unique-index race guard. */
@@ -58,6 +107,7 @@ function isArangoConflict(err) {
 
 module.exports = {
   isArangoNotFound,
+  isArangoCollectionNotFound,
   isArangoUniqueViolation,
   isArangoConflict
 };

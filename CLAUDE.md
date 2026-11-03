@@ -68,7 +68,7 @@ docker compose --profile observability up -d          # Core + observability sta
 
 # GPU-specific config:
 docker compose --env-file .env --env-file env.t4 up -d        # NVIDIA T4 (16GB)
-docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24GB)
+docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (48GB)
 
 # Useful commands:
 docker compose build [service_name]                   # Rebuild after code changes

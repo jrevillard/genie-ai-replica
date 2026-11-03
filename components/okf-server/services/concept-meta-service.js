@@ -1101,15 +1101,36 @@ function planAutocorrectForConcept(meta) {
     }
   }
 
-  // 4. status — default 'draft'; warn if outside enum.
-  if (!meta.status) {
+  // 4. status — the rule manages the FM field it writes, so read fm.status
+  // first (a present value is only validated, never clobbered). A row that
+  // carries a status SOMEWHERE ELSE (lifecycle_status, or the legacy
+  // top-level status) is left alone — its state is already recorded, and
+  // re-proposing fm.status would re-list the whole corpus on every run (the
+  // drain rewrites frontmatter from the bundle, wiping fm.status — the
+  // 2026-11-02 Quran sheet listed 6,351 rows because of exactly that). Only
+  // a row with NO status anywhere gets the 'draft' default. Frontmatter
+  // status ABSENT is not a conformance issue (validateConcept only rejects a
+  // present-and-invalid value) — this rule is hygiene, not gate repair.
+  const declaredStatus = fm.status;
+  if (declaredStatus !== undefined && declaredStatus !== null && declaredStatus !== '') {
+    if (!AUTOCORRECT_STATUS_ENUM.includes(declaredStatus)) {
+      warnings.push({
+        rule: 'INVALID_STATUS',
+        severity: 'warning',
+        message: `status "${declaredStatus}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}`
+      });
+    }
+  } else if (meta.status == null && meta.lifecycle_status == null) {
     changes.push({ field: 'status', before: null, after: 'draft', reason: 'MISSING_STATUS' });
-  } else if (!AUTOCORRECT_STATUS_ENUM.includes(meta.status)) {
-    warnings.push({
-      rule: 'INVALID_STATUS',
-      severity: 'warning',
-      message: `status "${meta.status}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}`
-    });
+  } else {
+    const mirror = meta.status || meta.lifecycle_status;
+    if (!AUTOCORRECT_STATUS_ENUM.includes(mirror)) {
+      warnings.push({
+        rule: 'INVALID_STATUS',
+        severity: 'warning',
+        message: `status "${mirror}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}`
+      });
+    }
   }
 
   // 5. stale_after — normalize any PARSEABLE date to the spec'd YYYY-MM-DD
@@ -1173,7 +1194,10 @@ function deriveTitleFromBody(body) {
  * @param {string} repo_id
  * @param {boolean} dry_run
  * @param {object} actor (unused — audit is per-concept in the patch path)
- * @returns {Promise<{changes, warnings, applied}>}
+ * @returns {Promise<{changes, warnings, applied, failed, failures, total_concepts}>}
+ *   failures names every concept whose patch did not land (per-concept retry
+ *   included) — the caller must surface it; a silent skip is what made the
+ *   2026-11-02 Quran apply look like a no-op.
  */
 async function autocorrectRepo(repo_id, dry_run = true) {
   const db = await getDb();
@@ -1182,7 +1206,9 @@ async function autocorrectRepo(repo_id, dry_run = true) {
   const concepts = await cursor.all();
   const allChanges = [];
   const allWarnings = [];
+  const failures = [];
   let appliedCount = 0;
+  let failedCount = 0;
   for (const meta of concepts) {
     const { changes, warnings } = planAutocorrectForConcept(meta);
     if (changes.length > 0) {
@@ -1201,11 +1227,41 @@ async function autocorrectRepo(repo_id, dry_run = true) {
       for (const c of changes) {
         patch[c.field] = c.after;
       }
-      const updated = await patchConceptFields(repo_id, meta.concept_id, { frontmatterPatch: patch });
-      if (updated) appliedCount += 1;
+      // One concept failing must not abort the run and one transient miss
+      // must not vanish: a 6,351-concept apply on the live local build
+      // (2026-11-02, Quran Core) silently skipped 785 consecutive rows when
+      // the row lookup answered not-found mid-run — the very next request
+      // applied 784 of the same rows with zero code changes between. The
+      // lookup gets one immediate retry; whatever still fails is recorded
+      // and returned so the panel can surface it instead of the sheet
+      // silently disagreeing with the corpus.
+      let updated = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 2 && !updated; attempt += 1) {
+        try {
+          updated = await patchConceptFields(repo_id, meta.concept_id, { frontmatterPatch: patch });
+          if (!updated) lastError = 'concept row not found';
+        } catch (err) {
+          updated = null;
+          lastError = err && err.message ? err.message : String(err);
+        }
+      }
+      if (updated) {
+        appliedCount += 1;
+      } else {
+        failedCount += 1;
+        failures.push({ concept_id: meta.concept_id, error: lastError || 'unknown error' });
+      }
     }
   }
-  return { changes: allChanges, warnings: allWarnings, applied: appliedCount, total_concepts: concepts.length };
+  return {
+    changes: allChanges,
+    warnings: allWarnings,
+    applied: appliedCount,
+    failed: failedCount,
+    failures,
+    total_concepts: concepts.length
+  };
 }
 
 module.exports = {

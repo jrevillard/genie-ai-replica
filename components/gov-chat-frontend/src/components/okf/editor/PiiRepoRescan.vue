@@ -75,19 +75,15 @@
 import DsButton from '../../ds/Button.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
+// #80929: the rescan-follow horizon is SHARED with the Validate step's panel
+// (steps/Validate.vue) — one constant, one 15-minute answer.
+import { PII_RESCAN_MAX_MS } from '../piiReview';
 import translateMixin from '../../../mixins/translateMixin';
 
 // The run is DETACHED server-side (one Presidio round-trip per concept), so
 // the control polls. Same cadence as the Validate step's panel — fast enough
 // that the bar moves, slow enough not to hammer the API.
 const PII_RESCAN_POLL_MS = 3000;
-// CEILING (round 18, #80488): a server run wedged at status 'running'
-// (worker crash without reaping) used to re-arm the 3s timer forever and
-// the button spun indefinitely — the exact dead-end class the surrounding
-// poll hardening exists to remove. Same horizon class as the store's
-// pollJob PII actions (15 min); past it the run STOPS being followed with
-// a readable timeout. The server-side run itself is untouched.
-const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
 
 export default {
   name: 'OkfPiiRepoRescan',

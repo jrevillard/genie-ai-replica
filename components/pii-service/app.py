@@ -121,7 +121,7 @@ def _load_national_id_overrides() -> dict[str, list[dict]]:
             for p in patterns
         ):
             print(
-                "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[" + str(key) + "] must be a list of "
+                f"CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[{key}] must be a list of "
                 "{name, regex, score} objects — ignoring that key and using the "
                 "built-in national-ID registry for it.",
                 flush=True,
@@ -133,21 +133,16 @@ def _load_national_id_overrides() -> dict[str, list[dict]]:
                 re.compile(p["regex"])
             except re.error as exc:
                 print(
-                    "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS["
-                    + str(key)
-                    + "] entry '"
-                    + str(p.get("name"))
-                    + "' carries an invalid regex ("
-                    + str(exc)
-                    + ") — dropping that entry and using the built-in "
-                    "national-ID registry for it.",
+                    f"CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[{key}] entry "
+                    f"'{p.get('name')}' carries an invalid regex ({exc}) — "
+                    "dropping that entry.",
                     flush=True,
                 )
                 continue
             compiled.append(p)
         if not compiled:
             print(
-                "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[" + str(key) + "] has no valid "
+                f"CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[{key}] has no valid "
                 "entries left — ignoring that key and using the built-in "
                 "national-ID registry for it.",
                 flush=True,

@@ -3,14 +3,19 @@
 // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
 // ingestion artifacts. They live forever, governed by the OKF lifecycle, NOT
 // by the document management tab. Only the okf-service service account may
-// delete them; Admin / steward roles get an explicit 403 BUNDLE_PROTECTED.
-// This test file locks down that contract for both single-file DELETE and
-// batch DELETE, and verifies the okf-service account is NOT blocked.
+// delete them; Admin / steward roles get an explicit 403 BUNDLE_PROTECTED on
+// the single DELETE. Batch DELETE is a PER-FILE refusal now (#1350 round-28 review, the
+// client partial-refusal contract): a mixed selection deletes the deletable subset and
+// reports the bundle rows as per-file failures, instead of aborting the whole
+// batch — this file locks down that contract for both handlers, and verifies
+// the okf-service account is NOT blocked.
 // DW-426 (review 2026-10-29 round 3): bundleProtectedIds answers from ONE
 // IN-list AQL now, so the mocks program dbService.getConnection's query
 // instead of per-file metadataService.getMetadataById.
 
 'use strict';
+
+const { createMockFileRecord } = require('../mocks/files');
 
 jest.mock('../../__tests__/__mocks__/shared-lib', () => ({}), { virtual: true });
 jest.mock(
@@ -22,6 +27,26 @@ jest.mock(
   { virtual: true }
 );
 
+// ONE owner for the fileService mock surface (review 84593): a new fileService
+// export is added HERE, not in the five doMock copies that used to repeat it.
+function makeFileServiceMock() {
+  return {
+    uploadFile: jest.fn(),
+    uploadLink: jest.fn(),
+    getFiles: jest.fn(),
+    deleteFile: jest.fn().mockResolvedValue(true),
+    searchFiles: jest.fn(),
+    getFileStats: jest.fn(),
+    getDb: jest.fn(),
+    scheduleSiteCrawl: jest.fn(),
+    getCrawlJobByFileId: jest.fn(),
+    getCrawlMetrics: jest.fn(),
+    getCrawlLogs: jest.fn(),
+    killCrawlTask: jest.fn(),
+    addIngestionLog: jest.fn(),
+    getIngestionLogs: jest.fn()
+  };
+}
 const makeAuthMock = (roles) => () => ({
   authenticateToken: jest.fn((req, res, next) => {
     req.user = {
@@ -102,22 +127,7 @@ describe('WS2: Bundle zip delete protection', () => {
     beforeEach(() => {
       mockAdminAuth();
       // rebuild app + fileService mock with the Admin-auth middleware
-      jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(),
-        uploadLink: jest.fn(),
-        getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true),
-        searchFiles: jest.fn(),
-        getFileStats: jest.fn(),
-        getDb: jest.fn(),
-        scheduleSiteCrawl: jest.fn(),
-        getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(),
-        getCrawlLogs: jest.fn(),
-        killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(),
-        getIngestionLogs: jest.fn()
-      }));
+      jest.doMock('../../services/fileService', () => makeFileServiceMock());
       const { dbService } = require('../../../shared-lib');
       protectedDb = makeProtectedDb(['bundle1']);
       dbService.getConnection.mockResolvedValue(protectedDb);
@@ -154,22 +164,7 @@ describe('WS2: Bundle zip delete protection', () => {
 
     beforeEach(() => {
       mockOkfServiceAuth();
-      jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(),
-        uploadLink: jest.fn(),
-        getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true),
-        searchFiles: jest.fn(),
-        getFileStats: jest.fn(),
-        getDb: jest.fn(),
-        scheduleSiteCrawl: jest.fn(),
-        getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(),
-        getCrawlLogs: jest.fn(),
-        killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(),
-        getIngestionLogs: jest.fn()
-      }));
+      jest.doMock('../../services/fileService', () => makeFileServiceMock());
       // The guard must actually RUN for the bypass to mean anything
       // (review !622 wave 2 / #78685: with the connection unprogrammed the
       // old fail-open catch answered [] and the test proved the mock).
@@ -198,22 +193,7 @@ describe('WS2: Bundle zip delete protection', () => {
   describe('DELETE /api/files/:fileId with a failing guard lookup (Admin caller)', () => {
     beforeEach(() => {
       mockAdminAuth();
-      jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(),
-        uploadLink: jest.fn(),
-        getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true),
-        searchFiles: jest.fn(),
-        getFileStats: jest.fn(),
-        getDb: jest.fn(),
-        scheduleSiteCrawl: jest.fn(),
-        getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(),
-        getCrawlLogs: jest.fn(),
-        killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(),
-        getIngestionLogs: jest.fn()
-      }));
+      jest.doMock('../../services/fileService', () => makeFileServiceMock());
       // The guard CANNOT evaluate (transient Arango outage) — the delete must
       // be REFUSED, not waved through on the empty-set answer (fail-closed,
       // review !622 wave 2 / #78677).
@@ -240,22 +220,7 @@ describe('WS2: Bundle zip delete protection', () => {
 
     beforeEach(() => {
       mockAdminAuth();
-      jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(),
-        uploadLink: jest.fn(),
-        getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true),
-        searchFiles: jest.fn(),
-        getFileStats: jest.fn(),
-        getDb: jest.fn(),
-        scheduleSiteCrawl: jest.fn(),
-        getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(),
-        getCrawlLogs: jest.fn(),
-        killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(),
-        getIngestionLogs: jest.fn()
-      }));
+      jest.doMock('../../services/fileService', () => makeFileServiceMock());
       const { dbService } = require('../../../shared-lib');
       protectedDb = makeProtectedDb(['bundleInBatch']);
       dbService.getConnection.mockResolvedValue(protectedDb);
@@ -266,16 +231,44 @@ describe('WS2: Bundle zip delete protection', () => {
       jest.resetModules();
     });
 
-    test('Admin caller batch-deleting with a bundle → 403 BUNDLE_PROTECTED, batch aborted', async () => {
+    test('Admin caller batch-deleting a MIXED selection → 200, deletable subset deleted, bundle refused per-file (#1350)', async () => {
       const res = await request(app)
         .delete('/api/files')
         .send({ fileIds: ['docInBatch', 'bundleInBatch'] });
-      expect(res.status).toBe(403);
-      expect(res.body.code).toBe('BUNDLE_PROTECTED');
+      // Per-file outcomes, not a whole-batch 403: the deletable row is gone,
+      // the bundle row rides back as a per-file refusal the client's existing
+      // partial-refusal strip renders.
+      expect(res.status).toBe(200);
+      const fs = require('../../services/fileService');
+      // ONLY the deletable id was deleted — never the bundle
+      expect(fs.deleteFile).toHaveBeenCalledTimes(1);
+      expect(fs.deleteFile).toHaveBeenCalledWith('docInBatch');
+      expect(fs.deleteFile).not.toHaveBeenCalledWith('bundleInBatch');
+      const byId = Object.fromEntries(res.body.results.map((r) => [r.fileId, r]));
+      expect(byId.docInBatch.success).toBe(true);
+      expect(byId.bundleInBatch.success).toBe(false);
+      expect(byId.bundleInBatch.code).toBe('BUNDLE_PROTECTED');
+      expect(byId.bundleInBatch.error).toContain('OKF lifecycle');
       // ONE query for the whole batch (DW-426), carrying every requested id
       expect(protectedDb.query).toHaveBeenCalledWith(expect.stringContaining('is_bundle == true'), {
         ids: ['docInBatch', 'bundleInBatch']
       });
+    });
+
+    test('Admin caller batch-deleting ONLY bundles → 200, nothing deleted, every row refused per-file', async () => {
+      // Override the guard answer: BOTH ids are protected
+      protectedDb.query.mockResolvedValue({ all: jest.fn().mockResolvedValue(['docA', 'docB']) });
+      const res = await request(app)
+        .delete('/api/files')
+        .send({ fileIds: ['docA', 'docB'] });
+      expect(res.status).toBe(200);
+      const fs = require('../../services/fileService');
+      expect(fs.deleteFile).not.toHaveBeenCalled();
+      expect(res.body.results).toHaveLength(2);
+      for (const row of res.body.results) {
+        expect(row.success).toBe(false);
+        expect(row.code).toBe('BUNDLE_PROTECTED');
+      }
     });
 
     test('Admin caller batch-deleting NON-bundles → 200', async () => {
@@ -287,5 +280,127 @@ describe('WS2: Bundle zip delete protection', () => {
         .send({ fileIds: ['docA', 'docB'] });
       expect(res.status).toBe(200);
     });
+  });
+});
+
+describe('#1350: ingest entries refuse bundle zips (the shared _ingestFileById guard)', () => {
+  let app;
+  let axiosMock;
+  let metadataMock;
+  let readFileMock;
+
+  // createMockFileRecord deep-merges dataprep (review 84593): a partial
+  // dataprep override used to REPLACE the whole object wholesale.
+  const bundleDoc = (overrides = {}) =>
+    createMockFileRecord({
+      file_id: 'bundle1',
+      file_name: 'bundle1.zip',
+      storage_path: 'uploads/bundle1.zip',
+      is_bundle: true,
+      dataprep: { status: 'Pending' },
+      ...overrides
+    });
+  const docDoc = (overrides = {}) =>
+    createMockFileRecord({
+      file_id: 'doc1',
+      file_name: 'doc1.pdf',
+      storage_path: 'uploads/doc1.pdf',
+      is_bundle: false,
+      dataprep: { status: 'Ingested' },
+      ...overrides
+    });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    mockAdminAuth();
+    // fs is required as `require('fs').promises` — keep the rest of the
+    // module real, replace only the read the ingest path performs.
+    readFileMock = jest.fn().mockResolvedValue(Buffer.from('PK-zip-bytes'));
+    // The physical-file check is callback-API (existsSync/statSync) and runs
+    // BEFORE the guard — a bundle doc must present a real-looking file so the
+    // test reaches the is_bundle refusal, not a 404.
+    jest.doMock('fs', () => ({
+      ...jest.requireActual('fs'),
+      existsSync: jest.fn(() => true),
+      statSync: jest.fn(() => ({ size: 12, isFile: () => true })),
+      promises: {
+        ...jest.requireActual('fs').promises,
+        readFile: readFileMock,
+        access: jest.fn().mockResolvedValue(undefined)
+      }
+    }));
+    axiosMock = { post: jest.fn() };
+    jest.doMock('axios', () => ({ ...jest.requireActual('axios'), post: axiosMock.post }));
+    metadataMock = { getMetadataById: jest.fn() };
+    jest.doMock('../../services/metadataService', () => metadataMock);
+    jest.doMock('../../services/fileService', () => ({
+      uploadFile: jest.fn(),
+      uploadLink: jest.fn(),
+      getFiles: jest.fn(),
+      deleteFile: jest.fn(),
+      searchFiles: jest.fn(),
+      getFileStats: jest.fn(),
+      getDb: jest.fn(),
+      scheduleSiteCrawl: jest.fn(),
+      getCrawlJobByFileId: jest.fn(),
+      getCrawlMetrics: jest.fn(),
+      getCrawlLogs: jest.fn(),
+      killCrawlTask: jest.fn(),
+      addIngestionLog: jest.fn(),
+      getIngestionLogs: jest.fn()
+    }));
+    const { dbService } = require('../../../shared-lib');
+    dbService.getConnection.mockResolvedValue(makeProtectedDb([]));
+    app = require('../../app');
+  });
+
+  afterEach(() => {
+    jest.resetModules();
+  });
+
+  test('POST /:fileId/ingest on a Pending bundle zip → 403 BUNDLE_PROTECTED, dataprep never called', async () => {
+    metadataMock.getMetadataById.mockResolvedValue(bundleDoc());
+
+    const res = await request(app).post('/api/files/bundle1/ingest');
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('BUNDLE_PROTECTED');
+    expect(res.body.success).toBe(false);
+    // The corruption this guard exists to prevent: not one byte of the zip
+    // reaches the chunking pipeline.
+    expect(axiosMock.post).not.toHaveBeenCalled();
+  });
+
+  test('an INGESTED bundle zip still answers BUNDLE_PROTECTED — the guard precedes the status check', async () => {
+    metadataMock.getMetadataById.mockResolvedValue(bundleDoc({ dataprep: { status: 'Ingested' } }));
+
+    const res = await request(app).post('/api/files/bundle1/ingest');
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('BUNDLE_PROTECTED');
+    expect(axiosMock.post).not.toHaveBeenCalled();
+  });
+
+  test('POST /ingest (batch) with a bundle in the selection → per-file refusal row carrying the code, no dataprep call', async () => {
+    metadataMock.getMetadataById.mockImplementation((fileId) =>
+      Promise.resolve(fileId === 'bundle1' ? bundleDoc() : docDoc())
+    );
+
+    const res = await request(app)
+      .post('/api/files/ingest')
+      .send({ fileIds: ['bundle1', 'doc1'] });
+
+    expect(res.status).toBe(207);
+    const bundleRow = res.body.results.find((row) => row.fileId === 'bundle1');
+    const docRow = res.body.results.find((row) => row.fileId === 'doc1');
+    expect(bundleRow.success).toBe(false);
+    expect(bundleRow.bundleProtected).toBe(true);
+    expect(bundleRow.code).toBe('BUNDLE_PROTECTED');
+    // doc1 is already 'Ingested' — the row fails on status, not on dataprep,
+    // so the whole batch proves no chunking POST left the process.
+    expect(docRow.success).toBe(false);
+    expect(docRow.error).toContain('already been ingested');
+    expect(axiosMock.post).not.toHaveBeenCalled();
   });
 });

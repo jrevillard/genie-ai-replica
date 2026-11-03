@@ -46,6 +46,9 @@ import DsInput from '../../ds/Input.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
+// #80931: the create-failure message is the SHARED composer (same as
+// StudioTab's "+ New repository" dialog — one tested owner).
+import { describeCreateFailure } from './failureMessages';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
@@ -122,27 +125,20 @@ export default {
       });
       this.creating = false;
       if (!result || !result.ok) {
-        // Round 20 (#80123): the repo EXISTS server-side but its index
-        // skeleton failed to import (okfRepoOps attaches it) — say THAT,
-        // not a blind "failed", or the steward retries and mints a second
-        // repo while the first lingers as an orphan draft card.
-        if (result && result.repo) {
-          this.createError = this.translate(
-            'okf.create.indexImportFailed',
-            'The repository was created, but its starter index could not be imported. Open it from the dashboard to continue.'
-          );
-          this.emitGate();
-          return false; // no auto-advance: the repo has no index yet
-        }
-        this.createError =
-          result && result.code === 'DUPLICATE_REPO'
-            ? this.translate(
-                'okf.create.duplicate',
-                'A repository with this name already exists - open it from the dashboard or pick another name.'
-              )
-            : (result && result.message) || this.translate('okf.create.failed', 'Repository creation failed');
+        // The message is the SHARED composer (#80931 — same as StudioTab's
+        // create dialog). Round 20 (#80123): a result carrying `repo` means
+        // the repo EXISTS server-side but its index skeleton failed to
+        // import (okfRepoOps attaches it) — say THAT, not a blind "failed";
+        // DUPLICATE_REPO points at the existing repo.
+        console.debug('[OkfStepEntry] createRepo failed', {
+          code: (result && result.code) || '',
+          has_repo: !!(result && result.repo)
+        });
+        this.createError = describeCreateFailure(result, this.translate);
+        // No auto-advance either way: with a repo the starter index is still
+        // missing, and without one the steward fixes the input first.
         this.emitGate();
-        return false; // the shell does NOT advance — the steward fixes the input
+        return false;
       }
       const repo = result.repo;
       // write the minted identity back so the shell + every later step see it

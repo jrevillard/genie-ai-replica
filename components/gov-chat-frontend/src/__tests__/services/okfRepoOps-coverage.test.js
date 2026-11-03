@@ -146,6 +146,7 @@ describe('zip import guards', () => {
       .mockRejectedValueOnce(new Error('bad zip')); // the zip import itself
     const err = await importRepoZip({ file, name: 'N' }).catch((e) => e);
     expect(err.message).toBe('bad zip');
+    expect(err.code).toBe('INDEX_IMPORT_FAILED'); // the typed contract: one stable code
     expect(err.repo).toMatchObject({ repo_id: 'r9' }); // the caller can still open it
   });
 

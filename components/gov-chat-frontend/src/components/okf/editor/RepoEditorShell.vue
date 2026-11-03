@@ -47,20 +47,20 @@
         <code>{{ bundleName }}</code>
       </span>
       <span v-if="sourceDoc && sourceDoc.file_name" class="okf-shell__source" :title="sourceTooltip">
-        <DsPill variant="info">Source document</DsPill>
+        <DsPill variant="info">{{ translate('okf.shell.sourceDocument', 'Source document') }}</DsPill>
         <code>{{ sourceDoc.file_name }}</code>
       </span>
       <div v-if="sourceDoc && sourceDoc.file_name" class="expanded-source">
         <div v-if="sourceDoc.size_bytes" class="expanded-source__row">
-          <span class="expanded-source__label">Size</span>
+          <span class="expanded-source__label">{{ translate('okf.shell.size', 'Size') }}</span>
           <span>{{ fmtBytes(sourceDoc.size_bytes) }}</span>
         </div>
         <div v-if="sourceDoc.file_type" class="expanded-source__row">
-          <span class="expanded-source__label">Type</span>
+          <span class="expanded-source__label">{{ translate('okf.shell.type', 'Type') }}</span>
           <span>{{ sourceDoc.file_type }}</span>
         </div>
         <div v-if="sourceDoc.url" class="expanded-source__row">
-          <span class="expanded-source__label">Crawl seed</span>
+          <span class="expanded-source__label">{{ translate('okf.shell.crawlSeed', 'Crawl seed') }}</span>
           <span>
             <a :href="sourceDoc.url" target="_blank" rel="noopener">{{ sourceDoc.url }}</a>
           </span>
@@ -342,12 +342,16 @@ export default {
     serving() {
       return !!(this.repo.lifecycle_state === 'publish' && this.repo.ingested_at);
     },
-    /** Story 1-8: the Testing Lab opens on publish/approve repos or any
-     * repo with a stored head (serving repos test read-only — legitimate
-     * post-ingest verification). */
+    /** The Testing Lab is ALWAYS reachable (David, 2026-11-02, hadith
+     * Sunni Nawawi: he was stuck curating with no way to build/test the
+     * head — the old gate required publish/approve state or an existing
+     * head, which is backwards: the FIRST head is built inside the Lab,
+     * from saved tags, before any publish). The dialog itself owns the
+     * no-head state: a "no head" badge, the Rebuild-head action, and the
+     * guidance to save tags first when frontmatter is missing. Serving
+     * repos still test read-only (dialog-internal). */
     showHeadTest() {
-      if (!this.repo) return false;
-      return ['publish', 'approve'].includes(this.repo.lifecycle_state) || !!this.repo.head;
+      return !!this.repo;
     },
     readOnly() {
       return this.serving;

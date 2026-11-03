@@ -148,7 +148,6 @@ async function createRepo(req, res, next) {
 }
 
 /**
-/**
  * Review !622 round 9, #78672: the repo-targeting half of BOTH conversion
  * endpoints, previously ~55 verbatim lines pasted twice (repo_id targeting,
  * the 10-attempt duplicate-name suffix loop, the 409, the born-right ACL
@@ -156,8 +155,10 @@ async function createRepo(req, res, next) {
  * fetch (F15: a domain-A caller cannot target a domain-B repo by id) plus
  * writability (serving/drain-frozen content 409s); absent repo_id mints a
  * uniquely-named repo (Wizard B1, Amendment A, 2026-09-27). Returns
- * { repo, baseName, name_adjusted } or { failure: { status, payload } } —
- * the caller renders the envelope since this helper owns no res.
+ * { repo, name_adjusted } or { failure: { status, payload } } — the caller
+ * renders the envelope since this helper owns no res. baseName is NOT part
+ * of the envelope (review !622, #80934): no caller ever read it, so it stays
+ * a local of the create loop below.
  *
  * name_adjusted (round 20, #80807) is computed ONLY on the CREATE path,
  * where the suffix loop can genuinely rename (baseName → baseName-N). On the
@@ -179,13 +180,13 @@ async function resolveTargetRepo(body, authz, actor, defaultName) {
       };
     }
     assertWritable(existing);
-    return { repo: existing, baseName, name_adjusted: false };
+    return { repo: existing, name_adjusted: false };
   }
   for (let attempt = 1; attempt <= 10; attempt++) {
     const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
     try {
       const repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
-      return { repo, baseName, name_adjusted: repo.name !== baseName };
+      return { repo, name_adjusted: repo.name !== baseName };
     } catch (err) {
       if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
     }
@@ -1391,7 +1392,8 @@ async function autocorrectRepo(req, res, next) {
           description:
             'Applied frontmatter autocorrect — ' +
             ((result.changes && result.changes.length) || 0) +
-            ' change(s) across the repository',
+            ' change(s) across the repository' +
+            (result.failed > 0 ? `, ${result.failed} concept(s) FAILED and reported to the client` : ''),
           details: { changes: result.changes, warnings: result.warnings }
         })
         .catch(() => {

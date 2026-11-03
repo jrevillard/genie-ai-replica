@@ -11,9 +11,12 @@ The chat-side forwarder reads the authorized graph set from
 retriever `kwargs` as `authorized_graph_names`, which `align_inputs`
 encodes into the search_start carrier via core.label_contract.encode.
 
-These tests are MOCKED (chatqna's existing pattern) — the live LG-5
-boundary probe lives in scripts/check-okf-retriever-boundary.py
-(queued for Wave R5 alongside the production forwarding it gates).
+These tests are MOCKED (chatqna's existing pattern). The planned live
+LG-5 boundary probe (scripts/check-okf-retriever-boundary.py) was NEVER
+committed — Story 1-0b records how the live gate was discharged instead:
+the fan-out carrier shape shipped with the pinned AC1 here plus the
+retriever-side decode tests, and the live boundary leg is covered by the
+Testing Lab's routing tests (head-test-service) against real heads.
 """
 
 from unittest.mock import MagicMock, patch

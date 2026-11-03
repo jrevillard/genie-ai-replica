@@ -236,6 +236,29 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
   });
 
+  // Review !622, #84217: negative control for the Joi `source` contract. The
+  // siblings pin no-source and a bad bundle_version, but nothing rejected an
+  // INVALID source — deleting the `.valid(...)` constraint let any value
+  // ride through unstamped, and a future caller's misspelled source would
+  // silently lose the reuse idempotency (duplicate zips on interrupted
+  // retries) with nothing red. Every table entry is a STRING that passes
+  // Joi.string() (which itself already rejects '') and fails ONLY the
+  // .valid(...) enum, so the whole table goes red when the constraint is
+  // removed (mutation-verified: constraint dropped → 3/3 red; restored →
+  // 3/3 green).
+  it.each(['PUBLISH-EXPORT', 'publish_export', 'publish'])(
+    'rejects an invalid source value with 400 (%s)',
+    async (badSource) => {
+      const res = await request(app)
+        .post('/api/files/ingest-bundle')
+        .send({ ...validBody, bundle_version: 3, is_bundle: true, source: badSource });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(fileService.uploadBundle).not.toHaveBeenCalled();
+    }
+  );
+
   it('the publish-export path forwards source to uploadBundle for the files doc', async () => {
     // Explicit null: clearAllMocks clears CALLS but not implementations —
     // without this, a leftover mockResolvedValue from an earlier test would

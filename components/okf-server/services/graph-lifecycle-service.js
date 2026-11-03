@@ -46,7 +46,7 @@
 
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
-const { isArangoNotFound } = require('./arango-errors');
+const { isArangoNotFound, isArangoCollectionNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
 
@@ -272,7 +272,15 @@ async function renameGraph(repo, fromGraph, toGraph, { allowDropTarget = false }
         }
       );
     } catch (err) {
-      if (isArangoNotFound(err)) continue; // the edge collection may not exist yet (fresh graph)
+      // Absence here is EXPECTED — the fresh-graph case this continue was
+      // written for: a never-ingested repo's edge collections do not exist
+      // yet. The query raises 1203 (collection-level twin), NOT the
+      // document-level absence isArangoNotFound covers — missing that
+      // spelling threw every settle of a fully-failed first drain (live
+      // 2026-11-03: 44 rows reaper-dead-lettered, promote threw, the drain
+      // flag stuck true, re-ingest 409'd on the same flag — the repo bricked
+      // for recovery). Both absence spellings continue; anything else throws.
+      if (isArangoNotFound(err) || isArangoCollectionNotFound(err)) continue;
       logger.error('Graph rename: edge endpoint rewrite failed', {
         repo_id: repo.repo_id,
         edge: `${toGraph}${edgeSuffix}`,

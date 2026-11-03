@@ -143,7 +143,7 @@
         <span>{{ translate('okf.models.services', 'Use this configuration for') }}</span>
         <div class="okf-models__groups">
           <div class="okf-models__group">
-            <div class="okf-models__group-title">{{ translate('okf.models.group.testLab', 'Test Lab Pipelines') }}</div>
+            <div class="okf-models__group-title">{{ translate('okf.models.groupTestLab', 'Test Lab Pipelines') }}</div>
             <div class="okf-models__services">
               <label
                 v-for="sv in SERVICE_DEFS"
@@ -224,13 +224,13 @@
     <table v-else class="okf-headtest__scores">
       <thead>
         <tr>
-          <th>{{ translate('okf.models.col.name', 'Name') }}</th>
-          <th>{{ translate('okf.models.col.provider', 'Provider') }}</th>
-          <th>{{ translate('okf.models.col.baseUrl', 'Endpoint') }}</th>
-          <th>{{ translate('okf.models.col.key', 'Key') }}</th>
-          <th>{{ translate('okf.models.col.model', 'Model') }}</th>
-          <th>{{ translate('okf.models.col.services', 'Used by') }}</th>
-          <th>{{ translate('okf.models.col.state', 'State') }}</th>
+          <th>{{ translate('okf.models.colName', 'Name') }}</th>
+          <th>{{ translate('okf.models.colProvider', 'Provider') }}</th>
+          <th>{{ translate('okf.models.colUrl', 'Endpoint') }}</th>
+          <th>{{ translate('okf.models.colKey', 'Key') }}</th>
+          <th>{{ translate('okf.models.colModel', 'Model') }}</th>
+          <th>{{ translate('okf.models.colServices', 'Used by') }}</th>
+          <th>{{ translate('okf.models.colState', 'State') }}</th>
           <th></th>
         </tr>
       </thead>

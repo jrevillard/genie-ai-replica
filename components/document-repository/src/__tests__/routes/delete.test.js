@@ -152,4 +152,76 @@ describe('Delete Route Tests', () => {
       expect(res.body.success).toBe(false);
     });
   });
+
+  // #1350 round-28 review (batch delete per-file partial success): a bundle row in a batch
+  // is a PER-FILE refusal now, never a whole-batch 403 — the deletable subset
+  // is deleted and the bundle rows ride back in the same per-file results the
+  // client's partial-refusal strip already renders. Full contract detail
+  // (guard query shape, okf-service bypass, all-bundle batch) lives in
+  // bundle-protection.test.js; these tests pin the ENVELOPE the frontend
+  // parses ({results: [{fileId, success, error?, code?}]}) from the
+  // always-programmed empty guard of this suite plus one re-programmed case.
+  describe('DELETE /api/files (batch)', () => {
+    const reprogramGuard = async (protectedIds) => {
+      const { dbService } = require('../../../shared-lib');
+      dbService.getConnection.mockResolvedValue({
+        query: jest.fn().mockResolvedValue({ all: jest.fn().mockResolvedValue(protectedIds) })
+      });
+    };
+
+    it('deletes the deletable subset and reports a bundle row as a per-file refusal', async () => {
+      await reprogramGuard(['bundleRow']);
+      fileService.deleteFile.mockResolvedValue(true);
+
+      const res = await request(app)
+        .delete('/api/files')
+        .send({ fileIds: ['docKeep', 'bundleRow'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual([
+        { fileId: 'docKeep', success: true },
+        {
+          fileId: 'bundleRow',
+          success: false,
+          code: 'BUNDLE_PROTECTED',
+          error: expect.stringContaining('OKF lifecycle')
+        }
+      ]);
+      expect(fileService.deleteFile).toHaveBeenCalledTimes(1);
+      expect(fileService.deleteFile).toHaveBeenCalledWith('docKeep');
+    });
+
+    it('reports a per-file failure (STILL_SERVING) inside the same 200 envelope', async () => {
+      const servingErr = new Error('File is still serving the corpus');
+      servingErr.statusCode = 409;
+      fileService.deleteFile.mockImplementation(async (id) => {
+        if (id === 'docServing') throw servingErr;
+        return true;
+      });
+
+      const res = await request(app)
+        .delete('/api/files')
+        .send({ fileIds: ['docServing', 'docClean'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual([
+        { fileId: 'docServing', success: false, error: 'File is still serving the corpus' },
+        { fileId: 'docClean', success: true }
+      ]);
+    });
+
+    it('returns per-file results for an all-success batch', async () => {
+      fileService.deleteFile.mockResolvedValue(true);
+
+      const res = await request(app)
+        .delete('/api/files')
+        .send({ fileIds: ['docA', 'docB'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual([
+        { fileId: 'docA', success: true },
+        { fileId: 'docB', success: true }
+      ]);
+    });
+  });
 });

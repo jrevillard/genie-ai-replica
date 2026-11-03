@@ -2,7 +2,8 @@
   DsTable.vue — sortable table.
   columns: [{ key, label, sortable?, width?, align? }]
   rows:    Array<object>
-  rowKey:  string | (row) => string
+  rowKey:  string | (row) => string — a row whose key is absent falls
+           back to an index key (#79625); pass a real key for reorderable rows.
   hoverable / loading / striped / emptyText
   Slots: default, cell-<key>, empty
   Emits: sort({ key, direction }), rowClick(row)
@@ -34,9 +35,9 @@
           </td>
         </tr>
         <tr
-          v-for="row in rows"
+          v-for="(row, rowIndex) in rows"
           v-else
-          :key="rowKeyValue(row)"
+          :key="rowKeyValue(row, rowIndex)"
           :class="{ 'ds-table__row--hoverable': hoverable }"
           @click="hoverable && $emit('rowClick', row)"
         >
@@ -92,9 +93,25 @@ export default {
     tdClass(col) {
       return { [`ds-table__td--${col.align || 'left'}`]: true };
     },
-    rowKeyValue(row) {
-      if (typeof this.rowKey === 'function') return this.rowKey(row);
-      return row[this.rowKey];
+    /**
+     * Row identity for Vue's key patching (#79625): a string/function rowKey
+     * that resolves to nothing (plain-object rows without the `_key` default
+     * field, e.g. OkfMarkdownEditor's `{author, type, uri}` sources) used to
+     * return `undefined` for EVERY row — Vue then patched by position with a
+     * dev-mode key warning, and row identity broke on reorder/splice. When
+     * the configured key is absent from a row we fall back to the INDEX
+     * explicitly — the same by-position behavior Vue would apply anyway, but
+     * without the warning, and rows carrying a real key keep real identity.
+     */
+    rowKeyValue(row, index) {
+      if (typeof this.rowKey === 'function') {
+        const key = this.rowKey(row);
+        if (key !== undefined && key !== null) return key;
+        return index;
+      }
+      const value = this.rowKey ? row[this.rowKey] : undefined;
+      if (value !== undefined && value !== null) return value;
+      return index;
     },
     sortGlyph(col) {
       if (this.sortKey !== col.key) return '↕';

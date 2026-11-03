@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -50,7 +49,7 @@ void main() {
   testWidgets('a dead scope tag names itself in the context bar on restore', (
     tester,
   ) async {
-    final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
+    final mock = ChatbotMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -79,7 +78,7 @@ void main() {
   });
 
   testWidgets('a live restore shows no caption', (tester) async {
-    final mock = _DeadScopeMockClient(tree, conversationTags: ['Births']);
+    final mock = ChatbotMockClient(tree, conversationTags: ['Births']);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -104,7 +103,7 @@ void main() {
     // No category edge at all: the bar would be hidden entirely (the
     // title gate), and the caption alone must keep it — and the clear
     // button — on the screen.
-    final mock = _DeadScopeMockClient(
+    final mock = ChatbotMockClient(
       tree,
       conversationTags: [deadTag],
       conversationCategoryId: null,
@@ -129,7 +128,7 @@ void main() {
       // retry that recovers the tree re-resolves the restore, and the
       // caption appears with the REAL verdict. TWO failures: the
       // mount's own fetch consumes the first, the restore's the second.
-      final mock = _DeadScopeMockClient(
+      final mock = ChatbotMockClient(
         tree,
         conversationTags: [deadTag],
         failFirstCounts: const {'en': 2},
@@ -154,10 +153,7 @@ void main() {
     // The resolver keeps duplicate tags (the saved count feeds the send
     // guard); the caption is a diagnosis, not the raw list — each dead
     // tag is named once.
-    final mock = _DeadScopeMockClient(
-      tree,
-      conversationTags: [deadTag, deadTag],
-    );
+    final mock = ChatbotMockClient(tree, conversationTags: [deadTag, deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -181,7 +177,7 @@ void main() {
       // hierarchy change. The caption stays quiet (the title, judged by
       // the healthy tree, stands); the recovery re-restores with the
       // config back and names the genuinely absent tag.
-      final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
+      final mock = ChatbotMockClient(tree, conversationTags: [deadTag]);
       final chatKey = GlobalKey<ChatBotComponentState>();
       tester.binding.defaultBinaryMessenger.setMockMessageHandler(
         'flutter/assets',
@@ -211,7 +207,7 @@ void main() {
     // the bar stays as the parked restore's predecessor left it — no
     // title, no caption. Nothing judges a scope from a half-settled
     // source pair; the settled parse (the cache) opens the commit.
-    final mock = _DeadScopeMockClient(
+    final mock = ChatbotMockClient(
       tree,
       conversationTags: [deadTag],
       failFirstCounts: const {'en': 2},
@@ -275,7 +271,7 @@ void main() {
   testWidgets('a sidebar selection replaces the dead-scope caption', (
     tester,
   ) async {
-    final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
+    final mock = ChatbotMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -300,7 +296,7 @@ void main() {
   });
 
   testWidgets('a card press replaces the dead-scope caption', (tester) async {
-    final mock = _DeadScopeMockClient(tree, conversationTags: [deadTag]);
+    final mock = ChatbotMockClient(tree, conversationTags: [deadTag]);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytesWithLiveCard);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -317,51 +313,4 @@ void main() {
     expect(find.text('Context: Births Card'), findsOneWidget);
     expect(find.textContaining('carries any more'), findsNothing);
   });
-}
-
-class _DeadScopeMockClient extends http.BaseClient {
-  _DeadScopeMockClient(
-    this.tree, {
-    this.conversationTags = const [],
-    this.conversationCategoryId = '2',
-    this.failFirstCounts = const {},
-  });
-
-  final List<dynamic> tree;
-  final List<String> conversationTags;
-  final String? conversationCategoryId;
-
-  /// Per locale: the FIRST N tree requests fail with a 500 (a transient
-  /// hierarchy outage) and every later one serves the tree. The counts
-  /// are keyed by the REQUEST's locale, like the sibling mock's — a
-  /// localized fetch inside the outage window must not consume another
-  /// locale's failure budget.
-  final Map<String, int> failFirstCounts;
-  final Map<String, int> _treeRequestsByLocale = {};
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    final locale = request.url.queryParameters['locale'] ?? 'en';
-    if (path.contains('/api/service-categories/categories')) {
-      _treeRequestsByLocale[locale] = (_treeRequestsByLocale[locale] ?? 0) + 1;
-      final failFirst = failFirstCounts[locale];
-      if (failFirst != null && _treeRequestsByLocale[locale]! <= failFirst) {
-        return httpResponseJson(<String, dynamic>{}, 500);
-      }
-      return httpResponseJson(tree, 200);
-    }
-    if (request.method == 'GET' && path.contains('/api/chat/conversations/')) {
-      final id = path.split('/api/chat/conversations/').last;
-      return httpResponseJson(<String, dynamic>{
-        '_key': id,
-        'title': 'Saved conversation',
-        if (conversationCategoryId != null)
-          'categoryId': conversationCategoryId,
-        'tags': conversationTags,
-        'messages': <dynamic>[],
-      }, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
 }

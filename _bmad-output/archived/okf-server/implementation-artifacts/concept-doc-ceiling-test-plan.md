@@ -1,0 +1,592 @@
+# Test Plan — Concept Document Ceiling & Derived Context Budget
+
+| Field | Value |
+|---|---|
+| Plan ID | `TPC-2026-10-14` |
+| Subject | Oversized concept-document splitting + derived Contextual Retrieval budget |
+| Branch | `feat/concept-doc-ceiling` (tip `b2576d9f2`) |
+| Environment | Local Docker build, `C:\Dev\builds\main`, compose project `main` |
+| Baseline | `verify-local-build.sh` → 77 pass / 0 fail |
+| Automated suites | okf-server **1189/1189**, config-validator **58/58**, OPEA **934 passed** (5 pre-existing failures unrelated) |
+| Date | 2026-10-14 |
+| Status | **Automated + in-container integration cases: all pass.** Operator tiers 0–4 (§9.3) pending execution |
+
+---
+
+## 1. Scope
+
+### In scope
+Verification that an oversized concept document is **split losslessly at import** against a ceiling **derived from the serving model's context window**, that the derivation is correct per hardware profile, and that truncation is **visible** to an operator.
+
+### Out of scope
+- Map-Reduce hierarchical summarization (named at `genieai_dataprep_arangodb.py:164` as future work; required only for documents exceeding *any* window)
+- Retrieval-quality measurement before/after (needs the RAG eval harness, separate plan)
+- Migration of the 1,291 pre-existing oversized concepts
+- Mobile / Flutter surfaces
+
+---
+
+## 2. Requirements under test
+
+| ID | Requirement | Source |
+|---|---|---|
+| **R1** | The doc-context budget is **derived** from `VLLM_MAX_MODEL_LEN`, not a fixed literal | `genieai_dataprep_arangodb.py::_resolve_doc_budget` |
+| **R2** | An unset `VLLM_MAX_MODEL_LEN` **clamps to the smallest profile** (fail closed) | `_resolve_doc_budget`, `DERIVE_FALLBACK_WINDOW` |
+| **R3** | The derived budget **fits the model window** (prompt + batch text + per-chunk output reservation) | `_resolve_doc_budget` |
+| **R4** | Truncation is recorded in the **admin Ingestion Log**, not only container stdout | `_doc_context_or_none` → `_write_ingestion_log` |
+| **R5** | A concept document over the ceiling is **split** at import | `concept-splitter.js`, `applyDocumentCeiling` |
+| **R6** | The split is **lossless** — `parts.join(eol) === body` | `concept-splitter.js` invariant |
+| **R7** | **Part 1 retains the original `concept_id`**; parts 2..N get `-part-N` | `applyDocumentCeiling` |
+| **R8** | Split runs **before** the concept-cap check, so expansion fails loudly | `ingest-service.js` ordering |
+| **R9** | A document that **cannot** be split is rejected `CONCEPT_TOO_LARGE`, never hard-wrapped | `concept-splitter.js` |
+| **R10** | A document **under** the ceiling is **not** split | `applyDocumentCeiling` |
+| **R11** | Editor save (`patchConcept`) over the ceiling → **409**, not a silent split | `repository-controller.js` |
+| **R12** | `okf_repo_id` is cleared when the repo it names is deleted | `backing-file-service.js::clearRepoStamp` |
+| **R13** | Compose and `env.j2` agree on every contextual default | config-validator **AC8** |
+
+---
+
+## 3. Test environment
+
+| Component | Value |
+|---|---|
+| Served model | `ibm-granite/granite-4.1-8b` |
+| GPU | NVIDIA RTX 6000 Ada, 48 GB |
+| `--max_model_len` | **65536** |
+| `--gpu_memory_utilization` | 0.55 (≈26.4 GB usable) |
+| `--max_num_seqs` | 16 |
+| **Derived ceiling** | `OKF_MAX_CONCEPT_DOC_CHARS = 250000` |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` (derive) |
+| `VLLM_MAX_MODEL_LEN` in dataprep | `65536` |
+| `OKF_IMPORT_CONCURRENCY` / `OKF_INGEST_CONCURRENCY` | 4 / 6 |
+
+**VRAM budget (recorded for future profiling):** 16 GB weights + ~8 GB KV cache @65536 + ~2 GB headroom. `max_model_len 131072` needs ~16 GB KV and would **not** fit.
+
+---
+
+## 4. Test data inventory
+
+Measured by unpacking each bundle; `body` = post-frontmatter character count.
+
+| Bundle | Concepts | **Over 250k ceiling** | Largest body | Decompressed | Passes caps? |
+|---|---|---|---|---|---|
+| `alphabet-company-information-llm-v7.zip` | 18 | **0** | 3,378 | 44 KB | yes |
+| `ncd-information-v6.zip` | 46 | **1** | 352,214 | 666 KB | yes |
+| `solar-system-v1.zip` | 140 | **1** | 804,896 | 1.3 MB | yes |
+| `bali-wikipedia-llm-v20.zip` | 999 | **88** | 849,702 | 96 MB | **no** |
+| `indonesia-history-llm-v1.zip` | 999 | **107** | 841,940 | 115 MB | **no** |
+| `www-gov-uk-full-crawl-v3.zip` | 997 | 1 | 259,063 | 6.9 MB | **no** (997 > 200) |
+| `el-salvador-v3.zip` | 586 | 0 | 68,290 | 824 KB | **no** (586 > 200) |
+| `slaugherhouse-heuristics-v7.zip` | 58 | 0 | 14,403 | 82 KB | yes |
+| `resilient-ai-hub-v1.zip` | 11 | 0 | 2,711 | 16 KB | yes |
+
+Caps: `OKF_INGEST_MAX_CONCEPTS` default **200/call**; `OKF_INGEST_MAX_ZIP_BYTES` default **26,214,400 decompressed**. Neither is plumbed through compose.
+
+---
+
+## 5. Test cases
+
+### 5.1 Automated cases (executed)
+
+| ID | Req | Case | Expected | Method | Result |
+|---|---|---|---|---|---|
+| TC-A01 | R6 | Split is lossless across 10 document shapes (headings, no headings, deep levels, frontmatter, consecutive headings, long-line, trailing/leading blanks, tables, CRLF) | `parts.join(eol) === body` every case | `concept-splitter.test.js` | **PASS** |
+| TC-A02 | R5 | Splits on heading boundaries when sections fit | exactly 3 parts, each starts `#` | `concept-splitter.test.js` | **PASS** |
+| TC-A03 | R5 | An oversized section decomposes further, never truncates | >1 part, lossless | `concept-splitter.test.js` | **PASS** |
+| TC-A04 | R9 | A single unbreakable line over the ceiling → unsplittable, not hard-wrapped | `unsplittable:true`, `parts:[]`, reason names the section | `concept-splitter.test.js` | **PASS** |
+| TC-A05 | R10 | Body under / exactly at the ceiling is not split | single part, unchanged | `concept-splitter.test.js` | **PASS** |
+| TC-A06 | R5 | Determinism — same input, identical output | arrays equal | `concept-splitter.test.js` | **PASS** |
+| TC-A07 | R5 | Idempotence — re-splitting a part is a no-op | `parts === [part]` | `concept-splitter.test.js` | **PASS** |
+| TC-A08 | R1,R2,R3 | Three-way budget contract: `>0` override, `<0` disable, unset derive | `("override"), (None,"disabled"), derived value` | `test_dataprep.py` | **PASS** |
+| TC-A09 | R2 | Unknown window clamps to smallest profile | equals `DERIVE_FALLBACK_WINDOW` result | `test_dataprep.py` | **PASS** |
+| TC-A10 | R3 | **Assembled request fits the window** at 4096/8192/16384/65536 | `prompt_tokens + completion <= window` | `test_dataprep.py` | **PASS** |
+| TC-A11 | R1 | The historical 6000 budget **would not fit** a 4096 window | assertion holds, derivation refuses | `test_dataprep.py` | **PASS** |
+| TC-A12 | R4 | Truncation is written to the Ingestion Log | exactly 1 `WARN`/`Contextualization`/"truncated" call | `test_dataprep.py` | **PASS** |
+| TC-A13 | R4 | **Negative control** — fitting document writes no truncation row | zero truncation calls | `test_dataprep.py` | **PASS** |
+| TC-A14 | R7 | Skipped backing file has `okf_repo_id` cleared | field `null` | `backing-file-service.test.js` | **PASS** |
+| TC-A15 | R12 | A stamp naming a **different** repo is left alone | unchanged | `backing-file-service.test.js` | **PASS** |
+| TC-A16 | R13 | Compose ↔ `env.j2` agree on 6 contextual defaults + ceiling | no mismatches | AC8 | **PASS** |
+| TC-A17 | R1 | Budget is `0`/derived, not a fixed literal | `'0'` | AC8 | **PASS** |
+
+### 5.2 Falsification evidence (each guard proven non-vacuous)
+
+| Falsifier | Result |
+|---|---|
+| Remove the Ingestion Log write | TC-A12 fails `assert 0 == 1` |
+| Use a flat `CONTEXTUAL_MAX_TOKENS` instead of `× batch_size` | TC-A10 fails `3572 + 2048 > 4096 — request would be rejected by vLLM` |
+| Restore compose default to `6000` | AC8 fails `Expected "0" / Received "6000"` |
+| Comment out `clearRepoStamp` | TC-A14, TC-A15 fail |
+| New container markers against the stale images | 6 markers FAIL `count=0 expected >= 1` before rebuild |
+
+### 5.3 Integration cases — real content, deployed container
+
+| ID | Req | Case | Data | Expected | Result |
+|---|---|---|---|---|---|
+| TC-I01 | R5,R6,R7 | **Deployed splitter in-container** | 869,815-char real crawled page | 4 parts, sizes 247096/242657/245080/134979, **lossless**, part 1 keeps id, paths `-part-2..4` | **PASS** |
+| TC-I02 | R5,R6 | Indonesia crawl source, 113.7 MB | 1000 pages | 109 over ceiling → 109 split, **0 unsplittable, 0 lossy**, 245 parts (2.25×) | **PASS** |
+| TC-I03 | R5,R6 | UK gov crawl source, 95.2 MB | 1002 pages | 88 → 88 split, **0 unsplittable, 0 lossy** | **PASS** |
+| TC-I04 | R5,R6 | Bali crawl source, 6.7 MB | 1001 pages | 1 → 1 split, **0 unsplittable, 0 lossy** | **PASS** |
+| TC-I05 | R10 | `ncd-information-v6` bundle | 46 concepts | 1 over ceiling (`clinical-detail-set-1`, 352,214) → 2 parts (248255/103958), lossless, 46→47 | **PASS** |
+| TC-I06 | R10 | `comprehensive-corpus-supplement` | 186,057 body | **under** ceiling → not split | **PASS** |
+| TC-I07 | R10 | Negative control, ncd 2nd largest | 185,318 body | under ceiling | **PASS** |
+
+**Corpus-wide impact at the derived ceiling:** 3,003 pages → 198 over ceiling → **all 198 split, 0 unsplittable, 0 lossy**; 3,003 → 3,254 concepts (**+8.4%**).
+
+### 5.4 Operational cases
+
+| ID | Case | Expected | Result |
+|---|---|---|---|
+| TC-O01 | `verify-local-build.sh` before rebuild | new markers FAIL against stale images | **PASS** (6 fail) |
+| TC-O02 | `verify-local-build.sh` after rebuild | 77 pass / 0 fail | **PASS** |
+| TC-O03 | Runtime env reaches the containers | `DATAPREP_CONTEXTUAL_DOC_BUDGET=0`, `VLLM_MAX_MODEL_LEN=65536`, `OKF_MAX_CONCEPT_DOC_CHARS=250000` | **PASS** |
+| TC-O04 | Mass repo delete leaves no fragments | 0 orphaned `okf_concepts_meta` rows; 0 dangling stamps | **PASS** |
+
+---
+
+## 6. Execution order & dependencies
+
+Full action sequence per tier is in **§9.3**; preconditions in **§9.1**.
+
+| Order | Tier | Bundle | Precondition |
+|---|---|---|---|
+| 0 | Negative control | alphabet-v7 | §9.1 green; no other repos exist |
+| 1 | Smoke | ncd-v6 | tier 0 clean |
+| 2 | Baseline | solar-system-v1 | tier 1 clean |
+| 3 | Volume | bali-v20 | tier 2 clean + import-cap override active |
+| 4 | Soak | indonesia-llm-v1 | tier 3 clean; overnight window |
+
+**Stop-on-failure:** each tier depends on the previous. TC-I02–I04 already prove the splitter at volume, so tiers 3–4 are a **regression re-run** against the real import pipeline, not the only evidence of scale behaviour.
+
+---
+
+## 7. Entry / exit criteria
+
+**Entry — all must hold before tier 0**
+- [x] `verify-local-build.sh` → 77 pass / 0 fail
+- [x] okf-server 1189/1189, config-validator 58/58
+- [x] Runtime env confirmed (§9.1 S1–S3)
+- [x] No tier-name clash — no live repo named after a tier bundle (§9.1 S5)
+- [x] No orphaned fragments — every `okf_concepts_meta` row maps to a live repo (§9.1 S5)
+
+**Exit — all of**
+- [x] R1–R13 each covered by ≥1 executed case
+- [x] Losslessness proven on synthetic shapes **and** 215 MB of real crawled content
+- [x] Negative controls present (TC-A13, TC-I06, TC-I07)
+- [x] Every guard falsified at least once (non-vacuous)
+- [x] No regression: full suites green, build verified 77/0
+- [ ] Operator tiers 0–4 executed against the live UI (§9.3)
+
+---
+
+## 8. Findings raised (not defects in this change)
+
+| ID | Finding | Status |
+|---|---|---|
+| F-01 | T4 profile (`max_model_len 2048`) cannot run contextualization at all — the per-chunk output reservation alone consumes the window. It has been **silently** falling back to raw chunks | Correct behaviour now surfaced; needs a release note |
+| F-02 | Six documentation surfaces named three different values for the same setting | Fixed |
+| F-03 | `env.j2` nested guard: setting only `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` rendered nothing | Fixed |
+| F-04 | AC7 parity regex excluded `DATAPREP_CONTEXTUAL_*`, so the drift was undetectable by CI | Fixed (AC8) |
+| F-05 | `probe.md` (6 bytes) stamped to sentinel `00000000-…-0001` | Pre-existing test artifact, not from a repo delete |
+| F-06 | `GRAPH_*` — 1,178 docs in 4 unversioned collections predating born-right naming | Pre-existing; separate cleanup decision |
+| F-07 | Hugo site build unverified — no Hugo binary, no Go, Docker Hub pull denied | Mitigated by new CI `docs:build` job; needs one CI run to confirm |
+| F-08 | `repos-routes.test.js › R9` failed twice in parallel mode, passed 7 consecutive runs after and under `--runInBand` | Transient flake under concurrent Docker build load; recorded, not dismissed |
+
+---
+
+## 9. Operator execution — local build
+
+### 10.1 Environment (already configured; confirm before starting)
+
+| # | Action | Where | Expected |
+|---|---|---|---|
+| S1 | `docker exec main-okf-server-1 printenv \| grep OKF_INGEST_MAX` | terminal | `OKF_INGEST_MAX_CONCEPTS=1200`, `OKF_INGEST_MAX_ZIP_BYTES=134217728` |
+| S2 | `docker exec main-okf-server-1 printenv \| grep OKF_MAX_CONCEPT` | terminal | `OKF_MAX_CONCEPT_DOC_CHARS=250000` |
+| S3 | `docker exec main-dataprep-arango-service-1 printenv \| grep -E "DOC_BUDGET\|MAX_MODEL_LEN"` | terminal | `DATAPREP_CONTEXTUAL_DOC_BUDGET=0` (derive), `VLLM_MAX_MODEL_LEN=65536` |
+| S4 | `cd C:\Dev\builds\tooling && sh ./verify-local-build.sh` | terminal | `77 pass, 0 fail` |
+| S5 | `node .scratch-pii/clean-state.js` from the repo root | terminal | `TIER-NAME CLASHES … 0`, and `0` orphaned `okf_concepts_meta` rows |
+
+S1–S5 were confirmed green on 2026-10-14. The two caps are **not** in `env` or
+`docker-compose.yaml` — they are set in `C:\Dev\builds\main\docker-compose.override.yml`
+(local-only). Reverting that file to the defaults restores 200 / 26,214,400.
+
+**Baseline DB state at S5 (2026-10-14).** Five repos are live; none is named after
+a tier bundle, so all five tiers import into fresh names. 1 657 concept rows exist
+and **every one maps to a live repo** — 0 orphans. The 25 564 graph docs are fully
+accounted for: 20 000 belong to `www-gov-uk-full-crawl` and 4 386 to
+`slaugherhouse-heuristics` (both live and ingested), and 1 178 are the legacy
+unversioned `GRAPH_*` collections (F-06, pre-date born-right naming). One file
+stamp points at the `00000000-…-0001` sentinel — `probe.md`, F-05, pre-existing.
+
+### 10.2 Expected results per tier (measured with the shipped splitter, not estimated)
+
+| Tier | Bundle | Concepts in | **Over ceiling** | **Concepts out** | Decompressed | Fits caps? |
+|---|---|---|---|---|---|---|
+| 0 | `alphabet-company-information-llm-v7.zip` | 18 | **0** | **18** | 0.0 MB | yes |
+| 1 | `ncd-information-v6.zip` | 46 | **1** | **47** | 0.6 MB | yes |
+| 2 | `solar-system-v1.zip` | 140 | **1** | **143** | 1.3 MB | yes |
+| 3 | `bali-wikipedia-llm-v20.zip` | 999 | **88** | **1111** | 91.3 MB | with override |
+| 4 | `indonesia-history-llm-v1.zip` | 999 | **107** | **1132** | 109.4 MB | with override |
+
+Every one of the 197 splits across all five bundles is **lossless** and **0
+unsplittable** — verified with the shipped `splitConceptBody` against the real
+bundle bodies, not inferred.
+
+Headroom check on the override: the cap is enforced **after** the split, on the
+post-split count. Worst case is indonesia at **1132 < 1200** (68 spare);
+largest decompressed is **109.4 MB < 128 MiB** (24 MiB spare).
+
+### 10.3 Action sequence — repeat per tier, in this order
+
+| # | Action | Where | What to check |
+|---|---|---|---|
+| 1 | Admin → **OKF** tab → Studio dashboard → click the **"+ New repository"** button | Studio dashboard | the **"New OKF repository"** dialog opens |
+| 2 | Type the **Repository name** | dialog, field 1 | a duplicate name shows an inline warning — not fatal |
+| 3 | Pick the **Subject area** from the dropdown | dialog, field 2 | **mandatory** — immutable after creation; the Create button stays disabled without it |
+| 4 | Below the divider, under *"Or import an existing zip bundle as a new repository"*, choose the file in the **Bundle (.zip)** picker | dialog, field 3 | *"Staged: &lt;filename&gt;"* appears — **this only stages; nothing has imported yet** |
+| 5 | Leave **Concept classification** at **Heuristics (default)** | dialog, field 4 | LLM-assisted / Hybrid exist but are slower — no reason to change it for this test |
+| 6 | Click **Create repository** | dialog, footer | **this click starts the import**; lands on the dashboard with an in-progress card |
+| 7 | **Wait** for the import card to finish | dashboard card | summary shows `created` / `split_documents` |
+| 8 | Open the repo from the dashboard card | dashboard | the wizard opens — **on whatever step the saved `studio_step` points at, empirically step 9 "Review" for a bundle import, NOT Curate** |
+| 8a | Click **"6. Curate"** in the **left rail** to go back | wizard left rail | unlocked (`locked = i > studio_step`, so every step up to and including the saved one is open); back-nav is non-destructive |
+| 9 | Count the `-part-N` siblings in the concept list | wizard step 6 · Curate | matches the "Concepts out" column in §9.2 |
+| 10 | **Set frontmatter: ≥3 `topic` AND ≥1 `forbidden`** | index.md YAML pane (Curate/Review) | saved **before** you publish — see §9.4 |
+| 11 | Advance **Validate → Auto-correct → Review** | wizard steps 7–9 | validation reports 0 issues / 0 blockers |
+| 12 | Reach step 10 **"Finish"** | wizard step 10 | the step is titled **Handoff** and **deliberately dead-ends** — see §9.3b |
+| 13 | Click **"Open the Dashboard"** | step 10 | back to the repo card |
+| 14 | Click the card's **contextual button** — it reads **"Submit for review"** | dashboard card | `draft → review` |
+| 15 | Click the **same button** — now reads **"Approve"** | dashboard card | `review → approve` |
+| 16 | Click the **same button** — now reads **"Publish"** | dashboard card | opens a confirmation dialog |
+| 17 | Click **"Acknowledge and Publish"** in that dialog | confirm dialog | `approve → publish`; bundle zip written to doc-repo |
+| 18 | Click the **same card button** — now reads **"Ingest"** | dashboard card | drain begins; button shows **"Ingesting…"** |
+| 19 | **Wait** for the drain to finish | dashboard card | ingest summary appears |
+| 20 | Open the bundle `.zip` → ingestion log | Files → FileDetailsDialog | **zero rows containing "truncated"** |
+| 21 | Record the outcome against this plan | §11 | pass / fail + observed counts |
+
+### 9.3b Step 10 is a dead end by design — publishing is NOT in the wizard
+
+Measured 2026-10-14 on the live build. `steps/Publish.vue:1-4` carries an explicit
+directive: *"NEVER publishes — 'KEEP PUBLISHING OUT OF THE WIZARD. I MEANT IT.'
+Submit → approve → publish lives ONLY in the dashboard and the editor."*
+
+Step 10 is titled **Handoff**. Its body says *"Publishing never happens here — submit
+it for approval on the dashboard, then approve and publish from the dashboard or the
+editor"*, and its only button is **"Open the Dashboard"** (`:55-57`).
+
+The lifecycle ritual is **one contextual button** on the dashboard repo card, whose
+label follows `contextualAction()` (`StudioDashboard.vue:695-703`) against
+`CONTEXTUAL_LABELS` (`:410-416`):
+
+| Card state | Button reads | Effect |
+|---|---|---|
+| `draft` | **Submit for review** | → `review` |
+| `review` | **Approve** | → `approve` |
+| `approve` | **Publish** | opens the confirm dialog (`onLifecycle`, `:809-814` — it does **not** fire directly) |
+| in dialog | **Acknowledge and Publish** (`:231`) | → `publish`, mints the version |
+| `publish`, not ingested | **Ingest** | drain begins, button becomes "Ingesting…" |
+| `publish`, ingested | **Retract** | → `retracted` |
+
+There are not four buttons to hunt for — it is the same button relabelling itself
+four times, and the confirm dialog in between is the only surprise.
+
+### 9.3a Where the zip picker is — and where it is NOT
+
+The bundle `.zip` picker lives **only** in the *New OKF repository* dialog
+(`components/okf/frontend/src/components/okf/StudioTab.vue`, dialog opens at
+`:39`, file input at `:114`). It is **not** in the wizard.
+
+Wizard step 1 (**Entry**, `steps/Entry.vue`) has no source picker of any kind — it
+only takes the name and domain. Step 3 (**Input**) accepts individual `.md` files
+(`onFsFiles` → `importConcepts`) and doc-repo sources via the source dialog, but
+**no `.zip`**. So there is no way to reach bundle import from inside the wizard:
+creating from a bundle and creating an empty repo both start on the dashboard.
+
+**Consequence:** clicking *Create repository* with only a name and subject area
+creates an **empty draft** containing just the seeded `index.md` skeleton
+(`concept_count: 1`). Nothing is damaged and the import is simply not started —
+delete that draft (`DELETE /api/okf/repos/:repo_id`, admin-scoped,
+`routes/repos-routes.js:46`) and repeat the dialog with the zip staged.
+
+**Step 15 fallback** if the bundle panel shows nothing: query ArangoDB directly
+(`DEBUGGING-TRACING.md` §3) —
+`FOR d IN ingestion_log FILTER d.message LIKE "%truncated%" RETURN d.message`.
+A hit means a document reached ingest **over** 250 000 chars, i.e. a defect.
+
+### 9.4 Set the tags in Curate — and why nothing tells you to go there
+
+**This is a product defect, not a documentation gap.** Measured 2026-10-14:
+
+- The bundle-import path creates the repo with only `{name, domain}`
+  (`StudioTab.vue:467`) and never sets `studio_step`, so the wizard's landing step
+  is wherever the default puts it — empirically **step 9 "Review"**, past the work.
+- **Step 9 `Review.vue` carries no frontmatter cue at all.** It shows a concept
+  count and one passing mention of labels ("set per topic in Curate") — nothing
+  about tags.
+- The **only** signal lives on `steps/Publish.vue:97-104`, which is **step 10, the
+  last step**: *"Frontmatter tags not approved — the LLM can draft them in Curate,
+  then approve before publishing."* The user clicks through nine steps, hits a
+  dead end, and is told to navigate backwards four.
+
+The frontmatter panel is mounted at the **top of the Curate step**
+(`steps/Curate.vue:39` → `FrontmatterPanel.vue`). Click **Refresh suggestions** to
+have the LLM draft topic + forbidden chips from the corpus, or type your own, then
+**Save tags**. The panel's own hint states the rule: *"Publish requires ≥3 topic +
+≥1 forbidden."*
+
+**Fix (not yet applied):** seed `studio_step: 5` (Curate) when creating from a
+bundle, exactly as the crawler path already does at `StudioTab.vue:674` and
+`:686`. That lands the user where the mandatory work lives instead of past it, and
+removes the need for a user manual to explain a navigation puzzle the product
+created.
+
+The Finish/Publish step re-checks the rule client-side
+(`steps/Publish.vue:209` → `isFrontmatterPublishReady`, counting frontmatter
+**rows**: `topic >= 3 && forbidden >= 1`) and shows *"Frontmatter tags approved"*
+only once satisfied — so following the wizard stops you **before** the publish
+request is ever sent.
+
+That client gate matters because the **server-side** gate runs late: at
+`lifecycle-service.js:748-760`, *after* `mintVersion` (`:669`) and after the bundle
+export. A publish reaching the server without frontmatter returns
+`409 FRONTMATTER_REQUIRED` but has **already burned a version number** and written
+a bundle. The wizard prevents this; a direct API call does not.
+
+### 9.5 Stop conditions
+
+Stop and do not proceed to the next tier if any of these occur:
+
+| Symptom | Meaning |
+|---|---|
+| Import card reports `CONCEPT_TOO_LARGE` | a body could not be split at the ceiling — inspect the named section before continuing |
+| Import card split count ≠ the table in 10.2 | the running image is not the one under test — re-run `verify-local-build.sh` |
+| `TOO_MANY_CONCEPTS` / zip-bytes rejection on tier 3 or 4 | the local override did not take — re-run S1 |
+| Any "truncated" row at step 15 | a document survived the split oversized — defect, capture the file_id |
+| Publish 409s | frontmatter missing (§9.4), or a concept exceeds the ceiling |
+
+Tiers 0–2 need no override and pass on stock defaults — **run tier 0 first**. If
+tier 0 does not produce exactly 18 concepts and 0 splits, stop; nothing downstream
+is meaningful.
+
+---
+
+## 10. Operator results
+
+### Tier 0 — `alphabet-company-information-llm-v7.zip` — **PASS**
+
+Executed 2026-10-14 on the local build.
+
+| Measure | Expected | Observed | Verdict |
+|---|---|---|---|
+| Concepts imported | 18 | **18** | ✅ |
+| Documents over the 250 000 ceiling | 0 | **0** | ✅ negative control holds |
+| Concepts after split | 18 | **18** (`-part-N` count = 0) | ✅ no spurious splits |
+| Validation | 0 issues / 0 blockers | **0 issues, 0 blockers** | ✅ |
+| Broken links | 0 | **0** | ✅ |
+| PII | — | 17 flagged, bulk-accepted scan-free | ⚠ see BUG-01 |
+| Concepts ingested | 18 | **18 / 18, all outcomes `ingested`** | ✅ |
+| Chunks ingested | — | **114** | ✅ |
+| **Truncation warnings** | **0** | **0** | ✅ |
+| Head suite | — | 85.6 % pass, 139 queries, score `219 → 219`, **20 ungrounded negative fails** | ⚠ see below |
+
+Per-concept ingest durations ranged 15 s (`sources`, 1 chunk) to 182 s
+(`alphabet_inc`, 10 chunks) — roughly 12–18 s per chunk with 2 lanes in flight.
+
+**Graph landed as** `OKF_alphabet-company-information_v1_*`:
+
+| Collection | Docs |
+|---|---|
+| `…_SOURCE` | **114** — exactly the chunk count reported by the worker |
+| `…_ENTITY` | 756 |
+| `…_LINKS_TO` | 999 |
+| `…_HAS_SOURCE` | 970 |
+
+Repo doc reached `lifecycle_state: publish`, `ingested_version: 1`,
+`ingested_at` set.
+
+**Observations carried forward**
+
+1. **The graph collection name does not follow `repo.graph_name`.** The repo doc
+   reserves `graph_name = OKF_<repo_id>` at create, but the drain writes
+   `OKF_<bundle-name>_v<n>_*`. Verified from two independent reads. Harmless here,
+   but any query written against `repo.graph_name` finds an empty collection — a
+   trap for anyone debugging by collection name.
+2. **Head suite: 20 ungrounded negative failures** — negative queries that should
+   not route to this repo were answered by it. Score `219 → 219` means the
+   recommendation produced no gain. Worth watching across tiers 1–4, since it is
+   the observable the head is supposed to improve.
+
+### Tier 1 — `ncd-information-v6.zip` — **PASS** (split proven on a real document)
+
+Executed 2026-10-14/15 on the local build, **concurrently** with a second drain.
+
+| Measure | Expected | Observed | Verdict |
+|---|---|---|---|
+| Concepts imported | 46 | **46** | ✅ |
+| Documents over the 250 000 ceiling | **1** | **1** | ✅ positive control |
+| Concepts after split | 47 | **47** | ✅ |
+| `clinical-detail-set-1` (part 1, keeps id) | 248 255 chars | **248 255** | ✅ exact |
+| `clinical-detail-set-1-part-2` | 103 958 chars | **103 958** | ✅ exact |
+| Concepts still over the ceiling | 0 | **0** | ✅ |
+| **Losslessness** | `248255 + 103958 = 352213` vs original `352214` | **1 char = the join separator** | ✅ nothing dropped |
+
+**This is the first split on real content.** Tier 0 proved nothing splits when
+nothing should; tier 1 proves exactly one document splits when exactly one
+should, and the other 45 are left alone. Both part sizes matched the
+pre-registered prediction character-for-character, so the splitter is
+deterministic on real input, not just on synthetic fixtures.
+
+| Head suite | Tier 0 (18 concepts) | Tier 1 (47 concepts) |
+|---|---|---|
+| pass_rate | 0.856 | **0.9275 → 0.9348** |
+| ungrounded negatives | 20 | **8** |
+| score | `219 → 219` | `228 → 228` |
+| steals | 0 | **1** |
+
+**8 ungrounded negatives across 47 concepts, against 20 across 18** — roughly
+0.17 per concept versus 1.11. That strongly supports the hypothesis in #1071
+that the tier-0 figure was a small-repo artefact and the metric needs
+normalising by suite size. **Tier 2 (140 concepts) is the data point that would
+settle it.**
+
+### Parallel drain — NCD ‖ Resilient AI Hub
+
+Both drained **simultaneously** against `OKF_INGEST_CONCURRENCY=6` /
+`DATAPREP_INGEST_CONCURRENCY=6` / `OKF_CLAIM_STRATEGY=fair` /
+`OKF_REPO_INGEST_CAP=3`.
+
+| Repo | Result | Failed | 429s | Truncation |
+|---|---|---|---|---|
+| Resilient AI Hub (11) | **11 / 11 complete** | **0** | **0** | **0** |
+| NCD Information (47) | see above | **0** | **0** | **0** |
+
+**Zero failures, zero 429s, zero truncation across both drains.** Resilient AI
+Hub completed *while NCD was still draining*, which is the concrete demonstration
+that per-repo graph isolation does what it should: `unstructured`/`dataprep` write
+to `OKF_<bundle>_v<n>_*` per repository (`genieai_dataprep_microservice.py:343`
+— `payload.graphName or ARANGO_GRAPH_NAME`), whereas the legacy path defaults to
+a single shared `GRAPH` (`:187` names it *"the legacy single-graph behavior"*).
+The shared graph is **why the legacy flock exists**; isolation is what removes
+the need for it.
+
+### Concurrency architecture (verified, not assumed)
+
+| Knob | Shipped default | Local build | Axis | Enforcement |
+|---|---|---|---|---|
+| `OKF_INGEST_CONCURRENCY` | **1** | 6 | per-process | N self-scheduling lanes, `ingestWorker.js:1455` |
+| `OKF_CLAIM_STRATEGY` | **`fifo`** | `fair` | ordering | `fifo` = global oldest-first, **no per-repo notion** |
+| `OKF_REPO_INGEST_CAP` | **0** = unlimited | 3 | per-repo | atomic AQL, `ingestWorker.js:335` |
+| `DATAPREP_INGEST_CONCURRENCY` | **1** | 6 | upstream | flock slot pool, `genieai_dataprep_microservice.py:109` |
+
+Three findings that change how the rest of this plan should be read:
+
+1. **`OKF_REPO_INGEST_CAP` is dead config under the default strategy.** `fifo`
+   has no per-repo notion, so the cap is **never read**. It only takes effect
+   when `OKF_CLAIM_STRATEGY=fair`.
+2. **Only `OKF_INGEST_CONCURRENCY` is plumbed through docker-compose.**
+   `OKF_CLAIM_STRATEGY` and `OKF_REPO_INGEST_CAP` have no env-block entry, so
+   setting them in `.env` does nothing — they need a compose override, exactly
+   as `OKF_INGEST_MAX_CONCEPTS` / `OKF_INGEST_MAX_ZIP_BYTES` do (§9.1).
+3. **Lanes are process-local; the per-repo cap is global.** `okf-server` is
+   pinned to `replicas: 1` (`docker-compose.yaml:775`), so per-process currently
+   equals per-container. At 2 replicas, concurrency becomes
+   `replicas × OKF_INGEST_CONCURRENCY` with **no global cap** — only dataprep's
+   slot pool bounds it, and that pool **429s rather than blocks**
+   (`genieai_dataprep_microservice.py:239-248`), so over-provisioning okf lanes
+   degrades into 429 backoff.
+
+**Tiers 2–4 therefore measure the local soak configuration, not stock behaviour.**
+The shipped default is one concept at a time across all repositories.
+
+### Truncation-warning validity — settled
+
+**Question raised during tier 1:** can the raw-chunk fallback suppress the very
+truncation warning this test looks for, making "0 truncation warnings" a false
+pass?
+
+**Answer: no.** `_doc_context_or_none` (`genieai_dataprep_arangodb.py:1295-1332`)
+runs entirely in this order:
+
+| Step | Line | Network? |
+|---|---|---|
+| `_resolve_doc_budget` | :1310 | **no** — reads env + chunk lengths |
+| `_doc_context_truncation` | :1313 | **no** — pure function |
+| `await _write_ingestion_log(... "Contextualization" ...)` | :1315-1329 | **no** |
+| `_build_doc_context(...)` | :1330 | **no** — string assembly |
+
+**Every step that can emit a truncation warning is local.** The LLM call happens
+*after* this function returns, in `_contextualize_doc_level` (:1337) or the
+batched per-chunk path (:1345). An `APITimeoutError` on the endpoint therefore
+cannot suppress, delay or fake the warning.
+
+**Consequence:** the tier-0 and tier-1 "0 truncation warnings" results stand as
+genuine passes, including during the saturation burst below.
+
+### Saturation burst during tier 1 — recorded, not a defect
+
+At **17:14:26** the remote inference endpoint (`ai.assembly.govstack.global:444`,
+a shared GPU node) became saturated. In a 30-minute window: **6 contextual
+batches started, 20 failed** with `APITimeoutError`, **all 20 at the same
+timestamp** — a single overload burst, not sustained failure.
+
+Impact: those batches fell back to raw chunks (the documented never-block-ingestion
+boundary), so roughly half the contextualization attempted in that window was
+lost. Ingestion still completed with **0 failed concepts**, which is the design
+working rather than the system being healthy.
+
+**Not a product defect** — the endpoint is shared infrastructure and the
+fallback behaved correctly. It does mean tier-1 retrieval quality should be
+re-measured after a re-ingest, and that **timing measurements taken during the burst
+window are not clean** (see the caveat in the parallel-drain section).
+
+### Pending observation — El Salvador is published but never ingested
+
+Noted during tier 1, **not filed as an issue** and not blocking anything.
+
+| Repo | lifecycle | `ingested_at` | `ingested_version` | Concepts at `parsed` | Last update |
+|---|---|---|---|---|---|
+| **El Salvador** | **`publish`** | **null** | **null** | **586** | 2026-10-13 |
+| Kenya Government Services | `review` | null | null | 5 | 2026-10-08 |
+
+Kenya is unremarkable — it is in `review`, so it was never published and never
+armed for drain. Its 5 parsed concepts are simply work-in-progress awaiting
+approval.
+
+**El Salvador is the anomaly.** It reached `publish`, which mints a version, but
+`ingested_at` and `ingested_version` are both unset and all 586 concepts sit at
+`parsed` with `rag_drain_active` unset on every row. So the drain was never
+armed, or was armed and cleared.
+
+Two readings, and the evidence does not yet distinguish them:
+
+1. **Workflow gap** — published, and nobody clicked Ingest. Unnoticed for two days.
+2. **Drain disarmed** — Ingest was clicked, the queue armed, then something
+   cleared `rag_drain_active` without the concepts being processed.
+
+Reading 2 would be the "wedged row holds its lane" failure mode named in this
+plan's risk section, and it would be **silent**: the repo looks published and
+healthy while contributing nothing to RAG.
+
+**How to distinguish, when convenient:** read `okf_audit_logs` for
+`repo.rag_drain_armed` on that repo id. An arming row with no matching completion
+points to reading 2; no arming row at all points to reading 1.
+
+Left for the triage session rather than chased mid-run.
+
+---
+
+## 11. Defect log
+
+| Defect ID | TC | Severity | Description | Status |
+|---|---|---|---|---|
+| — | — | — | None open | — |
+
+See [concept-doc-ceiling-defect-log.md](concept-doc-ceiling-defect-log.md) —
+7 entries (BUG-01 … BUG-07) raised during the live run.
+
+---
+
+## 12. Sign-off
+
+| Role | Name | Date | Verdict |
+|---|---|---|---|
+| Test author | Claude | 2026-10-14 | All executed cases pass |
+| Reviewer | *pending* | | |

@@ -76,15 +76,20 @@ describe('okfFlag.isOkfEnabled', () => {
 // the container entrypoint overwrites the file from VUE_APP_OKF_ENABLED.
 describe('the DEV runtime config keeps the dev server surfaces visible', () => {
   it('public/runtime/config.js loads and sets okfEnabled: "1"', () => {
-    // Owner-boundary check (round 21, #80881): EVALUATE the file the way
-    // the dev server serves it and read the flag off window.APP_CONFIG —
-    // the round-20 raw grep passed on a commented-out assignment (delete
-    // the real one, keep `// okfEnabled: "1"` and it stayed green while
-    // the dev server went dark). Evaluation also proves the file is still
+    // Owner-boundary check (round 21, #80881; closeout scratch-context
+    // form): EVALUATE the file the way the dev server serves it and read
+    // the flag off the config object — the round-20 raw grep passed on a
+    // commented-out assignment (delete the real one, keep
+    // `// okfEnabled: "1"` and it stayed green while the dev server went
+    // dark). The evaluation runs in a SCRATCH context — `new Function`
+    // with a stub window target — never window.eval against the real test
+    // window, which would leak APP_CONFIG state across suites. A
+    // commented-out or renamed key leaves the scratch config without the
+    // flag and this test RED; evaluation also proves the file is still
     // valid JS, which a substring search never did.
     const src = require('fs').readFileSync('public/runtime/config.js', 'utf8');
-    delete window.APP_CONFIG;
-    window.eval(src);
-    expect(window.APP_CONFIG && window.APP_CONFIG.okfEnabled).toBe('1');
+    const scratchWindow = {};
+    new Function('window', src)(scratchWindow);
+    expect(scratchWindow.APP_CONFIG && scratchWindow.APP_CONFIG.okfEnabled).toBe('1');
   });
 });

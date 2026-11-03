@@ -54,7 +54,7 @@ function isUnconfigured() {
     if (!_warnedUnconfigured) {
       _warnedUnconfigured = true;
       logger.warn(
-        'KC_OKF_SERVER_CLIENT_SECRET is not set — okf-server → document-repository calls will be UNAUTHENTICATED and rejected (401). Set KC_OKF_SERVER_CLIENT_ID/SECRET (the okf-server Keycloak client from Story 6.1).'
+        'KC_OKF_SERVER_CLIENT_SECRET is not set — okf-server → document-repository/dataprep calls will be UNAUTHENTICATED and rejected (401). Set KC_OKF_SERVER_CLIENT_ID/SECRET (the okf-server Keycloak client from Story 6.1).'
       );
     }
     return true;
@@ -119,36 +119,48 @@ async function getServiceToken() {
   return _mintPromise;
 }
 
-/** Authenticated axios surface for okf-server → doc-repo HTTP. Injects the
- * Bearer when configured. A 401 from doc-repo (stale cached token — e.g.
- * Keycloak restarted) resets the cache, re-mints, and retries ONCE; a second
- * 401 propagates (the caller decides retry policy). */
+/** Authenticated axios surface for okf-server → internal services HTTP
+ * (document-repository AND dataprep — see the egress allowlist below for
+ * how the second constituency was nearly lost). Injects the Bearer when
+ * configured. A 401 from the target (stale cached token — e.g. Keycloak
+ * restarted) resets the cache, re-mints, and retries ONCE; a second 401
+ * propagates (the caller decides retry policy). */
 function withAuth(token, opts) {
   return { ...opts, headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } };
 }
 function isUnauthorized(err) {
   return Boolean(err && err.response && err.response.status === 401);
 }
-// Egress allowlist (review 2026-10-29): every authedAxios call must target
-// the configured documentRepository origin. The wrapper attracts SAST SSRF
-// findings because it accepts an arbitrary url — this one check at the choke
-// point makes the arbitrary-url case unreachable while keeping the wrapper
-// generic for its 7 services.
+// Egress allowlist (review 2026-10-29 wave 2; widened 2026-11-03 — #1358):
+// every authedAxios call must target one of the TWO internal services this
+// wrapper serves — document-repository (the original, largest constituency)
+// and dataprep (the ingest drain's liveness probe, pre-POST retract and
+// concept POST have routed through here since the MR1 foundation). Wave 2
+// audited the nine OTHER consumer files (all doc-repo) but not the worker's
+// dataprep URLs, so the guard shipped doc-repo-only and fail-closed every
+// drain cycle at step 0 until the widening. The wrapper still attracts SAST
+// SSRF findings because it accepts an arbitrary url — this one check at the
+// choke point keeps the arbitrary-url case unreachable while the allowed
+// set stays deny-by-default and config-driven: both bases come from the
+// same env the config module reads (call-time require), so a deployment
+// override can never drift from what the callers actually build.
 function assertAllowedUrl(url) {
-  // Same env the okf-server config module reads — the fallback comes FROM
-  // config.documentRepository.url (call-time require, lazy shape preserved)
-  // so the allowlist can never drift from the base the callers actually use
-  // (a stale literal here would fail-close every authedAxios call).
-  const base = process.env.DOCUMENT_REPOSITORY_URL || require('../config').documentRepository.url;
+  const config = require('../config');
+  const bases = [
+    process.env.DOCUMENT_REPOSITORY_URL || config.documentRepository.url,
+    process.env.DATAPREP_URL || config.dataprep.url
+  ];
   let origin;
   try {
     origin = new URL(url).origin;
   } catch {
     throw new Error(`service-token: rejected malformed url: ${String(url).slice(0, 80)}`);
   }
-  const allowed = new URL(base).origin;
-  if (origin !== allowed) {
-    throw new Error(`service-token: egress to ${origin} is not the configured document repository (${allowed})`);
+  const allowed = bases.map((b) => new URL(b).origin);
+  if (!allowed.includes(origin)) {
+    throw new Error(
+      `service-token: egress to ${origin} is not the configured document repository or dataprep service (${allowed.join(' or ')})`
+    );
   }
 }
 
@@ -225,4 +237,4 @@ function _resetForTesting() {
   _tokenEndpoint = null;
 }
 
-module.exports = { getServiceToken, authedAxios, tokenEndpoint, _resetForTesting };
+module.exports = { getServiceToken, authedAxios, tokenEndpoint, _assertAllowedUrl: assertAllowedUrl, _resetForTesting };

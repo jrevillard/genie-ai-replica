@@ -1440,6 +1440,19 @@ export default {
     alt: 'Carregar'
   },
   details: {
+    crawl: {
+      seconds: 'segundos',
+      autoRefreshEvery: 'Atualização automática a cada',
+      refreshNow: 'Atualizar agora',
+      crawlRate: 'Taxa de rastreio',
+      queueSize: 'Tamanho da fila',
+      errorRate: 'Taxa de erro',
+      pagesProcessed: 'Páginas processadas',
+      depth: 'Profundidade',
+      internalLinks: 'Links internos',
+      externalLinks: 'Links externos',
+      totalFetched: 'Total obtidas'
+    },
     loading: 'A carregar detalhes do ficheiro...',
     title: 'Detalhes do Ficheiro',
     close: 'Fechar',
@@ -1458,6 +1471,7 @@ export default {
     uploadDate: 'Data de Carregamento',
     hash: 'Hash SHA256',
     tabs: {
+      dashboard: 'Painel',
       details: 'Detalhes',
       ingestionLog: 'Log de Ingestão',
       detailsHint:
@@ -1658,8 +1672,14 @@ export default {
       adminOnly: 'As configurações de modelo exigem a função de administrador da plataforma.'
     },
     versions: {
+      ingestFailed: 'falhou',
+      ingestPartialFailed: 'parcial',
+      ingestCompleted: 'ingerido',
+      bundleMissing: 'zip ausente',
+      bundleDownload: 'Baixar zip',
       bundle: 'Pacote',
       col: {
+        ingest: 'Ingestão',
         concepts: 'Conceitos',
         curator: 'Curador',
         minted: 'Criado',
@@ -1677,6 +1697,10 @@ export default {
       title: 'Versões'
     },
     shell: {
+      sourceDocument: 'Documento de origem',
+      size: 'Tamanho',
+      type: 'Tipo',
+      crawlSeed: 'Semente de rastreio',
       back: 'Painel do Studio',
       building: 'Construindo…',
       buildingHint: 'O arquivo de origem ainda está sendo processado',
@@ -1688,6 +1712,7 @@ export default {
       export: 'Exportar .zip',
       logs: 'Logs',
       pii: {
+        reviewHint: 'Clique em um arquivo sinalizado para corrigi-lo no editor:',
         ack: 'Reconhecer entidades sinalizadas e publicar',
         note: 'As entidades sinalizadas fazem parte do conteúdo publicado. Se você já as revisou (por exemplo, detalhes de contato oficiais), reconheça e continue.'
       },
@@ -1772,6 +1797,9 @@ export default {
       failed: 'Não foi possível iniciar a importação. Verifique os documentos e tente novamente.'
     },
     editor: {
+      resizeMeta: 'Arraste para redimensionar o painel de metadados',
+      resizeTip: 'Arraste para redimensionar — clique duplo para redefinir',
+      resizeRail: 'Arraste para redimensionar a lista de arquivos',
       addConcept: {
         bodyLabel: 'Markdown (cole ou deixe em branco)',
         bodyPh: '# Título\n\nCole o markdown aqui — o frontmatter será adicionado para você.',
@@ -1832,6 +1860,17 @@ export default {
         grantedGroupNotice: 'Grupo concedido — cada membro obtém acesso no próximo login.'
       },
       autocorrect: {
+        applyingProgress: 'A aplicar {done} / {total}…',
+        stop: 'Parar',
+        stopped: 'Parado — {n} conceito(s) aplicado(s) antes de parar.',
+        sheetShowing: 'A mostrar {shown} de {total} conceitos.',
+        sheetApplyCoversAll: '«Aplicar correções» cobre todos.',
+        sheetShowMore: 'Mostrar mais',
+        sheetFilter: 'Filtrar por id de conceito',
+        applySummary: 'Aplicada(s) {n} correção(ões).',
+        applyFailed:
+          'Aplicada(s) {n} correção(ões) — {f} conceito(s) FALHARAM. Clique em «Aplicar correções» para tentar novamente.',
+        failuresMore: 'e mais {n}',
         blankBefore: '(vazio)',
         blankBadge: 'sem frontmatter — proposta completa',
         applyField: 'Aplicar',
@@ -2041,6 +2080,7 @@ export default {
         note: 'As entidades sinalizadas fazem parte do conteúdo publicado. Se você já as revisou (por exemplo, detalhes de contato oficiais), reconheça e continue.'
       },
       publish: {
+        inProgress: 'Publicando — exportando e transferindo o pacote…',
         body: 'Ao executar publish, cria-se a v{n} e armazena-se o pacote "{file}" no repositório de documentos, substituindo o zip anterior. A nova versão não estará em serving até que você execute Ingest.',
         confirm: 'Publicar',
         title: 'Publicar'
@@ -2528,6 +2568,10 @@ export default {
         cloneFailed: 'A clonagem falhou — tente novamente.'
       },
       input: {
+        clsHybrid: 'Híbrido',
+        clsLlm: 'Classificação com LLM',
+        clsHeur: 'Heurísticas (rápido, sem LLM)',
+        classification: 'Estratégia de classificação',
         title: 'Entradas',
         documents: 'Escolha os documentos que devem iniciar a lista de tópicos.',
         crawl: 'Escolha o(s) site(s) para varredura.',
@@ -2560,6 +2604,7 @@ export default {
         cloned: 'Este repositório é um clone — seus tópicos já estão no lugar. Continue para Curate para revisá-los.'
       },
       produce: {
+        labelFailed: 'Falha na conversão',
         title: 'Gerar tópicos',
         hint: 'Estamos lendo suas fontes e propondo tópicos.',
         progress: 'Produtor em execução...',
@@ -2609,6 +2654,8 @@ export default {
         loadFailed: 'Não foi possível ler os rótulos agora.'
       },
       curate: {
+        labHint:
+          'Construa a cabeça de roteamento a partir das etiquetas salvas e teste-a — sem necessidade de publicar.',
         embedHint:
           'Revise e melhore cada tópico: corrija o texto, defina seu tipo e rótulo da Hierarquia de Conhecimento, adicione ou remova tópicos. Tudo o que você corrigir aqui é o que o assistente citará depois.',
         noRepo: 'Nenhum repositório ainda — volte a Entry e crie ou escolha um primeiro.',
@@ -2649,6 +2696,10 @@ export default {
         versionSummary: '{n} versão(ões) · última v{latest}'
       },
       publish: {
+        frontmatterPending: 'Tags de frontmatter não redigidas',
+        frontmatterPartial: 'Tags de frontmatter — precisa de revisão',
+        frontmatterOk: 'Tags de frontmatter aprovadas',
+        frontmatterServing: 'Tags de frontmatter definidas',
         title: 'Proteger e concluir',
         hint: 'Este repositório está pronto para revisão. A publicação nunca acontece aqui — submeta-o para aprovação no painel; a aprovação e a publicação são feitas no painel ou no editor.',
         nameOk: 'Nome do repositório definido',
@@ -2783,8 +2834,6 @@ export default {
       saveBlocked: 'Salvamento bloqueado: corrija os problemas de conformidade primeiro.'
     },
     validation: {
-      piiRescanTimeout:
-        'A reexaminação ainda decorre passados 15 minutos — continua no servidor. Nada se perdeu; verifique de novo dentro de um minuto.',
       healthAria: 'Saúde: {pct} por cento, {n} problema(s)',
       frozen:
         'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',
@@ -2888,6 +2937,7 @@ export default {
         'O servidor aceitou a reexaminação, mas não devolveu nenhum id de execução, então o progresso dela não pode ser acompanhado. Nada foi reportado.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'desapareceu',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',
@@ -3047,8 +3097,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Testes comparativos de RAGAS',
-        models: 'Modelos'
+        ragas: 'Testes comparativos de RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3142,6 +3191,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Carregando o conjunto…',
         generate: 'Generate test suite',
         generateTip:
           'O LLM escreve as consultas em lotes de 30 por classe — um pedido grande (100+) leva alguns minutos. A suíte aparece aqui e em suítes salvas ao terminar.',

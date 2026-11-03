@@ -215,13 +215,10 @@ import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import { mapGetters } from 'vuex';
 import repoOkfService from '../../../services/repoOkfService';
 import serviceTreeService from '../../../services/serviceTreeService';
-import {
-  buildConceptPayload,
-  labelOptionsForDomain,
-  applyLabel,
-  friendlyLifecycleError,
-  translateLifecycleError
-} from '../../../services/okfRepoOps';
+import { buildConceptPayload, labelOptionsForDomain, applyLabel } from '../../../services/okfRepoOps';
+// #80930: the bulk-PII failure composer is SHARED with editor/RepoEditor.vue
+// (the verbatim duplicate catch is how the round-19 fix missed one copy).
+import { bulkPiiFailureMessage } from './failureMessages';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
@@ -466,17 +463,13 @@ export default {
         // REJECTED bulkPiiAction (round 19, #80773): httpService rejects on
         // HTTP errors (409 drain freeze, 5xx), and without this catch the
         // rejection escaped try/finally — busy reset, dialog closed, no
-        // inputError, flags kept as if the action had run. Mirrors the
-        // RepoEditor handler (#80480).
-        const code = (err && (err.code || (err.data && err.data.error))) || '';
-        this.inputError = translateLifecycleError(
-          friendlyLifecycleError(
-            code,
-            err && err.message,
-            this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.')
-          ),
-          this.translate
-        );
+        // inputError, flags kept as if the action had run. The message
+        // composer is the SHARED one (#80930 — same as RepoEditor's handler).
+        console.debug('[OkfStepInput] bulk PII action rejected', {
+          code: (err && err.code) || '',
+          message: err && err.message
+        });
+        this.inputError = bulkPiiFailureMessage(err, this.translate);
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;

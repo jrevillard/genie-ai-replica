@@ -208,10 +208,11 @@ describe('fileController', () => {
     });
 
     it('blocks re-ingestion when status is "Ingested" (canonical capitalized form)', async () => {
-      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
         file: { file_id: 'f1', dataprep: { status: 'Ingested' } },
-        base64String: 'b64'
+        filePath: '/uploads/f1.bin'
       });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
 
       const result = await fileController._ingestFileById('f1');
 
@@ -221,10 +222,11 @@ describe('fileController', () => {
     });
 
     it('blocks re-ingestion case-insensitively (lowercase "ingested")', async () => {
-      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
         file: { file_id: 'f1', dataprep: { status: 'ingested' } },
-        base64String: 'b64'
+        filePath: '/uploads/f1.bin'
       });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
 
       const result = await fileController._ingestFileById('f1');
 
@@ -249,10 +251,11 @@ describe('fileController', () => {
         metadataService.updateMetadata = jest.fn().mockResolvedValue({});
         fileService.deleteIngestionLogs = jest.fn().mockResolvedValue({});
 
-        jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+        jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
           file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
-          base64String: 'b64'
+          filePath: '/uploads/f1.bin'
         });
+        jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
         axios.post.mockResolvedValue({ data: { success: true, chunk_count: 3 } });
       });
 
@@ -290,10 +293,11 @@ describe('fileController', () => {
           axios.post.mockResolvedValue({
             data: { success: true, status: 200, message: 'Ingestion started in background.' }
           });
-          jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+          jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
             file: { file_id: 'f1', chunk_count: 42, dataprep: { status } },
-            base64String: 'b64'
+            filePath: '/uploads/f1.bin'
           });
+          jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
 
           await fileController._ingestFileById('f1');
 
@@ -427,10 +431,11 @@ describe('fileController', () => {
       jest.clearAllMocks();
       metadataService.updateMetadata = jest.fn().mockResolvedValue({});
       fileService.addIngestionLog = jest.fn().mockResolvedValue({});
-      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
         file: { file_id: 'f1', dataprep: { status: 'Pending' } },
-        base64String: 'b64'
+        filePath: '/uploads/f1.bin'
       });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
     });
 
     afterEach(() => {
@@ -494,10 +499,11 @@ describe('fileController', () => {
       // zeroes its count BEFORE the ingest POST. A 409 arriving after that
       // leaves the file wiped — so it must be reported as a failure, not
       // shrugged off as a duplicate.
-      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
         file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
-        base64String: 'b64'
+        filePath: '/uploads/f1.bin'
       });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
       // The retract (first POST) succeeds; the ingest (second POST) gets the 409.
       axios.post
         .mockResolvedValueOnce({ data: { success: true } })

@@ -6,6 +6,7 @@
  */
 
 const { mount } = require('@vue/test-utils');
+const { gateStoreDispatch } = require('../../helpers/gatedStore');
 
 // Subject Areas load from the Knowledge Hierarchy via okfRepoOps — the
 // dashboard's domain-filter regression test pins that contract with a
@@ -224,16 +225,9 @@ describe('OkfConceptEditor', () => {
   // /index.md pre-PATCH and reverts the curator's typed body. The flush
   // must mean "the autosave has COMMITTED".
   it('flushPendingSave awaits an IN-FLIGHT save, not just a pending one (#80942)', async () => {
-    let releasePatch;
-    const gate = new Promise((resolve) => {
-      releasePatch = resolve;
-    });
-    const store = fakeStore();
-    const origDispatch = store.dispatch.bind(store);
-    store.dispatch = (type, payload) => {
-      if (type === 'okf/patchConcept') return gate.then(() => ({ ok: true, content_hash: 'H2' }));
-      return origDispatch(type, payload);
-    };
+    // The PATCH hangs on a manual gate (the shared gateStoreDispatch helper,
+    // #83615) — the flush may only resolve once it commits.
+    const { store, release } = gateStoreDispatch(fakeStore(), 'okf/patchConcept');
     const wrapper = mountEditor(store);
     await jest.advanceTimersByTimeAsync(0);
     await wrapper.vm.$nextTick();
@@ -247,7 +241,7 @@ describe('OkfConceptEditor', () => {
     await jest.advanceTimersByTimeAsync(1);
     await Promise.resolve();
     expect(flushed).toBe(false); // NOT resolved while the PATCH is in flight
-    releasePatch(); // the PATCH commits
+    release(); // the PATCH commits
     await f;
     expect(flushed).toBe(true); // the flush waited for the commit
     expect(wrapper.vm.saving).toBe(false);
@@ -259,16 +253,7 @@ describe('OkfConceptEditor', () => {
   // promise; reverting to a plain assignment resolves the flush before the
   // PATCH commits and THIS test goes red — fail-on-pre-fix by construction.
   it('flushPendingSave awaits a PENDING (debounce-not-yet-fired) save too', async () => {
-    let releasePatch;
-    const gate = new Promise((resolve) => {
-      releasePatch = resolve;
-    });
-    const store = fakeStore();
-    const origDispatch = store.dispatch.bind(store);
-    store.dispatch = (type, payload) => {
-      if (type === 'okf/patchConcept') return gate.then(() => ({ ok: true, content_hash: 'H2' }));
-      return origDispatch(type, payload);
-    };
+    const { store, release } = gateStoreDispatch(fakeStore(), 'okf/patchConcept');
     const wrapper = mountEditor(store);
     await jest.advanceTimersByTimeAsync(0);
     await wrapper.vm.$nextTick();
@@ -285,7 +270,7 @@ describe('OkfConceptEditor', () => {
     await Promise.resolve();
     expect(wrapper.vm.saving).toBe(true); // the flush started the save
     expect(flushed).toBe(false); // NOT resolved while the PATCH is in flight
-    releasePatch(); // the PATCH commits
+    release(); // the PATCH commits
     await f;
     expect(flushed).toBe(true);
     expect(wrapper.vm.saving).toBe(false);

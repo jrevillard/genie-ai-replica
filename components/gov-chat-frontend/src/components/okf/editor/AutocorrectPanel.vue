@@ -41,7 +41,18 @@
         {{ translate('okf.editor.autocorrect.clean', 'Nothing to fix — all frontmatter already conforms.') }}
       </p>
 
-      <div v-for="group in groupedRows" :key="group.concept_id" class="okf-ac__group">
+      <!-- The sheet is a WINDOW, not the whole corpus: rendering thousands
+           of groups synchronously froze the main thread (browser "Page
+           Unresponsive" on step entry — same class as the markdown-editor
+           render freeze fixed 2026-09-13). Apply fixes iterates EVERY group
+           regardless of what is displayed. -->
+      <DsInput
+        v-if="groupedRows.length > renderLimit"
+        v-model="groupFilter"
+        :placeholder="translate('okf.editor.autocorrect.sheetFilter', 'Filter by concept id')"
+        class="okf-ac__filter"
+      />
+      <div v-for="group in visibleGroups" :key="group.concept_id" class="okf-ac__group">
         <header class="okf-ac__group-head">
           <code>{{ group.concept_id }}</code>
           <DsPill v-if="group.blank" variant="warning">{{
@@ -78,6 +89,18 @@
         </table>
       </div>
 
+      <p v-if="matchedGroups.length > visibleGroups.length" class="okf-ac__sheet-note">
+        {{
+          translate('okf.editor.autocorrect.sheetShowing', 'Showing {shown} of {total} concepts.')
+            .replace('{shown}', String(visibleGroups.length))
+            .replace('{total}', String(matchedGroups.length))
+        }}
+        {{ translate('okf.editor.autocorrect.sheetApplyCoversAll', 'Apply fixes covers all of them.') }}
+        <DsButton variant="secondary" small @click="renderLimit += 100">
+          {{ translate('okf.editor.autocorrect.sheetShowMore', 'Show more') }}
+        </DsButton>
+      </p>
+
       <ul v-if="warnings.length" class="okf-ac__warnings">
         <li v-for="(w, i) in warnings" :key="i">
           <code>{{ w.concept_id }}</code> — {{ w.rule ? w.rule + ': ' : '' }}{{ w.message }}
@@ -96,10 +119,45 @@
 
     <p v-if="error" class="okf-ac__error">{{ error }}</p>
 
+    <!-- Apply outcome: the sheet must agree with the corpus. Live-caught
+         2026-11-02 (Quran Core): the run silently skipped 785 rows, the
+         sheet kept listing them and Apply looked like a no-op — the backend
+         now reports failures and the panel names them here. -->
+    <p v-if="applySummary" class="okf-ac__summary" :class="{ 'okf-ac__summary--partial': applySummary.failed > 0 }">
+      {{ summaryText }}
+    </p>
+    <ul v-if="applySummary && applySummary.failures.length" class="okf-ac__warnings">
+      <li v-for="f in applySummary.failures" :key="f.concept_id">
+        <code>{{ f.concept_id }}</code> — {{ f.error }}
+      </li>
+      <li v-if="applySummary.failuresTotal > applySummary.failures.length">
+        …{{
+          translate('okf.editor.autocorrect.failuresMore', 'and {n} more').replace(
+            '{n}',
+            String(applySummary.failuresTotal - applySummary.failures.length)
+          )
+        }}
+      </li>
+    </ul>
+
+    <!-- Live apply progress, visible in BOTH modes: the bulk apply used to
+         be ONE long request (minutes on a 6k-concept repo — the modal froze
+         around it, David 2026-11-02: "blocking wait dialog ... SHIT UX").
+         The apply is now one {frontmatter} PATCH per concept with live
+         progress and a Stop; Cancel/✕ stay usable throughout. -->
+    <div v-if="applying && applyProgress" class="okf-ac__applying">
+      <DsSpinner size="sm" />
+      <span class="okf-ac__progress-label">{{ progressText }}</span>
+      <DsProgress class="okf-ac__progress" :value="applyProgress.done" :max="applyProgress.total" />
+      <DsButton variant="secondary" small @click="requestStop()">
+        {{ translate('okf.editor.autocorrect.stop', 'Stop') }}
+      </DsButton>
+    </div>
+
     <!-- Inline mode carries its own actions (the modal's live in the
          DsDialog footer): Apply only — there is nothing to cancel. -->
-    <div v-if="inline" class="okf-ac__inline-actions">
-      <DsButton variant="primary" :disabled="applying || scanning || changeCount === 0" @click="onAction('apply')">
+    <div v-if="inline && !applying" class="okf-ac__inline-actions">
+      <DsButton variant="primary" :disabled="scanning || changeCount === 0" @click="onAction('apply')">
         {{ translate('okf.editor.autocorrect.apply', 'Apply fixes') }}
       </DsButton>
     </div>
@@ -112,12 +170,14 @@ import DsDialog from '../../ds/Dialog.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsButton from '../../ds/Button.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsProgress from '../../ds/Progress.vue';
+import DsInput from '../../ds/Input.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import conceptService from '../../../services/conceptService';
 
 export default {
   name: 'OkfAutocorrectPanel',
-  components: { DsDialog, DsSpinner, DsButton, DsPill, DsInfoTip },
+  components: { DsDialog, DsSpinner, DsButton, DsPill, DsProgress, DsInput, DsInfoTip },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
@@ -134,7 +194,13 @@ export default {
       applyingField: '',
       changes: [],
       warnings: [],
-      error: ''
+      error: '',
+      applySummary: null,
+      applyProgress: null,
+      stopping: false,
+      // Sheet window (the render cap): how many concept groups are mounted.
+      renderLimit: 25,
+      groupFilter: ''
     };
   },
   computed: {
@@ -151,6 +217,47 @@ export default {
     },
     changeCount() {
       return this.changes.length;
+    },
+    // The filtered corpus groups (the window's SOURCE — the apply iterates
+    // groupedRows, i.e. EVERY group, whatever the sheet displays).
+    matchedGroups() {
+      const f = String(this.groupFilter || '')
+        .trim()
+        .toLowerCase();
+      if (!f) return this.groupedRows;
+      return this.groupedRows.filter((g) => g.concept_id.toLowerCase().includes(f));
+    },
+    // What the sheet MOUNTS — capped so a 6k-group corpus cannot freeze the
+    // main thread (browser "Page Unresponsive" on step entry).
+    visibleGroups() {
+      return this.matchedGroups.slice(0, this.renderLimit);
+    },
+    progressText() {
+      return this.translate('okf.editor.autocorrect.applyingProgress', 'Applying {done} / {total}…')
+        .replace('{done}', String(this.applyProgress ? this.applyProgress.done : 0))
+        .replace('{total}', String(this.applyProgress ? this.applyProgress.total : 0));
+    },
+    summaryText() {
+      const s = this.applySummary;
+      if (!s) return '';
+      if (s.stopped) {
+        return this.translate(
+          'okf.editor.autocorrect.stopped',
+          'Stopped — {n} concept(s) applied before stopping.'
+        ).replace('{n}', String(s.applied));
+      }
+      if (s.failed > 0) {
+        return this.translate(
+          'okf.editor.autocorrect.applyFailed',
+          'Applied {n} fix(es) — {f} concept(s) FAILED. Click "Apply fixes" to retry.'
+        )
+          .replace('{n}', String(s.applied))
+          .replace('{f}', String(s.failed));
+      }
+      return this.translate('okf.editor.autocorrect.applySummary', 'Applied {n} fix(es).').replace(
+        '{n}',
+        String(s.applied)
+      );
     },
     // D-L: normalize every change row into per-FIELD rows. Accepts the
     // legacy flat shape {concept_id, before, after} and the propose shape
@@ -210,7 +317,10 @@ export default {
           key: 'cancel',
           label: this.translate('common.cancel', 'Cancel'),
           variant: 'secondary',
-          disabled: this.applying
+          // Never a dead button: while applying, Cancel means STOP the loop
+          // (the dialog stays open for the summary). Disabling it during the
+          // run is what turned the modal into a blocking wait dialog.
+          disabled: this.scanning
         },
         {
           key: 'apply',
@@ -231,6 +341,10 @@ export default {
       immediate: true,
       handler(v) {
         if (v) this.runDryRun();
+        // Backdrop / ✕ during a run must mean the same thing as the Stop
+        // button (review 84598: closing the modal otherwise leaves the
+        // 4-lane PATCH loop running hidden with no Stop reachable).
+        else if (this.applying) this.stopping = true;
       }
     }
   },
@@ -246,8 +360,13 @@ export default {
     async runDryRun() {
       this.scanning = true;
       this.error = '';
+      this.applySummary = null;
       this.changes = [];
       this.warnings = [];
+      // A new scan is a new sheet: reset the window so the cap holds for
+      // whatever corpus shape comes back.
+      this.renderLimit = 25;
+      this.groupFilter = '';
       // MECHANICAL, ALWAYS (David, 2026-09-12): this panel is the frontmatter
       // conformance fixer — mode is pinned to heuristics. The omitted-mode
       // fallback routed by the repo's PERSISTED classification, so on an
@@ -302,26 +421,92 @@ export default {
         this.applyingField = '';
       }
     },
+    requestStop() {
+      // Cooperative stop: in-flight PATCHes finish, no NEW concept starts.
+      // The loop drains, the summary reports where it got to.
+      this.stopping = true;
+    },
     async onAction(key) {
       if (key === 'cancel') {
+        if (this.applying) {
+          this.stopping = true;
+          return;
+        }
         this.$emit('close');
         return;
       }
       if (key !== 'apply' || this.applying || this.changeCount === 0) return;
+      // CHUNKED APPLY — async with live progress (David, 2026-11-02: "if it
+      // needs to be async then make it async and display the progress"). The
+      // old bulk POST held ONE request open for the whole run — minutes on a
+      // 6k-concept repo — freezing the modal around it. The apply is now one
+      // {frontmatter} PATCH per concept through the SAME endpoint the
+      // per-field Apply uses, 4 lanes wide, progress bar live, Stop always
+      // available. Failures are collected per concept; nothing aborts the
+      // rest. The apply iterates groupedRows — EVERY group — whatever the
+      // sheet window displays.
       this.applying = true;
+      this.stopping = false;
       this.error = '';
-      const result = await this.$store.dispatch('okf/autocorrectRepo', {
-        repoId: this.repoId,
-        dryRun: false,
-        mode: 'heuristics'
-      });
+      this.applySummary = null;
+      const groups = this.groupedRows;
+      const total = groups.length;
+      this.applyProgress = { done: 0, total };
+      const failures = [];
+      let applied = 0;
+      let next = 0;
+      const worker = async () => {
+        while (next < groups.length && !this.stopping) {
+          const group = groups[next++];
+          try {
+            const patch = {};
+            for (const row of group.rows) patch[row.field] = row.after;
+            await conceptService.update(this.repoId, group.concept_id, patch);
+            applied += 1;
+          } catch (err) {
+            failures.push({
+              concept_id: group.concept_id,
+              error: err && err.message ? err.message : this.translate('okf.editor.autocorrect.failed', 'Apply failed.')
+            });
+          }
+          this.applyProgress = { done: this.applyProgress.done + 1, total };
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, groups.length) }, worker));
+      const stopped = this.stopping;
       this.applying = false;
-      if (!result.ok) {
-        this.error = result.message || this.translate('okf.editor.autocorrect.failed', 'Apply failed.');
-        return;
+      this.applyProgress = null;
+      this.$emit('applied', { ok: true, applied, failed: failures.length, stopped });
+      // The sheet must agree with the corpus after an apply: re-scan so the
+      // rows reflect what is STILL to fix. Inline (wizard) stays open with
+      // the fresh scan; the modal closes only on a clean complete run — a
+      // stopped or failed run stays open so the steward sees why. The
+      // summary is set AFTER the scan — runDryRun clears it (a new scan is a
+      // new story) — so the outcome report survives the refresh.
+      const summary = {
+        applied,
+        failed: failures.length,
+        failures: failures.slice(0, 20),
+        failuresTotal: failures.length,
+        stopped
+      };
+      // ONE repo-wide PII rescan after the run (review 84588): every
+      // per-concept PATCH re-scans server-side against live ingest traffic,
+      // so the verdicts written mid-run reflect partially-applied state.
+      // Arming the async repo-wide rescan makes the PII verdicts
+      // authoritative for the POST-apply frontmatter — fire-and-forget;
+      // the dashboard and editor surfaces poll the scan.
+      if (applied > 0) {
+        this.$store.dispatch('okf/startRepoPiiScan', { repoId: this.repoId }).catch(() => {});
       }
-      this.$emit('applied', result);
-      this.$emit('close');
+      // BOTH modes re-scan after the run (review 84600): the sheet must
+      // agree with the corpus in the failure case too — a modal sheet that
+      // keeps listing applied rows makes "retry" re-PATCH concepts that no
+      // longer need it. The modal closes only on a clean complete run;
+      // stopped or failed stays open with the outcome.
+      await this.runDryRun();
+      this.applySummary = summary;
+      if (!this.inline && failures.length === 0 && !stopped) this.$emit('close');
     }
   }
 };
@@ -403,6 +588,39 @@ export default {
 .okf-ac__error {
   margin: var(--space-md) 0 0;
   color: var(--danger);
+  font-size: var(--text-sm);
+}
+.okf-ac__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-ac__summary--partial {
+  color: var(--warning);
+}
+.okf-ac__applying {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+}
+.okf-ac__progress-label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.okf-ac__progress {
+  flex: 1;
+}
+.okf-ac__filter {
+  margin-bottom: var(--space-md);
+}
+.okf-ac__sheet-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0 0;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
 </style>

@@ -23,7 +23,9 @@
  *   has no translate context, so the consumer renders it through
  *   okfRepoOps.translateLabError(). A message that came from the SERVER
  *   (doc.error.message, err.message) stays verbatim and that helper passes
- *   it through untouched.
+ *   it through untouched. The key strings live in ONE registry
+ *   (LAB_ERROR_KEYS below, #80928/#80940) — never inline a labErrors
+ *   literal at an emission site.
  */
 
 const initialState = () => ({
@@ -179,12 +181,12 @@ async function pollJob({
       return {
         ok: false,
         code: 'POLL_ABORTED',
-        message: 'okf.labErrors.pollAborted'
+        message: LAB_ERROR_KEYS.pollAborted
       };
     }
     if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
     await new Promise((resolve) => setTimeout(resolve, pollMs));
-    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: 'okf.labErrors.trackingStopped' };
+    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.trackingStopped };
     let doc;
     try {
       doc = await fetchDoc();
@@ -207,6 +209,49 @@ async function pollJob({
     return done(doc);
   }
 }
+
+/**
+ * LAB-ERROR KEY REGISTRY (#1350 review closeout) — the ONE place the
+ * okf.labErrors.* key strings appear. Before the registry the literals were
+ * inlined at every emission site and five of them appeared verbatim TWICE
+ * (runFailed, suiteRunFailed, runCancelled, generationFailed, explainFailed),
+ * so a rename touched each duplicate pair by hand and a miss drifted the
+ * two families apart. The registry is the single owner; the locale tree
+ * keeps exactly one leaf per key (localeConsistency's deep-key parity owns
+ * the other 13 locales).
+ *
+ * ONE CODE, ONE KEY (#80928): the Lab's suite run used to answer the SAME
+ * code RUN_FAILED the RAGAS run answers, with a DIFFERENT key — a consumer
+ * switching on res.code could not tell which sentence it would get. The
+ * suite family now answers SUITE_RUN_FAILED (pollHeadSuiteRun), so
+ * RUN_FAILED means the RAGAS run everywhere. The shared horizon/cancel
+ * codes (RUN_TIMEOUT, GENERATION_TIMEOUT, RUN_CANCELLED, EXPLAIN_TIMEOUT)
+ * still carry one flavour key per FAMILY — visible side by side here —
+ * their split is deliberately NOT part of this fix.
+ */
+const LAB_ERROR_KEYS = {
+  pollAborted: 'okf.labErrors.pollAborted',
+  trackingStopped: 'okf.labErrors.trackingStopped',
+  suiteGenTimeout: 'okf.labErrors.suiteGenTimeout',
+  suiteGenFailed: 'okf.labErrors.suiteGenFailed',
+  suiteRunFailed: 'okf.labErrors.suiteRunFailed',
+  suiteRunTimeout: 'okf.labErrors.runUnusuallyLong',
+  runTimeout: 'okf.labErrors.runStillRunning',
+  runAdoptTimeout: 'okf.labErrors.runStillExecuting',
+  rescoreTimeout: 'okf.labErrors.rescoreStillRunning',
+  runFailed: 'okf.labErrors.runFailed',
+  runCancelled: 'okf.labErrors.runCancelled',
+  rescoreCancelled: 'okf.labErrors.rescoreCancelled',
+  runNotStarted: 'okf.labErrors.runNotStarted',
+  rescoreNotStarted: 'okf.labErrors.rescoreNotStarted',
+  rescoreFailed: 'okf.labErrors.rescoreFailed',
+  generationTimeout: 'okf.labErrors.generationStillRunning',
+  generationAdoptTimeout: 'okf.labErrors.generationStillServerSide',
+  generationFailed: 'okf.labErrors.generationFailed',
+  explainTimeout: 'okf.labErrors.explainStillRunning',
+  explainShortTimeout: 'okf.labErrors.explainStillRunningShort',
+  explainFailed: 'okf.labErrors.explainFailed'
+};
 
 const getters = {
   activeDraft: (state) => (repoId) => state.drafts[repoId] || null,
@@ -654,8 +699,11 @@ const actions = {
       // Preserve the server's code (DUPLICATE_REPO etc.) — Entry's curated
       // refusal copy keys off it; a hardcoded CREATE_FAILED made the branch
       // unreachable (max-review F11, 2026-09-27).
-      // Round 20 (#80123): when the repo was created but its index-skeleton
-      // import failed, okfRepoOps attaches it on the error — pass it through
+      // #1350 review closeout: when the repo was created but its index-skeleton
+      // import failed, okfRepoOps promotes the error to the TYPED
+      // partial-create contract — the stable INDEX_IMPORT_FAILED code (the
+      // ONE discriminator okfRepoOps → store → create UIs agree on) plus
+      // the created repo as a first-class `repo` field. Both flow through
       // so the UI can say "open it from the dashboard" instead of a blind
       // "failed" that invites a retry (which mints a SECOND repo).
       return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message, repo: err.repo };
@@ -1054,7 +1102,9 @@ const actions = {
       return { ok: true, repo };
     } catch (err) {
       const code = (err && err.code) || 'IMPORT_FAILED';
-      if (err && err.repo) commit('upsertRepo', err.repo); // repo exists — openable
+      // A partial create (typed contract, #80937) carries the minted repo —
+      // cache it so the steward can open the repo instead of re-importing.
+      if (err && err.repo) commit('upsertRepo', err.repo);
       return { ok: false, code, message: err.message, repo: err && err.repo };
     }
   },
@@ -1352,9 +1402,15 @@ const actions = {
       const result = await headTestService.runSuite(repoId, suiteKey);
       return { ok: true, result };
     } catch (err) {
+      // ONE CODE, ONE KEY for the suite family — the synchronous start
+      // failure answers SUITE_RUN_FAILED like the poll path's failure
+      // envelopes, so RUN_FAILED means the RAGAS run everywhere.
       return {
         ok: false,
-        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        code:
+          err && err.code === 'RUN_FAILED'
+            ? 'SUITE_RUN_FAILED'
+            : (err && (err.code || (err.data && err.data.error))) || 'SUITE_RUN_FAILED',
         message: err.message
       };
     }
@@ -1392,8 +1448,8 @@ const actions = {
       // The server answers 200 {suite_key, status:'generating'} while the
       // async worker runs (never a 404) — keep waiting on that envelope.
       isRunning: (doc) => !doc || !doc.suite_key || doc.status === 'generating',
-      timeout: { code: 'SUITE_GEN_TIMEOUT', message: 'okf.labErrors.suiteGenTimeout' },
-      failed: { code: 'SUITE_GEN_FAILED', message: 'okf.labErrors.suiteGenFailed' },
+      timeout: { code: 'SUITE_GEN_TIMEOUT', message: LAB_ERROR_KEYS.suiteGenTimeout },
+      failed: { code: 'SUITE_GEN_FAILED', message: LAB_ERROR_KEYS.suiteGenFailed },
       done: (doc) => ({ ok: true, result: doc }),
       signal
     });
@@ -1405,10 +1461,14 @@ const actions = {
   async pollHeadSuiteRun({ dispatch }, { repoId, suiteKey, runKey, signal, onProgress } = {}) {
     const fetchDoc = () =>
       dispatch('headSuiteGetRun', { repoId, suiteKey, runKey }).then((r) => (r && r.ok ? r.result : null));
+    // ONE CODE, ONE KEY (#1350 review closeout): the suite family's terminal
+    // failure answers SUITE_RUN_FAILED — the RAGAS run keeps RUN_FAILED, so
+    // a consumer switching on res.code now knows which sentence it will get
+    // (the two families used to share RUN_FAILED with different English).
     const failedEnvelope = (doc) => ({
       ok: false,
-      code: (doc.error && doc.error.code) || 'RUN_FAILED',
-      message: (doc.error && doc.error.message) || 'okf.labErrors.suiteRunFailed'
+      code: (doc.error && doc.error.code) || 'SUITE_RUN_FAILED',
+      message: (doc.error && doc.error.message) || LAB_ERROR_KEYS.suiteRunFailed
     });
     const first = await fetchDoc();
     if (onProgress && first && first.progress && first.progress.total) onProgress(first.progress);
@@ -1422,8 +1482,8 @@ const actions = {
       deadlineMs: 6 * 60 * 1000,
       isRunning: (doc) => !doc || doc.status === 'running',
       onProgress,
-      timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runUnusuallyLong' },
-      failed: { code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' },
+      timeout: { code: 'RUN_TIMEOUT', message: LAB_ERROR_KEYS.suiteRunTimeout },
+      failed: { code: 'SUITE_RUN_FAILED', message: LAB_ERROR_KEYS.suiteRunFailed },
       done: (doc) => (doc.status === 'failed' ? failedEnvelope(doc) : { ok: true, result: doc }),
       signal
     });
@@ -1470,9 +1530,9 @@ const actions = {
         signal,
         timeout: {
           code: 'EXPLAIN_TIMEOUT',
-          message: 'okf.labErrors.explainStillRunning'
+          message: LAB_ERROR_KEYS.explainTimeout
         },
-        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
+        failed: { code: 'EXPLAIN_FAILED', message: LAB_ERROR_KEYS.explainFailed },
         done: (doc) => ({ ok: true, result: doc.payload })
       });
     } catch (err) {
@@ -1571,9 +1631,9 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'GENERATION_TIMEOUT',
-          message: 'okf.labErrors.generationStillRunning'
+          message: LAB_ERROR_KEYS.generationTimeout
         },
-        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
+        failed: { code: 'GENERATION_FAILED', message: LAB_ERROR_KEYS.generationFailed },
         done: (doc) => ({ ok: true, result: doc })
       });
     } catch (err) {
@@ -1653,7 +1713,7 @@ const actions = {
         return {
           ok: false,
           code: 'RESCORE_NOT_STARTED',
-          message: 'okf.labErrors.rescoreNotStarted'
+          message: LAB_ERROR_KEYS.rescoreNotStarted
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
@@ -1664,12 +1724,12 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'RUN_TIMEOUT',
-          message: 'okf.labErrors.rescoreStillRunning'
+          message: LAB_ERROR_KEYS.rescoreTimeout
         },
-        failed: { code: 'RESCORE_FAILED', message: 'okf.labErrors.rescoreFailed' },
+        failed: { code: 'RESCORE_FAILED', message: LAB_ERROR_KEYS.rescoreFailed },
         done: (doc) =>
           doc.status === 'cancelled'
-            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.rescoreCancelled', result: doc }
+            ? { ok: false, code: 'RUN_CANCELLED', message: LAB_ERROR_KEYS.rescoreCancelled, result: doc }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1772,7 +1832,7 @@ const actions = {
         return {
           ok: false,
           code: 'RUN_NOT_STARTED',
-          message: 'okf.labErrors.runNotStarted'
+          message: LAB_ERROR_KEYS.runNotStarted
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
@@ -1783,15 +1843,15 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'RUN_TIMEOUT',
-          message: 'okf.labErrors.runStillRunning'
+          message: LAB_ERROR_KEYS.runTimeout
         },
-        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
+        failed: { code: 'RUN_FAILED', message: LAB_ERROR_KEYS.runFailed },
         // A cancelled run is NOT a result (2026-10-21 review F4) — without
         // this branch a cancelled run resolved ok:true and rendered an empty
         // results section.
         done: (doc) =>
           doc.status === 'cancelled'
-            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled', result: doc }
+            ? { ok: false, code: 'RUN_CANCELLED', message: LAB_ERROR_KEYS.runCancelled, result: doc }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1815,8 +1875,8 @@ const actions = {
         pollMs: 2000,
         signal,
         onProgress: typeof onProgress === 'function' ? onProgress : null,
-        timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runStillExecuting' },
-        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
+        timeout: { code: 'RUN_TIMEOUT', message: LAB_ERROR_KEYS.runAdoptTimeout },
+        failed: { code: 'RUN_FAILED', message: LAB_ERROR_KEYS.runFailed },
         // Cancelled is its OWN arm (round 20, #79900): folding it into
         // RUN_FAILED rendered "Run failed" for a run someone deliberately
         // stopped — the operator retries a run that intentionally never
@@ -1824,7 +1884,7 @@ const actions = {
         // polls answer RUN_CANCELLED; the Lab translates this key.
         done: (doc) =>
           doc.status === 'cancelled'
-            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled' }
+            ? { ok: false, code: 'RUN_CANCELLED', message: LAB_ERROR_KEYS.runCancelled }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1847,8 +1907,8 @@ const actions = {
         signal,
         isRunning: (doc) => !doc || doc.status === 'generating',
         onProgress: typeof onProgress === 'function' ? onProgress : null,
-        timeout: { code: 'GENERATION_TIMEOUT', message: 'okf.labErrors.generationStillServerSide' },
-        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
+        timeout: { code: 'GENERATION_TIMEOUT', message: LAB_ERROR_KEYS.generationAdoptTimeout },
+        failed: { code: 'GENERATION_FAILED', message: LAB_ERROR_KEYS.generationFailed },
         done: (doc) => ({ ok: true, result: doc })
       });
     } catch (err) {
@@ -2032,9 +2092,9 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'EXPLAIN_TIMEOUT',
-          message: 'okf.labErrors.explainStillRunningShort'
+          message: LAB_ERROR_KEYS.explainShortTimeout
         },
-        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
+        failed: { code: 'EXPLAIN_FAILED', message: LAB_ERROR_KEYS.explainFailed },
         done: (doc) => ({ ok: true, result: doc.payload })
       });
     } catch (err) {

@@ -125,6 +125,40 @@ chunk when `CONTEXTUAL_LABEL_RAW=true`), and `labels` (assigned against
 the raw chunk). A missing `chunk_text` field indicates
 `CONTEXTUAL_LABEL_RAW=false` or a disabled context pipeline.
 
+### How many of your documents exceed the budget?
+
+Documents are the unit, not chunks. Chunk text lives in the
+`<GRAPH>_SOURCE` collections; join it per document and compare the total
+against the budget (adjust `6000` to whatever your deployment's budget
+is):
+
+```aql
+FOR d IN `OKF_<your-graph>_SOURCE`
+  COLLECT doc = d.file_id, cid = d.concept_id
+  AGGREGATE total = SUM(LENGTH(d.chunk_text)), n = LENGTH(d)
+  FILTER total > 6000
+  RETURN { doc: doc, concept: cid, chars: total, chunks: n }
+  LIMIT 50
+```
+
+Rows mean truncation — a row with a very large `chars` is a document
+mostly invisible to its own context. Use `chunk_text`, **not** `text`:
+`text` is the LLM-enriched copy written *after* contextualization, so
+measuring against it tells you nothing. On deployments running an older
+image the truncation itself is invisible in the UI — grep the container
+log instead:
+
+```bash
+docker logs <dataprep-container> --since 24h 2>&1 \
+  | grep -i "document context truncated"
+```
+
+The message names the budget, the percentage of the document that was
+kept, and the chunk count. Batches falling back to raw text, or an error
+at a `0/{total} chunks contextualized` guard, mean contextualization is
+effectively **off** for that document — most likely a context-window
+overflow on a small-GPU profile.
+
 ## Related
 
 - [Knowledge base → Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}})

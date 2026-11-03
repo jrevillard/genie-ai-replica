@@ -1428,6 +1428,19 @@ export default {
     alt: 'Upload'
   },
   details: {
+    crawl: {
+      seconds: 'seconds',
+      autoRefreshEvery: 'Auto-refresh every',
+      refreshNow: 'Refresh Now',
+      crawlRate: 'Crawl Rate',
+      queueSize: 'Queue Size',
+      errorRate: 'Error Rate',
+      pagesProcessed: 'Pages Processed',
+      depth: 'Depth',
+      internalLinks: 'Internal Links',
+      externalLinks: 'External Links',
+      totalFetched: 'Total Fetched'
+    },
     loading: 'Loading File Details...',
     title: 'File Details',
     close: 'Close',
@@ -1446,6 +1459,7 @@ export default {
     uploadDate: 'Upload Date',
     hash: 'SHA256 Hash',
     tabs: {
+      dashboard: 'Dashboard',
       details: 'Details',
       ingestionLog: 'Ingestion Log',
       detailsHint:
@@ -1654,8 +1668,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'RAGAS Benchmarks',
-        models: 'Models'
+        ragas: 'RAGAS Benchmarks'
       },
       head: {
         dim: 'Dimensions',
@@ -1746,6 +1759,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Loading the suite…',
         generate: 'Generate test suite',
         generateTip:
           'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
@@ -1859,13 +1873,13 @@ export default {
       advisor: {
         run: 'Advisor: recommend tag changes',
         busy: 'Simulating tag changes across recent runs…',
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
         title: 'Tag-set recommendation (simulated across recent runs)',
         apply: 'Apply changes & rebuild & re-run suite',
         scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
         now: 'Now',
         predicted: 'predicted',
         scope: ' (across {q} queries from the last {r} runs)',
-        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
         blockedTitle: 'Blocked removals — click to include in Apply',
         blockedGain: 'recovers {n} positive(s)',
         narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
@@ -2400,8 +2414,14 @@ export default {
       }
     },
     versions: {
+      ingestFailed: 'failed',
+      ingestPartialFailed: 'partial',
+      ingestCompleted: 'ingested',
+      bundleMissing: 'zip missing',
+      bundleDownload: 'Download zip',
       bundle: 'Bundle',
       col: {
+        ingest: 'Ingest',
         concepts: 'Concepts',
         curator: 'Curator',
         minted: 'Minted',
@@ -2419,6 +2439,10 @@ export default {
       title: 'Versions'
     },
     shell: {
+      sourceDocument: 'Source document',
+      size: 'Size',
+      type: 'Type',
+      crawlSeed: 'Crawl seed',
       back: 'Studio dashboard',
       building: 'Building…',
       buildingHint: 'The source file is still being processed',
@@ -2430,6 +2454,7 @@ export default {
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
+        reviewHint: 'Click a flagged file to correct it in the editor:',
         ack: 'Acknowledge flagged entities & publish',
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
@@ -2584,6 +2609,9 @@ export default {
       }
     },
     editor: {
+      resizeMeta: 'Drag to resize the metadata pane',
+      resizeTip: 'Drag to resize — double-click to reset',
+      resizeRail: 'Drag to resize the file list',
       addConcept: {
         bodyLabel: 'Markdown (paste or leave empty)',
         bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
@@ -2643,6 +2671,16 @@ export default {
         grantedGroupNotice: 'Group granted — every member gains access at next login.'
       },
       autocorrect: {
+        applyingProgress: 'Applying {done} / {total}…',
+        stop: 'Stop',
+        stopped: 'Stopped — {n} concept(s) applied before stopping.',
+        sheetShowing: 'Showing {shown} of {total} concepts.',
+        sheetApplyCoversAll: 'Apply fixes covers all of them.',
+        sheetShowMore: 'Show more',
+        sheetFilter: 'Filter by concept id',
+        applySummary: 'Applied {n} fix(es).',
+        applyFailed: 'Applied {n} fix(es) — {f} concept(s) FAILED. Click "Apply fixes" to retry.',
+        failuresMore: 'and {n} more',
         blankBefore: '(blank)',
         blankBadge: 'no frontmatter — full proposal',
         applyField: 'Apply',
@@ -2849,6 +2887,7 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
+        inProgress: 'Publishing — exporting and transferring the bundle…',
         body: 'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         title: 'Publish'
@@ -3335,6 +3374,10 @@ export default {
         cloneFailed: 'The clone failed — try again.'
       },
       input: {
+        clsHybrid: 'Hybrid',
+        clsLlm: 'LLM classification',
+        clsHeur: 'Heuristics (fast, no LLM)',
+        classification: 'Classification strategy',
         title: 'Inputs',
         documents: 'Pick the documents that should seed the topic list.',
         crawl: 'Pick the website(s) to crawl.',
@@ -3367,6 +3410,7 @@ export default {
         cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
+        labelFailed: 'Conversion failed',
         title: 'Generate topics',
         hint: 'We are reading your sources and proposing topics.',
         progress: 'Producer running...',
@@ -3415,6 +3459,7 @@ export default {
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
+        labHint: 'Build the routing head from the saved tags and test it — no publish needed.',
         embedHint:
           'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
@@ -3455,6 +3500,10 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
+        frontmatterPending: 'Frontmatter tags not drafted',
+        frontmatterPartial: 'Frontmatter tags — needs review',
+        frontmatterOk: 'Frontmatter tags approved',
+        frontmatterServing: 'Frontmatter tags set',
         title: 'Secure and Finish',
         hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
         nameOk: 'Repository name set',
@@ -3586,8 +3635,6 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
-      piiRescanTimeout:
-        'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.',
       healthAria: 'Health: {pct} percent, {n} issue(s)',
       frozen: 'Content frozen at {v} — read-only preview. Retract the serving version to make changes.',
       none: 'None',
@@ -3689,6 +3736,7 @@ export default {
         'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'vanished',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',

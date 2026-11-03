@@ -720,10 +720,17 @@ class FileController {
     }
   }
 
+  // Byte reader, split from _getFileBase64 so an ingest can load metadata,
+  // run its refusal guards, and only then pay for buffer + base64 copies of
+  // what may be a multi-GB file (review, #1350 closeout).
+  async _readFileBase64(filePath) {
+    const fileBuffer = await fs.readFile(filePath);
+    return fileBuffer.toString('base64');
+  }
+
   async _getFileBase64(fileId) {
     const { file, filePath } = await this._getFileAndPath(fileId);
-    const fileBuffer = await fs.readFile(filePath);
-    const base64String = fileBuffer.toString('base64');
+    const base64String = await this._readFileBase64(filePath);
     return { file, base64String };
   }
 
@@ -910,10 +917,17 @@ class FileController {
       }
       const { fileIds } = value;
 
-      // WS2 (David, 2026-09-25): same bundle protection in batch mode —
-      // a single bundle in the batch fails the WHOLE batch with 403 so
-      // the UI can surface the error clearly (partial-deletion is worse
-      // than no-deletion for the bundle semantics).
+      // WS2 (David, 2026-09-25): bundle protection in batch mode. A bundle in
+      // the batch is a PER-FILE refusal now (#1350 round-28 review, matching the
+      // client partial-refusal rendering): the deletable subset is deleted and the bundle rows
+      // come back as per-file outcomes with code=BUNDLE_PROTECTED, surfacing
+      // in the same partial-refusal strip the client already renders for
+      // STILL_SERVING rows. The old whole-batch 403 deleted ZERO files even
+      // when a mixed selection was mostly deletable — exactly the silent
+      // wholesale refusal that amendment removed on the frontend. The
+      // fail-closed guard (503 BUNDLE_GUARD_UNAVAILABLE) still refuses the
+      // WHOLE request when the protection cannot be evaluated at all.
+      let bundleRefused = new Set();
       if (!isOkfServiceCaller(req)) {
         let protectedIds;
         try {
@@ -921,18 +935,27 @@ class FileController {
         } catch (guardError) {
           return bundleGuardUnavailable(res, guardError);
         }
-        if (protectedIds.length > 0) {
-          return res.status(403).json({
-            success: false,
-            code: 'BUNDLE_PROTECTED',
-            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
-            message: `Bundle zip "${protectedIds[0]}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
+        bundleRefused = new Set(protectedIds);
+        if (bundleRefused.size > 0) {
+          logger.warn('[FILE-CONTROLLER] Batch delete skipping bundle-protected files', {
+            protected_ids: [...bundleRefused],
+            requested: fileIds.length,
+            deletable: fileIds.length - bundleRefused.size
           });
         }
       }
 
       const results = [];
       for (const fileId of fileIds) {
+        if (bundleRefused.has(fileId)) {
+          results.push({
+            fileId,
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management'
+          });
+          continue;
+        }
         try {
           const deleted = await fileService.deleteFile(fileId);
           results.push({ fileId, success: !!deleted });
@@ -1195,7 +1218,34 @@ class FileController {
   // --- Helper for ingesting a single file ---
 
   async _ingestFileById(fileId, chunkOverlap) {
-    const { file, base64String } = await this._getFileBase64(fileId);
+    // Metadata first, bytes later: the guards below can refuse this ingest, and
+    // materialising buffer + base64 copies of a potentially multi-GB zip just to
+    // answer a refusal was heap pressure on a guaranteed-return path (review,
+    // #1350 closeout). The bytes are read right before the dataprep post.
+    const { file, filePath } = await this._getFileAndPath(fileId);
+    // Review #1350: a bundle-zip doc (is_bundle=true) must NEVER reach dataprep as a
+    // chunkable document — the zip is the OKF ingestion INPUT; posting its
+    // bytes to the ingest endpoint is the exact corruption is_bundle exists to
+    // prevent. The bundleIngest route already skips its own kick for bundles,
+    // but the ADMIN ingest entries (POST /:fileId/ingest, POST /ingest) funnel
+    // through here unguarded — 'Ingest Selected' on a selection containing a
+    // Pending bundle zip (uploadBundle stores bundles 'Pending') would have
+    // re-chunked the whole corpus zip. One guard in the shared helper covers
+    // every entry; the outcome rides back as a per-file result so batch
+    // callers keep their partial-success shape (mirroring the delete path).
+    if (file.is_bundle) {
+      logger.warn(
+        `[FILE-CONTROLLER] Refusing ingest of bundle zip ${fileId}: is_bundle docs are OKF ingestion inputs, never chunkable documents`
+      );
+      return {
+        success: false,
+        bundleProtected: true,
+        // Same code the delete path answers per-file, so a batch client
+        // classifies this row the same way on either endpoint.
+        code: 'BUNDLE_PROTECTED',
+        error: 'Bundle zip files are OKF ingestion inputs and cannot be ingested as documents'
+      };
+    }
     // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
     const status = file.dataprep ? (file.dataprep.status || '').toLowerCase() : '';
     if (status === 'ingested') {
@@ -1262,6 +1312,10 @@ class FileController {
         );
       }
     }
+    // Read + encode the bytes only once every guard has passed and the degraded
+    // re-ingest has cleared the graph — this is the point of no return for this
+    // call, and the only point where the file contents are actually needed.
+    const base64String = await this._readFileBase64(filePath);
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     let response;
@@ -1574,6 +1628,18 @@ class FileController {
       const result = await this._ingestFileById(fileId, chunkOverlap);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
+      } else if (result.bundleProtected) {
+        // Review #1350: a bundle zip refused by the shared guard is a client-error
+        // refusal (4xx), not a dataprep failure — same code the delete path
+        // answers, so the UI treats one policy with one string.
+        logger.warn(`[FILE-CONTROLLER] Bundle-zip ingest refused for ${fileId} (BUNDLE_PROTECTED)`);
+        return res.status(403).json({
+          success: false,
+          code: 'BUNDLE_PROTECTED',
+          error: result.error,
+          message:
+            'Bundle zip files are owned by the OKF repository lifecycle and are ingested via the OKF pipeline, not as documents.'
+        });
       } else {
         return res.status(500).json({ success: false, error: 'Data prep failed.', details: result.error });
       }

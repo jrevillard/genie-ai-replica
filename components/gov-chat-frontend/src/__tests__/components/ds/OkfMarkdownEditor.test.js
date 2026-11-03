@@ -144,9 +144,61 @@ it('frontmatter is split cheaply: fm block parsed, body preserved verbatim', asy
   expect(wrapper.vm.renderedHtml).toContain('<h1>'); // body still renders
 });
 
+// Round 20, #79739: the save rebuilt `lifecycle` by spreading the PARSED
+// lifecycle back and overriding stale_after only when the draft value was
+// truthy — clearing the date input silently RESTORED the stored date while
+// the UI showed the cleared field. The save must DELETE the key when the
+// draft leaves it empty, and keep the rest of lifecycle intact.
+it('frontmatter save CLEARS lifecycle.stale_after when the draft leaves it empty', () => {
+  const wrapper = mountEditor({
+    value: '---\nokf_version: 0.2\nlifecycle:\n  status: draft\n  stale_after: 2026-01-15\n---\n\nBody.',
+    mode: 'source',
+    enableFrontmatter: true
+  });
+  wrapper.vm.draftFrontmatter.lifecycle.stale_after = ''; // the steward cleared the date
+  wrapper.vm.onFrontmatterAction('save');
+  const out = wrapper.emitted('update:value').pop()[0];
+  expect(out).not.toContain('stale_after'); // gone from the stored concept
+  expect(out).toContain('status: draft'); // the rest of lifecycle survives
+});
+
+it('frontmatter save keeps a freshly-entered stale_after date', () => {
+  const wrapper = mountEditor({
+    value: '---\nokf_version: 0.2\nlifecycle:\n  status: draft\n---\n\nBody.',
+    mode: 'source',
+    enableFrontmatter: true
+  });
+  wrapper.vm.draftFrontmatter.lifecycle.stale_after = '2027-06-30'; // the steward set a date
+  wrapper.vm.onFrontmatterAction('save');
+  const out = wrapper.emitted('update:value').pop()[0];
+  // gray-matter quotes the string value in YAML — assert the round-trip
+  expect(out).toContain('stale_after');
+  expect(out).toContain('2027-06-30');
+});
+
 // Round 20, #79191: the frontmatter dialog's save rebuilt `provenance` as
 // `{ sources }` — wholesale — silently dropping the keys the import pipeline
 // writes under it (crawled_at, source_ids). The spread must preserve them.
+// The provenance sources table (round-29 #1350 review, Visual Fidelity): the
+// pipeline writes crawl rows as {author, type, resource} — sourcesRows
+// normalizes them onto uri for display. Assert the RENDERED cell carries the
+// resource value, not an empty column.
+it('sources table renders a crawl-row resource value in the uri column', () => {
+  const wrapper = mountEditor({
+    value:
+      '---\nokf_version: 0.2\nprovenance:\n  sources:\n    - author: govuk-crawler\n      type: crawl\n      resource: https://example.com/page-one\n---\n\nBody.',
+    mode: 'source',
+    expert: true,
+    enableFrontmatter: true
+  });
+  wrapper.find('.ds-okf-md__frontmatter-edit').trigger('click');
+  return wrapper.vm.$nextTick().then(() => {
+    // The dialog teleports to document.body — the cells live outside the wrapper.
+    const cells = Array.from(document.querySelectorAll('td')).map((c) => c.textContent);
+    expect(cells).toContain('https://example.com/page-one');
+  });
+});
+
 it('frontmatter save PRESERVES unknown provenance keys (crawled_at, source_ids)', async () => {
   const wrapper = mountEditor({
     value:

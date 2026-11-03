@@ -10,8 +10,11 @@
  * 2. CANCEL — the component signal aborts the wait (the Lab's close path).
  * 3. TRANSIENT TOLERANCE — one failed GET mid-wait (the 2026-10-18
  *    gateway-restart class) no longer rejects the whole wait.
- * 4. FAILED mapping — a failed run comes back as code RUN_FAILED so the
- *    dialog's error contract (onRunSuite) is preserved.
+ * 4. FAILED mapping — a failed run comes back as the run doc's own error
+ *    code, or SUITE_RUN_FAILED when it carries none, so the dialog's error
+ *    contract (onRunSuite) is preserved. The suite family no longer shares
+ *    the RAGAS run's RUN_FAILED code (#1350 review closeout — one code, one
+ *    key: a consumer switching on res.code can tell the families apart).
  */
 
 jest.mock('@/services/headTestService', () => ({
@@ -132,7 +135,7 @@ describe('okf/pollHeadSuiteRun — async run wait', () => {
     expect(seen).toEqual([{ phase: 'scoring', done: 2, total: 5 }]);
   });
 
-  it('maps a failed run to code RUN_FAILED (the dialog error contract)', async () => {
+  it('passes a failed run doc its own error code through (the dialog error contract)', async () => {
     jest.useFakeTimers();
     headTestService.getRun.mockResolvedValue({
       run_key: 'k1',
@@ -144,5 +147,19 @@ describe('okf/pollHeadSuiteRun — async run wait', () => {
     expect(res.ok).toBe(false);
     expect(res.code).toBe('SCORING_FAILED');
     expect(res.message).toBe('reranker down');
+  });
+
+  it('maps a failed run with NO error code to SUITE_RUN_FAILED — the suite family is distinct from the RAGAS run (#1350 review closeout)', async () => {
+    // One code, one key: the suite family used to answer the SAME RUN_FAILED
+    // code the RAGAS run answers, with a different labErrors key — a
+    // consumer switching on res.code could not tell which sentence it would
+    // get. The fallback is now SUITE_RUN_FAILED (message suiteRunFailed).
+    jest.useFakeTimers();
+    headTestService.getRun.mockResolvedValue({ run_key: 'k1', status: 'failed' });
+    const store = buildStore();
+    const res = await store.dispatch('okf/pollHeadSuiteRun', { repoId: 'r1', suiteKey: 's1', runKey: 'k1' });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('SUITE_RUN_FAILED');
+    expect(res.message).toBe('okf.labErrors.suiteRunFailed');
   });
 });

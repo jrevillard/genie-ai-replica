@@ -1435,6 +1435,19 @@ export default {
     alt: 'Unggah'
   },
   details: {
+    crawl: {
+      seconds: 'detik',
+      autoRefreshEvery: 'Penyegaran otomatis setiap',
+      refreshNow: 'Segarkan sekarang',
+      crawlRate: 'Laju crawl',
+      queueSize: 'Ukuran antrean',
+      errorRate: 'Laju galat',
+      pagesProcessed: 'Halaman diproses',
+      depth: 'Kedalaman',
+      internalLinks: 'Tautan internal',
+      externalLinks: 'Tautan eksternal',
+      totalFetched: 'Total diambil'
+    },
     loading: 'Memuat Detail File...',
     title: 'Detail File',
     close: 'Tutup',
@@ -1453,6 +1466,7 @@ export default {
     uploadDate: 'Tanggal Unggah',
     hash: 'Hash SHA256',
     tabs: {
+      dashboard: 'Dasbor',
       details: 'Detail',
       ingestionLog: 'Log Pemrosesan',
       detailsHint:
@@ -1652,8 +1666,14 @@ export default {
       adminOnly: 'Konfigurasi model memerlukan peran admin platform.'
     },
     versions: {
+      ingestFailed: 'gagal',
+      ingestPartialFailed: 'sebagian',
+      ingestCompleted: 'terintegrasi',
+      bundleMissing: 'zip hilang',
+      bundleDownload: 'Unduh zip',
       bundle: 'Bundel',
       col: {
+        ingest: 'Ingest',
         concepts: 'Konsep',
         curator: 'Kurator',
         minted: 'Dicetak',
@@ -1671,6 +1691,10 @@ export default {
       title: 'Versi'
     },
     shell: {
+      sourceDocument: 'Dokumen sumber',
+      size: 'Ukuran',
+      type: 'Tipe',
+      crawlSeed: 'Benih crawl',
       back: 'Dasbor Studio',
       building: 'Membangun…',
       buildingHint: 'Berkas sumber masih diproses',
@@ -1682,6 +1706,7 @@ export default {
       export: 'Ekspor .zip',
       logs: 'Log',
       pii: {
+        reviewHint: 'Klik file yang ditandai untuk memperbaikinya di editor:',
         ack: 'Konfirmasikan entitas yang ditandai & publikasikan',
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
@@ -1766,6 +1791,9 @@ export default {
       failed: 'Impor tidak dapat dimulai. Periksa dokumen dan coba lagi.'
     },
     editor: {
+      resizeMeta: 'Seret untuk mengubah ukuran panel metadata',
+      resizeTip: 'Seret untuk mengubah ukuran — klik ganda untuk mengatur ulang',
+      resizeRail: 'Seret untuk mengubah ukuran daftar file',
       addConcept: {
         bodyLabel: 'Markdown (tempel atau biarkan kosong)',
         bodyPh: '# Judul\n\nTempel markdown di sini - frontmatter ditambahkan secara otomatis.',
@@ -1826,6 +1854,16 @@ export default {
         grantedGroupNotice: 'Grup diberikan akses — setiap anggota memperolehnya saat login berikutnya.'
       },
       autocorrect: {
+        applyingProgress: 'Menerapkan {done} / {total}…',
+        stop: 'Hentikan',
+        stopped: 'Dihentikan — {n} konsep diterapkan sebelum berhenti.',
+        sheetShowing: 'Menampilkan {shown} dari {total} konsep.',
+        sheetApplyCoversAll: '«Terapkan perbaikan» mencakup semuanya.',
+        sheetShowMore: 'Tampilkan lebih banyak',
+        sheetFilter: 'Saring berdasarkan id konsep',
+        applySummary: '{n} perbaikan diterapkan.',
+        applyFailed: '{n} perbaikan diterapkan — {f} konsep GAGAL. Klik «Terapkan perbaikan» untuk mencoba lagi.',
+        failuresMore: 'dan {n} lagi',
         blankBefore: '(kosong)',
         blankBadge: 'tanpa frontmatter — proposal lengkap',
         applyField: 'Terapkan',
@@ -2033,6 +2071,7 @@ export default {
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
+        inProgress: 'Menerbitkan — mengekspor dan mentransfer paket…',
         body: 'Melakukan publish akan mencetak v{n} dan menyimpan bundel "{file}" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.',
         confirm: 'Publikasikan',
         title: 'Publikasikan'
@@ -2517,6 +2556,10 @@ export default {
         cloneFailed: 'Kloning gagal — coba lagi.'
       },
       input: {
+        clsHybrid: 'Hibrid',
+        clsLlm: 'Klasifikasi LLM',
+        clsHeur: 'Heuristik (cepat, tanpa LLM)',
+        classification: 'Strategi klasifikasi',
         title: 'Masukan',
         documents: 'Pilih dokumen yang akan mengawali daftar topik.',
         crawl: 'Pilih situs web yang akan dirayapi.',
@@ -2549,6 +2592,7 @@ export default {
         cloned: 'Repositori ini adalah kloning — topiknya sudah ada. Lanjutkan ke Kurasi untuk meninjaunya.'
       },
       produce: {
+        labelFailed: 'Konversi gagal',
         title: 'Hasilkan topik',
         hint: 'Kami sedang membaca sumber Anda dan mengusulkan topik.',
         progress: 'Produser sedang berjalan...',
@@ -2598,6 +2642,7 @@ export default {
         loadFailed: 'Tidak dapat membaca label saat ini.'
       },
       curate: {
+        labHint: 'Bangun kepala perutean dari tag yang disimpan dan ujilah — tanpa perlu menerbitkan.',
         embedHint:
           'Tinjau dan tingkatkan setiap topik: perbaiki teksnya, tetapkan tipe dan label Hierarki Pengetahuan, tambah atau hapus topik. Semua yang Anda perbaiki di sinilah yang akan dikutip asisten nanti.',
         noRepo: 'Belum ada repositori — kembali ke langkah awal dan buat atau pilih satu dulu.',
@@ -2638,6 +2683,10 @@ export default {
         versionSummary: '{n} versi · terbaru v{latest}'
       },
       publish: {
+        frontmatterPending: 'Tag frontmatter belum dibuat',
+        frontmatterPartial: 'Tag frontmatter — perlu ditinjau',
+        frontmatterOk: 'Tag frontmatter disetujui',
+        frontmatterServing: 'Tag frontmatter ditetapkan',
         title: 'Amankan dan Selesaikan',
         hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
         nameOk: 'Nama repositori ditetapkan',
@@ -2771,8 +2820,6 @@ export default {
       saveBlocked: 'Penyimpanan diblokir: perbaiki masalah kesesuaian terlebih dahulu.'
     },
     validation: {
-      piiRescanTimeout:
-        'Pemindaian ulang masih berjalan setelah 15 menit — prosesnya berlanjut di sisi server. Tidak ada yang hilang; periksa lagi dalam satu menit.',
       healthAria: 'Kesehatan: {pct} persen, {n} masalah',
       frozen:
         'Konten dibekukan pada {v} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.',
@@ -2876,6 +2923,7 @@ export default {
         'Server menerima pemindaian ulang tetapi tidak mengembalikan id proses, sehingga kemajuannya tidak dapat dilacak. Tidak ada yang dilaporkan.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'hilang',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',
@@ -3036,8 +3084,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Tolok ukur RAGAS',
-        models: 'Model'
+        ragas: 'Tolok ukur RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3130,6 +3177,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Memuat suite…',
         generate: 'Generate test suite',
         generateTip:
           'LLM menulis kueri dalam batch 30 per kelas — permintaan besar (100+) butuh beberapa menit. Suite muncul di sini dan di suite tersimpan saat selesai.',

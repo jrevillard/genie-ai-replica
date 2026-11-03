@@ -1440,6 +1440,19 @@ export default {
     alt: 'Kenya'
   },
   details: {
+    crawl: {
+      seconds: 'metsotso',
+      autoRefreshEvery: 'Nchafatso ea othomatiki e ngoe le e ngoe',
+      refreshNow: 'Nchafatsa hona joale',
+      crawlRate: 'Lebelo la crawling',
+      queueSize: 'Bohol ba queue',
+      errorRate: 'Lebelo la liphoso',
+      pagesProcessed: 'Maqephe a hlotsoeng',
+      depth: 'Botebo',
+      internalLinks: 'Lihokelo tsa ka hare',
+      externalLinks: 'Lihokelo tsa kantle',
+      totalFetched: 'Kakaretso e tšollotseng'
+    },
     loading: 'E kenya Dintlha tsa Faele...',
     title: 'Dintlha tsa Faele',
     close: 'Kwala',
@@ -1458,6 +1471,7 @@ export default {
     uploadDate: 'Letsatsi la ho Kenya',
     hash: 'SHA256 Hash',
     tabs: {
+      dashboard: 'Dashboto',
       details: 'Dintlha',
       ingestionLog: 'Log ya ho Kenya',
       detailsHint:
@@ -1657,8 +1671,14 @@ export default {
       adminOnly: 'Dipehelo tsa dimela di hloka karolo ea molaoli oa sejalla.'
     },
     versions: {
+      ingestFailed: 'failed',
+      ingestPartialFailed: 'partial',
+      ingestCompleted: 'ingested',
+      bundleMissing: 'zip missing',
+      bundleDownload: 'Download zip',
       bundle: 'Bundle',
       col: {
+        ingest: 'Ingest',
         concepts: 'Maikutlo',
         curator: 'Mohlophisi',
         minted: 'E Thehiloe',
@@ -1676,6 +1696,10 @@ export default {
       title: 'Liphetolelo'
     },
     shell: {
+      sourceDocument: 'Tokumente ea mohloli',
+      size: 'Bohol',
+      type: 'Mofuta',
+      crawlSeed: 'Pele ea crawling',
       back: 'Dashboard ea Studio',
       building: 'Kaho…',
       buildingHint: 'Faele ea mohloli e ntse e sebetsoa',
@@ -1687,6 +1711,7 @@ export default {
       export: 'Romela ntle .zip',
       logs: 'Litlaleho',
       pii: {
+        reviewHint: 'Tobetsa faele e fanoasang ho e lokisa editoreng:',
         ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
         note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
       },
@@ -1771,6 +1796,9 @@ export default {
       failed: 'Kenya e ke ke ea qaloa. Hlahloba litokomane o leke hape.'
     },
     editor: {
+      resizeMeta: 'Hula ho fetola bohol ba panel ea metadata',
+      resizeTip: 'Hula ho fetola bohol — tobetsa habeli ho seta',
+      resizeRail: 'Hula ho fetola bohol ba lenane oa lifaele',
       addConcept: {
         bodyLabel: 'Markdown (mamaretsa kapa u siee e se na letho)',
         bodyPh: '# Sehlooho\n\nMamaretsa markdown mona — frontmatter e eketsetsoa uena.',
@@ -1830,6 +1858,16 @@ export default {
         grantedGroupNotice: 'Group e fanoeng — setho se seng le se seng se fuman phihlelo ha se kena hape.'
       },
       autocorrect: {
+        applyingProgress: 'Kenya ho sebediswa {done} / {total}…',
+        stop: 'Emisa',
+        stopped: 'Emisitsoe — {n} maemo a korisetsoe pejana ea ho emisa.',
+        sheetShowing: 'Ho bonts’a {shown} ya {total} maemo.',
+        sheetApplyCoversAll: '«Kenya tseko» e akaretsa tsohle.',
+        sheetShowMore: 'Bonts’a haholo',
+        sheetFilter: 'Sefa ka ID ea maemo',
+        applySummary: 'Korisetsa {n} tsekho.',
+        applyFailed: 'Korisetsa {n} tsekho — {f} maemo FETOTSE. Tlanya «Kenya tseko» ho leka hape.',
+        failuresMore: 'le {n} e eng',
         blankBefore: '(e se nang letho)',
         blankBadge: 'ha ho frontmatter — tlhahiso e felletseng',
         applyField: 'Sebelisa',
@@ -2039,6 +2077,7 @@ export default {
         note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
       },
       publish: {
+        inProgress: 'Ho hatisa — ho kenya neho le ho fetisa pakete…',
         body: 'Ho etsa publish ho theha v{n} le ho boloka ngata ea "{file}" polokelong ea litokomane, ho nka sebaka sa zip e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.',
         confirm: 'Phatlalatsa',
         title: 'Phatlalatsa'
@@ -2526,6 +2565,10 @@ export default {
         cloneFailed: 'Clone e hlolehile — leka hape.'
       },
       input: {
+        clsHybrid: 'Hybrid',
+        clsLlm: 'LLM classification',
+        clsHeur: 'Mekhoa e potolubileng (e potlako, ntle le LLM)',
+        classification: 'Classification strategy',
         title: 'Lintho tse kenoang',
         documents: 'Khetha litokomane tse lokelang ho theha lethathamo la lihlooho.',
         crawl: 'Khetha libaka tsa marang-rang tseo u batlang ho li batla.',
@@ -2559,6 +2602,7 @@ export default {
         cloned: 'Repo ena ke clone — lihlooho ea eona li se li le maemong. Tsoela pele ho Curate ho li hlahloba.'
       },
       produce: {
+        labelFailed: 'Conversion failed',
         title: 'Hlahisa lihlooho',
         hint: 'Re bala mehloli ea hau le ho sisinya lihlooho.',
         progress: 'Moetsi o ntse a sebetsa...',
@@ -2608,6 +2652,7 @@ export default {
         loadFailed: 'Ha e kgone ho bala ditag jwale.'
       },
       curate: {
+        labHint: 'Haaha hlooho ea tsela ho tsoa ho melaetsa e bolokileng mme u e leke — ha ho hlokeho ho hatisa.',
         embedHint:
           'Hlahloba mme u ntlafatse sehlooho se seng le se seng: lokisa mongolo, beha mofuta wa wona le tag ea Knowledge-Hierarchy, eketsa kapa tlosa lihlooho. Tsohle tseo u li lokisang mona ke tseo mothusi a tlang ho li qotsa.',
         noRepo: 'Ha ho repo ho fihlela jwale — khutlela ho Entry o thehe kapa o khethhe e le nngwe pele.',
@@ -2648,6 +2693,10 @@ export default {
         versionSummary: 'Mefuta {n} · ea morao-rao v{latest}'
       },
       publish: {
+        frontmatterPending: 'Malafrontmatter ha e a ngoloa',
+        frontmatterPartial: 'Malafrontmatter — hloka tlhahlobo',
+        frontmatterOk: 'Malafrontmatter a amohelehile',
+        frontmatterServing: 'Frontmatter tags set',
         title: 'Phekola e feditse',
         hint: 'Repo ena e loketse hlahlobo. Publish e ka sa etsahala mona ka mohla — e romelle bakeng sa tumello dashboard, ebe o amohela o phatlalatsa ho tloha dashboard kapa editor.',
         nameOk: 'Lebitso la polokelo le behiloe',
@@ -2782,8 +2831,6 @@ export default {
       saveBlocked: 'Ho boloka ho thibiloe: lokisa litaba tsa boikamahanyo pele.'
     },
     validation: {
-      piiRescanTimeout:
-        'Re-skan e ntse e ea ka morao ho metsotso e 15 — e tsoela pele serveñ. Ha ho lahloehe; hlahloba hape ka motsotso o le mong.',
       healthAria: 'Bophelo: {pct} lekholo, bothata {n}',
       frozen:
         'Litaba li emisitsoe ho {v} — pono ea ho bala feela. Etsa retract mofuteng o sebetsang ho serving ho etsa liphetoho.',
@@ -2887,6 +2934,7 @@ export default {
         'Seva e amohetse scan ea hape empa ha e kgutlise id ea tsamaiso, kahoo tsoelo-pele ea eona e ke ke ea latelwa. Ha ho letho le tlalehotsweng.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'vanished',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',
@@ -3047,8 +3095,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Ditekanyo tsa RAGAS',
-        models: 'Dimela'
+        ragas: 'Ditekanyo tsa RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3140,6 +3187,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Loading the suite…',
         generate: 'Generate test suite',
         generateTip:
           'LLM e ngola dipotso ka libaka tsa 30 ka sehlopha — kopo e kholo (100+) e nka metsotso e mmalwa. Sete e tla hlaha mona le ho tse bolokiloeng ha e phetha.',

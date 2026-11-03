@@ -865,20 +865,75 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   // O(n²) LLM calls). Fail-soft: an LLM outage degrades per-concept with a
   // logged fallback marker — the import NEVER blocks on the LLM.
   summary.curation = null;
+  let curationTail = Promise.resolve();
+  // ONE spelling of the model-pass rule (review round 3): the llm/hybrid
+  // modes run the unbounded LLM pass — spelled once here, consumed at both
+  // the curation block and the zip-record close below.
+  const modelPass = input.classification === 'llm' || input.classification === 'hybrid';
   if (input.classification && !input.skipCuration) {
-    summary.curation = await runImportCuration(repo_id, repo, input.classification);
+    if (modelPass) {
+      // ASYNC CURATION (the 504, live 2026-11-03): an llm/hybrid pass is the
+      // import's only unbounded cost — one LLM call per concept. A 344-concept
+      // zip took 2m07s of request time under drain load, past the gateway
+      // timeout, and the browser reported "background zip import failed" —
+      // while the import itself had succeeded server-side long before (344
+      // rows stored, 0 errors). The pass is already lane-based and already
+      // publishes 2s-granularity progress onto the repo doc's `curation` key
+      // (the Studio card reads it), so the await was the only thing holding
+      // the response. Respond as soon as the rows are stored; the pass
+      // continues below and the zip-conversion record closes when it lands
+      // (2026-09-08 ordering: the card must not flip to completed while
+      // labels are still landing). Heuristics stays synchronous: zero LLM,
+      // bounded, and the audit row keeps its counts inline.
+      summary.curation = { status: 'running', method: input.classification };
+      // runImportCuration is fail-soft BY CONTRACT ("returns the curation
+      // summary, or null on a non-fatal failure") — a null lands below and
+      // the audit row simply omits the pass clause. The catch exists for the
+      // drift case (a future edit breaking that contract): it keeps the
+      // rejection LOUD without taking the process down — an unhandled
+      // rejection under Node 22 crashes okf-server, killing unrelated
+      // in-flight requests (review round 3).
+      curationTail = runImportCuration(repo_id, repo, input.classification)
+        .then((result) => {
+          summary.curation = result;
+        })
+        .catch((err) => {
+          logger.error(
+            'OKF background curation tail rejected (contract drift — the pass is supposed to be fail-soft)',
+            {
+              repo_id,
+              error: err.message
+            }
+          );
+        });
+      // Test hook + zip-close ordering — NON-enumerable: the controller
+      // spreads {...summary} into the 202 response and a Promise would
+      // serialize as `{}`.
+      Object.defineProperty(summary, '_curationDone', { value: curationTail, enumerable: false });
+    } else {
+      summary.curation = await runImportCuration(repo_id, repo, input.classification);
+    }
   }
 
-  // ZIP CONVERSION RECORD CLOSE — AFTER the curation pass, so the dashboard
-  // card does not flip to completed while labels are still landing (live:
-  // the card cleared seconds before curation finished, 2026-09-08).
-  if (input.zip) {
-    await zipConvWrite({
+  const closeZipRecord = () =>
+    zipConvWrite({
       status: summary.enqueue_errors.length > 0 ? 'failed' : 'done',
       stage: summary.enqueue_errors.length > 0 ? 'failed' : 'done',
       pages_done: zipDone,
       finished_at: new Date().toISOString()
     });
+  // ZIP CONVERSION RECORD CLOSE — AFTER the curation pass, so the dashboard
+  // card does not flip to completed while labels are still landing (live:
+  // the card cleared seconds before curation finished, 2026-09-08). With
+  // async curation the close rides the background tail. The tail cannot
+  // reject (the catch above), and zipConvWrite cannot throw (its own
+  // try/catch) — the chain needs no further guard.
+  if (input.zip) {
+    if (modelPass) {
+      curationTail.then(closeZipRecord);
+    } else {
+      await closeZipRecord();
+    }
   }
 
   // [4g] Story 2.9.5-amend (2026-08-18): when the input was a ZIP bundle, ALSO
@@ -1041,16 +1096,20 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
             ')'
           : '') +
         (summary.curation
-          ? ' — curation pass (' +
-            summary.curation.method +
-            '): labeled=' +
-            summary.curation.labeled +
-            ', described=' +
-            summary.curation.described +
-            ', typed=' +
-            summary.curation.typed +
-            ', fallbacks=' +
-            summary.curation.fallbacks
+          ? summary.curation.status === 'running'
+            ? ' — curation pass (' +
+              summary.curation.method +
+              '): RUNNING IN BACKGROUND (live progress on the repo card; the import response no longer waits for it)'
+            : ' — curation pass (' +
+              summary.curation.method +
+              '): labeled=' +
+              summary.curation.labeled +
+              ', described=' +
+              summary.curation.described +
+              ', typed=' +
+              summary.curation.typed +
+              ', fallbacks=' +
+              summary.curation.fallbacks
           : ''),
       details: {
         total: summary.total,

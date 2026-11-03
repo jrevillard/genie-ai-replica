@@ -120,6 +120,71 @@ You can read the ingestion log in three places:
 See [Operations → Ingestion log]({{< relref "/docs/operate/ingestion-log" >}}) for the
 schema and canonical message strings.
 
+## Parallel indexing
+
+Documents from different sources — and concepts within different knowledge
+repositories — are independent units of work and are indexed **in parallel**,
+capped by configuration so a deployment can match the capacity of its machine:
+
+- `OKF_INGEST_CONCURRENCY` — how many concepts the okf-server worker drives
+  through the pipeline at once (drain lanes).
+- `DATAPREP_INGEST_CONCURRENCY` — how many documents the dataprep service
+  accepts concurrently (a request is rejected with `429` only when all slots
+  are busy; the worker backs off and retries).
+
+Both default to `1` (the historical strictly-sequential behavior). Raising them
+together scales indexing throughput with the machine — see
+[OKF Configuration Variables]({{< relref "/docs/configure/okf-variables" >}})
+for sizing guidance.
+
+## Import capacity
+
+Importing a knowledge repository — creating it from a bundle, documents, or a
+crawl — runs a **different** pipeline from indexing an existing one, and it has its
+own pair of settings:
+
+- `OKF_IMPORT_CONCURRENCY` — how many concepts flow through the import pipeline
+  at once (default `4`).
+- `PII_WEB_CONCURRENCY` — how many text scans the PII sidecar can run at once
+  (default `4`).
+
+**They must be set to the same value.** Import lanes above the sidecar's worker
+count do not add throughput: the extra lanes queue while they wait for a scan, so
+you pay latency and gain nothing. The same rule applies to the indexing pair above.
+
+Sizing is hardware-dependent and nothing infers it for you — the sizing table,
+the memory budget per PII worker, and the "verify what the host actually got"
+procedure live in the dedicated reference:
+[OKF Configuration Variables]({{< relref "/docs/configure/okf-variables" >}}).
+
+Every import records the capacity it actually started with in the service logs,
+under `OKF import lane capacity`, including whether the two settings match — so a
+misconfigured host can be seen in the logs rather than inferred from how long the
+import took.
+
+### The concept cap
+
+`OKF_INGEST_MAX_CONCEPTS` limits how many concepts one import may contain
+(default `1000`).
+
+It is a **capacity setting, not a safety limit**, and the value that matters is not
+the one you might expect: the cap is applied **after** oversized documents are
+split, so a selection of 999 documents can produce more than 1000 concepts. A
+single 999-document crawl was measured expanding to 1112 concepts across 89 split
+families — an import that looks comfortably within any reasonable limit.
+
+If a large import is rejected with a "too many concepts" error, raise the variable
+rather than splitting the work up. The limits that genuinely protect the machine
+are the maximum concept length and the lane settings above.
+
+Suggested values:
+
+| Kind of repository | `OKF_INGEST_MAX_CONCEPTS` |
+|---|---|
+| Pilot or demonstration | a few hundred |
+| Departmental knowledge base | ~1000 (the default) |
+| National or crawl-scale base | 10,000 or more — set it deliberately |
+
 ## What gets stored
 
 For each chunk, ArangoDB stores:

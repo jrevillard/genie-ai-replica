@@ -1,3 +1,4 @@
+const { flattenKeys } = require('./helpers/i18nKeys');
 import fs from 'fs';
 import path from 'path';
 import { parse } from '@babel/parser';
@@ -17,16 +18,6 @@ function getLocaleData(locale) {
 }
 
 // Collect every leaf key path (dotted) from a locale object.
-function flattenKeys(obj, prefix = '') {
-  const keys = [];
-  for (const [k, v] of Object.entries(obj)) {
-    const p = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === 'object' && !Array.isArray(v)) keys.push(...flattenKeys(v, p));
-    else keys.push(p);
-  }
-  return keys;
-}
-
 // Detect duplicate keys within object literals. JS silently keeps the last
 // value for a duplicate key, so this needs an AST scan (the parsed object would
 // hide duplicates).

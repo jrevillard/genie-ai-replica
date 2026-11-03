@@ -150,7 +150,12 @@
           <DsInput id="fm-attestation" :value="attestationPreview" :readonly="true" />
         </DsFormGroup>
         <DsFormGroup :label="sourcesLabel" input-id="fm-sources">
-          <DsTable :columns="sourcesColumns" :rows="draftFrontmatter.provenance.sources" :hoverable="false" />
+          <!-- #79625: rows are the provenance sources — the pipeline writes
+               {author, type, resource} (crawl rows), hand-authored docs write
+               {author, type, uri}; sourcesRows normalizes both onto uri so the
+               column renders and the row has an identity field (DsTable falls
+               back to the index when a row carries neither). -->
+          <DsTable :columns="sourcesColumns" :rows="sourcesRows" row-key="uri" :hoverable="false" />
         </DsFormGroup>
       </div>
     </DsDialog>
@@ -385,6 +390,16 @@ export default {
         { key: 'type', label: 'type' },
         { key: 'uri', label: 'uri' }
       ];
+    },
+    // The provenance rows as the table renders them: the pipeline's crawl
+    // rows name their source `resource`, hand-authored docs name it `uri` —
+    // one display field, with the row's own shape preserved underneath.
+    sourcesRows() {
+      return (
+        this.draftFrontmatter.provenance && this.draftFrontmatter.provenance.sources
+          ? this.draftFrontmatter.provenance.sources
+          : []
+      ).map((source) => ({ ...source, uri: source.uri || source.resource }));
     },
     sourcesLabel() {
       return this.translate('okf.curator.frontmatter.sources', 'provenance.sources');
@@ -652,16 +667,22 @@ export default {
         return;
       }
       // Re-serialize frontmatter; preserve unknowns by re-parsing the body.
+      // #79739: the lifecycle rebuild must distinguish "unset in the draft"
+      // from "keep the stored value" — spreading the parsed lifecycle back
+      // and only overriding on a truthy draft meant clearing the date input
+      // SILENTLY RESTORED the old stale_after on save. Build the object
+      // explicitly and DELETE the key when the draft leaves it empty.
+      const life = { ...(this.parsedData.lifecycle || {}), status: this.draftFrontmatter.lifecycle.status };
+      if (this.draftFrontmatter.lifecycle.stale_after) {
+        life.stale_after = this.draftFrontmatter.lifecycle.stale_after;
+      } else {
+        delete life.stale_after;
+        console.debug('[OkfMarkdownEditor] frontmatter save cleared lifecycle.stale_after');
+      }
       const fm = {
         ...this.parsedData,
         okf_version: this.draftFrontmatter.okf_version || '0.2',
-        lifecycle: {
-          ...(this.parsedData.lifecycle || {}),
-          status: this.draftFrontmatter.lifecycle.status,
-          ...(this.draftFrontmatter.lifecycle.stale_after
-            ? { stale_after: this.draftFrontmatter.lifecycle.stale_after }
-            : {})
-        },
+        lifecycle: life,
         // PRESERVE UNKNOWN KEYS under provenance (round 20, #79191): the
         // import pipeline writes provenance.crawled_at / source_ids — a
         // wholesale { sources } replacement silently dropped them on save.

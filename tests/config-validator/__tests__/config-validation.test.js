@@ -645,10 +645,12 @@ describe('Configuration Validation Suite', () => {
   // --- Story 1-8b: retriever routing-head knobs (graph affinity + the
   // forbidden/noise gate). The routing decision must be an affirmative claim
   // with positive evidence, and its thresholds are calibration-sensitive —
-  // plumbing drift between the three surfaces (compose pipe / env template
+  // plumbing drift between the surfaces (compose pipe / env template
   // doc / ansible env.j2) would silently retune production routing. Defaults
-  // live in genie-ai-overlay/retriever/config.py; these pins keep the
-  // plumbing honest (code default = compose default = template doc default).
+  // live in genie-ai-overlay/retriever/config.py; the literals below were
+  // copied from it at authoring time (the code file itself is NOT read here,
+  // so code-side drift is invisible to this suite), and these pins keep
+  // compose and the template docs honest against those literals.
   describe('Story 1-8b: retriever routing-head knob plumbing', () => {
     const ROUTE_HEAD_KNOBS = {
       RETRIEVER_ROUTE_HEAD_WEIGHT: '1.0',
@@ -1149,6 +1151,66 @@ describe('Configuration Validation Suite', () => {
       const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
       // 6000 was the T4-sized literal that truncated 57% of a real corpus.
       expect(Number(m[1])).toBeGreaterThan(200000);
+    });
+  });
+
+  // --- Review #1350 closeout: the retriever fan-out/route knobs are now
+  // emitted UNCONDITIONALLY by env.j2 (they used to be `is defined`-guarded,
+  // so an ansible host without those group_vars rendered an .env without
+  // them — invisible to the operator and to parity checks, while compose
+  // always pinned the same defaults). This family check pins compose ↔ env.j2;
+  // the retriever CODE defaults (genie-ai-overlay/retriever/config.py:280-355)
+  // were verified to match by hand at the time of writing but are NOT
+  // asserted here — they are comment-covered, not assertion-covered (follow-up
+  // tracked on #1350).
+  describe('AC8b: retriever fan-out/route defaults agree across compose and ansible', () => {
+    const RETRIEVER_FAMILY = [
+      'RETRIEVER_FANOUT_ENABLED',
+      'RETRIEVER_FANOUT_MAX_GRAPHS',
+      'RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS',
+      'RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH',
+      'RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL',
+      'RETRIEVER_FANOUT_SPINE_MAX_HOPS',
+      'RETRIEVER_FANOUT_EXTRACTED_HOP_CAP',
+      'RETRIEVER_ROUTE_ENABLED',
+      'RETRIEVER_ROUTE_TOP_K',
+      'RETRIEVER_ROUTE_MIN_CHUNKS',
+      'RETRIEVER_ROUTE_PROBE_TIMEOUT_MS',
+      'RETRIEVER_ROUTE_RETRY',
+      'RETRIEVER_ROUTE_HEAD_WEIGHT',
+      'RETRIEVER_ROUTE_HEAD_MARGIN',
+      'RETRIEVER_ROUTE_HEAD_FLOOR',
+      'RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX',
+      'RETRIEVER_ROUTE_HEADS_SUPERSEDE'
+    ];
+
+    test('the family parsed from compose (guard — a silent re-scope must not pass)', () => {
+      for (const v of RETRIEVER_FAMILY) {
+        const c = composeVars.find((x) => x.name === v);
+        expect({ name: v, found: !!c }).toEqual({ name: v, found: true });
+      }
+    });
+
+    test('compose and env.j2 agree on every fan-out/route default', () => {
+      const ansible = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      const problems = [];
+      for (const v of RETRIEVER_FAMILY) {
+        const a = ansible[v];
+        const c = composeVars.find((x) => x.name === v);
+        if (!a) {
+          problems.push(`${v}: not emitted by env.j2`);
+          continue;
+        }
+        if (a.count !== 1) problems.push(`${v}: emitted ${a.count}x by env.j2 (last-wins shadowing)`);
+        if (a.default === null) {
+          problems.push(`${v}: env.j2 carries no literal default, so compose silently wins`);
+          continue;
+        }
+        if (c && a.default !== c.default) problems.push(`${v}: compose=${c.default} ansible=${a.default}`);
+      }
+      expect(problems).toEqual([]);
     });
   });
 

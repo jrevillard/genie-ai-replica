@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
 
@@ -21,6 +20,8 @@ void main() {
 
   late Uint8List configBytes;
   late Uint8List configBytesWithJustChatEntry;
+  late Uint8List configBytesWithCivilButton;
+  late Uint8List configBytesWithCivilAndAgri;
 
   setUpAll(() async {
     // No just-chat entry: the deployment dropped or hid it — the exact
@@ -42,6 +43,36 @@ void main() {
         'serviceLabels': ['Births'],
       },
     ]);
+    // The CO-TAGGED button of the reverse-order restore: an ID'D card —
+    // the restore resolves button tags by id, on both platforms (an
+    // id-less card contributes no entry to the restore index).
+    configBytesWithCivilButton = await chatbotConfigBytesWithButtons(const [
+      {
+        'id': 'civil',
+        'title': {'en': 'Registry Card'},
+        'category': '2',
+        'serviceLabels': ['Births'],
+      },
+    ]);
+    // TWO category-carrying buttons: the positional last-writer tests —
+    // the web's restore forEach ends on the LAST category-writing tag,
+    // whatever kind it is, so a later button must override an earlier
+    // one exactly as an earlier legacy tag must not override a later
+    // button.
+    configBytesWithCivilAndAgri = await chatbotConfigBytesWithButtons(const [
+      {
+        'id': 'civil',
+        'title': {'en': 'Registry Card'},
+        'category': '2',
+        'serviceLabels': ['Births'],
+      },
+      {
+        'id': 'agri',
+        'title': {'en': 'Agri Advisory'},
+        'category': '1',
+        'serviceLabels': ['Harvest'],
+      },
+    ]);
   });
 
   setUp(resetChatbotTestState);
@@ -50,7 +81,7 @@ void main() {
   testWidgets('a saved just-chat tag restores the plain-chat scope', (
     tester,
   ) async {
-    final mock = _JustChatMockClient(tree, conversationTags: ['just-chat']);
+    final mock = ChatbotMockClient(tree, conversationTags: ['just-chat']);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -75,7 +106,7 @@ void main() {
   testWidgets('the reserved restore ignores a config entry that declares one', (
     tester,
   ) async {
-    final mock = _JustChatMockClient(tree, conversationTags: ['just-chat']);
+    final mock = ChatbotMockClient(tree, conversationTags: ['just-chat']);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytesWithJustChatEntry);
     await pumpChatBot(tester, mock, chatKey: chatKey);
@@ -97,7 +128,7 @@ void main() {
   ) async {
     // A just-chat conversation carries no category edge (the press
     // cleared it): the title alone must keep the bar on the screen.
-    final mock = _JustChatMockClient(
+    final mock = ChatbotMockClient(
       tree,
       conversationTags: ['just-chat'],
       conversationCategoryId: null,
@@ -123,7 +154,7 @@ void main() {
       // a restored bar once; this pins the reserved one against it.
       // TWO failures of each source: the mount's fetch consumes the
       // first, the restore's the second.
-      final mock = _JustChatMockClient(
+      final mock = ChatbotMockClient(
         tree,
         conversationTags: ['just-chat'],
         failFirstCounts: const {'en': 2},
@@ -159,7 +190,7 @@ void main() {
       // after a locale switch the config-reload re-title treats it like
       // any Quick Help chip (the web's own chip-id remap): an entry that
       // declares the id re-titles the bar, in the entry's own language.
-      final mock = _JustChatMockClient(tree, conversationTags: ['just-chat']);
+      final mock = ChatbotMockClient(tree, conversationTags: ['just-chat']);
       final chatKey = GlobalKey<ChatBotComponentState>();
       mockChatbotConfigAsset(tester, configBytesWithJustChatEntry);
       // The app's own supportedLocales: MaterialApp resolves an
@@ -197,7 +228,7 @@ void main() {
     // the same stale-language chip the web keeps (quickHelpTitleFor
     // falls back to the stored title when the id has no button). The
     // kept title must be the reserved one, never a failure caption.
-    final mock = _JustChatMockClient(tree, conversationTags: ['just-chat']);
+    final mock = ChatbotMockClient(tree, conversationTags: ['just-chat']);
     final chatKey = GlobalKey<ChatBotComponentState>();
     mockChatbotConfigAsset(tester, configBytes);
     await pumpChatBot(
@@ -217,50 +248,160 @@ void main() {
     expect(find.textContaining('Just Chat'), findsOneWidget);
     expect(find.textContaining('carries any more'), findsNothing);
   });
-}
 
-class _JustChatMockClient extends http.BaseClient {
-  _JustChatMockClient(
-    this.tree, {
-    this.conversationTags = const [],
-    this.conversationCategoryId = '2',
-    this.failFirstCounts = const {},
+  testWidgets('a co-tagged button restores its category in reverse tag order', (
+    tester,
+  ) async {
+    // The saved order is not guaranteed: a LEGACY conversation can
+    // carry the reserved chip FIRST and the button tag AFTER it
+    // (['just-chat', 'civil']). The web's restore forEach keeps
+    // processing after the reserved chip and sets currentCategoryId
+    // from the button's category — last-writer-wins — so the
+    // conversation stays scoped to category 2. No category EDGE is
+    // served here: with one, the conversation's own category already
+    // restores, and the button tag is the ONLY carrier of the saved
+    // category. A reserved branch that reads no button category
+    // widens the restore to label-only.
+    // The category is asserted at the HTTP boundary (the save's PATCH
+    // carries the restored scope's category), the way the tag test
+    // asserts the saved tags.
+    final mock = ChatbotMockClient(
+      tree,
+      conversationTags: const ['just-chat', 'civil'],
+      conversationCategoryId: null,
+      conversationMessages: const [
+        {'_id': 'm-1', 'sender': 'user', 'content': 'Saved question'},
+        {'_id': 'm-2', 'sender': 'assistant', 'content': 'Saved answer'},
+      ],
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockChatbotConfigAsset(tester, configBytesWithCivilButton);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
+
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+    // The reserved chip is still the bar's title; the co-tagged
+    // button's category rides BENEATH it (the web keeps 'Just Chat'
+    // too, scoped to the button's category).
+    expect(find.text('Context: Just Chat'), findsOneWidget);
+    expect(find.textContaining('no longer carries'), findsNothing);
+
+    // The next save persists the restored scope: its categoryId is
+    // what the wire receives.
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    expect(mock.savedCategoryIds, hasLength(1));
+    expect(mock.savedCategoryIds.single, '2');
   });
 
-  final List<dynamic> tree;
-  final List<String> conversationTags;
-  final String? conversationCategoryId;
+  testWidgets('a legacy tag mid-list does not override a later button', (
+    tester,
+  ) async {
+    // POSITIONAL parity, not precedence parity: the web's restore
+    // forEach writes currentCategoryId from every category-writing tag
+    // in SAVED ORDER — a legacy 'category.<id>' writes, and so does a
+    // button — so ['just-chat', 'category.1', 'civil'] ends on civil
+    // (category 2), not on the legacy category 1. A legacy-first chain
+    // answers from category 1, a wider corpus than the web uses.
+    // Same two-category tree: the legacy 'category.1' must name a
+    // category the tree carries, or the restore refuses instead of
+    // answering — the test exercises POSITIONAL precedence between a
+    // known legacy tag and a known later button, not the dead-chip
+    // refusal.
+    final twoCategoryTree = <dynamic>[
+      {
+        'catKey': '2',
+        'name': 'Civil Registry',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
+        ],
+      },
+      {
+        'catKey': '1',
+        'name': 'Agriculture',
+        'nameEN': 'Agriculture',
+        'children': [
+          {'_key': 'svc-2', 'name': 'Harvest', 'nameEN': 'Harvest'},
+        ],
+      },
+    ];
+    final mock = ChatbotMockClient(
+      twoCategoryTree,
+      conversationTags: const ['just-chat', 'category.1', 'civil'],
+      conversationCategoryId: null,
+      conversationMessages: const [
+        {'_id': 'm-1', 'sender': 'user', 'content': 'Saved question'},
+        {'_id': 'm-2', 'sender': 'assistant', 'content': 'Saved answer'},
+      ],
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockChatbotConfigAsset(tester, configBytesWithCivilAndAgri);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
 
-  /// Per locale: the FIRST N tree requests fail with a 500 (a transient
-  /// hierarchy outage) and every later one serves the tree — the same
-  /// shape the dead-scope mock uses (a localized fetch inside the outage
-  /// window must not consume another locale's failure budget).
-  final Map<String, int> failFirstCounts;
-  final Map<String, int> _treeRequestsByLocale = {};
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no longer carries'), findsNothing);
 
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final path = request.url.path;
-    if (path.contains('/api/service-categories/categories')) {
-      final locale = request.url.queryParameters['locale'] ?? 'en';
-      _treeRequestsByLocale[locale] = (_treeRequestsByLocale[locale] ?? 0) + 1;
-      final failFirst = failFirstCounts[locale];
-      if (failFirst != null && _treeRequestsByLocale[locale]! <= failFirst) {
-        return httpResponseJson(<String, dynamic>{}, 500);
-      }
-      return httpResponseJson(tree, 200);
-    }
-    if (request.method == 'GET' && path.contains('/api/chat/conversations/')) {
-      final id = path.split('/api/chat/conversations/').last;
-      return httpResponseJson(<String, dynamic>{
-        '_key': id,
-        'title': 'Saved conversation',
-        if (conversationCategoryId != null)
-          'categoryId': conversationCategoryId,
-        'tags': conversationTags,
-        'messages': <dynamic>[],
-      }, 200);
-    }
-    return httpResponseJson(<String, dynamic>{}, 404);
-  }
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    expect(mock.savedCategoryIds, hasLength(1));
+    expect(mock.savedCategoryIds.single, '2');
+  });
+
+  testWidgets('a later button overrides the first in a button-only save', (
+    tester,
+  ) async {
+    // The FIRST recognized tag being a button changes nothing: the web's
+    // forEach keeps processing, so ['civil', 'agri'] ends on agri — a
+    // button branch that returned its own card's category would answer
+    // from civil while the web answers from agri.
+    // The tree must KNOW both buttons' categories and labels, or the
+    // scope refuses (a category nothing can name is a visible refusal,
+    // never a silent widening) and the save never PATCHes. The harness
+    // fixture knows category 2 only, so this scenario carries its own
+    // two-category tree.
+    final twoCategoryTree = <dynamic>[
+      {
+        'catKey': '2',
+        'name': 'Civil Registry',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
+        ],
+      },
+      {
+        'catKey': '1',
+        'name': 'Agriculture',
+        'nameEN': 'Agriculture',
+        'children': [
+          {'_key': 'svc-2', 'name': 'Harvest', 'nameEN': 'Harvest'},
+        ],
+      },
+    ];
+    final mock = ChatbotMockClient(
+      twoCategoryTree,
+      conversationTags: const ['civil', 'agri'],
+      conversationCategoryId: null,
+      conversationMessages: const [
+        {'_id': 'm-1', 'sender': 'user', 'content': 'Saved question'},
+        {'_id': 'm-2', 'sender': 'assistant', 'content': 'Saved answer'},
+      ],
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockChatbotConfigAsset(tester, configBytesWithCivilAndAgri);
+    await pumpChatBot(tester, mock, chatKey: chatKey);
+
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no longer carries'), findsNothing);
+
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    expect(mock.savedCategoryIds, hasLength(1));
+    expect(mock.savedCategoryIds.single, '1');
+  });
 }

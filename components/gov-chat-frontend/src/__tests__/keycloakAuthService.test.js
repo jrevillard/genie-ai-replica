@@ -751,7 +751,8 @@ describe('cross-tab renew lease (#80800)', () => {
     delete navigator.locks;
     const holderUser = createMockUser({ access_token: 'lease-holder-token' });
     // +5s stamp: admissible to the startedAt gate without racing it (the
-    // same CI-flake rationale as the free-lock test above).
+    // same CI-flake rationale as the free-lock test below — round 25 moved
+    // it INSIDE the web-locks describe, under this test).
     window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));

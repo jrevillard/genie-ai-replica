@@ -33,9 +33,26 @@ const { ArangoToArcadeGraphTranslator } = require('./arango-to-arcade-graph');
  * /not found/i used elsewhere, which would also swallow 1203 and gateway
  * route-not-found.
  */
+// Absence-classifier twin 2 of 3 (review 84589): same 3.12 contract as
+// okf-server/services/arango-errors.js (the control-flow owner), which also
+// names the laxer legacy twin — repository-service.js ARANGO_NOT_FOUND — and
+// the lockstep-edit rule. This copy owns the retry wrapper's LOG severity.
 function _isExpectedAbsence(error) {
   if (!error) return false;
   if (error.errorNum === 1202 || error.errorNum === 1204) return true;
+  // ArangoDB 3.12 reimplemented the simple-query API: a firstExample miss
+  // answers errorNum 404 with errorMessage 'no match' (the 3.11 server
+  // answered 1204 — live-reproduced on the local build, Quran Core import
+  // 2026-11-02). 404 alone is NOT absence (a missing collection or route can
+  // carry it) — the verdict needs the server's own 'no match' message too.
+  if (
+    error.errorNum === 404 &&
+    String(error.message || '')
+      .trim()
+      .toLowerCase() === 'no match'
+  ) {
+    return true;
+  }
   if (error.errorNum != null) return false; // 1203 and friends are real faults
   return (
     String(error.message || '')

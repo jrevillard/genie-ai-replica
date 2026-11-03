@@ -227,3 +227,72 @@ http.StreamedResponse httpResponseJson(Object? body, int status) {
     headers: {'content-type': 'application/json'},
   );
 }
+
+/// The chatbot RESTORE tests' HTTP mock: the hierarchy tree — with a
+/// PER-LOCALE transient-outage budget — and ONE saved conversation
+/// carrying the tags, the category edge and the messages the scenario
+/// needs; every other request 404s. The restore test files shared this
+/// class verbatim as two private copies; the merge lives here so a
+/// change to its mechanics lands once.
+class ChatbotMockClient extends http.BaseClient {
+  ChatbotMockClient(
+    this.tree, {
+    this.conversationTags = const [],
+    this.conversationCategoryId = '2',
+    this.conversationMessages = const <dynamic>[],
+    this.failFirstCounts = const {},
+  });
+
+  final List<dynamic> tree;
+  final List<String> conversationTags;
+  final String? conversationCategoryId;
+  final List<dynamic> conversationMessages;
+
+  /// Per locale: the FIRST N tree requests fail with a 500 (a transient
+  /// hierarchy outage) and every later one serves the tree. The counts
+  /// are keyed by the REQUEST's locale — a localized fetch inside the
+  /// outage window must not consume another locale's failure budget.
+  final Map<String, int> failFirstCounts;
+  final Map<String, int> _treeRequestsByLocale = {};
+
+  /// The `categoryId` of every conversation-write request, in arrival
+  /// order — the wire a test reads the restored scope's category off.
+  final List<dynamic> savedCategoryIds = [];
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final path = request.url.path;
+    if (path.contains('/api/service-categories/categories')) {
+      final locale = request.url.queryParameters['locale'] ?? 'en';
+      _treeRequestsByLocale[locale] = (_treeRequestsByLocale[locale] ?? 0) + 1;
+      final failFirst = failFirstCounts[locale];
+      if (failFirst != null && _treeRequestsByLocale[locale]! <= failFirst) {
+        return httpResponseJson(<String, dynamic>{}, 500);
+      }
+      return httpResponseJson(tree, 200);
+    }
+    if (request.method == 'GET' && path.contains('/api/chat/conversations/')) {
+      final id = path.split('/api/chat/conversations/').last;
+      return httpResponseJson(<String, dynamic>{
+        '_key': id,
+        'title': 'Saved conversation',
+        if (conversationCategoryId != null)
+          'categoryId': conversationCategoryId,
+        'tags': conversationTags,
+        'messages': conversationMessages,
+      }, 200);
+    }
+    if (request.method == 'PATCH' &&
+        path.contains('/api/chat/conversations/')) {
+      _captureSave(request);
+      return httpResponseJson(<String, dynamic>{'_key': 'conv-1'}, 200);
+    }
+    return httpResponseJson(<String, dynamic>{}, 404);
+  }
+
+  void _captureSave(http.BaseRequest request) {
+    final body =
+        jsonDecode((request as http.Request).body) as Map<String, dynamic>;
+    savedCategoryIds.add(body['categoryId']);
+  }
+}

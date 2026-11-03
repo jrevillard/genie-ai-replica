@@ -169,7 +169,7 @@
       <OkfTestingLabDialog
         :visible="headTestOpen"
         :repo="headTestRepo"
-        :initial-tab="'test'"
+        :initial-tab="repo && repo.head ? 'test' : 'head'"
         @close="headTestOpen = false"
         @changed="onHeadTestChanged"
       />
@@ -405,6 +405,9 @@ import OkfAutocorrectPanel from './AutocorrectPanel.vue';
 import OkfTestingLabDialog from './TestingLabDialog.vue';
 import OkfAccessPanel from './AccessPanel.vue';
 import OkfPiiRepoRescan from './PiiRepoRescan.vue';
+// #80930: the bulk-PII failure composer is SHARED with steps/Input.vue (the
+// verbatim duplicate catch is how the round-19 fix missed one copy).
+import { bulkPiiFailureMessage } from '../steps/failureMessages';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
 
@@ -1132,15 +1135,14 @@ export default {
         // A rejected bulkPiiAction (409 drain-freeze, 5xx, network) must
         // surface — without this the dialog closed, the strip reset and the
         // user got zero feedback while the flags stayed (round 18, #80480).
-        const code = (err && (err.code || (err.data && err.data.error))) || '';
-        this.metaError = okfRepoOps.translateLifecycleError(
-          okfRepoOps.friendlyLifecycleError(
-            code,
-            err && err.message,
-            this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.')
-          ),
-          this.translate
-        );
+        // The message composer is the SHARED one (#80930 — same as the
+        // wizard Input step's handler; the duplicated catch is how the
+        // round-19 fix missed one copy).
+        console.debug('[RepoEditor] bulk PII action rejected', {
+          code: (err && err.code) || '',
+          message: err && err.message
+        });
+        this.metaError = bulkPiiFailureMessage(err, this.translate);
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;
@@ -1181,7 +1183,11 @@ export default {
       this.$store.commit('okf/setSelectedConcept', null);
     },
     onAutocorrectApplied() {
-      // The store action already refetched the rows.
+      // The chunked apply PATCHes concepts directly (conceptService.update),
+      // bypassing the store action — the rail and metadata panel would keep
+      // showing pre-fix frontmatter until some unrelated fetch. Refetch here
+      // so the editor reflects the corpus the apply just wrote.
+      this.$store.dispatch('okf/fetchConcepts', this.repoId);
       this.metaSaved = false;
     }
   }

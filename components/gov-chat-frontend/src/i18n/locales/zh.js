@@ -1402,6 +1402,19 @@ export default {
     alt: '上传'
   },
   details: {
+    crawl: {
+      seconds: '秒',
+      autoRefreshEvery: '自动刷新间隔',
+      refreshNow: '立即刷新',
+      crawlRate: '抓取速率',
+      queueSize: '队列大小',
+      errorRate: '错误率',
+      pagesProcessed: '已处理页面',
+      depth: '深度',
+      internalLinks: '内部链接',
+      externalLinks: '外部链接',
+      totalFetched: '抓取总数'
+    },
     loading: '正在加载文件详细信息...',
     title: '文件详情',
     close: '关闭',
@@ -1420,6 +1433,7 @@ export default {
     uploadDate: '上传日期',
     hash: 'SHA256 哈希值',
     tabs: {
+      dashboard: '仪表板',
       details: '详情',
       ingestionLog: '提取日志',
       detailsHint: '该文件的元数据：名称、作者以及 AI 用于路由问题的知识层级标签。执行 ingest 至少需要一个标签。',
@@ -1607,8 +1621,14 @@ export default {
       adminOnly: '模型配置需要平台管理员角色。'
     },
     versions: {
+      ingestFailed: '失败',
+      ingestPartialFailed: '部分完成',
+      ingestCompleted: '已摄入',
+      bundleMissing: '缺少 zip',
+      bundleDownload: '下载 zip',
       bundle: '捆绑包',
       col: {
+        ingest: '摄入',
         concepts: '概念',
         curator: '策展人',
         minted: '已创建',
@@ -1626,6 +1646,10 @@ export default {
       title: '版本'
     },
     shell: {
+      sourceDocument: '来源文档',
+      size: '大小',
+      type: '类型',
+      crawlSeed: '抓取种子',
       back: 'Studio 仪表盘',
       building: '构建中…',
       buildingHint: '源文件仍在处理中',
@@ -1637,6 +1661,7 @@ export default {
       export: '导出 .zip',
       logs: '日志',
       pii: {
+        reviewHint: '点击被标记的文件以在编辑器中纠正：',
         ack: '确认标记的实体并发布',
         note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
@@ -1719,6 +1744,9 @@ export default {
       failed: '无法开始导入。请检查文档后重试。'
     },
     editor: {
+      resizeMeta: '拖动以调整元数据面板大小',
+      resizeTip: '拖动调整大小 — 双击重置',
+      resizeRail: '拖动以调整文件列表大小',
       addConcept: {
         bodyLabel: 'Markdown（粘贴或留空）',
         bodyPh: '# 标题\n\n在此粘贴 markdown — frontmatter 将自动为您补齐。',
@@ -1775,6 +1803,16 @@ export default {
         grantedGroupNotice: '已授予组 — 每个成员在下次登录时获得访问权限。'
       },
       autocorrect: {
+        applyingProgress: '应用中 {done} / {total}…',
+        stop: '停止',
+        stopped: '已停止 — 停止前已应用 {n} 个概念。',
+        sheetShowing: '显示 {total} 个概念中的 {shown} 个。',
+        sheetApplyCoversAll: '“应用修复”覆盖全部。',
+        sheetShowMore: '显示更多',
+        sheetFilter: '按概念 ID 筛选',
+        applySummary: '已应用 {n} 处修复。',
+        applyFailed: '已应用 {n} 处修复 — {f} 个概念失败。点击“应用修复”重试。',
+        failuresMore: '以及另外 {n} 项',
         blankBefore: '（空白）',
         blankBadge: '无 frontmatter — 完整补全提案',
         applyField: '应用',
@@ -1973,6 +2011,7 @@ export default {
         note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
+        inProgress: '发布中 — 正在导出并传输包…',
         body: '执行 publish 将生成版本 v{n}，并将资产包“{file}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。',
         confirm: '发布',
         title: '发布'
@@ -2444,6 +2483,10 @@ export default {
         cloneFailed: '克隆失败——请重试。'
       },
       input: {
+        clsHybrid: '混合',
+        clsLlm: 'LLM 分类',
+        clsHeur: '启发式（快速，无 LLM）',
+        classification: '分类策略',
         title: '输入项',
         documents: '挑选作为主题列表来源的文档。',
         crawl: '选择待抓取的网站。',
@@ -2476,6 +2519,7 @@ export default {
         cloned: '此仓库是一个克隆——其主题已就位。请继续前往策展步骤进行复核。'
       },
       produce: {
+        labelFailed: '转换失败',
         title: '生成主题',
         hint: '我们正在读取您的来源并提炼主题建议。',
         progress: '生产模块运行中...',
@@ -2523,6 +2567,7 @@ export default {
         loadFailed: '暂时无法读取标签。'
       },
       curate: {
+        labHint: '从已保存的标签构建路由头并进行测试 — 无需发布。',
         embedHint:
           '复核并改进每个主题：修正文字、设置类型和知识层级标签、添加或移除主题。您在这里修正的一切，就是助手日后要引用的内容。',
         noRepo: '尚无仓库——请返回入口步骤，先创建或选择一个。',
@@ -2562,6 +2607,10 @@ export default {
         versionSummary: '{n} 个版本 · 最新 v{latest}'
       },
       publish: {
+        frontmatterPending: '尚未起草 frontmatter 标签',
+        frontmatterPartial: 'frontmatter 标签 — 需要审核',
+        frontmatterOk: 'frontmatter 标签已批准',
+        frontmatterServing: '已设置 frontmatter 标签',
         title: '安全设置并完成',
         hint: '此知识库已准备就绪，可供审查。这里从不进行发布——请在仪表盘上提交审批，然后从仪表盘或编辑器批准并发布。',
         nameOk: '知识库名称已设定',
@@ -2690,7 +2739,6 @@ export default {
       saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
     },
     validation: {
-      piiRescanTimeout: '重新扫描运行已超过 15 分钟 — 仍在服务器端继续执行。没有任何内容丢失；请稍后再来查看。',
       healthAria: '健康度：{pct}%，{n} 个问题',
       frozen: '内容已冻结于 {v} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。',
       none: '无',
@@ -2786,6 +2834,7 @@ export default {
       piiRescanNoKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪进度。没有任何结果被报告。',
       piiStateError: '扫描错误',
       piiTally: {
+        missing: '已消失',
         scanned: '已重新扫描 {n} 个页面',
         clean: '未发现',
         hit: '已标记',
@@ -2943,8 +2992,7 @@ export default {
         head: '头向量',
         test: '测试',
         suites: '测试集与分析',
-        ragas: 'RAGAS 基准测试',
-        models: '模型'
+        ragas: 'RAGAS 基准测试'
       },
       head: {
         dim: '维度',
@@ -3031,6 +3079,7 @@ export default {
         }
       },
       suites: {
+        loading: '正在加载测试集…',
         generate: '生成测试集',
         generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',
         generating: '正在分批生成 — 大批量需要几分钟…',

@@ -9,6 +9,7 @@
 const { mount } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState, createUnauthenticatedState } = require('../fixtures/store-state');
+const { realI18nMock } = require('../helpers/realI18n');
 
 // ---------------------------------------------------------------------------
 // Service mocks (closure-based refs for per-test control)
@@ -1805,24 +1806,11 @@ describe('AdminDashboard', () => {
       // The mock above pins the call SHAPE; this one pins the SEMANTICS:
       // translate() against the vue-i18n build the app actually installs,
       // with the en.js catalogue it actually ships, must interpolate named
-      // params — not render them empty (the #1130 regression).
-      const { createI18n } = require('vue-i18n');
-      const en = require('../../i18n/locales/en.js').default;
-      const i18n = createI18n({
-        legacy: true,
-        locale: 'en',
-        fallbackLocale: 'en',
-        messages: { en }
-      });
-      const wrapper = createAdminDashboardWrapper(
-        {},
-        {
-          $i18n: {
-            locale: 'en',
-            t: (...args) => i18n.global.t(...args)
-          }
-        }
-      );
+      // params — not render them empty (the #1130 regression). The real
+      // instance + $i18n delegation come from the shared realI18nMock
+      // helper (round 26, #83614 — this rig and the servingWarn pin below
+      // used to be verbatim twins that drifted independently).
+      const wrapper = createAdminDashboardWrapper({}, { $i18n: realI18nMock() });
       expect(
         wrapper.vm.translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)', {
           current: 2,
@@ -2521,26 +2509,11 @@ describe('AdminDashboard', () => {
       // BRACE-ESCAPED in the shipped catalogue (pinned by
       // localeConsistency's DYNAMIC_COMPILED_KEYS), so the compiled path
       // renders the LITERAL text {n} and the component's .replace fills it.
-      // Drive the REAL vue-i18n + REAL en.js leaf (the :1804 pattern) and
-      // assert the rendered title — a named-param call would leak a literal
+      // Drive the REAL vue-i18n + REAL en.js leaf — the shared realI18nMock
+      // helper, the one rig this file's real-i18n pins mount through — and
+      // assert the rendered title. A named-param call would leak a literal
       // "{n}" and fail this test, as it did in the shipped regression.
-      const { createI18n } = require('vue-i18n');
-      const en = require('../../i18n/locales/en.js').default;
-      const i18n = createI18n({
-        legacy: true,
-        locale: 'en',
-        fallbackLocale: 'en',
-        messages: { en }
-      });
-      const wrapper = createAdminDashboardWrapper(
-        {},
-        {
-          $i18n: {
-            locale: 'en',
-            t: (...args) => i18n.global.t(...args)
-          }
-        }
-      );
+      const wrapper = createAdminDashboardWrapper({}, { $i18n: realI18nMock() });
       await wrapper.setData({
         documents: [doc('f1', 'Ingested')],
         selectedDocuments: ['f1']

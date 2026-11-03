@@ -11,9 +11,13 @@ import '../helpers/chatbot_harness.dart';
 // a wide, short tile): a broken card's diagnosis caption gets a box
 // smaller than one textXs line at the shipped default layout, and the
 // text is hard-clipped mid-glyph — the ellipsis of the clamp can never
-// render. The icon+title row above it is a non-flex child, so at an
-// extreme accessibility font scale it alone can outgrow the fixed tile
-// and the build throws a RenderFlex overflow.
+// render. The icon+title row above the caption sits in that same fixed
+// tile, and at an extreme accessibility font scale a NON-FLEX row alone
+// can outgrow it. The guard the extreme-scale test trusts is
+// STRUCTURAL — the header pinned under a Flexible, so the tile's fixed
+// bounds contain the row. The load-bearing assertion is that
+// Flexible-ancestor check, NOT an overflow throw: the throw is a
+// symptom a layout change can silence while the row stays unbounded.
 //
 // These tests assert STRUCTURE and RESOLVED GEOMETRY on a phone-sized
 // surface (360×740 logical — the shipped 2-column default gives a

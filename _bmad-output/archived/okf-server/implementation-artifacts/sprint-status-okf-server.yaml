@@ -1,0 +1,930 @@
+# Sprint Status — GENIE.AI OKF Server (prd_key: okf-server)
+# Scoped filename (sprint-status-okf-server.yaml) because this repo runs multiple
+# agentic-enablement pillars; the BMAD mechanical sync assumes a single root
+# sprint-status.yaml + worktree, which does not fit the multi-pillar branch model.
+# GitLab sync is driven directly via glab against the OKF epics.md.
+
+generated: 2026-08-11
+last_updated: 2026-10-16 (DEFAULT-OPEN OKF ACCESS SHIPPED — OKF_SCOPE_MODE, default open - scopeless users authorized for ALL serving repos, scopes restrict, write side always closed-list. Surfaces - scope-authz-service (mode read per call), require-scope allowScopelessWhenOpen on ONLY the two chat-serving reads mounted before the router gate (management surfaces untouched), resolveGraphSet + getRetrievalConfig unrestricted rule (mirrored so carrier and engaged gate can never disagree), sticky already filtered through the same set (verified — no change needed). Tests +18 - require-scope 5, authz-resolver 4, retrieval-config service 3 + routes 4 (incl. two rewritten 403 pins now asserting open-admits/closed-denies), okf-server FULL SUITE 1283/1283 GREEN. Plumbing parity - compose okf-server block, ansible env.j2, env template §15, config-validator pin block. Docs - NEW site/content/en/docs/knowledge-base/access-control.md (the complete capability - model, scope grammar, per-caller table, mode flag, scopeless reach table, sticky, acl.required_scopes declared-but-unenforced status, Keycloak today/planned, flow+observability, revocation skew), okf-variables.md section, CLAUDE.md env entry, knowledge-base _index. NEW SPRINT ITEM 6-1c-repo-access-control-admin-keycloak - ready — the Keycloak mappers + admin grant/revoke facility + acl enforcement, scheduled after the bug-triage wave + bali validation. BUG-22 filed + sprint-integrated - chat sidebar document cards are dead clicks — handleOpenDocument is an empty stub at ChatBotComponent.vue:762, and OKF hits carry url-empty + no repo_id so no link target is constructible; retriever _attach_provenance repo_id param unused at both call sites; query-service fallback still injects example.com fixture docs. Worklist §BUG-22, key bug-22-chat-sidebar-document-links is ready. Fan-out practical test ran - 5 disconnected-topic queries, 4/5 returned the 3+3 GRAPH/OKF_bali_v1 interleave, 1 bali-leg silent zero (single-leg failure is by-design lossless); head-routing only engages with two or more OKF graphs on the carrier — with one OKF repo the legs run unconditionally. 2026-10-15 (concept-document-ceiling test plan, tiers 0-3. TIER 0 alphabet-v7 PASS · TIER 1 ncd-v6 PASS · TIER 2 solar-system-v1 ran to 144/144 indexed across a host reboot with ZERO duplicate chunks — drain state lives in ArangoDB and survives, and re-ingest is idempotent; observed +2 vs the offline prediction, fully reconciled as 1112 imported + 1 `index` skeleton. TIER 3 bali IMPORT COMPLETE 05:23:56Z — 999 docs -> 1112 imported concepts (+1 `index` skeleton = 1113 rows), 89 split families, last_ingest_summary reports 1113 parsed / 0 errors / 0 rejected / 0 deduped. 0 blank parts (BUG-13 fix holds at volume), 0 over ceiling, 74/89 families byte-exact vs the shipped splitter, 5/89 carry an unexplained 1-char delta — mechanism unknown, NOT filed as a defect. ONE FIX SHIPPED — BUG-13 blank split part 1 (concept-splitter boundaries() opened a group with blank lines; greedyMerge finalised it alone when the next group was within 1 char of the ceiling), commit fce5d356b, okf-server 1192/1192, verify-local-build 77/0, deployed and verified live in the running container across 500 ceilings. 21 issues raised this cycle (!1060-!1081); prioritized fix queue recorded above as bug-triage-2026-10-15, detail in docs/testing/bug-triage-worklist-2026-10-15.md. Prior cycle — publish/ingest cycle defects PC-1..PC-8 — see defects-publish-cycle-2026-10-13.md. All 8 fixed. PC-1 (XML PI crash, the cost-of-content defect David reported on Solar System) and PC-6 (wizard step 5 / publish PII verdict) are NOT YET DEPLOYED to the local build; the other six are. FIVE COMMITS ON feat/okf-server HAVE NO PIPELINE (3b6c17b64, 53b731400, e96a3f90b, c0169886d, 14f2ddfad — pushes landed during the GitLab 504 outage; last green is 12688 at 9e434c981). The pc-1/pc-8 branch fix/okf-unstructured-remove-pis is UNPUSHED, so it has no CI at all. Measured 2026-10-14 — okf-server 1137/1138 (1 documented load-flake, green isolated), frontend 1870/1870, OPEA dataprep+patch 139 passed/1 skipped, config-validator 51/51, verify-local-build 63/0. Also refreshed below. Prior cycle — 1-8a merged 2e9be556d; 1-8b gate-v2 COMMITTED f8ead5de0 + VALIDATED live on local build — suite 18/18 pass; 1-8c Lab teaching loop backend COMMITTED c87b5e2dc — frontend loop remaining; 1-8d teaching-loop guardrails backend COMMITTED 130a99e + 2f1cbd763 after the 3-cycle poisoning — frontend loop remaining; 1-8e live-cycle hardening COMMITTED (advisor UI 6b1dbab, TEI chunk 57dcf69, tag-dedup+display dd41684, tagset identity + damping + apply-race f642e65) — advisor CONVERGED live, bouncing root-caused (same-head runs bit-stable; swings = tag-set changes), B margin decision + honest-label benchmark open)
+project: GENIE.AI OKF Server
+project_key: okf-server
+tracking_system: gitlab
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+# GATING KEY (confirmed with team):
+#   [BUMP]  = blocked by OPEA 1.5 bump !277 (feat/opea-1.5-upgrade/prd) merging to main
+#   [AGENTIC] = blocked by agentic workflows !280 MCP client landing
+#   SST (!279) = pattern only, no gate. Ungated stories build first.
+#   2026-10-06: feat/okf-server rebased onto OPEA 1.5 (1a4a99a65); the [BUMP] gate is moot
+#   for Epic 1 work on THIS branch (work is building here, not on main).
+
+development_status:
+  # === NEXT CAB OFF THE RACK (2026-10-15) ==========================================
+  # Prioritized bug-fix queue from the concept-document-ceiling test plan.
+  # Full triage, rationale and execution order: docs/testing/bug-triage-worklist-2026-10-15.md
+  # Defect detail: docs/testing/concept-doc-ceiling-defect-log.md
+  # Ordered by blast radius x SILENTNESS — a P3 that silently returns wrong data
+  # outranks a P1 that fails loudly. Wave 0 first, always.
+  bug-triage-2026-10-15: ready
+  #   WAVE 0 — silent-wrong results (no error surfaces anywhere):
+  #     !1079 AQL silently returns empty for EVERY hyphenated collection; all OKF graph
+  #          names contain a hyphen, so (await db.query(aql)).result || [] returns []
+  #          and the caller concludes the collection is empty. Highest leverage: fixing
+  #          the shared driver to REJECT on error/errorNum turns this whole class from
+  #          silent-wrong into loud-error. Cost 3 wrong conclusions in one session,
+  #          incl. a near-miss filed as "144 indexed, graph empty" (graph had 3,011 chunks).
+  #     !1070 Graph collections named after the bundle, not repo.graph_name, so the
+  #          NAMED collections read empty after a successful ingest. Diagnosable once !1079 lands.
+  #   WAVE 1 — data entry blocked (loud): !1069 frontmatter invisible in dark mode (data
+  #          intact, operators re-type it) -> !1077 type:index INVALID_TYPE with no remedy
+  #          -> !1075 link suggestions unmount on accept (story 10.8) -> !1067 wizard opens
+  #          on step 9 -> !1060/!1063 PII sidecar worker dies (do NOT start without a repro).
+  #   WAVE 2 — operational: !1073 28 env vars never reach a container (fix BEFORE any
+  #          config knob is trusted) -> !1072 ArangoDB 1202 logged at error on a clean drain
+  #          -> !1071 head suite 20 ungrounded negatives -> !1061 sync mapping -> !1074
+  #          EMAIL_* -> !1064 clamav -> !1062 PC-1/PC-6 deployed-but-unverified.
+  #   WAVE 3 — throughput/capacity (config + documentation together): !1080 import pinned at
+  #          4 concurrent PII scans on a 24-core host (442% of 24 cores; 12 is already
+  #          reachable, clamp is 1..16) and !1081 OKF_INGEST_MAX_CONCEPTS default 200 -> 1000
+  #          (+ OKF_INGEST_MAX_ZIP_BYTES 25 MiB -> 256 MiB; Bali is 91.9 MB decompressed).
+  #   WAVE 4 — polish: !1066, !1068.
+  #   NEEDS A DECISION: !1065 was filed with a WRONG mechanism (BUG-12 proved pii_hit_count
+  #          and broken_link_count are hardcoded literals in the AQL, not a stale counter).
+  #          CLOSED as fixed in c080288 — see below; no separate decision needed.
+  #   OPEN QUESTION, no owner: 5 of 89 Bali split families have a stored part 2 exactly ONE
+  #          character longer than the shipped splitter produces from either extraction
+  #          variant; 74/89 are byte-exact. The --- horizontal-rule hypothesis was TESTED
+  #          and is dead (zero across all 999 files). Do NOT file as a defect until the
+  #          mechanism is known — instrument the body handed to the splitter.
+  # === END NEXT CAB ===============================================================
+  # 2026-10-16 — BUG-22 (David: "the document links displayed in the right sidebar are
+  #        not functional"). Chat sidebar document cards are dead clicks for EVERY
+  #        source: handleOpenDocument is an empty stub (ChatBotComponent.vue:762).
+  #        OKF hits additionally carry url:"" + a mangled concept id as document_name +
+  #        NO repo_id (retriever _attach_provenance has the param but both call sites
+  #        pass only graph_name), so no link target is even constructible; doc-repo
+  #        hits rely on a client-side URL build that never happens; the query-service
+  #        fallback path still injects example.com fixture docs. Full triage + fix
+  #        order: docs/testing/bug-triage-worklist-2026-10-15.md §BUG-22.
+  bug-22-chat-sidebar-document-links: ready=
+  # 2026-10-15 BATCH A PROGRESS — bug-clearing pass before the Bali re-run:
+  #   DONE  !1065 / BUG-12 (c080288) — pii_hit_count was a hardcoded literal and reported 0
+  #        on Bali where 1113/1113 concepts carry findings; now COMPUTED as findings-minus-
+  #        resolutions (pii_state reads clean before AND after accept, so it cannot express
+  #        it). broken_link_count REMOVED — the product defines no broken-link concept
+  #        (validation types are conformance/orphan/near_duplicate/citation) and nothing
+  #        read the field. The old test asserted 0 against a MOCKED query, so it could
+  #        never catch this; replaced with assertions on the query text.
+  #   DONE  !1082 / BUG-15 (5fd5adb) — suggester returned 22 entities against a 20 ceiling;
+  #        Joi rejects the whole body so every tag was lost. TAG_LIMITS is now an exported
+  #        single source of truth consumed by BOTH the validator and the suggester, with
+  #        drops logged and returned in over_ceiling rather than silently truncated.
+  #   CLOSED !1070 as NOT-A-BUG — repo.graph_name is OKF_<uuid> and no such collection exists,
+  #        but the serving path deliberately derives names via workingGraphName(repo)
+  #        (retrieval-config-service.js:183, documented in its module header). Design is
+  #        correct; the field is a naming trap, worth renaming separately.
+  #   DEMOTED !1079 to severity::low — arangojs THROWS errorNum 1203 on an unquoted
+  #        hyphenated collection, so production fails loud. The silent-empty is a property
+  #        of raw POST /_api/cursor (HTTP 200, error:true, no result field) — i.e. my own
+  #        diagnostic scripts. It was ranked Wave 0 on an untested premise; a one-minute
+  #        "does the client throw or return empty" check would have answered it.
+  #   STANDING RULE: before ranking a finding as silent-wrong, verify the client.
+  #   okf-server 1202/1202 across 48 suites, three consecutive clean runs.
+  #   DONE  !1069 / BUG-07 (89d0c54) — the OKF tree styled against 12 tokens defined
+  #        NOWHERE in the theme. An undefined var() is invalid at computed-value time,
+  #        so it falls back to the initial value: the frontmatter panel rendered
+  #        effectively invisible, and curators re-type data that was intact. 11 files,
+  #        not the 2 that were filed. font-weight is NOT a token (ds/ uses literal
+  #        600/500/400). Guard added in designTokens.test.js — asserts no OKF component
+  #        references a property no theme or scoped override defines, globally OR locally.
+  #   DONE  !1077 / BUG-11 (59ebfb1f) — autocorrect flagged the product's OWN bundle root
+  #        type "index" INVALID_TYPE with no remedy. New services/okf-vocabulary.js is the
+  #        single source of truth, imported by 4 consumers instead of restated 5 times;
+  #        reserved root types are recognised but kept OUT of the remedy text (offering a
+  #        recognised reserved type as a choice would mislead). A guard test strips
+  #        comments per consumer and fails if either literal reappears — that guard is
+  #        what caught a 4th restatement the first fix attempt missed.
+  #        COMPANION FINDING RESOLVED, and NOT in the direction first assumed. Measured
+  #        live (2979 concepts: 2860 draft / 5 stable / 114 absent; `active` and `retired`
+  #        occur ZERO times) plus concept-meta-service.test.js:304 (an explicit REGRESSION
+  #        test that `retired` is invalid), the correct list is [draft,stable,deprecated].
+  #        So conformance-service was RIGHT and AUTOCORRECT held the wrong list — it was
+  #        flagging the `stable` concepts that genuinely exist while accepting
+  #        active/retired. lifecycle_status derives from the same field, so one list only.
+  #   TWO CI FIXES (ed9c5f4f1) — lint:frontend (pii-panel-rescan.test.js not Prettier-clean)
+  #        and docs:build (ingestion.md relref pointed at /docs/configuration/okf-variables;
+  #        the page is under /docs/configure/ — Hugo REF_NOT_FOUND, exit 1).
+  #   okf-server 1219/1219 across 49 suites.
+  #   DONE  !1080 + !1081 / Wave 3 (10eced5a, e1531706) — import capacity. Config and
+  #        documentation, no logic change.
+  #        OKF_INGEST_MAX_CONCEPTS 200 -> 1000 and OKF_INGEST_MAX_ZIP_BYTES 25 MiB ->
+  #        256 MiB, EACH IN ALL FOUR declaration sites (service default, compose, env,
+  #        env.j2). crossReference conflicting=0 is the check that they agree.
+  #        The concept cap is documented as a CAPACITY knob, not a safety limit: it is
+  #        checked AFTER the document-ceiling split, so 999 documents measured 1112
+  #        concepts and a 200 cap rejected an ordinary crawl. The zip cap is documented
+  #        as a BOMB GUARD and explicitly NOT to be tuned.
+  #        Import pair defaults 1/2 -> 4/4 (the 2 dated from 2 uvicorn workers). The
+  #        pairing rule is now on EVERY surface an agent or operator might read one of:
+  #        env (both sites), CLAUDE.md, .claude/rules/ENVIRONMENT.md,
+  #        configure/okf-variables.md, knowledge-base/ingestion.md. The two pairs are kept
+  #        distinct because they fail differently — import lanes above the sidecar's
+  #        workers QUEUE, drain lanes above dataprep's slots get 429.
+  #        Every import now logs "OKF import lane capacity" with both values, whether they
+  #        are PAIRED, and the core count — a misconfigured host is visible in the logs
+  #        instead of inferred from timings.
+  #        Three tests pinning the 200 default were UPDATED, not deleted — they pin the
+  #        resolver's fallback behaviour; only the expected number changed.
+  #        NOT DONE: !1080's wall-clock acceptance (import Bali at 12/12 vs 4/4). That
+  #        belongs to the live re-import cycle and is NOT claimed here.
+  #   => WAVES 0-3 COMPLETE. Every item above is proven by tests + falsifying checks; every
+  #      one still needs the live re-import to close. That is now the whole queue.
+  #   DONE  !1073 / P2 (4758e71) — 28 documented OKF_* knobs reached NO container. There is
+  #        no env_file: anywhere in docker-compose.yaml, so a var absent from a service's
+  #        environment: block is unreachable: setting it in .env did nothing, silently.
+  #        Hit three separate times in one session.
+  #        26 WIRED into the okf-server block with the SERVICE's own defaults, plus emitted
+  #        by deploy/ansible/templates/env.j2 for cloud parity. Each service assignment was
+  #        made by grepping what READS the var, not by inferring from its name.
+  #        2 DELIBERATELY NOT WIRED — OKF_SEARCH_STYLE and OKF_FRONTMATTER_TAG_BATCH_SIZE
+  #        are read by NOTHING (spec 1-6 assigns the first to the retriever; the OPEA overlay
+  #        never reads it). They are documented-and-unimplemented, not unwired: a
+  #        live-LOOKING var that changes nothing is worse than an honest absence. Named
+  #        allowlist, asserted to be EXACTLY those two so the exemption cannot widen.
+  #        CI WAS STRUCTURALLY BLIND TWICE OVER, both now closed:
+  #          - parseEnvTemplate skipped # lines, and `env` has 300 commented variable
+  #            definitions vs 61 active — so these could not reach the orphan gate even in
+  #            principle. They now parse into a SEPARATE `documented` array (merging into
+  #            `variables` would swamp every existing check that reads it).
+  #          - Nothing asserted the env->compose direction. AC9 does, proven non-vacuous
+  #            and falsifying: 33 unwired pre-fix -> 0 post-fix (33 not 28 because 5 are
+  #            documented twice in `env`).
+  #        AC10 ADDED — the same drift class keeps recurring: 22 OKF_* knobs are documented
+  #        in TWO sections of `env` and nothing enforced agreement. That is the shape that
+  #        produced BUG-11, BUG-12 and BUG-15. Scoped to OKF_* on purpose: unscoped it
+  #        flags 12 legitimate multi-context examples (local install vs remote GPU node).
+  #        Verified directly in node (jest is EBUSY-locked on these files locally, CI is
+  #        Linux): 61 active vars, orphaned=4, conflicting=0 unchanged; `documented` does
+  #        not leak into crossReference; AC2 unaffected (all 26 carry defaults); ESLint adds
+  #        zero new problems (the 6 in the test file are pre-existing at HEAD).
+  #        Deliberately NOT reformatted docker-compose.yaml or the test file: both were
+  #        already Prettier-dirty at HEAD, so no gate covers them.
+  #   DONE  !1072 / P2 (d79e3732) — 24 error-level lines per 2 min on a CLEAN drain.
+  #        The filed direction was HALF WRONG and the wrong half was the dangerous one:
+  #        the issue proposes not re-throwing from the retry wrapper, but isArangoNotFound
+  #        guards 18 call sites using it to tell "absent" from "failed"
+  #        (if (!isArangoNotFound(err)) throw err — "never mask as no row"). Swallowing
+  #        the throw would turn every one into a silent "no row", i.e. an outage
+  #        rendered as an empty result. So: severity drops to debug, the error is STILL
+  #        RE-THROWN, and a test is named for that half.
+  #        SECOND defect found while verifying: measured on the real driver,
+  #        collection.document() miss = errorNum 1202 code 404, MISSING COLLECTION =
+  #        errorNum 1203 code 404. isArangoNotFound keyed on code===404 so it returned
+  #        TRUE for a missing collection — an infrastructure fault reported to all 18 call
+  #        sites as "document absent". errorNum is now authoritative; 1203 stays a fault.
+  #        THE MEASUREMENT THAT WAS WRONG: the first cut treated only 1202 as absent and
+  #        okf-server failed 33 tests, because concept-meta-service.test.js fixtures encode
+  #        firstExample throwing ArangoError 'no match' with errorNum 1204 — and
+  #        firstExample was REMOVED in arangojs 10, so the live probe was structurally
+  #        unable to see it. Both 1202 and 1204 mean absent; only 1203 was wrong.
+  #        STANDING RULE: one live measurement is not enough when the local driver version
+  #        differs from the deployed one — run the FULL suite, not just the probe.
+  #        okf-server 1219/1219 (49 suites); shared/lib db-connection-service 8/8.
+  #        HONEST CAVEAT: the shared/lib test file is locally flaky on Windows (2/3) — the
+  #        PRE-EXISTING isolateModules test races mine on a transform-cache rename (EBUSY).
+  #        Environmental, not a code defect; all six new tests pass every run.
+  #   FIX  f2d70cee2 — a stray `}` in the !1075 style addition broke the PRODUCTION build
+  #        (postcss "Unexpected }", caught by build:frontend in pipeline 13025, not by any
+  #        test). WHY no test caught it: jest compiles the SFC template+script but its style
+  #        block never goes through postcss, and Prettier's Vue parser does not reject an
+  #        unbalanced brace inside <style>. Both gateways passed a file that cannot build.
+  #        Verified with a real `npm run build` (hash 0964d39bc1de7bf8).
+  #   DONE  !1067 / BUG-03 (69983dbb2) — a bundle import opened the wizard on step 9
+  #        "Review", past step 6 "Curate", the only step with a blocking requirement
+  #        (frontmatter tags, PII acceptance, cross-links). TWO corrections to the
+  #        filed analysis, both of which change the fix:
+  #          - lockedIndices is NOT the mechanism — it only locks nothing when
+  #            studio_step is 9, a consequence not a cause. The real chain: the zip
+  #            branch seeds NO draft and navigates to the dashboard; the operator opens
+  #            the repo LATER via a card click; onResume finds no persisted draft and
+  #            takes the permissive studio_step 9 fallback at StudioTab.vue:381.
+  #          - The filed one-line fix (set activeDraft) would NOT have worked, because
+  #            the branch navigates away before the card click. Only a PERSISTED draft
+  #            survives — hence okf/saveDraft, the same call the crawler path makes at
+  #            :671-682. Landing step 5 (Curate); a bundle already carries its concepts
+  #            so Input/Produce/Label have nothing to do.
+  #        No-bundle create still starts at step 1 (David, 2026-10-11) — unchanged and
+  #        now pinned by a test so this fix cannot drag it along.
+  #        SECOND instance on this branch of a test that passes against broken code
+  #        because the mock was too weak: the round-trip test originally stubbed
+  #        getDraft with a hand-written draft, so it asserted only that resume HONOURS
+  #        a draft (always true) rather than that import CREATES one. It now stubs
+  #        nothing — onResume reads the cached draft, so the import path is the only
+  #        thing that can supply one.
+  #        Verified FALSIFYING (both new tests fail pre-fix). Frontend 1911/1911, 98 suites.
+  #        => WAVE 1 COMPLETE: 1.1 !1065, 1.2 !1077, 1.3 !1075, 1.5 !1067. 1.4
+  #           (!1060/!1063) deliberately still parked for want of a reproduction.
+  #   DONE  !1075 / BUG-10 (49499fec, Story 10.8) — accepting one link suggestion
+  #        unmounted every remaining proposal INCLUDING the one just accepted. The
+  #        proposal list was a DESCENDANT of the orphan row it remediates; accepting
+  #        the first gives the page a link, which CURES the orphan, so refresh()
+  #        removed the row and the proposals went with it as children. Worse: that row
+  #        also carries the "Suggest links" entry point, and once the page has a link it
+  #        is no longer orphaned — so the remaining proposals were UNREACHABLE, not just
+  #        destroyed. The remediation path worked exactly once per page.
+  #        Both panels now render at PANEL LEVEL keyed on suggestFor / wireFor. onAcceptLink
+  #        reads suggestFor rather than taking a conceptId, so the target page cannot
+  #        disagree with the panel that rendered its button.
+  #        EXTRA defect found and fixed in the same code: wireNote was one string rendered
+  #        inside EVERY citation row, so wiring one issue printed its result on all.
+  #        THE TEST-WRITING LESSON: the original test mocked fetchValidation with a STATIC
+  #        report, so refresh() returned the same orphan forever and the unmount never
+  #        happened. The mock was why it shipped green. A test for a self-clearing UI must
+  #        make the REFETCHED report differ, or it cannot reach the defect.
+  #        Verified FALSIFYING — all 4 new tests fail against the pre-fix component, pass
+  #        against the fixed one; the 13 pre-existing tests in that file are unaffected.
+  #        Frontend 1908/1908 across 98 suites.
+  #        FILED, NOT FIXED (out of story scope, needs its own i18n decision across 14
+  #        locale files): the Dismiss button writes p.dismissed = true and NOTHING anywhere
+  #        reads that flag — the affordance is dead.
+  epic-1: in-progress        # [RECONCILED 2026-10-07] 1-0, 6-1b, 1-3, 1-6 done; 1-0b unit leg, 1-2 carrier pin, 1-7 ungated legs in-progress; 1-1, 1-4, 1-5 status pending verification (1-1 BFF wire-up likely merged given the spec exists and the base commit is 1.3; needs GitLab MR lookup to confirm). Story 1.6 (frontmatter routing) merged 2026-10-07 12:32 UTC via !513 → commit b4222243b on feat/okf-server.
+  1-1-retriever-multigraph-fanout-rrf: review  # [RECONCILED 2026-10-06] retriever-side fan-out scaffolding shipped via 1-0 commit 18b34cd13 (per course-correction bundling); 1-1 spec narrowed to BFF wire-up (the actual e2e gap that unblocks OKF queries). Spec at _bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md (ready-for-dev 2026-10-06, 4372 tokens — user override of 1600 ceiling). Per course-correction §3 build order 1-1 was supposed to precede 1-2, but the BFF wire-up is the actual missing piece (chatqna forwarder is shipped at chatqna.py:1020, retriever carrier is shipped at retriever.py:927-933, BFF never passes the kwarg). [2026-10-06 build] implemented + reviewed (3-layer review, 9 patch groups fixed, 0 loopbacks) on feat/okf-1-1-bff-wireup; backend 1800/1809 (9 pre-existing local-env), OPEA covering suites 451/451, okf-server 747/747; live .102 validation + deploy pending (Path-2 venue).
+  1-2-chatqna-forwards-graph-set: in-progress       # [RECONCILED 2026-10-06] AC1 carrier pin landed (596a11fcd + 60b9355ce — fan-out engages on ≥1 graph); chatqna forwarder per its own file: "Implementation follows Wave R5"; no behavioral change to single-graph path
+  1-0-retriever-provenance-materialization: done    # [RECONCILED 2026-10-06 — was backlog per pre-rebase annotation; was actually DONE 2026-09-21] commits 18b34cd13 + 60b9355ce + 160d4504e + a2b9f2690 on feat/okf-server: fusion-time attribution (graph_name per leg, repo_id via resolver map, concept_id from chunk.file_id); RRF preserves provenance; zero-hit per missing graph with INFO log + fan_out.per_graph.failures span attribute; per-leg timeout via asyncio.wait_for
+  1-0b-boundary-probe-graph-names: in-progress      # [RECONCILED 2026-10-06 — unit leg DONE 2026-09-20; live-deploy leg (LG-5 launch gate) still pending] commit 58c87cbc7: graph_names carrier extends label_contract pattern; remaining: scripts/check-okf-retriever-boundary.py smoke harness on release/el-salvador
+  1-3-graph-router-query-aware-selection: backlog   # [BUMP moot on this branch] NEW 2026-08-13 — intelligent selection, MAX_FANOUT_GRAPHS=5, ≤20ms gate (G6, D8-D10/D14)
+  1-4-parallel-fanout-bounded-concurrency: backlog   # [BUMP moot on this branch] NEW 2026-08-13 — Semaphore + per-graph timeout + partial-failure (G14)
+  1-5-two-level-cross-graph-rrf: backlog            # [BUMP moot on this branch] NEW 2026-08-13 — size-normalized 2-level RRF (G21)
+  1-6-frontmatter-routing-publish-gate: done  # [DONE 2026-10-07 12:32 UTC] SQUASHED MERGED via !513 (commit b4222243b on feat/okf-server). 7-commit history on story-1-6/frontmatter-routing (docs + Layer 1 writer + Layer 2 carrier + Layer 3 reader + 3 lint/format/test fixes) was squashed into the single MR title. CI: 2 pipelines green (12049, 12050); lint:python + lint:backend + ruff format + prettier + 265 pytest tests + 16 image builds + contract:retriever-arango + scan:reranker all green. Worktree story-1-6 pruned; local + origin branches deleted. Spec at _bmad-output/implementation-artifacts/spec-1-6-frontmatter-routing-publish-gate.md. Original 1-6-fanout-observability-spans slot (G24, G35) absorbed into the rag.route.* attrs this story adds. [REPURPOSED 2026-10-07] the original 1-6-fanout-observability-spans slot (G24, G35) is taken over by the frontmatter routing work (supersedes the prior backlog slot per user directive 2026-10-07). NEW STORY 2026-10-07: LLM-tagged OKF repos as primary routing signal with k=40 chunk-probe (Story 1.3) preserved as always-on validator; env-driven OKF_SEARCH_STYLE knob (hybrid | frontmatter_tags | vector_probe, default hybrid); frontmatter tagging+vectorization are an ingest-time requirement independent of which style is active (so an operator can flip styles at any time without re-ingesting). Anchored on 2026-10-07 dry-run evidence (bali + indonesia mis-curation confirms the need; user: "garbage in garbage out — the user owns the corpus, we provide the tools"). Spec at _bmad-output/implementation-artifacts/spec-1-6-frontmatter-routing-publish-gate.md (ready-for-dev 2026-10-07). Observability span attrs (the original G24/G35 scope) absorbed into rag.route.* attrs this story adds. Wizard surfaces (Curate tags card + Publish frontmatter gate) MERGED 2026-10-07 13:50 UTC via !515 (squash commit 088edafaf on feat/okf-server); 3 commits total (3 file changes + 2 test fixups for the Publish.vue parallel gate). [2026-10-08] the deferred "Persistent editor pane in RepoEditor.vue" follow-up is DELIVERED by 1-7-frontmatter-in-index (below) — chip UI lives in the editor right rail on every concept.
+  1-7-frontmatter-in-index: done  # [DONE 2026-10-08, live on local build + pushed feat/okf-server] Story file _bmad-output/implementation-artifacts/1-7-frontmatter-in-index.md (dev-log appended). Directive changes shipped live: chip UI RESTORED (supersedes the story's Q5 "remove panel" — David: "the previous UX was great, it just saved to a 2nd overlay structure"), mounted in wizard Curate + editor right rail (always, every concept — editor parity rule); per-row approval DROPPED (supersedes Q4 — existence in frontmatter = approved; publish gate = ≥3 topic + ≥1 forbidden only); dialog renders the `frontmatter:` sub-block as form rows (textareas, one tag per line, no per-field add buttons — "users should not have to modify raw markdown"). Story 1.7a: buildVectorizedHead on every publish → okf_repositories.head {text, vector, per_field, dim, model, ...}; retriever does NOT read head yet. Bug chain: saveFrontmatter named-export import bug; PER_REPO_FIELDS template invisibility; en.js duplicate frontmatter key (runtime shadowing + CI); publish-gate AQL multi-RETURN syntax error (409 on EVERY publish — repro'd on NCD Information f043215b); wizard 70vh bounded layout + Step 9 compact embed; 3 lint warnings. Commits 9eba9d7e..408b8086 (9 commits). CI lint:frontend was red on the first 5 (fixed in eeac48e5+408b8086); remaining pipeline status being verified.
+  1-8-head-tester: done  # [DONE 2026-10-08 — ALL FOUR MRs SHIPPED + LIVE on local build] Spec §9 decisions: head-wiring IN-STORY (RETRIEVER_ROUTE_HEAD_WEIGHT default 1.0); okf_head_test_runs; negatives ALL THREE; sibling bound 20. MR-A 1f6934473 (head-test-service two-leg lab + head/rebuild + routing-test + forbidden-centroid fix); hotfix e3662c725 (smoke caught 3 missing-outer-awaits: reader-null / publish-gate-silently-skipped / bundle-merge-dropped-history + teiEmbed export); MR-B 6d8b80c0f+22694a186 (suites + run-all analytics + okf_head_test_runs + honest-empty semantics; kind=all bind-var fix). MR-C fb318763d (frontend Testing Lab: HeadTestDialog Head/Test/Suites tabs on StudioDashboard Published+Ingested cards, editor shell + right-rail badge, wizard Publish read-only card; headTestService + 6 store actions + i18n ×14 (+71 keys); 1637/1637 incl. 8 new dialog tests). MR-D 66062714d (retriever _route_graphs head pseudo-rows: weight×cosine into the global top-K pool, dim+model guards, best-effort fetch never degrades, 0.0 rollback; TestRouteGraphs 8/8; the 5 trace_logging/docarray failures pre-exist on HEAD). ENV EXTERNALIZATION dc23689f1 (David's standard: all OKF vars in .env, AI-readable env-template SECTION 15, env.j2 parity incl. TEI_EMBED_HOST same-host-as-inference derivation + OKF_INGEST_CONCURRENCY dedupe, config-validator AC7 parity tests 36/36; TEI_EMBED_HOST + EMBEDDING_MODEL_ID compose pipes). Live evidence: rebuild→200, routing-test both polarities 200 with BGE prefix fidelity ("BAAI/bge-large-en-v1.5 + query-instruction"), suite gen/run/list 200 (12 queries 0 errors, honest null negatives in the one-head universe), frontend bundle app.da863774.js carrying the Lab; retriever knob verified in-container. Deploy-ops note: Docker Desktop buildkit cache corruption caused silent no-op builds — docker builder prune fixed. REMAINING: MR-C frontend (HeadTestDialog + rail badge + Publish card + i18n ×14), MR-D retriever wiring. MR-B SHIPPED 6d8b80c0f + fix 22694a186 (head-suite-service: generateSuite = ONE guided-JSON vLLM call + deterministic forbidden-derived negatives + honest degradation when vLLM is down; addQueries curator free-text; runSuite via routingTest with HONEST-EMPTY semantics — one-repo universe reports negative metrics null, never fake 100%, solo-race margin excluded; listRuns kind filter; okf_head_test_runs + idx repo_id/created_at; vllmChatCompletions exported same as teiEmbed; arango-mock extended additively). LIVE SMOKE PASSED (smoke-1-8-mr-b.js): generate 201 (5 llm-pos + 3 llm-neg + 3 forbidden + 8 keywords — granite even picks forbidden-domain queries as negatives with reasons citing the exclusions), curator add 200, run 200 (12 queries 0 errors, positives 5/5 rank-1 scores 0.618-0.701, negatives honestly non-evaluatable sibling_count=0), list 200 (suites+runs newest first) — after the smoke caught kind=all binding an unused @kind (Arango rejects; 2nd mock-hides-wiring catch). Suite 771/771 (+10). NOTE: CI has no test:okf-server job — suite runs only locally.
+  1-8a-forbidden-gate: done  # [DONE 2026-10-09 — MERGED into feat/okf-server via merge 2e9be556d (squashed content a1046629c), verified from branch history on fix/story-1-8b-routing-gate-v2; was in-review on fix/story-1-8a-forbidden-gate → MR, 2026-10-09. Note: this key previously sat INLINE inside the 1-8-head-tester comment above and was invisible to YAML — split onto its own line 2026-10-09] David 2026-10-08: "under no circumstances should 'fun in Indonesia' be routed to the NCD Information repo… this should NEVER happen" + "the genetics query is borderline… probably in". The verdict is no longer rank alone: a head CLAIMS a query only when its score clears its own forbidden centroid by ROUTE_HEAD_MARGIN (default 0.01, calibrated 2026-10-08 on NCD: suppressed band avg−forbidden ∈ [−0.062, −0.008] = mental-health/nutrition/exercise/'fun in Indonesia'; selected band ≥ +0.024 = 'genetic risk factors for cancer' and the two cancer/asthma positives at +0.106/+0.122). Same gate in the retriever — a head's pseudo-row is dropped when margin ≤ 0; gate degrades open when per_field.forbidden is null (pre-1.8a rebuild). Evidence: live reproduction with the production TEI endpoint at 15:50 (head math) — every adversarial query (mental-health, nutrition, exercise, fun in Indonesia) sits below the gate, every positive (cancer screening, asthma) above, genetics borderline-IN as David ruled. Files: okf-server/services/head-test-service.js (the gate + head_claimed/forbidden_cosine/head_margin telemetry + provenance="head-suppressed (forbidden/noise)"); okf-server/services/head-suite-service.js (suite rows carry the gate fields; summarizeRun evaluates negatives solo via head_claimed === false, legacy results without the field keep the sibling-gated floor); genie-ai-overlay/retriever/{config.py,genieai_retriever_arangodb.py} (ROUTE_HEAD_MARGIN env + drop-in-the-pool filter); frontend HeadTestDialog.vue (new Claims-query column; verdict distinguishes rank-fail from gate-suppressed; adversarial + non-adversarial texts updated); i18n ×14 (5 new keys). Tests: okf-server 777/777 (+3); frontend 1640/1640 (+3); retriever 8/8 (existing pool tests cover the change; no new retriever tests per the directive to keep this small). CI: not yet — pipeline will run on the MR push.
+  1-8b-routing-gate-v2: review  # [VALIDATED + COMMITTED 2026-10-09 — f8ead5de0 (31 files, +1972) on fix/story-1-8b-routing-gate-v2 (cut from feat/okf-server 2e9be556); gate v2 live on the local build; MR → feat/okf-server pending. Validation results at the end of this comment + story §8] David 2026-10-09 rulings: "forbidden is forbidden — that is a hard contract, it should immediately score zero" (the veto); routing must be an AFFIRMATIVE claim — "we must ascertain that there either IS or IS NOT a reason to include any repo in the selected list for any given query… this is a key part of both the RAG accuracy and efficiency goals"; the Lab must TEACH the user how to adjust tags (suppression → which condition + which tag + what to edit); the suite generator must produce MORE RANDOM adversarial negatives. Three-condition claim contract (replaces 1-8a margin-only; margin kept): FLOOR score ≥ RETRIEVER_ROUTE_HEAD_FLOOR 0.55 (unrelated queries score 0.32-0.484 on any head; margin-only let "capital of France" 0.321 claim NCD at +0.012), VETO no single forbidden tag cosine ≥ RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX 0.55 (mixed-subject negatives slip the AVERAGED centroid: genetics 0.617 / epidemiology 0.619 / exercise 0.638 / incidence-trends 0.567 vs their dominant tag; legit claims ≤ 0.529 on any tag), MARGIN score − forbidden-centroid > RETRIEVER_ROUTE_HEAD_MARGIN 0.01. head_claimed = all three; head_claim ∈ {floor, veto, margin, claim} = FIRST failing condition (the teach-the-user hook); head.per_field.forbidden_vectors = [{tag, vector}] per-tag embeddings built at publish (frontmatter-service.buildVectorizedHead; averaged forbidden centroid unchanged — needs a head REBUILD on existing repos); verdict provenance 'head-suppressed (off-domain)' | 'head-suppressed (forbidden: <tag>)' | 'head-suppressed (forbidden/noise)'; fidelity algorithm story-1.3-replay+v2 with all 3 knobs. Retriever parity: _route_graphs head pseudo-row needs floor+veto+margin to enter the top-K pool; counters heads_floored/heads_vetoed/heads_gated; span attrs rag.route.heads_floored/heads_vetoed; log line extended; degradation skips veto without per-tag vectors / skips margin without centroid (never silently suppresses on missing data). Files changed (committed in f8ead5de0 — 31 files, +1972: the 4 core files + suite-generator randomization + HeadTestDialog gate breakdown/teach panels + i18n ×14 + jest +176 / pytest test_fanout.py +287 + env/docker-compose/env.j2/config-validation externalization of the two new knobs). SHIPPED IN THE COMMIT: v2 unit tests; MORE RANDOM adversarial negatives (randomized off-domain + meta classes with deterministic fallbacks); HeadTestDialog teach-the-user (3-check Floor/Forbidden-tags/Margin breakdown, DsPill pass/fail/na from fidelity.knobs; veto + floor teach panels). VALIDATION PASSED (2026-10-09, NCD f043215b local-build cycle): head rebuilt (forbidden_vectors minted) → suite 18/18 PASS at 08:08 (positives claimed, mixed-subject vetoed, off-domain floored; TB 0.509 floor-suppressed); David says "testing is much better". RESIDUAL spun into 1-8c: the HIV/communicable-disease query CLAIMS (head 0.594 > floor 0.55, max tag 0.518 < 0.55, margin +0.049 — all three conditions pass) because communicable-disease is UNDECLARED — a curation gap, not a gate bug; the Lab had no claim-side teaching surface. Story file _bmad-output/implementation-artifacts/story-1-8b-routing-gate-v2.md (§8 = validation results); spec §13-14.
+  1-8c-lab-teaching-loop: in-progress  # [NEW 2026-10-09 — spun out of 1-8b's residual; backend COMMITTED c87b5e2dc on fix/story-1-8b-routing-gate-v2 (5 files, +291) — frontend loop remaining] David's requirements (2026-10-09): (1) when tests FAIL the Lab MUST advise how to adjust the head — INCLUDING claim-side failures: suggest forbidden tags, let the user add them, rebuild, retest INSIDE the Lab; (2) "similar but wrong" negatives = the near-miss class; (3) user-controlled query counts per class in the suite dialog; (4) tag editing + head regeneration from the Lab; (5) batching — never a per-query full-time admin job. BACKEND DONE (c87b5e2dc): POST /api/okf/repos/:repo_id/routing-explain {query} → routingTest verdict + suggestion {tags (kebab-case forbidden tags), source 'llm'|'none', reason} populated ONLY when the head CLAIMS (explainRouting, head-test-service.js — LLM proposes 1-3 scope-excluding tags, deterministic empty fallback); POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain → {suite_key, run_key, failing_count, failing_queries, suggested_tags ≤5, source, note} — every failing negative of the LATEST run in ONE LLM call (explainSuiteFailures, head-suite-service.js:755 — the anti-treadmill guarantee); near-miss negative class (repo vocabulary, out-of-scope intent — LLM near_miss[] rows + deterministic NEAR_MISS_TEMPLATES fallback from entities, never empty); per-class count controls n_meta (default 3, cap 8) + n_near_miss (default 4, cap 10) beside n_positive (8..20) / n_negative (6..15) / n_negative_random (4..12), all clampCount-guarded; jest updated for the 5-class negative merge (17/17). REMAINING (frontend): claim-side teach panels in HeadTestDialog (suggestion → add tags → head/rebuild → suite re-run without leaving the Lab); per-class count inputs in the suite dialog; in-Lab tag edit + rebuild + re-run loop. STRATEGIC FOLLOW-UP recorded for David (spec §14.4): Subject-Area-inherited exclusions — boundary statements belong in the KH taxonomy and repos inherit them at head build; per-repo forbidden becomes the exception path — needs its own story; plus initial-tag forbidden suggestions at curation time (David: "look at the process of generating the initial tags too... if this can be improved without losing query fidelity on the target corpus then also fine"). Spec §14.
+  1-8d-teaching-loop-guardrails: review  # [NEW 2026-10-09 — remediation of the first live teaching-loop cycles; backend COMMITTED on fix/story-1-8b-routing-gate-v2: 130a99e + 2f1cbd763 (+ test-debt debt noted below); frontend loop remaining] THE POISONING (2026-10-09): 3 teaching-loop cycles applied LLM suggestions that forbade 'lung-cancer' — the repo's OWN entity tag — positives collapsed 7/8 -> 2/8 while negatives "improved" to 20/20 by over-suppression, and the Explain button (gated on negative failures only) disappeared exactly when the loop was most needed. David's three requirements: (1) every cycle improves, (2) unlimited cycles, (3) revert in the Lab. BACKEND DONE (130a99e): mechanical suggestion guardrail guardSuggestions (head-test-service.js) — embeds each candidate via frontmatterService.teiEmbed, rejects when cosine vs ANY topic/entity/keyword head vector >= OKF_GUARD_SELF_SUBJECT (0.55) or vs an existing forbidden vector >= OKF_GUARD_DUPLICATE_FORBIDDEN (0.9), returns {accepted, rejected:[{tag, reason}]}; both explain endpoints screen through it and report rejected candidates with reasons (source 'guardrail' when all screened) — a screened-out proposal never reaches the UI chips; explainRouting returns suggestion.{tags, rejected, source 'llm'|'guardrail'|'none', reason}. BOTH failure kinds (explainSuiteFailures v2): removal_suggestions [{tag, killed}] aggregated from killed positives' tag_veto attribution (remove-side advice, the inverse of add), positive_failures {count, veto_counts, margin_killed}, explicit improvements advice ("remove or narrow <vetoing tags>"), failures-are-suppressed-positives note when only positives failed (the Explain blind spot closed), advice persisted as kind:'explain' docs in okf_head_test_runs (auditable cycles). REVERT: every frontmatter save snapshots into bounded frontmatter_history (10, {saved_at, actor, shape}) on the repo doc; GET /api/okf/repos/:repo_id/frontmatter/history (read) + POST /api/okf/repos/:repo_id/frontmatter/revert {saved_at} (admin; re-enters update() so revert-of-revert works). Suite payload carries forbidden_snapshot (the forbidden list at generation time — cycle-staleness flag for the UI). FORBIDDEN CEILING 6 -> 24 (47171229 — add-all on a repo with 5 existing tags was a guaranteed 400). FOLLOW-UP 2f1cbd763: veto-impact simulation in the guardrail — a candidate whose cosine vs any of the run's own POSITIVE query vectors >= ROUTE_FORBIDDEN_TAG_MAX (0.55) is rejected with the kill list ("would suppress N positives") — a broad compound tag is a blunt veto and is now caught BEFORE it ships; under_test.max_tag names the nearest forbidden tag on EVERY query (margin-killed positives have attribution). ENV PLUMBING: OKF_GUARD_SELF_SUBJECT + OKF_GUARD_DUPLICATE_FORBIDDEN in env §15 (teaching-loop guardrail block), docker-compose okf-server pipes (empty default = code default), ansible env.j2 parity (default('0.55')/default('0.9')), config-validator Story 1-8d pin block — suite 42/42 green. FRONTEND DELIVERED 2026-10-09 (agent-built 1-8d workflow + advisor wiring 6b1dbab): guardrail rejection chips with reasons, removal chips (buildFrontmatterShape minus-tag), positive-failures block + Explain gate on either failure kind, same-suite positive tripwire (red strip → Revert panel), Revert-tags panel (history + revert + rebuild offer), staleness flag; full 1-8d live smoke 27/27 (scripts/okf-testing-lab/smoke-1-8d.js, incl. the section-13 advisor shape checks). KNOWN TEST DEBT: __tests__/head-test-service.test.js (2 explainRouting) + head-suite-service.test.js (2 explainSuiteFailures) assert the v1 shapes — UPDATE DONE (jest agent, 832/832 at the time; now 838). RESIDUAL moved to 1-8e: apply-flow race (silent stops), the bouncing-scorecard confusion, the one-tag-per-cycle treadmill. Spec §15 (post-mortem §15.1); story-1-8b §9 (cycle outcome + remediation).
+  1-8e-live-cycle-hardening: review  # [DONE 2026-10-09 — COMMITTED on fix/story-1-8b-routing-gate-v2: advisor UI 6b1dbab + env knobs e2c7e87 + harness 364916a + TEI chunk 57dcf69 + tag-dedup/display dd41684 + tagset identity/damping/apply-race f642e65; live on local build, 46/46 verify] David's asks this cycle: advisor must be comprehensive across suites AND cycles; recommendations must improve positives too; keep the cycle simple for admins; goal 100% on a large corpus. DELIVERED: (1) advisor frontend — Advisor button → scorecard ("Now X → predicted Y") + attributed add/remove chips + per-candidate verdicts + Apply-in-one-save → rebuild → same-suite rerun (i18n ×14, scripts/add-advisor-i18n-keys.cjs). (2) TEI chunking (57dcf69) — the advisor's one-shot embed of all deduped run queries 422'd on the remote TEI's 32-batch cap; teiEmbed chunks at 32, every caller bounded. (3) tag dedup at BOTH origin points (dd41684) — granite emitted "mental-health" 5× in one array; suggestTags dedups; repository-service.update() dedups topic/entity/keyword/forbidden at the write boundary (history snapshots store the clean shape); RepoEditor remounts the concept pane after a chip-panel save (stale-YAML display bug David hit). (4) THE BOUNCING ROOT-CAUSED — run-record forensics: same-head reruns are BIT-STABLE (0 flipped rows across 45); every pass-rate swing was a TAG-SET change compared as one experiment, plus the centroid-margin cross-effect (adding any tag shifts the margin verdict of every query). (5) tagset identity — every run doc stamps tagset {forbidden, hash8}; history table shows it (compare like with like); the advisor is already config-safe (re-predicts via predict(), never trusts stored outcomes). (6) anti-treadmill damping (f642e65) — negatives-only adds must suppress >= OKF_ADVISOR_MIN_NEGATIVE_GAIN (2, env-tunable); max OKF_ADVISOR_MAX_ADDS (3) adds per run; only 'no predicted improvement' rejections retried on the interaction pass. (7) Apply race fix (f642e65) — one busy token ('advisor-apply') owns save → rebuild → re-run; every failure path writes the error strip (the silent-guard chain stopped mid-leg live). LIVE EVIDENCE (suite s1791548461754, 45 rows): failing 7 → 6 → 5 over three advisor cycles, positive kills constant at 1 (the MISLABELLED HIV query — vetoed by communicable-diseases at 0.562: the gate did exactly what it was built for; the row's "fail" is the manual label); advisor CONVERGED (add=[] remove=[] score 58→58) after 4 rounds — the cycle terminates. The 5 residual fails are suite-label errors (in-scope near-misses the generator mislabelled). OPEN: (a) B — margin on worst-tag instead of centroid (compositional tuning; gate-semantics change lab+retriever; David deferred, "not so keen" on D auto-loop too); (b) honest-label benchmark regeneration (HIV as negative, 5 in-scope near-misses as positives) — prerequisite for 100%-meaningful numbers at scale; (c) branch push → CI → MR to feat/okf-server once David validates NCD. Tests: okf-server 838/838, frontend 1660/1660, smoke 1-8d 27/27, verify-local-build 46/46. Story file §10.
+  1-8f-suite-load-edit-rerun: review  # [DONE 2026-10-09 — COMMITTED cf9fe2c + smoke ce7d7a7 on fix/story-1-8b-routing-gate-v2; live on local build; David validation pending] David: 'the test suites need to be able to be saved, modified and rerun (of course)'. Suites already persisted + reran by key; the gaps were LOADING one back and EDITING rows (a row could only be ADDED — the HIV mislabel was permanent noise). GET /:suite_key (read, full rows) + POST /:suite_key/rows {updates[{match,set}],removes} (admin): flips search BOTH payload arrays (the mislabeled row sits in the wrong one — unit test pins it), cls cleared on flip, 409 on cross-array contradiction / in-kind duplicate. Lab: Saved-suites table (Load), rows visible + editable BEFORE any run (flip ⇄ / × delete), edits adopt the server-returned suite. ALSO this cycle: translateMixin RAW lookup (4ba28e5 — vue-i18n rendered every {placeholder} EMPTY live while jest stayed green; teach.veto ×14 un-escaped). Smoke 32/32 (§14 suite load + flip roundtrip); okf-server 843 (1 pre-existing flake: import-links-integration timeout under load, green isolated), frontend 1664; verify 46/46. Story §11. [1-8f2 FOLLOW-UP 2026-10-09, 036af473b — same status] (a) suite generation is ASYNC: beginSuiteGeneration mints the key, detached worker (one per repo, 2nd begin 409 GENERATION_IN_FLIGHT), controller 202 {suite_key}, dialog polls GET /:key 96×2.5s with honest timeout — the sync request died at the gateway on the 100-positive ask (suite saved at min 5, browser gave up at 60s; David's suite s1791559159861-e67759 DID land — Load it from Saved suites). (b) the {'{'}-escape convention is DEAD: raw-lookup mixin made escapes render as themselves (every dashboard card: "Ingested v{'{'}n{'}'}") — ~47 okf.* strings un-escaped ×14; admin.documents.* keeps escapes (AdminDashboard.translate still compiles via $t); localeConsistency guard re-inked to pin the split invariant. okf-server 845+, frontend 1668, smoke 32/32 with poll-based generation (NOTE: build tree held a STALE pre-async smoke copy — first run failed 24/32; cp the fresh smoke), verify 46/46 (patched_files 42). Story §12.
+  1-8g-lab-corpus-coverage: review  # [DONE 2026-10-10 — COMMITTED 7707f2dd2 (+ f408084ad supersede-legacy + 3dc2eee heads-supersede) on fix/story-1-8b-routing-gate-v2; live on local build; David validation pending] David: click-test each query against the live corpus + default suite names + suite delete + the corpus-coverage signal. (1) CORPUS PROBE: POST /routing-testsuite/:key/probe — embed → top-24 from <graph>_SOURCE → the pipeline TEI /rerank (OKF_RERANK_ENDPOINT; empty=unknown+note) → verdict bands answerable>=0.5 / weak>=0.15 / unanswerable (calibrated: match 0.94-0.95, related 0.05-0.13, garbage 0.00002); persisted per row as lastProbe; Lab Corpus column chip. (2) DEFAULT NAMES: <Repo> suite N (running count), rename wins. (3) DELETE: admin, removes suite + run docs, audit docs stay, in-flight 409. ALSO this cycle (heads-supersede, 3dc2eee + f408084ad): claims route EXCLUSIVELY (probe skipped, 78s→0.01s live), legacy GRAPH leg excluded under an active claim (the Kenya-chunks asthma post-mortem), per-leg extraction summary at INFO (dense/bm25/fused/labels). Smoke 1-8d §15-17; okf-server 851, frontend 1672, validator 45. Story §13-14. [FOLLOW-UP 2026-10-10, df8aa9539 — same status] David's live-build feedback: no summary panel after a probe + Corpus column stayed blank + "unanswerable must state exactly WHY; answerable shows the stats". Panel: probe response now carries head {claimed,claim,score} + reference files (files-collection resolution) + rerank-ordered top_chunks; probeReason() writes the evidence (term-overlap vs best candidate / score vs the 0.5 bar); HeadTestDialog probePanel section above the suite (legs, reason, files, chunks table). Column fix: suiteEditableRows dropped lastProbe in the passthrough. i18n ×14; okf-server 850/851 (import-links load-flake, green isolated), frontend 1673, smoke 409 self-heal. Story §15.
+  1-8g-a-corpus-column-and-panel: done # [DONE 2026-10-10 — df8aa9539 + d66544128] Corpus column + probe summary panel + Run-All corpus probes (probe-on-run default ON, {probe:false} opt-out) + the computed-output regression test. Defect log: implementation-artifacts/defects-1-8g-live-cycle.md §a. SHIPPED IN MR !521 (fix/story-1-8b-routing-gate-v2 → feat/okf-server, pushed 2026-10-10).
+  1-8g-b-advisor-sim-embedding-parity: done # [DONE 2026-10-10 — c4bcb8619 (was LOGGED 2026-10-10)] REWORK: the advisor's gate simulation embeds queries with bare teiEmbed while the live gate uses the BGE query-instruction prefix (headTestService.embedQuery) — the scorecard's "Now 13/50" was fiction vs the live 29/50. Fix: embed through embedQuery at recommendTagSet ~:1810 + scope line naming suite_key/tagset/age. Defect log §b. Own MR — SHIPPED IN MR !521 (folded: the fixes interleave in recommendTagSet; per-item tests keep cherry-pick splits possible).
+  1-8g-c-advisor-positive-removal-lever: done # [DONE 2026-10-10 — c4bcb8619 (was LOGGED 2026-10-10); topic-add lever (defect log §c f) stays future] REWORK: 23 veto-kills/run (meat-packaging 16-21 + food-safety-testing 6-7) but remove=[] forever — removalCandidates' baseline is the sliding-10-window's OLDEST entry (corrupted after ≥10 edits) and curator-declared originals are unremovable by design. Planned (additive): blocked_removals surface, baseline repair, NARROW option, class filter on the add-LLM, candidate chip lineage, eventual topic-add lever. Defect log §c. Own MR(s).
+  1-8g-d-advisor-add-llm-class-filter: done # [DONE 2026-10-10 — c4bcb8619 (was LOGGED 2026-10-10)] REWORK: the add-LLM receives confusable + meta rows — "query-selection-process" (from a meta query) was ACCEPTED and baked into a head; "cancer-risk-assessment" from NCD-sibling confusables (NO cross-repo contamination — verified). Fix: filter cls ∈ {off-domain, forbidden, near-miss} + render query lineage on chips. Shipped in MR !521 with c. Defect log §d.
+  1-8g-e-fm-scope-hint: done # [DONE 2026-10-10 — 95638ec30] Per-concept frontmatter bar shows the repo-tags summary + pointer (the "saved in the wizard, empty in the editor" scope confusion). i18n okf.fm.repoTagsHint ×14 (ba53cc140). Defect log §e. Shipped in MR !521.— SHIPPED IN MR !521 (folded: the fixes interleave in recommendTagSet; per-item tests keep cherry-pick splits possible).
+  1-8g-f-fm-updated-at-restamp: done # [DONE 2026-10-10 — 3e30a8078] repository-service.update() restamps frontmatter.updated_at server-side (was: chip saves kept the import-time stamp; the Lab stale badge + desync checks read a lie). Pinned by test. Defect log §f. Shipped in MR !521.— SHIPPED IN MR !521 (folded: the fixes interleave in recommendTagSet; per-item tests keep cherry-pick splits possible).
+  1-8g-g-corpus-probe-ingest-gate: done # [DONE 2026-10-10 — d66544128] ▶ disabled + reason until repo.ingested_graph_name exists (live 409 REPO_NOT_INGESTED on the un-ingested Slaugherhouse Heuristics; David's prescription). i18n suites.corpusNeedsIngest ×14 (ba53cc140). Defect log §g. Shipped in MR !521.— SHIPPED IN MR !521 (folded: the fixes interleave in recommendTagSet; per-item tests keep cherry-pick splits possible).
+  1-8g-h-suite-negative-dedup: done # [DONE 2026-10-10 — c4bcb8619 (was LOGGED 2026-10-10, minor)] 16/66 negative rows are duplicate texts per run — skews the advisor's deduped counts (116→100) and per-class tallies. Dedup at generation/add time. Defect log §h.
+  1-8g-o-probe-rerank-429-retry: done # [DONE 2026-10-11] Run-All corpus probes showed "unknown" — remote TEI rerank 429'd the bursty 4-way probe pool (19/116 rows, note "rerank failed: HTTP 429", run doc r1791649769837); individual probes never trip it. Fix: rerankTexts (shared by both probe legs) retries 429/502/503/504 ×3 with jittered backoff + Retry-After; timeouts NOT retried (bounded); exhausted → "HTTP 429 after 3 attempts" note; head-suite.probe_rerank_failed warn for VictoriaLogs. PROBE_CONCURRENCY stays 4 (burst bucket, not sustained). Tests: retry recovers to answerable + exhausted degrades honestly (fetch bounded at 3). Defect log §o. [MR !521 (the 1-8g family) MERGED 2026-10-11 — merge commit 31dc7d93f on feat/okf-server.]
+  1-8g-p-suite-dup-origin-and-selfheal: done # [DONE 2026-10-11] LLM emitted the same query in + and − (pre-1-8g-h suite: one text ×3 in negatives, 16/66 rows duplicated) and the row guards WRITE-LOCKED it — every edit 409'd (logs 17:38-17:39, :922/:929), unfixable through the API. ORIGIN: generation already dedups (1-8g-h assembly filter + per-class loop sets + addQueries — verified); added the suitePrompt UNIQUENESS constraint (unique across the whole response, never two classes, vary substance) so the LLM stops wasting its N-budget. SELF-HEAL (updateSuiteRows): removes/flips take ALL text+kind copies across BOTH arrays (the clicked row represents the TEXT; ambiguous genuine+mislabeled flips now RESOLVE and fix the mislabel); within-kind duplicates normalize ON SAVE (head-suite.rows_normalized); flip-into-genuine → actionable 409; cross-kind contradiction stays hard but escapable. Live repair: suite s1791637021770-ca5aed deduped in DB (66→50 negatives, backup kept), David unblocked. Tests: 4 new + ambiguous-input test rewritten to resolution semantics; 61/61. Defect log §p.
+  1-8g-q-serving-head-maintenance: done # [DONE 2026-10-11, David: "a maintenance operation, similar to indexing a database"] Serving repos were FULLY read-only — repository-service.update() 409'd every patch when ingested_at was set (rationale: rename desyncs the versioned graph name) AND assertWritable froze every concept write, so the FrontmatterPanel (head tags) + the whole tune loop were dead on the only repos actually serving. SCOPED fix: update() accepts frontmatter-only patches while serving (audited 'frontmatter_maintenance'; other keys → 409 naming the rule + keys); patchConcept exempts the INDEX concept's markdown write (the head YAML; every other concept + body/label writes stay frozen); FrontmatterPanel unlocked unconditionally; shell pill → "CONTENT READ ONLY — head/tags stay editable" (i18n ×14 codemod); rename stays blocked (still-valid reason); lifecycle transitions write the doc directly — verified untouched. Stale-label note: re-tagging stales chunk labels until the next Ingest (the DB index-rebuild analogy). Tests: +3 route (index maintenance 200 / non-index 409 / label 409 pinned), +2 service (serving frontmatter patch + restamp; rename+studio_step 409), okf-server 870/870, frontend OKF 246/246, localeConsistency 7/7. Defect log §q.
+  1-8g-r-suite-cap-generator-parity: done # [DONE 2026-10-11] SUITE_ROW_CAPS (positive 60 / negative 150 — hand-picked pre-1-8f) sat BELOW the generator CLASS_MAX (1000 / 500x4): David's legitimate 100-positive NCD suite (s1791565037101) 409'd on EVERY row edit (7x SUITE_CAP 02:59, logs) — write-lock #2, same class as 1-8g-p. Fix: caps DERIVE from CLASS_MAX (positive 1000; negative = 500x4 classes = 2000) so every generatable suite is editable; the cap rejects only NET GROWTH (pre-edit sizes captured; shrink-always-allowed) so no future cap change can re-lock. No DB repair needed. Tests: +3 (100-positive editable / over-cap shrink / growth 409); 64/64; eslint+prettier clean. Defect log §r.
+  1-8g-s-advisor-row-actions: done # [DONE 2026-10-11] 8 near-miss fails, advisor said NOTHING (logs: explain suggested:0, recommend 243->243) — add-LLM correctly refuses near-miss subjects (own vocabulary), removals are loop-only, and byText DROPPED the probe verdict (no row lever existed). Fix: probe rides into the advisor; failing negatives with answerable/weak probes become row_actions [{query, action:'flip', verdict, top_score, reason}] rendered with one-click Flip (normal row endpoint, 1-8g-p semantics); ungrounded negative fails counted honestly (ungrounded_negative_fails + note). i18n advisor.rowActionsTitle/flipToPositive/ungroundedNote ×14. Tests: +2. Defect log §s.
+  1-8g-t-suite-delete-confirm: done # [DONE 2026-10-11, David: 'the deletion must be confirmed with a dialog'] The × only ARMS a DsDialog confirm (key + name + irreversible warning; Cancel/Delete); delete fires solely from Confirm. Investigated 'deleted suites were not deleted': all 15 clicked deletes SUCCEEDED (server logs, keys absent) — what remained were 13 LEGACY name:null suites (pre-naming-fix) rendering as blank rows. UX gap, not a delete bug. i18n suites.deleteConfirm* + unnamedFallback ×14. Test rewritten arm→cancel→confirm. Defect log §t.
+  1-8g-u-generation-preflight-and-failure: done # [DONE 2026-10-11, David: 'suite <> not found for repo <>' on tag-less Indonesia History] beginSuiteGeneration minted the key + kicked the worker detached; NO_FRONTMATTER killed it in 1ms; .finally() cleared in-flight — the poll 404'd until timeout while the real error only hit the logs. Fix: begin is ASYNC and validates preconditions BEFORE minting (tag-less → immediate 409 NO_FRONTMATTER; UI: 'create tags in the Frontmatter panel (or use Suggest tags), then generate' — David's prescription); async failures recorded per repo → the poll's key answers {status:'failed', error:{code,message}} terminally, cleared on next begin. i18n error.noFrontmatter ×14. Tests: +3, begins updated to async signature. Defect log §u.
+  1-8g-v-async-suite-runs: done # [DONE 2026-10-11, David: 'runs like this on a large repo will always take longer than 60 seconds'] A 100+100 run on Indonesia History 504'd at the gateway TWICE while the server COMPLETED it (pass_rate 0.9286, 03:58:09) — results persisted but INVISIBLE (the UI only renders the run response). Fix: the 1-8f2 pattern for runs — beginRunSuite (validate → 409 concurrent → mint → status:'running' placeholder → detached worker; failed worker → status:'failed' doc), GET /:suite_key/runs/:run_key poll/load endpoint, head legs parallelized 4-way (results[i] by index, order-stable), UI onRunSuite 202+poll (~6min) + loadLatestRunForSuite adopts the suite's latest completed run on load/generate (the dashes screenshot cured). Tests: +1 UI poll adoption; okf-server 877/877; dialog 49/49. Defect log §v. NOTE: §v's final persist claimed 'REPLACES the placeholder' but shipped .save() — corrected by 1-8g-w.
+  1-8g-w-run-persist-replace: done # [DONE 2026-10-11] EVERY async run died at the final save: beginRunSuite saved a placeholder {_key, status:'running'} and runSuite's persist .save()'d the same _key (INSERT) → 'unique constraint violated' AFTER ~60s of work — Indonesia Suite 1 ×2 (r1791696163542-cb5f41, r1791696474473-b06d04; 154 probes each) destroyed; jest missed it (the sync path mints its own key). Fix: replace when opts.runKey handed in (sync keeps save); persist failure → RUN_PERSIST_FAILED; created_at = MINT time end-to-end; failDoc never leaks the driver's numeric 409 code; RUN_IN_FLIGHT/GENERATION_IN_FLIGHT carry err.details run_key/suite_key (client can adopt — UI = 1-8g-x); boot sweep sweepInterruptedRuns() marks post-restart running orphans RUN_INTERRUPTED + getRunSuite lazy-reaps no-lock running docs (polls terminate); placeholder-save failure cleans the lock (no restart-lock); deleteSuite refuses mid-run; listRuns projects status/error; head-suite.run_started log. Tests: +8 lifecycle (76 file / 885 suite), eslint+prettier clean. Defect log §w.
+  1-8g-x-run-progress-and-resume: in-progress # [NEXT, David: 'the UI should show a progress bar for the run' + reopen/409 blind] w delivered the server contract (details.run_key, listRuns status, orphan reaping); remaining: throttled {done,total,phase} progress persisted into the placeholder + poll-rendered bar at the Run button; reopen auto-resumes running/failed/completed via loadLatestRunForSuite; 409 handler adopts the in-flight run; runs-history status badge. Defect log §x.
+  1-8g-y-version-toast: proposed # [PROPOSED 2026-10-11] App-wide 'new version available — reload' toast: redeploys silently fork already-open tabs (old JS executes until manual reload; old-client/new-server mismatches look like §w's report). App-wide scope — David's go pending. Defect log §y.
+  1-8g-l-fanout-bound-and-fallback: done # [DONE 2026-10-11, David: 'the 3 queries I just ran pass the head test and are answerable but return AI responses... This is a major problem'] The oversized-graph traversal starved EVERY chat answer (9/9 since the retriever restart; 6+3 of David's queries): the Indonesia head CLAIMED all of them (borobudur IS a tag; rank-1), dense+BM25+RRF fused 20 on-point docs in 0.4-0.5s, then the depth-1 traversal scored a 1024-dim cosine per edge over 1,046,217 LINKS_TO edges with NO limit until full materialization → >8s leg budget → _invoke_leg abandoned the thread AND discarded the leg's fused 20 docs (asyncio.wait pending → return []) → fused=0 → honest abstention. Fix: graph-size gate ARANGO_TRAVERSAL_MAX_LINKS=300000 (indonesia skips; gov-uk 80k/ncd 8.5k/slaughterhouse 1.6k keep traversal), per-hop AQL cap ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE=2000 (chunk+node subqueries), traversal sub-budget (wait_for(to_thread) at remaining leg budget -0.75s; overrun/crash → continue WITHOUT enrichment, the leg SUCCEEDS with its fused docs), claimed-leg-empty fallback (supersede-shaped empty fusion → one vector-only retry enable_traversal=false; competition shape doesn't retry), legs= log counts the search set. Tests +7 (fanout 55; suite 909 green — 5 pre-existing env failures). Defect log §l (reactivated from the 2026-10-10 park with 9-trace live proof).
+  1-8g-m-label-grounded-suggestions: done # [DONE 2026-10-11, David: 'the tags on the repo head suggested are a very good base for routing queries, whether the repo is large or small' + 'never regress existing features'] suggestTags sampled SORT _key LIMIT 20 (first-20-by-autokey = an alphabetical slice) into ONE LLM call: on the 999-concept Indonesia repo it saw History 14 + Prehistory 5 while the real surface was History 513/Politics 133/Culture 99/Economics 68/Religion 29 — and it FORBIDDENED modern-politics + contemporary-culture for a corpus holding 133 Politics + 99 Culture concepts (a live ROUTE_FORBIDDEN_TAG_MAX veto trap); the prompt never told the LLM what the corpus contains. Fix: ONE COLLECT-by-label query returns the COMPLETE histogram (any repo size) + a bounded per-label sample; label-STRATIFIED sampling (quota + round-robin) so a 20-row budget spans every subject area incl. the 1-concept tail; the distribution rides the prompt with COVERAGE-AS-REQUIREMENT and NEVER-FORBID-WHAT-YOU-CONTAIN; a mechanical zero-LLM forbidden guard (collides a label carrying >=5 concepts; conservative, every drop REPORTED with corpus evidence); coverage + forbidden_rejected ride the response and render in the panel ("derived from 21 of 999 concepts across 7 labels" + why a tag vanished); the dead OKF_FRONTMATTER_SAMPLE_N knob now works. Tests: +12 backend (897/897) +6 frontend (new frontmatter-panel-suggest.test.js — the component had NO test) 1687/1687 + locale parity 14/14. Defect log §m.
+  1-7-retrieval-mode-governance-config: in-progress # [RECONCILED 2026-10-06 — ungated legs landed 2026-09-20, commits 8f1763e0a + ed86af6b7] config-validator + /retrieval-config legs DONE; remaining: read-side TTL cache in chatqna/retriever (Wave R4), legacy CI invariant (Wave R4), 10.7 Studio card with i18n ×14 + site-docs gates (Wave R6)
+
+  # ── Publish/ingest cycle defects (2026-10-13/14) — PC-1..PC-8 ──
+  # Full write-up: implementation-artifacts/defects-publish-cycle-2026-10-13.md
+  pc-1-unstructured-xml-pi-crash: done # [FIXED 2026-10-13 — commits 03e2bc260 + 2f90ae5de on fix/okf-unstructured-remove-pis — NOT DEPLOYED, NOT PUSHED] David's Solar System ingest error "'lxml.etree._ProcessingInstruction' object has no attribute 'is_phrasing'" on pds4-dph-1-26-0-sec99 + sec100. unstructured parser.py:929 builds the only etree.HTMLParser(remove_comments=True); the ElementNamespaceClassLookup at :933 maps classes for _Element SUBCLASSES only, so a PI node falls through to lxml's bare class with no is_phrasing (traversal sites :423/:628/:750). Reachable from ordinary content — partition_md renders markdown to an HTML STRING (md.py:76→78) and Python-Markdown passes a literal <?xml ?> line through unescaped; PDS4_DPH_1.26.0.pdf does that on 13 of 155 pages. FIX = upstream's own remove_pis=True added in 0.27.8 (upstream issue #4358), applied as a build patch because we are pinned to 0.18.32 across a 374-package --require-hashes lock; patching the CONSTRUCTION site means no next unguarded attribute exists for the crash to relocate into. Falsified before fixing: lxml 4.9.4 vs 5.4.0 fail identically (not version skew), boundary sanitisation deletes legitimate fenced-code content (195→164 chars measured), node guards leave 5/13 still crashing, docling drops content (772 vs ~153071 chars). Three outcomes never silent-no-op — a patcher that no-ops is worse than none, so an unrecognised parser.py SystemExits and FAILS THE IMAGE BUILD. 13/13 PI cases pass, 0 changed outputs across a 138-document previously-passing corpus. RE-TEST: rebuild dataprep, re-ingest sec99+sec100 → both status=ingested, plus negative control (a content-free concept must still fail "No valid content extracted").
+  pc-2-pii-worker-gil-region-split: done # [FIXED 2026-10-12 — f6ac10c8e serialize + cc19bbe6a respawn-no-permanent-error + 9e434c981 split_regions — DEPLOYED] An 805 KB concept could never publish. The PII sidecar is uvicorn-multiprocess; a single analyze() holds the GIL inside native spaCy/thinc so the child misses its 5s liveness pong and is SIGKILLed mid-scan → ECONNRESET → the fail-closed publish gate records a PERMANENT error state. Recovering needed retract→create version→ingest repeatedly (landed on attempt 5 via the reaper). Fix splits long text into PII_REGION_MAX_CHARS regions (default 50000, env §15, documented to lower on a slower host) so no single analyze() can exceed the supervisor window. MEASURED: an 850 KB page killed the worker 8/8 before, 0/10 after, split into 18 regions; a live 12-region scan gave 4791 hits / 8273 distinct offsets / 0 deaths. RESIDUAL OPEN: 2 post-scan deaths remain, both AFTER scan completion — serialization pressure is a HYPOTHESIS, not a conclusion; needs instrumentation of that window.
+  pc-3-pii-bulk-accept-dead-code: done # [FIXED 2026-10-13 — 3b6c17b64 — DEPLOYED — NO PIPELINE] pii-service.js filtered prior resolutions with .filter(r => r.action === 'accept') but the bulk path writes the ACCEPT_ALL_FINDINGS constant, so the filter matched NOTHING and a whole-concept "Accept all" never suppressed the findings it had just resolved. isSuppressingAccept() now takes {accept, ACCEPT_ALL_FINDINGS}; both call sites use it. accept_repo deliberately EXCLUDED — 321 legacy records carry it and must stay inert. Test drives inspectConcept through the REAL call path with persisted findings + ledger, not just the unit; falsified by reverting the filter (2 findings returned instead of 0).
+  pc-4-vacuous-offset-translation-test: done # [FIXED 2026-10-13 — 53b731400 — NO PIPELINE] test_offsets_are_absolute_across_regions asserted only 0<=start<=end<=len(text) and end-start==5, both satisfied by the region-LOCAL pair (0,5) — it would have passed with the pc-2 fix REVERTED, which was the test that mattered. Now asserts distinct starts, ascending order, equality with split_regions offsets, and that the spans slice the original text.
+  pc-5-retraction-log-asserts-caller-intent: done # [FIXED 2026-10-13 — e96a3f90b — DEPLOYED — NO PIPELINE] The log emitted "Starting retraction analysis..." FIRST and unconditionally, so a curator scanning the bundle's Ingestion Log concluded his data was being deleted and stopped reading. retract_file has three callers — okf-server's defensive pre-POST sweep (the common case, finds 0) plus the CancelledError/generic-Exception rollbacks inside dataprep — and the old wording ("This is the normal pre-ingest cleanup check", "no retraction is in progress") is FALSE on both rollback paths, where the call IS the retraction. Outcome first, intent second; behaviour unchanged (the orphan-cleanup find always runs, the chunk count is still logged, cleanup stays auditable).
+  pc-6-wizard-step5-publish-pii-verdict: done # [FIXED 2026-10-13 — c0169886d — DEPLOYED — NO PIPELINE OF ITS OWN] David on step 5 ("it seems redundant… you cannot do anything about the labels displayed") and on the publish gate ("this will obviously NOT work properly with a full end to end test"). Adds the publish-time PII verdict + whole-repo re-scan, PiiReviewSummary / PiiRepoRescan / piiReview.js, a real review verdict surfaced in review, and rewrites the step-4/step-5 narrative in ALL 14 locales; deletes 3 dead i18n keys (add, addConfirm, placeholder) that no component read. CORRECTION 2026-10-14: this entry previously read NOT DEPLOYED, on the evidence that "0 of its 6 new exported identifiers appear in the served bundle". That check was WRONG — it grepped the minified bundle for exported const NAMES (PII_CHECKING, PII_UNREADABLE, …) which Terser renames and inlines, so they could never appear regardless of whether the code shipped. Grepping for i18n key STRINGS instead (they survive minification as literals) finds piiRescan, piiReview, unreadableTitle, progressIdle and stillBlocking all present, and the running frontend image was built 2026-10-13 14:28 UTC — 2h45m AFTER c0169886d landed at 11:43 UTC. PC-6 shipped with the build that followed it. Same class as the sidecar "died" substring false positive.
+  pc-7-ansible-env-carried-no-pii-vars: done # [FIXED 2026-10-13 — c22262c89 + 14f2ddfad — NO PIPELINE] Every PII tuning knob existed in docker-compose.yaml and env but NOT in deploy/ansible/templates/env.j2, so an Ansible (cloud) deploy silently dropped the ENTIRE PII configuration — the exact class the config-validator parity tests exist to catch, and they did not cover it. env.j2 additions + parity pinned in config-validation.test.js (51/51).
+  pc-8-remove-pis-patcher-would-fail-build: done # [FIXED 2026-10-13 — 2f90ae5de — NOT PUSHED] Found by dry-running the pc-1 patcher against the REAL parser.py copied out of the running image, not against my own fixture. (1) The real constructor sits at COLUMN 0; a literal carrying 4 spaces of assumed indent never matches, the guard fires, and the IMAGE BUILD FAILS — the patcher now matches on content while capturing and reapplying the file's own indentation. (2) read_text/write_text use newline=None, translating LF to os.linesep on write — a Windows dry run turned all 1018 lines CRLF, making a one-line patch look like a whole-file rewrite; now open(..., newline="") on both. (3) The test fixture was CRLF on this host, failing 6 tests while the summary claimed otherwise. Same lesson as pc-4 — exercise a patch against the REAL artefact.
+  epic-1-retrospective: optional
+
+  epic-2: in-progress            # Mostly ungated — build first
+  2-1-okf-server-skeleton-deploy: done
+  2-2-arangodb-meta-collections-repo-crud: done
+  2-3-okf-parser-frontmatter-links: done
+  2-4-conformance-validation-quality-metrics: done
+  2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
+  2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
+  2-7-source-sync-git-s3-change-detection: deferred   # DEFERRED 2026-08-14: v1 inputs = browser file picker (FR-37) + crawler + manual; Git/S3 sync scrapped for v1 (FR-1/FR-2 deferred)
+  2-8-pii-redaction-version-provenance-docrefs: done       # review fixes applied 2026-08-14: 23 findings (incl. critical fail-open) fixed; CI lane added; deployed+verified locally; Ansible/Swarm wired
+  epic-2-retrospective: optional
+
+  epic-2.9: in-progress        # NEW 2026-08-13 — Write-side Orchestration (the trunk). Mostly ungated Node; 2.9.6 gated.
+  2-6a-acl-label-preserve-fix: done                # UNGATED P0 — code-review APPROVED (2026-08-14, 4 low/nit findings non-blocking). 91 tests green, pipeline #6102 green.
+  2-9-1-ingest-service-ingest-endpoint: done         # dev+review 2026-08-16: 10 review patches FIXED + FULL dual-facility live smoke exit 0 (zip bundle → per-repo OKF_{repo} graph, zero default-graph leakage); 2.9.5-zip + 2.9.6-graph-wiring PULLED FORWARD by steward directive (D24 lifted — !277 still draft)
+  2-9-2-concepts-meta-upsert-writer: done           # dev-story 2026-08-14; code-review 2026-08-15: 21 findings FIXED (3783b92a1), red-green 8→134/134, live smoke green + gate OPEN
+  2-9-3-links-to-edge-writer-within-repo: done # G7,G22 (#963) — post-index, within-repo validated, version-stamped edges
+  2-9-4-ingestion-worker-drains-pending: done  # dev 2026-08-16: crawlWorker pattern reused (poll loop, NO Redis — D-D), worker-exclusive indexed|failed transitions, orphan sweeper; live smoke exit 0 (41 PASS) — worker drains unattended + DEDUP fires live; 3 live-caught bugs fixed (concept_id derivation, doc-repo 429-poison, canonical content hash)
+  2-9-5-bundle-zip-format-unzip-dedup: done        # 2026-08-25 cleanup pass (commit 469b13b): atomicity review done — per-concept isolation + partial-202 ACCEPTED semantics; targeted fixes = stuck-parsed reaper (settle/mint unblock), worker-error queue-advance touch, last_ingest_summary surfaced on repo doc + audit. Smoke legacy file_id sections reworked; mint refreshes okf_bundle_manifest. jest 334/334.
+  2-9-6-graph-name-wiring-retract-fix: done        # UNGATED 2026-08-16 (D24 lifted), landed via 2.9.1 fix-pass: graphName payload wiring + unified retract fallback + lazy OKF_{repo} collections + retractRepoGraph CASCADE DROP (gharial dropCollections=true — definition + member tables; ArangoDB 1942 membership rule live-verified) — ALL smoke-asserted physically (collections gone from ArangoDB)
+  2-9-7-okf-versions-mint-version-publish: done # G26 (#962) — repo-level bundle_version, immutable manifest, okf:v{N} tag, chunk-doc threading (ADR-031 + D-V1/D-V4)
+  2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
+  2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator
+  # Bundle-graph refactor (Story 4.8-amend, WP-A + WP-B + WP-C, 2026-08-19, commits 5265c8d + b0b28dc + d0db1a13):
+  # WP-A: hard/warning split → rejected at ingest + publish gate enforced in mintVersion (FR-25 made real).
+  # WP-B: rooted named graph (is_index root marker + ENTITY is_index + named gharial graph in _ensure_graph_collections).
+  # WP-C: content-only chunking — only bundle zip is a doc-repo file; concepts are graph content chunked directly from okf-server worker to dataprep (no per-concept files doc); concept_id on chunks; secret-gated internal callback (OKF_INTERNAL_SECRET, fail-closed); compose + env + Ansible env.j2 + CI defaults wired. okf-server jest 327/327, overlay pytest 107/107, ESLint/Prettier/Ruff clean, GitLab pipeline #6270 (MR !278) 75/75 GREEN.
+  4-8-amend-wp-c-content-only-chunking: done  # WP-C landed on feat/okf-server @ d0db1a13; live smoke rework deferred to follow-up context (jest+pytest+CI is the merge gate)
+  epic-2.9-retrospective: optional
+
+  epic-3: in-progress        # Vue admin UI — ungated; RECONCILED 2026-09-27: 3.1-3.7 done, 3.4/3.8 in-progress (3.4 carries Amendment A — wizard completion & editor parity), 3.9 backlog; 3.10 planned 2026-09-28 (wizard UX remediation — design rev 3 FINAL, P0 sweep next)
+  3-1-okf-repositories-tab-service-vuex: done     # RECONCILED 2026-09-27 (David OK) — Vuex okf module + service layer + repo surfaces live; note: the old G25 If-Match/409 optimistic-concurrency idea was NEVER built (verified: no If-Match/ETag in okf-server)
+  3-2-repository-dialog-details-view: done        # RECONCILED 2026-09-27 (David OK) — details surface live (RepoEditorShell + RepoEditor/Versions/Logs dialogs)
+  3-3-ingestion-progress-i18n: done               # RECONCILED 2026-09-27 (David OK) — okf.* i18n keys landed (8f9334c04 + lifecycle keys)
+  3-4-okf-studio-wizard-shell-stepper-tab: done        # [MARKED DONE 2026-10-06 — work shipped on feat/okf-server: commit dd0489258 (Step-7 validation, 923aa46b (#1040), 31c2076 (#1042), c4d983b, 964be8309 (#1043)); frontend 1628/1628 green; local build live; CI 11856 ✓] — original 2026-09-27 marker: AMENDMENT A COMPLETE + MERGED (!474, 07740a988, 2026-09-27): slices 1-4a (shell A1-A5+C1; Input dual-source dialog; Produce repo_id conversions idempotent) + 11 binding UX decisions (ritual outside wizard→Editor-shell finish, automated Labels preview, real clone via 4.8 API, doc-mgmt batch action routes INTO wizard, Validate embeds editor's PiiOccurrences, Review tools row) + /code-review max sweep ALL 20 findings fixed (f7b7e33fe) — frontend 1538/1538 + backend 719/719 + served markers verified; pending David's LIVE PASS to mark done; polish backlog: ×14 locale batch, doc-mgmt/crawler ⓘ tips, OkfSourceDialog preflight pills (serving/already-in-repo)
+  3-5-okf-studio-dashboard-multi-repo-kanban: done        # RECONCILED 2026-09-27 — StudioDashboard.vue live (kanban by stage, resume routing, bulk actions, health/metrics, i18n, #1020 queue chips 3bccd5f1a); gated items (6.1b shared-label, 10.4 inbox) hidden per spec
+  3-6-document-mgmt-create-okf-entry-point: done          # RECONCILED 2026-09-27 — ImportDocumentsDialog + okf:create-from-documents event + StudioTab wizard handoff live; gate amendment DELIVERED via 7.7 (SOURCES_NOT_RETRACTED); the wizard Input documents-panel variant itself = 3.4 amendment scope
+  3-7-crawler-ui-create-okf-entry-point: done             # RECONCILED 2026-09-27 — AddFromLinkDialog + crawlerToOkfService + okf:create-from-crawl / okf:okf-repo-created (#977 opens crawl repos at Curate) live; crawler Input-panel variant = 3.4 amendment scope
+  3-8-okf-concept-curator-validation-panel: done        # [MARKED DONE 2026-10-06 — Substance IMPLEMENTED via Amendment A; same feat/okf-server commits as 3-4 cover Validate live-data, autocorrect dry-run groups, embedded PiiOccurrences, embedded editor on Curate; frontend 1628/1628 green] — original 2026-09-27 marker: Validate populates from LIVE data (autocorrect dry-run groups, index failures, metrics health) + FULL embedded PII remediation panel (editor's PiiOccurrences: redact/replace/remove/accept, green RESOLVED/orange flagged); Curate = full embedded editor (supersedes the slice-2 concept-tree design; body save live via patchConcept — the 4.2 deferral is moot). Pending David's live pass to mark done
+  3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — clone API 4.8 SHIPPED; dashboard/editor clone dialog live; WIZARD clone now real via the same API (Choose source picker → clone on Continue, Amendment A #9, 2026-09-27). Remaining for this story: nothing functional — verify dashboard toolbar entry + close
+  3-10-okf-wizard-ux-remediation: done                  # [MARKED DONE 2026-10-06 — work shipped on feat/okf-server: Step-7 issues list + merged conformance rows + per-type tips (#1037), Step-3 bulk PII (#1040), batch Delete (#1042), success feedback, taxonomy typo fix (#1041), Unpublish gate (#1043); frontend 1628/1628 green; local build live; CI 11855 ✓ 11856 ✓ 11857 ✓ 11931 ✓] — original 2026-09-28 marker: design FINAL rev 3 (okf-wizard-ux-review-2026-09-28.md, decisions D1-D8 locked via multiple-choice): tagged multi-crawl picker (search+provenance+session grouping), universal add-anything workbench (tree+edit, all feeders always), merge accounting (exact-slug auto-merge, near-dupe flags), auto-correct wire-or-remove, step 9 → Handoff (publish OUT of wizard PERMANENTLY per David), formatted-file split import, auto-label on entry, zip round-trip, crawler-dialog decision point; 5 P0s + small additive backend deps; blocks David's practical-usage E2E pass (readiness W8)
+  epic-3-retrospective: optional
+
+  epic-4: backlog            # Authoring & curation — ungated (Node-side)
+  4-1-concept-crud-incremental-reindex: backlog    # (+ 2026-08-13: optimistic concurrency If-Match/409 — G25)
+  4-1b-concept-label-rematerialization-on-edit: backlog  # NEW 2026-08-13 — recompute chunk_labels/trust_tier on edit (G29)
+  4-2-inapp-markdown-concept-editor: backlog
+  4-2b-okf-markdown-formatter-service: backlog          # NEW 2026-08-18 (authorship directive; Studio §8.2) — validate+auto-format markdown; round-trip-safe formatter (OKF_FORMAT_ON_INGEST opt-in); consumed by the OkfDiffReviewPanel Formatting lane
+  4-3-lifecycle-states: backlog
+  4-4-review-approval-gate: backlog
+  4-5-versioning-provenance: backlog
+  4-6-retention-ttl: backlog
+  4-7-reserved-files-foi-audit-export: backlog
+  4-8-repository-clone-curated-forks: done # #971 — clone repo (new repo_id+graph, cloned_from lineage, lifecycle draft) + meta-copy + isolation smoke; consumed by 3.9. Done 2026-08-18: review 3-layer 10 patches, r6 live exit 0 (71 PASS), 316/316 suites
+  epic-4-retrospective: optional
+
+  epic-5: backlog            # Serving — REST ungated, MCP gated
+  5-1-search-concepts-unified: backlog
+  5-2-get-concept-document: backlog
+  5-3-list-repositories-outline: backlog
+  5-4-trust-lifecycle-provenance-surfacing: backlog
+  5-5-parameterized-neighbors-traversal: backlog
+  5-6-mcp-ready-handlers: backlog                   # [AGENTIC]
+  epic-5-retrospective: optional
+
+  epic-6: in-progress        # Hardening — cross-cutting
+  6-1-authn-authz-rbac: done                    # (+ 2026-08-13 P0: default-deny, requireRepoScope(repo,'admin') replaces global tools-admin — G3/G15)
+  6-1b-authz-resolver-token-to-graph-set: done    # [RECONCILED 2026-10-06 — was backlog per pre-rebase annotation; was actually DONE 2026-09-20] commits feac617 + review-hardening commit: token→{graph_names,per_graph_labels,domains} resolver, all 18 review patches applied; consumers are separate stories by contract (1.2 forwards, 1.3 router)
+  6-1c-repo-access-control-admin-keycloak: review  # [NEW 2026-10-16 — David: "create a work item for implementing access control for repositories in the admin facility for OKF repos — this must be integrated with keycloak. Schedule the work item appropriately"] Per-repository access control, granted from the OKF admin facility and carried by Keycloak. CONTEXT: the read side shipped DEFAULT-OPEN the same day (OKF_SCOPE_MODE, default open — scopeless users reach all serving repos; scopes restrict; write side always closed-list; full model in site/content/en/docs/knowledge-base/access-control.md). CORRECTION during the adversarial design review: the okf_scopes CLAIM MAPPER ALREADY EXISTS (configs/keycloak/genie-realm.yaml — user-attribute protocol mapper on the genie-app + okf-server clients; the built-in admin's okf:*:*:admin wildcard is provisioned through it; a plain user's token mints the claim as an empty array). What does NOT exist is the GRANT FACILITY — no admin UI, no backend API, no documented procedure to set the okf_scopes attribute on a regular user. SCOPE: (a) grant/revoke UI in the OKF admin facility — set the okf_scopes user attribute per user/group through the Keycloak Admin API (the genie-proxy-client service account exists for exactly this delegated user-management class), every change audited (okf_audit: actor+target+scopes); (b) realm-template symmetry — document the attribute convention in genie-realm.yaml so deployments bootstrap scoped users declaratively; (c) enforcement — ZERO pipeline change: middleware/auth.js parseOkfScopes already consumes exactly this claim; per-repo acl.required_scopes (stamped on every repo doc at creation, currently declared-but-unenforced) becomes a live second gate in resolveGraphSet; tenant-segment enforcement (currently ignored everywhere) lands here too, giving read-side tenant isolation an opt-in; (d) operations — deployments wanting restrict-by-default flip OKF_SCOPE_MODE=closed once grants exist (documented); (e) tests — admin facility routes + audit + resolveGraphSet second-gate cases + a Keycloak round-trip proving a granted attribute lands in the token claim. SCHEDULING: after the bug-triage-2026-10-15 queue drains and the bali full-drain validation completes; before any multi-tenant deployment. Depends on nothing else in the branch. [IMPLEMENTED 2026-10-16, same day it was filed — David: "maybe build the access control mechanism and UI for the OKF repositories" during the bali drain window. Design delta vs the original scope: restriction is OPT-IN per repo (acl.restricted, absent on every historical + new repo — the blind required_scopes enforcement would have locked scopeless users out of ALL repos since every doc carries the creation stamp; pinned by test). ENFORCEMENT: access-control-service.callerMayTraverseRepo (privileged = derived role/wildcard ONLY, never the open-mode verdict — a semantics bug where open-mode scopeless bypassed restriction was caught by the integration test and fixed) applied identically in resolveGraphSet + getRetrievalConfig (servingRepos now projects acl). FACILITY: keycloak-access-service (genie-proxy-client client_credentials, 401 refresh) + access-controller (GET/PUT /:repo_id/access, POST grant|revoke — mints okf:t:{repo_id}:{level} into the user okf_scopes attribute, audited repo.access.grant|revoke|restrict; 503 ACCESS_CONTROL_UNCONFIGURED without credentials; toggle writes the doc directly, serving-maintenance precedent). UI: OkfAccessPanel in RepoEditor right rail (toggle + holders table + grant form), degrades honestly when unconfigured; i18n x14 via scripts/add-6-1c-access-i18n.cjs. Plumbing: compose KC_OKF_ACCESS_CLIENT_ID/SECRET, env.j2, env template. Tests: okf-server 54 suites/1316+25 green (access-control unit matrix + BOTH-views integration + HTTP routes), frontend 1911/1911 incl. designTokens + localeConsistency, config-validator 66/66. David live validation pending (deploy at the drain boundary).] [ENTERPRISE-SCALE REBUILD + DAVID'S UX PASSES 2026-10-17 — three shipped iterations the same day. (1) SCALE REBUILD (David: "100's and 1000's of users... do not make stupid under-designed decisions"): server-side holder search (Keycloak attribute q=, no realm listing, no cap), bulk usernames[], GROUP grants via realm-roles-named-as-scopes assigned to groups (group-inherited realm_access.roles verified live on KC 26; third scope source in middleware/auth.js), full suite 1320→1328. (2) UX PASS 1 (David: "The UI fucking sucks... Read and Admin shit???"): levels REMOVED from the UI (query access only — stewardship comes from realm roles; API defaults level=read), grant replaced by a PICKER DIALOG with debounced server-side user search + checkboxes + GRANT-BY-SEARCH ("Select all N matching" — the server walks every directory page through a worker pool; 3 clicks for 1000 users; audit records query+counts not username walls); group grants kept as the population path with a >500 hint. (3) UX PASS 2 (David: "popup a screen... at least add a picker (combo box) for Groups"): panel MIGRATED to the editor LEFT rail under the Concepts panel (right rail was crowded; bounded 340px); WIZARD PARITY — step 10 is now "Secure and Finish" (checklist + access panel + handoff; configuration not lifecycle, respects D4 like Curate frontmatter); group entry is a DsCombobox in a new backward-compatible REMOTE mode (server-side group search, granted groups marked). PICKER REVOKE (David: "cannot remove grants once users have access" — the kong trail showed the grant surface had no revoke): inline Revoke on granted picker rows + honest next-login wording x14. FIX CHAIN on grant-group: (a) 403 role create — genie-proxy-client lacked manage-realm (realm yaml now provisions it; note: this realm's realm-management set has NO manage-roles/manage-groups to map — naming them fails the import); (b) config-cli substitutes env tokens over RAW yaml text — a literal dollar-paren env token in a COMMENT (from main, via rebase) hard-fails the import; (c) Keycloak 201-with-empty-body on POST /roles and /groups crashed jsonOrThrow ("Unexpected end of JSON input") — now parses only when content exists, pinned by keycloak-access-unit.test.js HTTP-seam suite (ensureRole 404→empty-201→refetch, ensureGroup, 204 mappings); 403s map to 502 KEYCLOAK_FORBIDDEN naming the missing grant. All verified live through the actual service functions end-to-end. Panel tests OkfAccessPanel.test.js (4). Commits c96ad36bf..c2e0a9c31.]
+  6-2-audit-foi-export: backlog                   # (+ 2026-08-13: write-before-respond governance, hash chain, tenant field, INSERT-only — G16/LG-4)
+  6-3-end-to-end-tracing: backlog
+  6-4-health-readiness-metrics: backlog
+  6-5-supply-chain-airgap: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog            # AI-Driven OKF Producer (Crawl→Draft) — builds AFTER epic-3
+  7-1-model-client-provider-tier-sovereignty-gate: backlog
+  7-2-crawl-to-concept-draft-producer-pipeline: backlog   # depends 2-5; assemble→AI-adjust→cross-link
+  7-3-automated-hierarchy-label-assignment: backlog       # ALL hierarchy/label edits steward-vetted
+  7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
+  7-5-producer-hardening-injection-eval-cost: backlog
+  7-6-multi-source-crawl-seeding: backlog
+  7-7-produce-okf-from-selected-documents: done            # DONE 2026-09-14 (bd4c9df81 + close-out; #997): multi-select doc-mgmt import into ONE OKF repo; ingest gate = SOURCES_NOT_RETRACTED (live fail-closed re-check on source_documents[], is_bundle immune); ImportDocumentsDialog (heuristics|llm|hybrid); provenance deep links ?tab=documents&file= on cards; i18n ×14; okf-server 628/628 + frontend 1474/1474; live smoke ALL PASS 24/24 (md free-form-ingested → import → publish → 409 gate → retract → drain → v1 serving). Two live defects caught by harness: row deep-link no-op (R1), doc-repo {data:} envelope unwrap → gate would have failed open (R2 — memory reference_doc-repo-api-envelope); pdf-parse pinned ^1.1.4 (R3). Residual → Epic 11: docling-backed adapter, wizard entry point (b).
+  epic-7-retrospective: optional
+
+  epic-8: backlog            # NEW 2026-08-13 — Test Infrastructure & Evaluation (cross-cutting; unblocks launch gates)
+  8-1-static-fixture-site-seed-repos-golden-queries: backlog  # G20 — deterministic fixture trinity
+  8-2-multigraph-retrieval-integration-test: backlog           # G31, LG-2 — cross-graph/provenance/ACL/size-ratio
+  8-3-retrieval-quality-eval-harness: backlog                  # G30 — recall@k/precision@k/MRR (distinct from 7.5)
+  8-4-rrf-parameter-sweep-harness: backlog                     # G21 — tune k + per-graph weights (resolves PRD Q7)
+  8-5-opea-1.5-fallback-shim: backlog                          # CONTINGENCY ONLY — not built unless Epic 1 ungated pre-merge (G19, D25)
+  8-6-ragas-benchmarking-in-okf-lab: review # [NEW 2026-10-17, IMPLEMENTED same day] David directive — RAGAS benchmarking in the Testing Lab. Design: spec _bmad-output/specs/spec-okf-ragas-benchmarking/ (SPEC.md + 5 companions incl. model-requirements; memlog 68 entries; terminology rule — 'benchmark suite' ours, 'gold dataset' harness proper noun only; 1..N repo cardinality; full single-turn metric catalog w/ the harness four as default; charts mandatory in Lab + PDF reports client-side; NO results import; model-agnostic — nothing indexed on granite). ADR-okf-043 (Amendment B in architecture.md); epics Story 8.6; GitLab #1092; branch feat/okf-ragas (draft MR !560 → feat/okf-server). Implementation (4 commits 3533d6a..2b8f611): (1) sidecar components/ragas-service — FastAPI app + ragas_engine (fanout ChatOpenAI ported from his runner, vertexai stub, 10-metric registry keyed to his report columns, TestsetGenerator w/ llm-injected synthesizers) + xlsx_io (suite = his Test Dataset layout verbatim; results = Gold/Run_/Compare/empty-Calibrate, 22 NEW_COLS + 18 COMPARE_HEADERS verbatim, extended metrics appended, anchor cols blank); 18/18 pytest + ruff clean; API smoke-verified against real ragas 0.4.3. (2) okf-server ragas-suite-service.js (~1250 lines) — kinds ragas_suite/ragas_run/ragas_explain in okf_head_test_runs, 202+poll generate/run/explain w/ locks + adoptable keys + progress + orphan reap + boot sweep; multi-repo retrieval replay (per-graph top-K → unified rerank) + guided-JSON {answer,abstained} leg; failure-attribution matrix + guarded advice (guardSuggestions) incl. repo-level curation; xlsx passthroughs w/ 503 RAGAS_UNAVAILABLE; routes mirror routing-testsuite (literals above :suite_key; raw-body import); 18 new jest (suite 1346/1346) + eslint clean. (3) Frontend — RagasPanel.vue 4th tab (generate w/ dimensions, metrics checkboxes, entries parity table, gauges + trend + status charts, jsPDF report, xlsx buttons, explain chips, run history), ragasService + 16 store actions (store-side polls, progress callback), HeadTestDialog integrated saved-suites list (RAGAS badge, kind-routed load/delete); i18n x14 locales (consistency 7/7; man.js English per that file's own convention — native pass pending); frontend 1922/1922 incl. 7 new panel tests; designTokens clean (--muted). (4) Deployment — 17th image genie-ai-ragas-service: compose always-on block + okf-server env, CI build/scan/promote/test lanes, ansible image list (19) + env.j2 + env template section, config-validator parity tests (71/71); compose config validates. CHANGELOG Added entry; site docs (okf-studio RAGAS section, okf-variables table). LIVE VALIDATION 2026-10-17/18 (local build, remote GPU judge): smoke-8-6.js ALL CHECKS PASSED ×3 (rounds 4/6/7 — generate → run w/ four judged metrics → explain → suite+results xlsx exports → clean teardown); compat proof — his tests/rag-benchmarks/eval/xlsx_to_gold.py consumed our exported suite xlsx with 100% default settings (3 entries, 0 skipped, expected_chunk previews materialized). Six live bugs found+fixed en route, each regression-tested: (1) EMBED_MODEL_ID→EMBEDDING_MODEL_ID inheritance; (2) ragas 0.4.3 generate_with_langchain_docs takes no num_personas — wrapper body replicated onto generate(); (3) rapidfuzz pinned for KG relationship builders; (4) TEI-native embed dialect — sovereign nginx serves /embed not /v1/embeddings (_TeiEmbeddings, RAGAS_EMBED_API tei|openai); (5) aembed_* surface required (ragas runs asyncio; duck-typed class lacked it); (6) sync fetches died at 10-min under GPU contention → ARCHITECTURE CHANGE per David ('if it needs to be done async then do it async'): sidecar /generate-testset + /evaluate became 202+poll background jobs (in-memory registry, RAGAS_MAX_CONCURRENT_JOBS=2, coarse phases), okf-server polls short-budget calls w/ 60-min total deadline (OKF_RAGAS_LONG_TIMEOUT_MS), frontend store deadlines matched; PLUS cancellation (DELETE /jobs/{id}, CancelledError handled explicitly, poller-owns-job cancel-on-failure, deleting a generating suite cancels instead of 404ing) after orphaned jobs kept the GPU at 100% for ~25 min — the incident that motivated it, root-caused via agent. DB ownership per David directive: sidecar stateless (zero Arango); okf-server ensures okf_head_test_runs + compound indexes [repo_id,kind] + [kind,status] (boot sweep was full-scanning). UI per David: tab+pane renamed 'RAGAS Benchmarks' x14 locales; DsInfoTip gained optional in-bubble href; ⓘ glosses RAGAS + links ragas.io. Suites: sidecar 33/33, okf-server 1349/1349, frontend 1922/1922, config-validator 71/71. Smoke harness (smoke-8-6.js) committed — idempotent 409 adoption, admin-token refresh before cleanup, status-checked teardown. OPS NOTE: okf-server image context is components/ (shared/lib sibling) — building with components/okf-server yields a silently-stale image (cost a debugging round). FIX BATCH 2026-10-18 (commits 1a25b5741 + 125a52083, live bugs #8 + #9 + vanish incident after David's traced run): (a) headlines filter mismatch — ragas 0.4.3's default chain extracts headlines only on >500-token docs but HeadlineSplitter requires them on every node; engine's explicit transform mirror seeds headlines=[] (splitter's own keep-whole semantic); control test proves the library list still crashes on the same input. (b) bug #9 whole-run pydantic crash — raise_exceptions=False turns a failed sample call into np.nan (executor.py:84) which TestsetSample rejects (generate.py:610); _TolerantSynthesizer now wraps BOTH the default mix and user-specified synthesizers (failures → droppable empties, `dropped` count in result, zero-valid → honest RuntimeError). (c) THE VANISH (job 09ef44c3ce9b): ragas Executor's nest_asyncio reentrancy (executor.py:214) on the uvicorn loop corrupted the ready-deque (IndexError pop-from-empty-deque) → server died → restart lost the in-memory registry → 'vanished'; all three heavy legs (apply_transforms/generate/evaluate) now asyncio.to_thread-confined (private ephemeral loop). (d) NO-AUTO-TRASH per David ('I do not want to trash work automatically after 1 hour'): OKF_RAGAS_LONG_TIMEOUT_MS is a liveness horizon — reachable running jobs never time out (horizon rolls + logs), only unreachable-sidecar is bounded; UI store horizon 24h; cancel is cooperative (cancel_event short-circuits remaining synthesizer calls → drains within one LLM batch). Suites after: sidecar 41/41, okf-server ragas 23/23. SCALING DESIGN same day (David's 3 hard requirements): spec-okf-ragas-benchmarking/scaling-design.md — 1h is a design TARGET never a timer; D1 persistent generating placeholder, D2 KG seeded from per-repo Arango graphs, D3 stratified sampling K=max(60,3×size), D4 concurrency+frontier judge, D5 worker-process pool sized by host cores, D6 live per-unit progress + explicit Cancel; tracked as 8-6b (scheduled after 8-7). REMAINING: David live UI validation; merge feat/okf-ragas → feat/okf-server via !560.
+  8-7-frontier-model-routing: design # [NEW 2026-10-18, DESIGN PHASE — awaiting David lookover, NO implementation until approved] David directive — configure a remote FRONTIER MODEL (URL, model-list selection, access token; OpenAI AND Anthropic APIs; per-operation checkboxes) for heavy admin operations AND, per scope expansion, basic RAG inference ('framework users can access frontier models for RAG'). Embeddings/reranking NEVER routed (dimension-coupled); translation/PII out. Cardinal default rule: unconfigured/untoggled/failed => local model exactly as today — purely additive. Context-window rule: routed ops size prompts from the selected model's window (worked example shipped in 8-6: RAGAS_DOC_CHAR_CAP=auto derives from RAGAS_JUDGE_CONTEXT_TOKENS). Config screen must explain every option (David). Artifacts: spec _bmad-output/specs/spec-okf-frontier-model-routing/ (SPEC.md, 8 CAPs, memlog 26 entries + 5 companions: operations-routing [full call-site map: 9 vllmChatCompletions callers + 3 Node helpers + 3 dataprep legs + ragas factory + chatqna], provider-adapters [two-type contract, strict-JSON per provider, streaming, timeouts], config-and-ui [okf_system_config _key frontier_model cloning retrieval-config/ADR-okf-039-D3, token write-only + audit-masked, AdminDashboard Model Routing tab, DsCombobox remote fetch], model-requirements [per-class minimums], architecture-diagrams [mermaid x3]); ADR-okf-044 docs/adr/okf-044-frontier-model-routing.md (Proposed). Research findings baked in: pre-existing okf-server model-string bug (VLLM_LLM_MODEL_ID vs container VLLM_MODEL_ID — granite default sent regardless of config; router fixes), dead config?.llm? extension point at 3 call sites, dataprep env-only ingest contract, ragas per-request override cleanliness, audit-details token-leak hazard. OPEN QUESTIONS for lookover: ragas_judging delegable (recommend checkbox default-off); per-op model choice vs one global (recommend per-op override w/ global default). NEXT after approval: story breakdown + implementation on feat/okf-server lineage. SCOPE REVISION (David 2026-10-18, after ADR review): v1 = OKF ADMIN OPERATIONS ONLY — inference DEFERRED to future expansion (streaming complexity; config-UI row ships disabled + labeled 'future extension'); legacy ingestion pipeline UNTOUCHED — dataprep legs (ingest labeling, contextual) deferred as future extension via okf-originated request tagging; CROSSOVER ANSWERED: those legs run in the SHARED dataprep service both pipelines execute, separable only by okf-originated tagging (design ships in operations-routing.md); RAGAS answer leg local until inference lands; v1 propagation = ragas sidecar per-request judge overrides only (/internal/llm-routing is future plumbing). Spec + ADR + companions updated to match (memlog 28 entries).
+  epic-8-retrospective: optional
+
+  epic-9: backlog            # NEW 2026-08-13 — Label Onboarding (Pre-Ingest Curation). Analyze/apply ungated; ingest leg gated.
+  9-1-gap-mode-labeler-shared-canonicalize-embedding-merge: backlog  # dataprep (FR-36)
+  9-2-label-onboarding-service-proposal-api-collection: backlog       # okf-server (FR-36)
+  9-3-label-onboarding-wizard-ui: backlog                             # Epic 3 frontend (FR-36)
+  9-4-apply-ingest-wiring-two-store-sync-producer-unify: backlog      # cross-cutting (FR-36, ADR-okf-034)
+  9-5-boundedness-config-denylist-mgmt-fixture-tuning-guardrail: backlog  # gated by Story 8.1
+  epic-9-retrospective: optional
+
+  epic-10: backlog           # NEW 2026-08-13 — OKF Studio (creation & curation capstone). Ungated frontend; gated legs flagged.
+  10-1-okf-diff-review-panel-unified-autocorrect: backlog   # the FR-32 reviewable-diff surface (3 lanes)
+  10-2-auto-correct-service-conformance-broken-link: backlog  # conformance remediation (works today) + link (gated 2.3b)
+  10-3-domain-templates-conformance-clean-save-as-template: backlog
+  10-4-cross-repo-auto-correct-inbox: backlog                # gated by Story 6.1b (authz)
+  10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
+  10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
+  10-8-validate-remedy-panel-lifetime: backlog  # 2026-10-15 ADDED to tracker (was untracked — housekeeping gap closed). Story file _bmad-output/implementation-artifacts/10-8-validate-remedy-panel-lifetime.md; GitLab story !1076. Remediates BUG-10 / !1075: Validate.vue renders suggestions INSIDE the orphan issue row they remediate (:86 row, :95 nested div), so accepting the first proposal cures the orphan, the row unmounts, and every remaining proposal is destroyed. Wave 1 of the bug triage queue.
+  epic-10-retrospective: optional
+  # B+C+E (2026-08-23, David's directives — the bundle IS a graph + manifest discovery index):
+  # B: author-stated frontmatter links mirrored into _LINKS_TO (source='author', vertex-integrity + G22 enforced)
+  # C: okf_bundle_manifest written at settle (concepts/links/root/stats; LLM summary LAZY on first discovery read)
+  # E: discoverRepos + GET /repos/:id/manifest + POST /repos/discovery — tier 1 of the multi-domain retrieval fan-out
+  # Also: labeling skip REMOVED (bundle labels = candidate pool; per-chunk applicability; LLM recommendations logged);
+  # bundle state machine Pending→Ingesting→Ingested|Error; re-index retract; is_index merge-preserve.
+  # Smoke v10 70/0 baseline; v11 71/2; v12 73/1; v13b 72/2; v14 73/1 (stale-manifest purge gap); v15 FULL PASS 74/0. 3-layer code review: 11 patches (5523da6) + 4 decisions + 2 defers. Course-corrected 2026-08-24 (PRD/architecture/epics/ADR-024 note).
+  bce-bundle-manifest-author-graph-discovery: done   # code complete + CI green through 504b1af; awaiting v12 full-pass + PRD/ADR course-correction
+
+  # ── Steward-directive P0 work (2026-09-13/14, feat/okf-server, all pipelines green, MR !278 documents each) ──
+  # 9e18fa1  Repo-open freeze fix (markdown preview chunked render + lazy graph build) + PII findings
+  #          REUSE (server-side span persistence keyed by content signature — unchanged content never
+  #          re-scans; Re-scan forces live). David's "Page Unresponsive" + "scanned again" directives.
+  # eb45ab1e4 Drain settle reconciliation (the www-gov-uk-full-crawl 31h "not drained" wedge): settle only
+  #          ran as a job side-effect; the reaper wrote the last transitions. _reconcileArmedRepos settles
+  #          armed+empty-queue repos at startup + hourly; 429/timeout claim clears; stale-merge removed
+  #          (_settleIngest owns the terminal rag_ingestion record). LIVE-VERIFIED: wedged repo settled 12s
+  #          after worker restart (922/997 + honest failed record; retract→re-ingest possible again).
+  # b39477692 + 99f95deef + 935105ba7 Graph tab never blocks: async chunked build (400n/800e batches, real %,
+  #          stale-seq guard), fcose animate:false (animated variant never emits layoutstop — wedged at 99%),
+  #          completion guaranteed (dual listener + try/catch + 20s watchdog), selection in one cy.batch,
+  #          bulk opacity transitions removed; honest progress 0→88% ingest + indeterminate Layouting phase.
+  # 773f4536d scripts/check-okf-repo.js — per-repo 4-step health/graph/RAG check (lifecycle, author layer with
+  #          EXACT frontend projection math in AQL, serving graph, chunk/RAG layer), PASS/WARN/FAIL + --json;
+  #          live-verified on 5 repos (David: "turn the graph comparison into a test").
+  # a84ca7793 Ingest-failure hover card: RED failed rows in the concept tree float the VERBATIM last_error +
+  #          mapped recovery (reaper/dataprep/generic) + attempts; listConcepts projection now carries
+  #          last_error/last_worker_error/ingest_attempts. i18n ×14.
+  # c5b6876f9 Documents→OKF import DESIGN + Story 7.7 ready-for-dev (next work item); 3.6 gate amended.
+  # Frontend 1463/1463 · okf-server 618/618 · overlay pytest 107/107 baseline untouched.
+  # bd4c9df81 Story 7.7 IMPLEMENTED: producer-service documents conversion (per-format converters,
+  #          whole-corpus cross-links, index.md last, one curation pass, per-file isolation), xlsx
+  #          sheetjs converter (FR-42), convert-from-documents route, SOURCES_NOT_RETRACTED ingest
+  #          gate, ImportDocumentsDialog + gate amendment + provenance deep links, i18n ×14.
+  #          Close-out: doc-repo {data:} envelope unwrap fix (R2 fail-open gate catch), pdf-parse pin
+  #          ^1.1.4 (R3), smoke run-smoke-import-documents.js + real-PDF fixture + refresh tokens.
+  #          Live smoke ALL PASS 24/24 (double-serving scenario E2E). okf-server 628/628 · frontend 1474/1474.
+  # 6da43f705 Add-concept dialog body now the shared DsOkfMarkdownEditor (David directive 2026-09-14):
+  #          Source | Split | Preview modes + format toolbar + async preview; frontmatter machinery off
+  #          (store normalizes on create). Frontend 1475/1475. UI smoke plan handed to David (Phase 0-7).
+  # 487501d99 + 8c787dd86 + b0d9d4905 + 306760584 + 42cc61969 RAGAS operator
+  #          tooling + the guide's ERRORS chapter (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 5 commits, CI green 14370).
+  #          (a) scripts/okf-testing-lab/ragas-regenerate-entry.js — regenerate an ENTRY against
+  #          the PUBLISHED corpus (the gate refused 11 rows + 5 questions: their references
+  #          name facts the corpus does not contain). Gated on corpus presence of the new
+  #          passages + context_entities_recall floor + no duplicate question; --audit probes
+  #          every entry and reports NEEDS_REGENERATION without writing.
+  #          (b) scripts/okf-testing-lab/ragas-compare-runs.js — READ-ONLY two-run comparison via
+  #          the shared db driver: per-metric means WITH coverage beside each, the rows whose
+  #          reference changed, and the UNCHANGED rows as a control group — so "the regeneration
+  #          moved it" is distinguishable from "the run moved it" (it correctly reports the
+  #          latter when the two runs used different judges).
+  #          (c) RagasGuideDialog gains a SIXTH chapter — the error→result mapping, one table row
+  #          per state (errored / abstained / not measured / below threshold / out of scope) with
+  #          what it means and what it does to the number being read. David 2026-10-25: "whatever
+  #          you decide to do with errors and how they are mapped to benchmark results must be
+  #          documented in the embedded guide for users". i18n ×14 TRANSLATED (not placeholders);
+  #          the table cannot be an array in a locale file (translateMixin resolves leaves as
+  #          strings only) — one dotted key per cell, assembled in the component.
+  #          THE FIRST DRAFT OF THE TABLE WAS WRONG and was corrected before merge: it claimed a
+  #          failed row carries no metrics and drops out of every mean, and that an abstention is
+  #          never judged and never a metric failure. Both were the OPPOSITE of the code — the run
+  #          path builds the judge payload with `samples = entries.map(...)`
+  #          (ragas-suite-service.js:2274, NO filter), so EVERY row reaches the judge and a
+  #          failed/declined row returns ZEROS on the context and answer metrics; those zeros are
+  #          numbers, so means[m] (:2469) includes them and coverage[m] (:2477) counts them as
+  #          scored. MEASURED on rr1792742789648-86637b (100 rows, 6 failed): context_recall 0.8872
+  #          over all rows vs 0.9438 over the 94 non-failed; coverage.per_metric still reports
+  #          context_recall:100, so the "measured N of M" banner does NOT fire. Separately,
+  #          summarizeRun has no abstained guard, so an abstention can land in summary.failing
+  #          (all 6 abstained rows in that run are in the failing list) while the panel's stacked
+  #          bar computes answered = n_evaluable − n_abstained − failing_count
+  #          (RagasPanel.vue:1112) and subtracts them twice (the all-abstained runs reach −20).
+  #          TWO SEMANTICS QUESTIONS LEFT TO DAVID (NOT changed — the run in progress measures the
+  #          system under the current semantics, and changing what a number means mid-benchmark
+  #          would make it incomparable with the runs on record): (1) SHOULD A FAILED ROW CONTRIBUTE
+  #          ZEROS TO THE MEANS? THIS IS A BUG, and the intent is PINNED BY A TEST in the same file:
+  #          the RE-SCORE path filters scorable (:1692,:1750) and its test says "A row with no answer
+  #          has nothing to judge, so it is EXCLUDED from the submission", asserting the unsubmitted
+  #          row carries {} (ragas-suite-service.test.js:2353-2397). The RUN path builds the payload
+  #          with samples = entries.map(...) (:2274, NO filter) and its own comment says "Judge only
+  #          the rows that produced an answer" (:2166) — so it contradicts its comment, its sibling
+  #          path, and a passing test encoding the same intent. Impact: rr1792742789648-86637b
+  #          context_recall is 0.887 over all 100 rows vs 0.944 over the 94 non-failed — the fix
+  #          MOVES published numbers by ~0.057. Small fix: mirror the re-score scorable filter.
+  #          (2) Should an abstention be countable as a failure? Guide now documents the TRUTH.
+  #          Frontend 2035/2035 · localeConsistency 7/7 · guide test 23/23 (asserts the corrected
+  #          claims are present AND the retracted ones are absent). E2E browser proof:
+  #          tests/e2e/okf/ragas-guide-errors.spec.js (new) — the chapter is reachable and its
+  #          table renders 5 rows with the corrected text.
+  # fe18cef95 + 30e92080a + 2250ced71 The guide's OUTPUT table + the re-score
+  #          made a RUN again (MR !598 → feat/okf-server; branch
+  #          fix/ragas-entry-regeneration, 8 commits).
+  #          (a) David 2026-10-25: "You have not updated the guide to explain how to read
+  #          the 55/100 etc. in the output … If you have hard coded strings then fucking
+  #          fix it". The READ chapter gained a SECOND table — one row per piece of the
+  #          OUTPUT (the mean / the coverage fraction / the invalid-run banner / the run
+  #          name / the re-score / the status), each with what it IS and what to do with
+  #          it. The fraction is the number operators misread most: "0.87 55/100" is a mean
+  #          over 55 rows, not a score for 100, and the uncovered rows are NEVER counted
+  #          as zero. The rows name NO metric — the metric list is the product's
+  #          (ALL_METRICS), so a guide that hardcoded them would go stale the day one is
+  #          added; a test asserts the read chapter names none of the four core metrics.
+  #          i18n ×14 TRANSLATED (22 strings each); three copy/paste slips (a Hangul
+  #          fragment in id.js, a Han fragment in ar.js, a Cyrillic 'а' in man.js) were
+  #          caught by a script-contamination check and fixed before the commit.
+  #          (b) THE RE-SCORE WAS BROKEN LIVE. David: "it fails horribly … I cannot stop
+  #          the re-scoring!!!! … it also cannot be tracked and does not connect to the UI
+  #          with a progress bar … I THOUGHT YOU WOULD HAVE LEARNED THAT LESSON BY NOW".
+  #          THREE defects, one cause each: (1) the re-score wrote its run doc only at the
+  #          END of the judge leg, so the panel polled a key that did not exist yet — a 404
+  #          per poll for the whole judge leg; it now writes a 'running' doc the moment it
+  #          starts, and getRunSuite reports an in-flight re-score as running instead of
+  #          the "the worker died" verdict a 'running' doc used to earn. (2) cancelSuiteRun
+  #          only knew about the RUN map, so a re-score answered 409 "no such run is
+  #          executing" while the judge leg kept paying the GPU; it now finds the re-score
+  #          in its own map and cancels ITS sidecar job (not every job of the suite, so a
+  #          concurrent generation survives), and a cancel landing during the submit window
+  #          is honoured too. (3) the UI refreshed the history only on SUCCESS, so a
+  #          cancelled run kept its 'running' pill until a manual reload; and a cancel
+  #          read as an ERROR. The panel now drives a re-score through the SAME progress
+  #          bar and the SAME Cancel button as a run, and the history shows the terminal
+  #          state whatever it is.
+  #          (c) The fidelity block named the `ragas_answers` config in SERVE mode — a
+  #          model the serve path never consults (the served call carries no model at
+  #          all; the answers came from the deployment chat model). answerFidelity is now
+  #          mode-aware: serve mode records the deployment chat model (VLLM_LLM_MODEL_ID
+  #          || VLLM_MODEL_ID), the whatif leg keeps recording the config, and a
+  #          resolution failure degrades to the deployment chat instead of throwing.
+  #          (d) The not-found message named the run key TWICE ("run rrX for suite rsY
+  #          rrX not found") — loadDoc appended the key to a `what` that already had it.
+  #          okf-server 1647/1647 · frontend 2039/2039 · guide test 28/28 (the read table
+  #          AND the error table, per chapter) · localeConsistency 7/7. E2E browser proof:
+  #          tests/e2e/okf/ragas-rescore-tracking.spec.js (new) — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the
+  #          progress bar, the Cancel button, the history row with its lineage, and the
+  #          row turning 'cancelled'. Both specs PASS against the deployed local build.
+  # 26516467f + 5e30d9ad0 The advisor's second judge is COMPUTED, not asserted
+  #          (David 2026-10-25: "If you have hard coded strings then fucking fix it").
+  #          The advisor carried two FROZEN sentences about a second judge — "a second
+  #          judge disagrees on roughly half of these rows" (factual_correctness) and
+  #          "a second judge reproduces this on most of these rows" (entity recall).
+  #          Both were measured ONCE, offline, and baked into the string: no re-score,
+  #          no judge change and no suite edit could ever move them.
+  #          The verdict is now computed from the SIBLING RE-SCORE — the run that
+  #          scored the SAME answers with a different judge. Only a lineage-linked
+  #          sibling can be compared row by row (an unrelated run scored its own
+  #          answers, so its per-row scores say nothing about this one's). With no
+  #          sibling the advisor says so and points at the re-score as the way to
+  #          settle it — it no longer asserts a proportion it was never given. The
+  #          comparison travels in run_facts.judge_comparison, so the LLM advisor
+  #          quotes the counts it was handed.
+  #          MEASURED against the real stored pair (rr1792843333604-268dad MiniMax-M3.1-Flash
+  #          → its re-score rr1792871605303-9ce608 granite): entity recall — MiniMax failed
+  #          67 rows, granite CLEARED 13 and KEPT 52 failing (2 unmeasurable); factual_correctness
+  #          — 44 failed, 17 cleared, 25 kept failing (2 unmeasurable); answer_relevancy — 6 failed,
+  #          1 cleared, 5 kept. THE HARDCODED CLAIM SAID "cleared 9 of 21" and "reproduced on 30 of
+  #          39" — the proportions survive, the NUMBERS were wrong, and they were constants.
+  #          WHAT THIS CHANGES: the advisor told the curator to treat the second-judge rows as
+  #          "unproven rather than judge noise"; the measured comparison says the second judge
+  #          REPRODUCED most of them (52 of 67; 25 of 44). Those rows are real failures whose lever
+  #          is the reference answer's wording — not the RAG, not the prompt. The prompt tweak is
+  #          justified only by the rows BOTH judges failed with faithfulness actually failing.
+  #          okf-server 1651/1651 · frontend 2039/2039. E2E browser proof (both specs PASS against
+  #          the deployed build): tests/e2e/okf/ragas-rescore-tracking.spec.js — drives the REAL UI
+  #          through Keycloak, starts a re-score with the ENV judge, and asserts the progress bar,
+  #          the Cancel button, the history row with its lineage, and the row turning 'cancelled'.
+  # The failed-row defect FIXED (David 2026-10-25: "Fix it now"). MR !598 →
+  #          feat/okf-server; branch fix/ragas-entry-regeneration.
+  #          THE DEFECT: the run path handed EVERY row to the judge, including the rows that
+  #          produced NO answer. The sidecar then scored an EMPTY response, which came back as
+  #          ZEROS on the context and answer metrics — and zeros are numbers, so they landed in
+  #          the means and depressed them (measured on rr1792742789648-86637b: context_recall
+  #          0.887 over all 100 rows vs 0.944 over the 94 that answered). The run path's own
+  #          comment said "Judge only the rows that produced an answer" (:2287), its sibling
+  #          re-score path filtered the same way (:1770), and a passing test encoded the same
+  #          intent (:2353-2397) — the payload contradicted all three.
+  #          THE FIX: the run path filters `scorable` (no error AND an answer) and maps
+  #          `per_query` back through the ORIGINAL row index — the naive index alignment shifts
+  #          every score onto the wrong row after the first dropped one. A row with no answer
+  #          carries `{}`: it is EXCLUDED from the means (never a zero) and counted in the
+  #          coverage as NOT measured, so the coverage reads 99/100 instead of 100/100. A run
+  #          where NO row produced an answer now FAILS loudly instead of reporting a mean of
+  #          zeros, and the judge is never called with an empty dataset.
+  #          MEASURED ON EVERY STORED RUN: the three runs that matter for the current comparison
+  #          (rr1792896220523-b71784 MiniMax-M3, rr1792871605303-9ce608 granite,
+  #          rr1792843333604-268dad MiniMax-M3.1-Flash) have 0 errored rows and 0 abstentions —
+  #          the means before and after the fix are IDENTICAL on all ten metrics of all three.
+  #          The fix touches only the runs where a row actually failed.
+  #          THE ABSTENTION SEMANTICS: an abstention is a row that DECLINED — it still has an
+  #          answer, so the judge scores it and its context metrics come back 0, and those zeros
+  #          ARE in the averages. What was broken was the ARITHMETIC: the panel's bar computed
+  #          `answered = n_evaluable - n_abstained - failing_count`, subtracting the abstentions
+  #          TWICE (they are in failing_count too) — the all-abstained runs reached -20. The bar
+  #          now partitions the rows exactly: failing = max(0, failing_count - n_abstained),
+  #          answered = max(0, n_evaluable - n_errors - n_abstained - failing). The server also
+  #          stopped counting a row that FAILED as an abstention.
+  #          THE GUIDE WAS CORRECTED TO MATCH (14 locales, translated): the errors chapter said
+  #          "EVERY row in the suite is handed to the judge, including a row that failed or
+  #          declined" and "a row with no answer therefore scores 0 … and those zeros ARE counted
+  #          in the averages". The first half was true of the code until this fix and is now the
+  #          opposite; the second half stays true for the ABSTENTION, which still has an answer.
+  #          The guide test now asserts the failed row is NOT judged and never a zero, and that
+  #          an abstention IS judged and its zeros ARE in the averages.
+  #          okf-server 1653/1653 · frontend 2042/2042 · guide test 31/31.
+  #          CODE REVIEW 2026-10-25 (bmad-code-review, 4 layers: blind-hunter, edge-case-hunter,
+  #          verification-gap, acceptance-auditor; scope = the MR !598 merge diff vs its first
+  #          parent, cc7539c4d^1..cc7539c4d, 28 files / 4756 lines; spec = SPEC-okf-ragas-benchmarking).
+  #          62 findings raised, 39 verified at the source, 9 rejected after checking the code.
+  #          MR !598 MERGED into feat/okf-server as cc7539c4d (pipeline 14394 green) BEFORE the
+  #          review — the review therefore reads as a post-merge audit, and the fixes land on
+  #          feat/okf-server. NOTHING DEPLOYED: the local build still runs the pre-fix code.
+  #          THE HEADLINE DEFECT IS OURS: the guide's abstention row states the OPPOSITE of the
+  #          code, and the guide test PINS the error. The copy says an abstention "is still
+  #          handed to the judge … those zeros ARE counted in the averages" and "DECLINED still
+  #          has an answer". But servedIsAbstention (:190-199) and matchAbstention (:202-207) both
+  #          do `if (!text) return true` — an EMPTY answer IS a decline — and the run path's
+  #          scorable filter (:2395) excludes every no-answer row from the judge, so such a row
+  #          carries NO score and is NOT in the averages. It also leaves measured_rows <
+  #          total_rows, so the invalid-run banner FIRES — the guide's "does not invalidate the
+  #          run" is false for the same row. MEASURED LIVE (local build, 29 stored runs): 48
+  #          abstention rows, ALL 48 with an empty answer, ZERO carrying an answer. The claim
+  #          is false in 100% of observed cases.
+  #          THE OTHER HIGH FINDINGS: (a) the outcome bar does not partition the rows —
+  #          summarizeRun counts n_errors/n_abstained over ALL results (no oos filter) while
+  #          n_evaluable/failing_count exclude out-of-scope rows, and failingOnly =
+  #          failing_count - n_abstained subtracts an abstention that was never judged, so a
+  #          genuinely failing row is relabelled "answered" (worked example run against the
+  #          repo's own Arango mock: truth = answered 0 / abstained 1 / failing 2, bar reads
+  #          answered 1 / abstained 1 / failing 1); our commit message and the panel's own
+  #          comment claiming "every row counted exactly once" are FALSE; (b) out-of-scope rows
+  #          are INSIDE the metric means (means[m] at :2667 has no oos filter) while the guide
+  #          calls them "a control, not a result"; the sibling head suite settles the precedent
+  #          — it computes positive_pass_rate and negative_pass_rate SEPARATELY
+  #          (head-suite-service.js:2138-2143), never mixing flipped rows into the positives'
+  #          rate; (c) the DEFAULT re-score uses the SOURCE run's own judge (onRescoreOpen
+  #          prefills rescoreConfigKey from the run's judge_pick, RagasPanel.vue:2086) while the
+  #          run doc says "with a different judge" and the guide says "Re-scores the same answers
+  #          with a different judge"; (d) loadSecondJudgeRun never checks the sibling used a
+  #          different judge; (e) secondJudgeSentence falls back to the ALL-metric total while
+  #          still naming one metric, and total.failed_here counts (row, metric) PAIRS while the
+  #          sentence says "rows"; (f) a re-score doc carries NO payload.coverage, so the
+  #          invalid-run banner's coverage branch can never fire for a re-score, and the two new
+  #          guide chapters contradict each other on whether partial coverage invalidates a run
+  #          (the code uses the BEST-covered metric, measured_rows = max over metrics at :2542);
+  #          (g) a live re-score is killed by the liveness verdict — getRunSuite (:2695) returns
+  #          running only from the in-memory rescoreInFlight map and otherwise REWRITES the doc
+  #          as failed/RUN_INTERRUPTED (:2706-2719), and sweepInterruptedRuns builds liveKeys
+  #          from runInFlight.values() only (:3952) so the boot sweep does the same after a
+  #          restart — contradicting our own comment that "the doc is the only place that
+  #          survives more than one okf-server process"; (h) the two new E2E specs NEVER RUN IN
+  #          CI — .gitlab-ci.yml:444 invokes Playwright on tests/e2e/chatbot/,
+  #          tests/e2e/documents/ and theme-runtime-config.spec.js only, and the e2e job's
+  #          rules.changes never lists tests/e2e/okf/**/*; (i) the store's ragasRescoreRun poll
+  #          loop has NO test (the panel test mocks the whole dispatch) so the
+  #          cancelled -> RUN_CANCELLED mapping is unprotected; (j) loadSecondJudgeRun is not
+  #          exported and the test mock's AQL dispatcher falls through to `return {all: async
+  #          () => []}`, so the sibling lookup never executes in any test — the headline
+  #          "second judge is computed from the real sibling" behaviour is unproven end to end;
+  #          (k) the guide's i18n is wrong in three locales — man.js's errors intro and
+  #          error.effect are in an INVENTED Latin pseudo-language while the rest of the file is
+  #          real Mandinka (the other 13 locales are fine), and es/id/man ship an English
+  #          `state: 'error'` where en ships 'errored'; (l) the guide's rowKey is the TRANSLATED
+  #          display string, so row identity changes with the locale; (m) mean.element reads
+  #          "The score" while its own text says "It is not a score for the whole suite", and
+  #          runName.element reads "The run name" while its text describes the judge;
+  #          (n) CAP-8's "benchmark answers follow the configuration only when checked" is
+  #          UNREACHABLE from the product — answerFidelity consults the ragas_answers config
+  #          only in whatif mode, serve mode is the only mode the frontend can start (no `mode`
+  #          in the run body at okf.js:1611, zero `whatif` hits in the frontend), so an admin who
+  #          checks "benchmark answers" sees no effect on any benchmark a steward can run.
+  #          REJECTED AFTER CHECKING THE CODE (9): compareJudges conflating "no threshold" with
+  #          "not measured" (one thresholds object serves both judges, so a thresholdless metric
+  #          is excluded entirely); an errored row with an answer getting the false "metric below
+  #          threshold" (the r.error branch at :3054 catches it first); the E2E specs hardcoding
+  #          realm/repo name (both are env-driven; the hardcoded user/pw matches
+  #          ragas-judge-selector.spec.js); "the bar's buckets stop summing to n_evaluable" (they
+  #          always sum — the population is wrong, not the sum); the 24h poll horizon (matches
+  #          the run path and the spec's "nothing ends a healthy long-running job on a timer");
+  #          a no-answer row with no contexts never reaching the 'answer' stage (the earlier
+  #          !r.contexts.length -> routing branch is the more specific attribution); the compare
+  #          script's prefix metric match (the sidecar stores bare keys, so it agrees today —
+  #          only the comment misstates the rule); and the no-cancel-button window before the
+  #          202 (the cancel target does not exist yet).
+  #          THREE DECISIONS FOR DAVID: out-of-scope rows inside the metric means (excluding
+  #          them matches the head suite's precedent but shifts every stored benchmark's
+  #          numbers); the same-judge re-score default; and CAP-8's unreachable benchmark-answer
+  #          configuration. DEFERRED (3, in deferred-work.md): the failure-attribution.md matrix
+  #          sync (fix edits a spec companion), the two untested operator scripts, and the
+  #          find-prd activation workflow's unsubstituted pattern.
+  #          NAMING (David 2026-10-25): "Routing Lab" is retired — the surface now spans head
+  #          and routing tests AND RAGAS benchmarks AND the advisor, so the name describes a
+  #          mechanism that is only one tab of it. Renamed "Testing Lab", THOROUGHLY: the 3
+  #          label strings x 14 locales (42 strings), the dialog title and CTA, the
+  #          okf.headTest.* key namespace (247 references) and the HeadTestDialog.vue
+  #          component name, plus every reference in help text and documentation (the site
+  #          page site/content/en/docs/knowledge-base/okf-studio.md, ADR
+  #          docs/adr/okf-043-ragas-benchmarking-via-python-sidecar.md, the SPEC and its
+  #          architecture-diagrams.md, and the _bmad-output artifacts).
+  #          DONE 2026-10-25 (same branch as the review fixes): the 3 label strings in all
+  #          14 locales (okf.testingLab.title / .cta and okf.shell.testingLab — all three
+  #          were still ENGLISH in every locale and are now translated), the
+  #          okf.headTest.* namespace -> okf.testingLab.* (247 references),
+  #          HeadTestDialog.vue -> TestingLabDialog.vue (and OkfHeadTestDialog ->
+  #          OkfTestingLabDialog), the component fallback strings, the okf-server's own
+  #          comments, the site page, the ADR, the SPEC + architecture-diagrams.md, the
+  #          PRD architecture/epics and the _bmad-output artifacts.
+  #          DONE 2026-10-26 (the hole the first sweep left): the repository card's
+  #          button still read "Head Test" — its key lives in okf.dashboard.card.*, a
+  #          namespace the okf.headTest.* sweep never touched, so it survived the rename
+  #          in all 14 locales. All three RAGAS Playwright specs located that button by
+  #          the OLD name, which means they were passing against a button that no longer
+  #          said it — the suite certified the stale UI instead of catching it. Fixed:
+  #          the key moves to okf.dashboard.card.testingLab with the value "Testing Lab"
+  #          (the product name, as okf.testingLab.title already carries it in every
+  #          locale), and the specs find the button by the name the user sees. Also
+  #          corrected: the saved-suites help text named "the Head test tab", a tab that
+  #          does not exist (Head / Test / Suites & analytics / RAGAS Benchmarks) — and
+  #          loading a head suite does not switch tabs at all; its rows render in the
+  #          Suites tab, where the list already is. Deployed to the local build
+  #          (frontend rebuilt + recreated, verify 47/0); the shipped bundle carries 0
+  #          occurrences of "Head Test" and 0 of "Routing Lab".
+  #          LIVE VALIDATION 2026-10-26 (the second benchmark + the smoke):
+  #          (1) the granite re-score of rr1792896220523-b71784 landed as
+  #          rr1792942006568-976c3f — coverage 21/100 -> 98/100 on
+  #          context_entities_recall, 0 regenerated rows (the SAME answers, re-judged),
+  #          and the control group agrees (.433 -> .449): the low coverage was the
+  #          JUDGE, not the corpus. (2) the SECOND benchmark landed as
+  #          rr1792957108840-bb0b9a — a fresh end-to-end run, 100 answers re-served
+  #          through chatqna (serve mode), granite judge, 100/100 rows, 0 abstentions.
+  #          Its per-metric means sit within 0.0098 of the re-score's (two are
+  #          byte-identical): the benchmark is REPRODUCIBLE under answer regeneration.
+  #          Both control groups agree the two judges do. (3) the smoke harness PASSES
+  #          live on its right-sized corpus ("SMOKE 8-6: ALL CHECKS PASSED", cleanup
+  #          included: suite deleted, ROPC reverted, user deleted). (4) all 4 RAGAS
+  #          Playwright specs pass against the deployed build.
+  #          TOOLING 2026-10-26: the two operator scripts' DECISION rules are now
+  #          pinned by tests in the okf-server CI lane (ragas-compare-runs 13,
+  #          ragas-regenerate-entry 14). The tests FOUND two defects: the compare
+  #          tool's control group counted out-of-scope control rows (different
+  #          population from the means it is compared against), and it detected
+  #          "regenerated" rows only by a changed REFERENCE — which made a fresh run
+  #          report "0 regenerated rows" and drop answer-churned rows into the control
+  #          group. Both fixed; the answer/reference split is what the second
+  #          benchmark's comparison rests on.
+  #          COUNTER HONESTY 2026-10-26 (MR !602, branch fix/ragas-replay-counter):
+  #          the generation's progress line counted every ATTEMPT as an LLM call —
+  #          the counter is incremented at the top of the sidecar's LLM wrapper,
+  #          BEFORE the disk-cache lookup, so a call the cache answered (no request,
+  #          no GPU) was reported as work the model did. Live on the Solar System
+  #          generation: the panel read "673 LLM calls" while the remote GPU sat at
+  #          0 %; over a 31-second window the sidecar counted +45 calls while the
+  #          remote vLLM's own counters moved by ZERO requests
+  #          (vllm:request_success_total, vllm:prompt_tokens_total and
+  #          vllm:e2e_request_latency_seconds_count all flat), no cache file was
+  #          written (a miss always writes one) and no node was degraded (nothing
+  #          failed). The corpus had been generated before, so the knowledge-graph
+  #          summaries were replayed from the cache. Fixed: the counter moved AFTER
+  #          the cache lookup, so a hit is a REPLAY and never an LLM call; the
+  #          envelope publishes both (calls + replays) on the same live refresh as
+  #          the call count; the panel shows both as separate segments. New spec
+  #          constraint ("a progress number reports work, not attempts", memlog 117).
+  #          Tests: ragas-service 74 (4 new), frontend 62 (1 new), locale parity
+  #          across the 14 locales.
+  #          THE LIVE GENERATION DIED (2026-10-26): the Solar System run stopped at
+  #          137 minutes, chunk 1599 of 1600 in the NER phase, after 5,989 model
+  #          calls. The chain, read off the installed ragas 0.4.3: the chunk's NER
+  #          answer was invalid JSON (18 entities plus a // comment block) and
+  #          NEROutput rejected it; ragas then called the fix-output-format
+  #          retry, whose output_model is StringIO; asked to fix the format, the
+  #          model ECHOED the entities JSON, so the StringIO validation is what
+  #          failed ("1 validation error for StringIO"); the fix prompt retried
+  #          with the same input, the cache served the same bad answer again, and
+  #          the exception escaped apply_transforms and took the whole job with
+  #          it. An unparseable answer is the same class of event as a
+  #          dead node, and a dead node has always been tolerated: the node now
+  #          degrades (it keeps its other properties, the failure is COUNTED and
+  #          reported with the suite, the other nodes keep their work). The seam
+  #          is generate_execution_plan (one coroutine per node); wrapping each
+  #          coroutine catches every node-level failure without knowing which
+  #          method the transform uses, and the transform keeps its CLASS so
+  #          ragas's isinstance dispatch still holds (a proxy object would have
+  #          been silently ignored).
+  #          PROVEN LIVE ON THE SAME CORPUS (2026-10-26): the re-run reached the
+  #          same chunk, the sidecar logged "node degraded (NERExtractor:
+  #          OutputParserException)" and THE PHASE CONTINUED — the previous run
+  #          died at exactly that point. One node degraded; the corpus loses that
+  #          chunk's entities and keeps everything else.
+  #          AND THE TOLERANCE WAS INCOMPLETE — it MOVED the failure instead of
+  #          removing it (found live, same day): the re-run degraded the node and
+  #          then died in the phase RIGHT AFTER it with "Node X or Y has no
+  #          entities". A degraded node is left MISSING the property it failed to
+  #          produce, and ragas's relationship builders RAISE on a missing
+  #          property instead of skipping the node (traditional.py:37 / :144).
+  #          Fixed: the builders' FILTERS — which decide which nodes take part in
+  #          the relationship computation — exclude a node with no entities or no
+  #          embedding; it has no relationship to contribute, and excluding it
+  #          keeps the phase alive. Behaviour-preserving in the normal case
+  #          (every node then HAS the property), so the filters differ only for
+  #          a degraded node. The DEGRADED-NODE COUNT was also still the
+  #          process-global sibling of the counters the review had already
+  #          fixed — it travels with the job's stats dict now, because it is
+  #          REPORTED with the suite and a wrong number there is a wrong number
+  #          in front of the operator. Both landed in MR !602 (consolidated with
+  #          the counter fix — with only the counter fix the generation dies one
+  #          phase later, so they cannot land apart). Sidecar suite 90 green.
+  #          CORRECTED 2026-10-26: the claim that the sidecar's pytest suite has
+  #          no CI lane was WRONG — `test:ragas-service` has run ruff + the whole
+  #          suite against the pinned stack since 2026-10-17 (a66aa4659) and
+  #          passed on this MR's own pipeline.
+  #          THE REVIEW (independent adversarial review of the diff) found the
+  #          counters were PROCESS-GLOBAL: a second job's reset dropped the first
+  #          job's published number to zero mid-generation (the KG ticker
+  #          republishes once a second) and then counted the second job's calls
+  #          as the first's — and the scoring leg shared the same globals, so a
+  #          concurrent scoring run's calls were published as the generation's.
+  #          Each job now owns its counters (the app hands the engine a per-job
+  #          stats dict). The review also found: the fully-replayed case never
+  #          said "0 requests reached the model" (fixed — the panel now renders
+  #          "0 LLM calls · N replayed from cache"), and the new i18n key was
+  #          missing from the placeholder-shape guard (fixed — it joins
+  #          okf.ragas.gen.calls in replaceConsumedPlain).
+  #          DEPLOYED + PROVEN LIVE (the local build, the warm cache volume
+  #          survived): the smoke harness's generation leg reads
+  #          "building-knowledge-graph 0/114 calls=0 replays=350" rising to
+  #          "replays=414", then "synthesizing-questions calls=3 replays=417"
+  #          — the scenario that used to read "673 LLM calls" on a warm corpus
+  #          now reads honestly: ZERO model calls, 414 cache replays, then the
+  #          7 real calls for the new questions. 'SMOKE 8-6: ALL CHECKS PASSED'
+  #          with the new check "the generation progress envelope separates the
+  #          model calls from the cache replays".
+  #          THE FULL VERIFICATION (2026-10-26, the local build, three legs —
+  #          the answer to "does a NEW run finish cleanly?"):
+  #          LEG 1 — Solar System, WARM cache, the corpus that killed the
+  #          previous run: the generation COMPLETED. The persisted suite
+  #          rs1792997981392-2b027a carries kg_failures {"NERExtractor:
+  #          OutputParserException": 2} (the two poisoned nodes degraded, the
+  #          phase continued), and the benchmark run rr1793003603224-a8acb1
+  #          landed with 2/2 answered, 0 errors, 0 abstentions, failing_count 0,
+  #          faithfulness 0.775 / context_precision 1.000 / context_recall 1.000
+  #          / answer_relevancy 0.945 on the granite __env__ judge — a suite
+  #          whose generation had already lost two nodes still produced a
+  #          complete, fully scored run.
+  #          LEG 2 — Alphabet, WARM cache: 6.5 min, 8 real calls + 417
+  #          replays, kg_failures {} (not one node degraded), and
+  #          "SMOKE 8-6: ALL CHECKS PASSED" (exit 0).
+  #          LEG 3 — Alphabet, COLD cache: the sidecar recreated with
+  #          RAGAS_LLM_CACHE=0, which disables the cache read AND the write, so
+  #          every knowledge-graph node asks the model for real. 424 real calls,
+  #          0 replays, 782 s, kg_failures {} (again not one node degraded), 2
+  #          questions synthesized. The cache volume proves the coldness: 46,406
+  #          entries, newest write 08:43:02, the cold run started 08:44:33 and
+  #          wrote NOTHING (a miss always writes). "SMOKE 8-6: ALL CHECKS
+  #          PASSED" (exit 0), suite kept as rs1793004262276-355ca4. The run
+  #          leg rr1793005047691-aa20ac completed with 0 errors and 0
+  #          abstentions; one of the two rows scored 0 on answer_relevancy (the
+  #          served answer addressed the question's premise instead of the
+  #          question), so it carries n_failed: 1 — a QUALITY result the
+  #          benchmark exists to surface, not a completion failure.
+  #          THE TAX THAT MADE IT AN HOUR — FOUND AND FIXED (2026-10-26, MR
+  #          !605, branch fix/ragas-analytics-telemetry): ragas 0.4.3 wraps
+  #          EVERY prompt generation (ragas/_analytics.py:60) and POSTs the
+  #          usage event to https://t.explodinggradients.com from INSIDE the
+  #          async prompt path, with a 1 s timeout. The POST is SYNCHRONOUS,
+  #          so it blocks the event loop: ragas's own 16 workers and
+  #          RAGAS_LLM_MAX_CONCURRENCY never overlapped. Measured in the
+  #          sidecar image: a warm CACHE HIT — no model call at all — cost
+  #          0.79 s, and 0.008 s with the flag off (100x). Solar System's
+  #          graph is ~3,800 prompts, so the tax alone was ~50 min of a
+  #          generation, charged again on every judge call of every scored
+  #          row. TWO independent reasons it is off: performance, and
+  #          SOVEREIGNTY — a public-sector deployment must not ship per-call
+  #          usage telemetry to a third-party endpoint outside the
+  #          deployment. RAGAS_DO_NOT_TRACK lands in all four sites (compose,
+  #          env, env.j2, config-validator) and the engine sets it at import
+  #          time with setdefault, so a missed env plumbing cannot silently
+  #          re-enable the POST. Sidecar suite 91 green (one new), the
+  #          config-validator 82 green (one new).
+  #          THE REAL 50-QUESTION BENCHMARK ON THE SAME CORPUS (2026-10-26,
+  #          the fixed sidecar): suite rs1793010419829-90e663 — 50 questions,
+  #          corpus 1600 of 3011 chunks, generator ragas:ibm-granite/granite-4.1
+  #          -8b, and kg_failures {"NERExtractor: OutputParserException": 2}:
+  #          the SAME two poisoned nodes degraded and the phase CONTINUED —
+  #          the generation-survival fix working at scale on the corpus that
+  #          originally killed the run. Wall clock 7 min 24 s for the whole
+  #          graph build plus the synthesis (POST /generate-testset 10:27:06
+  #          UTC, suite created 10:34:30 UTC), against over an hour before
+  #          the telemetry fix on the same corpus and the same 1,600-chunk
+  #          graph. Run rr1793016096281-c9fe4b in serve mode, .env granite
+  #          judge.
+  #          STILL OPEN (David's call): the corpus is sized independently of
+  #          the suite size — buildCorpusDocuments never sees testset_size, so
+  #          a 2-question suite and a 50-question suite build the SAME graph.
+  #          Recorded in deferred-work.md.
+
+  #          FOUR-JUDGE EXPERIMENT + ENV ADVICE 2026-10-27 (branch
+  #          fix/ragas-env-advice, in review): four judges scored the SAME 50
+  #          answers (granite / MiniMax-M3 / glm-5.3-flash / glm-5.3) — the
+  #          outcome bar is a property of the judge (13/37, 25/25, 8/42, 7/43);
+  #          MiniMax's apparent win was never-judged rows counted as passes (its
+  #          <think> leak collapsed coverage); the honest failure core is 14 rows
+  #          (11 factual_correctness) failed by ALL FOUR. Deferred-work carries
+  #          the five-defect ledger. NEW FEATURE (David 2026-10-27: "a cycle of
+  #          adjustment that improves the RAGAS scores by configuration"):
+  #          buildEnvAdvice — env-change entries generated MECHANICALLY from the
+  #          attribution (the advisor LLM proved it loses shapes and prescribes
+  #          knobs for judge-staged rows), rendered as a table in RagasPanel
+  #          (8 i18n keys × 14 locales). Mode-aware (serve → chatqna's
+  #          RETRIEVER_ARANGO_K, whatif → OKF_RAGAS_CANDIDATE_K), rank-derived
+  #          K targets, reranker direction follows the ladder semantics
+  #          (reranker stage = cut the passage = LOOSEN), corpus/judge stages
+  #          get explicit no-change entries. Tests: okf-server 106 (12 new env
+  #          advice + the F1 preservation pin), locales 7/7. /code-review found
+  #          9 findings (2 critical: the LLM success path dropped env_changes;
+  #          the rules read `failed` where production rows carry `fails`) — all
+  #          fixed.

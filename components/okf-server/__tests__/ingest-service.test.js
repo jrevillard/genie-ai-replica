@@ -74,6 +74,23 @@ jest.mock('../services/repository-service', () => ({
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null)
 }));
+// The repo-level LLM curation pass — mocked so the async-curation test can
+// gate it (the per-concept curation composes inside ingest-service itself
+// and does not touch this module). The default mirrors the real service's
+// mode rule (llm|hybrid pass through; anything else is heuristics) because
+// the audit row nests the pass summary under its METHOD key.
+jest.mock('../services/llm-curation-service', () => ({
+  curateRepoConcepts: jest.fn(async (repo, { classification } = {}) => ({
+    method: classification === 'llm' || classification === 'hybrid' ? classification : 'heuristics',
+    total: 0,
+    curated: 0,
+    pre_labelled: 0,
+    labeled: 0,
+    described: 0,
+    typed: 0,
+    fallbacks: 0
+  }))
+}));
 
 const matter = require('gray-matter');
 const ingestService = require('../services/ingest-service');
@@ -807,5 +824,251 @@ describe('ingestService curation provenance (D-G #985)', () => {
     const row = writeAudit.mock.calls.map((c) => c[0]).find((r) => r.action === 'repo.import');
     expect(row.details.curation.method).toBeNull();
     expect(row.description).not.toContain('curation method');
+  });
+
+  test('llm curation runs in the BACKGROUND: the 202 returns while the pass is still running (the 504, 2026-11-03)', async () => {
+    // Live: a 344-concept zip took 2m07s of request time because the import
+    // awaited the LLM curation pass — past the gateway timeout — while the
+    // import itself had succeeded server-side long before. The response must
+    // no longer wait: rows stored -> 202 with curation flagged `running`;
+    // the pass continues detached and the caller can await its tail.
+    const llmCuration = require('../services/llm-curation-service');
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    llmCuration.curateRepoConcepts.mockImplementation(() =>
+      gate.then(() => ({ method: 'llm', total: 2, curated: 2, labeled: 2, described: 2, typed: 2, fallbacks: 0 }))
+    );
+    parserService.parseConcept.mockImplementation(async (markdown, ctx) => ({
+      concept_id: ctx.path.replace(/.md$/, ''),
+      repo_id: ctx.repo_id,
+      path: ctx.path,
+      frontmatter: { title: 'X' },
+      body: 'Body.',
+      sources: [],
+      links: []
+    }));
+    const summary = await ingestService.ingestRepoConcepts(
+      REPO,
+      { concepts: [conceptInput('A'), conceptInput('B')], classification: 'llm' },
+      ACTOR
+    );
+    // The response is FREE while the pass is still gated:
+    expect(llmCuration.curateRepoConcepts).toHaveBeenCalled();
+    expect(summary.success).toBe(true);
+    expect(summary.curation).toEqual({ status: 'running', method: 'llm' });
+    // The 202 body is JSON-safe — the tail promise never serializes into it.
+    expect(JSON.parse(JSON.stringify(summary))._curationDone).toBeUndefined();
+    const { writeAudit } = require('../services/audit-service');
+    const row = writeAudit.mock.calls.map((c) => c[0]).find((r) => r.action === 'repo.import');
+    expect(row.description).toContain('RUNNING IN BACKGROUND');
+    // The pass lands when its work does — the tail carries the real summary.
+    release();
+    await summary._curationDone;
+    expect(summary.curation).toMatchObject({ method: 'llm', labeled: 2 });
+  });
+
+  test('async curation failure is fail-soft; the zip record close still rides the tail', async () => {
+    // The pass is the fail-soft leg of the import (an LLM outage degrades
+    // per-concept with fallback markers; a failed pass must not fail the
+    // 202 — runImportCuration returns null and the audit row omits the pass
+    // clause) — and the zip conversion record must STILL close after the
+    // failed pass (2026-09-08 ordering: the card must not flip to completed
+    // while labels are landing; a failed pass is a landed pass for ordering).
+    // Review round 3 (MEDIUM): the close itself is ASSERTED below — a mutant
+    // deleting `curationTail.then(closeZipRecord)` (the only writer of the
+    // terminal `done` status on this path) turns this red, instead of leaving
+    // every llm/hybrid zip import stuck on the Studio Building card forever.
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.curateRepoConcepts.mockRejectedValueOnce(new Error('vLLM down'));
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    zip.addFile('t1.md', Buffer.from('# T1\nBody.'));
+    const summary = await ingestService.ingestRepoConcepts(
+      REPO,
+      { zip: zip.toBuffer().toString('base64'), classification: 'llm' },
+      ACTOR
+    );
+    await summary._curationDone;
+    const { writeAudit } = require('../services/audit-service');
+    const row = writeAudit.mock.calls.map((c) => c[0]).find((r) => r.action === 'repo.import');
+    expect(row.description).not.toContain('RUNNING IN BACKGROUND'); // the pass landed (as null)
+    expect(row.description).not.toContain('curation pass ('); // no pass summary to report
+    expect(summary.success).toBe(true); // the import itself never fails on curation
+    // THE CLOSE: the terminal conversion write carries a done/failed status —
+    // the early writes on this path are 'adding'/'crawling'; ONLY the tail's
+    // close writes the terminal state the Studio Building card waits for.
+    const { __mockDb } = require('../shared-lib/db-connection-service');
+    const terminal = __mockDb.query.mock.calls.filter(([text, bind]) => {
+      if (typeof text !== 'string' || !text.includes('conversion: MERGE')) return false;
+      const patch = bind && bind.p;
+      return patch && (patch.status === 'done' || patch.status === 'failed');
+    });
+    expect(terminal.length).toBeGreaterThanOrEqual(1);
+    expect(terminal[terminal.length - 1][1].p.finished_at).toBeTruthy();
+  });
+
+  test('a tail REJECTION (contract drift) is logged, not crashed, and the close still lands', async () => {
+    // runImportCuration is fail-soft by contract today — every awaited call
+    // inside it is try/caught — so the drift is simulated at the envelope
+    // itself: the pass's own non-fatal catch calls logger.warn, and THAT
+    // warn throws, escaping the function. The tail catch must keep the
+    // rejection loud (logger.error) WITHOUT an unhandled rejection crashing
+    // okf-server under Node 22 (round 3), and the zip record close must
+    // still land after the rejection so the Studio card clears.
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.curateRepoConcepts.mockRejectedValueOnce(new Error('vLLM down'));
+    const { logger } = require('../shared-lib/logger');
+    const prevWarn = logger.warn.getMockImplementation();
+    logger.warn.mockImplementation((msg) => {
+      if (String(msg).includes('curation pass failed')) throw new Error('warn exploded');
+    });
+    try {
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip();
+      zip.addFile('t3.md', Buffer.from('# T3\nBody.'));
+      const summary = await ingestService.ingestRepoConcepts(
+        REPO,
+        { zip: zip.toBuffer().toString('base64'), classification: 'llm' },
+        ACTOR
+      );
+      await summary._curationDone;
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('curation tail rejected'),
+        expect.objectContaining({ repo_id: REPO })
+      );
+      // The close still lands after the rejection.
+      const { __mockDb } = require('../shared-lib/db-connection-service');
+      const terminal = __mockDb.query.mock.calls.filter(([text, bind]) => {
+        if (typeof text !== 'string' || !text.includes('conversion: MERGE')) return false;
+        const patch = bind && bind.p;
+        return patch && (patch.status === 'done' || patch.status === 'failed');
+      });
+      expect(terminal.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      logger.warn.mockImplementation(prevWarn);
+    }
+  });
+
+  test('a zip conversion-record write failure is non-fatal (the import continues)', async () => {
+    // zipConvWrite is best-effort dashboard state — a storage hiccup writing
+    // it must degrade to a logged warning, never fail the import.
+    const { __mockDb } = require('../shared-lib/db-connection-service');
+    const prev = __mockDb.query.getMockImplementation();
+    __mockDb.query.mockImplementation((...args) => {
+      const text = typeof args[0] === 'string' ? args[0] : '';
+      if (text.includes('conversion: MERGE')) return Promise.reject(new Error('disk full'));
+      return prev(...args);
+    });
+    try {
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip();
+      zip.addFile('t2.md', Buffer.from('# T2\nBody.'));
+      const summary = await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
+      expect(summary.success).toBe(true);
+      const { logger } = require('../shared-lib/logger');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Zip conversion record write failed (non-fatal)',
+        expect.objectContaining({ repo_id: REPO })
+      );
+    } finally {
+      __mockDb.query.mockImplementation(prev);
+    }
+  });
+
+  test('a bundle zip with duplicate entry names is refused with the names called out', async () => {
+    // adm-zip's WRITER dedups (see the guard's comment), so the ambiguous
+    // bundle must be hand-built: a minimal STORED zip whose central
+    // directory carries the same entry name twice — the shape other zip
+    // tools (python zipfile et al.) happily produce.
+    const zlib = require('zlib');
+    const name = Buffer.from('docs/dup.md', 'utf8');
+    const data = Buffer.from('# Dup\nSame entry twice.', 'utf8');
+    const crc = zlib.crc32(data) >>> 0;
+    const local = (name, data, crc) => {
+      const h = Buffer.alloc(30);
+      h.writeUInt32LE(0x04034b50, 0);
+      h.writeUInt16LE(20, 4);
+      h.writeUInt16LE(0, 6);
+      h.writeUInt16LE(0, 8); // stored
+      h.writeUInt16LE(0, 10);
+      h.writeUInt16LE(0, 12);
+      h.writeUInt32LE(crc, 14);
+      h.writeUInt32LE(data.length, 18);
+      h.writeUInt32LE(data.length, 22);
+      h.writeUInt16LE(name.length, 26);
+      h.writeUInt16LE(0, 28);
+      return Buffer.concat([h, name, data]);
+    };
+    const central = (name, data, crc, offset) => {
+      const h = Buffer.alloc(46);
+      h.writeUInt32LE(0x02014b50, 0);
+      h.writeUInt16LE(20, 4);
+      h.writeUInt16LE(20, 6);
+      h.writeUInt16LE(0, 8);
+      h.writeUInt16LE(0, 10);
+      h.writeUInt16LE(0, 12);
+      h.writeUInt16LE(0, 14);
+      h.writeUInt32LE(crc, 16);
+      h.writeUInt32LE(data.length, 20);
+      h.writeUInt32LE(data.length, 24);
+      h.writeUInt16LE(name.length, 28);
+      h.writeUInt32LE(offset, 42);
+      return Buffer.concat([h, name]);
+    };
+    const parts = [];
+    const centrals = [];
+    let offset = 0;
+    for (let i = 0; i < 2; i += 1) {
+      const l = local(name, data, crc);
+      parts.push(l);
+      centrals.push(central(name, data, crc, offset));
+      offset += l.length;
+    }
+    const cdStart = offset;
+    const cd = Buffer.concat(centrals);
+    parts.push(cd);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(2, 8);
+    eocd.writeUInt16LE(2, 10);
+    eocd.writeUInt32LE(cd.length, 12);
+    eocd.writeUInt32LE(cdStart, 16);
+    parts.push(eocd);
+    const b64 = Buffer.concat(parts).toString('base64');
+    await expect(ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('docs/dup.md')
+    });
+  });
+
+  test('4c conformance-persist and 4e dedup pre-read failures are non-fatal per concept', async () => {
+    // Per-concept isolation: a conformance persist outage and a pre-read
+    // (dedup) outage each degrade that concept with a logged warning — the
+    // row still parses, writes and enqueues.
+    conformanceService.persistConformanceIssues.mockRejectedValueOnce(new Error('conformance store down'));
+    conceptMeta.getConceptMeta.mockRejectedValueOnce(new Error('meta read down'));
+    parserService.parseConcept.mockImplementation(async (markdown, ctx) => ({
+      concept_id: ctx.path.replace(/.md$/, ''),
+      repo_id: ctx.repo_id,
+      path: ctx.path,
+      frontmatter: { title: 'X' },
+      body: 'Body.',
+      sources: [],
+      links: []
+    }));
+    const summary = await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('D')] }, ACTOR);
+    expect(summary.success).toBe(true);
+    expect(summary.enqueued).toBe(1);
+    const { logger } = require('../shared-lib/logger');
+    expect(logger.error).toHaveBeenCalledWith(
+      'Import 4c conformance persist failed (non-fatal)',
+      expect.objectContaining({ repo_id: REPO })
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Import 4e pre-read failed (dedup disabled for this concept)',
+      expect.objectContaining({ repo_id: REPO })
+    );
   });
 });

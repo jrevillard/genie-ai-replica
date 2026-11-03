@@ -1430,6 +1430,19 @@ export default {
     alt: 'Pakia'
   },
   details: {
+    crawl: {
+      seconds: 'sekunde',
+      autoRefreshEvery: 'Kujisasisha kiotomatiki kila',
+      refreshNow: 'Sasisha sasa',
+      crawlRate: 'Kiwango cha utafutaji',
+      queueSize: 'Ukubwa wa foleni',
+      errorRate: 'Kiwango cha makosa',
+      pagesProcessed: 'Kurasa zilizochakata',
+      depth: 'Kina',
+      internalLinks: 'Viungo vya ndani',
+      externalLinks: 'Viungo vya nje',
+      totalFetched: 'Jumla iliyopatikana'
+    },
     loading: 'Inapakia Maelezo ya Faili...',
     title: 'Maelezo ya Faili',
     close: 'Funga',
@@ -1448,6 +1461,7 @@ export default {
     uploadDate: 'Tarehe ya Kupakia',
     hash: 'Hashi ya SHA256',
     tabs: {
+      dashboard: 'Dashibodi',
       details: 'Maelezo',
       ingestionLog: 'Kumbukumbu ya Uchakataji',
       detailsHint:
@@ -1646,8 +1660,14 @@ export default {
       adminOnly: 'Mipangilio ya modeli inahitaji jukumu la msimamizi wa jukwaa.'
     },
     versions: {
+      ingestFailed: 'imeshindikana',
+      ingestPartialFailed: 'sehemu',
+      ingestCompleted: 'imeingizwa',
+      bundleMissing: 'zip imepotea',
+      bundleDownload: 'Pakua zip',
       bundle: 'Kifurushi',
       col: {
+        ingest: 'Kuingiza',
         concepts: 'Dhana',
         curator: 'Mratibu',
         minted: 'Imeundwa',
@@ -1665,6 +1685,10 @@ export default {
       title: 'Matoleo'
     },
     shell: {
+      sourceDocument: 'Andiko la chanzo',
+      size: 'Ukubwa',
+      type: 'Aina',
+      crawlSeed: 'Mbegu ya utafutaji',
       back: 'Dashibodi ya Studio',
       building: 'Inajenga…',
       buildingHint: 'Faili chanzo bado inachakatwa',
@@ -1676,6 +1700,7 @@ export default {
       export: 'Hamisha .zip',
       logs: 'Kumbukumbu',
       pii: {
+        reviewHint: 'Bofya faili iliyoflag ili kuirekebisha kwenye kihariri:',
         ack: 'Kubali vitambulisho vilivyowekewa alama & chapisha',
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
@@ -1759,6 +1784,9 @@ export default {
       failed: 'Uingizaji haukuweza kuanzishwa. Angalia hati kisha ujaribu tena.'
     },
     editor: {
+      resizeMeta: 'Buruta kubadili ukubwa wa dirisha la metadata',
+      resizeTip: 'Buruta kubadili ukubwa — bofya mara mbili kuweka upya',
+      resizeRail: 'Buruta kubadili ukubwa wa orodha ya faili',
       addConcept: {
         bodyLabel: 'Markdown (bandika au acha tupu)',
         bodyPh: '# Kichwa cha Habari\n\nBandika markdown hapa - frontmatter inaongezwa kiotomatiki kwa ajili yako.',
@@ -1818,6 +1846,16 @@ export default {
         grantedGroupNotice: 'Kundi limopewa — kila mwanakundi anapata ufikiaji anapoingia tena.'
       },
       autocorrect: {
+        applyingProgress: 'Inatumika {done} / {total}…',
+        stop: 'Simamisha',
+        stopped: 'Imesimamishwa — {n} dhana zimetumika kabla ya kusimama.',
+        sheetShowing: 'Inaonyesha {shown} kati ya {total} dhana.',
+        sheetApplyCoversAll: '«Tumia marekebisho» inaghughulikia zote.',
+        sheetShowMore: 'Onyesha zaidi',
+        sheetFilter: 'Chuja kwa kitambulisho cha dhana',
+        applySummary: 'Marekebisho {n} yametumika.',
+        applyFailed: 'Marekebisho {n} yametumika — {f} dhana IMESHINDWA. Bonyeza «Tumia marekebisho» kujaribu tena.',
+        failuresMore: 'na {n} zaidi',
         blankBefore: '(tupu)',
         blankBadge: 'hakuna frontmatter — pendekezo kamili',
         applyField: 'Tumia',
@@ -2026,6 +2064,7 @@ export default {
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
+        inProgress: 'Inachapisha — inatoa na kuhamisha furushi…',
         body: 'Kufanya publish kunatoa v{n} na kuhifadhi kifurushi cha "{file}" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.',
         confirm: 'Chapisha',
         title: 'Chapisha'
@@ -2511,6 +2550,10 @@ export default {
         cloneFailed: 'Kunakili kumeshindwa — jaribu tena.'
       },
       input: {
+        clsHybrid: 'Mchanganyiko',
+        clsLlm: 'Uainishaji wa LLM',
+        clsHeur: 'Heuristics (haraka, bila LLM)',
+        classification: 'Mkakati wa uainishaji',
         title: 'Pembejeo',
         documents: 'Chagua nyaraka zinazopaswa kuanzisha orodha ya mada.',
         crawl: 'Chagua tovuti utakazokusanya maelezo yake.',
@@ -2543,6 +2586,7 @@ export default {
         cloned: 'Hazina hii ni nakala — mada zake tayari zimo mahali. Endelea kwenye Curate kuzikagua.'
       },
       produce: {
+        labelFailed: 'Ubadilishaji umeshindikana',
         title: 'Zalisha mada',
         hint: 'Tunasoma vyanzo vyako na kupendekeza mada.',
         progress: 'Mzalishaji anaendelea na kazi...',
@@ -2593,6 +2637,7 @@ export default {
         loadFailed: 'Haikuweza kusoma lebo kwa sasa.'
       },
       curate: {
+        labHint: 'Jenga kichwa uelekezi kutoka kwa lebo zilizohifadhiwa na uipime — bila ya kutangaza.',
         embedHint:
           'Kagua na boresha kila mada: rekebisha maandishi, weka aina yake na lebo ya Muundo wa Maarifa, ongeza au ondoa mada. Kila unachorekebisha hapa ndicho msaidizi atakachotaja baadaye.',
         noRepo: 'Bado hakuna hazina — rudi kwenye Entry uunde au uchague kwanza.',
@@ -2633,6 +2678,10 @@ export default {
         versionSummary: 'Matoleo {n} · jipya zaidi v{latest}'
       },
       publish: {
+        frontmatterPending: 'Lebo za frontmatter hazijaandaliwa',
+        frontmatterPartial: 'Lebo za frontmatter — inahitaji kupitiwa',
+        frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
+        frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
         hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
         nameOk: 'Jina la ghala limewekwa',
@@ -2767,8 +2816,6 @@ export default {
       saveBlocked: 'Uhifadhi umezuiwa: rekebisha masuala ya ulinganifu kwanza.'
     },
     validation: {
-      piiRescanTimeout:
-        'Ukchanganuzi upya bado unaendelea baada ya dakika 15 — unaendelea upande wa seva. Hakuna kilichopotea; angalia tena baada ya dakika moja.',
       healthAria: 'Afya: asilimia {pct}, matatizo {n}',
       frozen:
         'Maudhui yamesitishwa kwenye toleo la {v} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.',
@@ -2872,6 +2919,7 @@ export default {
         'Seva ilikubali uchanganuzi upya lakini haikurudisha kitambulisho cha uendeshaji, hivyo maendeleo yake hayawezi kufuatiliwa. Hakuna kilichoripotiwa.',
       piiStateError: 'Scan error',
       piiTally: {
+        missing: 'imepotea',
         scanned: '{n} page(s) re-scanned',
         clean: 'clear',
         hit: 'flagged',
@@ -3031,8 +3079,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Vipimo vya kulinganisha vya RAGAS',
-        models: 'Modeli'
+        ragas: 'Vipimo vya kulinganisha vya RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3124,6 +3171,7 @@ export default {
         }
       },
       suites: {
+        loading: 'Inapakia seti…',
         generate: 'Generate test suite',
         generateTip:
           'LLM huandika maswali kwa vipande vya 30 kwa kila aina — ombi kubwa (100+) huchukua dakika chache. Kipima hutokea hapa na kwenye vilivyohifadhiwa ikikamilika.',

@@ -395,6 +395,45 @@ void main() {
       },
     );
 
+    test('a raw-falsy category does not set the restored category', () {
+      // The restored-category walk gates on the RAW value's truthiness
+      // (quickHelpDeclaresCategory, the web's `if (button.category)`):
+      // a numeric 0 declares no category, so the conversation's own
+      // edge stays the effective category — the same reading the
+      // outage verdict applies through the one shared predicate.
+      final falsyCategory = [
+        {'id': 'civil', 'categoryRaw': 0, 'category': '0'},
+      ];
+      final scope = convResolver(
+        falsyCategory,
+      ).resolve(tags: ['civil'], categoryKey: '2');
+
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+    });
+
+    test(
+      'a map with no raw record reads its category raw, not stringified',
+      () {
+        // The parse always keeps the raw value beside its string form, but
+        // a map built by hand (a fixture, a programmatic card) carries only
+        // 'category'. That value is the RAW one, and the web reads it raw:
+        // a numeric 0 is falsy, so the card declares NO category and the
+        // conversation's own edge stays the effective category. Stringifying
+        // it first would read the truthy '0' and declare a category the
+        // hierarchy cannot name.
+        final rawOnly = [
+          {'id': 'civil', 'category': 0},
+        ];
+        final scope = convResolver(
+          rawOnly,
+        ).resolve(tags: ['civil'], categoryKey: '2');
+
+        expect(scope.categoryId, '2');
+        expect(scope.categoryNameEn, 'Civil Registry');
+      },
+    );
+
     test('a legacy falsy-id tag restores as a sidebar tag, like the web', () {
       // The web's restore lookup (`candidate.id === tag`) cannot match a
       // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR
@@ -2158,6 +2197,50 @@ void main() {
       expect(
         quickHelpDeclaresScope({'id': 'chat', 'category': 'general'}),
         isFalse,
+      );
+    });
+
+    test(
+      'a numeric 0 category NAMES a scope — the web verdict rule, on the raw value',
+      () {
+        // The web's verdict path (declaresCategoryScope(button.category))
+        // judges the RAW category: a hand-edited `category: 0` is
+        // declared-and-broken there — the VISIBLE failure direction, never
+        // a silently widened query. The mobile reads the same raw value, so
+        // the outage verdict and the press path answer as the web does.
+        expect(
+          quickHelpDeclaresScope({
+            'id': 'x',
+            'categoryRaw': 0,
+            'category': '0',
+          }),
+          isTrue,
+        );
+      },
+    );
+
+    test('the restore gate and the verdict gate are the web\'s TWO rules', () {
+      // The web keeps the two questions apart: its restore gates on the
+      // raw value's truthiness (`if (button.category)` — a numeric 0
+      // declares no category) and its verdict on the scope rule (a numeric
+      // 0 names a scope). The mobile answers both the web's way, from ONE
+      // shared read of the raw value.
+      final button = {'id': 'x', 'categoryRaw': 0, 'category': '0'};
+
+      expect(quickHelpDeclaresCategory(button), isFalse);
+      expect(quickHelpDeclaresScope(button), isTrue);
+    });
+
+    test("a raw '0' STRING category declares a category — JS truthiness", () {
+      // The falsy set is null/false/0/''; the non-empty STRING '0' is
+      // truthy in JavaScript and declares a category on both platforms.
+      expect(
+        quickHelpDeclaresCategory({
+          'id': 'x',
+          'categoryRaw': '0',
+          'category': '0',
+        }),
+        isTrue,
       );
     });
   });

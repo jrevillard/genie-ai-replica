@@ -35,8 +35,18 @@ import 'package:genie_ai_mobile/utils/config_resolver.dart';
 /// scope, in every rule that reads one. This predicate is the ONE copy —
 /// the subject of this whole branch is what happens when two copies of a
 /// scope rule drift apart.
-bool declaresCategoryScope(String? id) {
-  return id != null && id.isNotEmpty && id != 'general';
+///
+/// The web's rule is `id != null && id !== '' && id !== 'general'`, and it
+/// is read on the RAW value there — a numeric 0 names a scope (the strict
+/// compares let it through), while '' and the placeholder name none. The
+/// parameter is therefore DYNAMIC: the same rule must answer for a raw
+/// number as for a string, and Dart's cross-type equality gives the web's
+/// answer (0 == '' is false, 0 == 'general' is false).
+bool declaresCategoryScope(dynamic id) {
+  if (id == null) return false;
+  if (id == '') return false;
+  if (id == 'general') return false;
+  return true;
 }
 
 /// The one RESERVED conversation tag: `just-chat`. A saved conversation
@@ -635,9 +645,10 @@ String? quickHelpCategoryOf(Map<String, dynamic> button) =>
 /// disagree about the value itself, and a web-saved conversation
 /// carries the imprecise tag and misses this platform's index. A
 /// configuration with an id that large is not one the platforms can
-/// agree on at all; the durable answer is normalizing the tag at the
-/// save/restore boundary on both platforms, tracked beside the
-/// numeric-tag contract.
+/// agree on at all: the tag FORM is the same on both platforms (each
+/// writes the string form at the conversation boundary, and each restore
+/// reads the string form), so what stays unmatched is the VALUE the two
+/// decoders produced — no boundary rule can close that band.
 String? _jsTagForm(dynamic raw) {
   if (raw == null) return null;
   if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
@@ -672,11 +683,44 @@ String? quickHelpIdOf(Map<String, dynamic>? button) {
   return _jsTagForm(raw);
 }
 
+/// The category value [button] declares — the RAW config value, kept
+/// beside its string form by the parse. ONE accessor for the rules that
+/// JUDGE a category (the presence gate and the scope gate): they read it
+/// HERE, so no rule judges the stringified form by a rule the web applies
+/// to the RAW one. A map with no raw record (a hand-built fixture) falls
+/// back to the 'category' value it carries, read by the same RAW rules.
+dynamic quickHelpCategoryRawOf(Map<String, dynamic> button) =>
+    button['categoryRaw'] ?? button['category'];
+
+/// Whether [button] DECLARES a category AT ALL — the web's restore gate
+/// (`if (button.category)`): the RAW value's JavaScript truthiness
+/// ([configTruthy]). A falsy raw category (`0`, `false`, `''`) declares
+/// none, and its stringified `'0'` must not resurrect it — the web reads
+/// the value BEFORE any stringification, and a rule that judged the
+/// string form would answer the opposite.
+///
+/// ONE copy of the question "does this card carry a category?" — the
+/// restored-category walk reads it, and the web's own restore answers it
+/// the same way, so a falsy numeric category leaves the restored scope on
+/// the conversation's own edge.
+bool quickHelpDeclaresCategory(Map<String, dynamic> button) =>
+    configTruthy(quickHelpCategoryRawOf(button));
+
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
+///
+/// The category half is the web's OWN scope rule ([declaresCategoryScope]),
+/// read on the RAW value — the web judges the raw category there, so a
+/// hand-edited `category: 0` answers exactly as it does on the web. This
+/// is the web's SECOND question, not the restore's: the restore asks
+/// whether a category is PRESENT ([quickHelpDeclaresCategory]) and the
+/// verdict asks whether one is NAMED. The web keeps both questions apart
+/// (its restore gates on truthiness, its verdict on the scope rule), so
+/// the mobile keeps them apart too — on ONE shared read of the raw value,
+/// so the two answers can never come from two different strings.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return declaresCategoryScope(quickHelpCategoryOf(button)) ||
+  return declaresCategoryScope(quickHelpCategoryRawOf(button)) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
@@ -1075,16 +1119,11 @@ class ConversationScopeResolver {
         // The web's restore gates the category on the RAW value's
         // JavaScript truthiness (`if (button.category)`) BEFORE any
         // stringification: a falsy raw category (0, false, '') declares
-        // none. The parse keeps the raw value beside its string form
-        // for exactly this gate; a map with no raw record (a hand-built
-        // fixture) falls back to the string form's non-emptiness.
-        final raw = taggedButton['categoryRaw'];
-        final declared = quickHelpCategoryOf(taggedButton);
-        final declaresCategory = raw != null
-            ? configTruthy(raw)
-            : (declared != null && declared.isNotEmpty);
-        if (declaresCategory) {
-          effectiveCategory = _hierarchy.categoryIdFor(declared);
+        // none. quickHelpDeclaresCategory is that ONE gate.
+        if (quickHelpDeclaresCategory(taggedButton)) {
+          effectiveCategory = _hierarchy.categoryIdFor(
+            quickHelpCategoryOf(taggedButton),
+          );
         }
       } else if (tag.startsWith('category.')) {
         final legacyId = tag.substring('category.'.length);

@@ -1046,7 +1046,7 @@ const Map<String, dynamic> swLocale = {
     "quickHelpTitleMissing":
         "Tatizo la usanidi: kitufe hiki haina kichwa katika lugha hii. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.",
     "quickHelpScopeUnavailable":
-        "Tatizo la usanidi: mpangilio wa maarifa haukuweza kupakiwa, hivyo kwa hiyo upeo wa kitufe hiki hauwezi kuthibitishwa. Kitufe hiki hakiwezi kutumika hadi mpangilio upo.",
+        "Haipatikani kwa muda: mpangilio wa maarifa haukuweza kupakiwa, hivyo kwa hiyo upeo wa kitufe hiki hauwezi kuthibitishwa. Kitufe hiki hakiwezi kutumika hadi mpangilio upo.",
     "scopeNotNameable":
         "Tatizo la usanidi: kipimo kilichochaguliwa hikija na jina la Kiingereza katika mpangilio wa maarifa, hivyo huwezi kufafanua upeo wa swali. Swali halikutumwa.",
     "scopeTagGone":

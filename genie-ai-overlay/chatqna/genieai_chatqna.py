@@ -891,8 +891,8 @@ def _select_history_within_budget(history: list, max_translation_chars: int, pat
     oldest turns and keeps its recent ones. A newest message that alone
     exceeds the whole budget keeps its tail, truncated to the budget, so
     the retrieval query carries the end of the turn instead of an empty
-    string. The message dicts are copies: the request's history stays
-    untouched.
+    string. Only that message's dict is copied; the other kept messages
+    are the request's own dicts, which the callers never mutate.
 
     ``path`` names the caller in the truncation metric and in the log line.
     """
@@ -4078,6 +4078,25 @@ class ChatQnAService:
                 logger.warning("History translation asked for blank messages; reporting it as a fallback.")
                 return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
+        # The single-message shape's budget runs before the language map: an
+        # oversized query is refused even when the map cannot name English —
+        # the refusal must not depend on the registry's health.
+        if isinstance(history, str):
+            if not history.strip():
+                # An empty prompt would only harvest the model's junk reply
+                # as the embedded query, and there is nothing to translate.
+                logger.warning("History translation asked for an empty message; reporting it as a fallback.")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
+            max_translation_chars = _get_max_translation_chars()
+            if len(history) + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+                # The same budget the list shape applies, checked before the
+                # request: an oversized query is refused instead of being
+                # sent whole to the translation model.
+                raise TranslationInputTooLongError(
+                    f"the query is {len(history)} characters, over the "
+                    f"{max_translation_chars}-character translation budget"
+                )
+
         # The target steers the prompt, so it is resolved against the language
         # map — ONCE, for both shapes of the history. The target is English:
         # the history is normalized to the language of the embedding space,
@@ -4103,20 +4122,6 @@ class ChatQnAService:
         # and retrieve the wrong documents. The refusal is raised instead,
         # and the caller turns it into the 422 the answer path returns.
         if isinstance(history, str):
-            if not history.strip():
-                # An empty prompt would only harvest the model's junk reply
-                # as the embedded query, and there is nothing to translate.
-                logger.warning("History translation asked for an empty message; reporting it as a fallback.")
-                return history, QUERY_TRANSLATION_FALLBACK_ERROR
-            max_translation_chars = _get_max_translation_chars()
-            if len(history) + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
-                # The same budget the list shape applies, checked before the
-                # request: an oversized query is refused instead of being
-                # sent whole to the translation model.
-                raise TranslationInputTooLongError(
-                    f"the query is {len(history)} characters, over the "
-                    f"{max_translation_chars}-character translation budget"
-                )
             try:
                 return (
                     await self._translate_chunk_in_language(
@@ -4644,8 +4649,8 @@ class ChatQnAService:
                     ),
                 )
                 raise _translation_input_too_long_error(
-                    "The query exceeded the language model's input context window. "
-                    "Please shorten your message and try again."
+                    "The query exceeded the maximum input size for this "
+                    "deployment. Please shorten your message and try again."
                 ) from _e_trans_overflow
         else:
             # A passthrough is only "English" when something actually

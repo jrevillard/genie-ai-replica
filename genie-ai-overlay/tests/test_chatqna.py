@@ -3147,6 +3147,17 @@ class TestQueryTranslationStatus:
         with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
             await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
 
+    @pytest.mark.asyncio
+    async def test_an_oversized_single_message_is_refused_even_when_the_map_is_unreadable(self):
+        """The budget check runs before the language map: an oversized query
+        is refused even when the registry cannot name English — the refusal
+        must not depend on the registry's health."""
+        svc = create_chatqna_service()
+        stack = self._translation_patches(self._mock_client(), translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna.language_codes_map", return_value={}))
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string("q" * 5000, source_lang_code="es")
+
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
         stack = self._translation_patches(self._mock_client())
@@ -4913,6 +4924,42 @@ async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is
     # translator's.
     mock_counter.add.assert_any_call(1, {"path": "passthrough"})
     mock_counter.add.assert_any_call(1, {"path": "translation"})
+
+
+@pytest.mark.asyncio
+async def test_the_passthrough_truncates_an_oversized_newest_message_like_the_translator():
+    """A newest message that alone exceeds the whole budget keeps its tail
+    on the English path too — the same slice the translator keeps, head
+    dropped and all."""
+    svc = create_chatqna_service()
+    messages = [
+        {"role": "user", "content": "short old turn"},
+        {"role": "user", "content": "newest head " + "z" * 300},
+    ]
+    captured = {}
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+        patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=150),
+    ):
+        await _full_flow_payload(svc, stream=False, language="en", messages=messages, captured=captured)
+        await svc._get_translated_history_string(messages, source_lang_code="es")
+
+    passthrough_history = captured["full_chat_history_string"]
+    sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+    # The tail (the last budget-overhead characters) is what both paths keep.
+    assert "newest head" not in passthrough_history
+    assert len(passthrough_history) == len("USER: ") + (150 - 20)
+    assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
 
 
 @pytest.mark.asyncio

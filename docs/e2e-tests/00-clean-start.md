@@ -311,10 +311,10 @@ role lookup and the assignment):
 # first (see Prerequisites).
 node -e "
 const { getAdminToken } = require('./tests/e2e/helpers/auth');
-const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+const { ensureUser } = require('./tests/e2e/helpers/keycloak-admin');
 (async () => {
   const token = await getAdminToken();
-  await createUser(token, 'genie', {
+  await ensureUser(token, 'genie', {
     username: 'testadmin',
     email: 'testadmin@genie.local',
     firstName: 'Test',
@@ -333,15 +333,20 @@ const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
 - Password: `TestAdmin123!`
 
 The admin-surface authz specs (`tests/e2e/admin/authz.spec.js`) also need a
-user with NO realm roles — the non-admin side of the requireAdmin contract:
+user that carries NO role granting admin access — the non-admin side of the
+requireAdmin contract. (Keycloak still assigns the realm's default composite
+to every new account; what matters is that it grants no admin access.)
+
+Same prerequisites as the snippet above: `KEYCLOAK_ADMIN_PASSWORD` in the
+environment and `BASE_URL` pointing at the stack's edge.
 
 ```bash
 node -e "
 const { getAdminToken } = require('./tests/e2e/helpers/auth');
-const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+const { ensureUser } = require('./tests/e2e/helpers/keycloak-admin');
 (async () => {
   const token = await getAdminToken();
-  await createUser(token, 'genie', {
+  await ensureUser(token, 'genie', {
     username: 'testplain',
     email: 'testplain@genie.local',
     firstName: 'Test',
@@ -353,6 +358,10 @@ const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
 "
 # Expected: testplain ready (the second run is a no-op — 409 tolerated)
 ```
+
+**Test plain user credentials** (admin authz suite):
+- Username: `testplain`
+- Password: `TestPlain123!`
 
 ### 0.9 Seed the Knowledge Hierarchy (Quick Help Prerequisite)
 

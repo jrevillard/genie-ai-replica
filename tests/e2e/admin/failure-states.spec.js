@@ -8,10 +8,19 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
  * silent blank — the dashboard shell keeps rendering around it, and the
  * surface recovers on the next successful load.
  *
+ * The asserted toast is the one the COMPONENT raises from its catch path
+ * ("Failed to load system health data"), not any `.notification.error`:
+ * the axios interceptor raises its own toast for every non-401 answer
+ * (httpService.handleResponseError), so the class alone is satisfied even
+ * if the component stops reporting the failure — the assertion would then
+ * be decorative.
+ *
  * On mount the overview fires exactly ONE admin call (system-health), so
  * a single interception has no toast races: the component shows one
  * notification at a time and a later one would replace the earlier.
  */
+const COMPONENT_ERROR_TEXT = 'Failed to load system health data';
+
 test.describe('Admin overview failure states', () => {
   test.setTimeout(120000);
 
@@ -33,9 +42,9 @@ test.describe('Admin overview failure states', () => {
     // auto-waits from the moment the DOM is ready.
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
 
-    // The visible failure — the global toast the component raises from
+    // The visible failure — the notification the component raises from
     // its catch path.
-    const errorToast = page.locator('.notification.error');
+    const errorToast = page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT });
     await expect(errorToast).toBeVisible();
 
     // Never a silent blank: the dashboard shell and the four stat tiles
@@ -48,9 +57,7 @@ test.describe('Admin overview failure states', () => {
   test('recovers on the next successful load after a 503', async ({ page }) => {
     await loginViaUI(page, TEST_ADMIN_USER);
 
-    // First load fails; the reload after unroute goes through to the
-    // real backend. The overview fires exactly one system-health call
-    // per mount, so no attempt counting is needed.
+    // First load fails.
     await page.route('**/api/admin/system-health', (route) =>
       route.fulfill({
         status: 503,
@@ -63,26 +70,41 @@ test.describe('Admin overview failure states', () => {
     );
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.notification.error')).toBeVisible();
+    await expect(page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT })).toBeVisible();
 
     await page.unroute('**/api/admin/system-health');
 
-    // The recovery half must prove the reload actually reloaded: pass
-    // the real call through and count it, so a mount that fails before
-    // the API call cannot pass on static tiles.
+    // The recovery load answers with a DISTINCTIVE payload: proving the
+    // reload re-rendered from a successful load needs an assertion whose
+    // expected value cannot be the component's initial state. The
+    // component's default uptime (99.98) is what a failed recovery would
+    // leave on screen, so a mocked value the deployment cannot produce is
+    // the only non-vacuous witness here.
     const recovery = { calls: 0 };
-    await page.route('**/api/admin/system-health', async (route) => {
+    await page.route('**/api/admin/system-health', (route) => {
       recovery.calls++;
-      const response = await route.fetch();
-      await route.fulfill({ response });
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          metrics: {
+            systemUptime: 42.42,
+            avgResponseTime: 7,
+            errorRate: 0.5,
+            monthlyActiveUsers: 3,
+          },
+          healthServices: [],
+          resourceUsage: {},
+        }),
+      });
     });
 
     await page.reload({ waitUntil: 'networkidle' });
 
-    // Recovery: no error toast on the reloaded dashboard and the stat
-    // tiles render from the successful load.
-    await expect(page.locator('.notification.error')).toBeHidden();
-    await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
+    // Recovery: the dashboard renders the successful load's payload and
+    // the component reports no failure any more.
+    await expect(page.locator('[data-test-id="stat-system-uptime"] .stat-value')).toHaveText('42.42%');
+    await expect(page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT })).toHaveCount(0);
     expect(recovery.calls).toBeGreaterThanOrEqual(1);
   });
 });

@@ -70,6 +70,122 @@ async function createUser(adminToken, realm, userData) {
 }
 
 /**
+ * Ensure a fixture user exists with a KNOWN password and role set.
+ *
+ * createUser is create-only: it tolerates a 409 and moves on, which leaves
+ * three failure modes for a long-lived realm — a stale password (the realm
+ * refuses direct access grants, so only the browser login can reveal it),
+ * an account the realm left disabled/unverified or carrying a required
+ * action, and a transient 429/5xx from Keycloak that would otherwise kill
+ * the provisioning step. Each of those surfaces as a login failure minutes
+ * later, far from its cause.
+ *
+ * So: create with a bounded retry on transient answers, converge the
+ * password on the already-exists path, then verify the login-visible state
+ * and (re)assign the roles.
+ *
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @returns {Promise<string>} The user UUID
+ */
+async function ensureUser(adminToken, realm, userData) {
+  const { username, email, password } = userData;
+  const transient = [408, 425, 429];
+  let status = 0;
+  let body = '';
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await request('POST', `/auth/admin/realms/${realm}/users`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        username,
+        email,
+        firstName: userData.firstName || username,
+        lastName: userData.lastName || 'Test',
+        enabled: true,
+        emailVerified: true,
+        credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
+      },
+    });
+    status = res.status;
+    body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    const isTransient = status === 0 || status >= 500 || transient.includes(status);
+    if (!isTransient) break;
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  if (status !== 201 && status !== 409) {
+    throw new Error(`Failed to provision user ${username}: HTTP ${status} ${body}`);
+  }
+
+  // Resolve the id (exact: ?username= is a prefix search otherwise).
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  const found = searchRes.data && searchRes.data.length > 0 ? searchRes.data[0] : null;
+  if (!found || !found.id) {
+    throw new Error(`User ${username} was not found after provisioning (HTTP ${searchRes.status})`);
+  }
+  const userId = found.id;
+
+  if (status === 409) {
+    // Converge the password: an account carried over from an earlier
+    // fixture revision keeps its old one, and the realm refuses direct
+    // access grants, so nothing else can detect the drift.
+    if (password) {
+      const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${userId}/reset-password`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: { type: 'password', value: password, temporary: false },
+      });
+      if (resetRes.status !== 204) {
+        throw new Error(`Failed to converge the password of ${username}: HTTP ${resetRes.status}`);
+      }
+    }
+  }
+
+  // Fixture health — the login-visible state the browser session depends
+  // on. The email is deliberately NOT part of it: the venues spell the
+  // fixture emails differently (the Phase 0 doc uses @genie.local, the CI
+  // job @e2e.test), and an account created by one venue is reused by the
+  // other. The login reads the username, not the email.
+  const healthRes = await request('GET', `/auth/admin/realms/${realm}/users/${userId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  const user = healthRes.data || {};
+  const healthy = user.enabled === true && user.emailVerified === true;
+  if (!healthy || (user.requiredActions && user.requiredActions.length > 0)) {
+    throw new Error(
+      `User ${username} is not fixture-healthy (enabled=${user.enabled}, ` +
+        `emailVerified=${user.emailVerified}, email=${user.email}, ` +
+        `requiredActions=${JSON.stringify(user.requiredActions || [])}) — ` +
+        'realm defaults are attaching state to new users; check the realm import'
+    );
+  }
+
+  // Assign the realm roles (the admin half needs the `admin` role; the
+  // role-less fixture must carry none, so nothing is assigned for it).
+  if (userData.realmRoles && userData.realmRoles.length > 0) {
+    const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const rolesToAssign = rolesRes.data
+      .filter((r) => userData.realmRoles.includes(r.name))
+      .map((r) => ({ id: r.id, name: r.name }));
+    const missingRoles = userData.realmRoles.filter((r) => !rolesRes.data.some((avail) => avail.name === r));
+    if (missingRoles.length > 0) {
+      throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
+    }
+    await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: rolesToAssign,
+    });
+  }
+
+  return userId;
+}
+
+/**
  * Rotate realm signing keys: generate a new RSA key and demote the old one.
  * Uses the Keycloak 26 components API (no /keys POST endpoint exists).
  * @param {string} adminToken - Keycloak admin access token
@@ -218,6 +334,7 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 
 module.exports = {
   createUser,
+  ensureUser,
   rotateRealmKeys,
   getRealmSettings,
   updateRealmSettings,

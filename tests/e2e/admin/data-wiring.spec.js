@@ -60,21 +60,24 @@ test.describe('Admin overview data wiring', () => {
     await loginWithWiredPayload(page, {
       metrics: METRICS,
       healthServices: [
-        { id: 'wiredAlpha', name: 'Wired Service Alpha', status: 'healthy' },
-        { id: 'wiredBeta', name: 'Wired Service Beta', status: 'down' },
+        { id: 'wiredAlpha', name: 'Wired Service Alpha', status: 'good' },
+        { id: 'wiredBeta', name: 'Wired Service Beta', status: 'warning' },
       ],
       resourceUsage: { cpu: 42, memory: 67 },
     });
 
     // Health rows carry the per-service status class and the service
     // name (the i18n fallback — no admin.services.wiredAlpha key exists).
+    // The status vocabulary is the backend's own ('good' / 'warning' /
+    // 'error' — admin-dashboard-service.getSystemHealth), so the asserted
+    // classes are the ones the component actually renders.
     const alpha = page.locator('.health-item', { hasText: 'Wired Service Alpha' });
     await expect(alpha).toBeVisible();
-    await expect(alpha).toHaveClass(/status-healthy/);
+    await expect(alpha).toHaveClass(/status-good/);
 
     const beta = page.locator('.health-item', { hasText: 'Wired Service Beta' });
     await expect(beta).toBeVisible();
-    await expect(beta).toHaveClass(/status-down/);
+    await expect(beta).toHaveClass(/status-warning/);
 
     // Resource rows: the row anchor is the canonical resource id (the
     // label itself is i18n); value and bar width come from the payload.

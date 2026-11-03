@@ -59,7 +59,6 @@
           <DsButton
             variant="ghost"
             class="icon-btn admin-btn mobile-btn"
-            data-test-id="nav-admin-button-mobile"
             aria-label="Administration"
             :disabled="!isAdmin"
             :class="{ 'disabled-btn': !isAdmin }"

@@ -26,22 +26,12 @@ module.exports = defineConfig({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,
-    // The flag disables Chromium's user-namespace sandbox unconditionally:
-    // required in container runtimes without it (the local k3s-validation
-    // environment), harmless-but-present where the sandbox would work.
-    // E2E_CHROMIUM_ARGS carries venue-only browser flags (space-split):
-    // a validation cluster whose edge is a nodePort on a hostname no DNS
-    // server resolves maps it in-browser with
-    // --host-resolver-rules=MAP <host> <node-ip> — the machine has no
-    // root to edit /etc/hosts and a port-forward is deliberately not
-    // used for the E2E load.
+    // The flag disables Chromium's user-namespace sandbox: the e2e job
+    // runs Playwright inside a container (image node:20-bookworm-slim),
+    // where the sandbox has no setuid helper and no usable user
+    // namespaces to fall back on.
     launchOptions: {
-      args: [
-        '--no-sandbox',
-        ...(process.env.E2E_CHROMIUM_ARGS
-          ? process.env.E2E_CHROMIUM_ARGS.split(' ').filter(Boolean)
-          : []),
-      ],
+      args: ['--no-sandbox'],
     },
   },
   projects: [

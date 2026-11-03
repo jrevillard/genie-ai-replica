@@ -71,18 +71,33 @@ test.describe('Admin logs view', () => {
       ],
     });
 
-    const keycloakRow = page.locator('.log-summary-table tr', { hasText: 'wired-keycloak' });
+    // Scoped to the warnings card: the component assigns the errors and
+    // the warnings roll-ups independently, so an unscoped row locator
+    // would also match a swapped assignment (the rows would render in the
+    // errors card and the spec would stay green).
+    const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
+
+    const keycloakRow = warningsCard.locator('.log-summary-table tr', { hasText: 'wired-keycloak' });
     await expect(keycloakRow).toBeVisible();
     await expect(keycloakRow.locator('.log-count')).toHaveText('3');
 
-    const arangoRow = page.locator('.log-summary-table tr', { hasText: 'wired-arangodb' });
+    const arangoRow = warningsCard.locator('.log-summary-table tr', { hasText: 'wired-arangodb' });
     await expect(arangoRow).toBeVisible();
     await expect(arangoRow.locator('.log-count')).toHaveText('7');
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 
   test('an empty summary renders the explicit empty row', async ({ page }) => {
-    const summary = await loginAdminWithSummary(page, { errors: [], warnings: [] });
+    // The errors roll-up carries a row and the warnings roll-up is empty:
+    // that pairing tells the two apart. An empty summary alone cannot —
+    // the invalid-response branch renders the same empty row for both.
+    const summary = await loginAdminWithSummary(page, {
+      errors: [{ type: 'auth', service: 'wired-keycloak', count: 3 }],
+      warnings: [],
+    });
+
+    const errorsCard = page.locator('[data-test-id="logs-errors-card"]');
+    await expect(errorsCard.locator('.log-summary-table tr', { hasText: 'wired-keycloak' })).toBeVisible();
 
     // Both roll-up tables render their own empty row; scope to the
     // warnings card anchor (the table this spec's payload drives).

@@ -844,17 +844,20 @@ workflow:
     # testadmin (admin realm role) + testplain (no roles) for the admin
     # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
     # and a role-less login (testplain — requireAdmin must answer 403).
-    # Same createUser helper the compose venue uses
-    # (tests/e2e/helpers/keycloak-admin.js — 201/409 tolerance, exact id
-    # lookup, realmRoles assignment); testuser above keeps its admin
-    # role for the document tests.
+    # The ensureUser helper (tests/e2e/helpers/keycloak-admin.js) converges
+    # the fixture the way the testuser block above does: bounded retry on a
+    # transient Keycloak answer, password convergence on the already-exists
+    # path, and a fixture-health check (enabled, verified email, no required
+    # action) — so a stale account fails HERE instead of as a login failure
+    # minutes later. testuser above keeps its admin role for the document
+    # tests.
     - >
       ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node -e "
-      const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+      const { ensureUser } = require('./tests/e2e/helpers/keycloak-admin');
       (async () => {
         const token = process.env.ADMIN_TOKEN;
-        await createUser(token, 'genie', { username: 'testadmin', email: 'testadmin@e2e.test', firstName: 'Test', lastName: 'Admin', password: 'TestAdmin123!', realmRoles: ['admin'] });
-        await createUser(token, 'genie', { username: 'testplain', email: 'testplain@e2e.test', firstName: 'Test', lastName: 'Plain', password: 'TestPlain123!' });
+        await ensureUser(token, 'genie', { username: 'testadmin', email: 'testadmin@e2e.test', firstName: 'Test', lastName: 'Admin', password: 'TestAdmin123!', realmRoles: ['admin'] });
+        await ensureUser(token, 'genie', { username: 'testplain', email: 'testplain@e2e.test', firstName: 'Test', lastName: 'Plain', password: 'TestPlain123!' });
         console.log('testadmin + testplain ready');
       })().catch((e) => { console.error(e.message); process.exit(1); });
       "

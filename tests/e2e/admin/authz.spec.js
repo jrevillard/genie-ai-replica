@@ -27,12 +27,13 @@ const { loginViaUI, BASE_URL, TEST_PLAIN_USER, TEST_ADMIN_USER } = require('../h
  * render from their defaults.
  */
 function probeSystemHealth(page) {
-  // One record per call: a remount or token retry that fires the call
-  // twice must not leave last-write-wins scalars pairing a count>=1
-  // pass with the wrong call's status.
-  const state = { calls: 0, records: [] };
+  // One record per call, pushed when the call ANSWERS: a remount or token
+  // retry that fires the call twice must not leave last-write-wins
+  // scalars pairing a count>=1 pass with the wrong call's status. The
+  // counter is derived from the records (not incremented on entry), so an
+  // in-flight second call cannot desynchronise the two.
+  const state = { records: [] };
   page.route('**/api/admin/system-health', async (route) => {
-    state.calls++;
     const response = await route.fetch();
     state.records.push({
       status: response.status(),
@@ -59,8 +60,7 @@ test.describe('Admin route authorization', () => {
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
     await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
     await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeEnabled();
-    expect(health.calls).toBeGreaterThanOrEqual(1);
-    expect(health.records.length).toBe(health.calls);
+    expect(health.records.length).toBeGreaterThanOrEqual(1);
     expect(health.records.every((r) => r.status === 200)).toBe(true);
   });
 
@@ -77,8 +77,7 @@ test.describe('Admin route authorization', () => {
     // frontend ever grows a role gate, this assertion is the one to update
     // deliberately, not silently.
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
-    expect(health.calls).toBeGreaterThanOrEqual(1);
-    expect(health.records.length).toBe(health.calls);
+    expect(health.records.length).toBeGreaterThanOrEqual(1);
     expect(health.records.every((r) => r.status === 403)).toBe(true);
     expect(health.records[0].body.error).toBe('FORBIDDEN');
 

@@ -3265,10 +3265,9 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      // Normalize rows once: only string lang/text survive (legacy docs can
-      // hold nulls or numbers), trimmed, empties dropped. The {lang, text}
-      // rows are converted to the write contract by the service layer
-      // (serviceTreeService).
+      // Normalize rows once: only string lang/text survive (legacy docs can hold
+      // nulls or numbers), trimmed, empties dropped. The service layer maps the
+      // {lang, text} rows to the write contract.
       const rows = this.hierarchyForm.translations
         .map((t) => ({
           lang: typeof t?.lang === 'string' ? t.lang.trim() : '',
@@ -3292,8 +3291,7 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
-      // Type-safe like the rows above: a legacy doc can hold a non-string
-      // nameEN; the empty string lets the backend answer its 400 cleanly.
+      // A legacy doc can hold a non-string nameEN; the empty string lets the backend answer its 400.
       const payload = {
         nameEN: typeof this.hierarchyForm.nameEN === 'string' ? this.hierarchyForm.nameEN.trim() : '',
         translations: rows

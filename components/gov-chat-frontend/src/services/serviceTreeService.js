@@ -14,15 +14,15 @@ import httpService from './httpService';
 const TREE_FETCH_TIMEOUT_MS = 15000;
 
 /**
- * Converts a payload carrying translation rows into the write contract
- * ({languageCode, translation}) expected by the create/update endpoints.
+ * Converts a payload carrying translation rows in the read shape
+ * ({lang, text} — what the GET endpoints return and the forms hold) into
+ * the write contract ({languageCode, translation}) expected by the
+ * create/update endpoints.
  *
- * Rows are read in the read shape ({lang, text} — what the GET endpoints
- * return and the forms hold); a row already carrying the write shape is
- * passed through unchanged, so a caller holding either shape is safe.
  * A payload without a translations array is returned untouched: the backend
  * treats an omitted field as "leave the existing translations untouched" and
- * an empty array as clear-all.
+ * an empty array as clear-all. A row in any other shape is rejected by the
+ * backend with a 400 naming the keys it received.
  * @param {Object} payload - { nameEN, translations: [{lang, text}] }.
  * @returns {Object} The wire payload with {languageCode, translation} rows.
  */
@@ -32,9 +32,9 @@ function toWritePayload(payload) {
   }
   return {
     ...payload,
-    translations: payload.translations.filter(Boolean).map((row) => ({
-      languageCode: row.languageCode ?? row.lang,
-      translation: row.translation ?? row.text
+    translations: payload.translations.filter(Boolean).map(({ lang, text }) => ({
+      languageCode: lang,
+      translation: text
     }))
   };
 }

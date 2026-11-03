@@ -291,22 +291,6 @@ describe('serviceTreeService', () => {
         translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
       });
     });
-
-    it('leaves rows that already carry the write shape untouched', async () => {
-      mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
-
-      await serviceTreeService.updateService('svc-1', {
-        nameEN: 'Updated',
-        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
-      });
-
-      // A caller holding the write shape must not end up sending
-      // {languageCode: undefined, translation: undefined}.
-      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', {
-        nameEN: 'Updated',
-        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
-      });
-    });
   });
 
   // =========================================================================

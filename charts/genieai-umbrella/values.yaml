@@ -53,7 +53,7 @@ global:
   # containers download kubectl with busybox wget from the public
   # releases (the pre-install dependency-check Job downloads nothing).
   # In air-gapped environments set this to an internal mirror —
-  # [http[s]://]host[:port 1-65535][/multi/segment/prefix]; the scheme
+  # [http(s)://]host[:port 1-65535][/multi/segment/prefix]; the scheme
   # is optional (scheme-less makes wget use plain HTTP against the
   # local proxy), LOWERCASE ONLY (busybox wget rejects mixed-case
   # schemes outright), no trailing slash, and the path

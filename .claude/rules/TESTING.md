@@ -171,8 +171,8 @@ stack — neither exists inside Jest.
 E2E tests (and the provisioning/readiness shell in `docs/e2e-tests/`) must be
 deterministic — exact assertions only, no fallback paths or swallowed failures,
 waits as explicit wait-for-condition with a hard bound, fixed and isolated seed
-data. Any deviation is a FAIL. Full rules and suite layout:
-`tests/e2e/CLAUDE.md`.
+data. Any deviation is a FAIL (one narrow cleanup exception, defined in the full
+rules). Full rules and suite layout: `tests/e2e/CLAUDE.md`.
 
 ## CI Pipeline
 

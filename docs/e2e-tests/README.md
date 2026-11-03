@@ -27,7 +27,9 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 
 These phases must stay deterministic — no fallback paths, no fixed sleeps, waits
 only as bounded wait-for-condition. Full rules: [`tests/e2e/CLAUDE.md`](../../tests/e2e/CLAUDE.md)
-(Rule: Determinism — it covers this shell too).
+(Rule: Determinism — it covers this shell too). The fixed `sleep` commands still
+present in these phase docs are known violations tracked in #1386; do not copy
+them into new steps.
 
 ### Test Step Format
 

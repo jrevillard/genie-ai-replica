@@ -60,7 +60,7 @@ reference; do not duplicate or restate them here or in specs.
 |------|----------|
 | `*.spec.js`, `chatbot/`, `documents/`, `okf/` | Feature specs (Playwright) |
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
-| `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers |
+| `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
 | `fixtures/` | Fixed seed files for upload tests |
 | `capture-dashboard.js` | Dashboard screenshot capture script (not a spec) |
 

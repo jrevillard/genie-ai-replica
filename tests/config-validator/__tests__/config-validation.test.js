@@ -3324,9 +3324,14 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   test('the venue credentials are derived, never re-sourced', () => {
     // The fixtures module is required, not grepped: the denylist below
     // derives from the definition, so a new fixture's password is scanned
-    // without touching this pin.
+    // without touching this pin. A password-less fixture entry is named,
+    // not silently scanned for the literal "undefined".
     const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
     const fixturePasswords = E2E_FIXTURES.map((f) => f.password);
+    const passwordless = E2E_FIXTURES.filter((f) => !f.password).map((f) => f.username);
+    if (passwordless.length > 0) {
+      throw new Error(`fixture entries without a password cannot be scanned: ${passwordless.join(', ')}`);
+    }
     expect(fixturePasswords.length).toBeGreaterThanOrEqual(3);
     // The credential accessors and the derived login credentials live in
     // the fixtures module — beside the data they read.
@@ -3334,23 +3339,37 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("credentialsOf('testuser')");
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
+    // The role-less fixture's DEFINING contract: it must carry no
+    // realmRoles key at all — a granted role makes the provisioning
+    // script take the assign branch and skip its effective-role
+    // assertion, silently turning the authz spec's 403 half into an
+    // admin session.
+    expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
     // The Phase 0 doc's manual create payload must agree with the
-    // fixture address — convergeUser deliberately never rewrites the
-    // email, so a divergence here would ride forever unnoticed.
+    // fixture credentials — convergeUser deliberately never rewrites
+    // the email, and it resets the password on the already-exists path,
+    // so a divergence here would ride forever unnoticed (the §0.8 ROPC
+    // verification would fail for the next operator with no guard).
     const cleanStart = fs.readFileSync(path.join(ROOT, 'docs/e2e-tests/00-clean-start.md'), 'utf-8');
-    const testuserEmail = E2E_FIXTURES.find((f) => f.username === 'testuser').email;
-    if (!cleanStart.includes(`"email": "${testuserEmail}"`)) {
+    const testuser = E2E_FIXTURES.find((f) => f.username === 'testuser');
+    if (!cleanStart.includes(`"email": "${testuser.email}"`)) {
       throw new Error(
-        `00-clean-start.md §0.8 creates testuser with an address that no longer matches the fixture (${testuserEmail})`
+        `00-clean-start.md §0.8 creates testuser with an address that no longer matches the fixture (${testuser.email})`
+      );
+    }
+    if (!cleanStart.includes(testuser.password)) {
+      throw new Error(
+        `00-clean-start.md §0.8 no longer uses the testuser fixture password — the documented ROPC verification would fail against the converged account`
       );
     }
     // No venue-fixture password literal may reappear beside or after the
-    // fixtures module: the helpers and the spec directories must derive
-    // their credentials from it. Scoped, NOT a blanket scan: epic2's k1/i1
-    // specs mint tokens for their own ephemeral self-created users
-    // (noroles-e2e, genie2's testuser2) and legitimately carry their own
-    // password literals — that directory stays outside the scan until
-    // those specs are consolidated.
+    // fixtures module: every helper and spec directory under tests/e2e/
+    // must derive its credentials from it. Explicit exclusions only:
+    // epic2's k1/i1 specs mint tokens for their own ephemeral
+    // self-created users (noroles-e2e, genie2's testuser2) and
+    // legitimately carry their own password literals; fixtures/ holds
+    // the upload seed files. A NEW spec directory is scanned
+    // automatically — coverage is self-maintaining.
     const assertNoFixturePassword = (label, source) => {
       for (const password of fixturePasswords) {
         if (source.includes(password)) {
@@ -3358,39 +3377,31 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         }
       }
     };
-    // The helpers beside the fixtures module — chatbot re-exports, the
-    // rest must derive. Walked recursively so a nested helper cannot
-    // carry a literal outside the scan.
-    const walkJs = (dir, label, skip) => {
+    const walkJs = (dir, label, skipPaths) => {
       for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (skip && skip.has(name.name)) continue;
         const entryPath = path.join(dir, name.name);
+        if (skipPaths && skipPaths.has(entryPath)) continue;
         if (name.isDirectory()) {
-          walkJs(entryPath, `${label}/${name.name}`, skip);
+          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
         } else if (name.name.endsWith('.js')) {
           assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
         }
       }
     };
-    const helpersDir = path.join(ROOT, 'tests/e2e/helpers');
-    walkJs(helpersDir, 'helpers', new Set(['e2e-fixtures.js']));
-    // The spec directories — okf included (it joins the train in MR2;
-    // its specs create their own users today). A stale entry fails with
-    // a named error instead of a raw ENOENT.
-    const specDirs = ['chatbot', 'documents', 'admin', 'okf', 'epic1', 'epic3'];
-    for (const dir of specDirs) {
-      const dirPath = path.join(ROOT, 'tests/e2e', dir);
-      if (!fs.existsSync(dirPath)) {
-        throw new Error(`the credential scan lists tests/e2e/${dir}, which no longer exists — update the scan`);
-      }
-      walkJs(dirPath, dir, null);
-    }
-    // The top-level scripts the train also runs (specs and capture
-    // scripts alike).
     const e2eRoot = path.join(ROOT, 'tests/e2e');
-    for (const name of fs.readdirSync(e2eRoot)) {
-      if (!name.endsWith('.js')) continue;
-      assertNoFixturePassword(name, fs.readFileSync(path.join(e2eRoot, name), 'utf-8'));
+    const exclusions = new Set([
+      path.join(e2eRoot, 'epic2'), // deliberate self-created fixture users (see above)
+      path.join(e2eRoot, 'fixtures'), // upload seed files
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+    ]);
+    for (const name of fs.readdirSync(e2eRoot, { withFileTypes: true })) {
+      const entryPath = path.join(e2eRoot, name.name);
+      if (exclusions.has(entryPath)) continue;
+      if (name.isDirectory()) {
+        walkJs(entryPath, name.name, exclusions);
+      } else if (name.name.endsWith('.js')) {
+        assertNoFixturePassword(name.name, fs.readFileSync(entryPath, 'utf-8'));
+      }
     }
   });
 });

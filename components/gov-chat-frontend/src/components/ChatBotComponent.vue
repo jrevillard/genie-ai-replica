@@ -595,32 +595,42 @@ function quickHelpTagMatches(candidateId, tag) {
   return Boolean(candidateId) && isScalarId(candidateId) && isScalarId(tag) && String(candidateId) === String(tag);
 }
 
-// The identity a Quick Help card answers to (#1238): the id in its STRING
-// form when the configuration declares one, the card's OWN title when it
-// does not — the very string the card saves, so the tag a conversation
-// carries names the card that wrote it. ONE copy, read by the save, the
-// restore, the locale re-title and the press dedupe: a card without an
-// id used to save a tag NO lookup could read, and its scope silently
-// disappeared on reload.
+// The identity a Quick Help card answers to (#1238): the string the card
+// CARRIES — the one the save wrote (the mapped button's serviceKey, the
+// chip's own). The rule below is the fallback for a card that carries
+// none (a raw option, before it was mapped): the id in its STRING form
+// when the configuration declares one, the card's OWN title when it does
+// not. ONE copy, read by the save, the restore, the locale re-title and
+// the press dedupe: a card without an id used to save a tag NO lookup
+// could read, and its scope silently disappeared on reload.
+//
+// The carried string comes FIRST: it is what the conversation was saved
+// under, so it is what the restore has to read back — a rule spelled
+// twice is a rule that drifts, and a drifted identity is a scope that
+// silently disappears on reload.
 function quickHelpIdentityOf(card) {
-  return quickHelpTagOf(card && card.id, (card && card.service) || '');
+  return (card && card.serviceKey) || quickHelpTagOf(card && card.id, (card && card.service) || '');
 }
 
-// The cards whose IDENTITY is this string — the tag a conversation
-// carries, read against every card. One identity, ONE card — except in a
-// malformed configuration, where an id-less card can be titled like
-// another card's id: the string then names TWO cards, and every reader
-// below treats that as naming NONE. Restoring either would put a scope
-// the conversation was never asked in, silently; a visible refusal is
-// the honest verdict.
+// The card an identity names, and whether that identity is AMBIGUOUS —
+// ONE verdict for every reader.
+//
+// An identity TWO cards claim (an id-less card titled like another
+// card's id) names NO card: each reader refuses it in the way its own
+// context refuses — the restore carries no scope (a saved scope that
+// cannot be named is refused, never guessed), the re-title keeps the
+// chip's own title, the press installs the card the user pressed (the
+// press names the card; the tag does not). Restoring either card would
+// put a scope the conversation was never asked in, silently.
 //
 // Both sides speak strings: a card's identity is the id's string form or
 // its title, and the tag is read as the string it was saved as, so a
 // legacy raw-number tag still names its card. The scalar gate covers
 // the tag: a non-scalar id names nothing, and its card falls back to the
 // title.
-function quickHelpCardsForIdentity(buttons, identity) {
-  return buttons.filter((button) => button && quickHelpIdentityOf(button) === identity);
+function quickHelpVerdictForIdentity(buttons, identity) {
+  const claimants = buttons.filter((button) => button && quickHelpIdentityOf(button) === identity);
+  return { card: claimants.length === 1 ? claimants[0] : null, ambiguous: claimants.length > 1 };
 }
 
 // The identity a saved tag names, read as the string it was saved as.
@@ -1929,8 +1939,7 @@ export default {
       // card's name. An identity that resolves to nothing (a title the
       // locale changed under, or an identity two cards claim) keeps the
       // title the chip was pressed with.
-      const claimants = quickHelpCardsForIdentity(this.quickHelpButtons, quickHelpIdentityOf(item));
-      const button = claimants.length === 1 ? claimants[0] : null;
+      const { card: button } = quickHelpVerdictForIdentity(this.quickHelpButtons, quickHelpIdentityOf(item));
       return (button && resolveConfigText(button.textKey, locale)) || item.service;
     },
 
@@ -1964,10 +1973,11 @@ export default {
           // it REPORTS the typo, because a card that silently vanishes
           // leaves no trace of the configuration mistake that hid it.
           if (button.hidden !== undefined && button.hidden !== null && typeof button.hidden !== 'boolean') {
-            // The button is NAMED in the report: its id when it declares
-            // one, its resolved title otherwise (the raw title is a
-            // locale map, which would print as "[object Object]").
-            const name = button.id || resolveConfigText(button.title, locale) || '(untitled)';
+            // The button is NAMED in the report by the same rule that
+            // names it everywhere else (quickHelpTagOf): its id when it
+            // declares one, its resolved title otherwise (the raw title
+            // is a locale map, which would print as "[object Object]").
+            const name = quickHelpTagOf(button.id, resolveConfigText(button.title, locale)) || '(untitled)';
             console.warn(
               `[ChatBotComponent] Quick Help button "${name}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
             );
@@ -2076,16 +2086,14 @@ export default {
 
     selectQuickHelpOption(option) {
       const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
-      // The title gate — quickHelpCardTitle owns it: a card with no title
-      // renders a blank label and promises nothing, so its press is
-      // refused. The composer path reads the SAME predicate.
-      if (this.quickHelpCardTitle(rawOption) === null) {
-        return;
-      }
-      // A broken scope is a VISIBLE failure: the caption on the button names
-      // the configuration problem. Never a query with a silently reduced
-      // scope — not even the auto-send path a hidden prompt would trigger.
-      if (this.quickHelpScopeState(rawOption).broken) {
+      // The card's DISPLAY verdict is the press gate (quickHelpCardBroken
+      // owns it, the composer path reads the SAME one): a card with no
+      // title renders a blank label and promises nothing — a silent dead
+      // tap — and a broken scope is a VISIBLE failure: the caption on
+      // the button names the configuration problem. Never a query with a
+      // silently reduced scope — not even the auto-send path a hidden
+      // prompt would trigger.
+      if (this.quickHelpCardBroken(rawOption)) {
         return;
       }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
@@ -2106,7 +2114,7 @@ export default {
       // An identity TWO cards claim names no card: the press installs the
       // card the user pressed rather than keeping the other one's scope.
       const pressedIdentity = quickHelpIdentityOf(rawOption);
-      const identityIsAmbiguous = quickHelpCardsForIdentity(this.quickHelpButtons, pressedIdentity).length > 1;
+      const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
       const existingIdx = this.selectedContextItems.findIndex(
         (item) =>
           item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity && !identityIsAmbiguous
@@ -2180,12 +2188,11 @@ export default {
         // installs a chip with a blank label and an empty accessible
         // name, and the query leaves while the chip promises a scope
         // nobody can read. The tile path refuses the same card.
-        const caption = this.quickHelpCardCaption(entry);
-        if (
-          this.quickHelpCardTitle(entry) === null ||
-          this.quickHelpScopeState(entry).broken ||
-          !this.quickHelpScopeIsNameable(entry.category)
-        ) {
+        if (this.quickHelpCardBroken(entry) || !this.quickHelpScopeIsNameable(entry.category)) {
+          // The caption is computed HERE, on the refusing path only: it
+          // is the tile's own caption assembly (the missing title first,
+          // then the scope), and a healthy entry pays nothing for it.
+          const caption = this.quickHelpCardCaption(entry);
           // A hierarchy still ON ITS WAY is not a configuration problem:
           // the unavailable caption would point the operator at the
           // wrong thing. The loading copy says what is happening — the
@@ -2733,8 +2740,11 @@ export default {
             // an id (whose identity is its title) restores its own scope
             // instead of falling through to the sidebar branch and
             // becoming a label chip.
-            const claimants = quickHelpCardsForIdentity(this.quickHelpButtons, quickHelpTagIdentity(tag));
-            if (claimants.length > 1) {
+            const { card: button, ambiguous } = quickHelpVerdictForIdentity(
+              this.quickHelpButtons,
+              quickHelpTagIdentity(tag)
+            );
+            if (ambiguous) {
               // TWO cards claim this identity — an id-less card titled
               // like another card's id. The tag names NO card: restoring
               // either would put a scope the conversation was never asked
@@ -2750,7 +2760,6 @@ export default {
               });
               return;
             }
-            const button = claimants[0];
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

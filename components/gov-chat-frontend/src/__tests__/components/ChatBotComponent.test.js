@@ -1853,14 +1853,16 @@ describe('ChatBotComponent', () => {
 
       // One name, two cards: the id-less card is titled like the OTHER
       // card's id. A malformed configuration — but one where the tag
-      // names two cards, so it names none.
+      // names two cards, so it names none. The name is ALSO a live
+      // hierarchy label, so the sidebar branch COULD restore a scope
+      // under it: the refusal has to beat that.
       const collidingIdentityCards = {
         features: {
           chat: {
             quickHelp: {
               buttons: [
-                { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
-                { title: 'registry-help', serviceLabels: ['Potato'] }
+                { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
+                { title: 'Crops', serviceLabels: ['Potato'] }
               ]
             }
           }
@@ -1957,16 +1959,19 @@ describe('ChatBotComponent', () => {
           _key: 'c1',
           title: 'Saved chat',
           messages: [],
-          tags: ['registry-help']
+          tags: ['Crops']
         });
         await vm.loadExistingConversation('c1');
 
         // The tag names NO card: restoring either would put a scope the
         // conversation was never asked in — silently. The chip carries no
-        // scope and refuses the send visibly.
+        // scope and refuses the send visibly. It is NOT the sidebar scope
+        // the same name would restore: that would be a silent change of
+        // the scope the conversation was asked in.
         expect(vm.selectedContextItems).toHaveLength(1);
         expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
         expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
         expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
       });
 
@@ -1986,7 +1991,7 @@ describe('ChatBotComponent', () => {
         // second press a duplicate of the first, or the user would press
         // the card and keep the OTHER card's scope.
         expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].service).toBe('registry-help');
+        expect(vm.selectedContextItems[0].service).toBe('Crops');
         expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
       });
 

@@ -109,11 +109,10 @@ install_keycloak_operator() {
   # shipped one in `keycloak-operator`) — scan every namespace rather
   # than trusting the one name. Refuse rather than silently install a
   # second operator.
-  stray=$(kubectl get deployment --all-namespaces \
-            -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}' \
-            | awk -F'\t' -v ns="${ns}" '$2 == "keycloak-operator" && $1 != ns' || true)
-  if [ -n "${stray}" ]; then
-    printf 'ERROR: keycloak-operator found in namespace "%s" (not installed by this script). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "$(printf '%s\n' "${stray}" | head -1 | cut -f1)" "${ns}" >&2
+  stray_ns=$(kubectl get deployment --all-namespaces --no-headers 2>/dev/null \
+            | awk -v ns="${ns}" '$1 != ns && $2 == "keycloak-operator" {print $1; exit}' || true)
+  if [ -n "${stray_ns}" ]; then
+    printf 'ERROR: keycloak-operator found in namespace "%s" (not installed by this script). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "${stray_ns}" "${ns}" >&2
     exit 1
   fi
   if kubectl get namespace "${ns}" >/dev/null 2>&1 && \

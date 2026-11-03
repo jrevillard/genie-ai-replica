@@ -49,10 +49,8 @@ spec:
   {{- end }}
   containers:
     - name: t
-      {{- /* busybox, not curlimages/curl: the curl image layers carry the
-      build host's overlayfs xattrs in PAX headers and cannot be
-      extracted on storage refusing user.* setxattr. */}}
-      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/busybox:1.36"
+      {{- /* busybox — see the toolingImage helper for why not curlimages/curl. */}}
+      image: {{ include "genieai-umbrella.toolingImage" . }}
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

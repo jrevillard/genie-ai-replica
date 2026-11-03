@@ -68,10 +68,13 @@ differently (NVIDIA GPU Feature Discovery ships
 the default outright, so the pods need only the labels you declare.
 
 **Air-gapped clusters.** Set `global.kubeletToolsMirror` to an internal
-URL (`[http[s]://]host[:port 1-65535][/multi/segment/prefix]`, no
-trailing slash); the chart's pre-upgrade cluster-profile hook and its
-two kubectl-carrying helm-test Pods (`test-namespace`, `test-data-deps`)
-`curl`-download `kubectl` from a default public mirror otherwise.
+URL (`[https://]host[:port 1-65535][/multi/segment/prefix]`, lowercase
+scheme or none, no trailing slash); the chart's pre-upgrade
+cluster-profile hook and its two kubectl-carrying helm-test Pods
+(`test-namespace`, `test-data-deps`) `wget`-download `kubectl` with
+busybox — which validates no TLS certificates, so the download is
+verified against the release's pinned sha256 — from a default public
+mirror otherwise.
 
 ## Install paths
 

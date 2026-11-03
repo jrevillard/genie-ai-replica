@@ -180,12 +180,12 @@ class ServiceCategoryService {
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
-      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
-        throw new ValidationError('nameEN is required and must be a non-empty string');
-      }
       // Existence first: an unknown id must answer 404 even when the
       // payload is also malformed. Validation still runs before any write.
       await this._documentOr404(this.services, serviceKey, 'Service');
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
@@ -235,21 +235,43 @@ class ServiceCategoryService {
   /**
    * Loads a document, converting an arangojs not-found error (which carries
    * `code: 404` but no HTTP statusCode, so the global error middleware would
-   * answer 500) into a typed NotFoundError. Non-404 errors propagate.
+   * answer 500) into a typed NotFoundError. Non-absence errors propagate.
+   *
+   * The verdict keys on the ArangoDB error number, NOT on the HTTP status:
+   * a missing COLLECTION also answers 404 (errorNum 1203), and reporting
+   * that as "no such document" would render a broken deployment as an empty
+   * result. This mirrors the canonical classifier in
+   * components/shared/lib/db-connection-service.js (_isExpectedAbsence).
    * @param {Object} collection - The ArangoDB collection handle.
    * @param {String} key - The document _key.
    * @param {String} label - Resource label for the error message.
    * @returns {Promise<Object>} The document.
    */
   async _documentOr404(collection, key, label) {
+    let document;
     try {
-      return await collection.document(key);
+      document = await collection.document(key);
     } catch (error) {
-      if (error.code === 404) {
+      // Absence is classified by the ArangoDB error number, not by the HTTP
+      // status: 1202 (row absent) and 1204 (no match) are absence, while
+      // 1203 (COLLECTION absent) also carries HTTP 404 but is a real fault
+      // — reporting it as "no such document" would render a broken
+      // deployment as an empty result. An error carrying no errorNum at
+      // all (a raw HTTP failure) falls back to the status. This mirrors
+      // the canonical classifier in
+      // components/shared/lib/db-connection-service.js (_isExpectedAbsence).
+      const isAbsent = error.errorNum != null ? error.errorNum === 1202 || error.errorNum === 1204 : error.code === 404;
+      if (isAbsent) {
         throw new NotFoundError(`${label} ${key} not found`);
       }
       throw error;
     }
+    // The ArcadeDB adapter resolves a missing row as undefined instead of
+    // raising — without this the absence would pass as an existing record.
+    if (!document) {
+      throw new NotFoundError(`${label} ${key} not found`);
+    }
+    return document;
   }
 
   /**
@@ -857,12 +879,12 @@ class ServiceCategoryService {
   async updateCategoryWithTranslations(categoryKey, payload) {
     await this.init();
     try {
-      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
-        throw new ValidationError('nameEN is required and must be a non-empty string');
-      }
       // Existence first: an unknown id must answer 404 even when the
       // payload is also malformed. Validation still runs before any write.
       await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);

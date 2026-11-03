@@ -410,7 +410,7 @@
                       <div class="form-actions">
                         <DsButton
                           variant="primary"
-                          :disabled="!hierarchyForm.nameEN || isLoading || isTranslationsLoading"
+                          :disabled="!hierarchyForm.nameEN || isSavingHierarchyItem || isTranslationsLoading"
                           @click="saveHierarchyItem"
                         >
                           {{ translate('admin.buttons.save', 'Save') }}
@@ -1763,6 +1763,11 @@ export default {
 
       // State for loading translations
       isTranslationsLoading: false,
+      // Dedicated to the hierarchy form: the dashboard-wide isLoading is
+      // shared by unrelated operations, so gating the Save button on it
+      // disabled the form during a log/security scan and let one
+      // operation re-enable another operation's button.
+      isSavingHierarchyItem: false,
 
       // Configuration for language dropdowns in translations tables (deployment-scoped)
       availableLanguages: getAvailableLanguages(),
@@ -3295,6 +3300,7 @@ export default {
       };
 
       this.isLoading = true;
+      this.isSavingHierarchyItem = true;
       try {
         const { mode, _key, parentId } = this.hierarchyForm;
 
@@ -3338,6 +3344,7 @@ export default {
         console.error(error);
       } finally {
         this.isLoading = false;
+        this.isSavingHierarchyItem = false;
       }
     },
 

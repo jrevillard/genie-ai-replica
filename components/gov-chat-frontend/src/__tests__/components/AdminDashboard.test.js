@@ -948,6 +948,43 @@ describe('AdminDashboard', () => {
       expect(emissions.some(([, p]) => p.type === 'success')).toBe(true);
       expect(emissions.some(([, p]) => p.message === 'Failed to save hierarchy item.')).toBe(false);
     });
+
+    it('disables the Save button only while the hierarchy save itself runs', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+
+      // An unrelated admin operation (logs, security scan) holds the
+      // dashboard-wide isLoading flag: it must not disable the form's
+      // Save button.
+      wrapper.vm.isLoading = true;
+      await wrapper.vm.$nextTick();
+
+      const saveButton = () =>
+        wrapper.findAll('button').filter((b) => b.text() === 'Save' && b.attributes('disabled') !== undefined);
+      const enabledSaveButton = () => wrapper.findAll('button').filter((b) => b.text() === 'Save');
+      expect(enabledSaveButton().length).toBeGreaterThan(0);
+      expect(saveButton().length).toBe(0);
+
+      // While the hierarchy save runs, the button IS disabled.
+      let resolveSave;
+      treeMock.updateService.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        })
+      );
+      const saving = wrapper.vm.saveHierarchyItem();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isSavingHierarchyItem).toBe(true);
+      expect(saveButton().length).toBeGreaterThan(0);
+
+      resolveSave({ data: { _key: 'svc-1' } });
+      await saving;
+
+      expect(wrapper.vm.isSavingHierarchyItem).toBe(false);
+      expect(saveButton().length).toBe(0);
+    });
   });
 
   // -----------------------------------------------------------------------

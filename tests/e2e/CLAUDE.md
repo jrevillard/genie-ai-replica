@@ -20,10 +20,10 @@ in the error (never silently tolerated).
   Soft guards (`if (await locator.isVisible().catch(() => false)) ...`) are forbidden.
 - **No swallowing.** No `.catch(() => {})`, no bare `catch` that continues, no
   try/except that degrades to a fallback path. Helpers must not absorb a failure a
-  spec should see. Cleanup code is the only narrow exception: a cleanup step that
-  fails may warn-and-continue only if the next test's seed makes the leftover
-  state impossible — and the warning must name the leftover state. Prefer failing
-  cleanup that reports exactly what it could not remove.
+  spec should see. Cleanup code is the only narrow exception: the default is a
+  failing cleanup that reports exactly what it could not remove; warn-and-continue
+  is permitted only for a leftover state the next test's seed provably makes
+  impossible, and the warning must name the leftover state.
 - **Timeouts fail, never hang.** Use explicit bounds. A wait that expires is a
   failure — never followed by "continue anyway".
 - **Wait for conditions, not durations.** No `waitForTimeout`, no fixed `sleep`:
@@ -40,6 +40,12 @@ in the error (never silently tolerated).
 
 Applies to Playwright specs, `tests/e2e/helpers/*`, `capture-dashboard.js`, and the
 provisioning/readiness shell in `docs/e2e-tests/` alike.
+
+The existing suite predates this rule and violates it (fixed sleeps, swallowed
+waits, best-effort cleanup). The known violations are tracked in issues #1383–#1387
+and are fixed there, not by mass-rewriting unrelated specs in a feature MR. Any
+code you touch or add must comply; do not copy a violating pattern from a
+neighbouring file.
 
 ## Execution order and phase conventions
 
@@ -58,5 +64,8 @@ reference; do not duplicate or restate them here or in specs.
 | `fixtures/` | Fixed seed files for upload tests |
 | `capture-dashboard.js` | Dashboard screenshot capture script (not a spec) |
 
-Config: `playwright.config.js` at repo root — `baseURL https://localhost`,
-`ignoreHTTPSErrors`, `actionTimeout: 15000`.
+Config: `playwright.config.js` at repo root — `baseURL: process.env.BASE_URL ||
+'https://localhost'`, `retries: 0` and `workers: 1` (determinism is enforced here:
+do not add retries or parallelism to paper over a flake — fix the test),
+`timeout: 60000` per test, `expect.timeout: 15000`, `actionTimeout: 15000`,
+`ignoreHTTPSErrors`, `bypassCSP`.

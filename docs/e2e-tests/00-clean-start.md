@@ -293,14 +293,17 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 This payload matches the CI e2e provisioning fixture (`.e2e_web_base` in
 `.gitlab-ci.yml`), which converges an existing account to it on every run.
 
-#### 0.8b Create Test Admin (documents suites prerequisite)
+#### 0.8b Create the admin-surface test users (documents and admin suites prerequisites)
 
 The documents suites (`tests/e2e/documents/`) drive the upload/delete
 surfaces, which the document-repository restricts to the `admin` realm role
-(`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. Create a
-second test user carrying that role, via the same helper the specs use
-(`tests/e2e/helpers/keycloak-admin.js` — handles the 201/409 tolerance, the
-role lookup and the assignment):
+(`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. The
+admin-surface specs (`tests/e2e/admin/`) need the same admin login and, on
+top of it, a login that carries **no role granting admin access** — the
+non-admin side of the `requireAdmin` contract.
+
+Both fixtures are defined in one place (`tests/e2e/helpers/fixtures.js`)
+and provisioned by one script:
 
 ```bash
 # From the repository root. Needs KEYCLOAK_ADMIN_PASSWORD in the
@@ -309,55 +312,16 @@ role lookup and the assignment):
 # https://genieai.local:4443). The helper scripts resolve @playwright/test
 # from the root node_modules — run `npm install` at the repository root
 # first (see Prerequisites).
-node -e "
-const { getAdminToken } = require('./tests/e2e/helpers/auth');
-const { ensureUser } = require('./tests/e2e/helpers/keycloak-admin');
-(async () => {
-  const token = await getAdminToken();
-  await ensureUser(token, 'genie', {
-    username: 'testadmin',
-    email: 'testadmin@genie.local',
-    firstName: 'Test',
-    lastName: 'Admin',
-    password: 'TestAdmin123!',
-    realmRoles: ['admin'],
-  });
-  console.log('testadmin ready');
-})().catch((e) => { console.error(e.message); process.exit(1); });
-"
-# Expected: testadmin ready (the second run is a no-op — 409 tolerated)
+node tests/e2e/provision-admin-fixtures.js
+# Expected: admin fixtures ready: testadmin, testplain
 ```
+
+The script is safe to re-run: an existing account is converged (password
+reset, fixture-health check, role assignment) instead of failing.
 
 **Test admin credentials** (documents and admin suites):
 - Username: `testadmin`
 - Password: `TestAdmin123!`
-
-The admin-surface authz specs (`tests/e2e/admin/authz.spec.js`) also need a
-user that carries NO role granting admin access — the non-admin side of the
-requireAdmin contract. (Keycloak still assigns the realm's default composite
-to every new account; what matters is that it grants no admin access.)
-
-Same prerequisites as the snippet above: `KEYCLOAK_ADMIN_PASSWORD` in the
-environment and `BASE_URL` pointing at the stack's edge.
-
-```bash
-node -e "
-const { getAdminToken } = require('./tests/e2e/helpers/auth');
-const { ensureUser } = require('./tests/e2e/helpers/keycloak-admin');
-(async () => {
-  const token = await getAdminToken();
-  await ensureUser(token, 'genie', {
-    username: 'testplain',
-    email: 'testplain@genie.local',
-    firstName: 'Test',
-    lastName: 'Plain',
-    password: 'TestPlain123!',
-  });
-  console.log('testplain ready');
-})().catch((e) => { console.error(e.message); process.exit(1); });
-"
-# Expected: testplain ready (the second run is a no-op — 409 tolerated)
-```
 
 **Test plain user credentials** (admin authz suite):
 - Username: `testplain`

@@ -1,6 +1,58 @@
 const { request } = require('./auth');
 
 /**
+ * Resolve a user's id in a realm by exact username.
+ * exact=true: ?username= is a prefix search otherwise — a stray
+ * testadmin2 would misdirect the role assignment to data[0].
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} username - Exact username
+ * @returns {Promise<object>} The Keycloak user representation
+ */
+async function resolveUser(adminToken, realm, username) {
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (!searchRes.data || searchRes.data.length === 0) {
+    throw new Error(`User ${username} not found in realm ${realm}`);
+  }
+
+  return searchRes.data[0];
+}
+
+/**
+ * Assign realm roles to a user (no-op when no role is requested).
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} userId - The user's UUID
+ * @param {string[]} roleNames - Realm role names to assign
+ * @returns {Promise<void>}
+ */
+async function assignRealmRoles(adminToken, realm, userId, roleNames) {
+  if (!roleNames || roleNames.length === 0) return;
+
+  // Get available realm roles
+  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  const rolesToAssign = rolesRes.data
+    .filter((r) => roleNames.includes(r.name))
+    .map((r) => ({ id: r.id, name: r.name }));
+
+  const missingRoles = roleNames.filter((r) => !rolesRes.data.some((avail) => avail.name === r));
+  if (missingRoles.length > 0) {
+    throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
+  }
+
+  await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: rolesToAssign,
+  });
+}
+
+/**
  * Create a user in a Keycloak realm.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -31,42 +83,10 @@ async function createUser(adminToken, realm, userData) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 
-  // Get user ID from location header or search. exact=true: ?username= is
-  // a prefix search otherwise — a stray testadmin2 would misdirect the
-  // role assignment to data[0].
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
+  const user = await resolveUser(adminToken, realm, username);
+  await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
-  if (!searchRes.data || searchRes.data.length === 0) {
-    throw new Error(`User ${username} created but not found in search`);
-  }
-
-  const userId = searchRes.data[0].id;
-
-  // Assign realm roles if specified
-  if (userData.realmRoles && userData.realmRoles.length > 0) {
-    // Get available realm roles
-    const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-
-    const rolesToAssign = rolesRes.data
-      .filter((r) => userData.realmRoles.includes(r.name))
-      .map((r) => ({ id: r.id, name: r.name }));
-
-    const missingRoles = userData.realmRoles.filter(r => !rolesRes.data.some(avail => avail.name === r));
-    if (missingRoles.length > 0) {
-      throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
-    }
-
-    await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: rolesToAssign,
-    });
-  }
-
-  return userId;
+  return user.id;
 }
 
 /**
@@ -90,7 +110,7 @@ async function createUser(adminToken, realm, userData) {
  * @returns {Promise<string>} The user UUID
  */
 async function ensureUser(adminToken, realm, userData) {
-  const { username, email, password } = userData;
+  const { username, password } = userData;
   const transient = [408, 425, 429];
   let status = 0;
   let body = '';
@@ -100,7 +120,7 @@ async function ensureUser(adminToken, realm, userData) {
       headers: { Authorization: `Bearer ${adminToken}` },
       body: {
         username,
-        email,
+        email: userData.email,
         firstName: userData.firstName || username,
         lastName: userData.lastName || 'Test',
         enabled: true,
@@ -119,22 +139,14 @@ async function ensureUser(adminToken, realm, userData) {
     throw new Error(`Failed to provision user ${username}: HTTP ${status} ${body}`);
   }
 
-  // Resolve the id (exact: ?username= is a prefix search otherwise).
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const found = searchRes.data && searchRes.data.length > 0 ? searchRes.data[0] : null;
-  if (!found || !found.id) {
-    throw new Error(`User ${username} was not found after provisioning (HTTP ${searchRes.status})`);
-  }
-  const userId = found.id;
+  const user = await resolveUser(adminToken, realm, username);
 
   if (status === 409) {
     // Converge the password: an account carried over from an earlier
     // fixture revision keeps its old one, and the realm refuses direct
     // access grants, so nothing else can detect the drift.
     if (password) {
-      const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${userId}/reset-password`, {
+      const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
         headers: { Authorization: `Bearer ${adminToken}` },
         body: { type: 'password', value: password, temporary: false },
       });
@@ -145,14 +157,9 @@ async function ensureUser(adminToken, realm, userData) {
   }
 
   // Fixture health — the login-visible state the browser session depends
-  // on. The email is deliberately NOT part of it: the venues spell the
-  // fixture emails differently (the Phase 0 doc uses @genie.local, the CI
-  // job @e2e.test), and an account created by one venue is reused by the
-  // other. The login reads the username, not the email.
-  const healthRes = await request('GET', `/auth/admin/realms/${realm}/users/${userId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const user = healthRes.data || {};
+  // on (the exact-match lookup already carries it, so no extra read is
+  // needed). The email is deliberately NOT part of it: the login reads
+  // the username, and the venues spell the fixture emails differently.
   const healthy = user.enabled === true && user.emailVerified === true;
   if (!healthy || (user.requiredActions && user.requiredActions.length > 0)) {
     throw new Error(
@@ -165,24 +172,9 @@ async function ensureUser(adminToken, realm, userData) {
 
   // Assign the realm roles (the admin half needs the `admin` role; the
   // role-less fixture must carry none, so nothing is assigned for it).
-  if (userData.realmRoles && userData.realmRoles.length > 0) {
-    const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-    const rolesToAssign = rolesRes.data
-      .filter((r) => userData.realmRoles.includes(r.name))
-      .map((r) => ({ id: r.id, name: r.name }));
-    const missingRoles = userData.realmRoles.filter((r) => !rolesRes.data.some((avail) => avail.name === r));
-    if (missingRoles.length > 0) {
-      throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
-    }
-    await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: rolesToAssign,
-    });
-  }
+  await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
-  return userId;
+  return user.id;
 }
 
 /**

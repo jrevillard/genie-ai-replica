@@ -24,23 +24,29 @@ const COMPONENT_ERROR_TEXT = 'Failed to load system health data';
 test.describe('Admin overview failure states', () => {
   test.setTimeout(120000);
 
-  test('renders the error notification when system-health returns 500', async ({ page }) => {
+  /**
+   * Log in and open the admin overview with the system-health call
+   * failing with the given status.
+   *
+   * domcontentloaded, not networkidle: the toast hides itself after 3 s,
+   * and waiting for the network to go quiet can land the first assertion
+   * after it is already gone. The toast assertion auto-waits from the
+   * moment the DOM is ready.
+   */
+  async function openAdminWithFailure(page, status, error, message) {
     await loginViaUI(page, TEST_ADMIN_USER);
     await page.route('**/api/admin/system-health', (route) =>
       route.fulfill({
-        status: 500,
+        status,
         contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'INTERNAL_ERROR',
-          message: 'An internal error occurred',
-        }),
+        body: JSON.stringify({ error, message }),
       }),
     );
-    // domcontentloaded, not networkidle: the toast hides itself after 3 s,
-    // and waiting for the network to go quiet can land the first
-    // assertion after it is already gone. The toast assertion below
-    // auto-waits from the moment the DOM is ready.
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
+  }
+
+  test('renders the error notification when system-health returns 500', async ({ page }) => {
+    await openAdminWithFailure(page, 500, 'INTERNAL_ERROR', 'An internal error occurred');
 
     // The visible failure — the notification the component raises from
     // its catch path.
@@ -55,21 +61,8 @@ test.describe('Admin overview failure states', () => {
   });
 
   test('recovers on the next successful load after a 503', async ({ page }) => {
-    await loginViaUI(page, TEST_ADMIN_USER);
-
     // First load fails.
-    await page.route('**/api/admin/system-health', (route) =>
-      route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'SERVICE_UNAVAILABLE',
-          message: 'Temporarily unavailable',
-        }),
-      }),
-    );
-
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
+    await openAdminWithFailure(page, 503, 'SERVICE_UNAVAILABLE', 'Temporarily unavailable');
     await expect(page.locator('.notification.error', { hasText: COMPONENT_ERROR_TEXT })).toBeVisible();
 
     await page.unroute('**/api/admin/system-health');

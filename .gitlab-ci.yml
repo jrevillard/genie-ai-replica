@@ -294,15 +294,19 @@ workflow:
     - docker compose pull frontend backend document-repository nginx kong-config db-migrations keycloak keycloak-config postgres-init || true
     - docker compose up -d --no-build || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     - |
+      # Bounded curls (#1332): a backend that accepts the TCP connection but
+      # never answers would otherwise stall the job to its timeout — a dead
+      # call must fall through to the next loop iteration (or fail the hard
+      # gate below loudly), which is what the loop structure intends.
       for i in $(seq 1 60); do
-        if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+        if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf --connect-timeout 5 --max-time 10 http://localhost:3000/api/health > /dev/null 2>&1; then
           echo "Backend healthy"
           break
         fi
         echo "Waiting for backend... ($i/60)"
         sleep 5
       done
-    - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf --connect-timeout 5 --max-time 10 http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     # #1227 runtime contract gate: sweep the LIVE stack — long-term root
     # processes, init one-shot discipline, root-owned files on the host
     # binds. The static suite cannot see any of this; without this call

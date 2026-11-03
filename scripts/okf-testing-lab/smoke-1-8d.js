@@ -377,7 +377,7 @@ async function refreshUserToken() {
   SUITE_KEY = gen.suite_key;
   const negs = (gen.payload && gen.payload.negative) || [];
   const byCls = negs.reduce((m, q) => ((m[q.cls] = (m[q.cls] || 0) + 1), m), {});
-  check('suite: generated', !!SUITE_KEY && gen.status !== 'failed', `key=${SUITE_KEY} status=${gen.status}`);
+  check('suite: generated', !!SUITE_KEY && !['failed', 'timeout'].includes(gen.status), `key=${SUITE_KEY} status=${gen.status}`);
   check('suite: count controls honored', byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2, JSON.stringify(byCls));
 
   // 6. run the suite (1-8g-v: async — POST answers {run_key, status:'running'})

@@ -3263,16 +3263,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 });
 
-// The testuser 409 convergence in .e2e_web_base: a stale account (disabled,
-// unverified email, lingering required action, old password) that sails
-// through provisioning fails every login-dependent spec far from the cause.
-// Pin both repair arms of the convergence — the healthy path's
-// reset-password endpoint and its 204 gate, the drifted path's delete call,
-// 204/404 gate, both create invocations, the id resolutions and the
-// fixture-health gates — so a "simplification" that keeps the verdict text
-// but drops the machinery fails this pin instead of silently reverting to
-// trust-the-409.
-describe('the testuser 409 convergence in .e2e_web_base', () => {
+// The venue-fixture provisioning in .e2e_web_base (issue #1324): all three
+// venue users (testuser, testadmin, testplain) are provisioned through the
+// one shared script (tests/e2e/provision-e2e-fixtures.js → ensureUser in
+// tests/e2e/helpers/keycloak-admin.js), never through inline bash. Pin the
+// invocation, the single fixture definition and the derived login
+// credentials — and the ABSENCE of the deleted inline convergence — so a
+// "simplification" that re-grows a bash path beside the helper fails this
+// pin instead of silently reintroducing a second mechanism.
+describe('the venue-fixture provisioning in .e2e_web_base', () => {
   let content;
 
   beforeAll(() => {
@@ -3281,25 +3280,37 @@ describe('the testuser 409 convergence in .e2e_web_base', () => {
 
   const sectionOf = (job) => gitlabSection(content, job);
 
-  test('both repair arms and their gates are present', () => {
+  test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('username=testuser&exact=true');
-    expect(section).toContain("TESTUSER_EMAIL='testuser@e2e.test'");
-    expect(section).toContain("TESTUSER_PWD='TestPass123!'");
-    expect(section).toContain("u.get('email') == sys.argv[1]");
-    // both payloads take their fixture values through argv — a hardcoded
-    // literal in either payload escapes the single-source variables
-    expect(section).toContain('"value":sys.argv[2]');
-    expect(section).toContain('"value":sys.argv[1]');
-    expect(section).toContain('/reset-password');
-    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
-    expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
-    expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
-    expect(section).toContain('password converged');
-    expect(section).toContain('testuser recreated');
-    expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
-    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
-    expect(section.match(/^[ \t]+require_fixture_healthy$/gm) || []).toHaveLength(2);
+    expect(section).toContain('node tests/e2e/provision-e2e-fixtures.js');
+    // The deleted inline mechanism must not grow back beside the helper:
+    // these names existed only in the bash convergence this pin replaced.
+    expect(section).not.toContain('create_testuser');
+    expect(section).not.toContain('require_testuser_id');
+    expect(section).not.toContain('require_fixture_healthy');
+  });
+
+  test('the fixtures module is the single definition of the venue users', () => {
+    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    expect(fixtures).toContain("username: 'testuser'");
+    expect(fixtures).toContain("email: 'testuser@e2e.test'");
+    expect(fixtures).toContain("password: 'TestPass123!'");
+    // The documents suites drive ADMIN_ONLY surfaces — the primary login
+    // user must carry the admin realm role.
+    expect(fixtures).toContain("realmRoles: ['admin']");
+    expect(fixtures).toContain("username: 'testadmin'");
+    expect(fixtures).toContain("username: 'testplain'");
+  });
+
+  test('the specs derive their login credentials from the fixtures module', () => {
+    const chatbot = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/chatbot.js'), 'utf-8');
+    expect(chatbot).toContain("credentialsOf('testuser')");
+    expect(chatbot).toContain("credentialsOf('testadmin')");
+    expect(chatbot).toContain("credentialsOf('testplain')");
+    // A hardcoded credential literal here escapes the single source.
+    expect(chatbot).not.toContain('TestPass123!');
+    expect(chatbot).not.toContain('TestAdmin123!');
+    expect(chatbot).not.toContain('TestPlain123!');
   });
 });
 

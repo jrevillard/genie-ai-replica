@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
- * Provision the admin-surface E2E fixtures (testadmin, testplain).
+ * Provision the E2E venue fixtures (testuser, testadmin, testplain).
  *
- * Both fixtures are needed by tests/e2e/admin/: an admin-role login and
- * a role-less one (the backend gate answers 403 for the latter). The
- * helper converges an existing account (password reset, fixture-health
- * check, role assignment), so the script is safe to re-run.
+ * testuser is the primary login user (chat + documents suites); testadmin
+ * and testplain serve the admin surface — an admin-role login and a
+ * role-less one (the backend gate answers 403 for the latter). The helper
+ * converges an existing account (password reset, fixture-health check,
+ * role assignment), so the script is safe to re-run.
  *
  * Usage (from the repository root):
- *   ADMIN_TOKEN=<master admin token> BASE_URL=<edge> node tests/e2e/provision-admin-fixtures.js
+ *   ADMIN_TOKEN=<master admin token> BASE_URL=<edge> node tests/e2e/provision-e2e-fixtures.js
  * or, without a token:
- *   KEYCLOAK_ADMIN_PASSWORD=<password> BASE_URL=<edge> node tests/e2e/provision-admin-fixtures.js
+ *   KEYCLOAK_ADMIN_PASSWORD=<password> BASE_URL=<edge> node tests/e2e/provision-e2e-fixtures.js
  *
  * BASE_URL points at the stack's edge (defaults to https://localhost; the
  * k8s dev cluster is https://genieai.local:4443). The helper scripts
  * resolve @playwright/test from the root node_modules — run `npm install`
  * at the repository root first.
  */
-const { ADMIN_FIXTURES } = require('./helpers/admin-fixtures');
+const { E2E_FIXTURES } = require('./helpers/e2e-fixtures');
 const { ensureUser, removeRealmRoles, effectiveRealmRoles } = require('./helpers/keycloak-admin');
 const { getAdminToken } = require('./helpers/auth');
 
@@ -30,9 +31,9 @@ const ADMIN_ROLE = 'admin';
 
 (async () => {
   const adminToken = process.env.ADMIN_TOKEN || (await getAdminToken());
-  // Sequential: both fixtures live in the same realm, and a failure must
+  // Sequential: the fixtures live in the same realm, and a failure must
   // not leave one half-provisioned behind a process exit.
-  for (const fixture of ADMIN_FIXTURES) {
+  for (const fixture of E2E_FIXTURES) {
     const userId = await ensureUser(adminToken, REALM, fixture);
     if (!fixture.realmRoles || fixture.realmRoles.length === 0) {
       // The role-less fixture: "nothing was assigned" is not "carries
@@ -60,7 +61,7 @@ const ADMIN_ROLE = 'admin';
       }
     }
   }
-  console.log(`admin fixtures ready: ${ADMIN_FIXTURES.map((f) => f.username).join(', ')}`);
+  console.log(`e2e fixtures ready: ${E2E_FIXTURES.map((f) => f.username).join(', ')}`);
 })().catch((e) => {
   console.error(e.message);
   process.exit(1);

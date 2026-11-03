@@ -1,32 +1,27 @@
 const { expect } = require('@playwright/test');
-const { ADMIN_FIXTURES } = require('./admin-fixtures');
+const { E2E_FIXTURES } = require('./e2e-fixtures');
 
 /**
- * The login credentials of an admin-surface fixture.
+ * The login credentials of an E2E venue fixture.
  * @param {string} username - The fixture username
  * @returns {{username: string, password: string}}
  */
 function credentialsOf(username) {
-  const fixture = ADMIN_FIXTURES.find((f) => f.username === username);
+  const fixture = E2E_FIXTURES.find((f) => f.username === username);
   if (!fixture) {
-    throw new Error(`Unknown admin fixture: ${username}`);
+    throw new Error(`Unknown E2E fixture: ${username}`);
   }
   return { username: fixture.username, password: fixture.password };
 }
 
-const TEST_USER = {
-  username: 'testuser',
-  password: 'TestPass123!'
-};
+// The venue fixtures live in helpers/e2e-fixtures.js — the same definitions
+// the provisioning script (tests/e2e/provision-e2e-fixtures.js) creates, so
+// a credential is written once.
+const TEST_USER = credentialsOf('testuser');
 
-// The admin-surface fixtures live in helpers/admin-fixtures.js — the same
-// definitions the provisioning script (tests/e2e/provision-admin-fixtures.js)
-// creates, so a credential is written once.
-//
 // The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
 // the document-repository — a plain user's POST /api/files/upload is 403 by
-// design. The admin test user is provisioned with the `admin` realm role by
-// Phase 0 of docs/e2e-tests/00-clean-start.md.
+// design. The admin test user is provisioned with the `admin` realm role.
 const TEST_ADMIN_USER = credentialsOf('testadmin');
 
 // A user with NO realm role granting admin access — the non-admin side of

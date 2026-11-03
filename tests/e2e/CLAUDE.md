@@ -80,8 +80,8 @@ reference; do not duplicate or restate them here or in specs.
 | `*.spec.js`, `chatbot/`, `documents/`, `admin/`, `okf/` | Feature specs (Playwright) |
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
-| `helpers/admin-fixtures.js` | The admin-surface fixture definitions (username, email, password, realm roles) |
-| `provision-admin-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
+| `helpers/e2e-fixtures.js` | The venue fixture definitions (username, email, password, realm roles) |
+| `provision-e2e-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
 | `fixtures/` | Fixed seed files for upload tests |
 | `capture-dashboard.js` | Dashboard screenshot capture script (not a spec) |
 
@@ -104,14 +104,16 @@ page a session.
 
 ## Fixtures
 
-The admin-surface fixtures are defined once, in `tests/e2e/helpers/admin-fixtures.js`,
-and provisioned by `tests/e2e/provision-admin-fixtures.js` — the CI e2e job
-and the Phase 0 procedure (`docs/e2e-tests/00-clean-start.md`) both run it,
-so a credential is written in one place. The helper converges an existing
-account (password reset, role assignment, and the admin-granting role
-removed from the role-less fixture); it fails loudly on an account the
-realm left in a broken login state (disabled, unverified, carrying a
-required action) and names the cause.
+The venue fixtures (testuser, testadmin, testplain) are defined once, in
+`tests/e2e/helpers/e2e-fixtures.js`, and provisioned by
+`tests/e2e/provision-e2e-fixtures.js` — the CI e2e job and the Phase 0
+procedure (`docs/e2e-tests/00-clean-start.md`) both run it, so a credential
+is written in one place. The specs read their login credentials from the
+same module (`credentialsOf` in `helpers/chatbot.js`). The helper converges
+an existing account (password reset, role assignment, and the
+admin-granting role removed from the role-less fixture); it fails loudly on
+an account the realm left in a broken login state (disabled, unverified,
+carrying a required action) and names the cause.
 
 ## CI
 

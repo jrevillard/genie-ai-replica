@@ -1989,6 +1989,53 @@ describe('ChatBotComponent', () => {
         expect(mockSubmitQueryStream).toHaveBeenCalledTimes(1);
       });
 
+      it('two id-less cards sharing a TITLE are still two cards — the second press installs the pressed card', async () => {
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = await mountWithButtons([
+          { title: 'Advisory', serviceLabels: ['Tomato'] },
+          { title: 'Advisory', serviceLabels: ['Potato'] }
+        ]);
+        const vm = wrapper.vm;
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+
+        // The two cards share one identity AND one title: their declared
+        // labels are what tells them apart, and the card the user
+        // pressed is the one whose scope installs.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
+      });
+
+      it('a refused tag stays refused when the locale remap runs — the refusal is not a late tree', async () => {
+        // The hierarchy carries 'Crops' under no other spelling, so the
+        // refused chip's display name IS the live EN label: the remap's
+        // "the tree names it now" rule would clear the refusal and put
+        // the sidebar scope back — the silent substitution the refusal
+        // exists to avoid choosing.
+        mockLiveTree([
+          { catKey: '2', name: 'Crops', nameEN: 'Crops', children: [{ name: 'Tomate', nameEN: 'Tomato' }] }
+        ]);
+        const wrapper = await mountWithButtons(collidingIdentityCards);
+        const vm = wrapper.vm;
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Crops']
+        });
+        await vm.loadExistingConversation('c1');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+
+        vm.remapContextItemsToLocale('en');
+
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
+        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      });
+
       it('re-titles an id-less chip from ITS OWN card', async () => {
         mockLiveTree(treeWithTomatoAndPotato);
         const wrapper = await mountWithButtons(twoIdLessCards);

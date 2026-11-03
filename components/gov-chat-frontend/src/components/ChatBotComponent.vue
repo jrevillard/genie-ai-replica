@@ -548,18 +548,27 @@ function categoryOnlyItem(category, displayName) {
 
 // A scope restored from a saved tag that names no label: a sidebar
 // label the hierarchy no longer carries (serviceKey null, the scope
-// refused), or an identity two Quick Help cards claim (the same shape,
-// the same refusal). The chip shows the name the tag spells, the wire
-// carries no label, and the send refuses the scope visibly. ONE copy of
-// the shape, so the two callers cannot drift apart.
-function restoredScopeItem(service, serviceKey, category) {
-  return {
+// refused), or an identity the restore refuses (two Quick Help cards
+// claim it, or a title that is also a live hierarchy label). The chip
+// shows the name the tag spells, the wire carries no label, and the
+// send refuses the scope visibly. ONE copy of the shape, so the callers
+// cannot drift apart.
+//
+// identityRefused marks the refusals that are IDENTITY verdicts — the
+// tag names no single card, whatever the hierarchy does. The locale
+// remap heals an unresolved chip the tree could not name AT RESTORE
+// TIME; it must never heal these, or the refused tag would come back
+// as the sidebar scope the refusal exists to avoid choosing.
+function restoredScopeItem(service, serviceKey, category, identityRefused) {
+  const item = {
     service,
     serviceKey,
     category,
     unresolved: serviceKey === null,
     selected: true
   };
+  if (identityRefused) item.identityRefused = true;
+  return item;
 }
 
 function quickHelpContextItem(button) {
@@ -608,9 +617,6 @@ function quickHelpTagOf(id, title) {
 // card carries (quickHelpIdentityOf), so a card without an id is named
 // by its title there and never by a raw id comparison. Both sides read
 // as strings, so a mobile-saved '5' matches a numeric 5 the same way an
-
-// Whether a saved tag matches a button's id: both sides read as
-// strings, so a mobile-saved '5' matches a numeric 5 the same way an
 // old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
 // card never matches a '0' id (its identity is the title). The scalar
 // gate covers BOTH sides: the dedupe compares two configuration ids,
@@ -1918,7 +1924,11 @@ export default {
           // have caught up (a renamed-back label), and a chip that can
           // now be named must stop refusing the send. The tag's own
           // text is the identity the lookup uses.
-          ...(item.unresolved && this.enLabelDisplayNames.has(item.service)
+          // An IDENTITY-refused chip is refused for what the tag names,
+          // not for what the tree carries: the tree naming it "now"
+          // changes nothing, and healing it would put back the very
+          // scope the refusal declined to choose.
+          ...(item.unresolved && !item.identityRefused && this.enLabelDisplayNames.has(item.service)
             ? { serviceKey: item.service, unresolved: false }
             : {}),
           service:
@@ -2133,21 +2143,19 @@ export default {
       // card the user pressed rather than keeping the other one's scope.
       const pressedIdentity = quickHelpIdentityOf(rawOption);
       const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
-      const existingIdx = identityIsAmbiguous
-        ? // An identity TWO cards claim cannot be told apart by it alone:
-          // the card's own title can (the colliding cards wear different
-          // titles). Two cards indistinguishable in every way are one
+      const existingIdx = this.selectedContextItems.findIndex(
+        (item) =>
+          item.source === QUICK_HELP_SOURCE &&
+          quickHelpIdentityOf(item) === pressedIdentity &&
+          // An identity TWO cards claim cannot be told apart by it alone:
+          // the card's own fingerprint can (its title and its declared
+          // labels). Two cards indistinguishable in every way are one
           // card to the user — the repeat press stays a no-op instead of
-          // asking the question twice.
-          this.selectedContextItems.findIndex(
-            (item) =>
-              item.source === QUICK_HELP_SOURCE &&
-              quickHelpIdentityOf(item) === pressedIdentity &&
-              item.service === rawOption.service
-          )
-        : this.selectedContextItems.findIndex(
-            (item) => item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity
-          );
+          // asking the question twice or keeping the other card's scope.
+          (!identityIsAmbiguous ||
+            (item.service === rawOption.service &&
+              JSON.stringify(item.serviceLabels || []) === JSON.stringify(rawOption.serviceLabels || [])))
+      );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
@@ -2788,7 +2796,12 @@ export default {
               // cannot be carried: the send refuses it visibly, the way
               // a tag that names nothing is refused.
               restoredContextItems.push(
-                restoredScopeItem(this.displayNameForEnLabel(tag) || tag, null, this.currentCategoryId || 'general')
+                restoredScopeItem(
+                  this.displayNameForEnLabel(tag) || tag,
+                  null,
+                  this.currentCategoryId || 'general',
+                  true
+                )
               );
               return;
             }

@@ -81,6 +81,7 @@
               <li class="nav-item">
                 <a
                   href="#"
+                  data-test-id="admin-logs-link"
                   :class="['nav-link', { active: activeTab === 'logs' }]"
                   @click.prevent="setActiveTab('logs')"
                 >
@@ -152,21 +153,21 @@
           </div>
 
           <div class="quick-stats">
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-system-uptime">
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
-              <div class="stat-value">{{ metrics.systemUptime }}%</div>
+              <div class="stat-value" data-test-id="stat-system-uptime-value">{{ metrics.systemUptime }}%</div>
               <div v-if="trend('uptime', true)" class="stat-trend" :class="trend('uptime', true).className">
                 <span>{{ trend('uptime', true).arrow }} {{ trend('uptime', true).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-avg-response-time">
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
-              <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
+              <div class="stat-value" data-test-id="stat-avg-response-time-value">{{ metrics.avgResponseTime }}ms</div>
               <div
                 v-if="trend('responseTime', false)"
                 class="stat-trend"
@@ -176,21 +177,21 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-error-rate">
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
-              <div class="stat-value">{{ errorRateLabel }}</div>
+              <div class="stat-value" data-test-id="stat-error-rate-value">{{ errorRateLabel }}</div>
               <div v-if="trend('errorRate', false)" class="stat-trend" :class="trend('errorRate', false).className">
                 <span>{{ trend('errorRate', false).arrow }} {{ trend('errorRate', false).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-test-id="stat-monthly-active-users">
               <div class="stat-title">
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>
-              <div class="stat-value">
+              <div class="stat-value" data-test-id="stat-monthly-active-users-value">
                 {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
               </div>
               <div v-if="trend('activeUsers', true)" class="stat-trend" :class="trend('activeUsers', true).className">
@@ -220,6 +221,7 @@
                       v-for="service in healthServices"
                       :key="service.name"
                       :class="['health-item', `status-${service.status}`]"
+                      :data-test-id="`health-${service.id}`"
                     >
                       <div :class="['status-badge', `badge-${service.status}`]"></div>
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
@@ -235,14 +237,22 @@
                   </div>
 
                   <div class="resource-usage">
-                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                    <div
+                      v-for="resource in resourceUsage"
+                      :key="resource.id"
+                      class="usage-item"
+                      :data-test-id="`usage-${resource.id}`"
+                    >
                       <div class="usage-header">
                         <div class="usage-label">{{ resource.label }}</div>
-                        <div class="usage-value">{{ resource.value }}%</div>
+                        <div class="usage-value" :data-test-id="`usage-${resource.id}-value`">
+                          {{ resource.value }}%
+                        </div>
                       </div>
                       <div class="usage-bar">
                         <div
                           :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]"
+                          :data-test-id="`usage-${resource.id}-fill`"
                           :style="{ width: `${resource.value}%` }"
                         ></div>
                       </div>
@@ -745,7 +755,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-errors-card">
                     <h3 class="summary-title">
                       <span class="status-indicator error"></span>
                       {{ translate('admin.logsSection.errorLogs', 'Error Logs') }} ({{
@@ -764,15 +774,21 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
+                          <tr
+                            v-for="(log, index) in errorLogsSummary"
+                            :key="'error-' + index"
+                            :data-test-id="`log-row-errors-${log.type}-${log.service}`"
+                          >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count">{{ log.count }}</td>
+                            <td class="log-count" :data-test-id="`log-count-errors-${log.type}-${log.service}`">
+                              {{ log.count }}
+                            </td>
                           </tr>
                           <tr v-if="errorLogsSummary.length === 0">
-                            <td colspan="3" class="empty-logs">
+                            <td colspan="3" class="empty-logs" data-test-id="logs-errors-empty">
                               {{ translate('admin.logsSection.noErrorLogs', 'No error logs recorded today.') }}
                             </td>
                           </tr>
@@ -781,7 +797,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-warnings-card">
                     <h3 class="summary-title">
                       <span class="status-indicator warning"></span>
                       {{ translate('admin.logsSection.warningLogs', 'Warning Logs') }} ({{
@@ -800,15 +816,21 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
+                          <tr
+                            v-for="(log, index) in warningLogsSummary"
+                            :key="'warning-' + index"
+                            :data-test-id="`log-row-warnings-${log.type}-${log.service}`"
+                          >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count">{{ log.count }}</td>
+                            <td class="log-count" :data-test-id="`log-count-warnings-${log.type}-${log.service}`">
+                              {{ log.count }}
+                            </td>
                           </tr>
                           <tr v-if="warningLogsSummary.length === 0">
-                            <td colspan="3" class="empty-logs">
+                            <td colspan="3" class="empty-logs" data-test-id="logs-warnings-empty">
                               {{ translate('admin.logsSection.noWarningLogs', 'No warning logs recorded today.') }}
                             </td>
                           </tr>

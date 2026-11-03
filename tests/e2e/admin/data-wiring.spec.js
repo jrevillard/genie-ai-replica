@@ -1,0 +1,103 @@
+const { test, expect } = require('@playwright/test');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+
+/**
+ * Overview data wiring: the stat tiles, health services and resource usage
+ * render FROM the /api/admin/system-health payload.
+ *
+ * The payload is injected by route interception with values that collide
+ * with nothing — the component's uninitialized defaults are
+ * 99.98 / 245 / 0.05 / 0, so seeing 87.65 / 321 / 2.5% / 1,234 on screen
+ * can only mean the API response drove the render. Mutation gate: flip a
+ * value in the mocked payload (or break the component's assignment) and
+ * the exact-text assertions below fail.
+ */
+// The injected metric values. Single source for both tests: a
+// mutation-gate edit changes them once.
+const METRICS = {
+  systemUptime: 87.65,
+  avgResponseTime: 321,
+  errorRate: 2.5,
+  monthlyActiveUsers: 1234,
+};
+
+test.describe('Admin overview data wiring', () => {
+  // The login helper's own worst case (two attempts, navigation +
+  // redirect waits) exceeds two minutes: a shorter ceiling would fire
+  // first and hide the helper's diagnosis behind a bare timeout.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+  // Pin the locale: monthlyActiveUsers renders through
+  // toLocaleString(), whose grouping separator follows the browser
+  // locale ("1,234" en-US vs "1.234" de-DE).
+  test.use({ locale: 'en-US' });
+
+  async function loginWithWiredPayload(page, payload) {
+    await loginViaUI(page, TEST_ADMIN_USER);
+    await page.route('**/api/admin/system-health', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(payload),
+      }),
+    );
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
+  }
+
+  test('stat tiles render the system-health payload values', async ({ page }) => {
+    await loginWithWiredPayload(page, {
+      metrics: METRICS,
+      healthServices: [],
+      resourceUsage: {},
+    });
+
+    // Exact text, tile by tile. The assertion targets the VALUE element
+    // (its own handle), not the card: the card also carries the title
+    // and, when the payload carries trends, a percentage of its own —
+    // a substring match on the card could be satisfied by either. The
+    // template appends the unit (%, ms) and errorRateLabel appends %
+    // (or an em dash when the metric is null).
+    await expect(page.locator('[data-test-id="stat-system-uptime-value"]')).toHaveText('87.65%');
+    await expect(page.locator('[data-test-id="stat-avg-response-time-value"]')).toHaveText('321ms');
+    await expect(page.locator('[data-test-id="stat-error-rate-value"]')).toHaveText('2.5%');
+    await expect(page.locator('[data-test-id="stat-monthly-active-users-value"]')).toHaveText('1,234');
+  });
+
+  test('health services and resource usage render from the payload', async ({ page }) => {
+    await loginWithWiredPayload(page, {
+      metrics: METRICS,
+      healthServices: [
+        { id: 'wiredAlpha', name: 'Wired Service Alpha', status: 'good' },
+        { id: 'wiredBeta', name: 'Wired Service Beta', status: 'warning' },
+      ],
+      resourceUsage: { cpu: 42, memory: 67 },
+    });
+
+    // Health rows carry the per-service status class and the service
+    // name (the i18n fallback — no admin.services.wiredAlpha key exists).
+    // The status vocabulary is the backend's own ('good' / 'warning' /
+    // 'error' — admin-dashboard-service.getSystemHealth), so the asserted
+    // classes are the ones the component actually renders. The class IS
+    // the contract here (the backend's status mapped onto the row), so
+    // it is asserted directly; the failure message names the observed
+    // classes, and the row's own text proves the payload's service name
+    // reached the screen.
+    const alpha = page.locator('[data-test-id="health-wiredAlpha"]');
+    await expect(alpha).toHaveText('Wired Service Alpha');
+    await expect(alpha).toHaveClass(/status-good/);
+
+    const beta = page.locator('[data-test-id="health-wiredBeta"]');
+    await expect(beta).toHaveText('Wired Service Beta');
+    await expect(beta).toHaveClass(/status-warning/);
+
+    // Resource rows: the row anchor is the canonical resource id (the
+    // label itself is i18n); value and bar width come from the payload.
+    // The value assertion targets the value element's own handle — the
+    // row also carries the label, and "42%" as a substring would match
+    // "142%".
+    await expect(page.locator('[data-test-id="usage-cpu-value"]')).toHaveText('42%');
+    await expect(page.locator('[data-test-id="usage-cpu-fill"]')).toHaveAttribute('style', /width: 42%/);
+
+    await expect(page.locator('[data-test-id="usage-memory-value"]')).toHaveText('67%');
+  });
+});

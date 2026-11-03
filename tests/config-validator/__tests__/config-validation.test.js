@@ -2380,6 +2380,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // validates AND what every consumer downstream receives.
     targets = [...new Set(targets)].sort();
     expect(targets).toEqual([
+      'tests/e2e/admin/**/*',
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
       'tests/e2e/helpers/**/*',
@@ -2517,6 +2518,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   test('derivation scans exactly the spec files the invocation executes', () => {
     expect([...EXECUTED_SPECS].sort()).toEqual([
+      'tests/e2e/admin/authz.spec.js',
+      'tests/e2e/admin/data-wiring.spec.js',
+      'tests/e2e/admin/failure-states.spec.js',
+      'tests/e2e/admin/logs-view.spec.js',
       'tests/e2e/chatbot/conversation-history.spec.js',
       'tests/e2e/chatbot/error-handling.spec.js',
       'tests/e2e/chatbot/quick-help-scope.spec.js',

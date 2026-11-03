@@ -82,6 +82,7 @@ afterAll(() => {
 
 const { createApp } = require('../../index');
 const request = require('supertest');
+const AppError = require('../../middleware/errors').AppError;
 const { createValidToken } = require('../fixtures/tokens');
 const { createMockUser } = require('../fixtures/users');
 
@@ -338,7 +339,7 @@ describe('DELETE /api/service-categories/services/:serviceId (AC16)', () => {
 
   it('should return 404 when service not found', async () => {
     const notFoundError = new Error('Service not found');
-    notFoundError.code = 404;
+    notFoundError.statusCode = 404;
     serviceCategoryService.deleteService.mockRejectedValue(notFoundError);
 
     const response = await authDelete('/api/service-categories/services/nonexistent');
@@ -474,12 +475,6 @@ describe('POST /api/service-categories/init', () => {
 // of answering a flat local 500.
 // ============================================================
 describe('error-path status contract', () => {
-  const typedError = (message, statusCode) => {
-    const error = new Error(message);
-    error.statusCode = statusCode;
-    return error;
-  };
-
   it.each([
     ['GET', '/api/service-categories/categories', 'getAllCategoriesWithServices'],
     ['GET', '/api/service-categories/categories/detailed', 'getAdminAllCategoriesWithServices'],
@@ -488,7 +483,7 @@ describe('error-path status contract', () => {
     ['GET', '/api/service-categories/search?query=health', 'searchCategoriesAndServices'],
     ['DELETE', '/api/service-categories/cat-1', 'deleteCategory']
   ])('%s %s renders a typed status instead of a flat 500', async (method, path, methodName) => {
-    serviceCategoryService[methodName].mockRejectedValue(typedError('gone wrong', 503));
+    serviceCategoryService[methodName].mockRejectedValue(new AppError('gone wrong', 503));
     if (methodName === 'deleteCategory') {
       serviceCategoryService.categoryExists.mockResolvedValue(true);
     }

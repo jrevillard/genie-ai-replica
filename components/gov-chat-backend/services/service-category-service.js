@@ -664,6 +664,11 @@ class ServiceCategoryService {
         throw new Error('Invalid service key provided');
       }
 
+      // Absence is classified by the canonical predicate and raised typed:
+      // a raw driver 404 carries `code` but no `statusCode`, so the global
+      // error middleware would render it a 500.
+      await this._documentOr404(this.services, serviceKey, 'Service');
+
       // 1. Delete all translations for this service
       await this.db.query(aql`
       FOR trans IN serviceTranslations

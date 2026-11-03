@@ -3077,17 +3077,8 @@ describe('translation load-failure gate', () => {
   });
 
   it('the Save button is disabled while the failed-load flag holds', async () => {
-    const wrapper = createAdminDashboardWrapper();
+    const { wrapper } = mountEditingService([]);
     wrapper.vm.activeTab = 'hierarchy';
-    wrapper.vm.hierarchyForm = {
-      visible: true,
-      mode: 'editService',
-      title: 'Edit Service',
-      _key: 'svc-1',
-      nameEN: 'Tax Filing',
-      translations: [],
-      parentId: null
-    };
     wrapper.vm.translationsLoadFailed = true;
     await wrapper.vm.$nextTick();
 

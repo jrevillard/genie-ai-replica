@@ -490,13 +490,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      // The service raises the driver's raw 404 (it carries `code` but no
-      // `statusCode`, so the global middleware would render it a 500).
-      if (error.code === 404) {
-        res.status(404).json({ message: error.message });
-      } else {
-        next(error);
-      }
+      // The service raises a typed NotFoundError for an unknown id — the
+      // global middleware renders it 404.
+      next(error);
     }
   });
 

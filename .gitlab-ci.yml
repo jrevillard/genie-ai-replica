@@ -565,8 +565,12 @@ workflow:
           # token — the known cause is a master realm Access Token Lifespan
           # shorter than this readiness wait. Retrying with the same token
           # cannot heal it, and silently re-acquiring would mask the
-          # configuration drift; fail with the actual answer instead.
-          if [ "$CLIENT_STATUS" = "401" ]; then
+          # configuration drift; fail with the actual answer instead. Only a
+          # clean-exit answer is definitive: a non-zero curl rc means the
+          # status may sit over a truncated body (the #1334 round-6 class) —
+          # the loop retries, and a genuinely expired token answers cleanly
+          # on the next attempt.
+          if [ "$CLIENT_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
             echo "ERROR: master admin token rejected during the genie-app client lookup (HTTP 401, body: ${BODY:-none}) — the token this run acquired is no longer valid (master realm Access Token Lifespan shorter than the readiness wait is the known cause); failing instead of retrying with a dead token."
             exit 1
           fi
@@ -802,6 +806,14 @@ workflow:
         esac
       elif [ "$CURL_RC" -ne 0 ]; then
         echo "WARNING: roles lookup hit a transport fault (curl exit ${CURL_RC}, last HTTP $(http_label "$ROLES_STATUS")) — the answer may be truncated and is not a realm answer; document upload/delete tests may fail; body: ${BODY:-none}"
+      elif [ "$ROLES_STATUS" = "401" ]; then
+        # Same definitive class as the client-lookup 401 (#1320): the token
+        # was minted by this run and just worked for the testuser calls, so
+        # a 401 here means it expired mid-provisioning. Running the suites
+        # without the admin role fails every upload/delete spec far from the
+        # cause — fail here with the named cause instead.
+        echo "ERROR: master admin token rejected during the admin role lookup (HTTP 401, body: ${BODY:-none}) — the token this run acquired is no longer valid (master realm Access Token Lifespan shorter than the provisioning path is the known cause); failing instead of running the suites without the admin role."
+        exit 1
       elif [ "$ROLES_STATUS" = "404" ]; then
         echo "WARNING: the 'admin' realm role does not exist (HTTP 404 on the direct role endpoint) — realm import drift; document upload/delete tests may fail."
       else
@@ -4008,7 +4020,7 @@ config:provisioning-harness:
   stage: config
   dependencies: []
   before_script:
-    - pip install --cache-dir .cache/pip pyyaml
+    - pip install --cache-dir .cache/pip "pyyaml==6.0.2"
   cache:
     - key: provisioning-harness-pyyaml
       paths:

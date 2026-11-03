@@ -92,7 +92,7 @@ def _resp_list(override, default):
 
 def base_rules(client_resp=None, create_resp=None, user_resp=None,
                roles_resp=None, role_mapping_resp=None, reset_resp=None,
-               token_resp=None, ropc_resp=None):
+               token_resp=None, ropc_resp=None, delete_resp=None):
     """The scripted endpoints, overridable per scenario."""
     return [
         {"name": "health", "method": "GET", "url": "/api/health",
@@ -112,7 +112,7 @@ def base_rules(client_resp=None, create_resp=None, user_resp=None,
         {"name": "reset", "method": "PUT", "url": "reset-password",
          "responses": _resp_list(reset_resp, {"status": "204", "body": ""})},
         {"name": "delete", "method": "DELETE", "url": "admin/realms/genie/users/",
-         "responses": [{"status": "204", "body": ""}]},
+         "responses": _resp_list(delete_resp, {"status": "204", "body": ""})},
         {"name": "ropc", "method": "POST", "url": "realms/genie/protocol/openid-connect/token",
          "responses": _resp_list(ropc_resp, {"status": "401", "body": json.dumps({
              "error": "unauthorized_client",
@@ -240,9 +240,65 @@ def scenarios_list():
     ))
 
     scs.append(scenario(
+        # An expired token reaching the roles lookup is the same definitive
+        # class as the client-lookup 401 (#1320): the token was minted by
+        # this run. Fail with the named cause instead of warning and running
+        # the suites without the admin role.
+        "roles_401_fails_fast", 1,
+        base_rules(roles_resp={"status": "401", "body": json.dumps({
+            "error": "HTTP 401 Unauthorized"})}),
+        expect=["rejected during the admin role lookup",
+                "failing instead of running the suites without the admin role"],
+        forbid=["WARNING: Could not resolve the admin role"],
+    ))
+
+    scs.append(scenario(
+        # A truncated transport answer carrying a 401 trailer is NOT a
+        # definitive token rejection (the status may sit over a truncated
+        # body — the #1334 round-6 class): the loop retries, and a genuinely
+        # expired token answers cleanly on a later attempt. The budget then
+        # expires with the honest client-lookup verdict, not the mid-loop
+        # dead-token exit.
+        "truncated_client_401_retries", 1,
+        base_rules(client_resp={"status": "401",
+                                "body": json.dumps({"error": "HTTP 401 Unauthorized"}),
+                                "rc": 28}),
+        expect=["last client lookup: HTTP 401"],
+        forbid=["failing instead of retrying with a dead token"],
+        calls={"client": 90},
+    ))
+
+    scs.append(scenario(
         "role_mapping_403_warns", 0,
         base_rules(role_mapping_resp={"status": "403", "body": "forbidden"}),
         expect=["WARNING: admin role assignment failed"],
+    ))
+
+    # The remaining require_clean_curl gates, pinned like truncated_reset:
+    # a truncated transport answer over a captured status must fail the
+    # call loudly, never be read as a semantic verdict.
+    scs.append(scenario(
+        "truncated_delete_fails_loud", 1,
+        base_rules(create_resp={"status": "409", "body": "User exists with same email"},
+                   user_resp={"status": "200", "body": "[%s]" % DRIFTED_USER},
+                   delete_resp={"status": "204", "body": "", "rc": 28}),
+        expect=["transport fault during the stale testuser delete"],
+        forbid=["testuser recreated"],
+    ))
+
+    scs.append(scenario(
+        "truncated_lookup_fails_loud", 1,
+        base_rules(create_resp={"status": "409", "body": "User exists with same email"},
+                   user_resp={"status": "200", "body": "[%s]" % HEALTHY_USER, "rc": 28}),
+        expect=["transport fault during the testuser lookup"],
+        forbid=["password converged", "testuser recreated"],
+    ))
+
+    scs.append(scenario(
+        "truncated_role_mapping_fails_loud", 1,
+        base_rules(role_mapping_resp={"status": "204", "body": "", "rc": 28}),
+        expect=["transport fault during the admin role assignment"],
+        forbid=["WARNING: admin role assignment failed", "Assigned admin role"],
     ))
 
     scs.append(scenario(

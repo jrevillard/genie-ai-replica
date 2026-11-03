@@ -48,5 +48,6 @@ Each of these regressions turns specific scenarios red (verified for the
 |---|---|
 | rc capture moved inside the command substitution (the #1289 bug) | `truncated_reset_fails_loud`, `roles_transport_fault_not_misattributed` |
 | transient retry arm narrowed (drop 429) | `create_recovers_from_429` |
-| `require_clean_curl` gate inverted | 12 scenarios |
+| `require_clean_curl` gate inverted | 15 scenarios |
 | #1319 classifier reads the 200-char display body instead of the full capture | `long_body_401_still_fails_fast` |
+| #1320 fail-fast loses the clean-exit gate (truncated 401 treated as definitive) | `truncated_client_401_retries` |

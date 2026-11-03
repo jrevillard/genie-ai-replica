@@ -185,6 +185,24 @@ def scenarios_list():
         calls={"token": 3},
     ))
 
+    # Same rejection with an OAuth error body whose JSON exceeds the 200-char
+    # display truncation: the classifier reads the FULL capture (KC_RAW), so
+    # the fail-fast still fires at attempt 3. A display-body classifier
+    # parses a truncated string, finds no error member, classifies the
+    # rejection transient and burns the budget (token count 90 ≠ 3) — this
+    # scenario is the mutation gate for that regression.
+    long_invalid_grant = {"status": "401", "body": json.dumps({
+        "error": "invalid_grant",
+        "error_description": "Invalid user credentials. " + "x" * 250,
+    })}
+    scs.append(scenario(
+        "long_body_401_still_fails_fast", 1,
+        base_rules(token_resp=long_invalid_grant),
+        expect=["definitively rejected", "Check KEYCLOAK_ADMIN_PASSWORD"],
+        forbid=["Waiting for Keycloak via nginx/Kong... (4/90)"],
+        calls={"token": 3},
+    ))
+
     scs.append(scenario(
         "transient_000_then_token_ok", 0,
         base_rules(token_resp=[{"status": "000", "body": "", "rc": 7},
@@ -275,7 +293,7 @@ def scenarios_list():
     return scs
 
 
-def run_scenario(sc, workdir):
+def run_scenario(sc, helper, block, workdir):
     scenario_path = os.path.join(workdir, "scenario.json")
     state_path = os.path.join(workdir, "state.json")
     if os.path.exists(state_path):
@@ -298,7 +316,6 @@ def run_scenario(sc, workdir):
     env["HARNESS_STATE"] = state_path
     env["KEYCLOAK_ADMIN_PASSWORD"] = "ci-harness-password"
 
-    helper, block = provisioning_items()
     proc = subprocess.run(["bash", "-c", helper + "\n" + block],
                           env=env, capture_output=True, text=True,
                           timeout=120, cwd=workdir)
@@ -326,10 +343,11 @@ def run_scenario(sc, workdir):
 
 def main():
     scs = scenarios_list()
+    helper, block = provisioning_items()
     failed = 0
     with tempfile.TemporaryDirectory(prefix="provisioning-harness-") as workdir:
         for sc in scs:
-            problems, output = run_scenario(sc, workdir)
+            problems, output = run_scenario(sc, helper, block, workdir)
             if problems:
                 failed += 1
                 print("FAIL %s" % sc["name"])

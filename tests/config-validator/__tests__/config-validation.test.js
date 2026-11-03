@@ -3324,20 +3324,23 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('kc_curl() {');
     expect(section).toContain('require_clean_curl() {');
-    // The capture itself: the rc check must sit OUTSIDE the command
-    // substitution — an inside form (`... "$@" || CURL_RC=$?)`) ends the
-    // line with the substitution's closing paren and every transport
-    // failure looks like a clean exit again.
-    expect(section).toMatch(/^ {8}KC_RAW=\$\(curl[^\n]*\) \|\| CURL_RC=\$\?$/m);
-    // The drift sites: a curl whose exit code is captured inside the $( )
-    // vanishes into the subshell — pin the helper's capture site and forbid
-    // the inline pattern outside the ROPC probe (which keeps its own
-    // body-withheld contract).
-    const inlineCaptures = section.match(/^\s*\w+_RESP=\$\(curl /gm) || [];
-    expect(inlineCaptures).toHaveLength(0);
-    // Every routed call keeps the bounded timeout flags — the #1289 stall
-    // class must not reintroduce itself through a new call site.
-    expect(section).toContain('--connect-timeout 5 --max-time 10');
+    // The section's $(curl capture sites are an exact, enumerated set: the
+    // kc_curl capture plus the two deliberate body-withheld probes (nginx
+    // reachability, ROPC — different timeouts/contracts). Any fourth site
+    // re-grows the #1289 drift class this pin exists for; a deleted site
+    // (the helper losing its own capture) is equally visible.
+    const curlCaptureLines = section.split('\n').filter((l) => l.includes('$(curl'));
+    expect(curlCaptureLines).toHaveLength(3);
+    // The kc_curl capture: bounded timeout flags inline — a helper that
+    // drops them reintroduces the #1289 stall class through every routed
+    // call — and the rc check OUTSIDE the command substitution: an inside
+    // form (`... "$@" || CURL_RC=$?)`) ends the line with the
+    // substitution's closing paren and every transport failure looks like
+    // a clean exit again.
+    const kcCapture = curlCaptureLines.filter(
+      (l) => l.includes('KC_RAW=$(curl -sk --connect-timeout 5 --max-time 10') && l.endsWith(') || CURL_RC=$?')
+    );
+    expect(kcCapture).toHaveLength(1);
   });
 
   // #1319: a definitive 401 OAuth rejection cannot heal on retry and every
@@ -3405,8 +3408,19 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
   });
 
   test('compose pins the default posture the e2e suite runs', () => {
-    const content = fs.readFileSync(COMPOSE_FILE, 'utf-8');
-    expect(content).toContain('KEYCLOAK_VERIFY_EMAIL=${KEYCLOAK_VERIFY_EMAIL:-true}');
+    // Through the shared compose parser, not a raw-text grep: the parser
+    // already resolves ${VAR:-default} forms and skips comment lines, so
+    // the pin asserts the semantic (a default of true) rather than one
+    // spelling of it.
+    expect(parseComposeEnvVars(COMPOSE_FILE)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'KEYCLOAK_VERIFY_EMAIL',
+          default: 'true',
+          hasDefault: true
+        })
+      ])
+    );
   });
 });
 

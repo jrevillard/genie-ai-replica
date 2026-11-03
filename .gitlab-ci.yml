@@ -536,7 +536,15 @@ workflow:
           # rejections — enough to ride out a one-off proxy hiccup mimicking
           # a 401 — and keep the full 180s budget reserved for transient
           # conditions (no connection yet, 5xx, realm-import 404 races).
-          TOKEN_REJECT_DETAIL=$(printf '%s' "$TOKEN_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
+          # The error field is parsed from KC_RAW (the full capture, like
+          # the token parse above) — the 200-char display BODY can truncate
+          # the JSON before the error member and would hide a real
+          # rejection. The parse only runs on a 401: other statuses reset.
+          TOKEN_REJECT_DETAIL=""
+          if [ "$TOKEN_STATUS" = "401" ]; then
+            TOKEN_REJECT_DETAIL=$(printf '%s' "$KC_RAW" | sed '$d' \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
+          fi
           if [ "$TOKEN_STATUS" = "401" ] && [ -n "$TOKEN_REJECT_DETAIL" ]; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else

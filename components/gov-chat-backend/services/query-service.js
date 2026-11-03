@@ -501,6 +501,18 @@ class QueryService {
           if (Object.prototype.hasOwnProperty.call(obj, 'query_translation_status')) {
             parsed.query_translation_status = obj.query_translation_status;
           }
+          // Passthrough of chatqna's own metadata keys: a diagnostic field not
+          // on the known list above must reach the streamed path too — the
+          // JSON path forwards metadata verbatim, and a field-by-field rebuild
+          // here made the two paths disagree (retrieval_confidence_score,
+          // self_confidence and query_translation_status were each lost this
+          // way until a backend edit). Known fields are already on `parsed`
+          // with their defaults/normalization; this copies only the rest.
+          for (const [key, value] of Object.entries(obj)) {
+            if (key !== 'type' && !Object.prototype.hasOwnProperty.call(parsed, key)) {
+              parsed[key] = value;
+            }
+          }
           return parsed;
         }
       } catch {

@@ -832,53 +832,45 @@ describe('AdminDashboard', () => {
       return { wrapper, treeMock };
     }
 
-    it('passes the normalized {lang, text} rows to the service', async () => {
-      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
+    // One contract — the rows the form sends are normalized — four shapes of
+    // the input that used to reach the backend as-is.
+    [
+      {
+        label: 'passes the rows through',
+        rows: [{ lang: 'fr', text: 'Déclaration fiscale' }],
+        expected: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      },
+      {
+        label: 'trims whitespace from lang and text',
+        rows: [{ lang: ' fr ', text: '  Déclaration fiscale  ' }],
+        expected: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      },
+      {
+        label: 'drops rows with a null lang or text',
+        rows: [
+          { lang: null, text: 'orphan' },
+          { lang: 'fr', text: 'Nom' }
+        ],
+        expected: [{ lang: 'fr', text: 'Nom' }]
+      },
+      {
+        label: 'drops rows with a non-string lang or text (legacy numeric docs)',
+        rows: [
+          { lang: 'fr', text: 123 },
+          { lang: 'es', text: 'Nombre' }
+        ],
+        expected: [{ lang: 'es', text: 'Nombre' }]
+      }
+    ].forEach(({ label, rows, expected }) => {
+      it(`${label} before sending`, async () => {
+        const { wrapper, treeMock } = mountEditingService(rows);
 
-      await wrapper.vm.saveHierarchyItem();
+        await wrapper.vm.saveHierarchyItem();
 
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }]
-      });
-    });
-
-    it('trims whitespace from lang and text before sending', async () => {
-      const { wrapper, treeMock } = mountEditingService([{ lang: ' fr ', text: '  Déclaration fiscale  ' }]);
-
-      await wrapper.vm.saveHierarchyItem();
-
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }]
-      });
-    });
-
-    it('drops rows with null lang or text instead of throwing', async () => {
-      const { wrapper, treeMock } = mountEditingService([
-        { lang: null, text: 'orphan' },
-        { lang: 'fr', text: 'Nom' }
-      ]);
-
-      await wrapper.vm.saveHierarchyItem();
-
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'fr', text: 'Nom' }]
-      });
-    });
-
-    it('drops rows with non-string lang or text (legacy numeric docs)', async () => {
-      const { wrapper, treeMock } = mountEditingService([
-        { lang: 'fr', text: 123 },
-        { lang: 'es', text: 'Nombre' }
-      ]);
-
-      await wrapper.vm.saveHierarchyItem();
-
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'es', text: 'Nombre' }]
+        expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+          nameEN: 'Tax Filing',
+          translations: expected
+        });
       });
     });
 

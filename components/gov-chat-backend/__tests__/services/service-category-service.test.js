@@ -8,24 +8,7 @@ jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
 }));
 
-jest.mock(
-  '../../shared-lib',
-  () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
-    },
-    // The canonical absence predicate, real (pure function): the mocked
-    // dbService must classify an absence exactly like the real one.
-    dbService: {
-      getConnection: jest.fn(),
-      _isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
-    }
-  }),
-  { virtual: true }
-);
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
 jest.mock('../../middleware/errors', () => ({
   NotFoundError: class NotFoundError extends Error {
@@ -273,19 +256,6 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateServiceWithTranslations('missing', { nameEN: 'Test' })).rejects.toThrow('Not found');
     });
 
-    it('maps an arangojs 404 (error.code, no statusCode) to a typed NotFoundError', async () => {
-      const arangoErr = Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 });
-      mockServices.document.mockRejectedValue(arangoErr);
-
-      try {
-        await service.updateServiceWithTranslations('missing', { nameEN: 'Test' });
-        throw new Error('should have thrown');
-      } catch (e) {
-        expect(e.name).toBe('NotFoundError');
-        expect(e.statusCode).toBe(404);
-      }
-    });
-
     it('answers 404-class existence before payload validation', async () => {
       mockServices.document.mockRejectedValue(new Error('Not found'));
 
@@ -297,33 +267,41 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow('Not found');
     });
 
-    it('maps the ArangoDB 3.12 "no match" absence to a typed NotFoundError', async () => {
-      // The simple-query API answers errorNum 404 with the message 'no
-      // match' (3.11 answered 1204) — the canonical classifier treats it
-      // as an absence, and so must this one.
-      const noMatch = Object.assign(new Error('no match'), { code: 404, errorNum: 404 });
-      mockServices.document.mockRejectedValue(noMatch);
-
-      try {
-        await service.updateServiceWithTranslations('missing', { nameEN: 'Test' });
-        throw new Error('should have thrown');
-      } catch (e) {
-        expect(e.name).toBe('NotFoundError');
-        expect(e.statusCode).toBe(404);
+    // One contract, three shapes of the driver error: a missing row and the
+    // 3.12 simple-query miss are absences (typed 404), a missing collection
+    // is a real fault that must not be reported as "no such document".
+    [
+      {
+        label: 'a missing row (errorNum 1202)',
+        error: Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 }),
+        absent: true
+      },
+      {
+        label: "the ArangoDB 3.12 'no match' miss (errorNum 404)",
+        error: Object.assign(new Error('no match'), { code: 404, errorNum: 404 }),
+        absent: true
+      },
+      {
+        label: 'a missing collection (errorNum 1203)',
+        error: Object.assign(new Error('collection not found'), { code: 404, errorNum: 1203 }),
+        absent: false
       }
-    });
+    ].forEach(({ label, error, absent }) => {
+      it(`classifies ${label} as ${absent ? 'an absence' : 'a real fault'}`, async () => {
+        mockServices.document.mockRejectedValue(error);
 
-    it('does not report a missing collection as a missing document', async () => {
-      // 1203 also carries HTTP 404 but is a real fault: a broken
-      // deployment must not render as an empty result.
-      const missingCollection = Object.assign(new Error('collection not found'), { code: 404, errorNum: 1203 });
-      mockServices.document.mockRejectedValue(missingCollection);
-
-      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.toThrow(
-        'collection not found'
-      );
-      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.not.toMatchObject({
-        name: 'NotFoundError'
+        try {
+          await service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' });
+          throw new Error('should have thrown');
+        } catch (e) {
+          if (absent) {
+            expect(e.name).toBe('NotFoundError');
+            expect(e.statusCode).toBe(404);
+          } else {
+            expect(e.name).not.toBe('NotFoundError');
+            expect(e.message).toBe(error.message);
+          }
+        }
       });
     });
 

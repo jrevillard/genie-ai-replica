@@ -1432,7 +1432,12 @@ bool scopeCanGoOnTheWire({
   // refuses the tap: replaying the dead labels would filter on labels no
   // chunk carries — a silent abstention instead of a named failure.
   if (quickHelpScopeBroken) return false;
-  final labels = mergeServiceLabels(serviceLabels, sidebarServiceLabels);
+  final facts = queryScopeFacts(
+    categoryId: categoryId,
+    categoryNameEn: categoryNameEn,
+    serviceLabels: serviceLabels,
+    sidebarServiceLabels: sidebarServiceLabels,
+  );
   // An EMPTY category id declares nothing: the context bar's X clears the
   // selection with one, and an empty id is not a scope. Reading it as one
   // would refuse every question the user asks afterwards. 'general' is
@@ -1441,12 +1446,7 @@ bool scopeCanGoOnTheWire({
   // ONE spelling the send paths read (queryScopeFacts), so the guard and
   // the payloads cannot disagree on what declares a scope.
   final hasScope =
-      queryScopeFacts(
-        categoryId: categoryId,
-        categoryNameEn: categoryNameEn,
-        serviceLabels: serviceLabels,
-        sidebarServiceLabels: sidebarServiceLabels,
-      ).hasContext ||
+      facts.hasContext ||
       // The guard's OWN third leg: a selection that picked services it
       // cannot name yet (a count the labels do not carry) is a scope the
       // refusal must describe — the payloads never see it.
@@ -1461,7 +1461,7 @@ bool scopeCanGoOnTheWire({
     return false;
   }
   return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
-      labels.isNotEmpty;
+      facts.serviceLabels.isNotEmpty;
 }
 
 /// The labels a request carries: the Quick Help card's declared labels

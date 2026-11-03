@@ -551,6 +551,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     return partition;
   }
 
+  /// The scope facts BOTH send paths encode onto the wire — ONE argument
+  /// list, read once per send: Quick Help sets _activeServiceLabels;
+  /// sidebar sets the category; the category id speaks its own
+  /// truthiness ('' and 'general' name NO scope). A second hand-synced
+  /// call site is the drift that once sent the fallback's question over
+  /// the whole corpus while the chip promised a filtered one.
+  ({bool hasContext, String? categoryLabelEn, List<String> serviceLabels})
+  get _wireScopeFacts => queryScopeFacts(
+    categoryId: _selectedCategoryId,
+    categoryNameEn: _selectedCategoryNameEn,
+    serviceLabels: _activeServiceLabels,
+    sidebarServiceLabels: _sidebarServiceLabelsEn,
+  );
+
   void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -1144,16 +1158,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription = null;
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
-    // The scope facts this query carries — ONE copy shared with the
-    // fallback path (queryScopeFacts): Quick Help sets
-    // _activeServiceLabels; sidebar sets the category; the category id
-    // speaks its own truthiness ('' and 'general' name NO scope).
-    final facts = queryScopeFacts(
-      categoryId: _selectedCategoryId,
-      categoryNameEn: _selectedCategoryNameEn,
-      serviceLabels: _activeServiceLabels,
-      sidebarServiceLabels: _sidebarServiceLabelsEn,
-    );
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -1161,23 +1165,28 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sessionId': sessionId,
         if (_currentConversationId != null)
           'conversationId': _currentConversationId,
-        if (facts.hasContext) ...{
+        if (_wireScopeFacts.hasContext) ...{
           'messages': messagesForApi,
           'context': {
             // ENGLISH is the SSOT of the filter wire: chunk_labels carry the
             // EN translation, so the query speaks EN. The localized name is
             // display-only.
-            'categoryLabel': facts.categoryLabelEn,
-            'serviceLabels': facts.serviceLabels,
+            'categoryLabel': _wireScopeFacts.categoryLabelEn,
+            'serviceLabels': _wireScopeFacts.serviceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
-          'contextOption': 'conversation-with-context-labels',
+          // The mode token comes from the generated contract, ONE spelling
+          // for both send paths — a spec rename moves both.
+          'contextOption': ApiQueriesPostRequestContextOptionEnum
+              .conversationWithContextLabels
+              .value,
         } else ...{
           'messages': messagesForApi,
           'context': {
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
-          'contextOption': 'single-message',
+          'contextOption':
+              ApiQueriesPostRequestContextOptionEnum.singleMessage.value,
         },
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1392,17 +1401,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final queriesApi = ref.read(queriesApiProvider);
 
-      // The SAME scope facts the streaming path speaks — ONE copy shared
-      // by both send paths (queryScopeFacts): Quick Help sets
-      // _activeServiceLabels; sidebar sets the category; the category id
-      // speaks its own truthiness ('' and 'general' name NO scope).
-      final facts = queryScopeFacts(
-        categoryId: _selectedCategoryId,
-        categoryNameEn: _selectedCategoryNameEn,
-        serviceLabels: _activeServiceLabels,
-        sidebarServiceLabels: _sidebarServiceLabelsEn,
-      );
-
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
         messages: messagesForApi
@@ -1415,16 +1413,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
-        // Omitting the labels here sent the fallback path's question over
-        // the WHOLE corpus while the scope chip above promised a filtered
-        // one. ENGLISH stays the SSOT of the filter wire — the localized
-        // name is display-only.
+        // The SAME facts the streaming path speaks (_wireScopeFacts — one
+        // argument list for both send paths). Omitting the labels here
+        // once sent the fallback's question over the WHOLE corpus while
+        // the scope chip above promised a filtered one. ENGLISH stays the
+        // SSOT of the filter wire — the localized name is display-only —
+        // and an UNSCOPED query carries NO labels, the same body the
+        // streaming path posts for the identical state.
         context: QueryContext(
-          categoryLabel: facts.categoryLabelEn,
-          serviceLabels: facts.serviceLabels,
+          categoryLabel: _wireScopeFacts.hasContext
+              ? _wireScopeFacts.categoryLabelEn
+              : null,
+          serviceLabels: _wireScopeFacts.hasContext
+              ? _wireScopeFacts.serviceLabels
+              : const [],
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
-        contextOption: facts.hasContext
+        contextOption: _wireScopeFacts.hasContext
             ? ApiQueriesPostRequestContextOptionEnum
                   .conversationWithContextLabels
             : ApiQueriesPostRequestContextOptionEnum.singleMessage,
@@ -2781,19 +2786,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 index,
                               ) {
                                 final (button, scope) = broken[index];
-                                // The broken card fills the width the
-                                // way the stretch column did: a loose
-                                // cross-axis constraint would shrink-wrap
-                                // it.
-                                return SizedBox(
-                                  width: double.infinity,
-                                  child: _quickHelpBrokenCard(
-                                    button: button,
-                                    scope: scope,
-                                    theme: theme,
-                                    tokens: tokens,
-                                    dark: isDark,
-                                  ),
+                                return _quickHelpBrokenCard(
+                                  button: button,
+                                  scope: scope,
+                                  theme: theme,
+                                  tokens: tokens,
+                                  dark: isDark,
                                 );
                               }, childCount: broken.length),
                             ),

@@ -1629,6 +1629,30 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
       });
 
+      it('a tag that is not a string or a number names nothing', async () => {
+        // Coerced, an array could spell any card's id — String([5]) is
+        // '5' — and restoring it would put a scope the conversation was
+        // never asked in. A junk tag is an unnamed scope that refuses
+        // the send visibly.
+        mockLiveTree(treeWithTomato);
+        const wrapper = await mountWithButtons([{ id: '5', title: 'Five', category: '1', serviceLabels: ['Tomato'] }]);
+        const vm = wrapper.vm;
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: [[5]]
+        });
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      });
+
       it('a sidebar tag that spells a button id restores the BUTTON, not a sidebar scope', async () => {
         // The button lookup runs first: an opaque id names a card and
         // nothing else, so a hierarchy label that happens to spell the

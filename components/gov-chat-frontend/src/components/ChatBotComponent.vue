@@ -550,7 +550,10 @@ function quickHelpContextItem(button) {
   return {
     service: button.service,
     serviceLabels: button.serviceLabels || null,
-    serviceKey: button.serviceKey || button.id || button.service,
+    // The identity: the id the loader's gate guarantees (the mapped
+    // button carries it as serviceKey; the synthesized just-chat object
+    // carries it as id).
+    serviceKey: button.serviceKey || button.id,
     source: QUICK_HELP_SOURCE,
     id: button.id,
     category: button.category,
@@ -943,8 +946,9 @@ export default {
     // Every button's scope state, computed ONCE per tree/config change:
     // the template reads a button's state several times per render, and
     // every streaming token re-renders the panel. The buttons are unique
-    // by id here — applyQuickHelpButtons keeps the FIRST of any duplicate
-    // — so the map needs no rule of its own.
+    // by id here — the loader's gate (validateQuickHelpButtons) has
+    // refused any missing or duplicated id before the app ever mounted —
+    // so the map needs no rule of its own.
     quickHelpScopeStateMap() {
       const map = new Map();
       for (const button of this.quickHelpButtons) {
@@ -1845,11 +1849,12 @@ export default {
     // no longer declares keeps its last title: the id is gone, and with
     // it the only way to find the card.
     //
-    // The lookup runs over the DEDUPED button list — the one the grid,
-    // the click, the restore and the send guard all read. The RAW
-    // config's first entry for an id can be a card the loader dropped
-    // (hidden, or a duplicate): re-resolving from it would put a hidden
-    // card's title on a chip whose scope is the surviving card's.
+    // The lookup runs over the button list the grid, the click, the
+    // restore and the send guard all read — the visible cards, after
+    // applyQuickHelpButtons filtered the hidden ones (the loader refused
+    // any duplicate at start). Re-resolving from a hidden card's raw
+    // entry would put a hidden card's title on a chip whose scope is the
+    // visible card's.
     quickHelpTitleFor(item, locale) {
       // The chip's identity is the button's id — the same string in every
       // language, so the re-title finds the card under any locale. An id
@@ -2637,9 +2642,16 @@ export default {
             // — the string the loader's gate guarantees every button
             // carries — so the lookup reads the tag as the string it was
             // saved as (a legacy conversation that stored the raw number
-            // still names its card). A tag that names no button falls
-            // through to the branches below, never to a guess.
-            const button = this.quickHelpButtons.find((candidate) => candidate && candidate.serviceKey === String(tag));
+            // still names its card). A tag that is not a string or a
+            // number names nothing: coerced, an array could spell any
+            // card's id, and restoring it would put a scope the
+            // conversation was never asked in. A tag that names no button
+            // falls through to the branches below, never to a guess.
+            const tagKey = typeof tag === 'string' || typeof tag === 'number' ? String(tag) : null;
+            const button =
+              tagKey === null
+                ? null
+                : this.quickHelpButtons.find((candidate) => candidate && candidate.serviceKey === tagKey);
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

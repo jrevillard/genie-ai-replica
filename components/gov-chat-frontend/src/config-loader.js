@@ -80,7 +80,10 @@ const validateConfig = (data) => {
  */
 const validateQuickHelpButtons = (data) => {
   const buttons = data?.features?.chat?.quickHelp?.buttons;
-  if (!Array.isArray(buttons)) return;
+  if (buttons == null) return;
+  if (!Array.isArray(buttons)) {
+    throw new Error('genie-ai-config.json: features.chat.quickHelp.buttons must be an array of buttons.');
+  }
 
   const seen = new Map();
   for (const [index, button] of buttons.entries()) {

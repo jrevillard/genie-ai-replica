@@ -475,6 +475,16 @@ describe('loadConfig', () => {
       await expect(loadConfig()).rejects.toThrow(/no valid "id"/i);
     });
 
+    it('rejects a buttons value that is not an array', async () => {
+      for (const buttons of [{}, 'x', 3]) {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(configWithButtons(buttons))
+        });
+        await expect(loadConfig()).rejects.toThrow(/must be an array of buttons/i);
+      }
+    });
+
     it('gates nothing when the configuration declares no Quick Help buttons', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,

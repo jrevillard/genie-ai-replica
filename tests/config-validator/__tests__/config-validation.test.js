@@ -2477,6 +2477,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // the specifier string value), so it is inserted after each arm's
   // opening delimiter — derived, never a second hand-maintained copy.
   const DOT_LIT_SRC = ["'", '"', '`'].map((q) => LIT_ARM(q, true)).join('|');
+  // The whitespace between a call's tokens may legally carry a block
+  // comment; every call-shape regex below uses this fragment in those
+  // gaps, so a commented call is matched (or flagged) like a plain one.
+  const GAP_SRC = '(?:\\s|\\/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*\\/)*';
   // Node resolves the STRING VALUE, not the source text: escapes written in
   // the literal ('./it\'s.js') are already resolved before require runs.
   const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
@@ -2504,7 +2508,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // bare side-effect imports land in the same alternation; the literal
     // itself is the shared LIT_SRC policy (must start with `.` = relative).
     const specifierRe = new RegExp(
-      '(?:(?:require(?:\\.resolve)?)\\s*\\(\\s*|\\bimport\\s*\\(?\\s*|\\bfrom\\s*)(' + DOT_LIT_SRC + ')',
+      '(?:(?:require(?:\\.resolve)?)' +
+        GAP_SRC +
+        '\\(|\\bimport' +
+        GAP_SRC +
+        '\\(?|\\bfrom' +
+        GAP_SRC +
+        ')(' +
+        DOT_LIT_SRC +
+        ')',
       'g'
     );
     // Same literal policy for __dirname chains: any spacing, two or more
@@ -2514,7 +2526,17 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // import.meta.url are not derived — no spec uses them; they belong to
     // the same documented-limits family.
     const joinRe = new RegExp(
-      'path\\.(?:join|resolve)\\s*\\(\\s*__dirname((?:\\s*,\\s*(?:' + LIT_SRC + '))+)\\s*\\)',
+      'path\\.(?:join|resolve)' +
+        GAP_SRC +
+        '\\(' +
+        GAP_SRC +
+        '__dirname((?:' +
+        GAP_SRC +
+        ',' +
+        GAP_SRC +
+        '(?:' +
+        LIT_SRC +
+        '))+)\\s*\\)',
       'g'
     );
     const segmentRe = new RegExp(LIT_SRC, 'g');
@@ -2530,7 +2552,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // shape set: Playwright transpiles jsx/tsx helpers like js ones.
     const visitFile = (resolved) => {
       if (sources.has(resolved)) return;
-      if (!/\.[cm]?[jt]sx?$/.test(resolved)) return;
+      if (!new RegExp('\\.(?:' + JS_EXT_SRC + ')$').test(resolved)) return;
       sources.set(resolved, io.read(resolved));
       queue.push(resolved);
     };
@@ -2595,22 +2617,26 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const findNonLiteralConsumption = (source) => {
     const findings = [];
     const interpolated = (literal) => literal.startsWith('`') && literal.includes('${');
+    // Escapes UNESCAPE cannot resolve exactly (\uXXXX, \xNN, octal): the
+    // runtime path would differ from the derived one, so the call is
+    // flagged instead of silently resolved to a wrong path.
+    const ESCAPE_UNRESOLVED = /\\(?:u\{?[0-9a-fA-F]{1,6}|x[0-9a-fA-F]{2}|[0-7]{1,3})/;
     // Same word-boundary discipline as the specifier regex: a method named
     // require/import (x.import(...) / foo.require(...)) is not consumption.
-    const callStartRe = /(?<![\w.$])(?:require(?:\.resolve)?|import)\s*\(/g;
+    const callStartRe = new RegExp('(?<![\\w.$])(?:require(?:\\.resolve)?|import)' + GAP_SRC + '\\(', 'g');
     for (const match of source.matchAll(callStartRe)) {
       const m = LITERAL_ARG.exec(source.slice(match.index + match[0].length));
-      if (!m || interpolated(m[1])) {
+      if (!m || interpolated(m[1]) || ESCAPE_UNRESOLVED.test(m[1])) {
         findings.push('non-literal specifier in a require/import call');
       }
     }
-    const dirnameStartRe = /path\.(?:join|resolve)\s*\(\s*__dirname/g;
+    const dirnameStartRe = new RegExp('path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '__dirname', 'g');
     const SEGMENT = new RegExp('^\\s*,\\s*(' + LIT_SRC + ')');
     for (const match of source.matchAll(dirnameStartRe)) {
       let rest = source.slice(match.index + match[0].length);
       let segment;
       while ((segment = SEGMENT.exec(rest))) {
-        if (interpolated(segment[1])) break;
+        if (interpolated(segment[1]) || ESCAPE_UNRESOLVED.test(segment[1])) break;
         rest = rest.slice(segment[0].length);
       }
       if (!/^\s*\)/.test(rest)) findings.push('non-literal segment in a path.join(__dirname, ...) call');
@@ -2636,11 +2662,17 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
+  // The extension shape set Playwright's default testMatch accepts — one
+  // fragment shared by the executed-spec selection and the walk's JS-file
+  // gate so the two cannot drift.
+  const JS_EXT_SRC = '[cm]?[jt]sx?';
+
   // Pure selection of the executed files from a directory listing — the
   // units below pin the boundary and the testMatch shapes on synthetic
   // listings, the real-tree pin above anchors them to the actual invocation.
+  const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
   const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
+    files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
@@ -2821,10 +2853,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
           line = line.slice(end + 2);
           inBlock = false;
         }
-        // A whole-line comment is REMOVED (null → filtered), not blanked —
-        // the original line count shrinks like the pre-block-aware filter
-        // did. A line emptied by a block close stays '' (harmless to the
-        // config pins, which search text).
+        // A whole-line comment is REMOVED (null → filtered), not blanked;
+        // a line emptied by a block close stays '' (harmless to the config
+        // pins, which search text).
         if (line.trimStart().startsWith('//')) return null;
         const open = line.indexOf('/*');
         if (open !== -1) {
@@ -2873,6 +2904,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['no-space re-export from', "export { x } from'../helpers/auth';"]
     ])('consumes the %s shape', (_name, source) => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
+    });
+
+    test('a block comment inside the call does not hide the consumption', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "const h = require /* note */ ('../helpers/auth');")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
     });
 
     test('an extensionless same-dir require resolves through the .js rule', () => {
@@ -2926,8 +2963,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
         memIo(tree)
       );
       expect(derived.globs).toEqual(['tests/e2e/lib/**/*']);
-      // The escape must be RESOLVED, not carried: the unescape gate below
-      // mutates UNESCAPE away and expects exactly this file to go missing.
+      // The walked file must carry the RESOLVED escape (it's.js, not
+      // it\'s.js) — the value Node itself would load at runtime.
       expect(derived.files.map((f) => f.file)).toContain("tests/e2e/lib/it's.js");
     });
 
@@ -3039,6 +3076,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['variable dynamic import', 'const y = import(dynamicName);'],
       ['interpolated join segment', "const d = path.join(__dirname, '..', locale);"],
       ['spaced join with a variable segment', 'const d = path.join (__dirname, locale);'],
+      ['unicode escape in a require', "const h = require('./caf\\u00e9.js');"],
+      ['unicode escape in a join segment', "const d = path.join(__dirname, 'caf\\u00e9');"],
+      ['block comment inside a require call', 'const h = require /* note */ (dynamicName);'],
       ['interpolated backtick join segment', 'const d = path.join(__dirname, `../${locale}`);'],
       ['call argument after a literal join segment', "const d = path.join(__dirname, '..', dirName());"],
       // Over-capture is deliberate: a string merely mentioning a call shape
@@ -3060,6 +3100,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['apostrophe inside a double-quoted require', 'const h = require("./user\'s-data.js");'],
       ['escaped quote inside a require', "const h = require('./it\\'s.js');"],
       ['apostrophe inside a join segment', 'const d = path.join(__dirname, "user\'s docs");'],
+      ['block comment inside a literal require call', "const h = require /* note */ ('../helpers/auth');"],
       ['string mentioning require without call args', "const s = 'see require docs';"]
     ])('does not flag the %s shape', (_name, source) => {
       expect(findNonLiteralConsumption(source)).toEqual([]);

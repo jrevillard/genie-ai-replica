@@ -426,9 +426,10 @@ workflow:
           *)   echo "$1" ;;
         esac
       }
-      # Shared response parsing, same concatenation contract as http_label:
-      # curl captures the response with -w '\n%{http_code}', so the status is
-      # the last line and the body is everything before it.
+      # Shared response parsing, same concatenation contract as http_label
+      # (the kc_curl helper below is their only consumer): curl captures the
+      # response with -w '\n%{http_code}', so the status is the last line and
+      # the body is everything before it.
       resp_status() {
         local s
         s=$(printf '%s' "$1" | tail -n1)
@@ -3983,35 +3984,6 @@ config:docs-links:
         - "site/content/**/*"
         - "site/scripts/**/*"
         - "site/hugo.toml"
-        - ".gitlab-ci.yml"
-      when: on_success
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
-      when: on_success
-
-# The e2e provisioning-block stub-curl harness (#1337): executes the
-# Keycloak provisioning/readiness script item of .e2e_web_base under a
-# scripted stub curl — the guard semantics (retry classes, honest-status
-# echoes, loud failures) become regression-proofed instead of eyeballed.
-# Provenance: the scratch version caught a real bug the code review missed
-# during #1289 (see tests/ci-provisioning/README.md).
-config:provisioning-harness:
-  image: python:3.11-slim
-  stage: config
-  dependencies: []
-  before_script:
-    - pip install --cache-dir .cache/pip pyyaml
-  cache:
-    - key: provisioning-harness-pyyaml
-      paths:
-        - .cache/pip/
-      fallback_keys:
-        - provisioning-harness-
-  script:
-    - bash tests/ci-provisioning/run.sh
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "tests/ci-provisioning/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

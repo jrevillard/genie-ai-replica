@@ -22,7 +22,6 @@ Exit codes: 0 = all scenarios pass, 1 = at least one scenario failed.
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile

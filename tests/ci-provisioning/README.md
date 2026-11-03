@@ -48,4 +48,4 @@ Each of these regressions turns specific scenarios red (verified for the
 |---|---|
 | rc capture moved inside the command substitution (the #1289 bug) | `truncated_reset_fails_loud`, `roles_transport_fault_not_misattributed` |
 | transient retry arm narrowed (drop 429) | `create_recovers_from_429` |
-| `require_clean_curl` gate inverted | 11 scenarios |
+| `require_clean_curl` gate inverted | 12 scenarios |

@@ -205,15 +205,102 @@ describe('ci shell gate: bash -n', () => {
   });
 });
 
+describe('ci shell gate: runtime-accurate checking', () => {
+  test('a loop split across items passes — GitLab concatenates them', () => {
+    const content = 'job:\n  script:\n    - for x in a b; do\n    - echo "$x"\n    - done\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(3);
+    expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('an error in a concatenated group attributes the right item and line', () => {
+    const content = 'job:\n  script:\n    - echo ok\n    - echo "unterminated\n';
+    const { blocks } = extractCiShellBlocks(content);
+    const errors = checkShellSyntax(blocks);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].startLine).toBe(4);
+  });
+
+  test('a script-shaped line inside a data block scalar is not extracted', () => {
+    const content = [
+      'job:',
+      '  variables:',
+      '    TXT: |',
+      '      script: for x in a; do done',
+      '  script:',
+      '    - echo real'
+    ].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].text).toBe('echo real');
+    expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('a flow-sequence script value is a loud unhandled shape', () => {
+    const content = 'job:\n  script: ["echo a", "done"]\n';
+    const { errors } = extractCiShellBlocks(content);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/unhandled/);
+  });
+
+  test('an alias item with a trailing comment still resolves', () => {
+    const content = [
+      '.a: &a',
+      '  - echo from anchor',
+      '',
+      'job:',
+      '  script:',
+      '    - *a  # reuse the shared setup'
+    ].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.some((b) => b.text === 'echo from anchor')).toBe(true);
+    expect(blocks.some((b) => b.text.includes('*a'))).toBe(false);
+  });
+
+  test('an anchor token on the script key itself parses either value shape', () => {
+    const scalar = 'job:\n  script: &s |\n    echo anchored\n';
+    const s1 = extractCiShellBlocks(scalar);
+    expect(s1.errors).toEqual([]);
+    expect(s1.blocks.map((b) => b.text)).toEqual(['echo anchored']);
+
+    const list = 'job:\n  script: &s\n    - echo anchored\n';
+    const s2 = extractCiShellBlocks(list);
+    expect(s2.errors).toEqual([]);
+    expect(s2.blocks.map((b) => b.text)).toEqual(['echo anchored']);
+  });
+
+  test('a block scalar with an explicit indentation indicator (|2) extracts verbatim', () => {
+    const content = 'job:\n  script:\n    - |2\n      echo a\n      echo b\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks[0].text).toBe('echo a\necho b');
+  });
+
+  test('block scalar startLine survives trailing blank lines', () => {
+    const content = 'job:\n  script:\n    - |\n      echo a\n\n\n';
+    const { blocks } = extractCiShellBlocks(content);
+    expect(blocks[0].startLine).toBe(4);
+    expect(blocks[0].text).toBe('echo a');
+  });
+});
+
 describe('ci shell gate: the real .gitlab-ci.yml', () => {
   const { blocks, errors } = extractCiShellBlocks(fs.readFileSync(CI_FILE, 'utf-8'));
 
-  test('extracts a non-trivial number of blocks (the gate must not go vacuous)', () => {
-    // If extraction collapses to zero, every assertion below passes on an
-    // empty set and the gate is gone while still green. The file carries
-    // ~100 script items today; a floor of 10 survives large refactors
-    // while still catching a vanished extraction.
-    expect(blocks.length).toBeGreaterThanOrEqual(10);
+  test('extraction is substantial and reaches the whole file (anti-vacuity)', () => {
+    // If extraction collapses, every assertion below passes on an empty or
+    // partial set and the gate is gone while still green. The floor guards
+    // against wholesale collapse; the named owners guard against a shape
+    // regression that silently drops one extraction family (a plain-key
+    // job, the alias-carrying base, the shell anchor, a folded scalar).
+    expect(blocks.length).toBeGreaterThanOrEqual(40);
+    const owners = new Set(blocks.map((b) => b.owner));
+    for (const expected of ['.e2e_web_base', '.connect_compose_network', 'config:validate']) {
+      expect(owners.has(expected)).toBe(true);
+    }
   });
 
   test('no unhandled script shapes', () => {

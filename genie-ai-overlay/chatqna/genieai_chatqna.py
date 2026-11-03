@@ -891,7 +891,8 @@ def _select_history_within_budget(history: list, max_translation_chars: int, pat
     oldest turns and keeps its recent ones. A newest message that alone
     exceeds the whole budget keeps its tail, truncated to the budget, so
     the retrieval query carries the end of the turn instead of an empty
-    string.
+    string. The message dicts are copies: the request's history stays
+    untouched.
 
     ``path`` names the caller in the truncation metric and in the log line.
     """
@@ -908,12 +909,6 @@ def _select_history_within_budget(history: list, max_translation_chars: int, pat
         message_chars = len(message.get("content", ""))
         if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
             if not messages_to_process:
-                # Even the newest message exceeds the whole budget:
-                # keep its tail instead of dropping it, so the
-                # retrieval query carries the end of the turn (its
-                # newest text) instead of an empty string. The
-                # message dict is copied: the request's history must
-                # stay untouched.
                 tail_chars = max_translation_chars - TRANSLATION_MSG_OVERHEAD_CHARS
                 content = message.get("content", "")[-tail_chars:] if tail_chars > 0 else ""
                 messages_to_process.append({**message, "content": content})
@@ -942,6 +937,24 @@ def _select_history_within_budget(history: list, max_translation_chars: int, pat
             len(messages_to_process[-1].get("content", "")),
         )
     return messages_to_process
+
+
+def _translation_input_too_long_error(message: str) -> HTTPException:
+    """The HTTP 422 the translation-overflow contract answers with.
+
+    One body for every translation surface that can refuse an input (the
+    query path and the reply path): the caller consumes both, so the shape
+    lives in one place.
+    """
+    return HTTPException(
+        status_code=422,
+        detail={
+            "error": "translation_input_too_long",
+            "message": message,
+            "abstained": True,
+            "abstention_reason": "translation_input_too_long",
+        },
+    )
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
@@ -4630,17 +4643,9 @@ class ChatQnAService:
                         }
                     ),
                 )
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "error": "translation_input_too_long",
-                        "message": (
-                            "The query exceeded the language model's input context window. "
-                            "Please shorten your message and try again."
-                        ),
-                        "abstained": True,
-                        "abstention_reason": "translation_input_too_long",
-                    },
+                raise _translation_input_too_long_error(
+                    "The query exceeded the language model's input context window. "
+                    "Please shorten your message and try again."
                 ) from _e_trans_overflow
         else:
             # A passthrough is only "English" when something actually
@@ -5152,18 +5157,10 @@ class ChatQnAService:
                 f"Translation overflow at handle_request boundary: "
                 f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
             )
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "translation_input_too_long",
-                    "message": (
-                        "The translated reply exceeded the language model's input "
-                        "context window. Please reduce the conversation length or "
-                        "retry with fewer references."
-                    ),
-                    "abstained": True,
-                    "abstention_reason": "translation_input_too_long",
-                },
+            raise _translation_input_too_long_error(
+                "The translated reply exceeded the language model's input "
+                "context window. Please reduce the conversation length or "
+                "retry with fewer references."
             ) from _e_trans_overflow
 
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's

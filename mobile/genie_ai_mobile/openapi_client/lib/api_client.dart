@@ -310,6 +310,8 @@ class ApiClient {
           return ApiServiceCategoriesCategoriesCategoryIdGet200Response.fromJson(value);
         case 'ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner':
           return ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner.fromJson(value);
+        case 'ApiServiceCategoriesPost400Response':
+          return ApiServiceCategoriesPost400Response.fromJson(value);
         case 'ApiServiceCategoriesPostRequest':
           return ApiServiceCategoriesPostRequest.fromJson(value);
         case 'ApiServiceCategoriesPostRequestTranslationsInner':

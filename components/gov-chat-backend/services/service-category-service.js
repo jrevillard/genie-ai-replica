@@ -47,6 +47,13 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Validate before any write: a rejected payload must not leave a
+      // half-created service (or its category edge) behind. The parent
+      // category must exist too — the edge save would otherwise fail after
+      // the service document was already written. Direct document read (not
+      // categoryExists) so a DB outage surfaces as 5xx, not a fake 404.
+      await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
 
       // 1. Get the current maximum order number for services IN THIS CATEGORY
@@ -63,7 +70,7 @@ class ServiceCategoryService {
       // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
-        nameEN: payload.nameEN
+        nameEN: payload.nameEN.trim()
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
@@ -88,6 +95,83 @@ class ServiceCategoryService {
   }
 
   /**
+   * Validates the translations array of a write payload BEFORE any mutation.
+   * The update paths are delete-then-rebuild: a malformed entry that only
+   * surfaces mid-loop would leave the old translations deleted, so the whole
+   * array is checked up front and bad entries reject the request.
+   * @param {*} translations - The payload translations array (optional).
+   */
+  _validateTranslationsPayload(translations) {
+    if (translations === undefined || translations === null) {
+      return;
+    }
+    if (!Array.isArray(translations)) {
+      throw new ValidationError('translations must be an array of {languageCode, translation}');
+    }
+    const seenLocales = new Set();
+    for (let i = 0; i < translations.length; i++) {
+      const trans = translations[i];
+      if (
+        !trans ||
+        typeof trans !== 'object' ||
+        typeof trans.languageCode !== 'string' ||
+        !trans.languageCode.trim() ||
+        typeof trans.translation !== 'string' ||
+        !trans.translation.trim()
+      ) {
+        const keys = trans && typeof trans === 'object' ? Object.keys(trans).join(',') : typeof trans;
+        throw new ValidationError(
+          `Translation entry ${i} has an unexpected shape (expected {languageCode, translation}, got keys: ${keys})`
+        );
+      }
+      const locale = this._normalizeLocale(trans.languageCode);
+      // Same normalized code = same stored _key: the second entry would
+      // silently overwrite the first via overwrite:true.
+      if (seenLocales.has(locale)) {
+        throw new ValidationError(`Duplicate languageCode '${locale}' in translations`);
+      }
+      // The English name is owned by the nameEN field of the same payload;
+      // an EN entry here would silently overwrite it and desync the parent.
+      if (locale === 'EN') {
+        throw new ValidationError("translations must not include 'EN' — the English name is owned by nameEN");
+      }
+      seenLocales.add(locale);
+    }
+  }
+
+  /**
+   * Normalizes a language code to its stored form. The storage key of a
+   * translation is `${ownerKey}_${LOCALE}`, so the validator's duplicate
+   * detection and the document builder MUST normalize identically.
+   * @param {String} code - The raw language code.
+   * @returns {String} The uppercased, trimmed code.
+   */
+  _normalizeLocale(code) {
+    return code.trim().toUpperCase();
+  }
+
+  /**
+   * Builds a translation document for the given owner (category or service).
+   * @param {String} ownerKey - The _key of the owning category or service.
+   * @param {String} fkField - The foreign-key field name ('serviceCategoryId' or 'serviceId').
+   * @param {Object} trans - A validated {languageCode, translation} entry.
+   * @returns {Object} The translation document to save.
+   */
+  _buildTranslationDoc(ownerKey, fkField, trans) {
+    const transLocale = this._normalizeLocale(trans.languageCode);
+    const now = new Date().toISOString();
+    return {
+      _key: `${ownerKey}_${transLocale}`,
+      [fkField]: ownerKey,
+      languageCode: transLocale,
+      translation: trans.translation.trim(),
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    };
+  }
+
+  /**
    * Updates a single service and its translations.
    * @param {String} serviceKey - The _key of the service to update.
    * @param {Object} payload - The service data { nameEN, translations }.
@@ -96,20 +180,22 @@ class ServiceCategoryService {
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
+      // Existence first: an unknown id must answer 404 even when the
+      // payload is also malformed. Validation still runs before any write.
+      await this._documentOr404(this.services, serviceKey, 'Service');
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
-      logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
-
-      // 1. Ensure the service exists (this will throw an error if not found)
-      await this.services.document(serviceKey);
+      this._validateTranslationsPayload(payload.translations);
+      const nameEN = payload.nameEN.trim();
+      logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
 
       // 2. Update/create the English translation
       const englishTranslationDoc = {
         _key: `${serviceKey}_EN`,
         serviceId: serviceKey,
         languageCode: 'EN',
-        translation: payload.nameEN,
+        translation: nameEN,
         isActive: true,
         updatedAt: new Date().toISOString()
       };
@@ -117,31 +203,24 @@ class ServiceCategoryService {
       logger.info(`Upserted English translation for service ${serviceKey}`);
 
       // 2b. Keep nameEN in sync on the parent service document
-      await this.services.update(serviceKey, { nameEN: payload.nameEN });
+      await this.services.update(serviceKey, { nameEN });
 
-      // 3. Clear old non-English translations and save the new set
-      await this.db.query(aql`
-      FOR trans IN serviceTranslations
-        FILTER trans.serviceId == ${serviceKey}
-        FILTER trans.languageCode != 'EN'
-        REMOVE trans IN serviceTranslations
-    `);
+      // 3. Clear old non-English translations and save the new set. The
+      // REMOVE only runs when the payload carries a translations array —
+      // an omitted field means "leave the translations untouched" (an
+      // explicit empty array is the clear-all), matching the category path.
+      if (payload.translations) {
+        await this.db.query(aql`
+        FOR trans IN serviceTranslations
+          FILTER trans.serviceId == ${serviceKey}
+          FILTER trans.languageCode != 'EN'
+          REMOVE trans IN serviceTranslations
+      `);
 
-      if (payload.translations && Array.isArray(payload.translations)) {
         for (const trans of payload.translations) {
-          if (trans.languageCode && trans.translation) {
-            const transLocale = String(trans.languageCode).toUpperCase();
-            const translationDoc = {
-              _key: `${serviceKey}_${transLocale}`,
-              serviceId: serviceKey,
-              languageCode: transLocale,
-              translation: trans.translation,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            await this.serviceTranslations.save(translationDoc, { overwrite: true });
-          }
+          await this.serviceTranslations.save(this._buildTranslationDoc(serviceKey, 'serviceId', trans), {
+            overwrite: true
+          });
         }
         logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
       }
@@ -151,6 +230,39 @@ class ServiceCategoryService {
       logger.error(`Error updating service ${serviceKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  }
+
+  /**
+   * Loads a document, converting an arangojs not-found error (which carries
+   * `code: 404` but no HTTP statusCode, so the global error middleware would
+   * answer 500) into a typed NotFoundError. Non-absence errors propagate.
+   *
+   * The verdict comes from the canonical absence classifier
+   * (components/shared/lib/arango-absence.js), NOT from the HTTP status: a
+   * missing COLLECTION also answers 404 (errorNum 1203), and reporting that
+   * as "no such document" would render a broken deployment as an empty
+   * result.
+   * @param {Object} collection - The ArangoDB collection handle.
+   * @param {String} key - The document _key.
+   * @param {String} label - Resource label for the error message.
+   * @returns {Promise<Object>} The document.
+   */
+  async _documentOr404(collection, key, label) {
+    let document;
+    try {
+      document = await collection.document(key);
+    } catch (error) {
+      if (dbService._isExpectedAbsence(error)) {
+        throw new NotFoundError(`${label} ${key} not found`);
+      }
+      throw error;
+    }
+    // The ArcadeDB adapter resolves a missing row as undefined instead of
+    // raising — without this the absence would pass as an existing record.
+    if (!document) {
+      throw new NotFoundError(`${label} ${key} not found`);
+    }
+    return document;
   }
 
   /**
@@ -717,6 +829,9 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      // Validate before any write: a rejected payload must not leave a
+      // half-created category behind.
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating new category "${payload.nameEN}"`);
 
       // 1. Get the current maximum order number for categories
@@ -732,7 +847,7 @@ class ServiceCategoryService {
       // 2. Create the category document with the correct order and nameEN
       const categoryDoc = {
         order: newOrder,
-        nameEN: payload.nameEN
+        nameEN: payload.nameEN.trim()
       };
       const newCategory = await this.serviceCategories.save(categoryDoc);
 
@@ -755,10 +870,15 @@ class ServiceCategoryService {
   async updateCategoryWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      // Existence first: an unknown id must answer 404 even when the
+      // payload is also malformed. Validation still runs before any write.
+      await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
-      logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
+      this._validateTranslationsPayload(payload.translations);
+      const nameEN = payload.nameEN.trim();
+      logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
       // For now, we'll assume the main document has no fields that change here.
@@ -768,7 +888,7 @@ class ServiceCategoryService {
         _key: `${categoryKey}_EN`,
         serviceCategoryId: categoryKey,
         languageCode: 'EN',
-        translation: payload.nameEN,
+        translation: nameEN,
         isActive: true,
         updatedAt: new Date().toISOString()
       };
@@ -776,10 +896,10 @@ class ServiceCategoryService {
       logger.info(`Upserted English translation for category ${categoryKey}`);
 
       // 2b. Keep nameEN in sync on the parent category document
-      await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
+      await this.serviceCategories.update(categoryKey, { nameEN });
 
       // 3. Update/create the other translations
-      if (payload.translations && Array.isArray(payload.translations)) {
+      if (payload.translations) {
         // For simplicity, we can remove old translations and add the new set.
         // A more complex implementation could merge changes.
         await this.db.query(aql`
@@ -790,19 +910,12 @@ class ServiceCategoryService {
       `);
 
         for (const trans of payload.translations) {
-          if (trans.languageCode && trans.translation) {
-            const transLocale = String(trans.languageCode).toUpperCase();
-            const translationDoc = {
-              _key: `${categoryKey}_${transLocale}`,
-              serviceCategoryId: categoryKey,
-              languageCode: transLocale,
-              translation: trans.translation,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
-          }
+          await this.serviceCategoryTranslations.save(
+            this._buildTranslationDoc(categoryKey, 'serviceCategoryId', trans),
+            {
+              overwrite: true
+            }
+          );
         }
         logger.info(`Processed ${payload.translations.length} additional translations for category ${categoryKey}`);
       }

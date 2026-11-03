@@ -104,6 +104,7 @@ part 'model/api_queries_stream_post_request.dart';
 part 'model/api_queries_stream_post_request_messages_inner.dart';
 part 'model/api_service_categories_categories_category_id_get200_response.dart';
 part 'model/api_service_categories_category_id_translations_get200_response_inner.dart';
+part 'model/api_service_categories_post400_response.dart';
 part 'model/api_service_categories_post_request.dart';
 part 'model/api_service_categories_post_request_translations_inner.dart';
 part 'model/api_service_categories_search_get200_response.dart';

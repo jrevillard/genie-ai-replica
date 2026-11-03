@@ -3,6 +3,7 @@ const loggerModule = require('./logger'); // Import the module object
 const securityHeaders = require('./security-headers');
 const SecurityMiddleware = require('./security-middleware');
 const dbService = require('./db-connection-service');
+const { isExpectedAbsence } = require('./arango-absence'); // canonical ArangoDB absence predicate
 const validationUtils = require('./validation-utils'); // parsePositiveInt helper
 const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + client); unconditional so a missing submodule fails loudly with MODULE_NOT_FOUND
 const spanAttrs = require('./span-attrs'); // OTel span-attribute vocabulary, mirroring the OPEA overlay
@@ -13,6 +14,7 @@ module.exports = {
   reconfigureLogger: loggerModule.reconfigureLogger,
   parsePositiveInt: validationUtils.parsePositiveInt,
   dbService,
+  isExpectedAbsence,
   securityHeaders,
   SecurityMiddleware,
   melt: meltModule,

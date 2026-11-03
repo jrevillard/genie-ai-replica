@@ -8,6 +8,9 @@ const { parsePositiveInt } = require('../../../shared/lib/validation-utils');
 // silently skip the baggage instead of failing.
 const spanAttrs = require('../../../shared/lib/span-attrs');
 const tracingBaggage = require('../../../shared/lib/tracing-baggage');
+// The canonical ArangoDB absence predicate, re-exported for real (pure
+// function, no deps) so the mocked dbService answers exactly like the real one.
+const { isExpectedAbsence } = require('../../../shared/lib/arango-absence');
 
 module.exports = {
   logger: {
@@ -16,7 +19,7 @@ module.exports = {
     warn: jest.fn(),
     debug: jest.fn()
   },
-  dbService: { getConnection: jest.fn() },
+  dbService: { getConnection: jest.fn(), _isExpectedAbsence: isExpectedAbsence },
   securityHeaders: (req, res, next) => next(),
   SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
   reconfigureLogger: jest.fn(),

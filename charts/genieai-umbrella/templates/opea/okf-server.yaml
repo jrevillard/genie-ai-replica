@@ -144,7 +144,7 @@ wins over a derived row of the same name. */ -}}
     "image" (dict "repository" "genie-ai-okf-server" "tag" "main")
     "port" 3002
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $keycloakEnv $obsEnv $arangoEnv $arangoSecretEnv $kcSecretEnv $ragasSecretEnv $gpuSecretEnv $tuningEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $keycloakEnv $obsEnv $arangoEnv $arangoSecretEnv $kcSecretEnv $ragasSecretEnv $gpuSecretEnv $tuningEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 10 "periodSeconds" 10 "failureThreshold" 5)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 30 "periodSeconds" 10 "failureThreshold" 5)

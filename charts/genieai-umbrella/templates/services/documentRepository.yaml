@@ -113,7 +113,7 @@ Service, same address the backend is given. */ -}}
 {{- /* The operator's rows come LAST: a container env list applies in
 order, so the last row for a name wins and the operator's value
 overrides the one the chart derives. */ -}}
-{{- $_ := set $vals.services.documentRepository "env" (concat $urls $secretEnv $existingRows) -}}
+{{- $_ := set $vals.services.documentRepository "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $existingRows | toJson) | fromJsonArray) -}}
 {{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

@@ -165,7 +165,7 @@ operator's value wins over a derived row of the same name. */ -}}
     "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
     "port" 5000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)

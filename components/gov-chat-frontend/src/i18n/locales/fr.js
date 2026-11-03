@@ -469,6 +469,7 @@ export default {
       saveError: "Échec de l'enregistrement de l'élément de hiérarchie.",
       loadError: 'Échec du chargement de la hiérarchie des connaissances.',
       loadTranslationsError: 'Échec du chargement des traductions.',
+      translationsNotLoaded: "Traductions non chargées — rechargez avant d'enregistrer.",
       confirmCancelTitle: 'Modifications non enregistrées',
       confirmCancelEdit:
         "Vous avez des modifications non enregistrées qui seront perdues. Êtes-vous sûr de vouloir changer d'onglet ?",

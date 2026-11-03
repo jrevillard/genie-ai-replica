@@ -466,6 +466,7 @@ export default {
       saveError: 'Filiyata jukuto feng mara to.',
       loadError: 'Filiyata longo jukutol looti to.',
       loadTranslationsError: 'Filiyata tradiksion looti to.',
+      translationsNotLoaded: 'Tradiksion looti fili — looti ree adel savar.',
       confirmCancelTitle: 'Yailama-mang-mara',
       confirmCancelEdit: 'I la yailamawol ti mara folo. I lafiya la a bula le ti?',
       confirmDeleteTitleCategory: 'Katifo Fiti?',

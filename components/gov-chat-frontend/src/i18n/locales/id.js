@@ -467,6 +467,7 @@ export default {
       saveError: 'Gagal menyimpan item hierarki.',
       loadError: 'Gagal memuat hierarki pengetahuan.',
       loadTranslationsError: 'Gagal memuat terjemahan.',
+      translationsNotLoaded: 'Terjemahan tidak dimuat — muat ulang sebelum menyimpan.',
       confirmCancelTitle: 'Perubahan Belum Disimpan',
       confirmCancelEdit:
         'Anda memiliki perubahan yang belum disimpan yang akan hilang. Apakah Anda yakin ingin pindah tab?',

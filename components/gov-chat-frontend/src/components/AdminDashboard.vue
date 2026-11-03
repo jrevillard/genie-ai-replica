@@ -420,7 +420,12 @@
                       <div class="form-actions">
                         <DsButton
                           variant="primary"
-                          :disabled="!hierarchyForm.nameEN || isSavingHierarchyItem || isTranslationsLoading"
+                          :disabled="
+                            !hierarchyForm.nameEN ||
+                            isSavingHierarchyItem ||
+                            isTranslationsLoading ||
+                            translationsLoadFailed
+                          "
                           @click="saveHierarchyItem"
                         >
                           {{ translate('admin.buttons.save', 'Save') }}
@@ -1785,6 +1790,16 @@ export default {
 
       // State for loading translations
       isTranslationsLoading: false,
+      // Generation counter for edit-form translation fetches: two rapid
+      // showEditForm calls race, and the SLOWER fetch must not populate,
+      // flag or unblock the form the newer fetch already answered.
+      hierarchyTranslationsSeq: 0,
+      // The current edit form's translation load FAILED. The backend's
+      // update path treats `translations: []` as clear-all, so a save from
+      // a form whose rows never loaded would silently wipe every existing
+      // translation. While this is true, Save is disabled and the save
+      // action refuses to run.
+      translationsLoadFailed: false,
       // Dedicated to the hierarchy form: the dashboard-wide isLoading is
       // shared by unrelated operations, so gating the Save button on it
       // disabled the form during a log/security scan and let one
@@ -3158,7 +3173,19 @@ export default {
       }
     },
 
+    // An in-flight edit-form translation fetch belongs to the form
+    // generation that started it. A form opened or closed afterwards must
+    // never receive that fetch's rows, its failure flag, or its loading
+    // state — invalidate the generation, and drop the flag and spinner
+    // this form context owns.
+    invalidateTranslationsFetch() {
+      this.hierarchyTranslationsSeq++;
+      this.isTranslationsLoading = false;
+      this.translationsLoadFailed = false;
+    },
+
     showAddCategoryForm() {
+      this.invalidateTranslationsFetch();
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3174,6 +3201,7 @@ export default {
     },
 
     showAddServiceForm(category) {
+      this.invalidateTranslationsFetch();
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3210,7 +3238,9 @@ export default {
       };
 
       // Step 2: Fetch the translations asynchronously
+      this.invalidateTranslationsFetch();
       this.isTranslationsLoading = true;
+      const loadSeq = this.hierarchyTranslationsSeq;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
@@ -3219,6 +3249,12 @@ export default {
         } else {
           // Call the service method for services
           fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key);
+        }
+
+        // A newer showEditForm superseded this fetch: neither its rows nor
+        // its failure belong to the form now open.
+        if (loadSeq !== this.hierarchyTranslationsSeq) {
+          return;
         }
 
         // Filter out the English ('en') translation from the results
@@ -3235,6 +3271,16 @@ export default {
         // Step 4: Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch {
+        // The same staleness rule: a superseded fetch must not block the
+        // newer edit's save.
+        if (loadSeq !== this.hierarchyTranslationsSeq) {
+          return;
+        }
+        // The service layer rethrows failed translation loads (a silent []
+        // here would render an editable empty-rows form whose next save
+        // wipes every existing translation). The form stays open but the
+        // save is blocked until the load succeeds.
+        this.translationsLoadFailed = true;
         this.showNotification(
           this.translate('admin.hierarchy.loadTranslationsError', 'Failed to load translations.'),
           'error'
@@ -3243,8 +3289,15 @@ export default {
         if (this.hierarchyForm.translations.length === 0) {
           this.hierarchyForm.translations.push({ lang: '', text: '' });
         }
+        // Snapshot the failed-load state too: the user can still edit the
+        // form, and Cancel must warn about those edits like any other.
+        this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } finally {
-        this.isTranslationsLoading = false;
+        // Only the fetch the form currently waits on may clear the
+        // loading state.
+        if (loadSeq === this.hierarchyTranslationsSeq) {
+          this.isTranslationsLoading = false;
+        }
       }
     },
 
@@ -3258,6 +3311,7 @@ export default {
 
     closeHierarchyForm() {
       this.hierarchyForm.visible = false;
+      this.invalidateTranslationsFetch();
       this.originalHierarchyFormState = null;
     },
 
@@ -3286,6 +3340,20 @@ export default {
     },
 
     async saveHierarchyItem() {
+      // --- 0. LOAD GATE ---
+      // The update path is delete-then-rebuild on the backend: a payload
+      // whose rows came from a FAILED load (effectively []) would be read
+      // as a deliberate clear-all. Creating is safe — nothing exists to
+      // wipe — but an edit must not save until its translations loaded.
+      const isEditMode = this.hierarchyForm.mode === 'editCategory' || this.hierarchyForm.mode === 'editService';
+      if (isEditMode && this.translationsLoadFailed) {
+        this.showNotification(
+          this.translate('admin.hierarchy.translationsNotLoaded', 'Translations not loaded — reload before saving.'),
+          'error'
+        );
+        return;
+      }
+
       // --- 1. VALIDATION ---
       // Normalize rows once: only string lang/text survive (legacy docs can hold
       // nulls or numbers), trimmed, empties dropped. The service layer maps the

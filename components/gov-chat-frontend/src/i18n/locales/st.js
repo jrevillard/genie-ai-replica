@@ -468,6 +468,7 @@ export default {
       saveError: 'Ho hlolehile ho boloka ntho ya tharollo.',
       loadError: 'Ho hlolehile ho kenya tharollo ya tsebo.',
       loadTranslationsError: 'Ho hlolehile ho kenya diphetolelo.',
+      translationsNotLoaded: 'Diphetolelo ha di hlahelletse — kenya hape pele o boloka.',
       confirmCancelTitle: 'Diphetoho tse sa Bolokoang',
       confirmCancelEdit: 'O na le diphetoho tse sa bolokoang. Na o na le bonnete ba hore o batla ho hlakola?',
       confirmDeleteTitleCategory: 'Hlakola Sehlopha?',

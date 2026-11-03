@@ -245,6 +245,25 @@ function createUnauthenticatedStore() {
 // Mount helper
 // ---------------------------------------------------------------------------
 
+// Mount the dashboard with an open edit-service form holding `translations`.
+// Shared by the save-payload and load-failure-gate suites.
+function mountEditingService(translations) {
+  const wrapper = createAdminDashboardWrapper();
+  const treeMock = require('../../services/serviceTreeService');
+  treeMock.updateService.mockClear();
+  mockEventBusEmit.mockClear();
+  wrapper.vm.hierarchyForm = {
+    visible: true,
+    mode: 'editService',
+    title: 'Edit Service',
+    _key: 'svc-1',
+    nameEN: 'Tax Filing',
+    translations,
+    parentId: null
+  };
+  return { wrapper, treeMock };
+}
+
 function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extraStubs = {}) {
   const store = createAdminStore(storeOverrides);
   return mount(AdminDashboard, {
@@ -815,22 +834,6 @@ describe('AdminDashboard', () => {
   // -----------------------------------------------------------------------
   describe('saveHierarchyItem payload contract', () => {
     // Mount the dashboard with an open edit-service form holding `translations`.
-    function mountEditingService(translations) {
-      const wrapper = createAdminDashboardWrapper();
-      const treeMock = require('../../services/serviceTreeService');
-      treeMock.updateService.mockClear();
-      mockEventBusEmit.mockClear();
-      wrapper.vm.hierarchyForm = {
-        visible: true,
-        mode: 'editService',
-        title: 'Edit Service',
-        _key: 'svc-1',
-        nameEN: 'Tax Filing',
-        translations,
-        parentId: null
-      };
-      return { wrapper, treeMock };
-    }
 
     // One contract — the rows the form sends are normalized — four shapes of
     // the input that used to reach the backend as-is.
@@ -3010,6 +3013,214 @@ describe('round 18 — studio hand-off + selection + theme', () => {
     await wrapper.vm.$nextTick();
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
+    wrapper.unmount();
+  });
+});
+
+// -----------------------------------------------------------------------
+// #1318 — a FAILED translation load must never reach the backend as
+// `translations: []`: the update path treats [] as clear-all, so the
+// next save would silently wipe every existing translation.
+// -----------------------------------------------------------------------
+describe('translation load-failure gate', () => {
+  it('saveHierarchyItem refuses to save an edit whose translations failed to load', async () => {
+    const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+    wrapper.vm.translationsLoadFailed = true;
+
+    await wrapper.vm.saveHierarchyItem();
+
+    expect(treeMock.updateService).not.toHaveBeenCalled();
+    const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+    const errorToast = emissions.find(([, p]) => p.type === 'error');
+    expect(errorToast).toBeTruthy();
+    expect(errorToast[1].message).toBe('Translations not loaded — reload before saving.');
+  });
+
+  it('the gate applies to both edit modes', async () => {
+    const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+    wrapper.vm.hierarchyForm.mode = 'editCategory';
+    wrapper.vm.translationsLoadFailed = true;
+
+    await wrapper.vm.saveHierarchyItem();
+
+    expect(treeMock.updateCategory).not.toHaveBeenCalled();
+  });
+
+  it('a create is never gated (nothing exists to wipe)', async () => {
+    const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+    treeMock.createService.mockClear();
+    wrapper.vm.hierarchyForm.mode = 'createService';
+    wrapper.vm.hierarchyForm.parentId = 'cat-1';
+    wrapper.vm.translationsLoadFailed = true;
+
+    await wrapper.vm.saveHierarchyItem();
+
+    expect(treeMock.createService).toHaveBeenCalledWith('cat-1', {
+      nameEN: 'Tax Filing',
+      translations: [{ lang: 'fr', text: 'Nom' }]
+    });
+  });
+
+  it('showEditForm sets the flag when the load rejects and clears it on success', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('load blip'));
+    await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+    expect(wrapper.vm.translationsLoadFailed).toBe(true);
+
+    treeMock.getServiceTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'Déclaration' }]);
+    await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('the Save button is disabled while the failed-load flag holds', async () => {
+    const { wrapper } = mountEditingService([]);
+    wrapper.vm.activeTab = 'hierarchy';
+    wrapper.vm.translationsLoadFailed = true;
+    await wrapper.vm.$nextTick();
+
+    const saveButton = wrapper.findAll('button').find((b) => b.text().trim() === 'Save');
+    expect(saveButton).toBeTruthy();
+    expect(saveButton.attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('a failed edit does not disable Save on a create form opened afterwards', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    treeMock.createCategory.mockClear();
+    const wrapper = createAdminDashboardWrapper();
+    treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('blip'));
+
+    await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'X' }, { _key: 'cat-1', nameEN: 'C' });
+    expect(wrapper.vm.translationsLoadFailed).toBe(true);
+
+    wrapper.vm.showAddCategoryForm();
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+
+    await wrapper.vm.saveHierarchyItem();
+    expect(treeMock.createCategory).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('a superseded slow fetch neither populates nor blocks the newer edit', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    let rejectA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectA = reject;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    treeMock.getCategoryTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'B-nom' }]);
+    await wrapper.vm.showEditForm({ _key: 'cat-b', nameEN: 'B' });
+
+    // B answered: its rows are in, nothing is blocked.
+    expect(wrapper.vm.hierarchyForm._key).toBe('cat-b');
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    expect(wrapper.vm.isTranslationsLoading).toBe(false);
+
+    // A's fetch fails late: it must not block or repopulate B's form.
+    rejectA(new Error('late blip'));
+    await editA;
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
+    wrapper.unmount();
+  });
+
+  it('an in-flight edit fetch cannot leak into a create form opened meanwhile', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    treeMock.createCategory.mockClear();
+    const wrapper = createAdminDashboardWrapper();
+
+    let rejectA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectA = reject;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    // Admin gives up on the edit and opens a create form while A is in flight.
+    wrapper.vm.showAddCategoryForm();
+    expect(wrapper.vm.hierarchyForm.mode).toBe('createCategory');
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+
+    rejectA(new Error('late blip'));
+    await editA;
+
+    // A's failure belongs to the dead edit generation: the create form
+    // stays savable and its rows are untouched.
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
+    await wrapper.vm.saveHierarchyItem();
+    expect(treeMock.createCategory).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('closing the form invalidates the in-flight fetch (no late flag on nothing)', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    let rejectA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectA = reject;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    wrapper.vm.closeHierarchyForm();
+    rejectA(new Error('late blip'));
+    await editA;
+
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('a failed-load form still warns about typed edits on Cancel (dirty snapshot set on failure)', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+    treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('blip'));
+
+    await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'X' }, { _key: 'cat-1', nameEN: 'C' });
+    expect(wrapper.vm.translationsLoadFailed).toBe(true);
+
+    wrapper.vm.hierarchyForm.nameEN = 'Edited while unsavable';
+    expect(wrapper.vm.isFormDirty).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('a superseded slow fetch that succeeds late does not repopulate the newer edit', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    let resolveA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveA = resolve;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    treeMock.getCategoryTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'B-nom' }]);
+    await wrapper.vm.showEditForm({ _key: 'cat-b', nameEN: 'B' });
+
+    resolveA([{ lang: 'fr', text: 'A-nom' }]);
+    await editA;
+    // A's late rows must not land in B's already-answered form.
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
+    expect(wrapper.vm.hierarchyForm._key).toBe('cat-b');
     wrapper.unmount();
   });
 });

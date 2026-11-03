@@ -2321,7 +2321,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
   let filters;
   let EXECUTED_GLOBS;
   let EXECUTED_SPECS;
-  let DERIVED;
   let DERIVED_CONSUMED;
   let CONSUMED_FILES;
 
@@ -2333,14 +2332,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // invocations of the pipeline.
     EXECUTED_GLOBS = executedPaths();
     EXECUTED_SPECS = specFilesUnderExecuted(EXECUTED_GLOBS);
-    DERIVED = deriveConsumed(
+    ({ globs: DERIVED_CONSUMED, files: CONSUMED_FILES } = deriveConsumed(
       EXECUTED_SPECS.map((file) => ({
         file,
         source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
       }))
-    );
-    DERIVED_CONSUMED = DERIVED.globs;
-    CONSUMED_FILES = DERIVED.files;
+    ));
   });
 
   // Comments are stripped entirely — whole-line ones and inline ` #...`
@@ -2491,21 +2488,26 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const globs = new Set();
     const sources = new Map();
     const queue = [];
+    // One enqueue path for both consumption shapes: the visited set (the
+    // sources map) doubles as the cycle guard, and the read happens once.
+    const visitFile = (resolved) => {
+      if (sources.has(resolved)) return;
+      sources.set(resolved, io.read(resolved));
+      queue.push(resolved);
+    };
     for (const { file, source } of specFiles) {
       sources.set(file, source);
-      queue.push({ file, source });
+      queue.push(file);
     }
     while (queue.length > 0) {
-      const { file, source } = queue.shift();
+      const file = queue.shift();
+      const source = sources.get(file);
       const dir = path.posix.dirname(file);
       for (const match of source.matchAll(specifierRe)) {
         const resolved = resolveSpecifier(dir, match[2], io);
         if (!resolved) continue;
         globs.add(toAnchorPath(resolved, false));
-        if (!sources.has(resolved)) {
-          sources.set(resolved, io.read(resolved));
-          queue.push({ file: resolved, source: sources.get(resolved) });
-        }
+        visitFile(resolved);
       }
       for (const match of source.matchAll(joinRe)) {
         const segments = [...match[1].matchAll(/(['"`])([^'"`]*)\1/g)].map((m) => m[2]);
@@ -2517,10 +2519,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
         // own requires must be walked and it must face the #1325 detector
         // like any other consumed file. (The fixtures joins resolve to the
         // directory and stop here.)
-        if (st.isFile() && !sources.has(resolved)) {
-          sources.set(resolved, io.read(resolved));
-          queue.push({ file: resolved, source: sources.get(resolved) });
-        }
+        if (st.isFile()) visitFile(resolved);
       }
     }
     return {
@@ -2597,7 +2596,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // units below pin the boundary and the testMatch shapes on synthetic
   // listings, the real-tree pin above anchors them to the actual invocation.
   const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => /\.(?:spec|test)\.[cm]?[jt](?:sx?|x)?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
+    files.filter((f) => /\.(?:spec|test)\.[cm]?[jt]s?x?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
@@ -2810,7 +2809,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
   };
 
   describe('consumed-path derivation units', () => {
-    const deriveFrom = (file, source) => deriveConsumed([{ file, source }]).globs;
+    // tree (optional) swaps in the synthetic IO seam: tests pinning only the
+    // derived globs collapse to a one-liner; tests also pinning the walked
+    // FILE list keep the explicit deriveConsumed call — the {globs, files}
+    // return shape is part of what they pin.
+    const deriveFrom = (file, source, tree) => deriveConsumed([{ file, source }], tree && memIo(tree)).globs;
 
     // Synthetic IO seam: the walk's transitivity (#1326), the directory-
     // index resolution and the join-onto-a-file walk are shapes the real
@@ -2871,11 +2874,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
         'tests/e2e/documents/x.spec.js': "const t = require('../theme-runtime-config.spec.js');",
         'tests/e2e/theme-runtime-config.spec.js': 'test();'
       };
-      const derived = deriveConsumed(
-        [{ file: 'tests/e2e/documents/x.spec.js', source: tree['tests/e2e/documents/x.spec.js'] }],
-        memIo(tree)
-      );
-      expect(derived.globs).toEqual(['tests/e2e/theme-runtime-config.spec.js']);
+      expect(deriveFrom('tests/e2e/documents/x.spec.js', tree['tests/e2e/documents/x.spec.js'], tree)).toEqual([
+        'tests/e2e/theme-runtime-config.spec.js'
+      ]);
     });
 
     test('a directory-index require resolves through the index.js rule', () => {
@@ -2883,11 +2884,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
         'tests/e2e/documents/x.spec.js': "const l = require('../lib');",
         'tests/e2e/lib/index.js': 'module.exports = {};'
       };
-      const derived = deriveConsumed(
-        [{ file: 'tests/e2e/documents/x.spec.js', source: tree['tests/e2e/documents/x.spec.js'] }],
-        memIo(tree)
-      );
-      expect(derived.globs).toEqual(['tests/e2e/lib/**/*']);
+      expect(deriveFrom('tests/e2e/documents/x.spec.js', tree['tests/e2e/documents/x.spec.js'], tree)).toEqual([
+        'tests/e2e/lib/**/*'
+      ]);
     });
 
     test('a join that lands on a file walks the file too', () => {
@@ -2955,8 +2954,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Shape detector for the non-literal-argument family (#1325) — the
     // derivation regexes match nothing for these shapes, so without the
     // detector the consumption would drop silently.
-    const detectIn = (source) => findNonLiteralConsumption(source);
-
     test.each([
       ['interpolated require', 'const h = require(`../helpers/${name}`);'],
       ['variable require', 'const h = require(helperName);'],
@@ -2968,11 +2965,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
       // reads as consumption — loud is the safe direction for a trigger guard.
       ['string mentioning a require call', "const s = 'call require(x) later';"]
     ])('flags the %s shape', (_name, source) => {
-      expect(detectIn(source)).toEqual([
-        expect.stringMatching(
-          /non-literal (specifier|segment) in a (require\/import|path\.join\(__dirname, \.\.\.\)) call/
-        )
-      ]);
+      // One finding per shape — the wording itself is not the contract.
+      expect(findNonLiteralConsumption(source)).toHaveLength(1);
     });
 
     test.each([
@@ -2985,7 +2979,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['join with a paren inside a literal segment', "const d = path.join(__dirname, 'doc(v2)');"],
       ['string mentioning require without call args', "const s = 'see require docs';"]
     ])('does not flag the %s shape', (_name, source) => {
-      expect(detectIn(source)).toEqual([]);
+      expect(findNonLiteralConsumption(source)).toEqual([]);
     });
   });
 

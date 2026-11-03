@@ -199,9 +199,12 @@ and retry. The multi-message shape keeps the fallback described above: its
 history is background, normalized for the retriever and never shown, so the
 turn is not failed.
 
-Both shapes keep the same turns of the conversation (the newest ones, within
-the same character budget), so the retriever reads the same conversation
-whichever language it arrived in.
+The multi-message shape keeps the same turns of the conversation on both
+language paths (the newest ones, within the same character budget), so the
+retriever reads the same conversation whichever language it arrived in. The
+single-message shape is not budgeted on the English path: an English question
+is embedded as it is, while the same-length question in another language is
+refused as above.
 
 To diagnose a degraded period:
 

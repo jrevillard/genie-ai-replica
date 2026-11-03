@@ -129,7 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   language it arrived in. The budget is the translation one (2,000 characters,
   or what the discovered translation window allows), so a deployment that
   wants a deeper context raises the translation window
-  (`VLLM_TRANSLATION_MAX_MODEL_LEN`); the English-path truncation is counted
+  (`VLLM_TRANSLATION_MAX_MODEL_LEN`) — unless a deployer-set
+  `MAX_TRANSLATION_CHARS` caps the derived budget, in which case that value
+  must be raised too; the English-path truncation is counted
   on the same history-truncation metric, under the `passthrough` label.
   Chatqna only. (#1242, !700)
 

@@ -4898,6 +4898,7 @@ async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is
         patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
         patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=150),
+        patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
     ):
         await _full_flow_payload(svc, stream=False, language="en", messages=messages, captured=captured)
         await svc._get_translated_history_string(messages, source_lang_code="es")
@@ -4908,6 +4909,10 @@ async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is
     assert "oldest question" not in passthrough_history
     # The translator forwards the very same turns.
     assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
+    # The passthrough truncation is counted under its own label, like the
+    # translator's.
+    mock_counter.add.assert_any_call(1, {"path": "passthrough"})
+    mock_counter.add.assert_any_call(1, {"path": "translation"})
 
 
 @pytest.mark.asyncio

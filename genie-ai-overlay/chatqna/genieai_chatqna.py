@@ -4609,7 +4609,10 @@ class ChatQnAService:
                 # before the orchestrate-span metrics block, so the failed
                 # turn would otherwise be invisible to the dashboards — it
                 # is counted here, like the other error paths. No RAG ran,
-                # so there is no RAG duration to record.
+                # so there is no RAG duration to record. ``abstained``
+                # mirrors the refusal body (no document backed an answer);
+                # ``error`` is true because the turn failed, like the other
+                # fail-loud paths.
                 logger.warning(
                     f"Translation overflow at handle_request boundary: "
                     f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
@@ -4620,7 +4623,7 @@ class ChatQnAService:
                         {
                             "response_type": "streaming" if chat_request.stream else "sync",
                             "abstained": "true",
-                            "error": "false",
+                            "error": "true",
                             "retrieval_source": getattr(chat_request, "search_type", None)
                             or "similarity_score_threshold",
                             "abstention_reason": "translation_input_too_long",

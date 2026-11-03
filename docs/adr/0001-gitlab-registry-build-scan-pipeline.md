@@ -23,7 +23,9 @@ registry — and progressively retire the local Swarm registry.
 ### Constraints
 
 - **CI runner is non-privileged**, hardened with a docker-socket-proxy (API
-  filtering) on a tcp endpoint. E2E jobs run only on merge trains.
+  filtering) on a tcp endpoint. E2E jobs run only on merge trains, and only
+  when the project variable `E2E_ENABLED=1` is set (suspended since
+  2026-11-03 — no e2e runner capacity; see §3).
 - **Self-hosted GitLab** — `opensource.unicc.org` is not a trusted OIDC issuer
   for public Sigstore Fulcio.
 - **Sovereign public-sector project** — roots of trust should be self-owned.
@@ -89,10 +91,17 @@ promote:image → cross-repo copy tmp/<image>@DIGEST → <image>:main / :main-<s
 ### 3. Promote ordering and the merge-train design
 
 `promote` runs only on `main` and tags. E2E jobs run only on merge trains, so
-promote on `main`/tag is gated by `scan` (stage ordering) and by the
-**merge-train e2e having already validated the merged content** — the standard
-GitLab merge-train guarantee. Code does not reach `main` without passing the
-train's e2e.
+promote on `main`/tag is gated by `scan` (stage ordering) and, when E2E is
+enabled, by the **merge-train e2e having already validated the merged
+content** — the standard GitLab merge-train guarantee.
+
+**Suspended since 2026-11-03**: the train e2e jobs additionally require the
+project CI/CD variable `E2E_ENABLED` to equal `"1"` (exact string — `true`
+does not match). It is unset because there is no runner capacity for the
+compose + Playwright stack, so **today code can reach `main` without any e2e
+signal**; the remaining merge gate is lint + tests + build + scan + contract.
+Restore the guarantee by setting `E2E_ENABLED=1` (no YAML change) once an
+e2e runner lane exists.
 
 ### 4. SBOM: CycloneDX (from the GitLab template)
 

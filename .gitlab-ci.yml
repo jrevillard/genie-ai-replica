@@ -3061,6 +3061,7 @@ test:doc-repo:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/document-repository/**/*"
+        - "components/shared/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -3148,7 +3149,8 @@ test:python:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - "genie-ai-overlay/**/*"
+        - "genie-ai-overlay/**/*.py"
+        - "genie-ai-overlay/pyproject.toml"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -3183,8 +3185,8 @@ test:sitecustomize:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - "configs/**/*"
-        - "tests/config/**/*"
+        - "configs/ssl/**/*"
+        - "tests/config/ssl/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

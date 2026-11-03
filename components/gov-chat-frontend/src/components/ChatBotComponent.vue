@@ -606,14 +606,27 @@ function quickHelpIdentityOf(card) {
   return quickHelpTagOf(card && card.id, (card && card.service) || '');
 }
 
-// Whether a saved tag names a card: the tag the card SAVED is the tag
-// the restore READS (quickHelpIdentityOf on both sides). A card with an
-// id is named by that id; a card without one is named by its title —
-// the string it saved. Both sides speak strings, so a legacy raw-number
-// tag still names its card. The scalar gate covers both sides: a
-// non-scalar id names nothing, and its card falls back to the title.
-function quickHelpTagNames(card, tag) {
-  return isScalarId(tag) && quickHelpIdentityOf(card) === String(tag);
+// The cards whose IDENTITY is this string — the tag a conversation
+// carries, read against every card. One identity, ONE card — except in a
+// malformed configuration, where an id-less card can be titled like
+// another card's id: the string then names TWO cards, and every reader
+// below treats that as naming NONE. Restoring either would put a scope
+// the conversation was never asked in, silently; a visible refusal is
+// the honest verdict.
+//
+// Both sides speak strings: a card's identity is the id's string form or
+// its title, and the tag is read as the string it was saved as, so a
+// legacy raw-number tag still names its card. The scalar gate covers
+// the tag: a non-scalar id names nothing, and its card falls back to the
+// title.
+function quickHelpCardsForIdentity(buttons, identity) {
+  return buttons.filter((button) => button && quickHelpIdentityOf(button) === identity);
+}
+
+// The identity a saved tag names, read as the string it was saved as.
+// Null names NO card: the tag is not a scalar, so it carries no identity.
+function quickHelpTagIdentity(tag) {
+  return isScalarId(tag) ? String(tag) : null;
 }
 
 // Tight-list renderer override: chat-tuned model output puts a parent
@@ -1914,9 +1927,10 @@ export default {
       // comparison matched an UNDEFINED id against the FIRST id-less card
       // and re-titled the chip from that card — a chip wearing another
       // card's name. An identity that resolves to nothing (a title the
-      // locale changed under) keeps the title the chip was pressed with.
-      const identity = quickHelpIdentityOf(item);
-      const button = this.quickHelpButtons.find((b) => b && quickHelpIdentityOf(b) === identity);
+      // locale changed under, or an identity two cards claim) keeps the
+      // title the chip was pressed with.
+      const claimants = quickHelpCardsForIdentity(this.quickHelpButtons, quickHelpIdentityOf(item));
+      const button = claimants.length === 1 ? claimants[0] : null;
       return (button && resolveConfigText(button.textKey, locale)) || item.service;
     },
 
@@ -2089,8 +2103,13 @@ export default {
       // The dedupe compares IDENTITIES: two cards without an id share no id,
       // and the raw comparison called the second press a duplicate of the
       // first — the card the user actually pressed was never installed.
+      // An identity TWO cards claim names no card: the press installs the
+      // card the user pressed rather than keeping the other one's scope.
+      const pressedIdentity = quickHelpIdentityOf(rawOption);
+      const identityIsAmbiguous = quickHelpCardsForIdentity(this.quickHelpButtons, pressedIdentity).length > 1;
       const existingIdx = this.selectedContextItems.findIndex(
-        (item) => item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === quickHelpIdentityOf(rawOption)
+        (item) =>
+          item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity && !identityIsAmbiguous
       );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
@@ -2709,12 +2728,29 @@ export default {
               );
               return;
             }
-            // The identity rule — quickHelpTagNames owns it: the tag the
-            // card saved is the tag this reads, so a card WITHOUT an id
-            // (whose identity is its title) restores its own scope
+            // The identity rule — quickHelpCardsForIdentity owns it: the
+            // tag the card saved is the tag this reads, so a card WITHOUT
+            // an id (whose identity is its title) restores its own scope
             // instead of falling through to the sidebar branch and
             // becoming a label chip.
-            const button = this.quickHelpButtons.find((candidate) => quickHelpTagNames(candidate, tag));
+            const claimants = quickHelpCardsForIdentity(this.quickHelpButtons, quickHelpTagIdentity(tag));
+            if (claimants.length > 1) {
+              // TWO cards claim this identity — an id-less card titled
+              // like another card's id. The tag names NO card: restoring
+              // either would put a scope the conversation was never asked
+              // in, silently. The scope cannot be carried: the send
+              // refuses it visibly, the way a tag that names nothing is
+              // refused.
+              restoredContextItems.push({
+                service: this.displayNameForEnLabel(tag) || tag,
+                serviceKey: null,
+                category: this.currentCategoryId || 'general',
+                unresolved: true,
+                selected: true
+              });
+              return;
+            }
+            const button = claimants[0];
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

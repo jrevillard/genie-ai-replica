@@ -1923,6 +1923,79 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
       });
 
+      it('an identity TWO cards claim restores NOTHING — a visible refusal, not a wrong scope', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
+                  { title: 'registry-help', serviceLabels: ['Potato'] }
+                ]
+              }
+            }
+          }
+        });
+
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        // The id-less card is titled like the OTHER card's id: one
+        // string, two cards.
+        expect(vm.quickHelpButtons).toHaveLength(2);
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['registry-help']
+        });
+        await vm.loadExistingConversation('c1');
+
+        // The tag names NO card: restoring either would put a scope the
+        // conversation was never asked in — silently. The chip carries no
+        // scope and refuses the send visibly.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      });
+
+      it('pressing a card whose identity another card claims installs THAT card', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: 'registry-help', title: 'Registry Help', serviceLabels: ['Tomato'] },
+                  { title: 'registry-help', serviceLabels: ['Potato'] }
+                ]
+              }
+            }
+          }
+        });
+
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+
+        // The two cards share one identity: the dedupe cannot call the
+        // second press a duplicate of the first, or the user would press
+        // the card and keep the OTHER card's scope.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].service).toBe('registry-help');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
+      });
+
       it('re-titles an id-less chip from ITS OWN card', async () => {
         const loadConfig = require('../../config-loader').default;
         loadConfig.mockResolvedValue(twoIdLessCards);

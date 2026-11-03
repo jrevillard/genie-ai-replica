@@ -558,6 +558,43 @@ function quickHelpContextItem(button) {
   };
 }
 
+// The string-form identity rule (#1290), ONE copy: the tag a Quick Help
+// button saves, and the match rule the dedupe and the restore read. All
+// three call the same pair so they cannot drift — a save writing a tag
+// the dedupe would have collapsed, or a restore accepting a spelling
+// the save no longer produces.
+//
+// The id types that CAN carry an identity are the JSON scalars: a
+// hand-edited configuration can declare an array or an object id, and
+// coercing one (`String([5])` === `'5'`) would dedupe it into — or
+// restore it as — a numeric-5 card the raw `===` kept apart. A
+// non-scalar id declares nothing: it falls back to the title, the same
+// "names no button" verdict the web has always given such tags.
+function isScalarId(id) {
+  return typeof id === 'string' || typeof id === 'number' || typeof id === 'boolean';
+}
+
+// The tag a button saves: the id in its STRING form, the shape the
+// mobile has always written, behind #1244's raw-truthiness gate — a
+// falsy id (0, '', null) keeps the TITLE as the identity. Ids beyond
+// JavaScript's exact-integer range round here (the parsed JSON number
+// is a double) while the mobile keeps int64 precision, so such an id
+// writes a platform-local tag — the caveat the mobile's own identity
+// docstring carries. No shipped configuration declares a numeric id.
+function quickHelpTagOf(id, title) {
+  return id && isScalarId(id) ? String(id) : title;
+}
+
+// Whether a saved tag matches a button's id: both sides read as
+// strings, so a mobile-saved '5' matches a numeric 5 the same way an
+// old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
+// card never matches a '0' tag (its identity is the title). The scalar
+// gate covers BOTH sides: the dedupe compares two configuration ids,
+// and `String([5])` is `'5'` — a non-scalar id matches nothing.
+function quickHelpTagMatches(candidateId, tag) {
+  return Boolean(candidateId) && isScalarId(candidateId) && isScalarId(tag) && String(candidateId) === String(tag);
+}
+
 // Tight-list renderer override: chat-tuned model output puts a parent
 // label and its nested sub-list on adjacent lines in the markdown source,
 // but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
@@ -1884,7 +1921,8 @@ export default {
         // card, on either platform.
         .filter((button, _index, all) => {
           if (!button.id) return true;
-          if (all.some((b, i) => i < _index && b.id === button.id)) {
+          // The string-form id rule — quickHelpTagMatches owns it.
+          if (all.some((b, i) => i < _index && quickHelpTagMatches(b.id, button.id))) {
             console.warn(
               `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
             );
@@ -1909,7 +1947,8 @@ export default {
           return {
             service: title,
             serviceLabels: explicitLabels,
-            serviceKey: button.id || title,
+            // The saved conversation tag — quickHelpTagOf owns the rule.
+            serviceKey: quickHelpTagOf(button.id, title),
             textKey: button.title,
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
@@ -2606,7 +2645,8 @@ export default {
               );
               return;
             }
-            const button = this.quickHelpButtons.find((candidate) => candidate.id === tag);
+            // The string-form match rule — quickHelpTagMatches owns it.
+            const button = this.quickHelpButtons.find((candidate) => quickHelpTagMatches(candidate.id, tag));
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

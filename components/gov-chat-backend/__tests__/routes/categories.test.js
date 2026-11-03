@@ -231,8 +231,10 @@ describe('GET /api/service-categories/:categoryId/translations (AC13)', () => {
 });
 
 describe('GET /api/service-categories/services/:serviceId/translations (AC13)', () => {
-  it('should return 200 with service translations', async () => {
-    const translations = [{ languageCode: 'FR', translation: 'Vaccination' }];
+  it('should return 200 with the service translations read shape {lang, text}', async () => {
+    // The real service projects {lang (lowercased), text} — not the write
+    // shape {languageCode, translation}.
+    const translations = [{ lang: 'fr', text: 'Vaccination' }];
     serviceCategoryService.getServiceTranslations.mockResolvedValue(translations);
 
     const response = await authGet('/api/service-categories/services/svc-1/translations');
@@ -376,6 +378,61 @@ describe('PUT /api/service-categories/services/:serviceId (AC17)', () => {
     expect(serviceCategoryService.updateServiceWithTranslations).toHaveBeenCalledWith('svc-1', {
       nameEN: 'Vaccination Updated'
     });
+  });
+});
+
+// ============================================================
+// ValidationError from the service layer is a client mistake —
+// write handlers must answer 400, not 500.
+// ============================================================
+describe('write handlers map ValidationError to 400', () => {
+  // { method, path, serviceKey } for each write handler that can reject
+  // with a ValidationError raised on its payload.
+  const cases = [
+    { verb: 'post', path: '/api/service-categories', serviceKey: 'createCategory', body: { nameEN: 'X' } },
+    {
+      verb: 'put',
+      path: '/api/service-categories/cat-1',
+      serviceKey: 'updateCategoryWithTranslations',
+      body: { nameEN: 'X' }
+    },
+    {
+      verb: 'post',
+      path: '/api/service-categories/cat-1/services',
+      serviceKey: 'createServiceWithTranslations',
+      body: { nameEN: 'X' }
+    },
+    {
+      verb: 'put',
+      path: '/api/service-categories/services/svc-1',
+      serviceKey: 'updateServiceWithTranslations',
+      body: { nameEN: 'X' }
+    }
+  ];
+
+  cases.forEach(({ verb, path, serviceKey, body }) => {
+    it(`${verb.toUpperCase()} ${path} returns 400 on ValidationError`, async () => {
+      // The service layer throws a real ValidationError; the route checks
+      // the class identity with instanceof.
+      const { ValidationError } = require('../../middleware/errors');
+      serviceCategoryService[serviceKey].mockRejectedValue(new ValidationError('nameEN is required'));
+
+      const response = await request(app)[verb](path).set('Authorization', `Bearer ${validToken}`).send(body);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'nameEN is required' });
+    });
+  });
+
+  it('PUT /api/service-categories/cat-1 still returns 500 for non-validation errors', async () => {
+    serviceCategoryService.updateCategoryWithTranslations.mockRejectedValue(new Error('boom'));
+
+    const response = await authPut('/api/service-categories/cat-1', { nameEN: 'X' });
+
+    // Generic errors reach the global error middleware, which answers a
+    // uniform 500 body (details only in development mode).
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('An unexpected error occurred');
   });
 });
 

@@ -213,6 +213,7 @@ Class | Method | HTTP request | Description
  - [ApiQueriesStreamPostRequestMessagesInner](doc//ApiQueriesStreamPostRequestMessagesInner.md)
  - [ApiServiceCategoriesCategoriesCategoryIdGet200Response](doc//ApiServiceCategoriesCategoriesCategoryIdGet200Response.md)
  - [ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner](doc//ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner.md)
+ - [ApiServiceCategoriesPost400Response](doc//ApiServiceCategoriesPost400Response.md)
  - [ApiServiceCategoriesPostRequest](doc//ApiServiceCategoriesPostRequest.md)
  - [ApiServiceCategoriesPostRequestTranslationsInner](doc//ApiServiceCategoriesPostRequestTranslationsInner.md)
  - [ApiServiceCategoriesSearchGet200Response](doc//ApiServiceCategoriesSearchGet200Response.md)

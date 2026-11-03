@@ -408,7 +408,11 @@
                         </div>
                       </div>
                       <div class="form-actions">
-                        <DsButton variant="primary" :disabled="!hierarchyForm.nameEN" @click="saveHierarchyItem">
+                        <DsButton
+                          variant="primary"
+                          :disabled="!hierarchyForm.nameEN || isSavingHierarchyItem || isTranslationsLoading"
+                          @click="saveHierarchyItem"
+                        >
                           {{ translate('admin.buttons.save', 'Save') }}
                         </DsButton>
                         <DsButton variant="secondary" @click="cancelHierarchyForm">
@@ -1759,6 +1763,11 @@ export default {
 
       // State for loading translations
       isTranslationsLoading: false,
+      // Dedicated to the hierarchy form: the dashboard-wide isLoading is
+      // shared by unrelated operations, so gating the Save button on it
+      // disabled the form during a log/security scan and let one
+      // operation re-enable another operation's button.
+      isSavingHierarchyItem: false,
 
       // Configuration for language dropdowns in translations tables (deployment-scoped)
       availableLanguages: getAvailableLanguages(),
@@ -3256,10 +3265,19 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang && t.text.trim());
-      const langCodes = validTranslations.map((t) => t.lang);
+      // Normalize rows once: only string lang/text survive (legacy docs can hold
+      // nulls or numbers), trimmed, empties dropped. The service layer maps the
+      // {lang, text} rows to the write contract.
+      const rows = this.hierarchyForm.translations
+        .map((t) => ({
+          lang: typeof t?.lang === 'string' ? t.lang.trim() : '',
+          text: typeof t?.text === 'string' ? t.text.trim() : ''
+        }))
+        .filter((r) => r.lang && r.text);
+      const langCodes = rows.map((r) => r.lang.toLowerCase());
 
-      // Check for duplicate languages
+      // Check for duplicate languages (case-insensitive — the backend
+      // uppercases the code, so 'fr' and 'FR' would collide on one row)
       if (new Set(langCodes).size !== langCodes.length) {
         this.showNotification(
           // MODIFIED: Use new i18n key
@@ -3273,12 +3291,14 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
+      // A legacy doc can hold a non-string nameEN; the empty string lets the backend answer its 400.
       const payload = {
-        nameEN: this.hierarchyForm.nameEN,
-        translations: validTranslations
+        nameEN: typeof this.hierarchyForm.nameEN === 'string' ? this.hierarchyForm.nameEN.trim() : '',
+        translations: rows
       };
 
       this.isLoading = true;
+      this.isSavingHierarchyItem = true;
       try {
         const { mode, _key, parentId } = this.hierarchyForm;
 
@@ -3291,6 +3311,11 @@ export default {
           await serviceTreeService.createService(parentId, payload);
         } else if (mode === 'editService') {
           await serviceTreeService.updateService(_key, payload);
+        } else {
+          // An unknown mode must not report success: nothing was saved.
+          console.error(`saveHierarchyItem: unknown form mode "${mode}"`);
+          this.showNotification(this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'), 'error');
+          return;
         }
 
         this.showNotification(
@@ -3301,9 +3326,14 @@ export default {
         this.closeHierarchyForm(); // Close form on success
 
         // --- 4. REFRESH DATA ---
+        // loadKnowledgeHierarchy handles its own errors (accurate load-error
+        // toast), so a refresh failure never surfaces as a save failure.
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
         eventBus.$emit('knowledge-hierarchy-updated'); // Emit global event for other components
       } catch (error) {
+        // httpService's interceptor already toasts the backend's rejection
+        // reason for non-401 responses; this generic toast marks the failed
+        // action in the dashboard context.
         this.showNotification(
           // MODIFIED: Use new i18n key
           this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'),
@@ -3312,6 +3342,7 @@ export default {
         console.error(error);
       } finally {
         this.isLoading = false;
+        this.isSavingHierarchyItem = false;
       }
     },
 

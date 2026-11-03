@@ -253,6 +253,44 @@ describe('serviceTreeService', () => {
       expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', { nameEN: 'Updated' });
       expect(result.nameEN).toBe('Updated');
     });
+
+    it('converts {lang, text} rows to the {languageCode, translation} write contract', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
+
+      await serviceTreeService.updateService('svc-1', {
+        nameEN: 'Updated',
+        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+      });
+
+      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', {
+        nameEN: 'Updated',
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
+      });
+    });
+
+    it('sends the payload untouched when it carries no translations field', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
+
+      await serviceTreeService.updateService('svc-1', { nameEN: 'Updated' });
+
+      // An omitted translations field must stay omitted: the backend treats
+      // it as "leave the existing translations untouched".
+      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', { nameEN: 'Updated' });
+    });
+
+    it('drops null rows from the translations array instead of crashing', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
+
+      await serviceTreeService.updateService('svc-1', {
+        nameEN: 'Updated',
+        translations: [null, { lang: 'fr', text: 'Mis a jour' }]
+      });
+
+      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', {
+        nameEN: 'Updated',
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
+      });
+    });
   });
 
   // =========================================================================

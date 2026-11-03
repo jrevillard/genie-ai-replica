@@ -9,57 +9,32 @@ const { withBackgroundSpan } = require('./tracing-background');
 const { AqlToSqlTranslator } = require('./aql-to-sql');
 const { ArangoToArcadeGraphTranslator } = require('./arango-to-arcade-graph');
 
-/**
- * Is this error the EXPECTED "that row is not there" outcome rather than a
- * fault? Used ONLY to pick a log severity — never to change control flow
- * (see _executeWithRetry). Exported for the regression test.
- *
- * MEASURED against arangojs 10.1.2 + ArangoDB:
- *   collection.document('MISSING') -> errorNum 1202, code 404  -> expected
- *   collection('nope').document()   -> errorNum 1203, code 404  -> NOT expected
- *
- * 1203 is a MISSING COLLECTION — an infrastructure/configuration fault, and it
- * deliberately stays out of this predicate so it keeps reaching the error log.
- * All three arrive with code 404, so the errorNum is what separates them.
- *
- * 1204 ("no match") is ALSO expected: the driver throws it when a query matches
- * nothing (firstExample). That method was removed in arangojs 10, so it cannot
- * be provoked from this driver — the code is recorded here and in the fixtures
- * of okf-server/__tests__/concept-meta-service.test.js, which is where the
- * behaviour is actually pinned. It was nearly lost by trusting one measurement
- * over the fixtures; the full suite is what caught it.
- *
- * The message fallback is deliberately narrow — it is not the general
- * /not found/i used elsewhere, which would also swallow 1203 and gateway
- * route-not-found.
- */
-// Absence-classifier twin 2 of 3 (review 84589): same 3.12 contract as
-// okf-server/services/arango-errors.js (the control-flow owner), which also
-// names the laxer legacy twin — repository-service.js ARANGO_NOT_FOUND — and
-// the lockstep-edit rule. This copy owns the retry wrapper's LOG severity.
-function _isExpectedAbsence(error) {
-  if (!error) return false;
-  if (error.errorNum === 1202 || error.errorNum === 1204) return true;
-  // ArangoDB 3.12 reimplemented the simple-query API: a firstExample miss
-  // answers errorNum 404 with errorMessage 'no match' (the 3.11 server
-  // answered 1204 — live-reproduced on the local build, Quran Core import
-  // 2026-11-02). 404 alone is NOT absence (a missing collection or route can
-  // carry it) — the verdict needs the server's own 'no match' message too.
-  if (
-    error.errorNum === 404 &&
-    String(error.message || '')
-      .trim()
-      .toLowerCase() === 'no match'
-  ) {
-    return true;
-  }
-  if (error.errorNum != null) return false; // 1203 and friends are real faults
-  return (
-    String(error.message || '')
-      .trim()
-      .toLowerCase() === 'no match'
-  );
-}
+// The canonical absence classifier lives in shared/lib/arango-absence.js:
+// every component that must tell an absence from a fault uses the SAME rules
+// (ArangoDB 3.12 moved the simple-query miss from 1204 to errorNum 404 with
+// the message 'no match', and each copy had to be found and fixed in
+// lockstep). The local name is kept so the call sites below and the
+// `dbService._isExpectedAbsence` export stay unchanged.
+//
+// MEASURED against arangojs 10.1.2 + ArangoDB:
+//   collection.document('MISSING') -> errorNum 1202, code 404  -> expected
+//   collection('nope').document()   -> errorNum 1203, code 404  -> NOT expected
+//
+// 1203 is a MISSING COLLECTION — an infrastructure/configuration fault, and it
+// deliberately stays out of the predicate so it keeps reaching the error log.
+// All three arrive with code 404, so the errorNum is what separates them.
+//
+// 1204 ("no match") is ALSO expected: the driver throws it when a query matches
+// nothing (firstExample). That method was removed in arangojs 10, so it cannot
+// be provoked from this driver — the code is recorded in the fixtures of
+// okf-server/__tests__/concept-meta-service.test.js, which is where the
+// behaviour is actually pinned. It was nearly lost by trusting one measurement
+// over the fixtures; the full suite is what caught it.
+//
+// The message fallback is deliberately narrow — it is not the general
+// /not found/i used elsewhere, which would also swallow 1203 and gateway
+// route-not-found.
+const { isExpectedAbsence: _isExpectedAbsence } = require('./arango-absence');
 
 /**
  * Enhanced singleton class to manage long-lived database connections with COMPLETE RECOVERY.

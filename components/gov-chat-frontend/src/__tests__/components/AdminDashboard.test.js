@@ -809,6 +809,177 @@ describe('AdminDashboard', () => {
   });
 
   // -----------------------------------------------------------------------
+  // KH translation save — rows are trimmed/validated in the component and
+  // converted to the backend write contract ({languageCode, translation})
+  // by serviceTreeService (tested there).
+  // -----------------------------------------------------------------------
+  describe('saveHierarchyItem payload contract', () => {
+    // Mount the dashboard with an open edit-service form holding `translations`.
+    function mountEditingService(translations) {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+      mockEventBusEmit.mockClear();
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations,
+        parentId: null
+      };
+      return { wrapper, treeMock };
+    }
+
+    // One contract — the rows the form sends are normalized — four shapes of
+    // the input that used to reach the backend as-is.
+    [
+      {
+        label: 'passes the rows through',
+        rows: [{ lang: 'fr', text: 'Déclaration fiscale' }],
+        expected: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      },
+      {
+        label: 'trims whitespace from lang and text',
+        rows: [{ lang: ' fr ', text: '  Déclaration fiscale  ' }],
+        expected: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      },
+      {
+        label: 'drops rows with a null lang or text',
+        rows: [
+          { lang: null, text: 'orphan' },
+          { lang: 'fr', text: 'Nom' }
+        ],
+        expected: [{ lang: 'fr', text: 'Nom' }]
+      },
+      {
+        label: 'drops rows with a non-string lang or text (legacy numeric docs)',
+        rows: [
+          { lang: 'fr', text: 123 },
+          { lang: 'es', text: 'Nombre' }
+        ],
+        expected: [{ lang: 'es', text: 'Nombre' }]
+      }
+    ].forEach(({ label, rows, expected }) => {
+      it(`${label} before sending`, async () => {
+        const { wrapper, treeMock } = mountEditingService(rows);
+
+        await wrapper.vm.saveHierarchyItem();
+
+        expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+          nameEN: 'Tax Filing',
+          translations: expected
+        });
+      });
+    });
+
+    it('trims the nameEN field in the payload', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.hierarchyForm.nameEN = '  Tax Filing  ';
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Nom' }]
+      });
+    });
+
+    it('shows an error and saves nothing on an unknown form mode', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      wrapper.vm.hierarchyForm.mode = 'teleportCategory';
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).not.toHaveBeenCalled();
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+    });
+
+    it('shows the generic save-error toast when the service call rejects', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      // httpService rejects with {status, data, message} and toasts the
+      // backend reason itself; the component adds its own action-level toast.
+      treeMock.updateService.mockRejectedValueOnce({
+        status: 400,
+        data: { message: 'boom' },
+        message: 'boom'
+      });
+
+      await wrapper.vm.saveHierarchyItem();
+
+      const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      const errorToast = emissions.find(([, p]) => p.type === 'error');
+      expect(errorToast).toBeTruthy();
+      expect(errorToast[1].message).toBe('Failed to save hierarchy item.');
+    });
+
+    it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
+      const { wrapper, treeMock } = mountEditingService([
+        { lang: 'fr', text: 'A' },
+        { lang: 'FR', text: 'B' }
+      ]);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).not.toHaveBeenCalled();
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+    });
+
+    it('never reports a save failure when the post-save refresh fails', async () => {
+      const { wrapper } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.getAdminCategories.mockRejectedValueOnce(new Error('refresh blip'));
+
+      await wrapper.vm.saveHierarchyItem();
+
+      // The save succeeded: the success toast is shown and the misleading
+      // save-error toast never appears (the refresh reports its own
+      // accurate load-error toast instead).
+      const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      expect(emissions.some(([, p]) => p.type === 'success')).toBe(true);
+      expect(emissions.some(([, p]) => p.message === 'Failed to save hierarchy item.')).toBe(false);
+    });
+
+    it('disables the Save button only while the hierarchy save itself runs', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+
+      // An unrelated admin operation (logs, security scan) holds the
+      // dashboard-wide isLoading flag: it must not disable the form's
+      // Save button.
+      wrapper.vm.isLoading = true;
+      await wrapper.vm.$nextTick();
+
+      const saveButton = () =>
+        wrapper.findAll('button').filter((b) => b.text() === 'Save' && b.attributes('disabled') !== undefined);
+      const enabledSaveButton = () => wrapper.findAll('button').filter((b) => b.text() === 'Save');
+      expect(enabledSaveButton().length).toBeGreaterThan(0);
+      expect(saveButton().length).toBe(0);
+
+      // While the hierarchy save runs, the button IS disabled.
+      let resolveSave;
+      treeMock.updateService.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        })
+      );
+      const saving = wrapper.vm.saveHierarchyItem();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isSavingHierarchyItem).toBe(true);
+      expect(saveButton().length).toBeGreaterThan(0);
+
+      resolveSave({ data: { _key: 'svc-1' } });
+      await saving;
+
+      expect(wrapper.vm.isSavingHierarchyItem).toBe(false);
+      expect(saveButton().length).toBe(0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Task 1c: Loading/error states
   // -----------------------------------------------------------------------
   describe('error handling', () => {

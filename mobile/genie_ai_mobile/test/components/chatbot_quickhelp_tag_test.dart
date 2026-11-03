@@ -20,11 +20,10 @@ import '../helpers/chatbot_harness.dart';
 void main() {
   final tree = quickHelpTreeFixture();
 
-  // The two cards the test taps: an id-less scoped one and an id'd one,
-  // neither carrying an action, so a press installs the scope without
-  // sending a question. The third declares a NUMERIC id — the shape the
-  // cross-platform tag contract names.
-  final twoCards = <Map<String, dynamic>>[
+  // The cards the test taps: an id-less scoped one, an id'd one and a
+  // NUMERIC-id one — none carrying an action, so a press installs the
+  // scope without sending a question.
+  final tappedCards = <Map<String, dynamic>>[
     {
       'title': {'en': 'Registry Card'},
       'category': '2',
@@ -53,7 +52,7 @@ void main() {
   late Uint8List configBytes;
 
   setUpAll(() async {
-    configBytes = await chatbotConfigBytesWithButtons(twoCards);
+    configBytes = await chatbotConfigBytesWithButtons(tappedCards);
   });
 
   Future<void> pumpChat(

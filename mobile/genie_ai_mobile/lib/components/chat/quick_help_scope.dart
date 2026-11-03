@@ -35,8 +35,18 @@ import 'package:genie_ai_mobile/utils/config_resolver.dart';
 /// scope, in every rule that reads one. This predicate is the ONE copy —
 /// the subject of this whole branch is what happens when two copies of a
 /// scope rule drift apart.
-bool declaresCategoryScope(String? id) {
-  return id != null && id.isNotEmpty && id != 'general';
+///
+/// The web's rule is `id != null && id !== '' && id !== 'general'`, and it
+/// is read on the RAW value there — a numeric 0 names a scope (the strict
+/// compares let it through), while '' and the placeholder name none. The
+/// parameter is therefore DYNAMIC: the same rule must answer for a raw
+/// number as for a string, and Dart's cross-type equality gives the web's
+/// answer (0 == '' is false, 0 == 'general' is false).
+bool declaresCategoryScope(dynamic id) {
+  if (id == null) return false;
+  if (id == '') return false;
+  if (id == 'general') return false;
+  return true;
 }
 
 /// The one RESERVED conversation tag: `just-chat`. A saved conversation
@@ -673,12 +683,11 @@ String? quickHelpIdOf(Map<String, dynamic>? button) {
 }
 
 /// The category value [button] declares — the RAW config value, kept
-/// beside its string form by the parse. ONE accessor: every rule that
-/// reads a category reads it HERE, so no rule judges the stringified
-/// form by a rule the web applies to the RAW one. A map with no raw
-/// record (a hand-built fixture) falls back to the string form it
-/// carries — the same fallback the parse's own 'categoryRaw' key would
-/// have supplied.
+/// beside its string form by the parse. ONE accessor for the rules that
+/// JUDGE a category (the presence gate and the scope gate): they read it
+/// HERE, so no rule judges the stringified form by a rule the web applies
+/// to the RAW one. A map with no raw record (a hand-built fixture) falls
+/// back to the 'category' value it carries, read by the same RAW rules.
 dynamic quickHelpCategoryRawOf(Map<String, dynamic> button) =>
     button['categoryRaw'] ?? button['category'];
 
@@ -696,34 +705,21 @@ dynamic quickHelpCategoryRawOf(Map<String, dynamic> button) =>
 bool quickHelpDeclaresCategory(Map<String, dynamic> button) =>
     configTruthy(quickHelpCategoryRawOf(button));
 
-/// Whether [value] names a category scope — the web's `declaresCategoryScope`
-/// rule (`id != null && id !== '' && id !== 'general'`), read on the RAW
-/// value: a numeric 0 still NAMES a scope there (the web's strict
-/// compares let it through — a hand-edited `category: 0` is
-/// declared-and-broken, the VISIBLE failure direction), while '' and the
-/// 'general' placeholder name none.
-bool _declaresCategoryScopeValue(dynamic value) {
-  if (value == null) return false;
-  if (value == '') return false;
-  if (value == 'general') return false;
-  return true;
-}
-
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
 ///
-/// The category half is the web's OWN scope rule, read on the RAW value
-/// ([_declaresCategoryScopeValue]) — the web judges the raw category there,
-/// so a hand-edited `category: 0` answers exactly as it does on the web.
-/// This is the web's SECOND question, not the restore's: the restore asks
+/// The category half is the web's OWN scope rule ([declaresCategoryScope]),
+/// read on the RAW value — the web judges the raw category there, so a
+/// hand-edited `category: 0` answers exactly as it does on the web. This
+/// is the web's SECOND question, not the restore's: the restore asks
 /// whether a category is PRESENT ([quickHelpDeclaresCategory]) and the
 /// verdict asks whether one is NAMED. The web keeps both questions apart
 /// (its restore gates on truthiness, its verdict on the scope rule), so
 /// the mobile keeps them apart too — on ONE shared read of the raw value,
 /// so the two answers can never come from two different strings.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return _declaresCategoryScopeValue(quickHelpCategoryRawOf(button)) ||
+  return declaresCategoryScope(quickHelpCategoryRawOf(button)) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 

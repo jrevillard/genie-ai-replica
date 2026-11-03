@@ -16,7 +16,10 @@ import 'package:genie_ai_mobile/i18n/locales/th.dart';
 import 'package:genie_ai_mobile/i18n/locales/zh.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
-/// Every shipped locale's map, by its code.
+/// Every shipped locale's map, by its code. The set is asserted against
+/// the locale files on disk by the test below, so a locale added later
+/// FAILS the suite instead of being silently uncovered by the caption
+/// guard.
 const Map<String, Map<String, dynamic>> shippedLocales = {
   'ar': arLocale,
   'bn': bnLocale,
@@ -34,11 +37,15 @@ const Map<String, Map<String, dynamic>> shippedLocales = {
   'zh': zhLocale,
 };
 
-/// The localized text before the first colon (zh uses the full-width
-/// colon) — the LEAD a caption opens with.
+/// The localized text BEFORE the first colon (zh uses the full-width
+/// colon) — the LEAD a caption opens with, without the colon itself: the
+/// lead is the caption's OPENING WORDS, so a caption that reworded the
+/// punctuation ("Configuration problem — the hierarchy…") still borrows
+/// it and is caught.
 String leadOf(String caption) {
-  final match = RegExp(r'^.*?[:：]').firstMatch(caption);
-  return match?.group(0) ?? caption;
+  final colon = RegExp('[:：]').firstMatch(caption);
+  if (colon == null) return caption;
+  return caption.substring(0, colon.start);
 }
 
 void main() {
@@ -118,6 +125,23 @@ void main() {
         // colon; zh uses the full-width colon) — the outage caption must
         // not open with it. Both halves are checked per locale, so a
         // regression names the locale.
+        //
+        // Every locale file on disk is covered: the shipped set is
+        // asserted against the directory listing, so a locale added later
+        // fails this suite instead of slipping past the guard.
+        final localeFiles = Directory('lib/i18n/locales')
+            .listSync()
+            .whereType<File>()
+            .map((file) => file.uri.pathSegments.last.replaceAll('.dart', ''))
+            .toList();
+        expect(
+          shippedLocales.keys.toSet(),
+          containsAll(localeFiles),
+          reason:
+              'A locale file exists on disk with no entry in shippedLocales: '
+              'the caption guard would not cover it.',
+        );
+
         final bad = <String>[];
         for (final entry in shippedLocales.entries) {
           final code = entry.key;
@@ -126,11 +150,18 @@ void main() {
             bad.add('$code: no chatbot section');
             continue;
           }
-          final configLeads = [
+          final configCaptions = [
             chatbot['quickHelpLabelGone'],
             chatbot['quickHelpCategoryGone'],
             chatbot['quickHelpTitleMissing'],
-          ].map((caption) => leadOf(caption as String)).toList();
+          ];
+          if (configCaptions.any((caption) => caption is! String)) {
+            bad.add('$code: a configuration caption is missing');
+            continue;
+          }
+          final configLeads = configCaptions
+              .map((caption) => leadOf(caption as String))
+              .toList();
           if (configLeads.toSet().length != 1) {
             bad.add(
               '$code: the configuration captions do not share one lead: '
@@ -138,8 +169,8 @@ void main() {
             );
             continue;
           }
-          final outage = chatbot['quickHelpScopeUnavailable'] as String?;
-          if (outage == null) {
+          final outage = chatbot['quickHelpScopeUnavailable'];
+          if (outage is! String) {
             bad.add('$code: no outage caption');
             continue;
           }

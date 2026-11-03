@@ -412,6 +412,28 @@ void main() {
       expect(scope.categoryNameEn, 'Civil Registry');
     });
 
+    test(
+      'a map with no raw record reads its category raw, not stringified',
+      () {
+        // The parse always keeps the raw value beside its string form, but
+        // a map built by hand (a fixture, a programmatic card) carries only
+        // 'category'. That value is the RAW one, and the web reads it raw:
+        // a numeric 0 is falsy, so the card declares NO category and the
+        // conversation's own edge stays the effective category. Stringifying
+        // it first would read the truthy '0' and declare a category the
+        // hierarchy cannot name.
+        final rawOnly = [
+          {'id': 'civil', 'category': 0},
+        ];
+        final scope = convResolver(
+          rawOnly,
+        ).resolve(tags: ['civil'], categoryKey: '2');
+
+        expect(scope.categoryId, '2');
+        expect(scope.categoryNameEn, 'Civil Registry');
+      },
+    );
+
     test('a legacy falsy-id tag restores as a sidebar tag, like the web', () {
       // The web's restore lookup (`candidate.id === tag`) cannot match a
       // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR

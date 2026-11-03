@@ -108,7 +108,7 @@ class TestInstrumentCreation:
 
         mock_meter.create_counter.assert_any_call(
             "genie.ai/chat/history/truncated",
-            description="Chat history truncations (generation guard and translation budget)",
+            description="Chat history truncations by cause: generation guard, translation budget, passthrough",
         )
 
     def test_chat_rag_duration_histogram_created(self, _mock_tracing_meter):

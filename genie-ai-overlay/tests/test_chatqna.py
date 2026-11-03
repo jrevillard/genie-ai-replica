@@ -3133,19 +3133,30 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
-    async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
+    async def test_a_single_message_that_does_not_fit_the_window_is_refused(self):
         """A single-message history that does not fit the translation
-        window is refused like the list shape: the source text comes back
-        under fallback_error, not as an unhandled failure."""
+        window is refused, not fallen back on: in single-message mode the
+        string IS the retrieval query, so an untranslated fallback would be
+        embedded into the English space. The refusal reaches the caller,
+        which answers 422."""
         svc = create_chatqna_service()
         mock_client = self._mock_client()
         stack = self._translation_patches(mock_client, translategemma=False)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4000))
-        with stack:
-            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
-        assert text == "¿qué es X?"
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+
+    @pytest.mark.asyncio
+    async def test_an_oversized_single_message_is_refused_even_when_the_map_is_unreadable(self):
+        """The budget check runs before the language map: an oversized query
+        is refused even when the registry cannot name English — the refusal
+        must not depend on the registry's health."""
+        svc = create_chatqna_service()
+        stack = self._translation_patches(self._mock_client(), translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna.language_codes_map", return_value={}))
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string("q" * 5000, source_lang_code="es")
 
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
@@ -4723,18 +4734,21 @@ class TestAbstentionDefault:
 # ===========================================================================
 # Query-translation status on the response and the orchestrate span
 # ===========================================================================
-async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None):
+async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None, captured=None):
     """Drive handle_request end to end with the history translation mocked.
 
     `history_status` is the (text, status) tuple the history-translation
     helper reports; None leaves the real helper in place (used by the
     passthrough cases, which never reach it). `messages` overrides the
     request's message list; None keeps the Spanish-query default.
+    `captured` is filled with the genie_params the pipeline was called with.
     """
     svc.user_profile_client = MagicMock()
     svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
 
     async def fake_schedule(**_kwargs):
+        if captured is not None:
+            captured.update(_kwargs.get("genie_params") or {})
         return (
             {
                 "retriever": {"retrieved_docs": []},
@@ -4867,6 +4881,128 @@ async def test_the_query_translation_status_reaches_the_orchestrate_span(capture
     status = orchestrate.attributes[A["rag_translation_query_status"]]
     assert status == "fallback_timeout"
     assert status in QUERY_TRANSLATION_STATUSES
+
+
+@pytest.mark.asyncio
+async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is_written_in():
+    """The history the retriever is fed must not depend on the query's
+    language: the English passthrough keeps the turns the translator would
+    have kept, so the same conversation retrieves the same documents in
+    every language."""
+    svc = create_chatqna_service()
+    messages = [
+        {"role": "user", "content": "oldest question " + "x" * 40},
+        {"role": "assistant", "content": "old answer " + "y" * 40},
+        {"role": "user", "content": "newest question " + "z" * 20},
+    ]
+    captured = {}
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+        patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=150),
+        patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+    ):
+        await _full_flow_payload(svc, stream=False, language="en", messages=messages, captured=captured)
+        await svc._get_translated_history_string(messages, source_lang_code="es")
+
+    passthrough_history = captured["full_chat_history_string"]
+    sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+    assert "newest question" in passthrough_history
+    assert "oldest question" not in passthrough_history
+    # The translator forwards the very same turns.
+    assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
+    # The passthrough truncation is counted under its own label, like the
+    # translator's.
+    mock_counter.add.assert_any_call(1, {"path": "passthrough"})
+    mock_counter.add.assert_any_call(1, {"path": "translation"})
+
+
+@pytest.mark.asyncio
+async def test_the_passthrough_truncates_an_oversized_newest_message_like_the_translator():
+    """A newest message that alone exceeds the whole budget keeps its tail
+    on the English path too — the same slice the translator keeps, head
+    dropped and all."""
+    svc = create_chatqna_service()
+    messages = [
+        {"role": "user", "content": "short old turn"},
+        {"role": "user", "content": "newest head " + "z" * 300},
+    ]
+    captured = {}
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+        patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=150),
+    ):
+        await _full_flow_payload(svc, stream=False, language="en", messages=messages, captured=captured)
+        await svc._get_translated_history_string(messages, source_lang_code="es")
+
+    passthrough_history = captured["full_chat_history_string"]
+    sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+    # The tail (the last budget-overhead characters) is what both paths keep.
+    assert "newest head" not in passthrough_history
+    assert len(passthrough_history) == len("USER: ") + (150 - 20)
+    assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_single_message_query_is_refused_with_a_422():
+    """A query that does not fit the translation window must not be embedded
+    untranslated into the English space: the turn is refused with the 422 the
+    answer path returns, before the model is even asked."""
+    svc = create_chatqna_service()
+    mock_client = AsyncMock()
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000),
+        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, language="es", messages="q" * 5000)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
+    assert excinfo.value.detail["abstention_reason"] == "translation_input_too_long"
+    # Refused before the translation model was asked, and counted like the
+    # other failed turns.
+    mock_client.post.assert_not_called()
+    mock_counter.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
+    """The service's own refusal is the same overflow: it must not degrade
+    into an untranslated query embedded as if it were English."""
+    svc = create_chatqna_service()
+    with (
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=100000),
+        patch(
+            "chatqna.genieai_chatqna._translate_prompt",
+            new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("too long for the window")),
+        ),
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, language="es", messages="qué es X?")
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
 
 
 # ===========================================================================

@@ -181,12 +181,30 @@ The fallback is observable in two places:
   - `fallback_error` — the translation failed or was refused for any other
     reason (including an empty completion); the untranslated query was
     embedded. One sub-case differs: a history whose newest message alone
-    exceeds the whole translation budget falls back to an **empty** query —
-    nothing was embedded, guaranteed zero recall.
+    exceeds the whole translation budget keeps that message's **tail**
+    (truncated to the budget), so the query carries the end of the turn
+    instead of nothing.
 - **Trace attribute**: the same status is stamped as
   `rag.translation.query_status` on the `chatqna.orchestrate` span, so a
   degraded period can be found in the Trace explorer by filtering for
   anything other than `translated` / `passthrough_english`.
+
+A query sent as a **plain string** — single-message mode
+(`CONTEXT_OPTION=single-message`), where the current question *is* the whole
+history — is **refused** instead of fallen back on when it does not fit the
+translation window: the turn answers HTTP 422 (`translation_input_too_long`)
+and nothing is embedded, because the untranslated question would be looked up
+in the English space and retrieve the wrong documents. Shorten the message
+and retry. The multi-message shape keeps the fallback described above: its
+history is background, normalized for the retriever and never shown, so the
+turn is not failed.
+
+The multi-message shape keeps the same turns of the conversation on both
+language paths (the newest ones, within the same character budget), so the
+retriever reads the same conversation whichever language it arrived in. The
+single-message shape is not budgeted on the English path: an English question
+is embedded as it is, while the same-length question in another language is
+refused as above.
 
 To diagnose a degraded period:
 

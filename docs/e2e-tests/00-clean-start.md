@@ -291,8 +291,12 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Password: `TestPass123!`
 
 This payload matches the venue fixture defined in
-`tests/e2e/helpers/e2e-fixtures.js`, which the provisioning script below
-converges an existing account to on every run.
+`tests/e2e/helpers/e2e-fixtures.js`. The provisioning script below
+converges an existing account's password and login-visible state
+(enabled, verified, no required action) and its realm roles — the email
+is deliberately NOT rewritten (the login reads the username, not the
+email), so an account created with a previous fixture revision keeps its
+old address.
 
 #### 0.8b Provision the venue test users (all Playwright suites prerequisite)
 

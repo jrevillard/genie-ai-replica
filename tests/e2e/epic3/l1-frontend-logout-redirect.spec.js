@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { TEST_USER } = require('../helpers/chatbot');
 
 // Test L.1 — Frontend Logout Redirect
 // Complete logout flow: login, click logout button, verify redirect to Keycloak login page.
@@ -30,8 +31,8 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   ).toBeTruthy();
 
   // Step 3: Fill credentials and submit
-  await page.fill('#username', 'testuser');
-  await page.fill('#password', 'TestPass123!');
+  await page.fill('#username', TEST_USER.username);
+  await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
   // Step 4: Wait for redirect back to the app (dashboard)

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { TEST_USER } = require('../helpers/chatbot');
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,
@@ -31,8 +32,8 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   ).toBeTruthy();
 
   // Step 3: Fill credentials and submit
-  await page.fill('#username', 'testuser');
-  await page.fill('#password', 'TestPass123!');
+  await page.fill('#username', TEST_USER.username);
+  await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
   // Step 4: Wait for redirect back to the app

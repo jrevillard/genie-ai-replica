@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { TEST_USER } = require('../helpers/chatbot');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify state is cleared.
@@ -23,8 +24,8 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
     timeout: 15000,
   });
 
-  await page.fill('#username', 'testuser');
-  await page.fill('#password', 'TestPass123!');
+  await page.fill('#username', TEST_USER.username);
+  await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
   // Step 3: Wait for redirect back to the app (dashboard)

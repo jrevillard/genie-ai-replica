@@ -3296,8 +3296,11 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
     expect(fixtures).toContain("password: 'TestPass123!'");
     // The documents suites drive ADMIN_ONLY surfaces — the primary login
-    // user must carry the admin realm role.
-    expect(fixtures).toContain("realmRoles: ['admin']");
+    // user must carry the admin realm role. The role is asserted INSIDE
+    // the testuser entry ([^}] cannot cross the object's closing brace),
+    // so dropping testuser's own role line fails even though testadmin's
+    // identical-looking entry would satisfy a bare containment check.
+    expect(fixtures).toMatch(/username: 'testuser',[^}]*realmRoles: \['admin'\]/);
     expect(fixtures).toContain("username: 'testadmin'");
     expect(fixtures).toContain("username: 'testplain'");
   });

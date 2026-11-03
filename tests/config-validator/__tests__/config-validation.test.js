@@ -3293,8 +3293,9 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   test('the fixtures module is the single definition of the venue users', () => {
     const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
     expect(fixtures).toContain("username: 'testuser'");
+    // The CI venue's email domain is part of the fixture contract (the
+    // docs phases and the CI job must agree on it).
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
-    expect(fixtures).toContain("password: 'TestPass123!'");
     // The documents suites drive ADMIN_ONLY surfaces — the primary login
     // user must carry the admin realm role. The role is asserted INSIDE
     // the testuser entry ([^}] cannot cross the object's closing brace),
@@ -3305,15 +3306,35 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("username: 'testplain'");
   });
 
-  test('the specs derive their login credentials from the fixtures module', () => {
+  test('the venue credentials are derived, never re-sourced', () => {
+    // The credential accessors and the derived login credentials live in
+    // the fixtures module — beside the data they read.
+    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    expect(fixtures).toContain("credentialsOf('testuser')");
+    expect(fixtures).toContain("credentialsOf('testadmin')");
+    expect(fixtures).toContain("credentialsOf('testplain')");
+    // No venue-fixture password literal may reappear beside or after the
+    // fixtures module: the helpers and the spec directories this campaign
+    // converged must derive their credentials from it. Scoped, NOT a
+    // blanket scan: epic2's k1/i1 specs mint tokens for their own
+    // ephemeral self-created users (noroles-e2e, genie2's testuser2) and
+    // legitimately carry their own password literals.
     const chatbot = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/chatbot.js'), 'utf-8');
-    expect(chatbot).toContain("credentialsOf('testuser')");
-    expect(chatbot).toContain("credentialsOf('testadmin')");
-    expect(chatbot).toContain("credentialsOf('testplain')");
-    // A hardcoded credential literal here escapes the single source.
     expect(chatbot).not.toContain('TestPass123!');
     expect(chatbot).not.toContain('TestAdmin123!');
     expect(chatbot).not.toContain('TestPlain123!');
+    const fixturePasswords = ['TestPass123!', 'TestAdmin123!', 'TestPlain123!'];
+    const specDirs = ['chatbot', 'documents', 'admin', 'epic1', 'epic3'];
+    for (const dir of specDirs) {
+      const dirPath = path.join(ROOT, 'tests/e2e', dir);
+      for (const name of fs.readdirSync(dirPath)) {
+        if (!name.endsWith('.js')) continue;
+        const source = fs.readFileSync(path.join(dirPath, name), 'utf-8');
+        for (const password of fixturePasswords) {
+          expect(source).not.toContain(password);
+        }
+      }
+    }
   });
 });
 

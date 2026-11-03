@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_USER } = require('../helpers/chatbot');
+const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.1 — Frontend Logout Redirect
 // Complete logout flow: login, click logout button, verify redirect to Keycloak login page.

@@ -39,4 +39,21 @@ const E2E_FIXTURES = [
   },
 ];
 
-module.exports = { E2E_FIXTURES };
+/**
+ * The login credentials of a venue fixture.
+ * @param {string} username - The fixture username
+ * @returns {{username: string, password: string}}
+ */
+function credentialsOf(username) {
+  const fixture = E2E_FIXTURES.find((f) => f.username === username);
+  if (!fixture) {
+    throw new Error(`Unknown E2E fixture: ${username}`);
+  }
+  return { username: fixture.username, password: fixture.password };
+}
+
+const TEST_USER = credentialsOf('testuser');
+const TEST_ADMIN_USER = credentialsOf('testadmin');
+const TEST_PLAIN_USER = credentialsOf('testplain');
+
+module.exports = { E2E_FIXTURES, credentialsOf, TEST_USER, TEST_ADMIN_USER, TEST_PLAIN_USER };

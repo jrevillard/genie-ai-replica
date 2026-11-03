@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_USER } = require('../helpers/chatbot');
+const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify state is cleared.

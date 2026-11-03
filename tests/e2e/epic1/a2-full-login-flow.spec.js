@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_USER } = require('../helpers/chatbot');
+const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,

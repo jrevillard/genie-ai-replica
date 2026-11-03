@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_USER } = require('../helpers/chatbot');
+const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.2 — localStorage Cleanup on Logout
 // Login, inject legacy localStorage items, trigger logout, verify they are removed.

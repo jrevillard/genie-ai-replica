@@ -18,7 +18,7 @@ const E2E_FIXTURES = [
     firstName: 'Test',
     lastName: 'User',
     password: 'TestPass123!',
-    realmRoles: ['admin'],
+    realmRoles: ['admin']
   },
   {
     // The documents/admin-surface login. Carries the admin realm role: the
@@ -29,7 +29,7 @@ const E2E_FIXTURES = [
     firstName: 'Test',
     lastName: 'Admin',
     password: 'TestAdmin123!',
-    realmRoles: ['admin'],
+    realmRoles: ['admin']
   },
   {
     // No realm role: the non-admin half of the requireAdmin contract.
@@ -37,8 +37,8 @@ const E2E_FIXTURES = [
     email: 'testplain@e2e.test',
     firstName: 'Test',
     lastName: 'Plain',
-    password: 'TestPlain123!',
-  },
+    password: 'TestPlain123!'
+  }
 ];
 
 /**

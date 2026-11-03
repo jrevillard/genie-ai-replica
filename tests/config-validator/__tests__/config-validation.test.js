@@ -3359,7 +3359,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     }
     if (!cleanStart.includes(testuser.password)) {
       throw new Error(
-        `00-clean-start.md §0.8 no longer uses the testuser fixture password — the documented ROPC verification would fail against the converged account`
+        '00-clean-start.md §0.8 no longer uses the testuser fixture password — the documented ROPC verification would fail against the converged account'
       );
     }
     // No venue-fixture password literal may reappear beside or after the
@@ -3390,7 +3390,11 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     };
     const e2eRoot = path.join(ROOT, 'tests/e2e');
     const exclusions = new Set([
-      path.join(e2eRoot, 'epic2'), // deliberate self-created fixture users (see above)
+      // epic2's two self-created fixture users (genie2's testuser2,
+      // k1's noroles-e2e) legitimately carry their own password literals;
+      // the rest of epic2 stays scanned.
+      path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
+      path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
       path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
     ]);

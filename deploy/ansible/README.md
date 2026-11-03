@@ -355,8 +355,8 @@ Set in `group_vars/<env>/vars.yml`:
 > ingests and cross-replica status release. A normal single-replica rolling
 > update is safe by design: Swarm's stop-first order (no `update_config` in
 > the compose deploy block) stops the old task before the replacement boots,
-> and the boot-time recovery releases the orphaned ingest row. Do not scale
-> dataprep until a multi-replica-safe (shared-state) registry exists.
+> and the boot-time recovery releases the orphaned ingest row. Scaling is
+> blocked until a multi-replica-safe (shared-state) registry exists (#1390).
 
 ### Label Selector Prompt
 

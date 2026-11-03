@@ -787,9 +787,7 @@ if __name__ == "__main__":
     # count. (Restart churn also repeats the line over time — correlate by
     # container/replica id and timestamp, not by line count alone.) The
     # per-process behaviours named in the docker-compose.yaml deploy block
-    # (active_ingestion_tasks registry, boot-time stuck-'Ingesting' recovery,
-    # /tmp flock slot pool) are only correct while no second dataprep replica
-    # is live.
+    # are only correct while no second dataprep replica is live.
     logger.warning(
         "dataprep assumes at most ONE live replica (deploy.replicas in docker-compose.yaml): "
         "the ingestion task registry, the stuck-'Ingesting' startup recovery and the "

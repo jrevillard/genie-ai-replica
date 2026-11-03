@@ -2304,10 +2304,10 @@ services:
       # sets no update_config, so Swarm's stop-first order kills the old task
       # (its ingest row is orphaned) before the replacement boots, and the
       # #610 boot recovery then releases the orphaned row — that recovery is
-      # exactly this scenario's handler. Only a second LIVE replica (a scale
-      # to 2, or a pre-scaled deployment) triggers the hazards above.
-      # A multi-replica-safe (Redis/ArangoDB-backed) registry is a separate,
-      # much larger effort — do not scale this service until it exists.
+      # exactly this scenario's handler. Only a second LIVE replica triggers
+      # the hazards above.
+      # A multi-replica-safe (Redis/ArangoDB-backed) registry is a
+      # prerequisite for scaling (#1390).
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:

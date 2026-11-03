@@ -1,6 +1,52 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genie_ai_mobile/i18n/locales/ar.dart';
+import 'package:genie_ai_mobile/i18n/locales/bn.dart';
+import 'package:genie_ai_mobile/i18n/locales/de.dart';
+import 'package:genie_ai_mobile/i18n/locales/en.dart';
+import 'package:genie_ai_mobile/i18n/locales/es.dart';
+import 'package:genie_ai_mobile/i18n/locales/fr.dart';
+import 'package:genie_ai_mobile/i18n/locales/id.dart';
+import 'package:genie_ai_mobile/i18n/locales/man.dart';
+import 'package:genie_ai_mobile/i18n/locales/pt.dart';
+import 'package:genie_ai_mobile/i18n/locales/ru.dart';
+import 'package:genie_ai_mobile/i18n/locales/st.dart';
+import 'package:genie_ai_mobile/i18n/locales/sw.dart';
+import 'package:genie_ai_mobile/i18n/locales/th.dart';
+import 'package:genie_ai_mobile/i18n/locales/zh.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+
+/// Every shipped locale's map, by its code. The set is asserted against
+/// the locale files on disk by the test below, so a locale added later
+/// FAILS the suite instead of being silently uncovered by the caption
+/// guard.
+const Map<String, Map<String, dynamic>> shippedLocales = {
+  'ar': arLocale,
+  'bn': bnLocale,
+  'de': deLocale,
+  'en': enLocale,
+  'es': esLocale,
+  'fr': frLocale,
+  'id': idLocale,
+  'man': manLocale,
+  'pt': ptLocale,
+  'ru': ruLocale,
+  'st': stLocale,
+  'sw': swLocale,
+  'th': thLocale,
+  'zh': zhLocale,
+};
+
+/// The localized text BEFORE the first colon (zh uses the full-width
+/// colon) — the LEAD a caption opens with, without the colon itself: the
+/// lead is the caption's OPENING WORDS, so a caption that reworded the
+/// punctuation ("Configuration problem — the hierarchy…") still borrows
+/// it and is caught.
+String leadOf(String caption) {
+  final colon = RegExp('[:：]').firstMatch(caption);
+  if (colon == null) return caption;
+  return caption.substring(0, colon.start);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,5 +114,77 @@ void main() {
         );
       }
     });
+
+    test(
+      'the outage caption does not borrow the configuration-problem lead',
+      () {
+        // An outage of the knowledge hierarchy is NOT a configuration
+        // problem: the send guard's own comment says naming it as one
+        // points the operator at the wrong thing. The three CONFIGURATION
+        // captions share one lead (the localized text before the first
+        // colon; zh uses the full-width colon) — the outage caption must
+        // not open with it. Both halves are checked per locale, so a
+        // regression names the locale.
+        //
+        // Every locale file on disk is covered: the shipped set is
+        // asserted against the directory listing, so a locale added later
+        // fails this suite instead of slipping past the guard.
+        final localeFiles = Directory('lib/i18n/locales')
+            .listSync()
+            .whereType<File>()
+            .map((file) => file.uri.pathSegments.last.replaceAll('.dart', ''))
+            .toList();
+        expect(
+          shippedLocales.keys.toSet(),
+          containsAll(localeFiles),
+          reason:
+              'A locale file exists on disk with no entry in shippedLocales: '
+              'the caption guard would not cover it.',
+        );
+
+        final bad = <String>[];
+        for (final entry in shippedLocales.entries) {
+          final code = entry.key;
+          final chatbot = entry.value['chatbot'] as Map<String, dynamic>?;
+          if (chatbot == null) {
+            bad.add('$code: no chatbot section');
+            continue;
+          }
+          final configCaptions = [
+            chatbot['quickHelpLabelGone'],
+            chatbot['quickHelpCategoryGone'],
+            chatbot['quickHelpTitleMissing'],
+          ];
+          if (configCaptions.any((caption) => caption is! String)) {
+            bad.add('$code: a configuration caption is missing');
+            continue;
+          }
+          final configLeads = configCaptions
+              .map((caption) => leadOf(caption as String))
+              .toList();
+          if (configLeads.toSet().length != 1) {
+            bad.add(
+              '$code: the configuration captions do not share one lead: '
+              '${configLeads.join(' | ')}',
+            );
+            continue;
+          }
+          final outage = chatbot['quickHelpScopeUnavailable'];
+          if (outage is! String) {
+            bad.add('$code: no outage caption');
+            continue;
+          }
+          // The comparison is case-insensitive: a locale that reworded
+          // only the CASE of the borrowed lead still borrows it.
+          final lead = configLeads.first.trim().toLowerCase();
+          if (outage.trim().toLowerCase().startsWith(lead)) {
+            bad.add(
+              '$code: the outage caption borrows the configuration-problem lead',
+            );
+          }
+        }
+        expect(bad, isEmpty);
+      },
+    );
   });
 }

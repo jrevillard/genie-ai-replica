@@ -31,6 +31,13 @@ only as bounded wait-for-condition. Full rules: [`tests/e2e/CLAUDE.md`](../../te
 present in these phase docs are known violations tracked in #1386; do not copy
 them into new steps.
 
+### Locating application elements
+
+An E2E test reaches an application element only through a test handle the
+application declares — a `data-test-id` attribute in the web app, a `Key`
+in the Flutter app. Classes, i18n labels and DOM positions are not
+locators. The rule and its rationale: `.claude/rules/E2E-TESTING.md`.
+
 ### Test Step Format
 
 Each step follows this format:

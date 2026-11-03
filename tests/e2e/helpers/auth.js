@@ -20,6 +20,12 @@ function request(method, path, options = {}) {
       rejectUnauthorized: false,
       timeout: 30000,
       headers: options.headers || {},
+      // One socket per request. The global agent keeps sockets alive
+      // (Node >= 19), and an endpoint that does not consume the request
+      // body — Keycloak's DELETE on the role-mappings collection — leaves
+      // that body in the socket: the NEXT request on the same connection
+      // is then read as a malformed one and answers 400 Bad Request.
+      agent: false,
     };
 
     const req = https.request(reqOptions, (res) => {

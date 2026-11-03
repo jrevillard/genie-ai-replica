@@ -42,7 +42,13 @@
     </template>
 
     <!-- Global notification component -->
-    <div v-if="notification.visible" class="notification" :class="notification.type" @click="hideNotification">
+    <div
+      v-if="notification.visible"
+      class="notification"
+      :class="notification.type"
+      :data-test-id="`notification-${notification.type}`"
+      @click="hideNotification"
+    >
       {{ notification.message }}
     </div>
 

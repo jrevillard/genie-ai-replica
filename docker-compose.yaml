@@ -2295,7 +2295,8 @@ services:
       #   idempotency, kill_ingest, task_status) is per-process — a second
       #   replica 404s/misses tasks owned by the first;
       # - boot-time recovery releases ALL doc-repo rows stuck in 'Ingesting'
-      #   except the booting replica's OWN live tasks (excludeFileIds) — a
+      #   except the booting replica's OWN live tasks (excludeFileIds; OKF
+      #   bundle-zip docs are excluded on the doc-repo side) — a
       #   second booting replica releases a live ingest on the first and the
       #   re-ingest guard accepts the re-kick → the same file ingests twice;
       # - the ingest flock slot pool lives in the container's own /tmp —
@@ -2306,8 +2307,9 @@ services:
       # #610 boot recovery then releases the orphaned row — that recovery is
       # exactly this scenario's handler. Only a second LIVE replica triggers
       # the hazards above.
-      # A multi-replica-safe (Redis/ArangoDB-backed) registry is a
-      # prerequisite for scaling (#1390).
+      # Multi-replica-safe shared state for ALL three behaviours (task
+      # registry, recovery ownership, slot pool) is the prerequisite for
+      # scaling (#1390).
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:

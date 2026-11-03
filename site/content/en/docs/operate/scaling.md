@@ -188,11 +188,14 @@ task registry (ingest 409 idempotency, `kill_ingest`, `task_status`), the
 boot-time stuck-`Ingesting` recovery and the flock ingest slot pool are all
 per-process. A second replica breaks them silently: double ingests,
 cross-replica status release — this covers Swarm's `docker service scale`,
-compose-mode `docker compose --scale dataprep-arango-service=N`, and editing
-`replicas` in the compose deploy block. Each replica also logs a warning at
-boot stating this contract — more than one boot line for dataprep at the same
-time means the deployment is mis-scaled (restart churn also repeats the
-line — correlate by container id and timestamp, not by line count alone).
+compose-mode `docker compose up -d --scale dataprep-arango-service=N`, and
+editing `replicas` in the compose deploy block. Each replica also logs a
+line at boot stating this contract — more than one boot line for dataprep
+at the same time means the deployment is mis-scaled (restart churn also
+repeats the line — correlate by container id and timestamp, not by line
+count alone). dataprep still pins to the GPU-labelled node
+(`node.labels.gpu == true` placement constraint), so it occupies a slot of
+the GPU node's capacity budget even though it does not scale with it.
 
 To raise ingestion throughput on the single replica (each lever multiplies
 the load on the vLLM that labelling shares with chat answering — size

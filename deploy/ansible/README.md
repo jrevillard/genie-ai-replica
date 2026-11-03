@@ -356,9 +356,10 @@ Set in `group_vars/<env>/vars.yml`:
 > update is safe by design: Swarm's stop-first order (no `update_config` in
 > the compose deploy block) stops the old task before the replacement boots,
 > and the boot-time recovery releases the orphaned ingest row. Do not scale
-> dataprep: a multi-replica-safe (shared-state) registry is a prerequisite
-> for scaling (#1390), and nothing enforces the limit today — scaling
-> silently breaks ingestion correctness.
+> dataprep: multi-replica-safe shared state for all three behaviours (task
+> registry, recovery ownership, slot pool) is the prerequisite for scaling
+> (#1390), and nothing enforces the limit today — scaling silently breaks
+> ingestion correctness.
 
 ### Label Selector Prompt
 

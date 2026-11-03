@@ -267,10 +267,23 @@ keycloak_theme: genie
 #                                         #   retrieval — the retriever's except
 #                                         #   clause returns [] ahead of the
 #                                         #   hybrid/BM25 leg. The TEI branch
-#                                         #   (TEI_EMBEDDING_ENDPOINT and
-#                                         #   HF_TOKEN) is deliberately unbudgeted
-#                                         #   — and that is the REMOTE-GPU branch,
-#                                         #   so this knob does not reach it.
+#                                         #   is bounded by
+#                                         #   model_hub_embed_timeout_seconds
+#                                         #   below.
+#   model_hub_embed_timeout_seconds: 600 # the huggingface_hub clients under the
+#                                         #   TEI-branch HuggingFaceEndpointEmbeddings
+#                                         #   — dataprep's ingest embeds (per
+#                                         #   node/edge/source in the graph write)
+#                                         #   AND the retriever's query embed.
+#                                         #   Unbounded until #1381: a wedged /embed
+#                                         #   connection behind the shared GPU
+#                                         #   gateway accepted the connection and
+#                                         #   never answered, silently holding an
+#                                         #   ingest thread (and a drain lane) for
+#                                         #   30+ minutes. Bounded post-construction
+#                                         #   — the langchain class cannot take a
+#                                         #   timeout kwarg; its pydantic field set
+#                                         #   moves with the pin.
 #   model_connect_timeout_seconds: 30    # the CONNECT ceiling for the two aiohttp
 #                                         #   clients this policy budgeted. aiohttp's
 #                                         #   default session carried 30 s; an explicit

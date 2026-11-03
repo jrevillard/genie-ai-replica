@@ -2156,6 +2156,14 @@ services:
       # before this policy, and the right value for a phase with no degradation
       # path. Binding it differently needs a patch to the vendored source,
       # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
+      #
+      # #1381: the TEI EMBED half of that debt IS bounded from in-repo code —
+      # the hub clients langchain builds get their deadline via
+      # core/model_http_policy.harden_hub_embed_clients (applied in the
+      # dataprep subclass __init__; also the retriever's TEI branch). 600 s
+      # bounds a wedged /embed connection that previously waited forever —
+      # the live incident held an ingest thread 30+ min with no log line.
+      MODEL_HUB_EMBED_TIMEOUT_SECONDS: ${MODEL_HUB_EMBED_TIMEOUT_SECONDS:-600}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
@@ -2441,6 +2449,12 @@ services:
       MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
+      # #1381: bounds the huggingface_hub clients under the TEI-branch
+      # HuggingFaceEndpointEmbeddings — the retriever's own OpenAI-branch
+      # embedding budget above does not reach this client, whose default was
+      # (and whose constructor cannot take) a timeout; see
+      # core/model_http_policy.py::HUB_EMBED_TIMEOUT_SECONDS.
+      MODEL_HUB_EMBED_TIMEOUT_SECONDS: ${MODEL_HUB_EMBED_TIMEOUT_SECONDS:-600}
       # 600 is a NEW ceiling, not the openai default kept — langchain-openai
       # forwards request_timeout (default None), so this client was unbounded.
       # Not tightened the way the LLM budgets are: the summarizer has no

@@ -1942,6 +1942,53 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
       });
 
+      it('an id-less card titled like a LIVE hierarchy label refuses to restore — the tag cannot say which scope it stood for', async () => {
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = await mountWithButtons([{ title: 'Crops', serviceLabels: ['Tomato'] }]);
+        const vm = wrapper.vm;
+
+        // One card claims the tag — but the tag is ALSO the EN label of a
+        // live hierarchy entry, the string a sidebar selection saves. The
+        // tag cannot say which of the two scopes it stood for: restoring
+        // the card would silently replace the sidebar scope (and the
+        // other way round), so the scope is refused visibly instead.
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Crops']
+        });
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
+        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      });
+
+      it('pressing a colliding card a SECOND time stays a no-op — the question is not asked twice', async () => {
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = await mountWithButtons([
+          { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
+          {
+            title: 'Crops',
+            serviceLabels: ['Potato'],
+            action: { hiddenPrompt: 'Answer as a crops advisor.', visibleText: 'A crops question' }
+          }
+        ]);
+        const vm = wrapper.vm;
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+
+        // The two cards share one identity, which cannot tell them apart:
+        // the card's own title does. The repeat press of the SAME card is
+        // a no-op — one press, one question.
+        expect(mockSubmitQueryStream).toHaveBeenCalledTimes(1);
+      });
+
       it('re-titles an id-less chip from ITS OWN card', async () => {
         mockLiveTree(treeWithTomatoAndPotato);
         const wrapper = await mountWithButtons(twoIdLessCards);

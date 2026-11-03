@@ -575,10 +575,10 @@ function quickHelpContextItem(button) {
 }
 
 // The string-form identity rule (#1290), ONE copy: the tag a Quick Help
-// button saves, and the match rule the dedupe and the restore read. All
-// three call the same pair so they cannot drift — a save writing a tag
-// the dedupe would have collapsed, or a restore accepting a spelling
-// the save no longer produces.
+// button saves, and the scalar gate the identity reads and the
+// duplicate-id detector applies. They call the same pair so they cannot
+// drift — a save writing a tag the dedupe would have collapsed, or a
+// restore accepting a spelling the save no longer produces.
 //
 // The id types that CAN carry an identity are the JSON scalars: a
 // hand-edited configuration can declare an array or an object id, and
@@ -601,10 +601,18 @@ function quickHelpTagOf(id, title) {
   return id && isScalarId(id) ? String(id) : title;
 }
 
+// Whether two CONFIGURATION ids name the same button — the duplicate-id
+// detector in applyQuickHelpButtons, the one remaining reader of a raw
+// id pair. A saved conversation tag is NOT read here: the restore goes
+// through quickHelpVerdictForIdentity, whose identity is the string the
+// card carries (quickHelpIdentityOf), so a card without an id is named
+// by its title there and never by a raw id comparison. Both sides read
+// as strings, so a mobile-saved '5' matches a numeric 5 the same way an
+
 // Whether a saved tag matches a button's id: both sides read as
 // strings, so a mobile-saved '5' matches a numeric 5 the same way an
 // old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
-// card never matches a '0' tag (its identity is the title). The scalar
+// card never matches a '0' id (its identity is the title). The scalar
 // gate covers BOTH sides: the dedupe compares two configuration ids,
 // and `String([5])` is `'5'` — a non-scalar id matches nothing.
 function quickHelpTagMatches(candidateId, tag) {
@@ -2126,7 +2134,17 @@ export default {
       const pressedIdentity = quickHelpIdentityOf(rawOption);
       const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
       const existingIdx = identityIsAmbiguous
-        ? -1
+        ? // An identity TWO cards claim cannot be told apart by it alone:
+          // the card's own title can (the colliding cards wear different
+          // titles). Two cards indistinguishable in every way are one
+          // card to the user — the repeat press stays a no-op instead of
+          // asking the question twice.
+          this.selectedContextItems.findIndex(
+            (item) =>
+              item.source === QUICK_HELP_SOURCE &&
+              quickHelpIdentityOf(item) === pressedIdentity &&
+              item.service === rawOption.service
+          )
         : this.selectedContextItems.findIndex(
             (item) => item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === pressedIdentity
           );
@@ -2746,7 +2764,7 @@ export default {
               );
               return;
             }
-            // The identity rule — quickHelpCardsForIdentity owns it: the
+            // The identity rule — quickHelpVerdictForIdentity owns it: the
             // tag the card saved is the tag this reads, so a card WITHOUT
             // an id (whose identity is its title) restores its own scope
             // instead of falling through to the sidebar branch and
@@ -2755,13 +2773,20 @@ export default {
             // is not a scalar carries no identity and names no card.
             const tagIdentity = isScalarId(tag) ? String(tag) : null;
             const { card: button, ambiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, tagIdentity);
-            if (ambiguous) {
-              // TWO cards claim this identity — an id-less card titled
-              // like another card's id. The tag names NO card: restoring
-              // either would put a scope the conversation was never asked
-              // in, silently. The scope cannot be carried: the send
-              // refuses it visibly, the way a tag that names nothing is
-              // refused.
+            // A TITLE identity is label-shaped: an id-less card can carry
+            // the very string a sidebar selection saves. When that string
+            // is ALSO a live hierarchy label, the tag cannot say which of
+            // the two scopes it stood for — the card is refused the same
+            // way an ambiguous identity is, rather than silently
+            // replacing the sidebar scope (or the card) with the other
+            // one. An ID identity is opaque: it names a card and nothing
+            // else, so the card keeps the precedence the id-only lookup
+            // always had.
+            const namesALabel = this.enLabelDisplayNames.has(tag);
+            if (ambiguous || (button && !button.id && namesALabel)) {
+              // The tag names NO card it can be restored as. The scope
+              // cannot be carried: the send refuses it visibly, the way
+              // a tag that names nothing is refused.
               restoredContextItems.push(
                 restoredScopeItem(this.displayNameForEnLabel(tag) || tag, null, this.currentCategoryId || 'general')
               );

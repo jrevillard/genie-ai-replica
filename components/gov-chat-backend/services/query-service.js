@@ -445,7 +445,10 @@ class QueryService {
    * Parse a raw SSE line from ChatQnA's align_generator output.
    * ChatQnA outputs Python repr() of bytes: data: b'text'\n\n
    * @param {string} line - Raw SSE data line (without "data: " prefix)
-   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?: string }
+   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?|raw? } or,
+   *   for chatqna metadata events, { type: 'metadata', ...known fields } plus every
+   *   other key chatqna sent (the known-field set is normalized/defaulted; unknown
+   *   diagnostic fields pass through unchanged)
    */
   parseChatQnASSELine(line) {
     const trimmed = line.trim();
@@ -482,24 +485,36 @@ class QueryService {
             filter_labels: Array.isArray(obj.filter_labels) ? obj.filter_labels : null,
             is_grounded: obj.is_grounded ?? false
           };
-          // self_confidence is keyed by PRESENCE, not by value. chatqna emits
-          // the key only when LLM_SELF_CONFIDENCE_ENABLED, and emits an explicit
-          // null when the sentinel was omitted or malformed. The inspector
+          // Passthrough of chatqna's own metadata keys: a diagnostic field not
+          // on the known list above must reach the streamed path too — the
+          // JSON path forwards metadata verbatim, and a field-by-field rebuild
+          // here made the two paths disagree (retrieval_confidence_score,
+          // self_confidence and query_translation_status were each lost this
+          // way until a backend edit). Known fields are already on `parsed`
+          // with their defaults/normalization; this copies only the rest.
+          //
+          // The copy is by PRESENCE, not by value: a key chatqna sent keeps
+          // its value verbatim (explicit null included), a key it omitted
+          // stays absent. self_confidence relies on that distinction — chatqna
+          // emits it only when LLM_SELF_CONFIDENCE_ENABLED and an explicit
+          // null when the sentinel was omitted or malformed; the inspector
           // renders its block on hasOwnProperty and its "no sentinel" state on
-          // a null value, so collapsing "feature off" into "no sentinel" here
-          // would make the two indistinguishable.
-          if (Object.prototype.hasOwnProperty.call(obj, 'self_confidence')) {
-            parsed.self_confidence = obj.self_confidence;
-          }
-          // What the history translator fed the embedder ("translated",
-          // "passthrough_english", "passthrough_unknown_language",
-          // "fallback_timeout" or "fallback_error"): the response-side
-          // counterpart of the rag.translation.query_status span attribute.
-          // Dropping it here would make a degraded translation invisible on
-          // the streamed path. Keyed by presence so an older chatqna without
-          // the field stays mock/test-friendly.
-          if (Object.prototype.hasOwnProperty.call(obj, 'query_translation_status')) {
-            parsed.query_translation_status = obj.query_translation_status;
+          // a null value, so defaulting "feature off" to null would make the
+          // two indistinguishable. query_translation_status (what the history
+          // translator fed the embedder — "translated", "passthrough_english",
+          // "passthrough_unknown_language", "fallback_timeout" or
+          // "fallback_error", the response-side counterpart of the
+          // rag.translation.query_status span attribute) relies on it too: an
+          // older chatqna without the key stays mock/test-friendly.
+          //
+          // `__proto__` is excluded: JSON.parse yields it as an own property,
+          // but ordinary assignment routes through the inherited setter and
+          // would replace `parsed`'s prototype instead of copying the value.
+          for (const [key, value] of Object.entries(obj)) {
+            if (key === '__proto__') continue;
+            if (!Object.prototype.hasOwnProperty.call(parsed, key)) {
+              parsed[key] = value;
+            }
           }
           return parsed;
         }

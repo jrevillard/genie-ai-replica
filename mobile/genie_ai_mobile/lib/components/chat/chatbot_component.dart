@@ -1131,9 +1131,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
     // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
-    // Either constitutes a context-filtered query.
+    // Either constitutes a context-filtered query. The category id
+    // speaks its own truthiness: '' (the clear's payload) and the
+    // 'general' placeholder name NO scope — the one predicate every
+    // scope rule shares.
     final hasContext =
-        _selectedCategoryId != null ||
+        declaresCategoryScope(_selectedCategoryId) ||
         _activeServiceLabels.isNotEmpty ||
         _sidebarServiceLabelsEn.isNotEmpty;
     final request = http.Request('POST', uri)
@@ -1379,6 +1382,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final queriesApi = ref.read(queriesApiProvider);
 
+      // The SAME scope predicate the streaming path speaks: a selection
+      // of any shape makes this a conversation-with-context-labels
+      // query, whose payload is the one that carries the labels. The
+      // category id's truthiness is the shared predicate — '' (the
+      // clear's payload) names NO scope.
+      final hasContext =
+          declaresCategoryScope(_selectedCategoryId) ||
+          _activeServiceLabels.isNotEmpty ||
+          _sidebarServiceLabelsEn.isNotEmpty;
+
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
         messages: messagesForApi
@@ -1407,6 +1420,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           ),
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
+        contextOption: hasContext
+            ? ApiQueriesPostRequestContextOptionEnum
+                  .conversationWithContextLabels
+            : ApiQueriesPostRequestContextOptionEnum.singleMessage,
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );

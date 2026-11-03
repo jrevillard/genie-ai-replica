@@ -68,6 +68,10 @@ void main() {
       final context = first['context'] as Map<String, dynamic>;
       expect(context['serviceLabels'], ['Births']);
       expect(context['categoryLabel'], 'Civil Registry');
+      // The query MODE parity too: a scoped payload is a
+      // conversation-with-context-labels one, the same mode the
+      // streaming path declares for the identical scope.
+      expect(first['contextOption'], 'conversation-with-context-labels');
 
       // The chip's close control clears the scope; the NEXT typed
       // message goes out unfiltered — the clear reached the wire.
@@ -82,6 +86,8 @@ void main() {
       final cleared = second['context'] as Map<String, dynamic>;
       expect(cleared['serviceLabels'], isEmpty);
       expect(cleared['categoryLabel'], anyOf(isNull, isEmpty));
+      // The cleared scope is an unscoped query — the plain mode.
+      expect(second['contextOption'], 'single-message');
     },
   );
 }

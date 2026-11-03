@@ -59,8 +59,18 @@ void main() {
       final built = builtTiles(tester);
       expect(built, lessThan(cards.length ~/ 2));
 
-      // The far end builds when the user scrolls to it.
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -20000));
+      // The far end builds when the user scrolls to it — the OVERLAY's
+      // scrollable: the message list's Scrollable sits under the Stack,
+      // out of hit range behind the opaque overlay.
+      await tester.drag(
+        find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+        const Offset(0, -20000),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Card 119'), findsOneWidget);
     },

@@ -18,6 +18,11 @@ test.describe('Admin logs view', () => {
   // first and hide the helper's diagnosis behind a bare timeout.
   test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
+  // Pin the locale: the empty row's text is translated
+  // (admin.logsSection.noWarningLogs), so its exact wording depends on
+  // the locale the browser runs in.
+  test.use({ locale: 'en-US' });
+
   /**
    * Login, install the summary interception, open /admin. Returns
    * {calls} — the counter guards the assertions against a vacuous pass:
@@ -82,11 +87,11 @@ test.describe('Admin logs view', () => {
     const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
 
     const keycloakRow = warningsCard.locator('[data-test-id="log-row-warnings-auth-wired-keycloak"]');
-    await expect(keycloakRow).toBeVisible();
+    await expect(keycloakRow).toHaveText(/wired-keycloak/);
     await expect(warningsCard.locator('[data-test-id="log-count-warnings-auth-wired-keycloak"]')).toHaveText('3');
 
     const arangoRow = warningsCard.locator('[data-test-id="log-row-warnings-database-wired-arangodb"]');
-    await expect(arangoRow).toBeVisible();
+    await expect(arangoRow).toHaveText(/wired-arangodb/);
     await expect(warningsCard.locator('[data-test-id="log-count-warnings-database-wired-arangodb"]')).toHaveText('7');
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
@@ -101,12 +106,17 @@ test.describe('Admin logs view', () => {
     });
 
     const errorsCard = page.locator('[data-test-id="logs-errors-card"]');
-    await expect(errorsCard.locator('[data-test-id="log-row-errors-auth-wired-keycloak"]')).toBeVisible();
+    await expect(errorsCard.locator('[data-test-id="log-row-errors-auth-wired-keycloak"]')).toHaveText(/wired-keycloak/);
 
     // Both roll-up tables render their own empty row; scope to the
-    // warnings card anchor (the table this spec's payload drives).
+    // warnings card anchor (the table this spec's payload drives). The
+    // empty row's TEXT is asserted (the locale is pinned above): a
+    // visibility-only assertion would pass on any element carrying the
+    // handle, including one that rendered the wrong row.
     const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
-    await expect(warningsCard.locator('[data-test-id="logs-warnings-empty"]')).toBeVisible();
+    await expect(warningsCard.locator('[data-test-id="logs-warnings-empty"]')).toHaveText(
+      'No warning logs recorded today.'
+    );
     await expect(warningsCard.locator('[data-test-id^="log-count-"]')).toHaveCount(0);
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });

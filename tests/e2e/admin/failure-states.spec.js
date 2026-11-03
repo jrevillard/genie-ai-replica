@@ -22,6 +22,17 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
  */
 const COMPONENT_ERROR_TEXT = 'Failed to load system health data';
 
+// The four overview stat tiles, by their own handles. The tiles are
+// listed rather than counted with a prefix selector: the value elements
+// carry their own `stat-*-value` handles, so a prefix match would
+// resolve to eight elements.
+const STAT_TILES = [
+  'stat-system-uptime',
+  'stat-avg-response-time',
+  'stat-error-rate',
+  'stat-monthly-active-users',
+];
+
 test.describe('Admin overview failure states', () => {
   // The login helper's own worst case (two attempts, navigation +
   // redirect waits) exceeds two minutes: a shorter ceiling would fire
@@ -53,21 +64,25 @@ test.describe('Admin overview failure states', () => {
     await openAdminWithFailure(page, 500, 'INTERNAL_ERROR', 'An internal error occurred');
 
     // The visible failure — the notification the component raises from
-    // its catch path.
-    const errorToast = page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT });
-    await expect(errorToast).toBeVisible();
+    // its catch path. The EXACT text is asserted, not the visibility:
+    // the axios interceptor raises its own error notification for the
+    // same non-2xx answer, so only the text tells the component's
+    // notification from the interceptor's.
+    await expect(page.locator('[data-test-id="notification-error"]')).toHaveText(COMPONENT_ERROR_TEXT);
 
     // Never a silent blank: the dashboard shell and the four stat tiles
     // still render around the failure (tiles keep their last/initial
     // values — the failure surface is the toast, not a broken page).
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
-    await expect(page.locator('[data-test-id^="stat-"]')).toHaveCount(4);
+    for (const tile of STAT_TILES) {
+      await expect(page.locator(`[data-test-id="${tile}"]`)).toBeVisible();
+    }
   });
 
   test('recovers on the next successful load after a 503', async ({ page }) => {
     // First load fails.
     await openAdminWithFailure(page, 503, 'SERVICE_UNAVAILABLE', 'Temporarily unavailable');
-    await expect(page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT })).toBeVisible();
+    await expect(page.locator('[data-test-id="notification-error"]')).toHaveText(COMPONENT_ERROR_TEXT);
 
     await page.unroute('**/api/admin/system-health');
 
@@ -103,7 +118,7 @@ test.describe('Admin overview failure states', () => {
     // 99.98) — not the absence of a toast: the notification hides itself
     // after 3 s, so "no toast right now" can also mean "the toast is not
     // there yet" and would pass on a failed recovery.
-    await expect(page.locator('[data-test-id="stat-system-uptime"]')).toContainText('42.42%');
+    await expect(page.locator('[data-test-id="stat-system-uptime-value"]')).toHaveText('42.42%');
     expect(recovery.calls).toBeGreaterThanOrEqual(1);
   });
 });

@@ -51,13 +51,16 @@ test.describe('Admin overview data wiring', () => {
       resourceUsage: {},
     });
 
-    // Exact text, tile by tile — the template appends the unit
-    // (%, ms) and errorRateLabel appends % (or an em dash when the
-    // metric is null).
-    await expect(page.locator('[data-test-id="stat-system-uptime"]')).toContainText('87.65%');
-    await expect(page.locator('[data-test-id="stat-avg-response-time"]')).toContainText('321ms');
-    await expect(page.locator('[data-test-id="stat-error-rate"]')).toContainText('2.5%');
-    await expect(page.locator('[data-test-id="stat-monthly-active-users"]')).toContainText('1,234');
+    // Exact text, tile by tile. The assertion targets the VALUE element
+    // (its own handle), not the card: the card also carries the title
+    // and, when the payload carries trends, a percentage of its own —
+    // a substring match on the card could be satisfied by either. The
+    // template appends the unit (%, ms) and errorRateLabel appends %
+    // (or an em dash when the metric is null).
+    await expect(page.locator('[data-test-id="stat-system-uptime-value"]')).toHaveText('87.65%');
+    await expect(page.locator('[data-test-id="stat-avg-response-time-value"]')).toHaveText('321ms');
+    await expect(page.locator('[data-test-id="stat-error-rate-value"]')).toHaveText('2.5%');
+    await expect(page.locator('[data-test-id="stat-monthly-active-users-value"]')).toHaveText('1,234');
   });
 
   test('health services and resource usage render from the payload', async ({ page }) => {
@@ -74,22 +77,27 @@ test.describe('Admin overview data wiring', () => {
     // name (the i18n fallback — no admin.services.wiredAlpha key exists).
     // The status vocabulary is the backend's own ('good' / 'warning' /
     // 'error' — admin-dashboard-service.getSystemHealth), so the asserted
-    // classes are the ones the component actually renders.
+    // classes are the ones the component actually renders. The class IS
+    // the contract here (the backend's status mapped onto the row), so
+    // it is asserted directly; the failure message names the observed
+    // classes, and the row's own text proves the payload's service name
+    // reached the screen.
     const alpha = page.locator('[data-test-id="health-wiredAlpha"]');
-    await expect(alpha).toBeVisible();
+    await expect(alpha).toHaveText('Wired Service Alpha');
     await expect(alpha).toHaveClass(/status-good/);
 
     const beta = page.locator('[data-test-id="health-wiredBeta"]');
-    await expect(beta).toBeVisible();
+    await expect(beta).toHaveText('Wired Service Beta');
     await expect(beta).toHaveClass(/status-warning/);
 
     // Resource rows: the row anchor is the canonical resource id (the
     // label itself is i18n); value and bar width come from the payload.
-    const cpu = page.locator('[data-test-id="usage-cpu"]');
-    await expect(cpu).toContainText('42%');
+    // The value assertion targets the value element's own handle — the
+    // row also carries the label, and "42%" as a substring would match
+    // "142%".
+    await expect(page.locator('[data-test-id="usage-cpu-value"]')).toHaveText('42%');
     await expect(page.locator('[data-test-id="usage-cpu-fill"]')).toHaveAttribute('style', /width: 42%/);
 
-    const memory = page.locator('[data-test-id="usage-memory"]');
-    await expect(memory).toContainText('67%');
+    await expect(page.locator('[data-test-id="usage-memory-value"]')).toHaveText('67%');
   });
 });

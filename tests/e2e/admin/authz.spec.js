@@ -33,17 +33,33 @@ function probeSystemHealth(page) {
   // scalars pairing a count>=1 pass with the wrong call's status. The
   // counter is derived from the records (not incremented on entry), so an
   // in-flight second call cannot desynchronise the two.
+  //
+  // The body is captured as TEXT, not parsed here: a body that is not
+  // JSON (an error page from the edge) must not be swallowed into an
+  // empty object — the test parses it, and a parse failure names the
+  // body it could not read.
   const state = { records: [] };
   page.route('**/api/admin/system-health', async (route) => {
     const response = await route.fetch();
     state.records.push({
       status: response.status(),
-      body: await response.json().catch(() => ({})),
+      text: await response.text(),
     });
     await route.fulfill({ response });
   });
   return state;
 }
+
+// The four overview stat tiles, by their own handles. The tiles are
+// listed rather than counted with a prefix selector: the value elements
+// carry their own `stat-*-value` handles, so a prefix match would
+// resolve to eight elements.
+const STAT_TILES = [
+  'stat-system-uptime',
+  'stat-avg-response-time',
+  'stat-error-rate',
+  'stat-monthly-active-users',
+];
 
 test.describe('Admin route authorization', () => {
   // The login helper's own worst case (two attempts, navigation +
@@ -62,10 +78,14 @@ test.describe('Admin route authorization', () => {
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
     // The four overview stat tiles render (real backend data — values are
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
-    await expect(page.locator('[data-test-id^="stat-"]')).toHaveCount(4);
+    for (const tile of STAT_TILES) {
+      await expect(page.locator(`[data-test-id="${tile}"]`)).toBeVisible();
+    }
     await expect(page.locator('[data-test-id="nav-admin-button-desktop"]')).toBeEnabled();
     expect(health.records.length).toBeGreaterThanOrEqual(1);
-    expect(health.records.every((r) => r.status === 200)).toBe(true);
+    // Every recorded call answered 200. The assertion carries the
+    // observed statuses, so a non-200 answer names itself.
+    expect(health.records.map((r) => r.status).filter((s) => s !== 200)).toEqual([]);
   });
 
   test('non-admin session is refused by the backend and the navbar', async ({ page }) => {
@@ -82,8 +102,13 @@ test.describe('Admin route authorization', () => {
     // deliberately, not silently.
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
     expect(health.records.length).toBeGreaterThanOrEqual(1);
-    expect(health.records.every((r) => r.status === 403)).toBe(true);
-    expect(health.records[0].body.error).toBe('FORBIDDEN');
+    // Every recorded call answered 403. The assertion carries the
+    // observed statuses, so a non-403 answer names itself.
+    expect(health.records.map((r) => r.status).filter((s) => s !== 403)).toEqual([]);
+    // The backend's error vocabulary, read from the body it answered:
+    // parse it here, so a body that is not JSON fails the test with the
+    // text it could not read instead of silently passing on {}.
+    expect(JSON.parse(health.records[0].text).error).toBe('FORBIDDEN');
 
     // The navbar admin entry is disabled without the role — the visible
     // half of the refusal. The desktop button is the one asserted here;

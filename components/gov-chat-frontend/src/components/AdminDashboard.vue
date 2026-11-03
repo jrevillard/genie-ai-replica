@@ -157,7 +157,7 @@
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
-              <div class="stat-value">{{ metrics.systemUptime }}%</div>
+              <div class="stat-value" data-test-id="stat-system-uptime-value">{{ metrics.systemUptime }}%</div>
               <div v-if="trend('uptime', true)" class="stat-trend" :class="trend('uptime', true).className">
                 <span>{{ trend('uptime', true).arrow }} {{ trend('uptime', true).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
@@ -167,7 +167,7 @@
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
-              <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
+              <div class="stat-value" data-test-id="stat-avg-response-time-value">{{ metrics.avgResponseTime }}ms</div>
               <div
                 v-if="trend('responseTime', false)"
                 class="stat-trend"
@@ -181,7 +181,7 @@
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
-              <div class="stat-value">{{ errorRateLabel }}</div>
+              <div class="stat-value" data-test-id="stat-error-rate-value">{{ errorRateLabel }}</div>
               <div v-if="trend('errorRate', false)" class="stat-trend" :class="trend('errorRate', false).className">
                 <span>{{ trend('errorRate', false).arrow }} {{ trend('errorRate', false).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
@@ -191,7 +191,7 @@
               <div class="stat-title">
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>
-              <div class="stat-value">
+              <div class="stat-value" data-test-id="stat-monthly-active-users-value">
                 {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
               </div>
               <div v-if="trend('activeUsers', true)" class="stat-trend" :class="trend('activeUsers', true).className">
@@ -245,7 +245,9 @@
                     >
                       <div class="usage-header">
                         <div class="usage-label">{{ resource.label }}</div>
-                        <div class="usage-value">{{ resource.value }}%</div>
+                        <div class="usage-value" :data-test-id="`usage-${resource.id}-value`">
+                          {{ resource.value }}%
+                        </div>
                       </div>
                       <div class="usage-bar">
                         <div

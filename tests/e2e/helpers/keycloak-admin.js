@@ -1,15 +1,6 @@
 const { request } = require('./auth');
 
 /**
- * Resolve a user's id in a realm by exact username.
- * exact=true: ?username= is a prefix search otherwise — a stray
- * testadmin2 would misdirect the role assignment to data[0].
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {string} username - Exact username
- * @returns {Promise<object>} The Keycloak user representation
- */
-/**
  * A failure that a later attempt may survive: a transport error, a
  * timeout, a 408/425/429 or a 5xx from the Keycloak admin API.
  * @param {string} message - The diagnosis
@@ -22,6 +13,13 @@ function transientError(message) {
 }
 
 const TRANSIENT_STATUSES = [408, 425, 429];
+
+// The transient retry waits on a CONDITION (Keycloak answering without a
+// transient verdict), bounded by a deadline rather than by a fixed number
+// of attempts: the pause between attempts grows, and the budget expires
+// into a failure that names the last observed error.
+const TRANSIENT_RETRY_BUDGET_MS = 30000;
+const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
 
 /**
  * Resolve a user's id in a realm by exact username.
@@ -297,10 +295,15 @@ async function convergeUser(adminToken, realm, userData) {
  * otherwise kill the provisioning step. Each of those surfaces as a login
  * failure minutes later, far from its cause.
  *
- * So: the whole convergence (create, password, roles) is retried on a
- * transient or unanswered Keycloak call, the password is converged on the
+ * So: the whole convergence (create, password, roles) is retried while
+ * Keycloak answers transiently, the password is converged on the
  * already-exists path, then the login-visible state is verified and the
  * roles are (re)assigned.
+ *
+ * The retry waits on the CONDITION (Keycloak answering without a
+ * transient verdict), not on a duration: the pause between attempts
+ * grows, and the budget is a deadline — a wait that expires is a
+ * failure naming the last observed error, never a silent give-up.
  *
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -308,17 +311,29 @@ async function convergeUser(adminToken, realm, userData) {
  * @returns {Promise<string>} The user UUID
  */
 async function ensureUser(adminToken, realm, userData) {
+  const deadline = Date.now() + TRANSIENT_RETRY_BUDGET_MS;
   let lastError;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       return await convergeUser(adminToken, realm, userData);
     } catch (err) {
       lastError = err;
-      if (!err.transient || attempt === 3) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // A non-transient error is a real failure: it propagates at once.
+      if (!err.transient) throw err;
+      // The budget expired while Keycloak kept answering transiently:
+      // the wait ends in a FAILURE carrying the last observed error.
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Keycloak kept answering transiently for ${TRANSIENT_RETRY_BUDGET_MS}ms while ` +
+            `provisioning ${userData.username}: ${err.message}`
+        );
+      }
+      // Back off between attempts: the pause grows so a struggling
+      // Keycloak is not hammered, and it stays inside the deadline.
+      const pause = Math.min(TRANSIENT_RETRY_BASE_PAUSE_MS * attempt, deadline - Date.now());
+      await new Promise((resolve) => setTimeout(resolve, pause));
     }
   }
-  throw lastError;
 }
 
 /**

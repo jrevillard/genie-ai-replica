@@ -131,7 +131,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wants a deeper context raises the translation window
   (`VLLM_TRANSLATION_MAX_MODEL_LEN`); the English-path truncation is counted
   on the same history-truncation metric, under the `passthrough` label.
-  Chatqna only. (#1242)
+  Chatqna only. (#1242, !700)
+
+- **An oversized question sent as a plain string is refused instead of being
+  embedded untranslated.** A deployment running the backend in single-message
+  mode (`CONTEXT_OPTION=single-message`) sends the current question as a plain
+  string, and the chatqna history translator had no character budget on that
+  shape: a question longer than the translation window was sent whole to the
+  translation model, and the refusal it got back was swallowed into a silent
+  fallback — the untranslated question was embedded into the English embedding
+  space, the retriever looked for the wrong documents, and the turn was
+  answered from them. An oversized question is now refused before the model is
+  asked, and the refusal is answered with the same HTTP 422
+  (`translation_input_too_long`) the translated-reply path already returns, so
+  the caller sees one contract; the refused turn is counted on the
+  chat-requests metric. The multi-message shape keeps its documented
+  fallback (the history is normalized for the retriever, never shown).
+  Chatqna only; needs single-message mode and a question longer than the
+  translation budget (2,000 characters, or what the discovered translation
+  window allows). (#1235, !700)
 
 ### Added
 

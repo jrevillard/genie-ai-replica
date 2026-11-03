@@ -3133,19 +3133,19 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
-    async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
+    async def test_a_single_message_that_does_not_fit_the_window_is_refused(self):
         """A single-message history that does not fit the translation
-        window is refused like the list shape: the source text comes back
-        under fallback_error, not as an unhandled failure."""
+        window is refused, not fallen back on: in single-message mode the
+        string IS the retrieval query, so an untranslated fallback would be
+        embedded into the English space. The refusal reaches the caller,
+        which answers 422."""
         svc = create_chatqna_service()
         mock_client = self._mock_client()
         stack = self._translation_patches(mock_client, translategemma=False)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4000))
-        with stack:
-            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
-        assert text == "¿qué es X?"
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
 
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
@@ -4908,6 +4908,49 @@ async def test_the_retriever_sees_the_same_turns_whichever_language_the_query_is
     assert "oldest question" not in passthrough_history
     # The translator forwards the very same turns.
     assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_single_message_query_is_refused_with_a_422():
+    """A query that does not fit the translation window must not be embedded
+    untranslated into the English space: the turn is refused with the 422 the
+    answer path returns, before the model is even asked."""
+    svc = create_chatqna_service()
+    mock_client = AsyncMock()
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000),
+        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, language="es", messages="q" * 5000)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
+    assert excinfo.value.detail["abstention_reason"] == "translation_input_too_long"
+    # Refused before the translation model was asked, and counted like the
+    # other failed turns.
+    mock_client.post.assert_not_called()
+    mock_counter.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
+    """The service's own refusal is the same overflow: it must not degrade
+    into an untranslated query embedded as if it were English."""
+    svc = create_chatqna_service()
+    with (
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=100000),
+        patch(
+            "chatqna.genieai_chatqna._translate_prompt",
+            new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("too long for the window")),
+        ),
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, language="es", messages="qué es X?")
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
 
 
 # ===========================================================================

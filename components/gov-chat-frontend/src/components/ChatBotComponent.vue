@@ -595,6 +595,27 @@ function quickHelpTagMatches(candidateId, tag) {
   return Boolean(candidateId) && isScalarId(candidateId) && isScalarId(tag) && String(candidateId) === String(tag);
 }
 
+// The identity a Quick Help card answers to (#1238): the id in its STRING
+// form when the configuration declares one, the card's OWN title when it
+// does not — the very string the card saves, so the tag a conversation
+// carries names the card that wrote it. ONE copy, read by the save, the
+// restore, the locale re-title and the press dedupe: a card without an
+// id used to save a tag NO lookup could read, and its scope silently
+// disappeared on reload.
+function quickHelpIdentityOf(card) {
+  return quickHelpTagOf(card && card.id, (card && card.service) || '');
+}
+
+// Whether a saved tag names a card: the tag the card SAVED is the tag
+// the restore READS (quickHelpIdentityOf on both sides). A card with an
+// id is named by that id; a card without one is named by its title —
+// the string it saved. Both sides speak strings, so a legacy raw-number
+// tag still names its card. The scalar gate covers both sides: a
+// non-scalar id names nothing, and its card falls back to the title.
+function quickHelpTagNames(card, tag) {
+  return isScalarId(tag) && quickHelpIdentityOf(card) === String(tag);
+}
+
 // Tight-list renderer override: chat-tuned model output puts a parent
 // label and its nested sub-list on adjacent lines in the markdown source,
 // but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
@@ -1876,10 +1897,11 @@ export default {
 
     // A Quick Help chip's title is the BUTTON's title — localized config
     // text. The chip is installed with the title resolved at press time;
-    // a locale switch must re-resolve it from the config (by the button
-    // id), the same way applyQuickHelpButtons re-resolves the buttons. A
-    // button the config no longer declares keeps its last title: the
-    // chip's identity is the id, not the title.
+    // a locale switch must re-resolve it from the config (by the button's
+    // identity), the same way applyQuickHelpButtons re-resolves the
+    // buttons. A button the config no longer declares keeps its last
+    // title: the chip's identity is the id, and the title is only the
+    // identity of a card that declares no id.
     //
     // The lookup runs over the DEDUPED button list — the one the grid,
     // the click, the restore and the send guard all read. The RAW
@@ -1887,7 +1909,14 @@ export default {
     // (hidden, or a duplicate): re-resolving from it would put a hidden
     // card's title on a chip whose scope is the surviving card's.
     quickHelpTitleFor(item, locale) {
-      const button = this.quickHelpButtons.find((b) => b && b.id === item.id);
+      // The card that produced the chip is looked up by its IDENTITY: its
+      // id when it declares one, its own title when it does not. A raw id
+      // comparison matched an UNDEFINED id against the FIRST id-less card
+      // and re-titled the chip from that card — a chip wearing another
+      // card's name. An identity that resolves to nothing (a title the
+      // locale changed under) keeps the title the chip was pressed with.
+      const identity = quickHelpIdentityOf(item);
+      const button = this.quickHelpButtons.find((b) => b && quickHelpIdentityOf(b) === identity);
       return (button && resolveConfigText(button.textKey, locale)) || item.service;
     },
 
@@ -1911,7 +1940,22 @@ export default {
       // request is then scoped by the category label alone, which the backend
       // resolves against the live hierarchy like any other label.
       this.quickHelpButtons = buttons
-        .filter((button) => !button.hidden)
+        .filter((button) => {
+          // The hidden flag is a BOOLEAN (#1208). A hand-edited
+          // configuration that writes it as a string says nothing about
+          // what the operator meant — and the flag's TRUTHINESS decides:
+          // "false" is a non-empty string, so the card DISAPPEARS. The
+          // mobile reads the flag the same way (the parity is
+          // deliberate), so the web does not change what the flag does —
+          // it REPORTS the typo, because a card that silently vanishes
+          // leaves no trace of the configuration mistake that hid it.
+          if (button.hidden !== undefined && button.hidden !== null && typeof button.hidden !== 'boolean') {
+            console.warn(
+              `[ChatBotComponent] Quick Help button "${button.id || button.title}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
+            );
+          }
+          return !button.hidden;
+        })
         // The id is the button's IDENTITY — the conversation tag carries
         // it, the restore resolves it, the grid's verdict keys on it. Two
         // cards with one id cannot both be honoured: keeping both made
@@ -2014,7 +2058,10 @@ export default {
 
     selectQuickHelpOption(option) {
       const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
-      if (!rawOption.service) {
+      // The title gate — quickHelpCardTitle owns it: a card with no title
+      // renders a blank label and promises nothing, so its press is
+      // refused. The composer path reads the SAME predicate.
+      if (this.quickHelpCardTitle(rawOption) === null) {
         return;
       }
       // A broken scope is a VISIBLE failure: the caption on the button names
@@ -2035,8 +2082,11 @@ export default {
       // Quick Help is a mode switch: replace any prior Quick Help selection.
       // Sidebar items (source !== QUICK_HELP_SOURCE) are additive and survive.
       // Also dedup: if the same Quick Help option is already selected, keep it as-is.
+      // The dedupe compares IDENTITIES: two cards without an id share no id,
+      // and the raw comparison called the second press a duplicate of the
+      // first — the card the user actually pressed was never installed.
       const existingIdx = this.selectedContextItems.findIndex(
-        (item) => item.source === QUICK_HELP_SOURCE && item.id === rawOption.id
+        (item) => item.source === QUICK_HELP_SOURCE && quickHelpIdentityOf(item) === quickHelpIdentityOf(rawOption)
       );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
@@ -2103,8 +2153,16 @@ export default {
         // has to run here too: a broken card, or a scope the tree cannot
         // EN-name yet, installs nothing and sends nothing — the query
         // would leave unfiltered while the chip promised the card's scope.
-        if (this.quickHelpScopeState(entry).broken || !this.quickHelpScopeIsNameable(entry.category)) {
-          const caption = this.quickHelpErrorCaption(entry);
+        // The TITLE gate comes with it (#1263): an entry with no title
+        // installs a chip with a blank label and an empty accessible
+        // name, and the query leaves while the chip promises a scope
+        // nobody can read. The tile path refuses the same card.
+        const caption = this.quickHelpCardCaption(entry);
+        if (
+          this.quickHelpCardTitle(entry) === null ||
+          this.quickHelpScopeState(entry).broken ||
+          !this.quickHelpScopeIsNameable(entry.category)
+        ) {
           // A hierarchy still ON ITS WAY is not a configuration problem:
           // the unavailable caption would point the operator at the
           // wrong thing. The loading copy says what is happening — the
@@ -2621,14 +2679,16 @@ export default {
           // the sidebar branch and send the button id as a label.
           conversation.tags.forEach((tag) => {
             // A saved conversation keeps the tag of an item, not the item
-            // itself. A Quick Help tag is the id of the button that produced
-            // it, so the button is looked up by that id: restoring it as a
-            // plain sidebar item would drop the labels the deployment
-            // declared for it, and would make the query look like a
-            // misconfigured selection. The lookup is on the id and never on a
-            // label — a sidebar selection and a Quick Help button can carry
-            // the same label, and restoring the wrong one silently changes
-            // the scope of the saved query.
+            // itself. A Quick Help tag is the IDENTITY of the button that
+            // produced it, so the button is looked up by that identity: its
+            // id, or its own title when the configuration declares no id.
+            // Restoring it as a plain sidebar item would drop the labels
+            // the deployment declared for it, and would make the query look
+            // like a misconfigured selection. The lookup is on the card's
+            // identity and never on a sidebar label — a sidebar selection
+            // and a Quick Help button can carry the same label, and
+            // restoring the wrong one silently changes the scope of the
+            // saved query.
             // The RESERVED just-chat id: a saved conversation keeps it
             // even when the deployment's config dropped the entry — the
             // scope it names (NONE, unfiltered by design) does not
@@ -2645,8 +2705,12 @@ export default {
               );
               return;
             }
-            // The string-form match rule — quickHelpTagMatches owns it.
-            const button = this.quickHelpButtons.find((candidate) => quickHelpTagMatches(candidate.id, tag));
+            // The identity rule — quickHelpTagNames owns it: the tag the
+            // card saved is the tag this reads, so a card WITHOUT an id
+            // (whose identity is its title) restores its own scope
+            // instead of falling through to the sidebar branch and
+            // becoming a label chip.
+            const button = this.quickHelpButtons.find((candidate) => quickHelpTagNames(candidate, tag));
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation

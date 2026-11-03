@@ -1314,6 +1314,47 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons[0].id).toBe('b');
     });
 
+    it('a "hidden" flag that is not a boolean is REPORTED, and its truthiness still decides (#1208)', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const loadConfig = require('../../config-loader').default;
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
+                { id: 'flagged', title: 'Flagged', hidden: true, category: '2' },
+                { id: 'plain', title: 'Plain', category: '3' }
+              ]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+
+      // The truthiness decides, on both platforms: a quoted "false" is a
+      // non-empty string, so the card is HIDDEN — the mobile reads the
+      // flag the same way, and the web does not change what it does.
+      expect(vm.quickHelpButtons.map((b) => b.id)).toEqual(['plain']);
+
+      // But the typo is REPORTED: a card that silently disappears leaves
+      // no trace of the configuration mistake that hid it. (The buttons
+      // are applied once per load — the mount's and the explicit call's —
+      // so the report follows the load, not the card.)
+      const hiddenWarnings = warn.mock.calls.filter((call) =>
+        String(call[0]).includes('the "hidden" flag must be a boolean')
+      );
+      expect(hiddenWarnings.length).toBeGreaterThan(0);
+      expect(String(hiddenWarnings[0][0])).toContain('quoted');
+      expect(String(hiddenWarnings[0][0])).toContain('string ("false")');
+
+      warn.mockRestore();
+    });
+
     it('loadQuickHelpButtons reads serviceLabels and keeps the button id as the service key', async () => {
       const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({
@@ -1618,11 +1659,13 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].unresolved).toBe(true);
       });
 
-      it('restores the title tag a falsy-id card saves as a sidebar tag, not a card', async () => {
-        // The title is what BOTH platforms now save for a falsy-id card.
-        // Neither restore matches a title to a button (the lookup is
-        // id-only): the tag falls to the sidebar branch on both, and —
-        // the title naming no tree entity — refuses the send on both.
+      it('restores the title tag a falsy-id card saves as ITS OWN card', async () => {
+        // The title is what BOTH platforms save for a falsy-id card, and
+        // it is the card's IDENTITY. The web's restore reads the identity
+        // (the id, or the card's own title when the configuration declares
+        // none), so the card comes back with the scope it was asked in
+        // (#1238). The mobile's restore index still matches IDS only —
+        // its half of the rule is filed separately.
         const loadConfig = require('../../config-loader').default;
         loadConfig.mockResolvedValue(falsyIdConfig);
 
@@ -1642,8 +1685,8 @@ describe('ChatBotComponent', () => {
         await vm.loadExistingConversation('c1');
 
         expect(vm.selectedContextItems.length).toBe(1);
-        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].service).toBe('Card Zero');
       });
 
       it('saves the STRING tag the mobile saves for a numeric id, and restores both spellings', async () => {
@@ -1779,6 +1822,120 @@ describe('ChatBotComponent', () => {
         expect(vm.quickHelpButtons).toHaveLength(2);
         expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
         expect(vm.quickHelpButtons[1].serviceKey).toBe('Array');
+      });
+    });
+
+    describe('an id-less card — the identity rule finds the card that wrote the tag (#1238)', () => {
+      // A hand-edited configuration can declare a button with no id at
+      // all. Its identity is then its OWN title — the string the card
+      // saves — so the restore has to look the card up by that identity:
+      // an id-only lookup found no card, the tag fell to the sidebar
+      // branch, and the scope the card was asked in silently disappeared
+      // on reload.
+      afterEach(resetQuickHelpButtons);
+
+      const twoIdLessCards = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { title: 'Card One', serviceLabels: ['Tomato'] },
+                { title: 'Card Two', serviceLabels: ['Potato'] }
+              ]
+            }
+          }
+        }
+      };
+
+      const treeWithTomatoAndPotato = [
+        {
+          catKey: '2',
+          name: 'Cultivos',
+          nameEN: 'Crops',
+          children: [
+            { name: 'Tomate', nameEN: 'Tomato' },
+            { name: 'Patata', nameEN: 'Potato' }
+          ]
+        }
+      ];
+
+      it('restores the scope of a card without an id from the title tag it saved', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ title: 'Card Zero', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        // The card declares no id: its identity is its own title — the
+        // very string the card saves.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Card Zero');
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Card Zero']
+        });
+        await vm.loadExistingConversation('c1');
+
+        // The restore finds the card that wrote the tag: the declared
+        // labels ride along, the way an id-carrying card's did. Before,
+        // the tag fell to the sidebar branch and the chip was an unnamed
+        // label that refused every send.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].service).toBe('Card Zero');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
+      });
+
+      it('pressing a second card without an id installs THAT card', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(twoIdLessCards);
+
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+
+        // Two cards without an id share no id: the raw compare called the
+        // second press a duplicate of the first, and the card the user
+        // pressed was never installed.
+        expect(vm.selectedContextItems).toHaveLength(1);
+        expect(vm.selectedContextItems[0].service).toBe('Card Two');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
+      });
+
+      it('re-titles an id-less chip from ITS OWN card', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(twoIdLessCards);
+
+        mockLiveTree(treeWithTomatoAndPotato);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
+        const chip = vm.selectedContextItems[0];
+
+        // The locale re-title looks the card up by its identity: a raw id
+        // compare matched an UNDEFINED id against the FIRST id-less card
+        // and re-titled the chip from that card — a chip wearing another
+        // card's name.
+        expect(vm.quickHelpTitleFor(chip, 'en')).toBe('Card Two');
       });
     });
 
@@ -2940,6 +3097,45 @@ describe('ChatBotComponent', () => {
       const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
       expect(payload.context.categoryLabel).toBe('Crops');
       expect(payload.context.serviceLabels).toEqual(['Crops']);
+    });
+
+    it('a composer entry with NO title installs nothing and sends nothing (#1263)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const notificationService = require('../../services/notificationService');
+      notificationService.error.mockClear();
+
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+      // The composer's own entry, with the scope it declares and NO
+      // title: the tile path refuses such a card, the composer path read
+      // no title at all — it installed a chip with a blank label and an
+      // empty accessible name, and sent the question while the chip
+      // promised a scope nobody could read.
+      vm.quickHelpButtons = [
+        {
+          id: 'titleless-entry',
+          service: '',
+          serviceLabels: ['Crops'],
+          serviceKey: 'titleless-entry',
+          category: '2',
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+      // The refusal has a face: it names the missing title, the way the
+      // grid card's caption does (the title first — the configuration
+      // defect outlives a hierarchy outage).
+      const lastError = notificationService.error.mock.calls.at(-1)[0];
+      expect(lastError).toBe('chatbot.quickHelpTitleMissing');
     });
 
     it('a composer entry refused while the hierarchy is still LOADING says so, not "could not be loaded"', async () => {

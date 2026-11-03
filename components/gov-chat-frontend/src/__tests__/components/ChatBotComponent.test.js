@@ -205,10 +205,7 @@ async function createChatBotWrapperAsync(tree, storeOverrides = {}) {
   return wrapper;
 }
 
-// One stubs block for every mount factory in this file. Two factories
-// used to carry their own copies and drift silently (a functional
-// `DsInput` in one, `true` in the other) — the same single-construction
-// rule the mobile harness answers for `testApp()`/`pumpChatBot`.
+// One stubs block for every mount factory in this file.
 function chatbotStubs() {
   return {
     ChatResponseFeedbackDialog: true,
@@ -1668,10 +1665,8 @@ describe('ChatBotComponent', () => {
         await vm.loadQuickHelpButtons();
 
         // The identity is the id's STRING form at the save/restore
-        // boundary — the shape the mobile has always written. The raw
-        // number the web used to write never matched it: a mobile-saved
-        // numeric-id conversation restored unscoped here (one-way
-        // break, now closed).
+        // boundary: the shape the mobile writes, so a saved conversation
+        // restores on both platforms.
         expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
 
         const chatHistoryService = require('../../services/chatHistoryService');
@@ -1699,12 +1694,9 @@ describe('ChatBotComponent', () => {
         expect(vm.selectedContextItems[0].source).toBe('quickHelp');
       });
 
-      it('a sidebar tag that spells a numeric button id restores the BUTTON — the mobile precedence', async () => {
-        // A tree service whose EN name is the decimal spelling of a
-        // numeric button id makes '5' a valid tag for BOTH restore
-        // branches. The button lookup runs FIRST on the string forms,
-        // so the button wins — the same first-wins verdict the mobile's
-        // string-keyed restore index gives the same conversation.
+      it('a sidebar tag that spells a numeric button id restores the BUTTON, not a sidebar scope', async () => {
+        // The button lookup runs first, so a tag that spells a numeric
+        // id restores the button whose id it spells.
         const loadConfig = require('../../config-loader').default;
         loadConfig.mockResolvedValue({
           features: {
@@ -1767,6 +1759,27 @@ describe('ChatBotComponent', () => {
         // the numeric card's '5'.
         expect(vm.quickHelpButtons[0].serviceKey).toBe('Array');
         expect(vm.quickHelpButtons[1].serviceKey).toBe('5');
+
+        // The same config in the other order: the scalar gate covers
+        // BOTH sides of the dedupe compare, so the array card is not
+        // dropped as a "duplicate" of the numeric one either way.
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [
+                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] },
+                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] }
+                ]
+              }
+            }
+          }
+        });
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons).toHaveLength(2);
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
+        expect(vm.quickHelpButtons[1].serviceKey).toBe('Array');
       });
     });
 
@@ -5295,7 +5308,6 @@ describe('ChatBotComponent', () => {
       // state test stays green. These are the widget-level reads — what
       // the card SHOWS, not the state behind it.
       const wrapper = await mountWithButtons([iconButton], { renderStubDefaultSlot: true });
-      await wrapper.vm.$nextTick();
 
       const card = wrapper.find('.quick-help-item');
       expect(card.exists()).toBe(true);
@@ -5312,7 +5324,6 @@ describe('ChatBotComponent', () => {
         [{ id: 'no-icon', title: { en: 'No Icon' }, icon: undefined, category: null }],
         { renderStubDefaultSlot: true }
       );
-      await wrapper.vm.$nextTick();
 
       const card = wrapper.find('.quick-help-item');
       expect(card.exists()).toBe(true);

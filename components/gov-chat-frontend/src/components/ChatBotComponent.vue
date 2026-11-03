@@ -584,9 +584,11 @@ function quickHelpTagOf(id, title) {
 // Whether a saved tag matches a button's id: both sides read as
 // strings, so a mobile-saved '5' matches a numeric 5 the same way an
 // old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
-// card never matches a '0' tag (its identity is the title).
+// card never matches a '0' tag (its identity is the title). The scalar
+// gate covers BOTH sides: the dedupe compares two configuration ids,
+// and `String([5])` is `'5'` — a non-scalar id matches nothing.
 function quickHelpTagMatches(candidateId, tag) {
-  return Boolean(candidateId) && isScalarId(candidateId) && String(candidateId) === String(tag);
+  return Boolean(candidateId) && isScalarId(candidateId) && isScalarId(tag) && String(candidateId) === String(tag);
 }
 
 // Tight-list renderer override: chat-tuned model output puts a parent
@@ -1915,12 +1917,7 @@ export default {
         // card, on either platform.
         .filter((button, _index, all) => {
           if (!button.id) return true;
-          // The dedupe keys on the id's STRING form: a hand-edited
-          // configuration can declare the "same" id in two JSON types
-          // (`5` and `"5"`), and the raw `===` kept both cards while the
-          // mobile's string key collapsed them — one file, two card
-          // counts. The falsy gate stays raw (#1244): a card with no
-          // truthy id is never a duplicate of anything.
+          // The string-form id rule — quickHelpTagMatches owns it.
           if (all.some((b, i) => i < _index && quickHelpTagMatches(b.id, button.id))) {
             console.warn(
               `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
@@ -1946,12 +1943,7 @@ export default {
           return {
             service: title,
             serviceLabels: explicitLabels,
-            // The tag the conversation saves: the id in its STRING form —
-            // the shape the mobile has always written, so a numeric id
-            // saves the same tag on both platforms and a saved
-            // conversation restores on both. The RAW truthiness read
-            // stays (#1244): a falsy id (0, '', null) keeps the TITLE as
-            // the identity.
+            // The saved conversation tag — quickHelpTagOf owns the rule.
             serviceKey: quickHelpTagOf(button.id, title),
             textKey: button.title,
             visibleText: visibleText,
@@ -2649,12 +2641,7 @@ export default {
               );
               return;
             }
-            // The compare reads the STRING forms of both sides: a
-            // mobile-saved '5' matches a numeric 5 the same way an old
-            // web-saved raw 5 does. The FALSY gate is the #1244 rule
-            // intact — a raw-0 card never matches a '0' tag (its
-            // identity is the title), and a title tag never matches an
-            // id-only lookup.
+            // The string-form match rule — quickHelpTagMatches owns it.
             const button = this.quickHelpButtons.find((candidate) => quickHelpTagMatches(candidate.id, tag));
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));

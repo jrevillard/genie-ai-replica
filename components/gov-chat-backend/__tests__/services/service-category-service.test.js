@@ -17,7 +17,12 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    dbService: { getConnection: jest.fn() }
+    // The canonical absence predicate, real (pure function): the mocked
+    // dbService must classify an absence exactly like the real one.
+    dbService: {
+      getConnection: jest.fn(),
+      _isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
+    }
   }),
   { virtual: true }
 );

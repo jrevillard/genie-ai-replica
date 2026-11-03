@@ -10,7 +10,7 @@ const { request } = require('./auth');
  * @returns {Promise<object>} The Keycloak user representation
  */
 async function resolveUser(adminToken, realm, username) {
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${encodeURIComponent(username)}&exact=true`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
 
@@ -46,10 +46,15 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
     throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
   }
 
-  await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+  const assignRes = await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
     headers: { Authorization: `Bearer ${adminToken}` },
     body: rolesToAssign,
   });
+  if (assignRes.status !== 204 && assignRes.status !== 200) {
+    throw new Error(
+      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`
+    );
+  }
 }
 
 /**
@@ -83,10 +88,52 @@ async function createUser(adminToken, realm, userData) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 
-  const user = await resolveUser(adminToken, realm, username);
+  let user;
+  try {
+    user = await resolveUser(adminToken, realm, username);
+  } catch (err) {
+    if (status === 409) {
+      // The realm forbids duplicate emails, so a 409 can also mean that
+      // ANOTHER account owns the fixture email — the username lookup then
+      // finds nothing, and the bare "not found" would point the operator
+      // at the wrong cause.
+      throw new Error(
+        `${err.message} — the create answered 409, which may also be an email conflict ` +
+          `(another account owns ${email})`
+      );
+    }
+    throw err;
+  }
   await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
   return user.id;
+}
+
+/**
+ * Remove realm roles from a user.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} userId - The user's UUID
+ * @param {string[]} roleNames - Realm role names to remove
+ * @returns {Promise<string[]>} The role names that were actually removed
+ */
+async function removeRealmRoles(adminToken, realm, userId, roleNames) {
+  if (!roleNames || roleNames.length === 0) return [];
+
+  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  const toRemove = rolesRes.data.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
+  if (toRemove.length === 0) return [];
+
+  const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: toRemove,
+  });
+  if (res.status !== 204) {
+    throw new Error(`Failed to remove the realm roles of ${userId}: HTTP ${res.status}`);
+  }
+  return toRemove.map((r) => r.name);
 }
 
 /**
@@ -110,24 +157,35 @@ async function createUser(adminToken, realm, userData) {
  * @returns {Promise<string>} The user UUID
  */
 async function ensureUser(adminToken, realm, userData) {
-  const { username, password } = userData;
+  const { username, email, password } = userData;
   const transient = [408, 425, 429];
   let status = 0;
   let body = '';
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const res = await request('POST', `/auth/admin/realms/${realm}/users`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: {
-        username,
-        email: userData.email,
-        firstName: userData.firstName || username,
-        lastName: userData.lastName || 'Test',
-        enabled: true,
-        emailVerified: true,
-        credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
-      },
-    });
+    let res;
+    try {
+      res = await request('POST', `/auth/admin/realms/${realm}/users`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: {
+          username,
+          email,
+          firstName: userData.firstName || username,
+          lastName: userData.lastName || 'Test',
+          enabled: true,
+          emailVerified: true,
+          credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
+        },
+      });
+    } catch (err) {
+      // A transport-level failure (connection refused, timeout) rejects the
+      // promise instead of answering — Keycloak not listening yet is the
+      // most likely transient, and it must not kill the provisioning.
+      status = 0;
+      body = err.message;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 2000));
+      continue;
+    }
     status = res.status;
     body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
     const isTransient = status === 0 || status >= 500 || transient.includes(status);
@@ -158,8 +216,9 @@ async function ensureUser(adminToken, realm, userData) {
 
   // Fixture health — the login-visible state the browser session depends
   // on (the exact-match lookup already carries it, so no extra read is
-  // needed). The email is deliberately NOT part of it: the login reads
-  // the username, and the venues spell the fixture emails differently.
+  // needed). The email is deliberately NOT part of it: an account created
+  // before the fixtures module existed carries the previous address, and
+  // the login reads the username, not the email.
   const healthy = user.enabled === true && user.emailVerified === true;
   if (!healthy || (user.requiredActions && user.requiredActions.length > 0)) {
     throw new Error(
@@ -327,6 +386,7 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 module.exports = {
   createUser,
   ensureUser,
+  removeRealmRoles,
   rotateRealmKeys,
   getRealmSettings,
   updateRealmSettings,

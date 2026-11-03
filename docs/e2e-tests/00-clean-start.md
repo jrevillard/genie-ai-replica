@@ -302,7 +302,7 @@ admin-surface specs (`tests/e2e/admin/`) need the same admin login and, on
 top of it, a login that carries **no role granting admin access** — the
 non-admin side of the `requireAdmin` contract.
 
-Both fixtures are defined in one place (`tests/e2e/helpers/fixtures.js`)
+Both fixtures are defined in one place (`tests/e2e/helpers/admin-fixtures.js`)
 and provisioned by one script:
 
 ```bash
@@ -317,7 +317,11 @@ node tests/e2e/provision-admin-fixtures.js
 ```
 
 The script is safe to re-run: an existing account is converged (password
-reset, fixture-health check, role assignment) instead of failing.
+reset, role assignment, and the admin-granting role removed from the
+role-less fixture) instead of failing. It DOES fail loudly on an account
+the realm left in a broken login state (disabled, unverified, or carrying
+a required action) — that is a realm configuration problem, and the error
+names it.
 
 **Test admin credentials** (documents and admin suites):
 - Username: `testadmin`

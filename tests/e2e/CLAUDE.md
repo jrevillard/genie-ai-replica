@@ -108,8 +108,10 @@ The admin-surface fixtures are defined once, in `tests/e2e/helpers/admin-fixture
 and provisioned by `tests/e2e/provision-admin-fixtures.js` — the CI e2e job
 and the Phase 0 procedure (`docs/e2e-tests/00-clean-start.md`) both run it,
 so a credential is written in one place. The helper converges an existing
-account (password reset, fixture-health check, role assignment) instead of
-failing.
+account (password reset, role assignment, and the admin-granting role
+removed from the role-less fixture); it fails loudly on an account the
+realm left in a broken login state (disabled, unverified, carrying a
+required action) and names the cause.
 
 ## CI
 

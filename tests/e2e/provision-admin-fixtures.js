@@ -17,17 +17,34 @@
  * resolve @playwright/test from the root node_modules — run `npm install`
  * at the repository root first.
  */
-const { ADMIN_FIXTURES } = require('./helpers/fixtures');
-const { ensureUser } = require('./helpers/keycloak-admin');
+const { ADMIN_FIXTURES } = require('./helpers/admin-fixtures');
+const { ensureUser, removeRealmRoles } = require('./helpers/keycloak-admin');
 const { getAdminToken } = require('./helpers/auth');
 
 const REALM = 'genie';
 
+// The admin-granting role the non-admin fixture must NOT carry: the
+// backend gate (requireAdmin) reads the realm role, so a fixture that
+// kept it would answer 200 where the spec expects 403.
+const ADMIN_ROLE = 'admin';
+
 (async () => {
   const adminToken = process.env.ADMIN_TOKEN || (await getAdminToken());
-  // The fixtures are independent of each other (distinct usernames, one
-  // realm), so they are provisioned concurrently.
-  await Promise.all(ADMIN_FIXTURES.map((fixture) => ensureUser(adminToken, REALM, fixture)));
+  // Sequential: both fixtures live in the same realm, and a failure must
+  // not leave one half-provisioned behind a process exit.
+  for (const fixture of ADMIN_FIXTURES) {
+    const userId = await ensureUser(adminToken, REALM, fixture);
+    if (!fixture.realmRoles || fixture.realmRoles.length === 0) {
+      // The role-less fixture: "nothing was assigned" is not "carries
+      // none" — a role granted once (by hand, or by an earlier fixture
+      // revision) would silently turn the non-admin half of the authz
+      // spec into an admin session.
+      const removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
+      if (removed.length > 0) {
+        console.log(`${fixture.username}: removed the drifted role(s) ${removed.join(', ')}`);
+      }
+    }
+  }
   console.log(`admin fixtures ready: ${ADMIN_FIXTURES.map((f) => f.username).join(', ')}`);
 })().catch((e) => {
   console.error(e.message);

@@ -94,10 +94,12 @@ test.describe('Admin overview failure states', () => {
 
     await page.reload({ waitUntil: 'networkidle' });
 
-    // Recovery: the dashboard renders the successful load's payload and
-    // the component reports no failure any more.
-    await expect(page.locator('[data-test-id="stat-system-uptime"] .stat-value')).toHaveText('42.42%');
-    await expect(page.locator('[data-test-id="notification-error"]', { hasText: COMPONENT_ERROR_TEXT })).toHaveCount(0);
+    // Recovery: the dashboard renders the successful load's payload. The
+    // witness is the VALUE (42.42% on a tile whose initial value is
+    // 99.98) — not the absence of a toast: the notification hides itself
+    // after 3 s, so "no toast right now" can also mean "the toast is not
+    // there yet" and would pass on a failed recovery.
+    await expect(page.locator('[data-test-id="stat-system-uptime"]')).toContainText('42.42%');
     expect(recovery.calls).toBeGreaterThanOrEqual(1);
   });
 });

@@ -845,12 +845,12 @@ workflow:
     # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
     # and a role-less login (testplain — requireAdmin must answer 403).
     # The provisioning script (tests/e2e/provision-admin-fixtures.js) is the
-    # single definition of those fixtures: it converges them the way the
-    # testuser block above does — bounded retry on a transient Keycloak
-    # answer, password convergence on the already-exists path, a
-    # fixture-health check — so a stale account fails HERE instead of as a
-    # login failure minutes later. testuser above keeps its admin role for
-    # the document tests.
+    # single definition of those fixtures: it converges them — bounded
+    # retry on a transient or unanswered Keycloak call, password
+    # convergence on the already-exists path, role assignment, and the
+    # admin-granting role removed from the role-less fixture — so a stale
+    # account fails HERE instead of as a login failure minutes later.
+    # testuser above keeps its admin role for the document tests.
     - >
       ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node tests/e2e/provision-admin-fixtures.js
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
@@ -3540,6 +3540,7 @@ test:flutter:
   - tests/e2e/documents/**/*
   - tests/e2e/admin/**/*
   - tests/e2e/helpers/**/*
+  - tests/e2e/provision-admin-fixtures.js
   - tests/e2e/fixtures/**/*
   - tests/e2e/theme-runtime-config.spec.js
   - playwright.config.js

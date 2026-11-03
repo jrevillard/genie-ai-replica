@@ -26,13 +26,6 @@ module.exports = defineConfig({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,
-    // The flag disables Chromium's user-namespace sandbox: the e2e job
-    // runs Playwright inside a container (image node:20-bookworm-slim),
-    // where the sandbox has no setuid helper and no usable user
-    // namespaces to fall back on.
-    launchOptions: {
-      args: ['--no-sandbox'],
-    },
   },
   projects: [
     {

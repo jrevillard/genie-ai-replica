@@ -1,5 +1,5 @@
 const { expect } = require('@playwright/test');
-const { ADMIN_FIXTURES } = require('./fixtures');
+const { ADMIN_FIXTURES } = require('./admin-fixtures');
 
 /**
  * The login credentials of an admin-surface fixture.
@@ -19,7 +19,7 @@ const TEST_USER = {
   password: 'TestPass123!'
 };
 
-// The admin-surface fixtures live in helpers/fixtures.js — the same
+// The admin-surface fixtures live in helpers/admin-fixtures.js — the same
 // definitions the provisioning script (tests/e2e/provision-admin-fixtures.js)
 // creates, so a credential is written once.
 //

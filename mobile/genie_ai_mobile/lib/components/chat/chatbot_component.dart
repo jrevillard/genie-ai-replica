@@ -196,6 +196,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   //          a keyboard opening must not re-read the asset.
   String? _quickHelpButtonsLocale;
 
+  // The overlay's broken/healthy split, memoized against the inputs it
+  // reads: the button list (identity — a reload replaces it), the
+  // resolver (identity — a tree fetch or retry replaces it), and the
+  // outage flag (the resolver's null is not the outage's fact). The
+  // locale marker is deliberately NOT a key: verdicts are
+  // locale-independent and the titles live in the button maps, so the
+  // only marker move without a button-list replacement (the failed-load
+  // catch) could only trigger a re-walk for a result guaranteed
+  // identical. While the overlay is open, every build of the chat
+  // screen re-ran the resolver walk per button; with the memo the walk
+  // runs when one of those inputs moves and a rebuild without one is a
+  // field read — the hit path compares fields without building
+  // anything.
+  ({
+    List<Map<String, dynamic>> buttons,
+    QuickHelpScopeResolver? resolver,
+    bool unavailable,
+    QuickHelpPartition partition,
+  })?
+  _quickHelpPartitionMemo;
+
   // The locale the sidebar scope's title was last re-fetched under — the
   // drift marker the same way _quickHelpButtonsLocale is one, scoped to
   // its own fetch. A null marker names the state before any fetch: a
@@ -489,6 +510,51 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
     widget.onChatStateChanged?.call();
   }
+
+  /// The overlay's broken/healthy split, memoized (see the memo field
+  /// beside the locale marker): the walk runs when the buttons, the
+  /// resolver, the outage flag or the locale moved; a rebuild without
+  /// such a move reads the record, compared field-wise so the hit path
+  /// builds nothing.
+  QuickHelpPartition _quickHelpOverlayPartition() {
+    final memo = _quickHelpPartitionMemo;
+    final buttons = _quickHelpButtons;
+    final resolver = _scopeResolver;
+    final unavailable = _treeUnavailable;
+    if (memo != null &&
+        identical(memo.buttons, buttons) &&
+        identical(memo.resolver, resolver) &&
+        memo.unavailable == unavailable) {
+      return memo.partition;
+    }
+    final partition = quickHelpPartitionButtons(
+      buttons,
+      (button) => unavailable
+          ? QuickHelpScopeResolver.unavailableScopeFor(button)
+          : (resolver?.stateFor(button) ?? QuickHelpScopeResolver.pending),
+    );
+    _quickHelpPartitionMemo = (
+      buttons: buttons,
+      resolver: resolver,
+      unavailable: unavailable,
+      partition: partition,
+    );
+    return partition;
+  }
+
+  /// The scope facts BOTH send paths encode onto the wire — ONE argument
+  /// list, read once per send: Quick Help sets _activeServiceLabels;
+  /// sidebar sets the category; the category id speaks its own
+  /// truthiness ('' and 'general' name NO scope). A second hand-synced
+  /// call site is the drift that once sent the fallback's question over
+  /// the whole corpus while the chip promised a filtered one.
+  ({bool hasContext, String? categoryLabelEn, List<String> serviceLabels})
+  get _wireScopeFacts => queryScopeFacts(
+    categoryId: _selectedCategoryId,
+    categoryNameEn: _selectedCategoryNameEn,
+    serviceLabels: _activeServiceLabels,
+    sidebarServiceLabels: _sidebarServiceLabelsEn,
+  );
 
   void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1083,12 +1149,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription = null;
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
-    // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
-    // Either constitutes a context-filtered query.
-    final hasContext =
-        _selectedCategoryId != null ||
-        _activeServiceLabels.isNotEmpty ||
-        _sidebarServiceLabelsEn.isNotEmpty;
+    final facts = _wireScopeFacts;
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -1096,28 +1157,28 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sessionId': sessionId,
         if (_currentConversationId != null)
           'conversationId': _currentConversationId,
-        if (hasContext) ...{
+        if (facts.hasContext) ...{
           'messages': messagesForApi,
           'context': {
             // ENGLISH is the SSOT of the filter wire: chunk_labels carry the
             // EN translation, so the query speaks EN. The localized name is
             // display-only.
-            'categoryLabel': _selectedCategoryNameEn.isNotEmpty
-                ? _selectedCategoryNameEn
-                : null,
-            'serviceLabels': mergeServiceLabels(
-              _activeServiceLabels,
-              _sidebarServiceLabelsEn,
-            ),
+            'categoryLabel': facts.categoryLabelEn,
+            'serviceLabels': facts.serviceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
-          'contextOption': 'conversation-with-context-labels',
+          // The mode token comes from the generated contract, ONE spelling
+          // for both send paths — a spec rename moves both.
+          'contextOption': ApiQueriesPostRequestContextOptionEnum
+              .conversationWithContextLabels
+              .value,
         } else ...{
           'messages': messagesForApi,
           'context': {
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
-          'contextOption': 'single-message',
+          'contextOption':
+              ApiQueriesPostRequestContextOptionEnum.singleMessage.value,
         },
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1332,6 +1393,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final queriesApi = ref.read(queriesApiProvider);
 
+      final facts = _wireScopeFacts;
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
         messages: messagesForApi
@@ -1344,11 +1406,25 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             )
             .toList(),
-        // The language the user reads. Without it the backend answers in
-        // English, whatever the interface language is.
+        // The SAME facts the streaming path speaks (_wireScopeFacts — one
+        // argument list for both send paths). Omitting the labels here
+        // once sent the fallback's question over the WHOLE corpus while
+        // the scope chip above promised a filtered one. ENGLISH stays the
+        // SSOT of the filter wire — the localized name is display-only —
+        // and an UNSCOPED query carries NO labels. The bodies are not
+        // byte-identical (the generated DTO always emits its null/empty
+        // keys where the streaming map omits them); they are
+        // SEMANTICALLY equal because the backend reads a label list only
+        // when its length is > 0.
         context: QueryContext(
+          categoryLabel: facts.hasContext ? facts.categoryLabelEn : null,
+          serviceLabels: facts.hasContext ? facts.serviceLabels : const [],
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
+        contextOption: facts.hasContext
+            ? ApiQueriesPostRequestContextOptionEnum
+                  .conversationWithContextLabels
+            : ApiQueriesPostRequestContextOptionEnum.singleMessage,
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );
@@ -2232,13 +2308,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       :broken,
       :healthy,
     ) = _showQuickHelpOverlay && _quickHelpButtons.isNotEmpty
-        ? quickHelpPartitionButtons(
-            _quickHelpButtons,
-            (button) => _treeUnavailable
-                ? QuickHelpScopeResolver.unavailableScopeFor(button)
-                : (_scopeResolver?.stateFor(button) ??
-                      QuickHelpScopeResolver.pending),
-          )
+        ? _quickHelpOverlayPartition()
         : (
             broken: <(Map<String, dynamic>, Map<String, dynamic>)>[],
             healthy: <Map<String, dynamic>>[],
@@ -2691,100 +2761,111 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
                         // ONE scroll view for rows and grid: an outage
                         // breaks EVERY card, and a column of full-width
-                        // rows can exceed the viewport. The grid gives
-                        // up its own scrolling for the shared one.
-                        return SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final (button, scope) in broken)
-                                _quickHelpBrokenCard(
+                        // rows can exceed the viewport. The slivers keep
+                        // the shared scroll AND a lazy viewport: a
+                        // shrinkWrap grid inside this scroll view built
+                        // and laid out EVERY card on every frame, where
+                        // the sliver rows and grid build only what the
+                        // viewport (plus its cache extent) needs.
+                        return CustomScrollView(
+                          slivers: [
+                            // The diagnosis rows are a builder sliver too
+                            // — an outage breaks EVERY card, and an eager
+                            // list would rebuild them all per frame.
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final (button, scope) = broken[index];
+                                return _quickHelpBrokenCard(
                                   button: button,
                                   scope: scope,
                                   theme: theme,
                                   tokens: tokens,
                                   dark: isDark,
-                                ),
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: crossAxisCount,
-                                      childAspectRatio: aspectRatio,
-                                      mainAxisSpacing: quickHelpGridSpacing,
-                                      crossAxisSpacing: quickHelpGridSpacing,
-                                    ),
-                                // The grid renders the healthy TILE
-                                // placements only — a healthy
-                                // composer-placed entry has no mobile
-                                // surface (a BROKEN composer entry keeps
-                                // its diagnosis row above the grid: a
-                                // broken card is a VISIBLE failure, and
-                                // the surface it has nowhere to occupy
-                                // does not change the failure the row
-                                // names).
-                                itemCount: gridButtons.length,
-                                itemBuilder: (context, index) {
-                                  final button = gridButtons[index];
-                                  final String translatedTitle =
-                                      quickHelpTitleOf(button) ?? '';
-                                  final String iconAsset =
-                                      button['iconAsset']?.toString() ?? '';
-                                  final String inlineSvg =
-                                      button['iconInlineSvg']?.toString() ?? '';
-                                  final QuickHelpCardStyles cardStyles =
-                                      button['styles'] as QuickHelpCardStyles;
+                                );
+                              }, childCount: broken.length),
+                            ),
+                            SliverGrid(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    childAspectRatio: aspectRatio,
+                                    mainAxisSpacing: quickHelpGridSpacing,
+                                    crossAxisSpacing: quickHelpGridSpacing,
+                                  ),
+                              // The grid renders the healthy TILE
+                              // placements only — a healthy
+                              // composer-placed entry has no mobile
+                              // surface (a BROKEN composer entry keeps
+                              // its diagnosis row above the grid: a
+                              // broken card is a VISIBLE failure, and
+                              // the surface it has nowhere to occupy
+                              // does not change the failure the row
+                              // names).
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final button = gridButtons[index];
+                                final String translatedTitle =
+                                    quickHelpTitleOf(button) ?? '';
+                                final String iconAsset =
+                                    button['iconAsset']?.toString() ?? '';
+                                final String inlineSvg =
+                                    button['iconInlineSvg']?.toString() ?? '';
+                                final QuickHelpCardStyles cardStyles =
+                                    button['styles'] as QuickHelpCardStyles;
 
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        DsRadii.lg,
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.lg,
+                                    ),
+                                    onTap: () => _quickHelpPressed(button),
+                                    child: _quickHelpCardShell(
+                                      background: quickHelpCardBackgroundFor(
+                                        cardStyles,
+                                        tokens,
+                                        isDark,
                                       ),
-                                      onTap: () => _quickHelpPressed(button),
-                                      child: _quickHelpCardShell(
-                                        background: quickHelpCardBackgroundFor(
-                                          cardStyles,
-                                          tokens,
-                                          isDark,
-                                        ),
-                                        borderColor:
-                                            cardStyles.outline ??
-                                            tokens.borderLight,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // The header is a FLEX
-                                            // child: at an extreme
-                                            // accessibility font scale
-                                            // its text alone can ask
-                                            // for more height than the
-                                            // fixed tile has, and the
-                                            // flex bound clips the
-                                            // header instead of the
-                                            // row forcing the column
-                                            // past the tile.
-                                            Flexible(
-                                              child: _quickHelpCardHeader(
-                                                broken: false,
-                                                iconAsset: iconAsset,
-                                                inlineSvg: inlineSvg,
-                                                title: translatedTitle,
-                                                theme: theme,
-                                                tokens: tokens,
-                                              ),
+                                      borderColor:
+                                          cardStyles.outline ??
+                                          tokens.borderLight,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // The header is a FLEX
+                                          // child: at an extreme
+                                          // accessibility font scale
+                                          // its text alone can ask
+                                          // for more height than the
+                                          // fixed tile has, and the
+                                          // flex bound clips the
+                                          // header instead of the
+                                          // row forcing the column
+                                          // past the tile.
+                                          Flexible(
+                                            child: _quickHelpCardHeader(
+                                              broken: false,
+                                              iconAsset: iconAsset,
+                                              inlineSvg: inlineSvg,
+                                              title: translatedTitle,
+                                              theme: theme,
+                                              tokens: tokens,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
+                                  ),
+                                );
+                              }, childCount: gridButtons.length),
+                            ),
+                          ],
                         );
                       },
                     ),

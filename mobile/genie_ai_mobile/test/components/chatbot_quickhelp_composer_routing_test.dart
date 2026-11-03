@@ -94,14 +94,14 @@ void main() {
     expect(
       find.ancestor(
         of: find.text('Births Card'),
-        matching: find.byType(GridView),
+        matching: find.byType(SliverGrid),
       ),
       findsOneWidget,
     );
     expect(
       find.ancestor(
         of: find.text('Births Card 2'),
-        matching: find.byType(GridView),
+        matching: find.byType(SliverGrid),
       ),
       findsOneWidget,
     );
@@ -121,7 +121,7 @@ void main() {
       // Every entry targets the composer the platform lacks — the
       // overlay does not mount to render the heading above an empty
       // grid.
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byType(SliverGrid), findsNothing);
       expect(find.text('Just Chat'), findsNothing);
     },
   );
@@ -139,7 +139,7 @@ void main() {
       final caption = find.textContaining('no title in this language');
       expect(caption, findsOneWidget);
       expect(
-        find.ancestor(of: caption, matching: find.byType(GridView)),
+        find.ancestor(of: caption, matching: find.byType(SliverGrid)),
         findsNothing,
       );
     },
@@ -161,7 +161,7 @@ void main() {
       // The diagnosis row is not a grid tile (the empty grid widget
       // itself still mounts — the outage presentation's own shape).
       expect(
-        find.ancestor(of: caption, matching: find.byType(GridView)),
+        find.ancestor(of: caption, matching: find.byType(SliverGrid)),
         findsNothing,
       );
     },
@@ -180,13 +180,13 @@ void main() {
       final caption = find.textContaining('no title in this language');
       expect(caption, findsOneWidget);
       expect(
-        find.ancestor(of: caption, matching: find.byType(GridView)),
+        find.ancestor(of: caption, matching: find.byType(SliverGrid)),
         findsNothing,
       );
       expect(
         find.ancestor(
           of: find.text('Births Card'),
-          matching: find.byType(GridView),
+          matching: find.byType(SliverGrid),
         ),
         findsOneWidget,
       );

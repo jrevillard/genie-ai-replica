@@ -41,7 +41,8 @@ watch.
 | **Stateless** | `backend`, `frontend`, `kong`, `otel-collector` | Yes (freely, except `otel-collector`) | Add replicas behind the same Kong route; `otel-collector` is `mode: global` (one replica per Swarm node — do not override) |
 | **Stateful — single-writer** | `arango-vector-db`, `postgres`, `redis-cache` | Single instance by design | HA needs external/managed service |
 | **Stateful — sticky** | `document-repository`, `keycloak` | Keycloak: clustering mode. Doc-repo: shared volume (NFS, EFS) | Uploads are volume-bound |
-| **AI — GPU-bound** | `vllm`, `embedding`, `reranker`, `retriever-arango-service`, `dataprep-arango-service`, `chatqna-xeon-backend-server`, `translation`, `textgen` | Per-GPU budget | One replica per GPU; concurrent requests contend |
+| **AI — GPU-bound** | `vllm`, `embedding`, `reranker`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `translation`, `textgen` | Per-GPU budget | One replica per GPU; concurrent requests contend |
+| **AI — single-replica** | `dataprep-arango-service` | **No** | Single-replica contract (#1247): per-process task registry, boot recovery and slot pool break silently beyond one replica — see the Dataprep section |
 | **Observability — storage-bound** | `victoriametrics`, `victorialogs`, `victoriatraces` | Per storage | Retention/size tradeoff (see env vars) |
 
 ## Stateless services
@@ -179,14 +180,16 @@ Caveats:
 
 ### Dataprep (`dataprep-arango-service`)
 
-```bash
-docker service scale genieai_dataprep-arango-service=2
-```
+**Do not scale dataprep — single-replica contract (#1247).** Its ingestion
+task registry (ingest 409 idempotency, `kill_ingest`, `task_status`), the
+boot-time stuck-`Ingesting` recovery and the flock ingest slot pool are all
+per-process. A second replica breaks them silently: double ingests,
+cross-replica status release. Each replica also logs a warning at boot
+stating this contract — more than one boot line for dataprep at the same
+time means the deployment is mis-scaled.
 
-Caveats:
+To raise ingestion throughput on the single replica:
 
-- Each replica runs labelling LLM calls against vLLM — multiple replicas
-  multiply vLLM load (see `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`).
 - **Per-replica concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
   `20`, raised from `5` after the labelling-bottleneck fix).
 - **Batch size**: `DATAPREP_LLM_LABEL_BATCH_SIZE` (default `4`) — chunks
@@ -308,7 +311,7 @@ patterns in [Stateful — single-writer](#stateful--single-writer) and
 | Keycloak login slow | Auth DB CPU-bound | Scale Postgres or move to managed |
 | `victorialogs` disk filling | Retention too long | Lower `VICTORIALOGS_RETENTION` or add storage |
 | `chatqna` 500s | Downstream (retriever/reranker) saturated | Scale downstream; chatqna is stateless |
-| Dataprep ingest slow | vLLM labelling bottleneck | Raise `DATAPREP_MAX_CONCURRENT_BATCHES`, then scale dataprep |
+| Dataprep ingest slow | vLLM labelling bottleneck | Raise `DATAPREP_MAX_CONCURRENT_BATCHES` — dataprep cannot be scaled (single-replica contract, #1247) |
 
 ## Rollback
 

@@ -77,6 +77,36 @@ contractual evidence — a fresh clone does not carry them.)
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.
+- **Issue #1362 — SSA duplicate env names — fixed across the whole chart
+  (0.2.153 → 0.2.154)** — helm-controller applies HelmReleases with
+  server-side apply, and SSA merges container `env` as a list of dicts
+  keyed by `name`: two rows sharing a name are a hard install error,
+  not the last-wins merge plain kubectl performs. The chart derives
+  CORS/CSP rows AND lets overlays override them through the env maps,
+  so the documented override was unreachable (and the install failed).
+  New `genieai-umbrella.envRowsDedupe` (one row per name, the
+  operator's wins, at the first occurrence's position) now wraps all
+  TWELVE merge sites — the issue's backend pair plus the re-review
+  catch: the service factory's derived `PORT` row merged after the
+  per-service pass, the same failure on a different merge (reproduced
+  on backend/frontend/chatqna). The convergence Job fails the render
+  when an `envSecrets` row names one of the Job's inline-fixed
+  variables (snapshot taken before the rows join the placeholder-known
+  set — secret-backed rows stay the normal path). Proven: override →
+  one row with the operator's value; no-override render byte-identical;
+  live 0.2.154 → 20 deployments, zero duplicate env names.
+- **Issue #1378 — install-prereqs aborted by `helm repo update` —
+  fixed** — the bare full update exits nonzero when ANY repository in
+  the helm config is unreachable, and set -e killed the whole run
+  mid-way on flaky-egress windows (forge: every run stopped at cnpg).
+  Both sites scope the refresh to the repo the install needs and
+  tolerate the failure (`helm install` fetches the target index itself
+  when the cache is missing; a real failure still dies loudly at the
+  install). The review round added the named cause — helm's stderr
+  lands in the log line, since a stale cache is healed by this update
+  alone. Failure class reproduced with a dead repo via
+  `HELM_REPOSITORY_CONFIG`: old form exits 1 silently, shipped form
+  logs and continues.
 - **The branch was rebased onto `main` again (17 new commits, 648 replayed)** —
   main carried the compose non-root closeout (#1227), the Quick Help
   mobile waves, the Dart client drift CI gate and the OKF MR3 closeout.

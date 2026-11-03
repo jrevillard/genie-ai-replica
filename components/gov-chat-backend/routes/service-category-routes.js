@@ -1,9 +1,13 @@
 const express = require('express');
-const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
+  // One router PER factory call. A module-level router would be mutated on
+  // every factory call: the second mount would stack its routes onto the
+  // first router, whose handlers close over the FIRST service instance.
+  const router = express.Router();
+
   if (!serviceCategoryService || typeof serviceCategoryService.getAllCategoriesWithServices !== 'function') {
     logger.error('Invalid serviceCategoryService provided to service-category-routes');
     throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
@@ -40,7 +44,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/categories', async (req, res) => {
+  router.get('/categories', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -53,7 +57,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      // Typed errors (NotFoundError/ValidationError/...) carry their own
+      // status code — the global error middleware renders them.
+      next(error);
     }
   });
 
@@ -88,7 +94,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/categories/detailed', async (req, res) => {
+  router.get('/categories/detailed', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -101,7 +107,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -200,7 +206,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/:categoryId/translations', async (req, res) => {
+  router.get('/:categoryId/translations', async (req, res, next) => {
     const start = Date.now();
     try {
       const { categoryId } = req.params;
@@ -213,7 +219,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -239,7 +245,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/services/:serviceId/translations', async (req, res) => {
+  router.get('/services/:serviceId/translations', async (req, res, next) => {
     const start = Date.now();
     try {
       const { serviceId } = req.params;
@@ -252,7 +258,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -317,7 +323,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/search', async (req, res) => {
+  router.get('/search', async (req, res, next) => {
     const start = Date.now();
     try {
       const { query, locale = 'en' } = req.query;
@@ -336,7 +342,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -426,7 +432,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.delete('/:categoryId', async (req, res) => {
+  router.delete('/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       logger.info(`Attempting to delete category: ${req.params.categoryId}`);
@@ -443,7 +449,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -471,7 +477,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.delete('/services/:serviceId', async (req, res) => {
+  router.delete('/services/:serviceId', async (req, res, next) => {
     const start = Date.now();
     try {
       const { serviceId } = req.params;
@@ -484,11 +490,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      if (error.code === 404) {
-        res.status(404).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: error.message });
-      }
+      // The service raises a typed NotFoundError for an unknown id — the
+      // global middleware renders it 404.
+      next(error);
     }
   });
 

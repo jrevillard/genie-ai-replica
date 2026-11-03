@@ -638,6 +638,21 @@ describe('ServiceCategoryService', () => {
       mockDb.query.mockRejectedValue(new Error('Delete failed'));
       await expect(service.deleteService('svc-1')).rejects.toThrow('Delete failed');
     });
+
+    it('answers typed 404 when the service disappears between the check and the remove', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServices.remove.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.deleteService('svc-1');
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
+    });
   });
 
   describe('searchCategoriesAndServices', () => {

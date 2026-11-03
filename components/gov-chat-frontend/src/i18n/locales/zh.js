@@ -464,6 +464,7 @@ export default {
       saveError: '保存层级项失败。',
       loadError: '加载知识层级失败。',
       loadTranslationsError: '加载翻译失败。',
+      translationsNotLoaded: '翻译未加载 — 保存前请重新加载。',
       confirmCancelTitle: '未保存的更改',
       confirmCancelEdit: '您有未保存的更改。确定要取消吗？',
       confirmDeleteTitleCategory: '删除类别？',

@@ -469,6 +469,7 @@ export default {
       saveError: 'Fehler beim Speichern des Hierarchieelements.',
       loadError: 'Fehler beim Laden der Wissenshierarchie.',
       loadTranslationsError: 'Fehler beim Laden der Übersetzungen.',
+      translationsNotLoaded: 'Übersetzungen nicht geladen – vor dem Speichern neu laden.',
       confirmCancelTitle: 'Ungespeicherte Änderungen',
       confirmCancelEdit: 'Sie haben ungespeicherte Änderungen, die verloren gehen. Möchten Sie wirklich wechseln?',
       confirmDeleteTitleCategory: 'Kategorie löschen?',

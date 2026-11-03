@@ -77,6 +77,40 @@ contractual evidence — a fresh clone does not carry them.)
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.
+- **The branch was rebased onto `main` again (17 new commits, 648 replayed)** —
+  main carried the compose non-root closeout (#1227), the Quick Help
+  mobile waves, the Dart client drift CI gate and the OKF MR3 closeout.
+  Two `.gitignore` conflicts (both-added anchors; resolved by keeping
+  both sides' blocks, one of the two empty on replay). Chart-relevant
+  impact: compose grew five one-shot chown/re-permission init services
+  (backend, document-repository, ssl tree, victorialogs data, arango
+  data) — paired as `unpaired` in the parity allowlist with the reason
+  stated (fsGroup on the pod, storage owned by an operator CR, or no
+  ssl tree behind the Envoy edge), floor holds at 323 with 16/16 pairs
+  judged. Chart content byte-identical across the rebase — no cluster
+  roll, overlay stays at 0.2.152. Same vendored-tgz trap as before
+  (move aside, `helm dependency update` after). Local gate battery green
+  on the rebased tip (pipeline 16001).
+- **MR !695 merged (`75f6f4cdd`)** — the keycloak-operator runtime
+  sizing, redesigned in review: sizing, a widened startup window
+  (failureThreshold 30 ≈ 305 s — the upstream window is only 35 s, not
+  the 300 s a reviewer claimed) and the watch-all envs baked into the
+  overlay as one strategic-merge patch, applied on EVERY run —
+  idempotent drift repair natively, the first ReplicaSet born sized, one
+  rollout instead of three. The original JSON-patch helper was dropped:
+  RFC 6902 `remove` is not idempotent, so every healthy re-run rejected
+  the whole atomic patch and never re-asserted. Verified live on the
+  laptop cluster: sized rollout Ready, bare upstream re-apply
+  reproduces the drift (450Mi/ft=3/JOSDK_WATCH_CURRENT), overlay
+  re-apply repairs all three, a second apply touches no pod.
+- **The unused generic `minikube` venue was deleted from the deploy
+  repo** (`298762b`) — `clusters/minikube/` + `overlays/minikube/`
+  implemented the SOPS valuesFrom model as the onboarding template, no
+  cluster ever reconciled them, and the name invited confusion with the
+  developer's actual local minikube (which reconciles
+  `jrevillard-laptop`, SealedSecrets). The SOPS machinery stays: it
+  remains the documented path for a venue whose secret manager feeds
+  the chart through `valuesFrom`.
 - **The branch was rebased onto `main` again (16 new commits, 548 replayed, zero conflicts)** —
   main carried the OKF frontend MR2 (dark by default, `OKF_ENABLED=0`):
   no new Compose service, no new `env` template rows, so the parity

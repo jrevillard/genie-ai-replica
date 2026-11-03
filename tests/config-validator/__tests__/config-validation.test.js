@@ -2480,7 +2480,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // The whitespace between a call's tokens may legally carry a block
   // comment; every call-shape regex below uses this fragment in those
   // gaps, so a commented call is matched (or flagged) like a plain one.
-  const GAP_SRC = '(?:\\s|\\/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*\\/)*';
+  const GAP_SRC = '(?:\\s|\\/\\*[\\s\\S]*?\\*\\/)*';
   // Node resolves the STRING VALUE, not the source text: escapes written in
   // the literal ('./it\'s.js') are already resolved before require runs.
   const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
@@ -2552,7 +2552,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // shape set: Playwright transpiles jsx/tsx helpers like js ones.
     const visitFile = (resolved) => {
       if (sources.has(resolved)) return;
-      if (!new RegExp('\\.(?:' + JS_EXT_SRC + ')$').test(resolved)) return;
+      if (!WALKABLE_FILE_RE.test(resolved)) return;
       sources.set(resolved, io.read(resolved));
       queue.push(resolved);
     };
@@ -2671,6 +2671,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // units below pin the boundary and the testMatch shapes on synthetic
   // listings, the real-tree pin above anchors them to the actual invocation.
   const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+  const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
   const scanTargets = (files, executedGlobs) =>
     files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
 

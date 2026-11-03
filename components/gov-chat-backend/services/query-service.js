@@ -445,7 +445,10 @@ class QueryService {
    * Parse a raw SSE line from ChatQnA's align_generator output.
    * ChatQnA outputs Python repr() of bytes: data: b'text'\n\n
    * @param {string} line - Raw SSE data line (without "data: " prefix)
-   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?: string }
+   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?|raw? } or,
+   *   for chatqna metadata events, { type: 'metadata', ...known fields } plus every
+   *   other key chatqna sent (the known-field set is normalized/defaulted; unknown
+   *   diagnostic fields pass through unchanged)
    */
   parseChatQnASSELine(line) {
     const trimmed = line.trim();
@@ -508,7 +511,11 @@ class QueryService {
           // self_confidence and query_translation_status were each lost this
           // way until a backend edit). Known fields are already on `parsed`
           // with their defaults/normalization; this copies only the rest.
+          // `__proto__` is excluded: JSON.parse yields it as an own property,
+          // but ordinary assignment routes through the inherited setter and
+          // would replace `parsed`'s prototype instead of copying the value.
           for (const [key, value] of Object.entries(obj)) {
+            if (key === '__proto__') continue;
             if (key !== 'type' && !Object.prototype.hasOwnProperty.call(parsed, key)) {
               parsed[key] = value;
             }

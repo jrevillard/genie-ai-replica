@@ -624,6 +624,20 @@ describe('QueryService', () => {
       expect(result.some_future_diagnostic).toEqual({ v: 1 });
     });
 
+    it('should not let a __proto__ key mutate the parsed object prototype', () => {
+      // JSON.parse surfaces a __proto__ key as an own property of the source
+      // object, but ordinary assignment would route through the inherited
+      // setter and replace the parsed object's prototype instead of copying.
+      // Built as a raw string: an object literal with a __proto__ key would
+      // set the literal's own prototype instead of producing the key.
+      const meta = '{"type":"metadata","__proto__":{"polluted":1},"is_grounded":true}';
+      const result = queryService.parseChatQnASSELine(meta);
+      expect(result.type).toBe('metadata');
+      expect(result.is_grounded).toBe(true);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      expect(result).not.toHaveProperty('polluted');
+    });
+
     it('should preserve explicit null self_confidence (sentinel missing)', () => {
       const meta = {
         type: 'metadata',

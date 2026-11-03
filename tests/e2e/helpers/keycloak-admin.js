@@ -9,16 +9,66 @@ const { request } = require('./auth');
  * @param {string} username - Exact username
  * @returns {Promise<object>} The Keycloak user representation
  */
+/**
+ * A failure that a later attempt may survive: a transport error, a
+ * timeout, a 408/425/429 or a 5xx from the Keycloak admin API.
+ * @param {string} message - The diagnosis
+ * @returns {Error} The error, flagged transient
+ */
+function transientError(message) {
+  const error = new Error(message);
+  error.transient = true;
+  return error;
+}
+
+const TRANSIENT_STATUSES = [408, 425, 429];
+
+/**
+ * Resolve a user's id in a realm by exact username.
+ * exact=true: ?username= is a prefix search otherwise — a stray
+ * testadmin2 would misdirect the role assignment to data[0].
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} username - Exact username
+ * @returns {Promise<object>} The Keycloak user representation
+ */
 async function resolveUser(adminToken, realm, username) {
   const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${encodeURIComponent(username)}&exact=true`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
 
-  if (!searchRes.data || searchRes.data.length === 0) {
+  // The status and the payload shape are checked: an expired admin token
+  // answers 401 with an error body, and indexing that body would resolve
+  // an undefined user instead of naming the cause.
+  if (searchRes.status !== 200) {
+    throw new Error(
+      `User lookup for ${username} in realm ${realm} failed: HTTP ${searchRes.status}`
+    );
+  }
+  if (!Array.isArray(searchRes.data) || searchRes.data.length === 0) {
     throw new Error(`User ${username} not found in realm ${realm}`);
   }
 
   return searchRes.data[0];
+}
+
+/**
+ * The realm roles of a realm, as {id, name} pairs.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @returns {Promise<object[]>} The realm roles
+ */
+async function listRealmRoles(adminToken, realm) {
+  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  if (rolesRes.status !== 200 || !Array.isArray(rolesRes.data)) {
+    throw new Error(
+      `Cannot read the realm roles of ${realm}: HTTP ${rolesRes.status} ` +
+        `${typeof rolesRes.data === 'string' ? rolesRes.data : JSON.stringify(rolesRes.data)}`
+    );
+  }
+  return rolesRes.data;
 }
 
 /**
@@ -32,16 +82,10 @@ async function resolveUser(adminToken, realm, username) {
 async function assignRealmRoles(adminToken, realm, userId, roleNames) {
   if (!roleNames || roleNames.length === 0) return;
 
-  // Get available realm roles
-  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
+  const roles = await listRealmRoles(adminToken, realm);
+  const rolesToAssign = roles.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
 
-  const rolesToAssign = rolesRes.data
-    .filter((r) => roleNames.includes(r.name))
-    .map((r) => ({ id: r.id, name: r.name }));
-
-  const missingRoles = roleNames.filter((r) => !rolesRes.data.some((avail) => avail.name === r));
+  const missingRoles = roleNames.filter((r) => !roles.some((avail) => avail.name === r));
   if (missingRoles.length > 0) {
     throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
   }
@@ -51,9 +95,12 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
     body: rolesToAssign,
   });
   if (assignRes.status !== 204 && assignRes.status !== 200) {
-    throw new Error(
-      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`
-    );
+    const message =
+      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`;
+    if (assignRes.status >= 500 || TRANSIENT_STATUSES.includes(assignRes.status)) {
+      throw transientError(message);
+    }
+    throw new Error(message);
   }
 }
 
@@ -88,22 +135,7 @@ async function createUser(adminToken, realm, userData) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 
-  let user;
-  try {
-    user = await resolveUser(adminToken, realm, username);
-  } catch (err) {
-    if (status === 409) {
-      // The realm forbids duplicate emails, so a 409 can also mean that
-      // ANOTHER account owns the fixture email — the username lookup then
-      // finds nothing, and the bare "not found" would point the operator
-      // at the wrong cause.
-      throw new Error(
-        `${err.message} — the create answered 409, which may also be an email conflict ` +
-          `(another account owns ${email})`
-      );
-    }
-    throw err;
-  }
+  const user = await resolveUser(adminToken, realm, username);
   await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
   return user.id;
@@ -120,10 +152,8 @@ async function createUser(adminToken, realm, userData) {
 async function removeRealmRoles(adminToken, realm, userId, roleNames) {
   if (!roleNames || roleNames.length === 0) return [];
 
-  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const toRemove = rolesRes.data.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
+  const roles = await listRealmRoles(adminToken, realm);
+  const toRemove = roles.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
   if (toRemove.length === 0) return [];
 
   const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
@@ -137,80 +167,100 @@ async function removeRealmRoles(adminToken, realm, userId, roleNames) {
 }
 
 /**
- * Ensure a fixture user exists with a KNOWN password and role set.
- *
- * createUser is create-only: it tolerates a 409 and moves on, which leaves
- * three failure modes for a long-lived realm — a stale password (the realm
- * refuses direct access grants, so only the browser login can reveal it),
- * an account the realm left disabled/unverified or carrying a required
- * action, and a transient 429/5xx from Keycloak that would otherwise kill
- * the provisioning step. Each of those surfaces as a login failure minutes
- * later, far from its cause.
- *
- * So: create with a bounded retry on transient answers, converge the
- * password on the already-exists path, then verify the login-visible state
- * and (re)assign the roles.
- *
+ * The EFFECTIVE realm roles of a user — the direct mappings plus the
+ * composites they pull in (the realm's default role is one of them).
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} userId - The user's UUID
+ * @returns {Promise<string[]>} The effective role names
+ */
+async function effectiveRealmRoles(adminToken, realm, userId) {
+  const res = await request('GET', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  if (res.status !== 200 || !Array.isArray(res.data)) {
+    throw new Error(
+      `Cannot read the effective realm roles of ${userId}: HTTP ${res.status} ` +
+        `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
+    );
+  }
+  return res.data.map((r) => r.name);
+}
+
+/**
+ * One convergence attempt: create (or find), converge the password,
+ * check the login-visible state, assign the roles.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
  * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
  * @returns {Promise<string>} The user UUID
  */
-async function ensureUser(adminToken, realm, userData) {
+async function convergeUser(adminToken, realm, userData) {
   const { username, email, password } = userData;
-  const transient = [408, 425, 429];
-  let status = 0;
-  let body = '';
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    let res;
-    try {
-      res = await request('POST', `/auth/admin/realms/${realm}/users`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-        body: {
-          username,
-          email,
-          firstName: userData.firstName || username,
-          lastName: userData.lastName || 'Test',
-          enabled: true,
-          emailVerified: true,
-          credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
-        },
-      });
-    } catch (err) {
-      // A transport-level failure (connection refused, timeout) rejects the
-      // promise instead of answering — Keycloak not listening yet is the
-      // most likely transient, and it must not kill the provisioning.
-      status = 0;
-      body = err.message;
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 2000));
-      continue;
-    }
-    status = res.status;
-    body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-    const isTransient = status === 0 || status >= 500 || transient.includes(status);
-    if (!isTransient) break;
-    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 2000));
+  let res;
+  try {
+    res = await request('POST', `/auth/admin/realms/${realm}/users`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        username,
+        email,
+        firstName: userData.firstName || username,
+        lastName: userData.lastName || 'Test',
+        enabled: true,
+        emailVerified: true,
+        credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
+      },
+    });
+  } catch (err) {
+    // A transport-level failure (connection refused, timeout) rejects the
+    // promise instead of answering — Keycloak not listening yet is the
+    // most likely transient, and it must not kill the provisioning.
+    throw transientError(`Cannot reach the Keycloak admin API: ${err.message}`);
   }
 
+  const status = res.status;
   if (status !== 201 && status !== 409) {
-    throw new Error(`Failed to provision user ${username}: HTTP ${status} ${body}`);
+    const message = `Failed to provision user ${username}: HTTP ${status} ${
+      typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
+    }`;
+    if (status >= 500 || TRANSIENT_STATUSES.includes(status)) {
+      throw transientError(message);
+    }
+    throw new Error(message);
   }
 
-  const user = await resolveUser(adminToken, realm, username);
+  let user;
+  try {
+    user = await resolveUser(adminToken, realm, username);
+  } catch (err) {
+    if (status === 409) {
+      // The realm forbids duplicate emails, so a 409 can also mean that
+      // ANOTHER account owns the fixture email — the username lookup then
+      // finds nothing, and the bare "not found" would point the operator
+      // at the wrong cause.
+      throw new Error(
+        `${err.message} — the create answered 409, which may also be an email conflict ` +
+          `(another account owns ${email})`
+      );
+    }
+    throw err;
+  }
 
-  if (status === 409) {
+  if (status === 409 && password) {
     // Converge the password: an account carried over from an earlier
     // fixture revision keeps its old one, and the realm refuses direct
     // access grants, so nothing else can detect the drift.
-    if (password) {
-      const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-        body: { type: 'password', value: password, temporary: false },
-      });
-      if (resetRes.status !== 204) {
-        throw new Error(`Failed to converge the password of ${username}: HTTP ${resetRes.status}`);
+    const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: { type: 'password', value: password, temporary: false },
+    });
+    if (resetRes.status !== 204) {
+      const message = `Failed to converge the password of ${username}: HTTP ${resetRes.status}`;
+      if (resetRes.status >= 500 || TRANSIENT_STATUSES.includes(resetRes.status)) {
+        throw transientError(message);
       }
+      throw new Error(message);
     }
   }
 
@@ -234,6 +284,41 @@ async function ensureUser(adminToken, realm, userData) {
   await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
   return user.id;
+}
+
+/**
+ * Ensure a fixture user exists with a KNOWN password and role set.
+ *
+ * createUser is create-only: it tolerates a 409 and moves on, which leaves
+ * three failure modes for a long-lived realm — a stale password (the realm
+ * refuses direct access grants, so only the browser login can reveal it),
+ * an account the realm left disabled/unverified or carrying a required
+ * action, and a transient 429/5xx/timeout from Keycloak that would
+ * otherwise kill the provisioning step. Each of those surfaces as a login
+ * failure minutes later, far from its cause.
+ *
+ * So: the whole convergence (create, password, roles) is retried on a
+ * transient or unanswered Keycloak call, the password is converged on the
+ * already-exists path, then the login-visible state is verified and the
+ * roles are (re)assigned.
+ *
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @returns {Promise<string>} The user UUID
+ */
+async function ensureUser(adminToken, realm, userData) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await convergeUser(adminToken, realm, userData);
+    } catch (err) {
+      lastError = err;
+      if (!err.transient || attempt === 3) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -387,6 +472,7 @@ module.exports = {
   createUser,
   ensureUser,
   removeRealmRoles,
+  effectiveRealmRoles,
   rotateRealmKeys,
   getRealmSettings,
   updateRealmSettings,

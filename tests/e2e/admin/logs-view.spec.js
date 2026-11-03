@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
 
 /**
@@ -12,7 +13,10 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
  * here — the roll-up table is the tab's own surface.
  */
 test.describe('Admin logs view', () => {
-  test.setTimeout(120000);
+  // The login helper's own worst case (two attempts, navigation +
+  // redirect waits) exceeds two minutes: a shorter ceiling would fire
+  // first and hide the helper's diagnosis behind a bare timeout.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
   /**
    * Login, install the summary interception, open /admin. Returns
@@ -77,13 +81,13 @@ test.describe('Admin logs view', () => {
     // errors card and the spec would stay green).
     const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
 
-    const keycloakRow = warningsCard.locator('[data-test-id="log-row-warnings-wired-keycloak"]');
+    const keycloakRow = warningsCard.locator('[data-test-id="log-row-warnings-auth-wired-keycloak"]');
     await expect(keycloakRow).toBeVisible();
-    await expect(warningsCard.locator('[data-test-id="log-count-warnings-wired-keycloak"]')).toHaveText('3');
+    await expect(warningsCard.locator('[data-test-id="log-count-warnings-auth-wired-keycloak"]')).toHaveText('3');
 
-    const arangoRow = warningsCard.locator('[data-test-id="log-row-warnings-wired-arangodb"]');
+    const arangoRow = warningsCard.locator('[data-test-id="log-row-warnings-database-wired-arangodb"]');
     await expect(arangoRow).toBeVisible();
-    await expect(warningsCard.locator('[data-test-id="log-count-warnings-wired-arangodb"]')).toHaveText('7');
+    await expect(warningsCard.locator('[data-test-id="log-count-warnings-database-wired-arangodb"]')).toHaveText('7');
     expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 
@@ -97,7 +101,7 @@ test.describe('Admin logs view', () => {
     });
 
     const errorsCard = page.locator('[data-test-id="logs-errors-card"]');
-    await expect(errorsCard.locator('[data-test-id="log-row-errors-wired-keycloak"]')).toBeVisible();
+    await expect(errorsCard.locator('[data-test-id="log-row-errors-auth-wired-keycloak"]')).toBeVisible();
 
     // Both roll-up tables render their own empty row; scope to the
     // warnings card anchor (the table this spec's payload drives).

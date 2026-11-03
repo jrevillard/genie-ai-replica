@@ -18,7 +18,7 @@
  * at the repository root first.
  */
 const { ADMIN_FIXTURES } = require('./helpers/admin-fixtures');
-const { ensureUser, removeRealmRoles } = require('./helpers/keycloak-admin');
+const { ensureUser, removeRealmRoles, effectiveRealmRoles } = require('./helpers/keycloak-admin');
 const { getAdminToken } = require('./helpers/auth');
 
 const REALM = 'genie';
@@ -39,9 +39,24 @@ const ADMIN_ROLE = 'admin';
       // none" — a role granted once (by hand, or by an earlier fixture
       // revision) would silently turn the non-admin half of the authz
       // spec into an admin session.
-      const removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
-      if (removed.length > 0) {
-        console.log(`${fixture.username}: removed the drifted role(s) ${removed.join(', ')}`);
+      // The EFFECTIVE roles — the direct mappings plus the composites they
+      // pull in (the realm's default role is one of them). Removing a
+      // direct mapping cannot take away a role the realm's default
+      // composite or a group grants, so the invariant is ASSERTED, not
+      // assumed.
+      const before = await effectiveRealmRoles(adminToken, REALM, userId);
+      if (before.includes(ADMIN_ROLE)) {
+        const removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
+        console.log(
+          `${fixture.username}: removed the drifted ${ADMIN_ROLE} role mapping (${removed.join(', ') || 'none accepted'})`
+        );
+      }
+      const effective = await effectiveRealmRoles(adminToken, REALM, userId);
+      if (effective.includes(ADMIN_ROLE)) {
+        throw new Error(
+          `${fixture.username} still holds the ${ADMIN_ROLE} realm role (effective roles: ${effective.join(', ')}) — ` +
+            'the realm default role or a group grants it; the non-admin half of the admin spec needs a role-less account'
+        );
       }
     }
   }

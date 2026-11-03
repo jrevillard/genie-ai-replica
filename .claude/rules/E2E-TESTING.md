@@ -14,6 +14,14 @@ The handle is the platform's own mechanism:
 The same rule, two spellings. The Flutter app already carries `Key`s for the
 same purpose (see `mobile/genie_ai_mobile/patrol_test/CLAUDE.md`).
 
+The web app carries TWO attribute spellings today: the older `data-testid`
+(the chat surfaces) and `data-test-id` (the admin surface). Both are
+valid handles; **a spec must use the spelling of the component it
+addresses** — read the component before writing the locator. New handles
+follow the component they are added to, not a global sweep: renaming
+82 handles is a separate cleanup, and a spec that guesses the wrong
+spelling fails with an empty locator rather than a wrong element.
+
 ## Why
 
 A locator built from a class name or a label is a claim about the

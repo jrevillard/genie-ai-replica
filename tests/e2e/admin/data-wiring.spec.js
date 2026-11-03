@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
 
 /**
@@ -22,7 +23,10 @@ const METRICS = {
 };
 
 test.describe('Admin overview data wiring', () => {
-  test.setTimeout(120000);
+  // The login helper's own worst case (two attempts, navigation +
+  // redirect waits) exceeds two minutes: a shorter ceiling would fire
+  // first and hide the helper's diagnosis behind a bare timeout.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
   // Pin the locale: monthlyActiveUsers renders through
   // toLocaleString(), whose grouping separator follows the browser
   // locale ("1,234" en-US vs "1.234" de-DE).

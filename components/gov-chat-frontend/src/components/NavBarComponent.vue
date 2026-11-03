@@ -209,7 +209,7 @@
         <DsButton
           variant="ghost"
           class="icon-btn admin-btn"
-          data-test-id="nav-admin-button"
+          data-test-id="nav-admin-button-desktop"
           aria-label="Administration"
           :disabled="!isAdmin"
           :class="{ 'disabled-btn': !isAdmin }"

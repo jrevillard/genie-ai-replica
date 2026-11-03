@@ -775,13 +775,15 @@
                           <tr
                             v-for="(log, index) in errorLogsSummary"
                             :key="'error-' + index"
-                            :data-test-id="`log-row-errors-${log.service}`"
+                            :data-test-id="`log-row-errors-${log.type}-${log.service}`"
                           >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count" :data-test-id="`log-count-errors-${log.service}`">{{ log.count }}</td>
+                            <td class="log-count" :data-test-id="`log-count-errors-${log.type}-${log.service}`">
+                              {{ log.count }}
+                            </td>
                           </tr>
                           <tr v-if="errorLogsSummary.length === 0">
                             <td colspan="3" class="empty-logs" data-test-id="logs-errors-empty">
@@ -815,13 +817,13 @@
                           <tr
                             v-for="(log, index) in warningLogsSummary"
                             :key="'warning-' + index"
-                            :data-test-id="`log-row-warnings-${log.service}`"
+                            :data-test-id="`log-row-warnings-${log.type}-${log.service}`"
                           >
                             <td>
                               {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
-                            <td class="log-count" :data-test-id="`log-count-warnings-${log.service}`">
+                            <td class="log-count" :data-test-id="`log-count-warnings-${log.type}-${log.service}`">
                               {{ log.count }}
                             </td>
                           </tr>

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
 
 /**
@@ -22,7 +23,10 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
 const COMPONENT_ERROR_TEXT = 'Failed to load system health data';
 
 test.describe('Admin overview failure states', () => {
-  test.setTimeout(120000);
+  // The login helper's own worst case (two attempts, navigation +
+  // redirect waits) exceeds two minutes: a shorter ceiling would fire
+  // first and hide the helper's diagnosis behind a bare timeout.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
   /**
    * Log in and open the admin overview with the system-health call

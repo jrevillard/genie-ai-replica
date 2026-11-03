@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_PLAIN_USER, TEST_ADMIN_USER } = require('../helpers/chatbot');
 
 /**
@@ -45,7 +46,10 @@ function probeSystemHealth(page) {
 }
 
 test.describe('Admin route authorization', () => {
-  test.setTimeout(120000);
+  // The login helper's own worst case (two attempts, navigation +
+  // redirect waits) exceeds two minutes: a shorter ceiling would fire
+  // first and hide the helper's diagnosis behind a bare timeout.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
   test('admin role renders the admin dashboard', async ({ page }) => {
     await loginViaUI(page, TEST_ADMIN_USER);
@@ -59,7 +63,7 @@ test.describe('Admin route authorization', () => {
     // The four overview stat tiles render (real backend data — values are
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
     await expect(page.locator('[data-test-id^="stat-"]')).toHaveCount(4);
-    await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeEnabled();
+    await expect(page.locator('[data-test-id="nav-admin-button-desktop"]')).toBeEnabled();
     expect(health.records.length).toBeGreaterThanOrEqual(1);
     expect(health.records.every((r) => r.status === 200)).toBe(true);
   });
@@ -85,6 +89,6 @@ test.describe('Admin route authorization', () => {
     // half of the refusal. The desktop button is the one asserted here;
     // the mobile twin carries no handle (no spec drives a mobile
     // viewport), so it is not an anchor the suite claims.
-    await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeDisabled();
+    await expect(page.locator('[data-test-id="nav-admin-button-desktop"]')).toBeDisabled();
   });
 });

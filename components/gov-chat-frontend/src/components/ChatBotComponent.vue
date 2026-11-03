@@ -576,7 +576,11 @@ function isScalarId(id) {
 
 // The tag a button saves: the id in its STRING form, the shape the
 // mobile has always written, behind #1244's raw-truthiness gate — a
-// falsy id (0, '', null) keeps the TITLE as the identity.
+// falsy id (0, '', null) keeps the TITLE as the identity. Ids beyond
+// JavaScript's exact-integer range round here (the parsed JSON number
+// is a double) while the mobile keeps int64 precision, so such an id
+// writes a platform-local tag — the caveat the mobile's own identity
+// docstring carries. No shipped configuration declares a numeric id.
 function quickHelpTagOf(id, title) {
   return id && isScalarId(id) ? String(id) : title;
 }

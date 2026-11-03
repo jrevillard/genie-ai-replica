@@ -1562,12 +1562,11 @@ describe('ChatBotComponent', () => {
 
     describe('a falsy JSON id — the cross-platform identity contract', () => {
       // A hand-edited configuration can declare `"id": 0` or `false`.
-      // The web's identity rule (`button.id || title`) tests the RAW
-      // value's truthiness; the mobile must read the same rule, or the
-      // two platforms save different tags for the same card and no
-      // cross-platform restore matches. These tests pin the WEB half of
-      // the contract (the mobile's live beside the mobile identity
-      // rules); the web's own behaviour here is unchanged.
+      // The identity rule tests the RAW value's truthiness (#1244): a
+      // falsy id means the TITLE is the identity, on both platforms.
+      // These tests pin the WEB half of that contract; the mobile's
+      // live beside the mobile identity rules.
+      afterEach(resetQuickHelpButtons);
       const falsyIdConfig = {
         features: {
           chat: {

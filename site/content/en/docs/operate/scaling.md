@@ -152,10 +152,12 @@ GPU services ship a single replica per GPU node. The compose uses two
 templates: `replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}` for the
 heavyweight services (`vllm`, `vllm-translation-guardrail`, `translation`, `tei`,
 `tei_reranker`) and `replicas: ${DEPLOY_OPEA:-1}` for the lighter OPEA
-wrappers (`textgen`, `embedding`, `reranker`, `dataprep-arango-service`,
+wrappers (`textgen`, `embedding`, `reranker`,
 `retriever-arango-service`, `chatqna-xeon-backend-server`). Each replica
 pins to one GPU; concurrent requests share the KV cache on vLLM and contend
-for TEI worker threads on the embedding/reranker containers.
+for TEI worker threads on the embedding/reranker containers. Dataprep is
+NOT in this group: it is single-replica by contract regardless of GPU
+budget (see the Dataprep section below).
 
 ### vLLM
 
@@ -186,7 +188,8 @@ boot-time stuck-`Ingesting` recovery and the flock ingest slot pool are all
 per-process. A second replica breaks them silently: double ingests,
 cross-replica status release. Each replica also logs a warning at boot
 stating this contract — more than one boot line for dataprep at the same
-time means the deployment is mis-scaled.
+time means the deployment is mis-scaled (restart churn also repeats the
+line — correlate by container id and timestamp, not by line count alone).
 
 To raise ingestion throughput on the single replica:
 

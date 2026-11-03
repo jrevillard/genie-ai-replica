@@ -121,7 +121,11 @@ spec:
             to say why. Services whose image takes the port another way
             (clamd reads clamd.conf, redis-server takes --port) simply
             ignore this variable. */ -}}
-            {{- (list (dict "name" "PORT" "value" ($svc.port | toString))) | concat (include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray) | toYaml | nindent 12 }}
+            {{- /* PORT rides envRowsDedupe like every other derived row:
+            an operator who names PORT in `services.<svc>.env` gets ONE
+            row (their value wins) — SSA is a name-keyed merge, two rows
+            would fail the install (issue #1362). */ -}}
+            {{- include "genieai-umbrella.envRowsDedupe" (concat (list (dict "name" "PORT" "value" ($svc.port | toString))) (include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray) | toJson) | fromJsonArray | toYaml | nindent 12 }}
           {{- with $svc.secrets }}
           envFrom:
             {{- range . }}

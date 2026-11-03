@@ -249,7 +249,14 @@ helm_install_operator() {
   fi
   log "${chart} ${version}: helm install"
   helm repo add "${repo_name}" "${repo_url}" >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
+  # Scope the index refresh to the repo this install needs, and TOLERATE
+  # its failure: a FULL `helm repo update` exits nonzero when ANY
+  # repository in the helm config is unreachable, and under set -e that
+  # aborted the whole script mid-run on flaky-egress windows. helm
+  # install refreshes the target index itself, so the scoped update is
+  # a latency optimization, not a correctness step (issue #1378).
+  helm repo update "${repo_name}" >/dev/null 2>&1 \
+    || log "helm repo update ${repo_name} failed (unreachable?) — helm install refreshes the index itself"
   helm install "${release}" "${repo_name}/${chart}" \
     --version "${version}" \
     --namespace "${ns}" --create-namespace=false \
@@ -408,7 +415,10 @@ install_grafana_operator() {
   fi
   log "grafana-operator ${GRAFANA_OPERATOR_VERSION}: helm install"
   helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
+  # Same scoped-and-tolerated update as helm_install_operator (issue #1378):
+  # a full update under set -e died on ANY unreachable repo.
+  helm repo update grafana >/dev/null 2>&1 \
+    || log "helm repo update grafana failed (unreachable?) — helm install refreshes the index itself"
   helm install "${release}" grafana/grafana-operator \
     --version "${GRAFANA_OPERATOR_VERSION}" \
     --namespace "${ns}" --create-namespace=false \

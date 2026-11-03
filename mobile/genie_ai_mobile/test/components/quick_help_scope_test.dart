@@ -301,6 +301,25 @@ void main() {
       expect(resolver.categoryIdFor(null), isNull);
     });
 
+    test('the wire facts read the no-scope placeholders as unscoped', () {
+      // The facts both send paths encode: the same placeholders the rest
+      // of the file treats as no scope name no scope ON THE WIRE — an
+      // id-less 'general' restore goes out single-message, not as a
+      // label-less conversation query. An empty EN name is no name.
+      for (final id in <String>['general', '']) {
+        final facts = queryScopeFacts(categoryId: id, categoryNameEn: '');
+        expect(facts.hasContext, isFalse, reason: "categoryId '$id'");
+        expect(facts.categoryLabelEn, isNull);
+        expect(facts.serviceLabels, isEmpty);
+      }
+      final facts = queryScopeFacts(
+        categoryId: '2',
+        categoryNameEn: 'Civil Registry',
+      );
+      expect(facts.hasContext, isTrue);
+      expect(facts.categoryLabelEn, 'Civil Registry');
+    });
+
     test('a reference the hierarchy cannot name keeps its own spelling', () {
       // The scope is broken — a broken scope sends nothing — but what the
       // configuration wrote is still what the conversation carries.

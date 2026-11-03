@@ -162,6 +162,7 @@ Future<void> pumpChatBot(
   Widget Function(Widget chatbot)? buildHome,
   ThemeData? theme,
   QueriesApi? queriesApi,
+  bool settle = true,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -192,7 +193,9 @@ Future<void> pumpChatBot(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  }
 }
 
 /// The tree-answer mock client the Quick Help grid tests share: the

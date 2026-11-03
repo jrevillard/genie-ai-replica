@@ -1437,10 +1437,19 @@ bool scopeCanGoOnTheWire({
   // selection with one, and an empty id is not a scope. Reading it as one
   // would refuse every question the user asks afterwards. 'general' is
   // the placeholder a category-less selection is stored under — it names
-  // no category, on either platform.
+  // no category, on either platform. The two shared legs come from the
+  // ONE spelling the send paths read (queryScopeFacts), so the guard and
+  // the payloads cannot disagree on what declares a scope.
   final hasScope =
-      declaresCategoryScope(categoryId) ||
-      labels.isNotEmpty ||
+      queryScopeFacts(
+        categoryId: categoryId,
+        categoryNameEn: categoryNameEn,
+        serviceLabels: serviceLabels,
+        sidebarServiceLabels: sidebarServiceLabels,
+      ).hasContext ||
+      // The guard's OWN third leg: a selection that picked services it
+      // cannot name yet (a count the labels do not carry) is a scope the
+      // refusal must describe — the payloads never see it.
       sidebarServiceCount > 0;
   if (!hasScope) return true;
   // A PICKED service must carry its own ENGLISH name: the category does

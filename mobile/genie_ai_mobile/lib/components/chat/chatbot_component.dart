@@ -2767,18 +2767,25 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         // rows can exceed the viewport. The slivers keep
                         // the shared scroll AND a lazy viewport: a
                         // shrinkWrap grid inside this scroll view built
-                        // and laid out EVERY tile on every frame, where
-                        // the sliver grid builds only what the viewport
-                        // (plus its cache extent) needs.
+                        // and laid out EVERY card on every frame, where
+                        // the sliver rows and grid build only what the
+                        // viewport (plus its cache extent) needs.
                         return CustomScrollView(
                           slivers: [
-                            for (final (button, scope) in broken)
-                              SliverToBoxAdapter(
+                            // The diagnosis rows are a builder sliver too
+                            // — an outage breaks EVERY card, and an eager
+                            // list would rebuild them all per frame.
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final (button, scope) = broken[index];
                                 // The broken card fills the width the
                                 // way the stretch column did: a loose
                                 // cross-axis constraint would shrink-wrap
                                 // it.
-                                child: SizedBox(
+                                return SizedBox(
                                   width: double.infinity,
                                   child: _quickHelpBrokenCard(
                                     button: button,
@@ -2787,8 +2794,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     tokens: tokens,
                                     dark: isDark,
                                   ),
-                                ),
-                              ),
+                                );
+                              }, childCount: broken.length),
+                            ),
                             SliverGrid(
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(

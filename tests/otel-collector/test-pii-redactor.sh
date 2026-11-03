@@ -138,46 +138,41 @@ TEST_ID="piired$(date +%s)$$"
 BEARER_TOKEN="abcdefghij0123456789ABCD"
 APIKEY="sk-abcdefghijklmnop0123456789"
 JWT="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.dBjftJeZ4CVPmB92K27uhbUJU1p1r"
+# DW-416 / #1148 — the PROSE record: a NON-JSON string body whose only PII is
+# a bare address in an error line. No "email":"..." key pair exists, so the
+# key-based statement cannot match it; the value-format email statement must.
+PROSE_ID="piiredprose$(date +%s)$$"
+PROSE_EMAIL="alice.stokes@example-gov.org"
 
 # OTLP/HTTP JSON protobuf envelope. body.stringValue carries the JSON
 # envelope; the collector normalises it to a string in the log pipeline.
 PAYLOAD=$(cat <<JSON
-{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"pii-smoke"}}]},"scopeLogs":[{"scope":{"name":"pii-smoke","version":"1"},"logRecords":[{"timeUnixNano":"${TIME_NS}","severityNumber":9,"severityText":"INFO","body":{"stringValue":"{\"smoke_id\":\"${TEST_ID}\",\"level\":\"info\",\"session_id\":\"abc-123\",\"email\":\"u@x.com\",\"mail\":\"v@y.z\",\"password\":\"hunter2\",\"auth_header\":\"Bearer ${BEARER_TOKEN}\",\"provider_key\":\"${APIKEY}\",\"id_token\":\"${JWT}\",\"trace_id\":\"${TRACE_ID}\"}"},"traceId":"${TRACE_ID}","attributes":[{"key":"smoke.test_id","value":{"stringValue":"${TEST_ID}"}}]}]}]}]}
+{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"pii-smoke"}}]},"scopeLogs":[{"scope":{"name":"pii-smoke","version":"1"},"logRecords":[{"timeUnixNano":"${TIME_NS}","severityNumber":9,"severityText":"INFO","body":{"stringValue":"{\"smoke_id\":\"${TEST_ID}\",\"level\":\"info\",\"session_id\":\"abc-123\",\"email\":\"u@x.com\",\"mail\":\"v@y.z\",\"password\":\"hunter2\",\"auth_header\":\"Bearer ${BEARER_TOKEN}\",\"provider_key\":\"${APIKEY}\",\"id_token\":\"${JWT}\",\"trace_id\":\"${TRACE_ID}\"}"},"traceId":"${TRACE_ID}","attributes":[{"key":"smoke.test_id","value":{"stringValue":"${TEST_ID}"}}]},{"timeUnixNano":"${TIME_NS}","severityNumber":17,"severityText":"ERROR","body":{"stringValue":"pii-prose ${PROSE_ID}: ERROR: send failed to ${PROSE_EMAIL} after 3 retries (smtp relay timeout)"},"traceId":"${TRACE_ID}","attributes":[{"key":"smoke.test_id","value":{"stringValue":"${PROSE_ID}"}}]}]}]}]}
 JSON
 )
 echo "${PAYLOAD}" > "$TMP/payload.json"
 
 # --- Send the record through the prod collector ---
-# Sidecar shares the collector's netns (--network container:<name>) so
-# localhost:4318 IS the collector's OTLP HTTP receiver. The collector
-# then runs its production pipeline → exports to VL via otlp_http.
-#
-# The payload is mounted as a file (not piped via stdin) because piping
-# JSON via stdin + curl --data-binary @- races with the parent shell's
-# pipe-close and surfaces as curl exit 23 ("client returned ERROR on
-# write of N bytes"). The collector still receives the request, but
-# curl aborts before emitting the HTTP status code. A file mount makes
-# the request body fully owned by curl and the exit code reliable.
-echo "${PAYLOAD}" > "$TMP/payload.json"
-HTTP_CODE=$(docker run --rm \
-  --network "container:${COLLECTOR_CONTAINER}" \
-  -v "$TMP/payload.json:/tmp/payload.json:ro" \
-  --entrypoint "" \
-  curlimages/curl:8.10.1 \
-  curl -sS -w '%{http_code}' \
-  -X POST -H "Content-Type: application/json" \
-  --data-binary @/tmp/payload.json \
-  -o /dev/null \
-  http://127.0.0.1:4318/v1/logs) || {
-  echo "FAIL: OTLP HTTP POST to collector failed (curl exit)"
+# The payload is STREAMED into the VL container as a tar pipe (same
+# user-defined network, so the collector resolves by name) and POSTed with
+# busybox wget --post-file. This avoids three host-path failure modes: the
+# netns-sidecar curl's bind mount (breaks on Git Bash once MSYS path
+# conversion is disabled), `docker cp` with a POSIX source path (a Windows
+# docker.exe resolves it against its own CWD and cannot find the file), and
+# piping JSON via stdin into curl (races the pipe-close, exit 23).
+tar -C "$TMP" -cf - payload.json | docker exec -i "${VL_CONTAINER}" sh -c 'tar -xC /tmp'
+HTTP_LINE=$(docker exec "${VL_CONTAINER}" \
+  wget -S --post-file=/tmp/payload.json \
+       --header 'Content-Type: application/json' \
+       -O /dev/null \
+       "http://${COLLECTOR_CONTAINER}:4318/v1/logs" 2>&1 | grep -o 'HTTP/1.[01] [0-9]*' | head -1) || {
+  echo "FAIL: OTLP HTTP POST to collector failed (wget exit)"
   docker logs --tail 50 "${COLLECTOR_CONTAINER}" 2>&1 || true
   exit 1
 }
-# OTLP/HTTP success returns 200. Any other code is a config error or a
-# malformed payload — fail loudly so a regex regression in production
-# surfaces here.
-if [ "${HTTP_CODE}" != "200" ]; then
-  echo "FAIL: OTLP HTTP POST returned ${HTTP_CODE} (expected 200)"
+docker exec "${VL_CONTAINER}" rm -f /tmp/payload.json
+if [ "${HTTP_LINE}" != "HTTP/1.1 200" ] && [ "${HTTP_LINE}" != "HTTP/1.0 200" ]; then
+  echo "FAIL: OTLP HTTP POST returned '${HTTP_LINE}' (expected 200)"
   docker logs --tail 50 "${COLLECTOR_CONTAINER}" 2>&1 || true
   exit 1
 fi
@@ -196,6 +191,14 @@ sleep 8
 docker exec "${VL_CONTAINER}" \
   wget -qO- "http://127.0.0.1:9428/select/logsql/query?query=_msg:${TEST_ID}&limit=5" \
   > "$TMP/vl.json"
+
+# The PROSE record has its own marker (its body is a plain string, so the
+# marker IS the body prefix) — fetch it separately and run the prose
+# assertions against its own row. The marker is alphanumeric-only, so a
+# single token query is exact.
+docker exec "${VL_CONTAINER}" \
+  wget -qO- "http://127.0.0.1:9428/select/logsql/query?query=_msg:${PROSE_ID}&limit=5" \
+  > "$TMP/vl-prose.json"
 
 if ! grep -q '"_msg"' "$TMP/vl.json"; then
   echo "FAIL: no VL row found for smoke_id=${TEST_ID} (collector may not have exported)"
@@ -241,6 +244,33 @@ assert_redacted_to() {
 assert_redacted_to "bearer"  "${BEARER_TOKEN}"  "[REDACTED_BEARER]"
 assert_redacted_to "api key" "${APIKEY}"        "[REDACTED_APIKEY]"
 assert_redacted_to "jwt"     "${JWT}"           "[REDACTED_JWT]"
+
+# --- Prose-row assertions (DW-416 / #1148) — the value-format email -------
+if ! grep -q '"_msg"' "$TMP/vl-prose.json"; then
+  echo "FAIL: no VL row found for prose marker ${PROSE_ID}"
+  echo "--- vl-prose.json ---"
+  cat "$TMP/vl-prose.json"
+  exit 1
+fi
+# The bare address must NOT survive in the prose row...
+if grep -qF -- "${PROSE_EMAIL}" "$TMP/vl-prose.json"; then
+  echo "FAIL: prose email still present: ${PROSE_EMAIL} (value-format redactor missing or broken)"
+  cat "$TMP/vl-prose.json"
+  exit 1
+fi
+# ...and it must have been replaced by the EMAIL placeholder specifically —
+# a blanket scrub would also satisfy the absence check above.
+if ! grep -qF -- "[REDACTED_EMAIL]" "$TMP/vl-prose.json"; then
+  echo "FAIL: prose row lacks the [REDACTED_EMAIL] placeholder"
+  cat "$TMP/vl-prose.json"
+  exit 1
+fi
+# The prose row's non-PII context must survive (over-match guard).
+if ! grep -qF -- "smtp relay timeout" "$TMP/vl-prose.json"; then
+  echo "FAIL: prose row lost its non-PII context (redactor over-matched)"
+  cat "$TMP/vl-prose.json"
+  exit 1
+fi
 
 # The [REDACTED] placeholder MUST appear (proves redaction ran)
 if ! grep -q '\[REDACTED\]' "$TMP/vl.json"; then

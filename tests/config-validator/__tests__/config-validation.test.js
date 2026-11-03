@@ -3324,7 +3324,11 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('kc_curl() {');
     expect(section).toContain('require_clean_curl() {');
-    expect(section).toContain('|| CURL_RC=$?');
+    // The capture itself: the rc check must sit OUTSIDE the command
+    // substitution — an inside form (`... "$@" || CURL_RC=$?)`) ends the
+    // line with the substitution's closing paren and every transport
+    // failure looks like a clean exit again.
+    expect(section).toMatch(/^ {8}KC_RAW=\$\(curl[^\n]*\) \|\| CURL_RC=\$\?$/m);
     // The drift sites: a curl whose exit code is captured inside the $( )
     // vanishes into the subshell — pin the helper's capture site and forbid
     // the inline pattern outside the ROPC probe (which keeps its own
@@ -3344,6 +3348,10 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(section).toContain('TOKEN_REJECT_RUN');
     expect(section).toContain('definitively rejected');
     expect(section).toContain("Check KEYCLOAK_ADMIN_PASSWORD");
+    // The threshold itself is pinned: a drift to a larger value would
+    // silently restore the burn-the-budget behavior the fail-fast exists
+    // to remove.
+    expect(section).toContain('[ "$TOKEN_REJECT_RUN" -ge 3 ]');
   });
 
   // #1320: the admin token is acquired by the loop itself — a 401 on the
@@ -3366,6 +3374,39 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // The full-list lookup + client-side filter is gone.
     expect(section).not.toContain('/admin/realms/genie/roles"');
     expect(section).not.toContain("r['name']=='admin'");
+  });
+});
+
+// #1330: the CI e2e realm's email-verification posture is the compose
+// default (KEYCLOAK_VERIFY_EMAIL:-true → configs/keycloak/genie-realm.yaml
+// verifyEmail), asserted at provisioning time by the fixture-health gate
+// (fresh accounts ship emailVerified + no required actions). The deploy-job
+// rewrite that "guarded" the posture was dead code — the env template
+// carries the line commented, so its grep never matched. The template must
+// KEEP the knob commented: an uncommented line would flip the CI realm
+// posture silently, with no test observing the change.
+describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
+  test('the env template keeps KEYCLOAK_VERIFY_EMAIL commented out', () => {
+    const parsed = parseEnvTemplate(ENV_FILE);
+    // No active definition — the compose default is the single source of
+    // the e2e posture.
+    expect(parsed.variables.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(0);
+    // The knob stays documented (commented) so operators can see it exists.
+    expect(parsed.documented.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(1);
+  });
+
+  test('the deploy job carries no KEYCLOAK_VERIFY_EMAIL rewrite', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    // Only the explanatory comment may mention the var — any rewrite
+    // machinery (loop entry, sed arm) is forbidden outright.
+    const lines = content.split('\n').filter((l) => l.includes('KEYCLOAK_VERIFY_EMAIL'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\s*#/);
+  });
+
+  test('compose pins the default posture the e2e suite runs', () => {
+    const content = fs.readFileSync(COMPOSE_FILE, 'utf-8');
+    expect(content).toContain('KEYCLOAK_VERIFY_EMAIL=${KEYCLOAK_VERIFY_EMAIL:-true}');
   });
 });
 

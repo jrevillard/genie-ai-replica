@@ -259,12 +259,20 @@ workflow:
         fi
       done < env
     - |
-      for var in EMAIL_FROM EMAIL_HOST KEYCLOAK_VERIFY_EMAIL; do
+      # KEYCLOAK_VERIFY_EMAIL is deliberately NOT rewritten here (#1330): the
+      # env template carries the line commented, so the old grep-guarded
+      # rewrite was dead code — and had it ever fired, an uncommented
+      # template line would have silently flipped the CI realm to
+      # verifyEmail: false. The effective e2e posture is the compose default
+      # (true), pinned by the config-validator (the env template must not set
+      # the var uncommented) and asserted at provisioning time by the
+      # fixture-health gate (fresh accounts ship emailVerified + no required
+      # actions).
+      for var in EMAIL_FROM EMAIL_HOST; do
         if grep -q "^${var}=$" .env; then
           case "$var" in
             EMAIL_FROM) sed -i "s|^${var}=.*|${var}=noreply@ci-genie-ai.local|" .env ;;
             EMAIL_HOST) sed -i "s|^${var}=.*|${var}=localhost|" .env ;;
-            KEYCLOAK_VERIFY_EMAIL) sed -i "s|^${var}=.*|${var}=false|" .env ;;
           esac
         fi
       done

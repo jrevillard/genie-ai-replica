@@ -66,6 +66,39 @@ const validateConfig = (data) => {
   throw new Error(`genie-ai-config.json failed schema validation:\n${details}`);
 };
 
+/**
+ * The Quick Help button contract (#1238): every button carries a
+ * non-empty string `id`, and no two buttons share one. The id is the
+ * button's ONLY identity — the tag a saved conversation carries and the
+ * key the restore reads — so a button without one, or two buttons with
+ * the same one, cannot be honoured; the earlier title-fallback identity
+ * made a card's tag change with the interface language.
+ *
+ * Checked on every load, independently of the JSON schema: a document
+ * that carries no `$schema` skips the schema validation but not this
+ * contract.
+ */
+const validateQuickHelpButtons = (data) => {
+  const buttons = data?.features?.chat?.quickHelp?.buttons;
+  if (!Array.isArray(buttons)) return;
+
+  const seen = new Map();
+  for (const [index, button] of buttons.entries()) {
+    const id = button?.id;
+    if (typeof id !== 'string' || id === '') {
+      throw new Error(
+        `genie-ai-config.json: Quick Help button #${index} has no valid "id" — every button must carry a non-empty string id (the id is the button's identity: it is the tag a saved conversation carries and the key the restore reads).`
+      );
+    }
+    if (seen.has(id)) {
+      throw new Error(
+        `genie-ai-config.json: Quick Help button #${index} duplicates the id "${id}" of button #${seen.get(id)} — ids must be unique.`
+      );
+    }
+    seen.set(id, index);
+  }
+};
+
 async function loadConfig() {
   let data = null;
   try {
@@ -86,6 +119,7 @@ async function loadConfig() {
     // main.js awaits loadConfig() before createApp(), so throwing leaves
     // the app unmounted and the error visible in the console.
     validateConfig(data);
+    validateQuickHelpButtons(data);
     config = { ...config, ...data };
   }
 

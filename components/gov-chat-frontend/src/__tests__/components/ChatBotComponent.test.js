@@ -1319,8 +1319,7 @@ describe('ChatBotComponent', () => {
       const wrapper = await mountWithButtons([
         { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
         { id: 'flagged', title: 'Flagged', hidden: true, category: '2' },
-        { id: 'plain', title: 'Plain', category: '3' },
-        { title: { en: 'Titled hidden card' }, hidden: 'yes', category: '4' }
+        { id: 'plain', title: 'Plain', category: '3' }
       ]);
       const vm = wrapper.vm;
 
@@ -1332,16 +1331,14 @@ describe('ChatBotComponent', () => {
       // But the typo is REPORTED: a card that silently disappears leaves
       // no trace of the configuration mistake that hid it. (The report
       // follows the configuration load, not the card — the buttons are
-      // applied again on every language switch.)
+      // applied again on every language switch.) The report names the
+      // offending button by its ID — the identity the loader's gate
+      // guarantees — and the offending value: the operator has to learn
+      // WHICH card vanished and WHAT it said.
       const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
       expect(hiddenWarnings.length).toBeGreaterThan(0);
-      // The report NAMES the offending button and the offending value:
-      // the operator has to learn WHICH card vanished and WHAT it said.
       expect(String(hiddenWarnings[0][0])).toContain('quoted');
       expect(String(hiddenWarnings[0][0])).toContain('false');
-      // A card with no id is named by its RESOLVED title: the raw title
-      // is a locale map, and the report printed "[object Object]".
-      expect(hiddenWarnings.some((call) => String(call[0]).includes('Titled hidden card'))).toBe(true);
 
       warn.mockRestore();
     });
@@ -1592,160 +1589,54 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems[0].serviceKey).toBeNull();
     });
 
-    describe('a falsy JSON id — the cross-platform identity contract', () => {
-      // A hand-edited configuration can declare `"id": 0` or `false`.
-      // The identity rule tests the RAW value's truthiness (#1244): a
-      // falsy id means the TITLE is the identity, on both platforms.
-      // These tests pin the WEB half of that contract; the mobile's
-      // live beside the mobile identity rules.
-      afterEach(resetQuickHelpButtons);
-      const falsyIdConfig = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [{ id: 0, title: 'Card Zero', category: '1', serviceLabels: ['Tomato'] }]
-            }
-          }
-        }
-      };
+    describe('the restore reads the tag the card saved (#1238)', () => {
+      const treeWithTomato = [
+        { catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [{ name: 'Tomate', nameEN: 'Tomato' }] }
+      ];
 
-      it('saves the TITLE as the identity — the raw id is falsy', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(falsyIdConfig);
-
-        const wrapper = createChatBotWrapper();
-        const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
-
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('Card Zero');
-        // The id itself stays RAW: the restore compares it with ===.
-        expect(vm.quickHelpButtons[0].id).toBe(0);
-      });
-
-      it('does not match a mobile-saved "0" tag — it restores as an unnamed sidebar tag', async () => {
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(falsyIdConfig);
-
-        mockLiveTree([]);
-        const wrapper = createChatBotWrapper();
-        const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['0']
-        });
-
-        await vm.loadExistingConversation('c1');
-
-        // The strict `candidate.id === tag` cannot match a raw 0 against
-        // the string '0': the tag falls to the sidebar branch, the
-        // unnamed-tag count refuses the send. The mobile's restore index
-        // skips falsy raw ids and reaches the SAME verdict.
-        expect(vm.selectedContextItems.length).toBe(1);
-        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-      });
-
-      it('restores the title tag a falsy-id card saves as ITS OWN card', async () => {
-        // The title is what BOTH platforms save for a falsy-id card, and
-        // it is the card's IDENTITY. The web's restore reads the identity
-        // (the id, or the card's own title when the configuration declares
-        // none), so the card comes back with the scope it was asked in
-        // (#1238). The mobile's restore index still matches IDS only —
-        // its half of the rule is filed separately.
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue(falsyIdConfig);
-
-        mockLiveTree([]);
-        const wrapper = createChatBotWrapper();
-        const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Card Zero']
-        });
-
-        await vm.loadExistingConversation('c1');
-
-        expect(vm.selectedContextItems.length).toBe(1);
-        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
-        expect(vm.selectedContextItems[0].service).toBe('Card Zero');
-      });
-
-      it('saves the STRING tag the mobile saves for a numeric id, and restores both spellings', async () => {
+      it('a legacy conversation that stored the RAW number still names its string-id card', async () => {
+        // The pre-contract web wrote the id's raw JSON value as the tag.
+        // The loader's gate now guarantees a string id, and the restore
+        // reads the tag as the string it was saved as — so the old
+        // spelling still finds its card.
         const loadConfig = require('../../config-loader').default;
         loadConfig.mockResolvedValue({
           features: {
             chat: {
               quickHelp: {
-                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
+                buttons: [{ id: '5', title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
               }
             }
           }
         });
 
-        mockLiveTree([]);
+        mockLiveTree(treeWithTomato);
         const wrapper = createChatBotWrapper();
         const vm = wrapper.vm;
         await vm.loadQuickHelpButtons();
 
-        // The identity is the id's STRING form at the save/restore
-        // boundary: the shape the mobile writes, so a saved conversation
-        // restores on both platforms.
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
-
         const chatHistoryService = require('../../services/chatHistoryService');
-        // The mobile's stringified tag restores — the cross-platform
-        // case this boundary exists for.
         chatHistoryService.getConversation.mockResolvedValueOnce({
           _key: 'c1',
           title: 'Saved chat',
-          messages: [],
-          tags: ['5']
-        });
-        await vm.loadExistingConversation('c1');
-        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
-
-        // An OLD conversation that saved the raw number still restores:
-        // the stringified compare keeps the pre-existing web tags
-        // readable.
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c2',
-          title: 'Saved chat 2',
           messages: [],
           tags: [5]
         });
-        await vm.loadExistingConversation('c2');
+        await vm.loadExistingConversation('c1');
+
         expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+        expect(vm.selectedContextItems[0].service).toBe('Five');
+        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
       });
 
-      it('a sidebar tag that spells a numeric button id restores the BUTTON, not a sidebar scope', async () => {
-        // The button lookup runs first, so a tag that spells a numeric
-        // id restores the button whose id it spells.
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
-              }
-            }
-          }
-        });
-
+      it('a sidebar tag that spells a button id restores the BUTTON, not a sidebar scope', async () => {
+        // The button lookup runs first: an opaque id names a card and
+        // nothing else, so a hierarchy label that happens to spell the
+        // id does not steal the restore.
         const tree = [{ catKey: '2', name: 'Cinq', nameEN: '5', children: [] }];
         mockLiveTree(tree);
-        const wrapper = createChatBotWrapper();
+        const wrapper = await mountWithButtons([{ id: '5', title: 'Five', category: '1', serviceLabels: ['Tomato'] }]);
         const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
 
         const chatHistoryService = require('../../services/chatHistoryService');
         chatHistoryService.getConversation.mockResolvedValueOnce({
@@ -1758,365 +1649,6 @@ describe('ChatBotComponent', () => {
 
         expect(vm.selectedContextItems[0].source).toBe('quickHelp');
         expect(vm.selectedContextItems[0].service).toBe('Five');
-      });
-
-      it('a non-scalar id declares nothing — it is not collapsed into a scalar twin', async () => {
-        // Coercing an array id would fold `["5"]`/`[5]` into the numeric
-        // 5 card (`String([5]) === '5'`) — a hand-edited config's garbage
-        // id would steal — or restore as — a real card's identity. A
-        // non-scalar id declares nothing: it keeps its own card and
-        // saves the title, the same "names no button" verdict such tags
-        // have always gotten on restore.
-        const loadConfig = require('../../config-loader').default;
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [
-                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] },
-                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] }
-                ]
-              }
-            }
-          }
-        });
-
-        mockLiveTree([]);
-        const wrapper = createChatBotWrapper();
-        const vm = wrapper.vm;
-        await vm.loadQuickHelpButtons();
-
-        expect(vm.quickHelpButtons).toHaveLength(2);
-        expect(vm.quickHelpButtons[0].service).toBe('Array');
-        // The array card saves its TITLE — not a tag that collides with
-        // the numeric card's '5'.
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('Array');
-        expect(vm.quickHelpButtons[1].serviceKey).toBe('5');
-
-        // The same config in the other order: the scalar gate covers
-        // BOTH sides of the dedupe compare, so the array card is not
-        // dropped as a "duplicate" of the numeric one either way.
-        loadConfig.mockResolvedValue({
-          features: {
-            chat: {
-              quickHelp: {
-                buttons: [
-                  { id: 5, title: 'Numeric', category: '1', serviceLabels: ['Tomato'] },
-                  { id: [5], title: 'Array', category: '1', serviceLabels: ['Tomato'] }
-                ]
-              }
-            }
-          }
-        });
-        await vm.loadQuickHelpButtons();
-
-        expect(vm.quickHelpButtons).toHaveLength(2);
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
-        expect(vm.quickHelpButtons[1].serviceKey).toBe('Array');
-      });
-    });
-
-    describe('an id-less card — the identity rule finds the card that wrote the tag (#1238)', () => {
-      // A hand-edited configuration can declare a button with no id at
-      // all. Its identity is then its OWN title — the string the card
-      // saves — so the restore has to look the card up by that identity:
-      // an id-only lookup found no card, the tag fell to the sidebar
-      // branch, and the scope the card was asked in silently disappeared
-      // on reload.
-      afterEach(resetQuickHelpButtons);
-
-      const twoIdLessCards = [
-        { title: 'Card One', serviceLabels: ['Tomato'] },
-        { title: 'Card Two', serviceLabels: ['Potato'] }
-      ];
-
-      // One name, two cards: the id-less card is titled like the OTHER
-      // card's id. A malformed configuration — but one where the tag
-      // names two cards, so it names none. The name is ALSO a live
-      // hierarchy label, so the sidebar branch COULD restore a scope
-      // under it: the refusal has to beat that.
-      const collidingIdentityCards = [
-        { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
-        { title: 'Crops', serviceLabels: ['Potato'] }
-      ];
-
-      const treeWithTomatoAndPotato = [
-        {
-          catKey: '2',
-          name: 'Cultivos',
-          nameEN: 'Crops',
-          children: [
-            { name: 'Tomate', nameEN: 'Tomato' },
-            { name: 'Patata', nameEN: 'Potato' }
-          ]
-        }
-      ];
-
-      it('restores the scope of a card without an id from the title tag it saved', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([{ title: 'Card Zero', serviceLabels: ['Tomato'] }]);
-        const vm = wrapper.vm;
-
-        // The card declares no id: its identity is its own title — the
-        // very string the card saves.
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('Card Zero');
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Card Zero']
-        });
-        await vm.loadExistingConversation('c1');
-
-        // The restore finds the card that wrote the tag: the declared
-        // labels ride along, the way an id-carrying card's did. Before,
-        // the tag fell to the sidebar branch and the chip was an unnamed
-        // label that refused every send.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
-        expect(vm.selectedContextItems[0].service).toBe('Card Zero');
-        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
-      });
-
-      it('pressing a second card without an id installs THAT card', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons(twoIdLessCards);
-        const vm = wrapper.vm;
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-
-        // Two cards without an id share no id: the raw compare called the
-        // second press a duplicate of the first, and the card the user
-        // pressed was never installed.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].service).toBe('Card Two');
-        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
-      });
-
-      it('an identity TWO cards claim restores NOTHING — a visible refusal, not a wrong scope', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons(collidingIdentityCards);
-        const vm = wrapper.vm;
-
-        // The id-less card is titled like the OTHER card's id: one
-        // string, two cards.
-        expect(vm.quickHelpButtons).toHaveLength(2);
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Crops']
-        });
-        await vm.loadExistingConversation('c1');
-
-        // The tag names NO card: restoring either would put a scope the
-        // conversation was never asked in — silently. The chip carries no
-        // scope and refuses the send visibly. It is NOT the sidebar scope
-        // the same name would restore: that would be a silent change of
-        // the scope the conversation was asked in.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
-        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
-      });
-
-      it('pressing a card whose identity another card claims installs THAT card', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons(collidingIdentityCards);
-        const vm = wrapper.vm;
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-
-        // The two cards share one identity: the dedupe cannot call the
-        // second press a duplicate of the first, or the user would press
-        // the card and keep the OTHER card's scope.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].service).toBe('Crops');
-        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
-      });
-
-      it('an id-less card titled like a LIVE hierarchy label refuses to restore — the tag cannot say which scope it stood for', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([{ title: 'Crops', serviceLabels: ['Tomato'] }]);
-        const vm = wrapper.vm;
-
-        // One card claims the tag — but the tag is ALSO the EN label of a
-        // live hierarchy entry, the string a sidebar selection saves. The
-        // tag cannot say which of the two scopes it stood for: restoring
-        // the card would silently replace the sidebar scope (and the
-        // other way round), so the scope is refused visibly instead.
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Crops']
-        });
-        await vm.loadExistingConversation('c1');
-
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
-        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
-      });
-
-      it('pressing a colliding card a SECOND time stays a no-op — the question is not asked twice', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([
-          { id: 'Crops', title: 'Crops card', serviceLabels: ['Tomato'] },
-          {
-            title: 'Crops',
-            serviceLabels: ['Potato'],
-            action: { hiddenPrompt: 'Answer as a crops advisor.', visibleText: 'A crops question' }
-          }
-        ]);
-        const vm = wrapper.vm;
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-
-        // The two cards share one identity, which cannot tell them apart:
-        // the card's own title does. The repeat press of the SAME card is
-        // a no-op — one press, one question.
-        expect(mockSubmitQueryStream).toHaveBeenCalledTimes(1);
-      });
-
-      it('an id-less card pressed again after a language switch is still the same card — the scope says so', async () => {
-        // The card's title is its identity, and the title changes with
-        // the language. What does not change is the scope it declares:
-        // the labels and the category are what the dedupe reads when the
-        // identity cannot survive the switch — the repeat press stays a
-        // no-op instead of asking the card's hidden prompt twice.
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([
-          { title: { en: 'Advisory', es: 'Asesoría' }, serviceLabels: ['Tomato'] }
-        ]);
-        const vm = wrapper.vm;
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
-
-        vm.currentLocale = 'es';
-        vm.applyQuickHelpButtons();
-        expect(vm.quickHelpButtons[0].serviceKey).toBe('Asesoría');
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
-
-        // The press is a no-op: the chip the user installed keeps its
-        // title, its scope, and its armed prompt.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].service).toBe('Advisory');
-        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
-      });
-
-      it('two id-less cards sharing a TITLE are still two cards — the second press installs the pressed card', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([
-          { title: 'Advisory', serviceLabels: ['Tomato'] },
-          { title: 'Advisory', serviceLabels: ['Potato'] }
-        ]);
-        const vm = wrapper.vm;
-
-        vm.selectQuickHelpOption(vm.quickHelpButtons[0]);
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-
-        // The two cards share one identity AND one title: their declared
-        // labels are what tells them apart, and the card the user
-        // pressed is the one whose scope installs.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Potato']);
-      });
-
-      it('a refused tag stays refused when the locale remap runs — the refusal is not a late tree', async () => {
-        // The hierarchy carries 'Crops' under no other spelling, so the
-        // refused chip's display name IS the live EN label: the remap's
-        // "the tree names it now" rule would clear the refusal and put
-        // the sidebar scope back — the silent substitution the refusal
-        // exists to avoid choosing.
-        mockLiveTree([
-          { catKey: '2', name: 'Crops', nameEN: 'Crops', children: [{ name: 'Tomate', nameEN: 'Tomato' }] }
-        ]);
-        const wrapper = await mountWithButtons(collidingIdentityCards);
-        const vm = wrapper.vm;
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Crops']
-        });
-        await vm.loadExistingConversation('c1');
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-
-        vm.remapContextItemsToLocale('en');
-
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-        expect(vm.selectedContextItems[0].serviceKey).toBeNull();
-        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
-      });
-
-      it('an id-less chip keeps the title it was pressed with across a language switch', async () => {
-        mockLiveTree(treeWithTomatoAndPotato);
-        const wrapper = await mountWithButtons([
-          { title: { en: 'Card One', es: 'Uno' }, serviceLabels: ['Tomato'] },
-          { title: { en: 'Card Two', es: 'Dos' }, serviceLabels: ['Potato'] }
-        ]);
-        const vm = wrapper.vm;
-
-        // Pressed under the Spanish title...
-        vm.currentLocale = 'es';
-        vm.applyQuickHelpButtons();
-        vm.selectQuickHelpOption(vm.quickHelpButtons[1]);
-        const chip = vm.selectedContextItems[0];
-        expect(chip.service).toBe('Dos');
-
-        // ...and the interface moves to English: the cards re-resolve,
-        // the chip's identity — the Spanish title — names no card under
-        // the new language, and the chip keeps the title it was pressed
-        // with. (The old raw-id compare re-titled the chip from the FIRST
-        // id-less card — a chip wearing another card's name; an
-        // implementation that re-titles from the card's own EN title
-        // fails here too.)
-        vm.currentLocale = 'en';
-        vm.applyQuickHelpButtons();
-        expect(vm.quickHelpTitleFor(chip, 'en')).toBe('Dos');
-      });
-
-      it('a title identity cannot be checked while the hierarchy is down — the scope refuses rather than choosing', async () => {
-        const serviceTreeService = require('../../services/serviceTreeService');
-        // The tree is down at the mount and down again at the restore's
-        // bounded retry; each failure settles.
-        serviceTreeService.getAllCategories
-          .mockRejectedValueOnce(new Error('hierarchy down'))
-          .mockRejectedValueOnce(new Error('hierarchy down'));
-
-        const wrapper = await mountWithButtons([{ title: 'Crops', serviceLabels: ['Tomato'] }]);
-        const vm = wrapper.vm;
-
-        const chatHistoryService = require('../../services/chatHistoryService');
-        chatHistoryService.getConversation.mockResolvedValueOnce({
-          _key: 'c1',
-          title: 'Saved chat',
-          messages: [],
-          tags: ['Crops']
-        });
-        await vm.loadExistingConversation('c1');
-
-        // Whether 'Crops' is also a sidebar label is unknowable with the
-        // tree down, and the restore does not choose: the scope is
-        // refused visibly, like a tag that names nothing.
-        expect(vm.selectedContextItems).toHaveLength(1);
-        expect(vm.selectedContextItems[0].unresolved).toBe(true);
-        expect(vm.selectedContextItems[0].identityRefused).toBe(true);
-        expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
       });
     });
 
@@ -3664,103 +3196,6 @@ describe('ChatBotComponent', () => {
       expect(mockSubmitQueryStream).not.toHaveBeenCalled();
       const notificationService = require('../../services/notificationService');
       expect(notificationService.error).toHaveBeenCalled();
-    });
-
-    it('two configuration cards sharing an id keep only the FIRST', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      // The id is the button's IDENTITY: the conversation tag carries it,
-      // the restore resolves it, and the grid's verdict map keys on it.
-      // Two cards with one id cannot both be honoured — and keeping both
-      // made the wire disagree with the verdict: the map judged the FIRST
-      // card (healthy) while the click put the CLICKED card's labels on
-      // the wire, a dead label among them, and the corpus abstained
-      // silently behind a card that looked healthy. The FIRST card wins,
-      // the duplicate never becomes a card at all.
-      vm.cachedConfig = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { id: 'civil', title: { en: 'First' }, category: '2', serviceLabels: ['Births'] },
-                { id: 'civil', title: { en: 'Second' }, category: '2', serviceLabels: ['No Such Service'] }
-              ]
-            }
-          }
-        }
-      };
-
-      vm.applyQuickHelpButtons();
-
-      expect(vm.quickHelpButtons).toHaveLength(1);
-      // The FIRST card's scope is what survives — its labels are the ones
-      // a click would put on the wire.
-      expect(vm.quickHelpButtons[0].service).toBe('First');
-      expect(vm.quickHelpButtons[0].serviceLabels).toEqual(['Births']);
-    });
-
-    it('two cards whose ids differ only in JSON type keep ONE — the string key', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      // A hand-edited configuration can declare the "same" id in two
-      // JSON types (`5` and `"5"`). The raw `===` dedupe kept BOTH cards
-      // while the mobile's string key collapsed them — one file, two
-      // card counts — and both cards would now stringify to the SAME
-      // conversation tag. The dedupe keys on the string form: one card,
-      // the first, on both platforms.
-      vm.cachedConfig = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { id: 5, title: { en: 'Numeric' }, category: '2', serviceLabels: ['Births'] },
-                { id: '5', title: { en: 'String' }, category: '2', serviceLabels: ['No Such Service'] }
-              ]
-            }
-          }
-        }
-      };
-
-      vm.applyQuickHelpButtons();
-
-      expect(vm.quickHelpButtons).toHaveLength(1);
-      expect(vm.quickHelpButtons[0].service).toBe('Numeric');
-      // The surviving card saves the string tag — the one shape both
-      // platforms write for a numeric id.
-      expect(vm.quickHelpButtons[0].serviceKey).toBe('5');
-    });
-
-    it('a hidden card sharing an id never lends its title to the surviving chip', async () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-
-      // The hidden filter runs BEFORE the dedup, so the surviving card is
-      // the first VISIBLE one. The raw config's first entry for the id is
-      // the HIDDEN card — and a locale switch re-resolving the chip's
-      // title from the raw list would put a hidden card's title on a chip
-      // whose scope is the visible card's. The title must come from the
-      // DEDUPED list, the one every other reader (grid, click, restore,
-      // send guard) already speaks.
-      vm.cachedConfig = {
-        features: {
-          chat: {
-            quickHelp: {
-              buttons: [
-                { id: 'civil', title: { en: 'Hidden first' }, hidden: true, category: '2' },
-                { id: 'civil', title: { en: 'Visible second', fr: 'Second visible' }, category: '2' }
-              ]
-            }
-          }
-        }
-      };
-      vm.applyQuickHelpButtons();
-      expect(vm.quickHelpButtons).toHaveLength(1);
-
-      // The title is re-resolved from the card that IS, not from the one
-      // the deployment hid.
-      expect(vm.quickHelpTitleFor({ id: 'civil', service: 'Visible second' }, 'fr')).toBe('Second visible');
     });
 
     it('a category-only selection is not refused for lacking a service name', async () => {

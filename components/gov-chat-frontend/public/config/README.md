@@ -38,7 +38,7 @@ Configurations are JSON files in `/public/config/`, validated against a JSON sch
       - `botName` (string): Chatbot name (default: `Genie`).
       - `quickHelp` (object):
         - `buttons` (array): List of Quick Help buttons, each with:
-          - `id` (string): Unique identifier.
+          - `id` (string, REQUIRED, unique): The button's identity — the tag a saved conversation carries and the key the restore reads. The app refuses to start a configuration where a button has no id or where two buttons share one.
           - `title` (string): i18n key for button label.
           - `icon` (object): Icon configuration (`type`: `file` or `inline`, `value`: SVG path or content).
           - `category` (string or null): The knowledge area's ENGLISH name in the live hierarchy (e.g. `Taxes & Revenue`), null for general. The hierarchy's own database key is still accepted, for configurations written before that spelling.
@@ -202,7 +202,7 @@ Quick Help buttons provide quick access to specific knowledge areas and predefin
 1. **Edit the Config File**:
    - Open the desired config (e.g., `/public/config/genie-ai-config.json`).
    - Add or update entries in `features.chat.quickHelp.buttons`:
-     - **id**: Unique identifier for the button (e.g., `just-chat`).
+     - **id**: REQUIRED, unique across all buttons (e.g., `just-chat`). The id is the button's identity: it is the tag a saved conversation carries and the key the restore reads, so it must not depend on the labels the deployment declares. The app refuses to start a configuration where a button has no id or where two buttons share one.
      - **title**: i18n key for the button label (e.g., `quickhelp.justChat`).
      - **icon**: Specify icon `type` (`file` or `inline`) and `value` (SVG path or content).
      - **category**: The knowledge area's ENGLISH name in the live hierarchy (e.g., `Identity & Civil Registration` for civil services, `null` for general queries). The hierarchy's own database key is still accepted, for configurations written before that spelling.

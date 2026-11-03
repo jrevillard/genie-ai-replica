@@ -546,31 +546,6 @@ function categoryOnlyItem(category, displayName) {
   };
 }
 
-// A scope restored from a saved tag that names no label: a sidebar
-// label the hierarchy no longer carries (serviceKey null, the scope
-// refused), or an identity the restore refuses (two Quick Help cards
-// claim it, or a title that is also a live hierarchy label). The chip
-// shows the name the tag spells, the wire carries no label, and the
-// send refuses the scope visibly. ONE copy of the shape, so the callers
-// cannot drift apart.
-//
-// identityRefused marks the refusals that are IDENTITY verdicts — the
-// tag names no single card, whatever the hierarchy does. The locale
-// remap heals an unresolved chip the tree could not name AT RESTORE
-// TIME; it must never heal these, or the refused tag would come back
-// as the sidebar scope the refusal exists to avoid choosing.
-function restoredScopeItem(service, serviceKey, category, identityRefused) {
-  const item = {
-    service,
-    serviceKey,
-    category,
-    unresolved: serviceKey === null,
-    selected: true
-  };
-  if (identityRefused) item.identityRefused = true;
-  return item;
-}
-
 function quickHelpContextItem(button) {
   return {
     service: button.service,
@@ -581,86 +556,6 @@ function quickHelpContextItem(button) {
     category: button.category,
     selected: true
   };
-}
-
-// The string-form identity rule (#1290), ONE copy: the tag a Quick Help
-// button saves, and the scalar gate the identity reads and the
-// duplicate-id detector applies. They call the same pair so they cannot
-// drift — a save writing a tag the dedupe would have collapsed, or a
-// restore accepting a spelling the save no longer produces.
-//
-// The id types that CAN carry an identity are the JSON scalars: a
-// hand-edited configuration can declare an array or an object id, and
-// coercing one (`String([5])` === `'5'`) would dedupe it into — or
-// restore it as — a numeric-5 card the raw `===` kept apart. A
-// non-scalar id declares nothing: it falls back to the title, the same
-// "names no button" verdict the web has always given such tags.
-function isScalarId(id) {
-  return typeof id === 'string' || typeof id === 'number' || typeof id === 'boolean';
-}
-
-// The tag a button saves: the id in its STRING form, the shape the
-// mobile has always written, behind #1244's raw-truthiness gate — a
-// falsy id (0, '', null) keeps the TITLE as the identity. Ids beyond
-// JavaScript's exact-integer range round here (the parsed JSON number
-// is a double) while the mobile keeps int64 precision, so such an id
-// writes a platform-local tag — the caveat the mobile's own identity
-// docstring carries. No shipped configuration declares a numeric id.
-function quickHelpTagOf(id, title) {
-  return id && isScalarId(id) ? String(id) : title;
-}
-
-// Whether two CONFIGURATION ids name the same button — the duplicate-id
-// detector in applyQuickHelpButtons, the one remaining reader of a raw
-// id pair. A saved conversation tag is NOT read here: the restore goes
-// through quickHelpVerdictForIdentity, whose identity is the string the
-// card carries (quickHelpIdentityOf), so a card without an id is named
-// by its title there and never by a raw id comparison. Both sides read
-// as strings, so a mobile-saved '5' matches a numeric 5 the same way an
-// old web-saved raw 5 does. The FALSY gate is #1244 intact — a raw-0
-// card never matches a '0' id (its identity is the title). The scalar
-// gate covers BOTH sides: the dedupe compares two configuration ids,
-// and `String([5])` is `'5'` — a non-scalar id matches nothing.
-function quickHelpTagMatches(candidateId, tag) {
-  return Boolean(candidateId) && isScalarId(candidateId) && isScalarId(tag) && String(candidateId) === String(tag);
-}
-
-// The identity a Quick Help card answers to (#1238): the string the card
-// CARRIES — the one the save wrote (the mapped button's serviceKey, the
-// chip's own). The rule below is the fallback for a card that carries
-// none (a raw option, before it was mapped): the id in its STRING form
-// when the configuration declares one, the card's OWN title when it does
-// not. ONE copy, read by the save, the restore, the locale re-title and
-// the press dedupe: a card without an id used to save a tag NO lookup
-// could read, and its scope silently disappeared on reload.
-//
-// The carried string comes FIRST: it is what the conversation was saved
-// under, so it is what the restore has to read back — a rule spelled
-// twice is a rule that drifts, and a drifted identity is a scope that
-// silently disappears on reload.
-function quickHelpIdentityOf(card) {
-  return (card && card.serviceKey) || quickHelpTagOf(card && card.id, (card && card.service) || '');
-}
-
-// The card an identity names, and whether that identity is AMBIGUOUS —
-// ONE verdict for every reader.
-//
-// An identity TWO cards claim (an id-less card titled like another
-// card's id) names NO card: each reader refuses it in the way its own
-// context refuses — the restore carries no scope (a saved scope that
-// cannot be named is refused, never guessed), the re-title keeps the
-// chip's own title, the press installs the card the user pressed (the
-// press names the card; the tag does not). Restoring either card would
-// put a scope the conversation was never asked in, silently.
-//
-// Both sides speak strings: a card's identity is the id's string form or
-// its title, and the tag is read as the string it was saved as, so a
-// legacy raw-number tag still names its card. The scalar gate covers
-// the tag: a non-scalar id names nothing, and its card falls back to the
-// title.
-function quickHelpVerdictForIdentity(buttons, identity) {
-  const claimants = buttons.filter((button) => button && quickHelpIdentityOf(button) === identity);
-  return { card: claimants.length === 1 ? claimants[0] : null, ambiguous: claimants.length > 1 };
 }
 
 // Tight-list renderer override: chat-tuned model output puts a parent
@@ -1924,11 +1819,7 @@ export default {
           // have caught up (a renamed-back label), and a chip that can
           // now be named must stop refusing the send. The tag's own
           // text is the identity the lookup uses.
-          // An IDENTITY-refused chip is refused for what the tag names,
-          // not for what the tree carries: the tree naming it "now"
-          // changes nothing, and healing it would put back the very
-          // scope the refusal declined to choose.
-          ...(item.unresolved && !item.identityRefused && this.enLabelDisplayNames.has(item.service)
+          ...(item.unresolved && this.enLabelDisplayNames.has(item.service)
             ? { serviceKey: item.service, unresolved: false }
             : {}),
           service:
@@ -1949,10 +1840,10 @@ export default {
     // A Quick Help chip's title is the BUTTON's title — localized config
     // text. The chip is installed with the title resolved at press time;
     // a locale switch must re-resolve it from the config (by the button's
-    // identity), the same way applyQuickHelpButtons re-resolves the
-    // buttons. A button the config no longer declares keeps its last
-    // title: the chip's identity is the id, and the title is only the
-    // identity of a card that declares no id.
+    // id — the identity, the same string in every language), the same way
+    // applyQuickHelpButtons re-resolves the buttons. A button the config
+    // no longer declares keeps its last title: the id is gone, and with
+    // it the only way to find the card.
     //
     // The lookup runs over the DEDUPED button list — the one the grid,
     // the click, the restore and the send guard all read. The RAW
@@ -1960,14 +1851,13 @@ export default {
     // (hidden, or a duplicate): re-resolving from it would put a hidden
     // card's title on a chip whose scope is the surviving card's.
     quickHelpTitleFor(item, locale) {
-      // The card that produced the chip is looked up by its IDENTITY: its
-      // id when it declares one, its own title when it does not. A raw id
-      // comparison matched an UNDEFINED id against the FIRST id-less card
-      // and re-titled the chip from that card — a chip wearing another
-      // card's name. An identity that resolves to nothing (a title the
-      // locale changed under, or an identity two cards claim) keeps the
-      // title the chip was pressed with.
-      const { card: button } = quickHelpVerdictForIdentity(this.quickHelpButtons, quickHelpIdentityOf(item));
+      // The chip's identity is the button's id — the same string in every
+      // language, so the re-title finds the card under any locale. An id
+      // the configuration no longer declares keeps the title the chip was
+      // pressed with. (The pre-contract raw id compare matched an
+      // UNDEFINED id against the FIRST id-less card and re-titled the
+      // chip from that card — a shape the loader's gate now refuses.)
+      const button = this.quickHelpButtons.find((b) => b && b.serviceKey === item.serviceKey);
       return (button && resolveConfigText(button.textKey, locale)) || item.service;
     },
 
@@ -2001,35 +1891,19 @@ export default {
       // the filter below stays a pure filter.
       buttons.forEach((button) => {
         if (button.hidden == null || typeof button.hidden === 'boolean') return;
-        // The button is NAMED in the report by the same rule that names
-        // it everywhere else (quickHelpTagOf): its id when it declares
-        // one, its resolved title otherwise (the raw title is a locale
-        // map, which would print as "[object Object]").
-        const name = quickHelpTagOf(button.id, resolveConfigText(button.title, locale)) || '(untitled)';
+        // The button is NAMED in the report by its id — the identity the
+        // loader's gate guarantees every button carries.
         console.warn(
-          `[ChatBotComponent] Quick Help button "${name}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
+          `[ChatBotComponent] Quick Help button "${button.id}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
         );
       });
+      // The id is the button's IDENTITY — the conversation tag carries
+      // it, the restore resolves it, the grid's verdict keys on it. The
+      // loader's gate (validateQuickHelpButtons) has already refused any
+      // button without a non-empty string id and any duplicated id, so
+      // every button here answers to exactly one id.
       this.quickHelpButtons = buttons
         .filter((button) => !button.hidden)
-        // The id is the button's IDENTITY — the conversation tag carries
-        // it, the restore resolves it, the grid's verdict keys on it. Two
-        // cards with one id cannot both be honoured: keeping both made
-        // the wire disagree with the verdict (the click put the CLICKED
-        // card's labels on the wire while the verdict spoke for the
-        // FIRST). The FIRST card wins; the duplicate never becomes a
-        // card, on either platform.
-        .filter((button, _index, all) => {
-          if (!button.id) return true;
-          // The string-form id rule — quickHelpTagMatches owns it.
-          if (all.some((b, i) => i < _index && quickHelpTagMatches(b.id, button.id))) {
-            console.warn(
-              `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
-            );
-            return false;
-          }
-          return true;
-        })
         .map((button) => {
           const title = resolveConfigText(button.title, locale);
           const visibleText = resolveConfigText(button.action?.visibleText, locale);
@@ -2047,8 +1921,9 @@ export default {
           return {
             service: title,
             serviceLabels: explicitLabels,
-            // The saved conversation tag — quickHelpTagOf owns the rule.
-            serviceKey: quickHelpTagOf(button.id, title),
+            // The saved conversation tag: the id — the button's identity,
+            // and the string the loader's gate guarantees it carries.
+            serviceKey: button.id,
             textKey: button.title,
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
@@ -2136,40 +2011,13 @@ export default {
       // Quick Help is a mode switch: replace any prior Quick Help selection.
       // Sidebar items (source !== QUICK_HELP_SOURCE) are additive and survive.
       // Also dedup: if the same Quick Help option is already selected, keep it as-is.
-      // The dedupe compares IDENTITIES: two cards without an id share no id,
-      // and the raw comparison called the second press a duplicate of the
-      // first — the card the user actually pressed was never installed.
-      // An identity TWO cards claim names no card: the press installs the
-      // card the user pressed rather than keeping the other one's scope.
-      const pressedIdentity = quickHelpIdentityOf(rawOption);
-      const { ambiguous: identityIsAmbiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, pressedIdentity);
-      const existingIdx = this.selectedContextItems.findIndex((item) => {
-        if (item.source !== QUICK_HELP_SOURCE) return false;
-        if (quickHelpIdentityOf(item) === pressedIdentity) {
-          // An identity TWO cards claim cannot be told apart by it alone:
-          // the card's own fingerprint can (its title and its declared
-          // labels). Two cards indistinguishable in every way are one
-          // card to the user — the repeat press stays a no-op instead of
-          // asking the question twice or keeping the other card's scope.
-          return (
-            !identityIsAmbiguous ||
-            (item.service === rawOption.service &&
-              JSON.stringify(item.serviceLabels || []) === JSON.stringify(rawOption.serviceLabels || []))
-          );
-        }
-        // A card WITHOUT an id carries no identity that survives a
-        // language switch — its title is its identity, and the title
-        // changes with the language. The SCOPE it declares is what says
-        // "this is the card I pressed": the English labels and the
-        // category, the locale-independent fields. Without this, the
-        // repeat press of the same tile re-installs the chip and asks
-        // its hidden prompt twice.
-        return (
-          rawOption.id == null &&
-          (item.serviceLabels || []).join('|') === (rawOption.serviceLabels || []).join('|') &&
-          (item.category || 'general') === (rawOption.category || 'general')
-        );
-      });
+      // The dedupe compares the button's ID — the identity, the same
+      // string in every language, so the repeat press of the same tile
+      // stays a no-op (it does not ask a hidden prompt twice) no matter
+      // which language the interface moved through.
+      const existingIdx = this.selectedContextItems.findIndex(
+        (item) => item.source === QUICK_HELP_SOURCE && item.serviceKey === rawOption.serviceKey
+      );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
@@ -2760,16 +2608,15 @@ export default {
           // the sidebar branch and send the button id as a label.
           conversation.tags.forEach((tag) => {
             // A saved conversation keeps the tag of an item, not the item
-            // itself. A Quick Help tag is the IDENTITY of the button that
-            // produced it, so the button is looked up by that identity: its
-            // id, or its own title when the configuration declares no id.
-            // Restoring it as a plain sidebar item would drop the labels
-            // the deployment declared for it, and would make the query look
-            // like a misconfigured selection. The lookup is on the card's
-            // identity and never on a sidebar label — a sidebar selection
-            // and a Quick Help button can carry the same label, and
-            // restoring the wrong one silently changes the scope of the
-            // saved query.
+            // itself. A Quick Help tag is the ID of the button that
+            // produced it, so the button is looked up by that id:
+            // restoring it as a plain sidebar item would drop the labels
+            // the deployment declared for it, and would make the query
+            // look like a misconfigured selection. The lookup is on the
+            // button's id and never on a label — a sidebar selection and
+            // a Quick Help button can carry the same label, and restoring
+            // the wrong one silently changes the scope of the saved
+            // query.
             // The RESERVED just-chat id: a saved conversation keeps it
             // even when the deployment's config dropped the entry — the
             // scope it names (NONE, unfiltered by design) does not
@@ -2786,44 +2633,13 @@ export default {
               );
               return;
             }
-            // The identity rule — quickHelpVerdictForIdentity owns it: the
-            // tag the card saved is the tag this reads, so a card WITHOUT
-            // an id (whose identity is its title) restores its own scope
-            // instead of falling through to the sidebar branch and
-            // becoming a label chip.
-            // The tag is read as the string it was saved as; a tag that
-            // is not a scalar carries no identity and names no card.
-            const tagIdentity = isScalarId(tag) ? String(tag) : null;
-            const { card: button, ambiguous } = quickHelpVerdictForIdentity(this.quickHelpButtons, tagIdentity);
-            // A TITLE identity is label-shaped: an id-less card can carry
-            // the very string a sidebar selection saves. When that string
-            // is ALSO a live hierarchy label, the tag cannot say which of
-            // the two scopes it stood for — the card is refused the same
-            // way an ambiguous identity is, rather than silently
-            // replacing the sidebar scope (or the card) with the other
-            // one. An ID identity is opaque: it names a card and nothing
-            // else, so the card keeps the precedence the id-only lookup
-            // always had.
-            // And when the hierarchy could not be consulted at all, the
-            // question has no answer: the sidebar branch refuses for the
-            // same reason, so the title identity refuses with it instead
-            // of quietly choosing the card.
-            const namesALabel = this.enLabelDisplayNames.has(tag);
-            const hierarchyUsable = this.serviceCategoriesStatus === 'loaded';
-            if (ambiguous || (button && !button.id && (namesALabel || !hierarchyUsable))) {
-              // The tag names NO card it can be restored as. The scope
-              // cannot be carried: the send refuses it visibly, the way
-              // a tag that names nothing is refused.
-              restoredContextItems.push(
-                restoredScopeItem(
-                  this.displayNameForEnLabel(tag) || tag,
-                  null,
-                  this.currentCategoryId || 'general',
-                  true
-                )
-              );
-              return;
-            }
+            // The identity rule: the tag a card saves is the button's ID
+            // — the string the loader's gate guarantees every button
+            // carries — so the lookup reads the tag as the string it was
+            // saved as (a legacy conversation that stored the raw number
+            // still names its card). A tag that names no button falls
+            // through to the branches below, never to a guess.
+            const button = this.quickHelpButtons.find((candidate) => candidate && candidate.serviceKey === String(tag));
             if (button) {
               restoredContextItems.push(quickHelpContextItem(button));
               // The card knows the scope it was asked in: a conversation
@@ -2863,15 +2679,15 @@ export default {
             // cannot be carried. The 'general' placeholder below would
             // exempt it from the unnamed-item rule, and the send would
             // quietly drop the scope it stood for the moment another
-            // item provided a filter. The builder's flag names it for
-            // the guard: no partial drop, the send refuses.
-            restoredContextItems.push(
-              restoredScopeItem(
-                this.displayNameForEnLabel(enLabel || tag) || tag,
-                enLabel,
-                this.currentCategoryId || 'general'
-              )
-            );
+            // item provided a filter. `unresolved` names it for the
+            // guard: no partial drop, the send refuses.
+            restoredContextItems.push({
+              service: this.displayNameForEnLabel(enLabel || tag) || tag,
+              serviceKey: enLabel,
+              category: this.currentCategoryId || 'general',
+              unresolved: enLabel === null,
+              selected: true
+            });
           });
         } else if (this.currentCategoryId) {
           // The scope of this item IS the category — 'category.<id>' is

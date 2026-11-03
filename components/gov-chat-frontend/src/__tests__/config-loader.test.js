@@ -410,4 +410,78 @@ describe('loadConfig', () => {
 
     expect(cssPropsSet()).not.toContain('--visual-heor');
   });
+
+  // The Quick Help button contract (#1238): the id is the button's ONLY
+  // identity — the tag a saved conversation carries and the key the
+  // restore reads — so a button without one, or two buttons sharing one,
+  // cannot be honoured. The gate runs on every load, independently of
+  // the JSON schema: a document without a `$schema` skips the schema
+  // validation but not this contract.
+  describe('Quick Help button contract', () => {
+    const configWithButtons = (buttons, extra = {}) => ({
+      features: { chat: { quickHelp: { buttons } } },
+      ...extra
+    });
+
+    it('accepts buttons that each carry a unique non-empty string id', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            configWithButtons([
+              { id: 'just-chat', title: { en: 'Just Chat' }, category: null },
+              { id: 'taxes-revenue', title: { en: 'Pay Taxes' }, category: '2' }
+            ])
+          )
+      });
+
+      await expect(loadConfig()).resolves.toBeDefined();
+    });
+
+    it('rejects a button whose id is missing, empty, or not a string', async () => {
+      const cases = [{}, { id: '' }, { id: 5 }, { id: null }, { id: ['x'] }];
+      for (const buttons of cases.map((b) => [b])) {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(configWithButtons(buttons))
+        });
+        await expect(loadConfig()).rejects.toThrow(/no valid "id"/i);
+      }
+    });
+
+    it('rejects two buttons sharing one id, naming both', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            configWithButtons([
+              { id: 'taxes-revenue', title: { en: 'First' } },
+              { id: 'taxes-revenue', title: { en: 'Second' } }
+            ])
+          )
+      });
+
+      await expect(loadConfig()).rejects.toThrow(/duplicates the id "taxes-revenue" of button #0/i);
+    });
+
+    it('gates a document that carries no schema at all', async () => {
+      // A legacy config without a `$schema` skips the schema validation
+      // by design — the Quick Help contract is not skipped with it.
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ features: { chat: { quickHelp: { buttons: [{ title: { en: 'No id' } }] } } } })
+      });
+
+      await expect(loadConfig()).rejects.toThrow(/no valid "id"/i);
+    });
+
+    it('gates nothing when the configuration declares no Quick Help buttons', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ features: { chat: {} } })
+      });
+
+      await expect(loadConfig()).resolves.toBeDefined();
+    });
+  });
 });

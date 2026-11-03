@@ -3134,4 +3134,28 @@ describe('translation load-failure gate', () => {
     expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
     wrapper.unmount();
   });
+
+  it('a superseded slow fetch that succeeds late does not repopulate the newer edit', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    let resolveA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveA = resolve;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    treeMock.getCategoryTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'B-nom' }]);
+    await wrapper.vm.showEditForm({ _key: 'cat-b', nameEN: 'B' });
+
+    resolveA([{ lang: 'fr', text: 'A-nom' }]);
+    await editA;
+    // A's late rows must not land in B's already-answered form.
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
+    expect(wrapper.vm.hierarchyForm._key).toBe('cat-b');
+    wrapper.unmount();
+  });
 });

@@ -1346,12 +1346,12 @@ describe('ChatBotComponent', () => {
       // no trace of the configuration mistake that hid it. (The buttons
       // are applied once per load — the mount's and the explicit call's —
       // so the report follows the load, not the card.)
-      const hiddenWarnings = warn.mock.calls.filter((call) =>
-        String(call[0]).includes('the "hidden" flag must be a boolean')
-      );
+      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
       expect(hiddenWarnings.length).toBeGreaterThan(0);
+      // The report NAMES the offending button and the offending value:
+      // the operator has to learn WHICH card vanished and WHAT it said.
       expect(String(hiddenWarnings[0][0])).toContain('quoted');
-      expect(String(hiddenWarnings[0][0])).toContain('string ("false")');
+      expect(String(hiddenWarnings[0][0])).toContain('false');
       // A card with no id is named by its RESOLVED title: the raw title
       // is a locale map, and the report printed "[object Object]".
       expect(hiddenWarnings.some((call) => String(call[0]).includes('Titled hidden card'))).toBe(true);

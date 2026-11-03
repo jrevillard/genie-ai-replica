@@ -174,7 +174,7 @@ void main() {
             bad.add('$code: no outage caption');
             continue;
           }
-          if (outage.startsWith(configLeads.first)) {
+          if (outage.trim().startsWith(configLeads.first.trim())) {
             bad.add(
               '$code: the outage caption borrows the configuration-problem lead',
             );

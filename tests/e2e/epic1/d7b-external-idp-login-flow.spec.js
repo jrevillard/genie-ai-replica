@@ -17,9 +17,19 @@ async function brokerLogin(page) {
   await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 15000 });
   await page.locator('#social-external-idp').click({ timeout: 10000 });
 
-  // Wait for the redirect chain to settle (may land on external-idp login,
-  // VERIFY_EMAIL required action, or directly on callback/dashboard)
-  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  // Wait for the redirect chain to reach a known landing state
+  // (external-idp login, or the broker exchange landing on callback/dashboard)
+  await page.waitForURL(
+    (url) => {
+      const urlStr = url.toString();
+      return (
+        urlStr.includes('realms/external-idp') ||
+        urlStr.includes('/callback') ||
+        urlStr.includes('/dashboard')
+      );
+    },
+    { timeout: 30000 },
+  );
 
   // If we landed on the external-idp login page, fill credentials and submit
   const currentUrl = page.url();
@@ -27,7 +37,6 @@ async function brokerLogin(page) {
     await page.fill('#username', 'external-test-user');
     await page.fill('#password', 'External123!');
     await page.click('#kc-login');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   }
 }
 
@@ -106,27 +115,37 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
 
       // Step 6: Verify authenticated state — login button should not be visible
       const loginButton = page.locator('#kc-login');
-      const isLoginVisible = await loginButton.isVisible().catch(() => false);
-      expect(
-        isLoginVisible,
+      await expect(
+        loginButton,
         'Login button should not be visible after successful authentication',
-      ).toBeFalsy();
+      ).not.toBeVisible({ timeout: 15000 });
     } finally {
-      // Step 7: Re-enable VERIFY_EMAIL required action (best effort)
+      // Step 7: Re-enable VERIFY_EMAIL required action.
       // Note: Keycloak 26 removes (unregisters) the action when disabled.
       // It will be fully restored by keycloak-config-cli on next deploy.
-      await apiContext.put(
-        'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
-        { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
-      ).catch(() => {});
+      try {
+        await apiContext.put(
+          'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
+          { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
+        );
+      } catch (restoreError) {
+        throw new Error(
+          `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +
+            `(brokered logins skip email verification) until keycloak-config-cli ` +
+            `re-runs on the next deploy. Restore error: ${restoreError.message}`,
+        );
+      }
     }
 
     await context.close();
   } catch (error) {
     const errorUrl = page.url();
-    const errorBody = await page
-      .evaluate(() => document.body.innerText.substring(0, 500))
-      .catch(() => 'N/A');
+    let errorBody;
+    try {
+      errorBody = await page.evaluate(() => document.body.innerText.substring(0, 500));
+    } catch (bodyError) {
+      errorBody = `unavailable (page read failed: ${bodyError.message})`;
+    }
 
     await context.close();
 

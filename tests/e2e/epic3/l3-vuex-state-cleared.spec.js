@@ -44,8 +44,17 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   ).toBeTruthy();
 
   // Step 4: Verify authenticated state via Vuex store
-  // Wait for Vue to mount and Vuex store to be initialized
-  await page.waitForTimeout(2000);
+  // Wait for Vue to mount — the store is reachable once __vue_app__ exists.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const app = document.querySelector('#app');
+          return Boolean(app && app.__vue_app__);
+        }),
+      { timeout: 15000 },
+    )
+    .toBe(true);
 
   const authStateBefore = await page.evaluate(() => {
     const app = document.querySelector('#app');
@@ -125,7 +134,16 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
 
   // Additionally verify Vuex state directly if still on app domain
   if (!isAtKeycloak) {
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const app = document.querySelector('#app');
+            return Boolean(app && app.__vue_app__);
+          }),
+        { timeout: 15000 },
+      )
+      .toBe(true);
     const authStateAfter = await page.evaluate(() => {
       const app = document.querySelector('#app');
       if (app && app.__vue_app__) {

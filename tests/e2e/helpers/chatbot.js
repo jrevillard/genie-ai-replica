@@ -121,24 +121,19 @@ async function sendMessage(page, message) {
 }
 
 /**
- * Wait for a bot response to appear in the chat window.
- * Polls for new bot messages and ensures the loading spinner disappears.
+ * Wait for a bot response to complete in the chat window.
+ *
+ * The loading spinner is transient — a fast answer mounts and hides it
+ * between two polls — so neither its appearance nor its absence is an
+ * observable of the turn's state. The durable outcome is the last bot
+ * bubble carrying content: the send handler mounts it as an empty
+ * placeholder, and only the completed turn fills it.
  */
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
 
-  // Wait for loading spinner to appear (indicates processing started)
-  await page
-    .waitForSelector('.loading-spinner', {
-      timeout: 5000
-    })
-    .catch(() => {
-      // Spinner may be very fast — OK if missed
-    });
-
-  // Wait for loading spinner to disappear (indicates response complete)
-  await expect(page.locator('.loading-spinner')).toBeHidden({
-    timeout
+  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(/\S/, {
+    timeout,
   });
 }
 

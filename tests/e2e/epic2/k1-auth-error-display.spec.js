@@ -48,20 +48,23 @@ test.describe.serial('Phase K: Auth Error Display', () => {
         const token = await getAdminToken();
         await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
       } catch (e) {
-        // Best-effort, never silent: if K.2 ran, a failed restore leaves
+        // Failing cleanup, never silent: if K.2 ran, a failed restore leaves
         // the realm at its 10s lifespan, poisoning every suite after.
-        console.warn(`k1 afterAll: lifespan restore failed — verify the realm's accessTokenLifespan manually: ${e.message}`);
+        throw new Error(
+          `k1 afterAll: accessTokenLifespan restore failed — the genie realm is left at a ` +
+            `mutated lifespan that every later suite inherits. Restore it manually, then re-run. ` +
+            `Cause: ${e.message}`,
+        );
       }
     }
 
-    // Cleanup: delete no-roles user if created
+    // Cleanup: delete no-roles user. A failed delete fails the suite and
+    // names the leftover; a leftover account is harmless to the next run
+    // only because createUser tolerates the 409, so the failure must be
+    // visible, not swallowed.
     if (noRolesUserId) {
-      try {
-        const token = await getAdminToken();
-        await deleteUser(token, 'genie', noRolesUserId);
-      } catch {
-        // User may already be deleted
-      }
+      const token = await getAdminToken();
+      await deleteUser(token, 'genie', noRolesUserId);
     }
   });
 

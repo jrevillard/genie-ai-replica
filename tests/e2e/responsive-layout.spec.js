@@ -53,6 +53,25 @@ async function gotoChatbot(page) {
   await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
 }
 
+// The sidebar widths animate over a 0.3 s transition and the layout
+// reflows around them. A geometry read must see the transition's end,
+// not a mid-flight frame, so the waits poll until a panel's measured
+// width holds steady across two consecutive samples — bounded by a
+// hard timeout, never by a fixed duration.
+async function waitForWidthSettled(page, selector, timeout = 15000) {
+  let prev = null;
+  await expect
+    .poll(async () => {
+      const box = await page.locator(selector).boundingBox();
+      const width = box ? Math.round(box.width) : null;
+      const settled = width !== null && prev === width;
+      prev = width;
+      return settled;
+    }, { timeout })
+    .toBe(true);
+  return prev;
+}
+
 // Bounding boxes overlap iff `a.left < b.right && a.right > b.left`.
 // Off-canvas sidebars have bounding rects that extend past the viewport,
 // so the strict `<= right + 4` checks used to disagree on those
@@ -169,9 +188,11 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
     test(`${vp}x800: layout is non-zero, column count follows the invariant, no overlap`, async ({ page }) => {
       await page.setViewportSize({ width: vp, height: 800 });
       await gotoChatbot(page);
-      // Settle the 0.3s sidebar transition and the Vue-driven position
-      // reflow before reading.
-      await page.waitForTimeout(2000);
+      // The sidebar widths settle through the 0.3s transition and the
+      // Vue-driven position reflow; the read below must see the final
+      // geometry, so wait until both panels' widths hold steady.
+      await waitForWidthSettled(page, '.side-bar');
+      await waitForWidthSettled(page, '.sidebar');
 
       const m = await measureLayout(page);
 
@@ -268,12 +289,10 @@ test.describe('Welcome panel does not scroll horizontally', () => {
       }) => {
         const { ctx, page } = await openWelcomeScreen(browser, {
           viewport: { width: vp, height: 800 },
-          theme,
-          // Past the 650 ms entrance animation and Chromium's mask-layer
-          // settle window, so the banner's box has its final width. This
-          // panel's geometry does not sit behind the mask, so it does not
-          // need the suite's longer default.
-          settle: 2500
+          theme
+          // The banner's box reaches its final width once the entrance
+          // animation and the compositing gate inside openWelcomeScreen
+          // pass — no fixed settle window is needed for this read.
         });
         try {
           const m = await readWelcomePanel(page);

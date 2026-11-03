@@ -78,7 +78,12 @@ test.describe('Document Search', () => {
     const filesResponse = page.waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 });
     await statusFilter.selectOption('pending');
     await filesResponse;
-    await page.waitForTimeout(250);
+
+    // The response has arrived; getDocumentTableRows reads once, without
+    // retrying — wait for the table to render the filtered rows first.
+    await expect
+      .poll(async () => (await getDocumentTableRows(page)).length, { timeout: 10000 })
+      .toBeGreaterThanOrEqual(1);
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

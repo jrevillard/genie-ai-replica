@@ -30,11 +30,11 @@ test.describe('Conversation V1', () => {
     );
     expect(closeOutside, 'the close cross sits outside the save/export cluster').toBe(true);
     await page.locator('[data-testid="conversation-header-close"]').click();
-    // The unsaved-changes confirm may appear — accept its default action.
-    const confirm = page.locator('[role="dialog"]');
-    if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.keyboard.press('Enter');
-    }
+    // The close on an unsaved turn always prompts — a completed turn with
+    // no saved conversation reads as unsaved by design. Enter accepts the
+    // dialog's default action (save and start new).
+    await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await page.keyboard.press('Enter');
     await expect(page.locator('.quick-help-overlay')).toBeVisible({ timeout: 15000 });
     await ctx.close();
   });
@@ -43,7 +43,15 @@ test.describe('Conversation V1', () => {
   test('the wave is fixed behind the conversation and does not scroll with the messages', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await askAndAnswer(page, 'What is GENIE.AI?');
-    await page.waitForTimeout(500);
+    // The wave's paint may trail the first frame — wait for the pseudo
+    // element to paint before reading its computed styles.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => getComputedStyle(document.querySelector('.chatbot-container'), '::after').content),
+        { timeout: 5000 }
+      )
+      .not.toBe('none');
     const before = await page.evaluate(() => {
       const cs = getComputedStyle(document.querySelector('.chatbot-container'), '::after');
       return { content: cs.content, position: cs.position, bottom: cs.bottom, image: cs.backgroundImage };
@@ -54,11 +62,15 @@ test.describe('Conversation V1', () => {
     await page.evaluate(() => {
       document.querySelector('.chat-window').scrollTop = 400;
     });
-    await page.waitForTimeout(200);
-    const after = await page.evaluate(
-      () => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom
-    );
-    expect(after, 'the wave must not scroll with the messages').toBe(before.bottom);
+    // The wave is fixed: its bottom must not move with the scroll — the
+    // poll holds the assertion open through the scroll settling.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom),
+        { timeout: 5000 }
+      )
+      .toBe(before.bottom);
     // The band shares the welcome banner's mechanics: its height derives
     // from the artwork's own aspect ratio, so nothing squashes or shears
     // at any viewport width.
@@ -81,7 +93,11 @@ test.describe('Conversation V1', () => {
       });
     const on = await boxes();
     await page.evaluate(() => document.documentElement.setAttribute('data-visual', 'off'));
-    await page.waitForTimeout(300);
+    // Layer-off re-renders through Vue — wait for the header box to
+    // settle before reading all three boxes.
+    await expect
+      .poll(async () => (await boxes()).header, { timeout: 5000 })
+      .toEqual(on.header);
     const off = await boxes();
     expect(off.header, 'the header box does not move with the layer off').toEqual(on.header);
     expect(off.input, 'the composer box does not move with the layer off').toEqual(on.input);
@@ -98,7 +114,18 @@ test.describe('Conversation V1', () => {
     await expect(page.locator('[data-testid="composer-mic-btn"]')).toBeDisabled();
     const lines = Array(8).fill('line').join('\n');
     await page.locator('[data-testid="chat-composer"] textarea').fill(lines);
-    await page.waitForTimeout(300);
+    // The field's auto-resize trails the fill — wait for the content to
+    // outgrow the five-line cap before reading the computed styles.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const ta = document.querySelector('[data-testid="chat-composer"] textarea');
+            return parseFloat(getComputedStyle(ta).maxHeight) < ta.scrollHeight;
+          }),
+        { timeout: 5000 }
+      )
+      .toBe(true);
     const m = await page.evaluate(() => {
       const ta = document.querySelector('[data-testid="chat-composer"] textarea');
       const cs = getComputedStyle(ta);
@@ -190,7 +217,7 @@ test.describe('Conversation — sources', () => {
       return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fake' });
     });
     await page.locator('[data-testid^="answer-source-card-"]').click();
-    await page.waitForTimeout(800);
+    await expect.poll(() => viewFetch !== null, { timeout: 15000 }).toBe(true);
     expect(viewFetch, 'opening the card fetches the document').not.toBeNull();
     expect(viewFetch.auth, 'the fetch carries the session token').toMatch(/^Bearer /);
     await page.locator('[data-testid="answer-sources-toggle"]').click();
@@ -216,7 +243,7 @@ test.describe('Conversation — actions', () => {
     // The pointer rests on the thumb after the click — its hover paint would
     // mask the rated state. Move away so only the rated paint is read.
     await page.mouse.move(10, 10);
-    await page.waitForTimeout(500);
+    await expect(page.locator('[data-testid="answer-thumb-up"]')).toHaveAttribute('data-rated', 'true');
     const rated = await page.evaluate(() => {
       const el = document.querySelector('[data-testid="answer-thumb-up"]');
       return { attr: el.getAttribute('data-rated'), bg: getComputedStyle(el).backgroundColor };
@@ -225,7 +252,10 @@ test.describe('Conversation — actions', () => {
     expect(rated.bg, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
     await expect(page.locator('.notification.success'), 'the rating confirms itself').toBeVisible();
     await page.locator('[data-testid="answer-copy"]').click();
-    await page.waitForTimeout(300);
+    // The clipboard write trails the click — wait for the text to land.
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 })
+      .not.toBe('');
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     expect(clip.length, 'the clipboard holds the answer text').toBeGreaterThan(0);
     // The button acknowledges the copy with a check mark, then reverts.
@@ -233,11 +263,14 @@ test.describe('Conversation — actions', () => {
       () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''
     );
     expect(copiedIcon, 'the copy button shows a check while copied').toContain('check');
-    await page.waitForTimeout(1600);
-    const revertedIcon = await page.evaluate(
-      () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''
-    );
-    expect(revertedIcon, 'the copy button reverts to the copy icon').toContain('copy');
+    // The revert timer runs ~1.5 s after the copy — the poll outlives it.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''),
+        { timeout: 5000 }
+      )
+      .toContain('copy');
     await ctx.close();
   });
 });
@@ -521,16 +554,15 @@ test.describe('Conversation — surface invariants', () => {
     // Leave while the answer is still streaming.
     await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
     await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
-    await page.waitForTimeout(500);
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
     // Release the stream while the chat view is unmounted: the store
     // must keep consuming it.
     releaseStream();
     await page.waitForResponse((r) => r.url().includes('/queries/stream') && r.status() === 200, { timeout: 15000 });
-    await page.waitForTimeout(1000); // frame processing + persistence debounce
     // Back through the router (history back is an in-app navigation, not
     // a reload): the conversation is intact and the answer completed in
-    // the background.
+    // the background — the wait below holds until the released stream's
+    // frame has been consumed and rendered.
     await page.goBack();
     await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
     await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');

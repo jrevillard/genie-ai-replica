@@ -67,7 +67,6 @@ test.describe('the RAGAS model selection is in the UI', () => {
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
-    await page.waitForTimeout(1500);
 
     // 3. the repo card -> Testing Lab (the dialog that carries the Benchmarks tab)
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
@@ -80,14 +79,16 @@ test.describe('the RAGAS model selection is in the UI', () => {
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
-    await page.waitForTimeout(2500);
 
     // 5. THE ASSERTION — the judge dropdown, with the env default among its
     // options, in BOTH the generation form and the benchmark-run form.
     // David 2026-10-25: "put it back for both generation and benchmark, run".
     const judgeSelects = page.locator('select').filter({ has: page.locator('option[value="__env__"]') });
+    await expect(
+      judgeSelects,
+      'the judge/model selector must be rendered in BOTH the generation and the run form'
+    ).toHaveCount(2);
     const count = await judgeSelects.count();
-    expect(count, 'the judge/model selector must be rendered in BOTH the generation and the run form').toBe(2);
 
     for (let i = 0; i < count; i += 1) {
       const options = await judgeSelects
@@ -120,7 +121,6 @@ test.describe('the RAGAS model selection is in the UI', () => {
     const modelsTab = page.getByRole('button', { name: /^Models$/i }).first();
     await expect(modelsTab, 'the Models tab must be reachable').toBeVisible({ timeout: 20000 });
     await modelsTab.click();
-    await page.waitForTimeout(2000);
 
     // The named configurations must be ON SCREEN — the tab read `res.configs`
     // from the same broken envelope and was blank for the same reason.
@@ -131,11 +131,11 @@ test.describe('the RAGAS model selection is in the UI', () => {
     // BLANK tab produces (the #78684 bug rendered nothing at all), so the
     // pre-fix mutant passed. The teeth are POSITIVE: at least one rendered
     // configuration row must exist.
-    const rowCount = await page.locator('tr', { has: page.locator('td.okf-models__cell-url') }).count();
-    expect(
-      rowCount,
+    const modelRows = page.locator('tr', { has: page.locator('td.okf-models__cell-url') });
+    await expect(
+      modelRows,
       'the Models tab must list the configured models — ≥1 rendered configuration row'
-    ).toBeGreaterThan(0);
+    ).not.toHaveCount(0);
 
     await page.screenshot({ path: 'test-results/okf-models-tab.png', fullPage: false });
     await context.close();

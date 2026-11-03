@@ -89,12 +89,11 @@ function composerPlaceholder(locale) {
 
 /**
  * Sign in and land on the dashboard — the same session the welcome
- * screen's measurements open, without the settle: nothing here reads
- * the banner's mask layer, and every test below waits for the state it
- * needs on its own.
+ * screen's measurements open: nothing here reads the banner's mask
+ * layer, and every test below waits for the state it needs on its own.
  */
 async function freshSignedIn(browser, viewport = { width: 1440, height: 900 }, theme = 'light') {
-  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, settle: 0 });
+  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme });
   await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
   return { ctx, page };
 }
@@ -107,8 +106,9 @@ test.describe('chat-composer mounted state', () => {
     // Land on the chat view fresh — the welcome screen renders first.
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-    // Settle Vue-driven reflow + the data-visual=off test below.
-    await page.waitForTimeout(500);
+    // The composer mounts once the runtime config's buttons are known —
+    // wait for it before counting.
+    await page.waitForSelector('.chat-composer', { timeout: 15000 });
 
     const composerCount = await page.locator('.chat-composer').count();
     expect(composerCount, 'welcome screen composer count').toBe(1);
@@ -202,7 +202,6 @@ test.describe('composer send pathway', () => {
     await welcomeField.press('Shift+Enter');
 
     // No chat view; welcome composer still present.
-    await page.waitForTimeout(300);
     await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
     // No user message was appended.
@@ -227,7 +226,6 @@ test.describe('composer send pathway', () => {
     const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
     await welcomeField.click();
     await welcomeField.press('Enter');
-    await page.waitForTimeout(300);
 
     // No user message, welcome composer still present.
     await expect(page.locator('.chat-message.user')).toHaveCount(0);
@@ -244,12 +242,9 @@ test.describe('grid after placement extraction', () => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-    // Settle the Living Intelligence entrance animation (~650 ms) before
-    // counting.
-    await page.waitForTimeout(800);
-
-    const tileCount = await page.locator('.quick-help-grid .quick-help-item').count();
-    expect(tileCount, 'tile count').toBe(8);
+    // The Living Intelligence entrance animation mounts the tiles over
+    // ~650 ms — the count assertion waits out the whole entrance.
+    await expect(page.locator('.quick-help-grid .quick-help-item')).toHaveCount(8);
 
     // The "just chat" string is the entry's localised title. A tile that
     // still carries it would mean the placement filter bypassed the grid.
@@ -286,7 +281,10 @@ test.describe('config / composer identity', () => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-    await page.waitForTimeout(300);
+    const composerRoot = page.locator('[data-testid="welcome-composer"]');
+    // The tint lands as the composer's inline style — wait for it before
+    // the raw attribute reads below.
+    await expect(composerRoot).toHaveAttribute('style', /--composer-tint:/i);
 
     // Fetch the served config inside the page (same-origin) to compare
     // against the running DOM, so a stale cached config doesn't pass.
@@ -300,8 +298,6 @@ test.describe('config / composer identity', () => {
       outline: jc.styles.outlineColor,
       title: jc.title.en // base config carries a localised map; English serves as a fallback
     };
-
-    const composerRoot = page.locator('[data-testid="welcome-composer"]');
 
     // The leading mark is the reference's sparkles (a four-pointed star
     // with two smaller ones), not the entry's chat bubble: the reference
@@ -336,7 +332,12 @@ test.describe('config / composer identity', () => {
       const { ctx, page } = await freshSignedIn(browser, { width: 1440, height: 900 }, theme);
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-      await page.waitForTimeout(300);
+      // The background is derived from the composer's tint; wait for the
+      // tint to land before reading the computed paint.
+      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute(
+        'style',
+        /--composer-tint:/i
+      );
 
       const bg = await page.evaluate(() => {
         const el = document.querySelector('[data-testid="welcome-composer"]');
@@ -373,7 +374,6 @@ test.describe('config / composer identity', () => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-    await page.waitForTimeout(300);
 
     const attachBtn = page.locator('[data-testid="composer-attach-btn"]');
     const micBtn = page.locator('[data-testid="composer-mic-btn"]');
@@ -391,7 +391,6 @@ test.describe('config / composer identity', () => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-    await page.waitForTimeout(300);
 
     const sendBtn = page.locator('[data-testid="composer-send-btn"]');
     await expect(sendBtn).toBeDisabled();
@@ -422,7 +421,6 @@ test.describe('visual-layer off', () => {
     await page.evaluate(() => {
       document.documentElement.dataset.visual = 'off';
     });
-    await page.waitForTimeout(150);
 
     const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
     await welcomeField.click();
@@ -485,7 +483,20 @@ test.describe('composer field', () => {
 
     const field = page.locator('[data-testid="welcome-composer"] textarea');
     await field.click();
-    await page.waitForTimeout(150);
+    // The focus ring may trail the focus through a transition — wait for
+    // it to paint before reading the computed styles.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              getComputedStyle(
+                document.querySelector('[data-testid="welcome-composer"] .chat-composer')
+              ).boxShadow
+          ),
+        { timeout: 5000 }
+      )
+      .not.toBe('none');
 
     const rings = await page.evaluate(() => {
       const pill = document.querySelector('[data-testid="welcome-composer"] .chat-composer');
@@ -581,12 +592,12 @@ const GROWTH_LINES = { '1920x1080 light': 2, '1440x900 light': 3 };
  * the sidebar hint and the splash-clearing reload are all `openWelcomeScreen`
  * — plus the composer itself, which is the element under test here.
  *
- * The settle is this file's own: the composer's geometry does not sit
- * behind the banner's mask layer, so it does not need the suite's
- * longer, mask-settle default.
+ * The composer's geometry does not sit behind the banner's mask layer:
+ * `openWelcomeScreen`'s animation and compositing gates are enough for
+ * the reads below.
  */
 async function openWelcome(browser, { viewport, theme, locale } = {}) {
-  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, locale, settle: 1100 });
+  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, locale });
   await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
   return { ctx, page };
 }
@@ -725,7 +736,11 @@ test.describe('welcome bar measure', () => {
           if (i > 1) await page.keyboard.press('Shift+Enter');
           await page.keyboard.type(text, { delay: 5 });
         }
-        await page.waitForTimeout(250);
+        // The bar's height grows with the field's content; the Vue-driven
+        // resize trails the last keystroke — wait for the grown height.
+        await expect
+          .poll(async () => (await measureWelcomeBar(page)).bar.h, { timeout: 5000 })
+          .toBeGreaterThan(before.bar.h);
 
         const after = await measureWelcomeBar(page);
         expect(after.value, `the field holds every line typed at ${where} (got ${JSON.stringify(after.value)})`).toBe(
@@ -808,7 +823,6 @@ test.describe('welcome bar measure', () => {
       const { ctx, page } = await openWelcome(browser, {
         viewport: { width: vp.width, height: vp.height }
       });
-      await page.waitForTimeout(300);
 
       for (const locale of LOCALES) {
         const expected = composerPlaceholder(locale);

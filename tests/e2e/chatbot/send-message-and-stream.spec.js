@@ -69,28 +69,27 @@ test.describe('Chatbot message sending and SSE streaming', () => {
   test('SSE stream renders bot response progressively', async () => {
     await sendMessage(page, 'Tell me about public services');
 
-    // Verify progressive rendering by polling bot message text
-    // Text should grow over time as SSE chunks arrive
+    // Progressive rendering: the bubble's text grows as SSE chunks arrive.
+    // The poll holds until the text observed first has grown — a bubble
+    // that only ever renders its full text in one frame fails the poll.
     const botBubble = page.locator('.chat-message.bot .message-bubble').last();
-    let previousLength = 0;
-    let textGrew = false;
-
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(1000);
-      const currentVisible = await botBubble.isVisible().catch(() => false);
-      if (!currentVisible) continue;
-      const currentText = (await botBubble.innerText().catch(() => '')).trim();
-      if (currentText.length > previousLength) {
-        textGrew = true;
-      }
-      previousLength = currentText.length;
-    }
+    let firstLength = null;
+    await expect
+      .poll(
+        async () => {
+          const text = (await botBubble.innerText()).trim();
+          if (firstLength === null) {
+            firstLength = text.length;
+          }
+          return text.length;
+        },
+        { timeout: 30000 }
+      )
+      .toBeGreaterThan(firstLength);
 
     await waitForBotResponse(page, { timeout: 120000 });
 
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
-    // Progressive rendering: text should have grown during streaming
-    expect(textGrew).toBeTruthy();
   });
 });

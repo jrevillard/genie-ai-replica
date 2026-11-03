@@ -5,10 +5,10 @@
 // Four specs open a signed-in session on the welcome screen, three of
 // them capture pixels and read them back, and two of them compute WCAG
 // contrast ratios. Each of those was written out again in every file,
-// and the copies had already drifted: two settle constants (2500 ms
-// and 3000 ms), two alpha tables carrying the same numbers under two
-// names, and a visual-layer read whose "layer is off" branch returned
-// bare from one copy and `{ hasOverlay: false }` from the other.
+// and the copies had already drifted: two alpha tables carrying the
+// same numbers under two names, and a visual-layer read whose "layer
+// is off" branch returned bare from one copy and `{ hasOverlay: false }`
+// from the other.
 //
 // One implementation of each recipe is here. Nothing in this module
 // asserts — it measures and returns, and the spec names the assertion
@@ -25,18 +25,65 @@ const { loginViaUI } = require('./chatbot');
 // is measuring a different page.
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+// Hard bounds for the two settle gates below. A gate that expires is a
+// failure, never a reason to sample a moving page.
+const ENTRANCE_TIMEOUT_MS = 15000;
+const COMPOSITING_TIMEOUT_MS = 15000;
+
 /*
- * The pause after the reload, before the page is sampled.
+ * The settled page, as a sampler sees it. Two gates, both real
+ * observables:
  *
- * The banner's entrance animation finishes at 650 ms, but Chromium's
- * mask compositing layer takes a few extra seconds to settle after the
- * animation completes — a screenshot taken earlier reports the scrim
- * mid-gray rather than at its resolved alpha. 3000 ms is past that
- * window and is the default here, so no spec becomes flakier than it
- * was. A caller that measures something the mask layer does not touch
- * (the composer's geometry, for one) may pass a shorter pause.
+ * 1. The banner's entrance. gli-enter runs 650 ms of opacity and
+ *    transform on .quick-help-banner, and a box read or a capture
+ *    inside that window measures the animation rather than the page.
+ *    The gate is the animation's own playState, so the wait ends when
+ *    the page is done animating, at whatever speed the machine
+ *    renders it.
+ *
+ * 2. Compositing of the masked banner. A capture taken before the
+ *    compositor has produced its final frame can read the scrim
+ *    mid-gray instead of at its resolved alpha. Two consecutive
+ *    captures of the banner's box must agree byte for byte before the
+ *    page counts as settled; a banner that never stops repainting
+ *    never settles, and the timeout reports that instead of letting a
+ *    spec sample a moving target.
  */
-const DEFAULT_SETTLE_MS = 3000;
+async function waitForBannerSettled(page) {
+  await page.waitForFunction(
+    () => {
+      const banner = document.querySelector('.quick-help-banner');
+      return banner !== null && banner.getAnimations().every((a) => a.playState !== 'running');
+    },
+    undefined,
+    { timeout: ENTRANCE_TIMEOUT_MS }
+  );
+
+  const clip = await page.evaluate(() => {
+    const el = document.querySelector('.quick-help-banner');
+    const r = el.getBoundingClientRect();
+    return {
+      x: Math.max(r.left, 0),
+      y: Math.max(r.top, 0),
+      width: Math.min(r.right, window.innerWidth) - Math.max(r.left, 0),
+      height: Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)
+    };
+  });
+  const deadline = Date.now() + COMPOSITING_TIMEOUT_MS;
+  let prev = await page.screenshot({ clip, type: 'png' });
+  while (true) {
+    const next = await page.screenshot({ clip, type: 'png' });
+    if (next.equals(prev)) return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        'The banner compositing never settled: consecutive captures of ' +
+          '.quick-help-banner still differ after ' +
+          `${COMPOSITING_TIMEOUT_MS}ms — the page is repainting under the sampler.`
+      );
+    }
+    prev = next;
+  }
+}
 
 /**
  * Open a signed-in session on the welcome screen.
@@ -50,18 +97,22 @@ const DEFAULT_SETTLE_MS = 3000;
  *   theme     the context's colorScheme ('light' | 'dark')
  *   locale    applied through the app's own boot path
  *             (localStorage.userLocale, read by main.js before mount)
- *   settle    ms to wait after the reload; defaults to DEFAULT_SETTLE_MS
  *   setupPage an async hook run on the page BEFORE the login — the
  *             place for route stubs: the first chat mount already
  *             sees them, instead of a stub installed after the app
  *             has already fetched the real thing
- *   reload    false skips the splash-clearing reload and its settle
- *             pause — for a spec that HOLDS a network answer, a
- *             `waitUntil: 'networkidle'` reload would never settle
+ *   reload    false skips the splash-clearing reload — for a spec
+ *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
+ *             reload would never settle
+ *
+ * The banner is settled before the screen is returned — the entrance
+ * animation is over and two consecutive captures of the banner agree
+ * (see waitForBannerSettled) — so every value a caller samples is the
+ * resolved page.
  *
  * Returns { ctx, page } — the caller closes ctx when it is done.
  */
-async function openWelcomeScreen(browser, { viewport, theme, locale, settle, setupPage, reload = true } = {}) {
+async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
   const ctx = await browser.newContext({
     viewport: viewport || DEFAULT_VIEWPORT,
     colorScheme: theme || 'light',
@@ -86,10 +137,8 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, settle, set
   if (reload) {
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-    await page.waitForTimeout(settle === undefined ? DEFAULT_SETTLE_MS : settle);
-  } else if (settle !== undefined) {
-    await page.waitForTimeout(settle);
   }
+  await waitForBannerSettled(page);
   return { ctx, page };
 }
 
@@ -224,6 +273,7 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
   openWelcomeScreen,
+  waitForBannerSettled,
   readVisualLayerState,
   capturePixels,
   lum,

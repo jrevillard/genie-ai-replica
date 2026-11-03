@@ -69,7 +69,6 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
-    await page.waitForTimeout(1500);
 
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
@@ -81,7 +80,6 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
-    await page.waitForTimeout(2500);
 
     const guideButton = page.locator('.okf-ragas__help-toggle').first();
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
@@ -103,7 +101,6 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
       .first();
     await expect(readTab, 'the guide must have a read-the-results chapter').toBeVisible({ timeout: 20000 });
     await readTab.click();
-    await page.waitForTimeout(600);
 
     // The guide keeps EVERY chapter in the DOM (v-show), so a table count
     // must be scoped to the VISIBLE pane — the errors chapter's five rows
@@ -124,14 +121,11 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // Scroll the table into view — the dialog opens at the top of the
     // chapter, and the table is the point of the screenshot.
     await guideRows.first().scrollIntoViewIfNeeded();
-    await page.waitForTimeout(400);
     await page.screenshot({ path: 'test-results/ragas-guide-read.png', fullPage: false });
     await guide
       .getByRole('button', { name: /^Close$/i })
       .first()
-      .click()
-      .catch(() => {});
-    await page.waitForTimeout(800);
+      .click();
 
     // ---- B. a re-score is TRACKED and CANCELLABLE ----
     // The history lists the runs; the newest DONE one can be re-scored.
@@ -163,7 +157,6 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
       .getByRole('button', { name: /^Re-score$/ })
       .first()
       .click();
-    await page.waitForTimeout(3000);
 
     // The re-score is a RUN: a progress bar and a Cancel button.
     const cancelRun = page.getByRole('button', { name: /cancel run/i }).first();
@@ -181,7 +174,6 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     // ---- C. and it can be STOPPED ----
     await cancelRun.click();
-    await page.waitForTimeout(4000);
 
     // The row lands 'cancelled' — never 'failed', and it does not vanish.
     const cancelledRow = historyRows.filter({ hasText: /re-scored from/i }).first();

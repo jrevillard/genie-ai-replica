@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 const { loginViaUI } = require('./helpers/chatbot');
+const { waitForBannerSettled } = require('./helpers/welcome');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
@@ -269,9 +270,14 @@ const audit = () => {
 
         await loginViaUI(page);
         await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
-        // Wait for the splash overlay to fade out (5s display + 1s fade)
-        await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 }).catch(() => {});
-        await page.waitForTimeout(1500);
+        // The splash shows on the first authenticated load (5s display + 1s
+        // fade) and covers the page while it is up — a capture before it is
+        // gone photographs the splash, not the banner. Detached is the hard
+        // requirement: a splash still mounted at the timeout is a failure.
+        await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 });
+        // The banner's entrance animation and the compositing of its masked
+        // layer must both be finished before a pixel is sampled.
+        await waitForBannerSettled(page);
 
         // The collapsed-sidebars state widens the centre overlay; the
         // panel's response to a wider stage is what the layer's band
@@ -314,11 +320,24 @@ const audit = () => {
                 `refusing to write a misnamed capture.`
             );
           }
+          // The collapse is only done when the overlay has actually
+          // widened past the pre-click width — the 0.3 s width transition
+          // landing is observed, not timed. A click that widens nothing
+          // fails here instead of writing a misnamed capture.
+          const overlayWidth = () =>
+            page.evaluate(() => document.querySelector('.quick-help-overlay').getBoundingClientRect().width);
+          const waitWiderThan = (prev) =>
+            page.waitForFunction(
+              (w) => document.querySelector('.quick-help-overlay').getBoundingClientRect().width > w + 1,
+              prev,
+              { timeout: 15000 }
+            );
           await left.click();
-          await page.waitForTimeout(400);
+          await waitWiderThan(openOverlayWidth);
           if (wantBoth) {
+            const afterLeft = await overlayWidth();
             await right.click();
-            await page.waitForTimeout(400);
+            await waitWiderThan(afterLeft);
           }
 
           // Verify the panel actually widened. The art's box tracks the

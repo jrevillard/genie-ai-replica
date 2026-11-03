@@ -166,6 +166,16 @@ stack — neither exists inside Jest.
 > meant to catch. It passed against a completely broken redactor. It now
 > reads the row back by a unique marker instead.
 
+## E2E Determinism
+
+E2E tests (and their provisioning/readiness shell in `docs/e2e-tests/`) must be
+deterministic: no fallback paths, no catch-and-continue, no retry loops that mask a
+real failure, no best-effort degradation. Assert exactly the expected behaviour; any
+deviation is a FAIL carrying the observed value in the error. Waits are explicit
+wait-for-condition with a hard bound — expiry fails (never `waitForTimeout` or fixed
+`sleep`), and seed data is fixed and isolated per test. Full rules and the suite
+layout: `tests/e2e/CLAUDE.md`.
+
 ## CI Pipeline
 
 GitLab CI pipeline (`.gitlab-ci.yml`) runs on every merge request with stages in this order:

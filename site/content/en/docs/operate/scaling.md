@@ -153,11 +153,12 @@ templates: `replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}` for the
 heavyweight services (`vllm`, `vllm-translation-guardrail`, `translation`, `tei`,
 `tei_reranker`) and `replicas: ${DEPLOY_OPEA:-1}` for the lighter OPEA
 wrappers (`textgen`, `embedding`, `reranker`,
-`retriever-arango-service`, `chatqna-xeon-backend-server`). Each replica
+`retriever-arango-service`, `chatqna-xeon-backend-server` — dataprep uses
+the same expression but is NOT in this scaling group: it is single-replica
+by contract regardless of GPU budget, see the Dataprep section below).
+Each replica
 pins to one GPU; concurrent requests share the KV cache on vLLM and contend
-for TEI worker threads on the embedding/reranker containers. Dataprep is
-NOT in this group: it is single-replica by contract regardless of GPU
-budget (see the Dataprep section below).
+for TEI worker threads on the embedding/reranker containers.
 
 ### vLLM
 
@@ -186,12 +187,16 @@ Caveats:
 task registry (ingest 409 idempotency, `kill_ingest`, `task_status`), the
 boot-time stuck-`Ingesting` recovery and the flock ingest slot pool are all
 per-process. A second replica breaks them silently: double ingests,
-cross-replica status release. Each replica also logs a warning at boot
-stating this contract — more than one boot line for dataprep at the same
+cross-replica status release — this covers Swarm's `docker service scale`,
+compose-mode `docker compose --scale dataprep-arango-service=N`, and editing
+`replicas` in the compose deploy block. Each replica also logs a warning at
+boot stating this contract — more than one boot line for dataprep at the same
 time means the deployment is mis-scaled (restart churn also repeats the
 line — correlate by container id and timestamp, not by line count alone).
 
-To raise ingestion throughput on the single replica:
+To raise ingestion throughput on the single replica (each lever multiplies
+the load on the vLLM that labelling shares with chat answering — size
+against the model's headroom, especially on a shared GPU):
 
 - **Per-replica concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
   `20`, raised from `5` after the labelling-bottleneck fix).

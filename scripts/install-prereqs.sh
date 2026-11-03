@@ -102,6 +102,22 @@ ensure_namespace() {
 
 install_keycloak_operator() {
   local ns="keycloak-system"
+  # Size the operator for a constrained/nested node: the upstream manifest
+  # ships 450Mi with 5 s probes, and the watch-all JVM (four informers, the
+  # repair below blanks the namespace envs) OOMs (exit 137, ~35 s) before
+  # the startup probe can ever succeed — the deployment never becomes Ready
+  # and every later script run re-times out on it. 2Gi/1Gi with 180 s/120 s
+  # probe delays boots it comfortably. Idempotent; also repairs out-of-band
+  # drift (a bare re-apply of the upstream kustomization restores 450Mi).
+  keycloak_operator_runtime() {
+    kubectl -n "${ns}" patch deploy keycloak-operator --type=json -p='[
+      {"op":"remove","path":"/spec/template/spec/containers/0/startupProbe"},
+      {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/initialDelaySeconds","value":180},
+      {"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/initialDelaySeconds","value":120},
+      {"op":"replace","path":"/spec/template/spec/containers/0/resources/requests/memory","value":"1Gi"},
+      {"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"2Gi"}
+    ]' || warn "could not patch keycloak-operator runtime sizing (deployment absent?)"
+  }
   # Pre-flight: a keycloak-operator left anywhere OUTSIDE this script's
   # namespace would fight this one over the same CRs once both watch all
   # namespaces. The upstream kustomize default lands it in `keycloak`;
@@ -146,6 +162,7 @@ EOF
       return 1
     fi
     rm -rf "${overlay}"
+    keycloak_operator_runtime
     wait_deploy_ready "${ns}" "keycloak-operator"
   fi
   # Everything below is idempotent and runs on EVERY invocation so
@@ -192,6 +209,7 @@ EOF
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES= \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES= \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES=
+  keycloak_operator_runtime
   wait_deploy_ready "${ns}" "keycloak-operator"
 }
 

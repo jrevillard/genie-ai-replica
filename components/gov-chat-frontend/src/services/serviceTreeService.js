@@ -159,8 +159,14 @@ export default {
    */
   async getCategoryTranslations(categoryId) {
     try {
-      // This endpoint matches the one created in service-category-routes.js
-      const response = await httpService.get(`service-categories/${categoryId}/translations`);
+      // This endpoint matches the one created in service-category-routes.js.
+      // Bounded like every fetch in this file: a request that never answers
+      // would leave the edit form 'loading' forever, Save disabled with it.
+      const response = await httpService.get(
+        `service-categories/${categoryId}/translations`,
+        {},
+        { timeout: TREE_FETCH_TIMEOUT_MS }
+      );
       return response.data || [];
     } catch (error) {
       // A FAILED load must surface as a rejection, never as []: an empty
@@ -179,8 +185,13 @@ export default {
    */
   async getServiceTranslations(serviceId) {
     try {
-      // This endpoint matches the one created in service-category-routes.js
-      const response = await httpService.get(`service-categories/services/${serviceId}/translations`);
+      // This endpoint matches the one created in service-category-routes.js.
+      // Bounded like every fetch in this file.
+      const response = await httpService.get(
+        `service-categories/services/${serviceId}/translations`,
+        {},
+        { timeout: TREE_FETCH_TIMEOUT_MS }
+      );
       return response.data || [];
     } catch (error) {
       // Same contract as getCategoryTranslations: a failed load rejects.

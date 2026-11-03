@@ -691,6 +691,12 @@ class ServiceCategoryService {
 
       return { _key: serviceKey, status: 'deleted' };
     } catch (error) {
+      // A document deleted between the existence check and the remove
+      // raises a raw driver 404 (no statusCode — the global middleware
+      // would render it a 500). Classify by the canonical predicate.
+      if (dbService._isExpectedAbsence(error)) {
+        throw new NotFoundError(`Service ${serviceKey} not found`);
+      }
       logger.error(`Error deleting service ${serviceKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }

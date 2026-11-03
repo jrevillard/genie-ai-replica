@@ -3135,6 +3135,71 @@ describe('translation load-failure gate', () => {
     wrapper.unmount();
   });
 
+  it('an in-flight edit fetch cannot leak into a create form opened meanwhile', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    treeMock.createCategory.mockClear();
+    const wrapper = createAdminDashboardWrapper();
+
+    let rejectA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectA = reject;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    // Admin gives up on the edit and opens a create form while A is in flight.
+    wrapper.vm.showAddCategoryForm();
+    expect(wrapper.vm.hierarchyForm.mode).toBe('createCategory');
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+
+    rejectA(new Error('late blip'));
+    await editA;
+
+    // A's failure belongs to the dead edit generation: the create form
+    // stays savable and its rows are untouched.
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
+    await wrapper.vm.saveHierarchyItem();
+    expect(treeMock.createCategory).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('closing the form invalidates the in-flight fetch (no late flag on nothing)', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+
+    let rejectA;
+    treeMock.getCategoryTranslations.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectA = reject;
+        })
+    );
+    const editA = wrapper.vm.showEditForm({ _key: 'cat-a', nameEN: 'A' });
+
+    wrapper.vm.closeHierarchyForm();
+    rejectA(new Error('late blip'));
+    await editA;
+
+    expect(wrapper.vm.translationsLoadFailed).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('a failed-load form still warns about typed edits on Cancel (dirty snapshot set on failure)', async () => {
+    const treeMock = require('../../services/serviceTreeService');
+    const wrapper = createAdminDashboardWrapper();
+    treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('blip'));
+
+    await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'X' }, { _key: 'cat-1', nameEN: 'C' });
+    expect(wrapper.vm.translationsLoadFailed).toBe(true);
+
+    wrapper.vm.hierarchyForm.nameEN = 'Edited while unsavable';
+    expect(wrapper.vm.isFormDirty).toBe(true);
+    wrapper.unmount();
+  });
+
   it('a superseded slow fetch that succeeds late does not repopulate the newer edit', async () => {
     const treeMock = require('../../services/serviceTreeService');
     const wrapper = createAdminDashboardWrapper();

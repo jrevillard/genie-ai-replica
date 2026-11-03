@@ -3173,10 +3173,19 @@ export default {
       }
     },
 
-    showAddCategoryForm() {
-      // A failed translation load belongs to the edit form it happened in:
-      // a create form opened afterwards must be savable.
+    // An in-flight edit-form translation fetch belongs to the form
+    // generation that started it. A form opened or closed afterwards must
+    // never receive that fetch's rows, its failure flag, or its loading
+    // state — invalidate the generation, and drop the flag and spinner
+    // this form context owns.
+    invalidateTranslationsFetch() {
+      this.hierarchyTranslationsSeq++;
+      this.isTranslationsLoading = false;
       this.translationsLoadFailed = false;
+    },
+
+    showAddCategoryForm() {
+      this.invalidateTranslationsFetch();
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3192,9 +3201,7 @@ export default {
     },
 
     showAddServiceForm(category) {
-      // Same reset as showAddCategoryForm: the flag belongs to the edit
-      // form it was raised in.
-      this.translationsLoadFailed = false;
+      this.invalidateTranslationsFetch();
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -3231,9 +3238,9 @@ export default {
       };
 
       // Step 2: Fetch the translations asynchronously
+      this.invalidateTranslationsFetch();
       this.isTranslationsLoading = true;
-      this.translationsLoadFailed = false;
-      const loadSeq = ++this.hierarchyTranslationsSeq;
+      const loadSeq = this.hierarchyTranslationsSeq;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
@@ -3282,6 +3289,9 @@ export default {
         if (this.hierarchyForm.translations.length === 0) {
           this.hierarchyForm.translations.push({ lang: '', text: '' });
         }
+        // Snapshot the failed-load state too: the user can still edit the
+        // form, and Cancel must warn about those edits like any other.
+        this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } finally {
         // Only the fetch the form currently waits on may clear the
         // loading state.
@@ -3301,7 +3311,7 @@ export default {
 
     closeHierarchyForm() {
       this.hierarchyForm.visible = false;
-      this.translationsLoadFailed = false;
+      this.invalidateTranslationsFetch();
       this.originalHierarchyFormState = null;
     },
 

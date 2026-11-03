@@ -423,7 +423,7 @@ describe('loadConfig', () => {
       ...extra
     });
 
-    it('accepts buttons that each carry a unique non-empty string id', async () => {
+    it('accepts buttons that each carry a unique non-blank string id', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: () =>

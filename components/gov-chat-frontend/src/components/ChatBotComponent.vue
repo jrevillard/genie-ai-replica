@@ -1913,7 +1913,7 @@ export default {
       // The id is the button's IDENTITY — the conversation tag carries
       // it, the restore resolves it, the grid's verdict keys on it. The
       // loader's gate (validateQuickHelpButtons) has already refused any
-      // button without a non-empty string id and any duplicated id, so
+      // button without a non-blank string id and any duplicated id, so
       // every button here answers to exactly one id.
       this.quickHelpButtons = buttons
         .filter((button) => !button.hidden)

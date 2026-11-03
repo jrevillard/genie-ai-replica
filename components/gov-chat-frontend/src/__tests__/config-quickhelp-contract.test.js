@@ -3,7 +3,7 @@
 //
 // The id is the button's ONLY identity — the tag a saved conversation
 // carries and the key the restore reads — so every button must carry a
-// non-empty string id, and no two buttons may share one. The loader
+// non-blank string id, and no two buttons may share one. The loader
 // (src/config-loader.js, validateQuickHelpButtons) enforces the contract
 // at runtime; this test calls that SAME exported validator on the files
 // that ship, so a config that would be refused at boot fails the build
@@ -59,7 +59,7 @@ describe('Quick Help button contract across every shipped configuration', () => 
   });
 
   it.each(SOURCES.map((source) => [source.label, source]))(
-    '%s: every button carries a unique non-empty string id',
+    '%s: every button carries a unique non-blank string id',
     (_label, source) => {
       const files = fs
         .readdirSync(source.dir)

@@ -69,7 +69,7 @@ const validateConfig = (data) => {
 
 /**
  * The Quick Help button contract (#1238): every button carries a
- * non-empty string `id`, and no two buttons share one. The id is the
+ * non-blank string `id`, and no two buttons share one. The id is the
  * button's ONLY identity — the tag a saved conversation carries and the
  * key the restore reads — so a button without one, or two buttons with
  * the same one, cannot be honoured; the earlier title-fallback identity
@@ -95,7 +95,7 @@ const validateQuickHelpButtons = (data) => {
     const id = button?.id;
     if (typeof id !== 'string' || id.trim() === '') {
       throw new Error(
-        `genie-ai-config.json: Quick Help button #${index} has no valid "id" — every button must carry a non-empty string id (the id is the button's identity: it is the tag a saved conversation carries and the key the restore reads).`
+        `genie-ai-config.json: Quick Help button #${index} has no valid "id" — every button must carry a non-blank string id (the id is the button's identity: it is the tag a saved conversation carries and the key the restore reads).`
       );
     }
     if (seen.has(id)) {

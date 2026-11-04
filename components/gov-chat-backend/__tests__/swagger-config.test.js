@@ -268,7 +268,8 @@ describe('Swagger Configuration', () => {
     // `data`, so EventRequest documents the request wire and Event stays
     // the stored ArangoDB document shape. A shared schema carrying both
     // spellings made `eventData` vs `data` ambiguous to client authors —
-    // sending `data` was silently dropped (stored as {}).
+    // a body sending `data` used to be silently dropped (stored as {});
+    // the route now refuses it with 400.
     const spec = mergedSpec;
     const eventsOps = spec.paths['/api/analytics/events'];
 
@@ -305,6 +306,39 @@ describe('Swagger Configuration', () => {
       );
       // A successful save always carries all three keys.
       expect(spec.components.schemas.EventCreated.required).toEqual(['_id', '_key', '_rev']);
+    });
+  });
+
+  describe('401 documented on every guarded analytics endpoint (#1295)', () => {
+    // Every /api/analytics route sits behind keycloakAuthMiddleware, and
+    // POST /events additionally rejects an authenticated token whose claims
+    // carry no user identifier. A client author reading the spec must see
+    // both 401 sources.
+    const spec = mergedSpec;
+    const analyticsPaths = Object.keys(spec.paths).filter((p) => p.startsWith('/api/analytics/'));
+
+    it('lists every analytics path', () => {
+      expect(analyticsPaths.sort()).toEqual([
+        '/api/analytics/dashboard',
+        '/api/analytics/events',
+        '/api/analytics/metric/{metric}',
+        '/api/analytics/records',
+        '/api/analytics/satisfaction/gauge',
+        '/api/analytics/satisfaction/heatmap',
+        '/api/analytics/timeseries/{metricType}'
+      ]);
+    });
+
+    it('documents a 401 response on every analytics operation', () => {
+      const OPERATIONS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
+      const missing = [];
+      for (const path of analyticsPaths) {
+        for (const [method, op] of Object.entries(spec.paths[path])) {
+          if (!OPERATIONS.includes(method)) continue; // path-level keys (parameters, …)
+          if (!op.responses || !op.responses['401']) missing.push(`${method.toUpperCase()} ${path}`);
+        }
+      }
+      expect(missing).toEqual([]);
     });
   });
 

@@ -308,6 +308,37 @@ describe('Swagger Configuration', () => {
     });
   });
 
+  describe('401 documented on every guarded analytics endpoint (#1295)', () => {
+    // Every /api/analytics route sits behind keycloakAuthMiddleware, and
+    // POST /events additionally rejects an authenticated token whose claims
+    // carry no user identifier. A client author reading the spec must see
+    // both 401 sources.
+    const spec = mergedSpec;
+    const analyticsPaths = Object.keys(spec.paths).filter((p) => p.startsWith('/api/analytics/'));
+
+    it('lists every analytics path', () => {
+      expect(analyticsPaths.sort()).toEqual([
+        '/api/analytics/dashboard',
+        '/api/analytics/events',
+        '/api/analytics/metric/{metric}',
+        '/api/analytics/records',
+        '/api/analytics/satisfaction/gauge',
+        '/api/analytics/satisfaction/heatmap',
+        '/api/analytics/timeseries/{metricType}'
+      ]);
+    });
+
+    it('documents a 401 response on every analytics operation', () => {
+      const missing = [];
+      for (const path of analyticsPaths) {
+        for (const [method, op] of Object.entries(spec.paths[path])) {
+          if (!op.responses || !op.responses['401']) missing.push(`${method.toUpperCase()} ${path}`);
+        }
+      }
+      expect(missing).toEqual([]);
+    });
+  });
+
   describe('Server URL vs annotated paths', () => {
     // The exported swaggerOptions capture process.env.API_URL at module
     // load. These tests re-require index.js with API_URL pinned (unset or

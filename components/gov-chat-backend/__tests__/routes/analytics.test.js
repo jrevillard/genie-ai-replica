@@ -369,6 +369,17 @@ describe('POST /api/analytics/events (AC6)', () => {
     expect(response.body).toEqual({ message: 'eventType is required' });
   });
 
+  it('should return 400 when the body arrives under the legacy `data` key', async () => {
+    const response = await authPost('/api/analytics/events', {
+      eventType: 'pageView',
+      data: { page: '/home' }
+    });
+
+    expect(response.status).toBe(400);
+    // No silent empty payload stored.
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
   it('should return 401 when user has no iss_sub claim', async () => {
     userProvisioningService.provisionUser.mockResolvedValue({
       ...mockUser,

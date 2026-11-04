@@ -57,7 +57,7 @@ void (empty response body)
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiMeDeletePost**
-> apiMeDeletePost()
+> ApiMeDeletePost200Response apiMeDeletePost()
 
 Delete user account (GDPR right to erasure)
 
@@ -72,7 +72,8 @@ import 'package:openapi/api.dart';
 final api_instance = CurrentUserApi();
 
 try {
-    api_instance.apiMeDeletePost();
+    final result = api_instance.apiMeDeletePost();
+    print(result);
 } catch (e) {
     print('Exception when calling CurrentUserApi->apiMeDeletePost: $e\n');
 }
@@ -83,7 +84,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiMeDeletePost200Response**](ApiMeDeletePost200Response.md)
 
 ### Authorization
 
@@ -92,7 +93,7 @@ void (empty response body)
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

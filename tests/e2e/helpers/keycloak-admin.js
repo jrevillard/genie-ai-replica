@@ -602,18 +602,32 @@ async function rotateRealmKeys(adminToken, realm) {
   // Get realm UUID (parentId for key components)
   const realmId = (await getRealmSettings(adminToken, realm)).id;
 
-  // Get existing key providers
+  // Get existing key providers. The status and the payload shape are
+  // checked like every other read: an expired admin token answers 401
+  // with an error body that .map() would choke on without a verdict, and
+  // a 200 with a non-array payload is a broken answer — reading it as an
+  // empty key set would create the new key and demote nothing.
   const keysRes = await request('GET', `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
-  const existingKeys = keysRes.data || [];
+  if (keysRes.status !== 200) {
+    failWithStatus(
+      `Cannot read the existing key providers of ${realm}: HTTP ${keysRes.status} ${bodyText(keysRes)}`,
+      keysRes.status
+    );
+  }
+  if (!Array.isArray(keysRes.data)) {
+    throw new Error(`The key providers of ${realm} answered HTTP 200 with a non-array payload: ${bodyText(keysRes)}`);
+  }
+  const existingKeys = keysRes.data;
   const oldKeyIds = existingKeys.map((k) => k.id);
 
   // Generate new RSA key with higher priority (becomes active signing key)
+  const rotatedKeyName = `rsa-generated-rotated-${Date.now()}`;
   const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
     headers: { Authorization: `Bearer ${adminToken}` },
     body: {
-      name: `rsa-generated-rotated-${Date.now()}`,
+      name: rotatedKeyName,
       providerId: 'rsa-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
       parentId: realmId,
@@ -627,7 +641,7 @@ async function rotateRealmKeys(adminToken, realm) {
   });
 
   if (newKeyRes.status !== 201) {
-    throw new Error(`Failed to generate new key: ${newKeyRes.status} ${JSON.stringify(newKeyRes.data)}`);
+    failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
   }
 
   // The components API answers 201 with an EMPTY body — auth.request
@@ -637,21 +651,45 @@ async function rotateRealmKeys(adminToken, realm) {
   const location = newKeyRes.headers && newKeyRes.headers.location;
   const newKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
   if (!newKeyId) {
+    // The key component was already created and is the realm's ACTIVE
+    // signer, but its id is untracked: the message must say so, or a
+    // re-run accumulates untracked active rotated keys.
     throw new Error(
       `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
-        `(${location || 'none'}) — the new key id cannot be resolved`
+        `(${location || 'none'}) — the new key id cannot be resolved. The key component ${rotatedKeyName} ` +
+        `was already created and is the active signer but is untracked: delete it or resolve its id ` +
+        `via the components list before re-running`
     );
   }
 
   // Demote old keys (set active to false)
   for (const oldKey of existingKeys) {
     const updatedConfig = { ...oldKey.config, active: ['false'] };
-    const res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: { ...oldKey, config: updatedConfig },
-    });
+    let res;
+    try {
+      res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: { ...oldKey, config: updatedConfig },
+      });
+    } catch (err) {
+      // A transport break here is past the mutation boundary: the new key
+      // already exists and signs, so the raw transport message must not
+      // bypass the re-run-safety diagnosis.
+      const failure = requestFailure(err, `the demotion of key ${oldKey.id}`);
+      failure.message +=
+        ` — the new rotated key ${newKeyId} was already created and is the active signer: ` +
+        `a re-run must NOT create a second rotated key (reuse or delete ${newKeyId})`;
+      throw failure;
+    }
     if (res.status !== 204) {
-      throw new Error(`Failed to demote key ${oldKey.id}: ${res.status} ${JSON.stringify(res.data)}`);
+      // The realm is half-mutated: the new key signs while this old key
+      // stayed active. The message names the new key so a re-run does not
+      // create a second rotated key.
+      throw new Error(
+        `Failed to demote key ${oldKey.id}: HTTP ${res.status} ${bodyText(res)} — the new rotated key ` +
+          `${newKeyId} was already created and is the active signer: a re-run must NOT create a ` +
+          `second rotated key (reuse or delete ${newKeyId})`
+      );
     }
   }
 

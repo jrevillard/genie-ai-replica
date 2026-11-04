@@ -19,7 +19,8 @@ jest.mock(
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
     },
-    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
+    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
   }),
   { virtual: true }
 );
@@ -28,14 +29,6 @@ jest.mock(
 jest.mock('arangojs', () => ({
   aql: jest.fn((strings, ...values) => ({ _aql: true, strings, values }))
 }));
-
-// The provisioner requires keycloak-auth-service (the #1438 reactivation
-// gate), which loads the ESM-only `jose` package — mock it so this suite
-// never parses it as CommonJS. The reactivation gate itself is exercised
-// (and keycloak-auth-service mocked) in __tests__/services/.
-jest.mock('jose', () => require('./mocks/jose'));
-
-jest.mock('axios', () => ({ get: jest.fn() }));
 
 // markUserAsDeleted evicts the cache, which now broadcasts over Redis
 // (#1443) — mock the client so no suite opens a real connection handle

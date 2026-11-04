@@ -1180,12 +1180,62 @@ describe('UserProvisioningService', () => {
       expect(mockDb.query.mock.calls.length).toBe(before + 1);
     });
 
-    it('must ignore a malformed payload without crashing', async () => {
+    it('must ignore a malformed payload without crashing or evicting', async () => {
       await userProvisioningService.initialize();
       const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
       const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
 
       expect(() => handler('user-provisioning:invalidate', 'not-json')).not.toThrow();
+
+      // Warm the cache with one full provision
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      await userProvisioningService.provisionUser(token);
+
+      // A truthy NON-STRING issSub is malformed too: evicting nothing while
+      // still bumping the global cache epoch would discard unrelated
+      // in-flight provisions — it must be dropped untouched
+      expect(() => handler('user-provisioning:invalidate', JSON.stringify({ origin: 'x', issSub: 123 }))).not.toThrow();
+
+      // The cache is still warm: the next provision costs one revalidation read
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const before = mockDb.query.mock.calls.length;
+      await userProvisioningService.provisionUser(token);
+      expect(mockDb.query.mock.calls.length).toBe(before + 1);
+    });
+
+    it('must not discard in-flight provisions on a malformed message', async () => {
+      // A malformed envelope (truthy non-string issSub) must not bump the
+      // epoch: a provision in flight when it arrives would be discarded and
+      // re-run its whole query chain for nothing
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      const user = { _key: 'user-ok', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      const tombstoneCursor = {
+        next: jest.fn(async () => {
+          handler('user-provisioning:invalidate', JSON.stringify({ origin: 'x', issSub: 123 }));
+          return undefined;
+        })
+      };
+      mockDb.query
+        .mockResolvedValueOnce(tombstoneCursor) // tombstone — malformed message mid-flight
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: user, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+      // The provision's own result is served — it was NOT discarded as stale
+      expect(result._key).toBe('user-ok');
     });
 
     it('must not cache a provision that spanned a remote invalidation', async () => {

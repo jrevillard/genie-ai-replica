@@ -2,6 +2,7 @@
 
 const { aql } = require('arangojs');
 const Redis = require('ioredis');
+const { randomUUID } = require('crypto');
 const { logger, dbService, erasureTombstoneKey, parsePositiveInt } = require('../shared-lib');
 const keycloakAuthService = require('./keycloak-auth-service');
 
@@ -60,7 +61,7 @@ function createRedisClient(clientOptions = {}) {
 }
 
 /** Identifies this replica in invalidation envelopes so a client drops its own loopback delivery. */
-const INSTANCE_ID = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+const INSTANCE_ID = randomUUID();
 
 /**
  * Bumped on every cache eviction. A provision that started before an eviction
@@ -381,7 +382,7 @@ const userProvisioningService = {
       _subscriber.on('message', (_channel, payload) => {
         try {
           const { origin, issSub } = JSON.parse(payload);
-          if (!issSub) return;
+          if (typeof issSub !== 'string') return;
           // The publisher's own subscriber receives the loopback delivery —
           // the local eviction already ran; applying it again would double-
           // bump the epoch and discard unrelated in-flight provisions

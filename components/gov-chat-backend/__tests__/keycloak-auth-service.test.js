@@ -832,6 +832,49 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
+    it('should return { active: false, disabled: true } when UserInfo returns 401 naming the user disabled', async () => {
+      // Live-realm contract probe (#1476, Keycloak 26.8.0, realm genie, 2026-11-04):
+      // a DISABLED user's userinfo answers 401 —
+      //   WWW-Authenticate: Bearer error="invalid_token", error_description="User disabled"
+      // with an empty body — not 403. The description match is the confirmed-disable
+      // answer, the same contract the 403 branch serves; the reactivation gate may
+      // then cache the refusal instead of re-running the provision chain per request.
+      mockAxiosGet.mockRejectedValue({
+        response: {
+          status: 401,
+          headers: {
+            'www-authenticate':
+              'Bearer realm="genie", error="invalid_token", error_description="User disabled"'
+          }
+        }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toEqual({ active: false, disabled: true });
+    });
+
+    it('should stay null when a 401 WWW-Authenticate names another reason (expired token)', async () => {
+      mockAxiosGet.mockRejectedValue({
+        response: {
+          status: 401,
+          headers: {
+            'www-authenticate': 'Bearer realm="genie", error="invalid_token", error_description="Token expired"'
+          }
+        }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+    });
+
     it('should return { active: false, disabled: true } when UserInfo returns 403', async () => {
       mockAxiosGet.mockRejectedValue({
         response: { status: 403 }

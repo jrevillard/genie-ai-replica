@@ -211,6 +211,16 @@ const keycloakProxyService = {
       userProvisioningService.invalidateCache(issSub);
     }
 
+    // NOTE: no cache eviction here — the only eviction is the post-commit one
+    // below (#1483). invalidateCache broadcasts over Redis pub/sub, and a
+    // pre-commit broadcast makes the other replicas evict and re-provision
+    // against the not-yet-erased document, re-caching the live profile with a
+    // fresh TTL until the post-commit broadcast closes it again (for the
+    // remaining TTL if that publish is lost). Same ordering as
+    // markUserAsDeleted: evict only AFTER the write that changed the state.
+    // Local staleness during the erase window is bounded by the revalidation
+    // (a cached hit re-reads the deleted flag) and the TTL.
+
     // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
     // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
     // the ArangoDB record may still hold the user's PII, and the erasure —

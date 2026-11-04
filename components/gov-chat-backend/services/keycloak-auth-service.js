@@ -424,8 +424,18 @@ const keycloakAuthService = {
       if (error.response && error.response.status === 403) {
         return { active: false, disabled: true };
       }
-      // 401 is ambiguous: expired token OR disabled user — don't take destructive action
+      // 401 is ambiguous: expired token OR disabled user — don't take destructive
+      // action unless the response names the reason. Live-realm probe (issue #1476,
+      // Keycloak 26.8.0, 2026-11-04): a DISABLED user's userinfo answers 401 —
+      // WWW-Authenticate: Bearer error="invalid_token", error_description="User
+      // disabled" — not 403. A matching WWW-Authenticate is the confirmed-disable
+      // answer (same contract as the 403 branch above); anything else (expired
+      // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
+        const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
+        if (typeof wwwAuthenticate === 'string' && wwwAuthenticate.includes('error_description="User disabled"')) {
+          return { active: false, disabled: true };
+        }
         logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
         return null;
       }

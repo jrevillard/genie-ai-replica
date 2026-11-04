@@ -581,10 +581,12 @@ workflow:
         if [ -n "$TOKEN_BODY" ]; then
           # A 200 whose body was cut mid-transfer leaves a token PREFIX here
           # (the access_token member prints before the cut) — withhold token
-          # material from the job log; every other body (error JSON, an
-          # interception page) is the diagnostic itself and stays visible.
+          # material from the job log. The pattern requires the member WITH a
+          # value start (`"access_token":` plus optional space), so an
+          # interception page that merely names the field stays visible — it
+          # is the diagnostic itself.
           case "$TOKEN_BODY" in
-            *access_token*)
+            *'"access_token":'*|*'"access_token": '*)
               echo "response body: <withheld — token response material>"
               ;;
             *)
@@ -3826,6 +3828,7 @@ config:docs-links:
 config:provisioning-harness:
   image: python:3.11-slim
   stage: config
+  interruptible: true
   dependencies: []
   before_script:
     - pip install --cache-dir .cache/pip "pyyaml==6.0.2"

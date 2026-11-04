@@ -37,6 +37,8 @@ VALUE_FLAGS = {
     "--connect-timeout",
     "--max-time",
 }
+# Short flags the provisioning block uses that carry no value.
+BARE_FLAG_CHARS = set("sk")
 
 
 def parse_args(argv):
@@ -57,14 +59,26 @@ def parse_args(argv):
                 write_out = argv[i + 1]
             i += 2
         elif arg.startswith("--"):
-            # Unknown long flag: consume its value token too, so a future
-            # "--retry 3" cannot leak "3" in as the positional URL.
-            if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
-                i += 2
-            else:
-                i += 1
+            # An unmodeled long flag is a harness gap, not something to
+            # guess at: a value-carrying flag added without teaching the
+            # stub would leak its value as the positional URL, and a
+            # valueless one would swallow the URL. Fail with the remedy.
+            sys.stderr.write(
+                f"stub-curl: unknown flag {arg!r} — add it to VALUE_FLAGS "
+                f"(carries a value) or teach BARE_FLAG_CHARS; a block flag "
+                f"the stub cannot parse would silently misroute rules\n"
+            )
+            sys.exit(98)
         elif arg.startswith("-"):
-            i += 1  # bundled short flags: -s -k -f -S and combinations
+            unknown = set(arg[1:]) - BARE_FLAG_CHARS
+            if unknown:
+                sys.stderr.write(
+                    f"stub-curl: unknown short flag(s) "
+                    f"{''.join(sorted(unknown))!r} in {arg!r} — add them "
+                    f"to BARE_FLAG_CHARS\n"
+                )
+                sys.exit(98)
+            i += 1  # known bundled short flags
         else:
             url = arg
             i += 1

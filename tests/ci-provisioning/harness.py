@@ -43,16 +43,24 @@ def provisioning_items():
     with open(CI_FILE) as f:
         doc = yaml.safe_load(f)
     items = doc[".e2e_web_base"]["script"]
-    helper = next(i for i in items if isinstance(i, str) and "http_label() {" in i)
-    block = next(
-        i for i in items if isinstance(i, str) and "Keycloak readiness wait" in i
-    )
-    return helper, block
+
+    def find(anchor):
+        item = next((i for i in items if isinstance(i, str) and anchor in i), None)
+        if item is None:
+            sys.exit(
+                f"harness extraction lost: no .e2e_web_base script item carries "
+                f"{anchor!r} — the block was reworded or reshaped; update "
+                f"provisioning_items() to the new anchors"
+            )
+        return item
+
+    return find("http_label() {"), find("Keycloak readiness wait")
 
 
 def long_token():
-    """A JWT-shaped access token long enough to exceed the 200-char display
-    truncation of the block's BODY capture."""
+    """A long opaque token string (not a real JWT — shape does not matter
+    here) whose only job is to exceed the 200-char display truncation of
+    the block's BODY capture."""
     return "tok" * 300
 
 
@@ -77,6 +85,11 @@ def _resp_list(override, default):
         return [default]
     if isinstance(override, dict):
         return [override]
+    if not override:
+        raise ValueError(
+            "an empty response-list override has no last entry to repeat — "
+            "give the rule at least one response"
+        )
     return override
 
 

@@ -292,9 +292,10 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 
 This payload matches the venue fixture defined in
 `tests/e2e/helpers/e2e-fixtures.js`. On the already-exists path the
-provisioning script below resets the account's password and asserts its
+provisioning script below resets the account's password, asserts its
 login-visible state (enabled, verified, no required action — failing
-loudly on drift instead of repairing it) and assigns its realm roles.
+loudly on drift instead of repairing it), assigns its declared realm
+roles, and strips an admin role the fixture does not declare (logged).
 The email is deliberately NOT rewritten (the login reads the username,
 not the email), so an account created with a previous fixture revision
 keeps its old address.

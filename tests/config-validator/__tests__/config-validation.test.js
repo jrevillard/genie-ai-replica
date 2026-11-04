@@ -3324,13 +3324,16 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // docs-side agreement is asserted in the credentials test below,
     // against the module-derived address.
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
-    // testadmin carries the admin realm role (the documents suites drive
-    // ADMIN_ONLY surfaces as testadmin). testuser does NOT (#1402: the
-    // parity role had no consumer) — the role is asserted INSIDE the
-    // testadmin entry ([^}] cannot cross the object's closing brace), so
-    // moving the role to the wrong entry fails this pin.
-    expect(fixtures).toMatch(/username: 'testadmin',[^}]*realmRoles: \['admin'\]/);
     expect(fixtures).toContain("username: 'testplain'");
+    // The realm-role contract, asserted on the PARSED fixture data (not a
+    // source regex, which a nested object or a key reorder evades):
+    // testadmin is the ONLY role-carrying fixture — the documents suites
+    // drive ADMIN_ONLY surfaces as testadmin; testuser does NOT (#1402:
+    // the parity role had no consumer) and no other fixture has a
+    // consumer to justify a role either.
+    const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
+    expect(E2E_FIXTURES.filter((f) => 'realmRoles' in f).map((f) => f.username)).toEqual(['testadmin']);
+    expect(E2E_FIXTURES.find((f) => f.username === 'testadmin').realmRoles).toEqual(['admin']);
   });
 
   test('the venue credentials are derived, never re-sourced', () => {
@@ -3351,12 +3354,11 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("credentialsOf('testuser')");
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
-    // The role-less fixtures' DEFINING contract: they must carry no
-    // realmRoles key at all — a declared role makes the provisioning
-    // script strip-and-assert instead of trust the declaration, and no
-    // role-less fixture has a consumer to justify any role (see #1402).
-    expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
-    expect(fixtures).not.toMatch(/username: 'testuser',[^}]*realmRoles/);
+    // The role-less fixtures' DEFINING contract (asserted on the parsed
+    // data in the test above): they carry no realmRoles key at all — an
+    // undeclared ADMIN grant is stripped-and-asserted by the provisioning
+    // script, but a role DECLARED on a fixture is trusted and assigned,
+    // so the pin is the guard that keeps the declaration out.
     // The shell docs' manual payloads must agree with the fixture
     // credentials — convergeUser deliberately never rewrites the email,
     // and it resets the password on the already-exists path, so a

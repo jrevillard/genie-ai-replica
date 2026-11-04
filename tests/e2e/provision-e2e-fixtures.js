@@ -48,18 +48,25 @@ const ADMIN_ROLE = 'admin';
       // composite or a group grants, so the invariant is ASSERTED, not
       // assumed.
       const before = await effectiveRealmRoles(adminToken, REALM, userId);
+      let removed = [];
       if (before.includes(ADMIN_ROLE)) {
-        const removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
-        console.log(
-          `${fixture.username}: removed the drifted ${ADMIN_ROLE} role mapping (${removed.join(', ') || 'none accepted'})`
-        );
+        // removeRealmRoles returns the names it ATTEMPTED, not the
+        // mappings it actually dropped — a composite-granted role is a
+        // no-op DELETE. The success is logged only after the effective
+        // re-check below proves the role is gone.
+        removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
       }
-      const effective = await effectiveRealmRoles(adminToken, REALM, userId);
+      // The effective re-check is only needed when a removal was
+      // attempted; otherwise `before` already proved the account clean.
+      const effective = removed.length > 0 ? await effectiveRealmRoles(adminToken, REALM, userId) : before;
       if (effective.includes(ADMIN_ROLE)) {
         throw new Error(
           `${fixture.username} still holds the ${ADMIN_ROLE} realm role (effective roles: ${effective.join(', ')}) — ` +
             'the realm default role or a group grants it; the fixture declares no admin role, so the realm import needs fixing'
         );
+      }
+      if (removed.length > 0) {
+        console.log(`${fixture.username}: stripped the drifted ${ADMIN_ROLE} role mapping (${removed.join(', ')})`);
       }
     }
   }

@@ -424,8 +424,17 @@ class UserProfileService {
       }
 
       // Files are removed only after the write succeeded — a failed reset
-      // must not have already destroyed the user's uploads.
-      await this.deleteUserFiles(currentUserDoc);
+      // must not have already destroyed the user's uploads. A deletion
+      // failure after a committed write must not answer 500 for a reset
+      // that already happened: warn and report success.
+      try {
+        await this.deleteUserFiles(currentUserDoc);
+      } catch (fileError) {
+        logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {
+          userKey,
+          error: fileError.message
+        });
+      }
 
       logger.info('UserProfileService.reset_user_data_completed', {
         userKey,

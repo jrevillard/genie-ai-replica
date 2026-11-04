@@ -5,7 +5,8 @@ require('../setup-env');
 // Tracker for fs operations — referenced by mock factory (Jest allows mock-prefixed vars)
 const mockFsTracker = {
   rmCalls: [],
-  existsResults: true
+  existsResults: true,
+  rmImplementation: null
 };
 
 // Mock fs BEFORE requiring service — constructor uses it
@@ -21,6 +22,9 @@ jest.mock('fs', () => ({
     readFile: jest.fn().mockResolvedValue(Buffer.from('filecontent')),
     rm: jest.fn().mockImplementation((...args) => {
       mockFsTracker.rmCalls.push(args);
+      if (mockFsTracker.rmImplementation) {
+        return mockFsTracker.rmImplementation(...args);
+      }
       return Promise.resolve();
     })
   }
@@ -94,6 +98,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFsTracker.rmCalls = [];
   mockFsTracker.existsResults = true;
+  mockFsTracker.rmImplementation = null;
 
   mockUsers = createMockCollection();
 
@@ -373,6 +378,22 @@ describe('UserProfileService', () => {
 
       await expect(userProfileService.resetUserData('user-1')).rejects.toThrow();
       expect(mockFsTracker.rmCalls.length).toBe(0);
+    });
+
+    it('should still succeed when user file deletion fails after the reset write', async () => {
+      // The reset is applied once the document write commits; a leftover
+      // uploads directory (rm EACCES/EBUSY) must not answer 500 for a
+      // reset that already happened.
+      mockUsers.document.mockResolvedValue({
+        _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      });
+      mockFsTracker.rmImplementation = () => Promise.reject(new Error('EACCES: permission denied'));
+
+      const result = await userProfileService.resetUserData('user-1');
+      expect(result.success).toBe(true);
+      expect(mockFsTracker.rmCalls.length).toBe(1);
     });
 
     it('should fallback to update with overwrite on replace failure', async () => {

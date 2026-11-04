@@ -1,38 +1,14 @@
 const { expect } = require('@playwright/test');
-const { ADMIN_FIXTURES } = require('./admin-fixtures');
-
-/**
- * The login credentials of an admin-surface fixture.
- * @param {string} username - The fixture username
- * @returns {{username: string, password: string}}
- */
-function credentialsOf(username) {
-  const fixture = ADMIN_FIXTURES.find((f) => f.username === username);
-  if (!fixture) {
-    throw new Error(`Unknown admin fixture: ${username}`);
-  }
-  return { username: fixture.username, password: fixture.password };
-}
-
-const TEST_USER = {
-  username: 'testuser',
-  password: 'TestPass123!'
-};
-
-// The admin-surface fixtures live in helpers/admin-fixtures.js — the same
-// definitions the provisioning script (tests/e2e/provision-admin-fixtures.js)
-// creates, so a credential is written once.
-//
-// The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
-// the document-repository — a plain user's POST /api/files/upload is 403 by
-// design. The admin test user is provisioned with the `admin` realm role by
-// Phase 0 of docs/e2e-tests/00-clean-start.md.
-const TEST_ADMIN_USER = credentialsOf('testadmin');
-
-// A user with NO realm role granting admin access — the non-admin side of
-// the admin-surface authz specs (requireAdmin must answer 403). Provisioned
-// alongside testadmin by the same venues (CI e2e setup and Phase 0).
-const TEST_PLAIN_USER = credentialsOf('testplain');
+// The venue fixtures (and the credential accessors over them) live in
+// helpers/e2e-fixtures.js — the same definitions the provisioning script
+// (tests/e2e/provision-e2e-fixtures.js) creates, so a credential is
+// written once. Re-exported here for the specs that import credentials
+// alongside the login helpers.
+const {
+  TEST_USER,
+  TEST_ADMIN_USER,
+  TEST_PLAIN_USER,
+} = require('./e2e-fixtures');
 
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when

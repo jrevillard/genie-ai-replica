@@ -9,9 +9,12 @@ const { logger, dbService } = require('../shared-lib');
  * Creates or updates a user record in ArangoDB on each successful
  * Keycloak authentication. Uses atomic UPSERT to prevent duplicates.
  *
- * An in-memory cache avoids hitting ArangoDB on every authenticated request.
- * The cache TTL is short (60s) so profile changes from Keycloak propagate
- * within a minute without repeated DB writes on every API call.
+ * An in-memory cache avoids re-running the UPSERT write on every
+ * authenticated request. A cache hit is revalidated before it is served:
+ * the JWT claims are compared against the cached profile (a Keycloak
+ * profile change must land on the next request, not within the TTL) and
+ * one indexed read detects an out-of-band soft-delete of the underlying
+ * document (reactivation must never be served from a stale copy).
  */
 
 /** In-memory cache: iss_sub → { user, expiresAt } */
@@ -20,6 +23,33 @@ const CACHE_TTL_MS = 60_000;
 
 /** In-flight locks: iss_sub → Promise — prevents concurrent upserts for the same user */
 const _locks = new Map();
+
+/**
+ * Profile fields the UPSERT derives from the JWT claims.
+ */
+function profileFromToken(decodedToken) {
+  return {
+    email: decodedToken.email || null,
+    name: decodedToken.name || decodedToken.preferred_username || null,
+    emailVerified: decodedToken.email_verified || false,
+    roles: decodedToken.realm_access?.roles || []
+  };
+}
+
+/**
+ * Whether the cached user document still matches the token's claims.
+ * A mismatch means Keycloak state changed out-of-band after the copy
+ * was cached.
+ */
+function profileMatches(cachedUser, decodedToken) {
+  const expected = profileFromToken(decodedToken);
+  return (
+    expected.email === cachedUser.email &&
+    expected.name === cachedUser.name &&
+    expected.emailVerified === cachedUser.emailVerified &&
+    JSON.stringify(expected.roles) === JSON.stringify(cachedUser.roles || [])
+  );
+}
 
 /**
  * Evict expired entries from the provisioning cache.
@@ -72,11 +102,29 @@ const userProvisioningService = {
       `[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`
     );
 
-    // Check cache first — avoids ArangoDB round-trip on every request
+    // Check cache first — a valid hit is revalidated before it is served so
+    // out-of-band state changes are not masked by the TTL
     evictExpired();
     const cached = _cache.get(issSub);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.user;
+      if (!profileMatches(cached.user, decodedToken)) {
+        // Keycloak claims changed since the copy was cached — re-provision
+        _cache.delete(issSub);
+      } else {
+        // One indexed read: if the underlying document was soft-deleted
+        // out-of-band, fall through to the full UPSERT (reactivation)
+        const db = await dbService.getConnection('default');
+        const cursor = await db.query(aql`
+          FOR u IN users
+            FILTER u.iss_sub == ${issSub} AND u.deleted == true
+            RETURN u
+        `);
+        if (await cursor.next()) {
+          _cache.delete(issSub);
+        } else {
+          return cached.user;
+        }
+      }
     }
 
     // If a provisioning is already in-flight for this user, wait for it

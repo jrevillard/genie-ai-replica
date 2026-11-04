@@ -63,19 +63,102 @@ describe('UserProvisioningService', () => {
 
   describe('provisionUser - cache', () => {
     it('should return cached user when cache is valid', async () => {
-      const cachedUser = { _key: 'user-1', email: 'test@test.com' };
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
 
-      mockDb.query.mockResolvedValue(createMockCursor([{ new: cachedUser, old: null }]));
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])) // upsert
+        .mockResolvedValue(createMockCursor([])); // revalidation deleted-check → not deleted
 
       const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
       const result1 = await userProvisioningService.provisionUser(token);
       expect(result1._key).toBe('user-1');
 
-      // Second call should hit cache — no additional DB queries
-      const callsBefore = mockDb.query.mock.calls.length;
+      // Second call revalidates the cached copy (one soft-delete read) and
+      // serves it from cache — no UPSERT re-runs
       const result2 = await userProvisioningService.provisionUser(token);
-      expect(result2._key).toBe('user-1');
-      expect(mockDb.query.mock.calls.length).toBe(callsBefore);
+      expect(result2).toBe(result1);
+      expect(mockDb.query).toHaveBeenCalledTimes(4); // 3 (first cycle) + 1 (revalidation read)
+    });
+  });
+
+  describe('provisionUser - cache revalidation', () => {
+    const baseToken = {
+      iss_sub: 'iss/sub-1',
+      iss: 'https://keycloak',
+      sub: 'sub-1',
+      email: 'test@test.com',
+      name: 'Old Name'
+    };
+
+    // Mock one full provision cycle: legacy lookup → deleted check → upsert
+    function mockProvisionCycle(name) {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(
+          createMockCursor([
+            { new: { _key: 'user-1', email: 'test@test.com', name, emailVerified: false, roles: [] }, old: null }
+          ])
+        ); // upsert
+    }
+
+    it('should re-provision on a cache hit when Keycloak claims changed', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+      expect(result1.name).toBe('Old Name');
+
+      mockProvisionCycle('JIT Test');
+      const result2 = await userProvisioningService.provisionUser({ ...baseToken, name: 'JIT Test' });
+      expect(result2.name).toBe('JIT Test');
+      expect(mockDb.query).toHaveBeenCalledTimes(6); // two full provision cycles
+    });
+
+    it('should re-provision on a cache hit when the underlying document is soft-deleted', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+      expect(result1.name).toBe('Old Name');
+
+      const reactivated = {
+        _key: 'user-1',
+        email: 'test@test.com',
+        name: 'Old Name',
+        emailVerified: false,
+        roles: [],
+        deleted: false,
+        active: true
+      };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'user-1', deleted: true }])) // revalidation deleted-check → hit
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'user-1', deleted: true }])) // deleted check → reactivation
+        .mockResolvedValueOnce(createMockCursor([{ new: reactivated, old: { _key: 'user-1', deleted: true } }])); // upsert
+
+      const result2 = await userProvisioningService.provisionUser(baseToken);
+      expect(result2.deleted).toBe(false);
+      expect(result2.active).toBe(true);
+    });
+
+    it('should serve a valid cache hit with exactly one revalidation read (no UPSERT)', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      mockDb.query.mockResolvedValue(createMockCursor([])); // revalidation deleted-check → not deleted
+      const result2 = await userProvisioningService.provisionUser(baseToken);
+      expect(result2).toBe(result1); // same cached object — no re-provision
+      expect(mockDb.query).toHaveBeenCalledTimes(4); // 3 (first cycle) + 1 (revalidation read)
+    });
+
+    it('should not re-provision on a cache hit when only non-profile fields differ', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      mockDb.query.mockResolvedValue(createMockCursor([])); // revalidation deleted-check → not deleted
+      // iss changes per token mint but is not a profile field the UPSERT updates
+      const result2 = await userProvisioningService.provisionUser({ ...baseToken, iss: 'https://other-issuer' });
+      expect(result2).toBe(result1);
+      expect(mockDb.query).toHaveBeenCalledTimes(4);
     });
   });
 

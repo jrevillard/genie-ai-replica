@@ -30,16 +30,22 @@
 // the gate does not see, and it must fail loudly. Errors carry the same
 // shape the checker produces ({owner, key, startLine, message}).
 
-// Script keys sit directly under a top-level job, at indent 1-2 — never
-// deeper. A deeper `script:` line is a custom variable or example text
-// (legal GitLab, data, never a job script), and must not be extracted.
-const KEY_RE = new RegExp('^( {1,2})(script|before_script|after_script)\\s*:\\s*(.*)$');
+// Script keys sit directly under a top-level job, at the job body's own
+// indent (tracked per job as jobIndent — 2 in this repo, but any consistent
+// YAML indent is legal). A deeper `script:` line belongs to a nested
+// mapping (a custom variable, example text — data, never a job script).
+// Quoted keys ("script":) are legal YAML spellings of the same key.
+const KEY_RE = new RegExp('^(\\s+)(["\']?)(script|before_script|after_script)\\2\\s*:\\s*(.*)$');
 // Column-0 key, optionally carrying a YAML anchor token: `.name: &anchor`.
 // The key may itself contain colons (namespaced jobs: `config:validate:`),
 // so the class is only bounded by whitespace and comments — a valueless
 // (or comment/anchor-suffixed) line is what makes the match. A line with
-// an inline value fails the match and is handled by DATA_SCALAR_RE.
+// an inline value fails the match and is handled by TOP_KEY_ANCHOR_SCALAR_RE
+// or DATA_SCALAR_RE.
 const TOP_KEY_RE = /^([^\s#][^#]*):\s*(?:&(\S+)\s*)?(?:#.*)?$/;
+// Column-0 key whose anchored value is an inline scalar (.common: &common
+// echo hello) — aliasable shell, recorded as a one-line block.
+const TOP_KEY_ANCHOR_SCALAR_RE = /^([^\s#][^#]*):\s*&(\S+)\s+([^#]*?)\s*(?:#.*)?$/;
 const ITEM_RE = /^(\s*)-\s+(.*)$/;
 // The block scalar header grammar after the `|`/`>` style char: optional
 // indentation indicator and chomping modifier in either order, then an
@@ -64,8 +70,23 @@ const EMPTY_FLOW_MAP_RE = /^\{\s*\}$/;
 const MAPPING_LINE_RE = /^\s+[\w.-]+:\s*(\S|$)/;
 // A top-level (column-0) key whose value is a flow collection — a
 // flow-style job definition. Its script keys are invisible to a line
-// parser; loud error, never a silent coverage gap.
-const FLOW_KEY_RE = /^([^\s#][^#]*):\s*[[{]/;
+// parser; loud error, never a silent coverage gap. Framework keys whose
+// flow values can never hold scripts are exempt (a flow `workflow:` or
+// `include:` is a legal one-liner, not a job).
+const FLOW_KEY_RE = /^([^\s#][^#]*?):\s*[[{]/;
+const NON_JOB_FLOW_KEYS = new Set([
+  'workflow',
+  'include',
+  'stages',
+  'variables',
+  'default',
+  'before_script',
+  'after_script',
+  'script',
+  'image',
+  'services',
+  'pages'
+]);
 
 // YAML strips a block scalar's indentation relative to its first non-blank
 // line before handing the text to bash, so the gate strips the same amount
@@ -147,23 +168,53 @@ function extractCiShellBlocks(content) {
     errors.push(error);
   };
 
-  // Materialize an alias target into blocks/errors, once per anchor.
-  const checkedAnchors = new Set();
-  const resolveAlias = (name, lineNo) => {
+  // Plain scalar continuation folding shared by item-level and key-level
+  // plain scalars: a break between non-blank lines folds to a space, a
+  // blank line folds to a newline. Stops at the first non-blank line at
+  // or above floorIndent. Returns the folded text and the index of the
+  // first unconsumed line.
+  const collectPlain = (firstText, floorIndent, startIdx) => {
+    let text = firstText;
+    let pendingBlanks = 0;
+    let j = startIdx;
+    while (j < lines.length) {
+      const cont = lines[j];
+      if (!cont.trim()) {
+        pendingBlanks += 1;
+        j += 1;
+        continue;
+      }
+      if (cont.match(/^ */)[0].length <= floorIndent) {
+        break;
+      }
+      text += (pendingBlanks > 0 ? '\n'.repeat(pendingBlanks) : ' ') + cont.trim();
+      pendingBlanks = 0;
+      j += 1;
+    }
+    return { text, next: j };
+  };
+
+  // Materialize an alias target into blocks/errors — once per alias SITE,
+  // with the aliasing job's owner/key: the anchor shell runs in the
+  // aliasing job, and a second copy inside the definition owner's group
+  // would let duplicated text even out a quote parity (a false pass in
+  // the !674 class).
+  const resolveAlias = (name, lineNo, aliaserOwner, aliaserKey) => {
     if (!anchors.has(name)) {
       // Unknown target — loud error, never a silent skip.
-      pushError({ owner: null, key: null, startLine: lineNo, message: `alias to unknown anchor: *${name}` });
+      pushError({
+        owner: aliaserOwner,
+        key: aliaserKey,
+        startLine: lineNo,
+        message: `alias to unknown anchor: *${name}`
+      });
       return;
     }
-    if (checkedAnchors.has(name)) {
-      return;
-    }
-    checkedAnchors.add(name);
     const def = anchors.get(name);
     if (def.kind === 'block') {
-      blocks.push(def.block);
+      blocks.push({ ...def.block, owner: aliaserOwner, key: aliaserKey });
     } else if (def.kind === 'list') {
-      parseList(def.startIdx, def.keyIndent, def.owner, 'anchor');
+      parseList(def.startIdx, def.keyIndent, aliaserOwner, aliaserKey);
     } else if (def.kind === 'col0') {
       // Shape unknown until resolved: a list body parses as a list, a
       // scalar body extracts as one block, a mapping body is a loud error
@@ -176,17 +227,22 @@ function extractCiShellBlocks(content) {
         return; // empty body
       }
       if (lines[k].match(ITEM_RE)) {
-        parseList(k, 0, def.owner, 'anchor');
+        parseList(k, 0, aliaserOwner, aliaserKey);
       } else if (lines[k].match(MAPPING_LINE_RE)) {
         pushError({
           owner: def.owner,
-          key: 'anchor',
+          key: aliaserKey,
           startLine: k + 1,
           message: `anchor *${name} has a mapping body — not shell it can be aliased into`
         });
       } else {
         const { body } = collectBlockBody(k, 0);
-        blocks.push({ owner: def.owner, key: 'anchor', startLine: k + 1, text: renderScalar('|', body) });
+        blocks.push({
+          owner: aliaserOwner,
+          key: aliaserKey,
+          startLine: k + 1,
+          text: renderScalar('|', body)
+        });
       }
     } else if (def.kind === 'error') {
       pushError(def.error);
@@ -236,12 +292,13 @@ function extractCiShellBlocks(content) {
       }
       const alias = itemText.match(ALIAS_RE);
       if (alias) {
-        // Alias item: the shell lives at the anchor's definition. Only
+        // Alias item: the shell lives at the anchor's definition, but it
+        // RUNS in this job — materialize it here, under this owner. Only
         // anchors referenced FROM a script value are shell-checked this
         // way; a column-0 anchor used elsewhere (changes filters, rules)
         // never runs under bash and its body (`- if: ...`, `- path/...`)
         // is not shell.
-        resolveAlias(alias[1], i + 1);
+        resolveAlias(alias[1], i + 1, owner, key);
         if (itemName) {
           anchors.set(itemName, {
             kind: 'error',
@@ -266,19 +323,13 @@ function extractCiShellBlocks(content) {
           anchors.set(itemName, { kind: 'block', block });
         }
       } else {
-        // Plain scalar item: single line, plus any deeper-indented
-        // continuation lines folded with spaces (YAML plain-scalar rule).
-        const parts = [itemText];
-        i += 1;
-        while (i < lines.length) {
-          const cont = lines[i];
-          if (!cont.trim() || cont.match(/^ */)[0].length <= dashIndent) {
-            break;
-          }
-          parts.push(cont.trim());
-          i += 1;
-        }
-        const block = { owner, key, startLine: i - parts.length + 1, text: parts.join(' ') };
+        // Plain scalar item: a line, plus any deeper-indented continuation
+        // lines folded YAML-style (space between lines, newline across a
+        // blank line).
+        const itemLine = i + 1;
+        const folded = collectPlain(itemText, dashIndent, i + 1);
+        i = folded.next;
+        const block = { owner, key, startLine: itemLine, text: folded.text };
         blocks.push(block);
         if (itemName) {
           anchors.set(itemName, { kind: 'block', block });
@@ -289,6 +340,7 @@ function extractCiShellBlocks(content) {
   };
 
   let owner = null;
+  let jobIndent = null; // the body indent of the current top-level mapping
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -301,6 +353,7 @@ function extractCiShellBlocks(content) {
     const topKey = line.match(TOP_KEY_RE);
     if (topKey) {
       owner = topKey[1].trim();
+      jobIndent = null;
       if (topKey[2]) {
         anchors.set(topKey[2], { kind: 'col0', owner, bodyStart: i + 1 });
       }
@@ -308,12 +361,35 @@ function extractCiShellBlocks(content) {
       continue;
     }
 
-    const keyMatch = line.match(KEY_RE);
-    if (!keyMatch) {
+    // Column-0 anchored inline scalar (.common: &common echo hello) —
+    // aliasable shell.
+    const anchorScalar = line.match(TOP_KEY_ANCHOR_SCALAR_RE);
+    if (anchorScalar) {
+      owner = anchorScalar[1].trim();
+      jobIndent = null;
+      const keyLine = i + 1;
+      const folded = collectPlain(anchorScalar[3].trim(), 0, i + 1);
+      i = folded.next;
+      anchors.set(anchorScalar[2], {
+        kind: 'block',
+        block: { owner, key: 'scalar', startLine: keyLine, text: folded.text }
+      });
+      continue;
+    }
+
+    // Track the current top-level mapping's body indent from its first
+    // nested line — script keys must sit exactly there.
+    if (jobIndent === null && line.trim() && !line.trimStart().startsWith('#')) {
+      jobIndent = line.match(/^ */)[0].length;
+    }
+
+    const keyMatch = jobIndent !== null ? line.match(KEY_RE) : null;
+    if (!keyMatch || keyMatch[1].length !== jobIndent) {
       // A flow-style job definition (`job: {script: [...]}`) hides its
       // script keys from a line parser — loud error, never a silent gap.
+      // Framework keys whose flow values can never hold scripts are exempt.
       const flowKey = line.match(FLOW_KEY_RE);
-      if (flowKey) {
+      if (flowKey && !NON_JOB_FLOW_KEYS.has(flowKey[1].trim())) {
         pushError({
           owner: flowKey[1].trim(),
           key: null,
@@ -334,9 +410,9 @@ function extractCiShellBlocks(content) {
       continue;
     }
     const keyIndent = keyMatch[1].length;
-    const key = keyMatch[2];
+    const key = keyMatch[3];
     // `script:  # note` reads as an empty key followed by a comment.
-    let rest = keyMatch[3].trim();
+    let rest = keyMatch[4].trim();
     if (rest.startsWith('#')) {
       rest = '';
     }
@@ -364,8 +440,8 @@ function extractCiShellBlocks(content) {
       }
     } else if (keyAlias) {
       // Key-level alias (`script: *anchor`): the shell lives at the
-      // anchor's definition.
-      resolveAlias(keyAlias[1], i + 1);
+      // anchor's definition but runs in this job.
+      resolveAlias(keyAlias[1], i + 1, owner, key);
       if (itemName) {
         anchors.set(itemName, {
           kind: 'error',
@@ -402,13 +478,15 @@ function extractCiShellBlocks(content) {
       pushError({ owner, key, startLine: i + 1, message: `unhandled ${key} value shape (YAML tag): "${rest}"` });
       i += 1;
     } else if (rest !== '') {
-      // Inline scalar (`script: npm test`): one line of shell.
-      const block = { owner, key, startLine: i + 1, text: rest };
+      // Inline scalar (`script: npm test`) — one line of shell, plus any
+      // deeper-indented plain-scalar continuation lines folded in.
+      const folded = collectPlain(rest, keyIndent, i + 1);
+      const block = { owner, key, startLine: i + 1, text: folded.text };
       blocks.push(block);
       if (itemName) {
         anchors.set(itemName, { kind: 'block', block });
       }
-      i += 1;
+      i = folded.next;
     } else {
       // Bare key: the list of script items below it (aliases inside
       // resolve to their anchor definitions, which resolveAlias checks

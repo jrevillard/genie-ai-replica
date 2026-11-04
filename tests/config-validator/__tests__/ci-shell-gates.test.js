@@ -86,7 +86,8 @@ describe('ci shell gate: extraction', () => {
     expect(errors).toEqual([]);
     const anchored = blocks.find((b) => b.text === 'echo from anchor');
     expect(anchored).toBeDefined();
-    expect(anchored.owner).toBe('.shared');
+    // The anchor shell runs in the aliasing job — attribution follows it.
+    expect(anchored.owner).toBe('job');
   });
 
   test('an unhandled script shape (unknown tag) is reported as an error, not skipped', () => {
@@ -126,12 +127,12 @@ describe('ci shell gate: extraction', () => {
       '    - echo after'
     ].join('\n');
 
-    test('the anchor body is shell-extracted at its definition', () => {
+    test('the anchor body is shell-extracted under the aliasing job', () => {
       const { blocks, errors } = extractCiShellBlocks(ALIAS);
       expect(errors).toEqual([]);
       const anchored = blocks.find((b) => b.text.includes('docker network connect'));
       expect(anchored).toBeDefined();
-      expect(anchored.owner).toBe('.net_setup');
+      expect(anchored.owner).toBe('job');
     });
 
     test('a stray done inside the anchor body fails the gate', () => {
@@ -217,6 +218,90 @@ describe('ci shell gate: extraction', () => {
     const tagged = 'job:\n  script: !reference [.x]\n';
     const { errors } = extractCiShellBlocks(tagged);
     expect(errors[0]).toMatchObject({ owner: 'job', key: 'script', startLine: 2 });
+  });
+
+  test('an alias runs the anchor shell in the aliasing job, not twice in one group', () => {
+    // The anchor body is broken shell that runs in BOTH jobs; the gate must
+    // report both, and must not let a second copy of the same text inside
+    // one group even out the quote parity (a false pass in the !674 class).
+    const content = [
+      'job-one:',
+      '  script:',
+      '    - &q |',
+      '      echo "unclosed',
+      'job-two:',
+      '  script:',
+      '    - *q'
+    ].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    const failures = checkShellSyntax(blocks);
+    expect(failures).toHaveLength(2);
+    expect(failures.map((f) => f.owner).sort()).toEqual(['job-one', 'job-two']);
+  });
+
+  test('a key-level inline scalar folds its continuation lines', () => {
+    const content = 'job:\n  script: echo one\n    && echo "\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].text).toBe('echo one && echo "');
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('an item plain scalar continues across a blank line (newline fold)', () => {
+    const content = 'job:\n  script:\n    - echo one\n\n      && echo "broken\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].text).toBe('echo one\n&& echo "broken');
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('framework keys with flow values are not flow-style jobs', () => {
+    const content = ['workflow: {name: mine}', 'include: {project: x}', 'job:', '  script:', '    - echo hi'].join(
+      '\n'
+    );
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi']);
+  });
+
+  test('a flow-style job error names the key without garbling', () => {
+    const { errors } = extractCiShellBlocks('job: {script: ["echo a"]}\n');
+    expect(errors[0].message).toContain('"job"');
+    expect(errors[0].owner).toBe('job');
+  });
+
+  test('a column-0 anchor with an inline scalar value aliases cleanly', () => {
+    const content = ['.common: &common echo hello', '', 'job:', '  script: *common'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hello']);
+  });
+
+  test('an EOF error line stays inside the offending item', () => {
+    // bash reports lastLine+1 for unexpected-EOF; the mapping must not
+    // point past the item into the next YAML construct.
+    const content = 'job:\n  script:\n    - |\n      if true; then\n      echo x\n';
+    const { blocks } = extractCiShellBlocks(content);
+    const errors = checkShellSyntax(blocks);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/file line 5\)/);
+  });
+
+  test('a job body indented deeper than two is still gated', () => {
+    const content = 'job:\n    script:\n        - echo hi\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi']);
+  });
+
+  test('a quoted script key extracts', () => {
+    const content = 'job:\n  "script":\n    - echo hi\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi']);
   });
 });
 
@@ -416,10 +501,10 @@ describe('ci shell gate: the real .gitlab-ci.yml', () => {
     // partial set and the gate is gone while still green. The floor guards
     // against wholesale collapse; the named owners guard against a shape
     // regression that silently drops one extraction family (a plain-key
-    // job, the alias-carrying base, the shell anchor, a folded scalar).
+    // config job, the alias-carrying e2e base, another namespaced job).
     expect(blocks.length).toBeGreaterThanOrEqual(40);
     const owners = new Set(blocks.map((b) => b.owner));
-    for (const expected of ['.e2e_web_base', '.connect_compose_network', 'config:validate']) {
+    for (const expected of ['.e2e_web_base', 'config:validate', 'config:docs-links']) {
       expect(owners.has(expected)).toBe(true);
     }
   });

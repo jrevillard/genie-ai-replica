@@ -20,9 +20,10 @@ const childProcess = require('child_process');
 function checkShellSyntax(blocks) {
   // Group blocks the way the runner concatenates them: before_script and
   // script are ONE shell file per job, after_script runs separately.
-  // Boundaries still accepted as limits: extends-inherited scripts and
-  // alias-spliced anchor bodies are checked as their own groups, so a
-  // construct spanning those joins is (rarely) a false failure.
+  // Boundaries still accepted as limits: extends-inherited scripts,
+  // alias-spliced anchor bodies, and a `default: before_script:` a job
+  // inherits are checked as their own groups, so a construct spanning
+  // those joins is (rarely) a false failure.
   const groups = new Map();
   for (const block of blocks) {
     const groupKey = `${block.owner}\u0000${block.key === 'after_script' ? 'after_script' : 'script-group'}`;
@@ -56,12 +57,17 @@ function checkShellSyntax(blocks) {
       if (rel) {
         const concatLine = Number(rel[1]);
         // Last item whose offset precedes the reported line.
+        let originIdx = items.length - 1;
         for (let j = 0; j < items.length; j += 1) {
           if (offsets[j] <= concatLine) {
             origin = items[j];
+            originIdx = j;
           }
         }
-        at = ` (file line ${origin.startLine + (concatLine - offsets[items.indexOf(origin)])})`;
+        // EOF-class errors report lastLine+1 — clamp to the item's span so
+        // the hint never points past it into the next YAML construct.
+        const relLine = Math.min(concatLine - offsets[originIdx], origin.text.split('\n').length - 1);
+        at = ` (file line ${origin.startLine + Math.max(relLine, 0)})`;
       }
       const first =
         stderr.split('\n')[0] || `bash -n exited abnormally (status ${run.status}, signal ${run.signal || 'none'})`;

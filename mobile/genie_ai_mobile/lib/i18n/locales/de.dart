@@ -560,6 +560,8 @@ const Map<String, dynamic> deLocale = {
     "confirmChange": "Änderung bestätigen",
     "processing": "Verarbeite...",
     "userDataReset": "Deine Profildaten wurden erfolgreich zurückgesetzt.",
+    "userDataResetFilesFailed":
+        "Deine Profildaten wurden zurückgesetzt, aber einige gespeicherte Dateien konnten nicht entfernt werden. Bitte kontaktiere einen Administrator.",
     "failedToResetUserData":
         "Zurücksetzen der Profildaten fehlgeschlagen. Bitte versuche es später erneut.",
     "changingEmailTo": "Ändere deine E-Mail zu",

@@ -556,6 +556,8 @@ const Map<String, dynamic> esLocale = {
     "confirmChange": "Confirmar cambio",
     "processing": "Procesando...",
     "userDataReset": "Tus datos de perfil han sido restablecidos.",
+    "userDataResetFilesFailed":
+        "Tus datos de perfil han sido restablecidos, pero no se pudieron eliminar algunos archivos almacenados. Contacta a un administrador.",
     "failedToResetUserData": "Error al restablecer datos. Inténtalo más tarde.",
     "changingEmailTo": "Cambiando tu correo a",
     "will": "se",

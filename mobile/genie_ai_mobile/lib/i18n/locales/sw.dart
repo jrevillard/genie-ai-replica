@@ -556,6 +556,8 @@ const Map<String, dynamic> swLocale = {
     "confirmChange": "Thibitisha Mabadiliko",
     "processing": "Inachakata...",
     "userDataReset": "Data ya wasifu wako imewekwa upya kikamilifu.",
+    "userDataResetFilesFailed":
+        "Data ya wasifu wako imewekwa upya, lakini baadhi ya faili zilizohifadhiwa hazikuweza kufutwa. Tafadhali wasiliana na msimamizi.",
     "failedToResetUserData":
         "Imeshindwa kuweka upya data ya wasifu wako. Tafadhali jaribu tena baadaye.",
     "changingEmailTo": "Inabadilisha barua pepe yako kuwa",

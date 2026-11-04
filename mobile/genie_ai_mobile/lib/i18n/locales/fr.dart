@@ -559,6 +559,8 @@ const Map<String, dynamic> frLocale = {
     "processing": "Traitement...",
     "userDataReset":
         "Vos données de profil ont été réinitialisées avec succès.",
+    "userDataResetFilesFailed":
+        "Vos données de profil ont été réinitialisées, mais certains fichiers stockés n'ont pas pu être supprimés. Veuillez contacter un administrateur.",
     "failedToResetUserData":
         "Échec de la réinitialisation de vos données de profil. Veuillez réessayer plus tard.",
     "changingEmailTo": "Changement de votre e-mail vers",

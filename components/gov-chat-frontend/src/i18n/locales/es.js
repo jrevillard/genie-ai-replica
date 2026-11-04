@@ -984,6 +984,8 @@ export default {
       '¿Está seguro de que desea eliminar su cuenta? Esta acción es permanente y no se puede deshacer. Todos sus datos serán borrados.',
     processing: 'Procesando...',
     userDataReset: 'Sus datos de perfil han sido restablecidos con éxito.',
+    userDataResetFilesFailed:
+      'Sus datos de perfil han sido restablecidos, pero algunos archivos almacenados no pudieron eliminarse. Por favor, contacte a un administrador.',
     failedToResetUserData: 'Falló el restablecimiento de sus datos de perfil. Por favor, intente nuevamente más tarde.',
     unableToLoadUser: 'No se pudo cargar la información del usuario. Por favor, intente nuevamente.',
     retry: 'Reintentar',

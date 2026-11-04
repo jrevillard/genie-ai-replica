@@ -556,6 +556,8 @@ const Map<String, dynamic> ptLocale = {
     "confirmChange": "Confirmar Alteração",
     "processing": "Processando...",
     "userDataReset": "Seus dados de perfil foram redefinidos com sucesso.",
+    "userDataResetFilesFailed":
+        "Seus dados de perfil foram redefinidos, mas alguns arquivos armazenados não puderam ser removidos. Entre em contato com um administrador.",
     "failedToResetUserData":
         "Falha ao redefinir seus dados de perfil. Por favor, tente novamente mais tarde.",
     "changingEmailTo": "Alterando seu e-mail para",

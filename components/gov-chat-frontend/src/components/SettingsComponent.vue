@@ -514,16 +514,31 @@ export default {
     async resetUserData() {
       try {
         this.isLoading = true;
-        await userService.resetUserData();
-        notificationService.success(
-          this.translate('settings.userDataReset', 'Your profile data has been successfully reset.')
-        );
+        const response = await userService.resetUserData();
+        if (response && response.filesDeletionFailed === true) {
+          notificationService.warning(
+            this.translate(
+              'settings.userDataResetFilesFailed',
+              'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
+            )
+          );
+        } else {
+          notificationService.success(
+            this.translate('settings.userDataReset', 'Your profile data has been successfully reset.')
+          );
+        }
         await this.fetchUserData();
-        const themeValue = localStorage.getItem('theme');
-        const langValue = localStorage.getItem('userLocale');
-        localStorage.clear();
-        if (themeValue) localStorage.setItem('theme', themeValue);
-        if (langValue) localStorage.setItem('userLocale', langValue);
+        // The reset has committed and the outcome is already announced; a
+        // local-preferences failure must not surface as a failed reset.
+        try {
+          const themeValue = localStorage.getItem('theme');
+          const langValue = localStorage.getItem('userLocale');
+          localStorage.clear();
+          if (themeValue) localStorage.setItem('theme', themeValue);
+          if (langValue) localStorage.setItem('userLocale', langValue);
+        } catch (storageError) {
+          console.error('[SETTINGS] Error clearing local preferences:', storageError);
+        }
       } catch (e) {
         console.error('[SETTINGS] Error resetting user data:', e);
         notificationService.error(

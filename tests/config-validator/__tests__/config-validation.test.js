@@ -3463,10 +3463,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     walkSpecs(e2eRoot);
     if (violations.length > 0) {
       throw new Error(
-        `spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ` +
-          `helpers/chatbot in one file): ${violations.join(', ')} — take credentials from ` +
-          `helpers/e2e-fixtures.js alone, or from the same helpers/chatbot.js require as loginViaUI ` +
-          `(tests/e2e/CLAUDE.md § Fixtures)`
+        'spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ' +
+          'helpers/chatbot in one file): ' +
+          violations.join(', ') +
+          ' — take credentials from ' +
+          'helpers/e2e-fixtures.js alone, or from the same helpers/chatbot.js require as loginViaUI ' +
+          '(tests/e2e/CLAUDE.md § Fixtures)'
       );
     }
   });

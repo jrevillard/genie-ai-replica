@@ -7,6 +7,7 @@
 const {
   isHuskDoc,
   findDivergences,
+  HUSK_IDENTITY_FIELDS,
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL
 } = require('../scripts/report-husk-user-docs');
@@ -82,10 +83,12 @@ describe('isHuskDoc', () => {
 });
 
 describe('HUSK_MATCHER_AQL', () => {
-  // Pin the AQL to the same tests the predicate runs: each absence test, the
-  // soft-delete carve-out, the allowed-field subset check and a final RETURN.
-  it('tests all three identity fields for absence', () => {
-    for (const field of ['iss_sub', 'sub', 'email']) {
+  // Pin the AQL template to the constants it is generated from: each absence
+  // test, the soft-delete carve-out, the allowed-field subset check and a
+  // final RETURN. The matcher itself is built from HUSK_IDENTITY_FIELDS and
+  // HUSK_ALLOWED_FIELDS, so these pins guard template corruption only.
+  it('tests all identity fields for absence', () => {
+    for (const field of HUSK_IDENTITY_FIELDS) {
       expect(HUSK_MATCHER_AQL).toContain(`FILTER u.${field} == null`);
     }
   });

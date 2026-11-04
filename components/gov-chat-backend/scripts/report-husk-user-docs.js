@@ -13,6 +13,10 @@
  *   - deleted missing or false       — soft-deleted docs are NOT husks
  *   - no other application fields    — only _key/_id/_rev system fields remain
  *
+ * The signature is defined ONCE, as the HUSK_IDENTITY_FIELDS and
+ * HUSK_ALLOWED_FIELDS constants below; the JS predicate, the AQL matcher and
+ * the tests are all derived from them, so the sides cannot drift apart.
+ *
  * This script is deliberately NOT under scripts/migrations/: that directory is
  * executed automatically by the db-migrations init container on every deploy
  * (see docs/database-migrations.md). This one runs only when a human runs it.
@@ -38,25 +42,24 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
 const SAMPLE_LIMIT = 50;
 
-// The only non-internal fields a husk may carry: the timestamps the old
-// reset preserved and an explicit soft-delete marker set to false. The
-// identity fields (iss_sub, sub, email) are tested for absence; every other
+// --- The husk signature, defined once --------------------------------------
+// Identity fields the document must LACK entirely (null or missing).
+const HUSK_IDENTITY_FIELDS = ['iss_sub', 'sub', 'email'];
+// The only non-internal fields it may CARRY: the timestamps the old reset
+// preserved and an explicit soft-delete marker set to false. Every other
 // application field disqualifies the document.
 const HUSK_ALLOWED_FIELDS = ['createdAt', 'updatedAt', 'deleted'];
 
-// ---------------------------------------------------------------------------
-// Signature — one JS predicate and the same tests in AQL
-// ---------------------------------------------------------------------------
-
 /**
- * True when a document matches the husk signature. The AQL query below runs
- * the same tests; every AQL hit is re-checked through this predicate before
- * anything is reported or removed, so the two cannot silently diverge.
+ * True when a document matches the husk signature. The AQL matcher below is
+ * generated from the same two constants; every AQL hit is re-checked through
+ * this predicate before anything is reported or removed, so even a genuine
+ * AQL-semantics surprise cannot reach the destructive path.
  * @param {Object} doc
  * @returns {boolean}
  */
 function isHuskDoc(doc) {
-  if (doc.iss_sub != null || doc.sub != null || doc.email != null) {
+  if (HUSK_IDENTITY_FIELDS.some((field) => doc[field] != null)) {
     return false;
   }
   // Mirrors the AQL test exactly: missing, null or boolean false only —
@@ -79,15 +82,15 @@ function findDivergences(husks) {
   return husks.filter((doc) => !isHuskDoc(doc));
 }
 
+const IDENTITY_FILTERS_AQL = HUSK_IDENTITY_FIELDS.map((field) => `FILTER u.${field} == null`).join('\n');
+
 // ATTRIBUTES(u, true) strips the internal attributes (_key/_id/_rev); what
 // remains must be a subset of the allowed fields.
 const HUSK_MATCHER_AQL = `
 FOR u IN @@collection
-  FILTER u.iss_sub == null
-  FILTER u.sub == null
-  FILTER u.email == null
+${IDENTITY_FILTERS_AQL}
   FILTER u.deleted == null || u.deleted == false
-  FILTER LENGTH(MINUS(ATTRIBUTES(u, true), ['createdAt', 'updatedAt', 'deleted'])) == 0
+  FILTER LENGTH(MINUS(ATTRIBUTES(u, true), [${HUSK_ALLOWED_FIELDS.map((field) => `'${field}'`).join(', ')}])) == 0
   RETURN u
 `;
 
@@ -95,13 +98,19 @@ FOR u IN @@collection
 // Legacy pre-Keycloak accounts look exactly like this and are healthy —
 // every legitimate document-creation path in the repo sets email, so these
 // must never match the husk signature. Reported for operator context only.
-const LEGACY_LOOKALIKE_FILTERS = `
-  FILTER u.iss_sub == null
-  FILTER u.sub == null
-  FILTER u.email != null
+// Derived from the identity fields MINUS email (a lookalike HAS an email —
+// including the email-absence filter here would contradict it to zero rows).
+const LOOKALIKE_IDENTITY_FIELDS = HUSK_IDENTITY_FIELDS.filter((field) => field !== 'email');
+const LOOKALIKE_IDENTITY_FILTERS_AQL = LOOKALIKE_IDENTITY_FIELDS.map((field) => `FILTER u.${field} == null`).join('\n');
+const LEGACY_LOOKALIKE_AQL = `
+LET lookalikeDocs = (
+  FOR u IN @@collection
+  ${LOOKALIKE_IDENTITY_FILTERS_AQL}
+    FILTER u.email != null
+    RETURN KEEP(u, '_key', 'createdAt')
+)
+RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
 `;
-const LEGACY_LOOKALIKE_COUNT_AQL = `FOR u IN @@collection${LEGACY_LOOKALIKE_FILTERS}COLLECT WITH COUNT INTO c RETURN c`;
-const LEGACY_LOOKALIKE_SAMPLE_AQL = `FOR u IN @@collection${LEGACY_LOOKALIKE_FILTERS}LIMIT @sampleLimit RETURN KEEP(u, '_key', 'createdAt', 'updatedAt')`;
 
 // ---------------------------------------------------------------------------
 // Main
@@ -129,16 +138,11 @@ async function main() {
       password: process.env.ARANGO_PASSWORD || ''
     }
   });
-  const totals = await db.query('FOR u IN @@collection COLLECT WITH COUNT INTO c RETURN c', {
-    '@collection': COLLECTION
-  });
-  const total = (await totals.next()) || 0;
+  const collection = db.collection(COLLECTION);
+  const total = ((await collection.count()) || {}).count || 0;
 
-  const husks = [];
   const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
-  for await (const doc of huskCursor) {
-    husks.push(doc);
-  }
+  const husks = await huskCursor.all();
 
   // Defense against AQL/predicate divergence — abort before any destructive
   // step if the two disagree about what a husk is.
@@ -152,15 +156,18 @@ async function main() {
     process.exit(1);
   }
 
-  const lookalikeCountCursor = await db.query(LEGACY_LOOKALIKE_COUNT_AQL, { '@collection': COLLECTION });
-  const lookalikeCount = (await lookalikeCountCursor.next()) || 0;
-  const lookalikes = [];
-  const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_SAMPLE_AQL, {
-    '@collection': COLLECTION,
-    sampleLimit: SAMPLE_LIMIT
-  });
-  for await (const doc of lookalikeCursor) {
-    lookalikes.push(doc);
+  let lookalikeCount = 0;
+  let lookalikes = [];
+  if (!doDelete) {
+    // Context for the dry-run report only — a --delete run has already been
+    // through a reviewed dry run and needs nothing from these lookalikes.
+    const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
+      '@collection': COLLECTION,
+      sampleLimit: SAMPLE_LIMIT
+    });
+    const lookalikeResult = (await lookalikeCursor.next()) || {};
+    lookalikeCount = lookalikeResult.count || 0;
+    lookalikes = lookalikeResult.sample || [];
   }
 
   console.log('--- Husk user-document report (READ ONLY unless --delete) ---');
@@ -211,11 +218,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  isHuskDoc,
-  findDivergences,
-  HUSK_ALLOWED_FIELDS,
-  HUSK_MATCHER_AQL,
-  LEGACY_LOOKALIKE_COUNT_AQL,
-  LEGACY_LOOKALIKE_SAMPLE_AQL
-};
+module.exports = { isHuskDoc, findDivergences, HUSK_IDENTITY_FIELDS, HUSK_ALLOWED_FIELDS, HUSK_MATCHER_AQL };

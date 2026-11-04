@@ -328,8 +328,8 @@ node tests/e2e/provision-e2e-fixtures.js
 ```
 
 The script is safe to re-run: an existing account is converged (password
-reset, role assignment, and the admin-granting role removed from the
-role-less fixture) instead of failing. It DOES fail loudly on an account
+reset, role assignment, and the admin-granting role removed from every
+fixture that does not declare it) instead of failing. It DOES fail loudly on an account
 the realm left in a broken login state (disabled, unverified, or carrying
 a required action) — that is a realm configuration problem, and the error
 names it.

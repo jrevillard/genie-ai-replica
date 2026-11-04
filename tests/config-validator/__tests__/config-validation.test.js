@@ -3330,7 +3330,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // testadmin entry ([^}] cannot cross the object's closing brace), so
     // moving the role to the wrong entry fails this pin.
     expect(fixtures).toMatch(/username: 'testadmin',[^}]*realmRoles: \['admin'\]/);
-    expect(fixtures).toContain("username: 'testuser'");
+    expect(fixtures).toContain("username: 'testadmin'");
     expect(fixtures).toContain("username: 'testplain'");
   });
 
@@ -3353,11 +3353,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
     // The role-less fixtures' DEFINING contract: they must carry no
-    // realmRoles key at all — a granted role makes the provisioning
-    // script take the assign branch and skip its effective-role
-    // assertion (testplain: silently turning the authz spec's 403 half
-    // into an admin session; testuser: re-growing the #1402 parity role
-    // no consumer justifies).
+    // realmRoles key at all — a granted ADMIN role makes the
+    // provisioning script strip-and-assert instead of trust the
+    // declaration (testplain: a kept role silently turns the authz
+    // spec's 403 half into an admin session; testuser: re-growing the
+    // #1402 parity role no consumer justifies), and any other declared
+    // role has no consumer to justify it either.
     expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
     expect(fixtures).not.toMatch(/username: 'testuser',[^}]*realmRoles/);
     // The shell docs' manual payloads must agree with the fixture

@@ -757,7 +757,8 @@ workflow:
     # (tests/e2e/provision-e2e-fixtures.js) over the ensureUser helper —
     # bounded retry on a transient or unanswered Keycloak call, password
     # convergence on the already-exists path, role assignment, and the
-    # admin-granting role removed from the role-less fixture — so a stale
+    # admin-granting role removed from every fixture that does not
+    # declare it — so a stale
     # account fails HERE instead of as a login failure minutes later.
     # The fixture definitions (emails, passwords, roles) live in
     # tests/e2e/helpers/e2e-fixtures.js; the specs read their login

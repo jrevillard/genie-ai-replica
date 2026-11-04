@@ -58,7 +58,7 @@ const ADMIN_ROLE = 'admin';
       if (effective.includes(ADMIN_ROLE)) {
         throw new Error(
           `${fixture.username} still holds the ${ADMIN_ROLE} realm role (effective roles: ${effective.join(', ')}) — ` +
-            'the realm default role or a group grants it; the non-admin half of the admin spec needs a role-less account'
+            'the realm default role or a group grants it; the fixture declares no admin role, so the realm import needs fixing'
         );
       }
     }

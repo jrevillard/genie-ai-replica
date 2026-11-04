@@ -114,7 +114,7 @@ re-exports them beside the login helpers). The import-path convention: a spec
 that needs only credentials requires them from `helpers/e2e-fixtures.js`
 directly; a spec that also logs in takes them from the same
 `helpers/chatbot.js` require as `loginViaUI` — do not mix both paths in one
-file. The helper converges
+file. The provisioning script (`provision-e2e-fixtures.js`) converges
 an existing account (password reset, role assignment, and the
 admin-granting role removed from every fixture that does not declare it);
 it fails loudly on

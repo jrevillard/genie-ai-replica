@@ -3243,6 +3243,20 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(ruleCount(sectionOf('e2e:integration'))).toBe(2);
     expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
     expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
+    // The E2E_ENABLED gate (disabled-by-default: no runner capacity for the
+    // compose + Playwright stack; re-enable is a CI variable flip, not a YAML
+    // change) is pinned on EVERY rule of the three train e2e jobs — dropping
+    // it silently re-arms the 30-minute e2e stage on every merge train.
+    const gate = '$E2E_ENABLED == "1" && ';
+    for (const job of [...E2E_JOBS, 'e2e:cleanup']) {
+      const ifs = sectionOf(job)
+        .split('\n')
+        .filter((line) => line.trimStart().startsWith('- if:'));
+      expect(ifs.length).toBeGreaterThan(0);
+      for (const line of ifs) {
+        expect(line.trimStart()).toContain(gate);
+      }
+    }
   });
 
   test('mobile stays integration-only', () => {

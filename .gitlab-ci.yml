@@ -2990,6 +2990,10 @@ test:backend:
         path: components/gov-chat-backend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-backend/**/*"
+        - "components/shared/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3023,6 +3027,9 @@ test:frontend:
         path: components/gov-chat-frontend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-frontend/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3052,6 +3059,10 @@ test:doc-repo:
         path: components/document-repository/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/document-repository/**/*"
+        - "components/shared/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3137,6 +3148,10 @@ test:python:
         path: genie-ai-overlay/reports/coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "genie-ai-overlay/**/*.py"
+        - "genie-ai-overlay/pyproject.toml"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3169,6 +3184,10 @@ test:sitecustomize:
         path: reports/coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "configs/ssl/**/*"
+        - "tests/config/ssl/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3198,6 +3217,9 @@ test:rag-benchmarks:
         - reports/rag-benchmarks-capture-report.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "tests/rag-benchmarks/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3315,6 +3337,9 @@ test:flutter:
     expire_in: 7 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "mobile/genie_ai_mobile/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -3372,6 +3397,13 @@ test:flutter:
   - .gitlab-ci.yml
 
 # Integration E2E — compose stack from candidate images (merge trains)
+# DISABLED BY DEFAULT (E2E_ENABLED gate, 2026-11-03): there is no runner
+# capacity for the compose stack + Playwright on the shared docker runner, so
+# every rule additionally requires the project CI/CD variable E2E_ENABLED=1.
+# Unset (the default) keeps the e2e stage empty in every pipeline while the
+# rules, the shared anchor and the hard needs stay in place — re-enabling is
+# a variable flip, not a YAML change. Scheduled E2E (scheduled:integration +
+# scheduled:e2e-web) is unaffected and keeps running on schedule pipelines.
 # Rules union: the two rules below trigger e2e:integration on the shared
 # filter PLUS the integration-only mobile entry. The web suite does not test
 # the mobile app, so e2e:playwright deliberately does not run on mobile-only
@@ -3384,10 +3416,10 @@ e2e:integration:
   allow_failure: true  # per-image skip: not all images build on a given MR;
                         # e2e needs ALL → can fail if unchanged images not in tmp/
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+    - if: '$E2E_ENABLED == "1" && $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         - mobile/genie_ai_mobile/**/*
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+    - if: '$E2E_ENABLED == "1" && $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         paths: *e2e_merge_train_changes
 
@@ -3398,7 +3430,7 @@ e2e:playwright:
   resource_group: e2e-runner
   needs: [e2e:integration]
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+    - if: '$E2E_ENABLED == "1" && $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         paths: *e2e_merge_train_changes
 
@@ -3768,7 +3800,7 @@ scheduled:e2e-web:
 e2e:cleanup:
   extends: .cleanup_base
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"
+    - if: '$E2E_ENABLED == "1" && $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       when: always
 
 scheduled:cleanup:

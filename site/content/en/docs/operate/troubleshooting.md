@@ -189,22 +189,47 @@ The fallback is observable in two places:
   degraded period can be found in the Trace explorer by filtering for
   anything other than `translated` / `passthrough_english`.
 
-A query sent as a **plain string** — single-message mode
-(`CONTEXT_OPTION=single-message`), where the current question *is* the whole
-history — is **refused** instead of fallen back on when it does not fit the
-translation window: the turn answers HTTP 422 (`translation_input_too_long`)
-and nothing is embedded, because the untranslated question would be looked up
-in the English space and retrieve the wrong documents. Shorten the message
-and retry. The multi-message shape keeps the fallback described above: its
-history is background, normalized for the retriever and never shown, so the
-turn is not failed.
+A query that does not fit the translation window is **refused** instead of
+fallen back on: the turn answers HTTP 422 (`translation_input_too_long`) and
+nothing is embedded, because the untranslated question would be looked up in
+the English space and retrieve the wrong documents. Shorten the message and
+retry. The refusal covers two cases, and neither depends on the
+language the query is written in:
+
+- **Single-message mode** (`CONTEXT_OPTION=single-message`, where the current
+  question *is* the whole history): the character budget is applied on the
+  English path too, so an oversized question is refused at the same budget
+  whatever language it is in. On a non-English query the refusal can also
+  come from the service side: a query that passes the char budget but whose
+  prompt still does not fit the translation model's window (dense scripts
+  run ~1 token/char, so the Latin-derived budget undercounts them) is
+  refused by the same guard the multi-message shape hits. An English query
+  is only ever refused by the char budget — it never reaches the
+  translation service.
+- **Multi-message history, service-side refusal**: when the prompt the
+  translation service is asked to translate does not fit its model window —
+  typically a dense-script history, where the character budget's
+  chars-per-token estimate runs ~3× over (the budget is a Latin-script
+  estimate; dense scripts cost ~1 token/char) — the translation service
+  refuses the flattened history and the turn is refused with it — the newest
+  message in the history is still the query, so it is not answered from an
+  untranslated fallback. The mitigation is **lowering** `MAX_TRANSLATION_CHARS`
+  for the deployment's script; raising it only takes effect when the window
+  probe cannot answer (the budget then falls back to that configured value).
 
 The multi-message shape keeps the same turns of the conversation on both
 language paths (the newest ones, within the same character budget), so the
 retriever reads the same conversation whichever language it arrived in. The
-single-message shape is not budgeted on the English path: an English question
-is embedded as it is, while the same-length question in another language is
-refused as above.
+char-budget truncation (the newest message's **tail** kept when it alone
+exceeds the budget) is still the multi-message shape's contract for an
+oversized history: only a prompt the translation service cannot fit in its
+window refuses the turn.
+
+Blank and all-blank queries also report `fallback_error` on the English
+path, not only on the translation path — a spike of it can be blank user
+input with the translation microservice perfectly healthy. The Docker logs
+name it: the passthrough blank guard logs the same warning the translation
+path's guard does.
 
 To diagnose a degraded period:
 

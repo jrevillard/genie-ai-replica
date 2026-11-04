@@ -83,6 +83,14 @@ const validateConfig = (data) => {
  * (src/__tests__/config-quickhelp-contract.test.js) enforces the SAME
  * rules on the files that ship — one copy of the contract, not two.
  */
+// The button ids whose non-boolean "hidden" flag was already reported.
+// loadConfig runs more than once per page session (boot in main.js, and
+// again wherever a component re-fetches the configuration), so a
+// per-load report would print the identical warning two or more times —
+// the same multiplication this report replaced (#1361). One report per
+// button id per session, like the component-side dedup it succeeded.
+const hiddenFlagReported = new Set();
+
 const validateQuickHelpButtons = (data) => {
   const buttons = data?.features?.chat?.quickHelp?.buttons;
   if (buttons == null) return;
@@ -106,11 +114,12 @@ const validateQuickHelpButtons = (data) => {
     seen.set(id, index);
     // The "hidden" flag's shape is a property of the document, so the
     // report lives at configuration-resolution time (#1361): one warning
-    // per malformed flag per load, named by the button's id — not one per
-    // mount or language switch, under whatever title the locale resolved.
-    // A report, not a gate: the flag's truthiness decides (deliberate
-    // parity with the mobile), so the app still boots.
-    if (button.hidden != null && typeof button.hidden !== 'boolean') {
+    // per malformed flag per session, named by the button's id — not one
+    // per mount or language switch, under whatever title the locale
+    // resolved. A report, not a gate: the flag's truthiness decides
+    // (deliberate parity with the mobile), so the app still boots.
+    if (button.hidden != null && typeof button.hidden !== 'boolean' && !hiddenFlagReported.has(id)) {
+      hiddenFlagReported.add(id);
       console.warn(
         `genie-ai-config.json: Quick Help button "${id}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decides (${button.hidden ? 'hidden' : 'shown'}).`
       );

@@ -495,7 +495,7 @@ describe('loadConfig', () => {
       await expect(loadConfig()).resolves.toBeDefined();
     });
 
-    it('reports a non-boolean "hidden" flag ONCE per load, named by the button id (#1361)', async () => {
+    it('reports a non-boolean "hidden" flag ONCE per session, named by the button id (#1361)', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -517,6 +517,30 @@ describe('loadConfig', () => {
       // gate above guarantees — and the offending value.
       expect(String(hiddenWarnings[0][0])).toContain('quoted');
       expect(String(hiddenWarnings[0][0])).toContain('"false"');
+      warn.mockRestore();
+    });
+
+    it('a second loadConfig call in the same session does not re-report the same button id', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const mistyped = [
+        { id: 'quoted', title: { en: 'Quoted' }, hidden: 'false', category: '1' },
+        { id: 'still-mistyped', title: { en: 'Still' }, hidden: 'no', category: '2' }
+      ];
+      // Two loads in one session: boot (main.js) plus the component's
+      // re-fetch. The same typo must stay one console line, and a
+      // DIFFERENT mistyped id still gets its own report.
+      for (let i = 0; i < 2; i++) {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(configWithButtons(mistyped))
+        });
+        await expect(loadConfig()).resolves.toBeDefined();
+      }
+
+      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
+      expect(hiddenWarnings.length).toBe(2);
+      expect(String(hiddenWarnings[0][0])).toContain('quoted');
+      expect(String(hiddenWarnings[1][0])).toContain('still-mistyped');
       warn.mockRestore();
     });
 

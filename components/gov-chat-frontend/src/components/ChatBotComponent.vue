@@ -1890,10 +1890,12 @@ export default {
       // meant — and the flag's TRUTHINESS decides: "false" is a
       // non-empty string, so the card DISAPPEARS. The mobile reads the
       // flag the same way (the parity is deliberate). The typo itself is
-      // REPORTED by the loader's gate (validateQuickHelpButtons, once per
-      // configuration load, named by the button's id) — a shape error is
-      // a property of the document, not of the locale the UI happens to
-      // be in (#1361). The filter here stays a pure filter.
+      // REPORTED by the loader's shape report (validateQuickHelpButtons —
+      // one warning per malformed flag per session, named by the button's
+      // id; the id/duplicate checks are the gate, this one never blocks a
+      // load) — a shape error is a property of the document, not of the
+      // locale the UI happens to be in (#1361). The filter here stays a
+      // pure filter.
       // The id is the button's IDENTITY — the conversation tag carries
       // it, the restore resolves it, the grid's verdict keys on it. The
       // loader's gate (validateQuickHelpButtons) has already refused any

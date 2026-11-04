@@ -329,9 +329,11 @@ describe('Swagger Configuration', () => {
     });
 
     it('documents a 401 response on every analytics operation', () => {
+      const OPERATIONS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
       const missing = [];
       for (const path of analyticsPaths) {
         for (const [method, op] of Object.entries(spec.paths[path])) {
+          if (!OPERATIONS.includes(method)) continue; // path-level keys (parameters, …)
           if (!op.responses || !op.responses['401']) missing.push(`${method.toUpperCase()} ${path}`);
         }
       }

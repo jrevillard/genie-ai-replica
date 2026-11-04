@@ -80,6 +80,49 @@ def _judge_base_url() -> str:
     return (os.getenv("RAGAS_JUDGE_BASE_URL") or "").rstrip("/")
 
 
+def _deployment_vllm_base() -> str:
+    """The deployment vLLM endpoint — the ONLY base the deployment bearer may
+    be aimed at (credential scoping, !640 / #1209)."""
+    return (os.getenv("VLLM_ENDPOINT") or os.getenv("VLLM_BASE_URL") or "").rstrip("/")
+
+
+def _same_origin(a: str, b: str) -> bool:
+    """Scheme + host + port comparison for the credential-scoping rule."""
+    from urllib.parse import urlparse
+
+    try:
+        pa, pb = urlparse(a), urlparse(b)
+        return (pa.scheme, pa.hostname, pa.port) == (pb.scheme, pb.hostname, pb.port)
+    except (ValueError, AttributeError):
+        return a == b
+
+
+def _scoped_judge_key(base: str) -> str:
+    """The credential a judge/embed call to `base` may send (#1209).
+
+    The compose default injects VLLM_API_KEY into RAGAS_JUDGE_API_KEY so the
+    SHIPPED judge (the deployment endpoint) authenticates. An operator who
+    re-points the judge at a third-party gateway inherits that injected value —
+    and would silently ship the GPU bearer to it. Scope at the client: an
+    injected (VLLM_API_KEY-equal) credential travels ONLY to the deployment
+    endpoint; a value that DIFFERS is operator-explicit and goes anywhere.
+    The scoped-out case falls back to the junk header (an unauthenticated
+    endpoint accepts it; an authenticated one 401s loudly instead of leaking).
+    """
+    judge_key = (os.getenv("RAGAS_JUDGE_API_KEY") or "").strip()
+    dep_key = (os.getenv("VLLM_API_KEY") or "").strip()
+    dep_base = _deployment_vllm_base()
+    if judge_key and dep_key and judge_key == dep_key and dep_base and not _same_origin(base, dep_base):
+        logger.warning(
+            "judge credential scoped out (#1209): RAGAS_JUDGE_API_KEY equals the "
+            "deployment bearer and the judge base is not the deployment endpoint — "
+            "proceeding without a real credential (set an explicit "
+            "RAGAS_JUDGE_API_KEY for the foreign judge)"
+        )
+        return "sk-no-key"
+    return judge_key or "sk-no-key"
+
+
 def _tls_verify_enabled() -> bool:
     """True when RAGAS_VERIFY_SSL opts the deployment into strict verification.
 
@@ -903,7 +946,7 @@ def build_llm(
     else:
         base = _judge_base_url()
         model = os.getenv("RAGAS_JUDGE_MODEL")
-        api_key = os.getenv("RAGAS_JUDGE_API_KEY") or "sk-no-key"
+        api_key = _scoped_judge_key(base)  # #1209 — the injected bearer stays bound to the deployment endpoint
         if not base or not model:
             raise RuntimeError("judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)")
         model_tag = None  # env tag — keeps the existing disk cache valid
@@ -1048,7 +1091,11 @@ def build_embeddings(embed: dict | None = None):
     if not model:
         return None
     base = (os.getenv("RAGAS_EMBED_BASE_URL") or _judge_base_url()).rstrip("/")
-    api_key = os.getenv("RAGAS_EMBED_API_KEY") or os.getenv("RAGAS_JUDGE_API_KEY") or ""
+    # #1209: an explicit RAGAS_EMBED_API_KEY travels anywhere; the
+    # RAGAS_JUDGE_API_KEY fallback is the injectable one, so it gets the same
+    # deployment-endpoint scoping as the judge client.
+    embed_key = (os.getenv("RAGAS_EMBED_API_KEY") or "").strip()
+    api_key = embed_key or _scoped_judge_key(base)
     dialect = (os.getenv("RAGAS_EMBED_API") or "tei").lower()
     if dialect == "openai":
         from langchain_openai import OpenAIEmbeddings

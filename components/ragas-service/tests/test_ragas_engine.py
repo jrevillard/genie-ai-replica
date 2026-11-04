@@ -2210,3 +2210,41 @@ def test_ragas_usage_telemetry_is_off_by_default():
     from ragas import _analytics
 
     assert _analytics.do_not_track() is True, "ragas would POST usage telemetry off the deployment"
+
+
+# ---------------------------------------------------------------------------
+# #1209 — judge/embed credential scoping: the deployment bearer (injected by
+# the compose default into RAGAS_JUDGE_API_KEY) travels ONLY to the
+# deployment endpoint; an operator-explicit key travels anywhere.
+# ---------------------------------------------------------------------------
+class TestScopedJudgeKey:
+    def test_injected_key_to_foreign_base_is_scoped_out(self, monkeypatch):
+        monkeypatch.setenv("RAGAS_JUDGE_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://gpu.example.com/llm")
+        assert ragas_engine._scoped_judge_key("https://vendor-judge.example.com/v1") == "sk-no-key"
+
+    def test_injected_key_to_the_deployment_base_travels(self, monkeypatch):
+        monkeypatch.setenv("RAGAS_JUDGE_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://gpu.example.com/llm")
+        assert ragas_engine._scoped_judge_key("https://gpu.example.com/llm/v1") == "gpu-bearer"
+
+    def test_operator_explicit_key_travels_anywhere(self, monkeypatch):
+        monkeypatch.setenv("RAGAS_JUDGE_API_KEY", "operator-key")
+        monkeypatch.setenv("VLLM_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://gpu.example.com/llm")
+        assert ragas_engine._scoped_judge_key("https://vendor-judge.example.com/v1") == "operator-key"
+
+    def test_no_env_key_falls_back_to_junk(self, monkeypatch):
+        monkeypatch.delenv("RAGAS_JUDGE_API_KEY", raising=False)
+        monkeypatch.delenv("VLLM_API_KEY", raising=False)
+        assert ragas_engine._scoped_judge_key("https://anything.example.com/v1") == "sk-no-key"
+
+    def test_scoping_is_origin_only_path_is_ignored(self, monkeypatch):
+        monkeypatch.setenv("RAGAS_JUDGE_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_API_KEY", "gpu-bearer")
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://gpu.example.com/llm")
+        # the gateway's /embed path is a DIFFERENT service on the SAME host —
+        # the deployment credential still applies (the shared-gateway shape)
+        assert ragas_engine._scoped_judge_key("https://gpu.example.com/embed") == "gpu-bearer"

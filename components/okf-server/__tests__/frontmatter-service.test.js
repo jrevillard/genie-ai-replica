@@ -26,6 +26,7 @@ jest.mock('../services/model-config-service', () => ({
 }));
 
 const svc = require('../services/frontmatter-service');
+const path = require('path');
 const axios = require('axios');
 const modelCache = require('../services/vllm-model-cache');
 const { isolateVllmEnv } = require('./vllm-env-helper');
@@ -693,6 +694,73 @@ describe('withUpstreamRetry — 429 is retriable (2026-10-23)', () => {
     // 4 attempts (the binary exponential ladder), then honest failure.
     expect(axios.post.mock.calls.filter((c) => String(c[0]).includes('/embed'))).toHaveLength(4);
   }, 20000); // the real 1s+2s+4s backoff sleeps exceed the 5s default
+});
+
+describe('teiEmbed credential scoping (#1201) — the deployment bearer never leaves the deployment endpoint', () => {
+  isolateVllmEnv([
+    'HF_TOKEN',
+    'HUGGINGFACEHUB_API_TOKEN',
+    'VLLM_API_KEY',
+    'VLLM_ENDPOINT',
+    'TEI_EMBED_HOST',
+    'EMBEDDING_SERVICE_URL'
+  ]);
+
+  // The TEI host is a module-load const in the service: set the env FIRST,
+  // then require a SANDBOXED instance — jest.isolateModules re-instantiates
+  // the module (and the axios mock) inside its own registry and restores the
+  // outer one after, so the file-level svc/axios mocks every other describe
+  // uses are untouched.
+  function freshSvc(env) {
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    let out;
+    jest.isolateModules(() => {
+      const axiosFresh = require('axios');
+      // absolute path: the sandbox's relative resolution differs on Windows
+      const service = require(path.join(__dirname, '..', 'services', 'frontmatter-service'));
+      out = { axios: axiosFresh, service };
+    });
+    return out;
+  }
+
+  it('explicit HF_TOKEN is sent to ANY TEI host — it names TEI, not the deployment', async () => {
+    const { axios, service } = freshSvc({
+      HF_TOKEN: 'hf-explicit',
+      VLLM_API_KEY: 'gpu-bearer',
+      VLLM_ENDPOINT: 'https://gpu.example.com/llm',
+      TEI_EMBED_HOST: 'https://vendor-tei.example.com'
+    });
+    axios.post.mockResolvedValue({ data: { data: [[0.1, 0.2]] } });
+    await service.teiEmbed(['probe query']);
+    expect(axios.post.mock.calls[0][2].headers.Authorization).toBe('Bearer hf-explicit');
+  });
+
+  it('no explicit credential + a FOREIGN TEI host → NO Authorization header at all', async () => {
+    // The old chain fell through to the GPU bearer for exactly this shape —
+    // an operator-pointed third-party TEI silently received VLLM_API_KEY.
+    const { axios, service } = freshSvc({
+      VLLM_API_KEY: 'gpu-bearer',
+      VLLM_ENDPOINT: 'https://gpu.example.com/llm',
+      TEI_EMBED_HOST: 'https://vendor-tei.example.com'
+    });
+    axios.post.mockResolvedValue({ data: { data: [[0.1, 0.2]] } });
+    await service.teiEmbed(['probe query']);
+    expect(axios.post.mock.calls[0][2].headers.Authorization).toBeUndefined();
+  });
+
+  it('no explicit credential + the deployment-host TEI → the deployment bearer IS sent (shared gateway)', async () => {
+    const { axios, service } = freshSvc({
+      VLLM_API_KEY: 'gpu-bearer',
+      VLLM_ENDPOINT: 'https://gpu.example.com/llm',
+      TEI_EMBED_HOST: 'https://gpu.example.com/embed'
+    });
+    axios.post.mockResolvedValue({ data: { data: [[0.1, 0.2]] } });
+    await service.teiEmbed(['probe query']);
+    expect(axios.post.mock.calls[0][2].headers.Authorization).toBe('Bearer gpu-bearer');
+  });
 });
 
 describe('vllmChatCompletions — which judge an explicit env request actually names', () => {

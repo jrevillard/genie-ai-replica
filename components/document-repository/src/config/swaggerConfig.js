@@ -10,8 +10,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3001',
-        description: 'Development server'
+        // Relative base: swagger-ui resolves it against the origin the docs
+        // are served from, so Try-it-out never targets the browsing user's
+        // own machine (the hardcoded localhost default did).
+        url: '/',
+        description: 'Same-origin server'
       }
     ],
     components: {

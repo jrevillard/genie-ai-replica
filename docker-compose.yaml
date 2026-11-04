@@ -790,6 +790,10 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_USER=${ARANGO_USER:-root}
+      # Absolute base of the public API, used by the OpenAPI spec's server
+      # entry (external tooling). Unset = the spec carries a relative server
+      # URL, which swagger-ui resolves against the page origin.
+      - API_URL=${API_URL:-}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth

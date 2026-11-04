@@ -74,7 +74,12 @@ time guessing what is wrong.
 
 - The OpenAPI JSON (`GET /api-docs.json`) — a programmatic copy of all the
   schemas below, refreshed on every BFF restart. Useful for client code
-  generation and contract tests.
+  generation and contract tests. Its `servers[0].url` is **relative** (`/`)
+  by default: the base comes from wherever you fetch the spec, and Swagger
+  UI's Try-it-out therefore targets the origin the docs page is served from
+  (same-origin, in dev and behind the gateway). Set the backend's `API_URL`
+  (root `env` template, section 6) to publish an absolute base instead — no
+  `/api` suffix, the paths already carry it.
 
 ## Verify your setup
 

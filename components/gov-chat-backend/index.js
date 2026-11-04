@@ -960,7 +960,10 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+      // Path only: the public base is nginx's, which this process does not
+      // know — a localhost URL in the logs is unreachable in every deployed
+      // topology (only nginx 80/443 is exposed).
+      logger.info('API Documentation available at: /api-docs');
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)
     if (typeof server.setTimeout === 'function') {

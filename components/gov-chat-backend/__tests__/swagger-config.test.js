@@ -379,7 +379,15 @@ describe('Swagger Configuration', () => {
         // served from — same-origin in dev AND behind the gateway, so no
         // mixed-content or CSP connect-src failure on https deployments.
         expect(url).toBe('/');
-        expect(url).not.toMatch(/\/api\/?$/);
+      });
+    });
+
+    it('the server entry is labelled after what it points at, not as a dev server', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].description).toBe('Same-origin server');
+      });
+      withApiUrl('https://gov.example.com', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].description).toBe('Configured API base');
       });
     });
 

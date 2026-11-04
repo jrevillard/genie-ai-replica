@@ -24,9 +24,10 @@ module.exports = {
       // absolute localhost default targets the browser's own machine in
       // every deployed topology (only nginx 80/443 is exposed) and is
       // blocked twice more on https (mixed content + CSP connect-src).
-      // Set API_URL to pin an absolute base for external tooling.
+      // Set API_URL (backend container environment) to pin an absolute
+      // base for external tooling.
       url: process.env.API_URL || '/',
-      description: 'Development server'
+      description: process.env.API_URL ? 'Configured API base' : 'Same-origin server'
     }
   ],
   components: {

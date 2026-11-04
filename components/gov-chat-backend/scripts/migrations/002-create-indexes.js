@@ -27,6 +27,13 @@ module.exports = {
         sparse: true,
         name: 'idx_users_email'
       },
+      {
+        collection: 'users',
+        type: 'persistent',
+        fields: ['erased_key'],
+        unique: false,
+        name: 'idx_users_erased_key'
+      },
 
       // sessions
       {

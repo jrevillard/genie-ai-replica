@@ -230,14 +230,10 @@ const keycloakProxyService = {
             FILTER u._key == ${userKey}
             UPDATE u WITH {
               deleted: true,
-              // Erasure tombstone: the SHA-256 digest of iss_sub, computed before
-              // that field is nulled below. The provisioning UPSERT is keyed on
-              // iss_sub, which this erasure nulls — without the tombstone, a
-              // still-valid access token would re-INSERT the erased identity on
-              // the next provision cycle. The digest is pseudonymous: it cannot
-              // be reversed to the subject it was derived from, and it is
-              // retained solely so user-provisioning-service can recognize and
-              // refuse the erased subject at provisioning time.
+              // Tombstone digest — contract: shared/lib/erasure-tombstone.js.
+              // Written BEFORE iss_sub is nulled below, so provisioning can
+              // recognize and refuse the erased subject instead of re-INSERTing
+              // it from the still-valid token.
               erased_key: ${erasedKey},
               erasedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW()),

@@ -53,15 +53,17 @@ const userProvisioningService = {
   async initialize() {
     if (_initialized) return;
     _initialized = true;
-    // Erasure tombstone lookup index. Sparse: only erased documents carry
-    // erased_key, so live-user provisioning never touches the index tree.
-    // Ensured here (idempotent, boot-time) rather than only in the migration
-    // script so existing deployments pick it up without an ops step.
+    // Erasure tombstone lookup index. NOT sparse: the optimizer cannot prove
+    // a bound equality value is non-null, so a sparse index may be skipped and
+    // the lookup degrade to a full scan — a persistent index already excludes
+    // documents lacking the field. Ensured here (idempotent, boot-time) rather
+    // than only in the migration script so existing deployments pick it up
+    // without an ops step.
     const db = await dbService.getConnection('default');
     await db.collection('users').ensureIndex({
       type: 'persistent',
       fields: ['erased_key'],
-      sparse: true,
+      unique: false,
       name: 'idx_users_erased_key'
     });
     logger.info('[UserProvisioning] Schema initialization complete');
@@ -113,17 +115,12 @@ const userProvisioningService = {
 
     const now = new Date().toISOString();
 
-    // Erasure tombstone check — MUST run before the UPSERT. The GDPR erasure
-    // (keycloak-proxy-service.deleteUser) nulls iss_sub on the user document, so
-    // the UPSERT below (keyed on iss_sub) would find nothing and INSERT a fresh
-    // document from the still-valid token claims, resurrecting the erased
-    // identity. The erasure path leaves behind a pseudonymous marker —
-    // erased_key, the SHA-256 digest of iss_sub written before the nulling —
-    // which is retained for the sole purpose of recognizing (and refusing) the
-    // erased subject at provisioning time. The digest is bound from here (not
-    // computed in AQL) so the sparse index on erased_key serves the lookup. The
-    // erased document is returned as-is (deleted: true) — the middleware answers
-    // 403 for deleted users.
+    // Erasure tombstone check — MUST run before the UPSERT: the GDPR erasure
+    // nulls iss_sub (the UPSERT key), so without this check the still-valid
+    // token would re-INSERT the erased identity. Contract: erasure-tombstone.js.
+    // The digest is bound from here (not computed in AQL) so the sparse index
+    // on erased_key serves the lookup. The erased document is returned as-is
+    // (deleted: true) — the middleware answers 403 for deleted users.
     const erasedKey = erasureTombstoneKey(issSub);
     const erasedCursor = await db.query(
       aql`
@@ -177,7 +174,7 @@ const userProvisioningService = {
           `
         );
         // Invalidate any cache for this iss_sub to force fresh read after migration
-        _cache.delete(issSub);
+        this.invalidateCache(issSub);
       }
     }
 
@@ -267,7 +264,7 @@ const userProvisioningService = {
    */
   async markUserAsDeleted(issSub) {
     // Invalidate cache so next request re-provisions (and hits deleted check)
-    _cache.delete(issSub);
+    this.invalidateCache(issSub);
 
     const db = await dbService.getConnection('default');
     const now = new Date().toISOString();

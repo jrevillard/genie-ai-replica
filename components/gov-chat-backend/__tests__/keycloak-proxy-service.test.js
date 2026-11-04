@@ -33,7 +33,7 @@ jest.mock(
     dbService: {
       getConnection: jest.fn()
     },
-    erasureTombstoneKey: (issSub) => require('crypto').createHash('sha256').update(issSub).digest('hex')
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
   }),
   { virtual: true }
 );

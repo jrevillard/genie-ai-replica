@@ -60,6 +60,8 @@ Each step follows this format:
 | `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
 | `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
+| `$KC_EMAIL` | `testuser`'s address as the venue's Keycloak account holds it — captured in M.1/M.2, reused by the Phase N recreates | Phase M |
+| `$ORIGINAL_EMAIL` | Address captured before the M.4 email change; restored by M.5 | Phase M |
 
 ### Resolving test accounts
 

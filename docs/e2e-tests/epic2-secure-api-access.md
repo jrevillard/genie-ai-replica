@@ -84,20 +84,16 @@ fi
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
-# First, find the user's _key from their own profile — resolve the account by
-# username, never by email: the venue-fixture contract never rewrites a fixture
-# account's email, so a venue provisioned before the fixtures module keeps the
-# original address and an email lookup finds nothing
-USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
-# Fail loudly here — a silent "null" would surface far from the cause
-[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
-
-# Make authenticated request to the user profile endpoint
-curl -sk -X GET "https://localhost/api/me" \
+# One authenticated profile request provides the log entry under test and
+# yields the _key — resolve via /api/me, never by email (see README
+# "Resolving test accounts")
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -o /dev/null -w "%{http_code}" | grep -qx 200 || { echo "FATAL: profile request did not answer 200"; exit 1; }
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
 # Verify this request resolved the ArangoDB _key — the profile-retrieval log
 # entry carries the userKey (no output is a failure; the quoted field makes
@@ -184,9 +180,8 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
-# Look up the user's _key from their own profile (email-keyed admin searches
-# are not used: the search endpoint keys on term/field, and the account is
-# already resolved by the username the token carries)
+# Resolve the _key from the user's own profile — see README
+# "Resolving test accounts" (never key an account by email)
 USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
 # Fail loudly here — a silent "null" would surface far from the cause
@@ -374,29 +369,29 @@ USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/op
 
 # Look up user keys from each user's own profile (each realm provisions its
 # own ArangoDB user, so the _key differs per realm)
-GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
-# Fail loudly here — a silent "null" would surface far from the cause
-[ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
-GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER2_TOKEN" | jq -r '._key')
-[ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
-# The whole point of the test: distinct realms must resolve distinct ArangoDB docs
-[ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }
-
-# Make request with genie realm token and check logs
-curl -sk -X GET "https://localhost/api/me" \
+# Per realm: one profile request provides the log entry under test and yields
+# the _key — resolve via /api/me, never by email (see README "Resolving test
+# accounts")
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
-  -o /dev/null -w "%{http_code}" | grep -qx 200 || { echo "FATAL: genie realm profile request failed"; exit 1; }
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
 docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE_USER_KEY\""
 # Expected: the recent profile-retrieval entries include the genie-realm-user's _key (no output = failure)
 
-# Make request with genie2 realm token and check logs
-curl -sk -X GET "https://localhost/api/me" \
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN" \
-  -o /dev/null -w "%{http_code}" | grep -qx 200 || { echo "FATAL: genie2 realm profile request failed"; exit 1; }
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie2 realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
 docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE2_USER_KEY\""
 # Expected: the recent profile-retrieval entries include the genie2-realm-user's _key (distinct from genie)
+
+# The whole point of the test: distinct realms must resolve distinct ArangoDB docs
+[ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }
 ```
 
 > **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.

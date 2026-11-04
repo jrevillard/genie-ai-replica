@@ -3127,7 +3127,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     'package-lock.json',
     'docker-compose.yaml',
     'env',
-    'tests/e2e/provision-admin-fixtures.js',
+    'tests/e2e/provision-e2e-fixtures.js',
     'configs/keycloak/**/*',
     'configs/otel/otel-collector-config.yaml'
   ];
@@ -3345,22 +3345,26 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // assertion, silently turning the authz spec's 403 half into an
     // admin session.
     expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
-    // The Phase 0 doc's manual create payload must agree with the
-    // fixture credentials — convergeUser deliberately never rewrites
-    // the email, and it resets the password on the already-exists path,
-    // so a divergence here would ride forever unnoticed (the §0.8 ROPC
-    // verification would fail for the next operator with no guard).
-    const cleanStart = fs.readFileSync(path.join(ROOT, 'docs/e2e-tests/00-clean-start.md'), 'utf-8');
+    // The shell docs' manual payloads must agree with the fixture
+    // credentials — convergeUser deliberately never rewrites the email,
+    // and it resets the password on the already-exists path, so a
+    // divergence would ride forever unnoticed: the documented ROPC
+    // verification in ANY phase doc would fail for the next operator
+    // with no guard.
     const testuser = E2E_FIXTURES.find((f) => f.username === 'testuser');
-    if (!cleanStart.includes(`"email": "${testuser.email}"`)) {
-      throw new Error(
-        `00-clean-start.md §0.8 creates testuser with an address that no longer matches the fixture (${testuser.email})`
-      );
-    }
-    if (!cleanStart.includes(testuser.password)) {
-      throw new Error(
-        '00-clean-start.md §0.8 no longer uses the testuser fixture password — the documented ROPC verification would fail against the converged account'
-      );
+    const docChecks = [
+      ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
+      ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
+      ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+    ];
+    for (const [doc, expected] of docChecks) {
+      const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
+      if (!source.includes(expected)) {
+        throw new Error(
+          `${doc} no longer carries the testuser fixture credential — its documented ROPC verification would fail against the converged account`
+        );
+      }
     }
     // No venue-fixture password literal may reappear beside or after the
     // fixtures module: every helper and spec directory under tests/e2e/
@@ -3373,18 +3377,9 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const assertNoFixturePassword = (label, source) => {
       for (const password of fixturePasswords) {
         if (source.includes(password)) {
-          throw new Error(`${label} carries the fixture password ${password} — derive it from the fixtures module`);
-        }
-      }
-    };
-    const walkJs = (dir, label, skipPaths) => {
-      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        const entryPath = path.join(dir, name.name);
-        if (skipPaths && skipPaths.has(entryPath)) continue;
-        if (name.isDirectory()) {
-          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
-        } else if (name.name.endsWith('.js')) {
-          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
+          throw new Error(
+            `${label} carries a fixture password literal (rotation ${fixturePasswords.indexOf(password) + 1} of ${fixturePasswords.length}) — derive it from the fixtures module`
+          );
         }
       }
     };
@@ -3398,15 +3393,18 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'fixtures'), // upload seed files
       path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
     ]);
-    for (const name of fs.readdirSync(e2eRoot, { withFileTypes: true })) {
-      const entryPath = path.join(e2eRoot, name.name);
-      if (exclusions.has(entryPath)) continue;
-      if (name.isDirectory()) {
-        walkJs(entryPath, name.name, exclusions);
-      } else if (name.name.endsWith('.js')) {
-        assertNoFixturePassword(name.name, fs.readFileSync(entryPath, 'utf-8'));
+    const walkJs = (dir, label, skipPaths) => {
+      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, name.name);
+        if (skipPaths && skipPaths.has(entryPath)) continue;
+        if (name.isDirectory()) {
+          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
+        } else if (name.name.endsWith('.js')) {
+          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
+        }
       }
-    }
+    };
+    walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
   });
 });
 

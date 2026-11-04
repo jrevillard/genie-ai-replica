@@ -30,7 +30,9 @@ function request(method, path, options = {}) {
 
     const req = https.request(reqOptions, (res) => {
       let body = '';
-      res.on('data', (chunk) => { body += chunk; });
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
       res.on('end', () => {
         // A non-JSON body is a broken endpoint, not a usable value: resolve
         // with the raw text and the caller's status guard would report a
@@ -44,11 +46,17 @@ function request(method, path, options = {}) {
         try {
           resolve({ status: res.statusCode, data: JSON.parse(body) });
         } catch {
-          reject(
-            new Error(
-              `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
-            )
+          const error = new Error(
+            `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
           );
+          // The endpoint answered — it just did not answer with JSON. The
+          // status travels with the error: the retry verdict follows the
+          // server's state (a 5xx is an outage a retry may survive), not
+          // the content type. A rejection without a status is a transport
+          // failure.
+          error.nonJsonBody = true;
+          error.status = res.statusCode;
+          reject(error);
         }
       });
     });
@@ -103,8 +111,7 @@ async function getAdminToken(adminPassword) {
 
 // Remediation hint shared by the two getUserToken guards below.
 const ROPC_REALM_HINT =
-  'pass { realm: <test-realm> } for a test-only realm provisioned with ' +
-  'enableDirectAccessGrants';
+  'pass { realm: <test-realm> } for a test-only realm provisioned with ' + 'enableDirectAccessGrants';
 
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).

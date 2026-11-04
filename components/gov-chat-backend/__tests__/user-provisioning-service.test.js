@@ -68,6 +68,7 @@ describe('userProvisioningService', () => {
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
         name: 'Test User',
+        emailVerified: false,
         roles: ['user', 'admin'],
         active: true,
         deleted: false,
@@ -121,6 +122,38 @@ describe('userProvisioningService', () => {
       const updateDoc = upsertValues[2]; // 3rd interpolated value
       expect(updateDoc).toBeDefined();
       expect(updateDoc.createdAt).toBeUndefined();
+    });
+
+    it('should write sub in both the INSERT and UPDATE docs unconditionally', async () => {
+      // The UPDATE doc is built solely from the decoded JWT — the stored doc
+      // does not influence it, so the write is unconditional (idempotent —
+      // the iss_sub match guarantees identity). The sub-less fixture stands
+      // for a doc that had lost (or never gained) the field.
+      const existingUserWithoutSub = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        email: 'updated@example.com',
+        name: 'Updated Name',
+        roles: ['user'],
+        active: true,
+        deleted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z'
+      };
+      mockCursor.next.mockResolvedValue({ new: existingUserWithoutSub, old: { _key: 'users/789' } });
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
+      };
+
+      await userProvisioningService.provisionUser(decoded);
+
+      const upsertCall = mockQuery.mock.calls[3][0];
+      expect(upsertCall.values[1].sub).toBe(mockJwtPayload.sub); // INSERT doc
+      const updateDoc = upsertCall.values[2]; // 3rd interpolated value
+      expect(updateDoc.sub).toBe(mockJwtPayload.sub);
     });
 
     it('should preserve custom fields (personalIdentification, theme) during UPSERT on re-login', async () => {
@@ -453,7 +486,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[2][0]; // no email → no legacy lookup
       expect(upsertCall.values[1].email).toBeNull(); // newDoc
       expect(upsertCall.values[1].name).toBeNull(); // newDoc
       expect(upsertCall.values[1].roles).toEqual([]); // newDoc
@@ -490,7 +523,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[2][0]; // no email → no legacy lookup
       expect(upsertCall.values[1].roles).toEqual([]); // newDoc
       expect(upsertCall.values[2].roles).toEqual([]); // updateDoc
     });

@@ -9,9 +9,12 @@ const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
  * Creates or updates a user record in ArangoDB on each successful
  * Keycloak authentication. Uses atomic UPSERT to prevent duplicates.
  *
- * An in-memory cache avoids hitting ArangoDB on every authenticated request.
- * The cache TTL is short (60s) so profile changes from Keycloak propagate
- * within a minute without repeated DB writes on every API call.
+ * An in-memory cache avoids re-running the UPSERT write on every
+ * authenticated request. A cache hit is revalidated before it is served:
+ * the JWT claims are compared against the cached profile (a Keycloak
+ * profile change must land on the next request, not within the TTL) and
+ * one indexed read detects an out-of-band soft-delete of the underlying
+ * document (reactivation must never be served from a stale copy).
  */
 
 /** In-memory cache: iss_sub → { user, expiresAt } */
@@ -28,6 +31,123 @@ let _cacheEpoch = 0;
 
 /** In-flight locks: iss_sub → Promise — prevents concurrent upserts for the same user */
 const _locks = new Map();
+
+/**
+ * Memoized connection proxy for the per-request revalidation read.
+ * dbService.getConnection re-runs a health-check query on every call;
+ * the returned proxy is self-healing, so it is held here instead —
+ * the hot path then costs exactly one query per revalidation.
+ */
+let _dbPromise = null;
+let _lastRevalWarnAt = 0;
+
+function getDb() {
+  if (!_dbPromise) {
+    _dbPromise = dbService.getConnection('default').catch((err) => {
+      _dbPromise = null; // allow the next call to retry
+      throw err;
+    });
+  }
+  return _dbPromise;
+}
+
+/**
+ * Profile fields the UPSERT derives from the JWT claims.
+ */
+function profileFromToken(decodedToken) {
+  return {
+    email: decodedToken.email || null,
+    name: decodedToken.name || decodedToken.preferred_username || null,
+    emailVerified: decodedToken.email_verified || false,
+    roles: decodedToken.realm_access?.roles || []
+  };
+}
+
+/**
+ * Whether the cached user document still matches the token's claims.
+ * A mismatch means Keycloak state changed out-of-band after the copy
+ * was cached. Roles are compared order-insensitively (their order in
+ * the token is not contractually stable) and exactly (no multiset
+ * collapses).
+ */
+function profileMatches(cachedUser, decodedToken) {
+  const expected = profileFromToken(decodedToken);
+  const cachedRoles = cachedUser.roles || [];
+  const sortedExpected = [...expected.roles].sort();
+  const sortedCached = [...cachedRoles].sort();
+  return (
+    expected.email === cachedUser.email &&
+    expected.name === cachedUser.name &&
+    expected.emailVerified === cachedUser.emailVerified &&
+    sortedExpected.length === sortedCached.length &&
+    sortedExpected.every((role, index) => role === sortedCached[index])
+  );
+}
+
+/** Bound on how long the per-request revalidation may delay a cache hit. */
+const REVALIDATION_TIMEOUT_MS = 3000;
+
+/**
+ * Warn about a revalidation fail-open, at most once per TTL window so a
+ * degraded database does not put a warn line on every authenticated request.
+ */
+function warnRevalidationThrottled(message) {
+  if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
+    _lastRevalWarnAt = Date.now();
+    logger.warn(`[UserProvisioning] Soft-delete revalidation ${message}`);
+  }
+}
+
+/**
+ * Whether the document a cached copy points at has been soft-deleted
+ * out-of-band. Looked up by the cached document's _key (which survives a
+ * GDPR erasure) but matches only in-place soft-deletes: an erasure nulls
+ * iss_sub, and re-provisioning an erased identity would re-materialize
+ * the erasure, so the cached copy is served for it. On a failure — or a
+ * revalidation (connection + query) that outlives REVALIDATION_TIMEOUT_MS —
+ * the cached copy is served: a cache hit previously required no DB access
+ * at all, and the entry expires with the TTL anyway.
+ */
+async function isSoftDeleted(cachedUser) {
+  let timer;
+  // Distinct from the boolean outcomes so a deadline win is never confused
+  // with a "not deleted" answer
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve('deadline'), REVALIDATION_TIMEOUT_MS);
+  });
+  try {
+    const work = (async () => {
+      const db = await getDb();
+      const cursor = await db.query(aql`
+        FOR u IN users
+          FILTER u._key == ${cachedUser._key} AND u.deleted == true AND u.iss_sub != null
+          LIMIT 1
+          RETURN u._key
+      `);
+      // arangojs resolves an exhausted cursor's next() with undefined, not
+      // null — a truthy check is what the driver contract wants
+      return !!(await cursor.next());
+    })();
+    const outcome = await Promise.race([work, deadline]);
+    if (outcome === 'deadline') {
+      // A DB consistently slower than the deadline fail-opens here; say so
+      // (rate-limited like the failure path) so the latency and the stale
+      // copies are traceable in the logs
+      warnRevalidationThrottled(
+        `timed out after ${REVALIDATION_TIMEOUT_MS}ms, serving cached copy for user document ${cachedUser._key}`
+      );
+      return false;
+    }
+    return outcome;
+  } catch (err) {
+    // Fail open (bounded by the TTL) — but warn at most once per TTL so a
+    // DB outage does not put a warn line on every authenticated request
+    warnRevalidationThrottled(`failed, serving cached copy for user document ${cachedUser._key}: ${err.message}`);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Evict expired entries from the provisioning cache.
@@ -66,6 +186,8 @@ const userProvisioningService = {
   _reset() {
     _cache.clear();
     _locks.clear();
+    _dbPromise = null;
+    _lastRevalWarnAt = 0;
     _initialized = false;
     _cacheEpoch = 0;
   },
@@ -123,25 +245,42 @@ const userProvisioningService = {
       `[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`
     );
 
-    // Check cache first — avoids ArangoDB round-trip on every request
+    // Check cache first — a valid hit is revalidated before it is served so
+    // out-of-band state changes are not masked by the TTL
     evictExpired();
     const cached = _cache.get(issSub);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.user;
+      if (cached.user && cached.user.deleted === true) {
+        // Erasure tombstone refusal — never re-provisioned, and the claims
+        // check is irrelevant: the identity does not exist anymore
+        return cached.user;
+      }
+      if (!profileMatches(cached.user, decodedToken)) {
+        // Keycloak claims changed since the copy was cached — re-provision
+        _cache.delete(issSub);
+      } else if (await isSoftDeleted(cached.user)) {
+        // The underlying document was soft-deleted out-of-band — fall
+        // through to the full UPSERT (reactivation)
+        _cache.delete(issSub);
+      } else {
+        return cached.user;
+      }
     }
 
-    // An eviction while a provision is in flight (e.g. the GDPR erasure
-    // committing) means any result computed before it is stale: the awaiting
-    // caller is re-provisioned so it observes post-eviction state instead of
-    // the pre-erasure profile.
     const epochAtEntry = _cacheEpoch;
 
-    // Staleness gate shared by both paths: if an eviction happened while the
-    // provision ran, the result predates it (e.g. the GDPR erasure committed)
-    // — re-provision through provisionUser so the retry re-enters the lock
-    // machinery instead of racing another stale waiter.
-    const finishOrReprovision = (user) => {
-      if (_cacheEpoch !== epochAtEntry) {
+    // Staleness gates. The own-provision result was just written from this
+    // token's claims, so only an eviction (e.g. the GDPR erasure committing
+    // mid-flight) can make it stale. A lock-waiter serves ANOTHER request's
+    // result, so its claims freshness must be checked too. A refusal result
+    // (the erasure tombstone's deleted document) is served as-is — it never
+    // matches the claims, and re-provisioning it would loop forever. Either
+    // stale shape re-provisions through provisionUser so the retry re-enters
+    // the lock machinery instead of racing another stale waiter.
+    const finishOrReprovision = (user, checkClaims) => {
+      const isRefusal = user && user.deleted === true;
+      const stale = checkClaims && !profileMatches(user, decodedToken);
+      if (!isRefusal && (_cacheEpoch !== epochAtEntry || stale)) {
         return this.provisionUser(decodedToken);
       }
       return user;
@@ -150,7 +289,7 @@ const userProvisioningService = {
     // If a provisioning is already in-flight for this user, wait for it
     const inFlight = _locks.get(issSub);
     if (inFlight) {
-      return finishOrReprovision(await inFlight);
+      return finishOrReprovision(await inFlight, true);
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result
@@ -158,7 +297,7 @@ const userProvisioningService = {
       _locks.delete(issSub);
     });
     _locks.set(issSub, provisionPromise);
-    return finishOrReprovision(await provisionPromise);
+    return finishOrReprovision(await provisionPromise, false);
   },
 
   /**
@@ -193,15 +332,19 @@ const userProvisioningService = {
       return erasedUser;
     }
 
+    // Derive the profile fields from the single claims→profile mapping —
+    // the same one profileMatches compares against, so a new profile field
+    // cannot be written by the UPSERT while escaping cache revalidation
+    const profile = profileFromToken(decodedToken);
+
     // Migrate legacy user: if a user without iss_sub shares the same email,
     // update it with iss_sub so the UPSERT below finds and updates it
     // instead of inserting a duplicate.
-    const email = decodedToken.email || null;
-    if (email) {
+    if (profile.email) {
       const legacyCursor = await db.query(
         aql`
           FOR u IN users
-            FILTER u.email == ${email} AND u.iss_sub == null
+            FILTER u.email == ${profile.email} AND u.iss_sub == null
             RETURN u
         `
       );
@@ -216,9 +359,9 @@ const userProvisioningService = {
                 iss_sub: ${issSub},
                 iss: ${decodedToken.iss},
                 sub: ${decodedToken.sub},
-                name: ${decodedToken.name || decodedToken.preferred_username || legacyUser.name || null},
-                emailVerified: ${decodedToken.email_verified || false},
-                roles: ${decodedToken.realm_access?.roles || []},
+                name: ${profile.name || legacyUser.name || null},
+                emailVerified: ${profile.emailVerified},
+                roles: ${profile.roles},
                 active: true,
                 deleted: false,
                 deletedAt: null,
@@ -252,10 +395,7 @@ const userProvisioningService = {
       iss_sub: issSub,
       iss: decodedToken.iss,
       sub: decodedToken.sub,
-      email: decodedToken.email || null,
-      name: decodedToken.name || decodedToken.preferred_username || null,
-      emailVerified: decodedToken.email_verified || false,
-      roles: decodedToken.realm_access?.roles || [],
+      ...profile,
       active: true,
       deleted: false,
       createdAt: now,
@@ -263,10 +403,8 @@ const userProvisioningService = {
     };
 
     const updateDoc = {
-      email: decodedToken.email || null,
-      name: decodedToken.name || decodedToken.preferred_username || null,
-      emailVerified: decodedToken.email_verified || false,
-      roles: decodedToken.realm_access?.roles || [],
+      ...profile,
+      sub: decodedToken.sub,
       updatedAt: now,
       ...(isReactivation ? { deleted: false, deletedAt: null, active: true } : {})
     };

@@ -439,6 +439,27 @@ describe('ci shell gate: bash -n', () => {
     }
   });
 
+  test('the bash -n spawn pins a C locale so the stderr parsing is locale-independent', () => {
+    // The gate regex-parses bash's English stderr (the `line (\d+)` mapping
+    // and the forwarded message, #1423). Dropping the pin keeps every test
+    // here green on the CI's C-locale image — it only re-breaks localized
+    // dev hosts — so the pin itself is asserted, not inferred.
+    const spy = jest.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
+      status: 0,
+      signal: null,
+      stderr: '',
+      stdout: ''
+    });
+    try {
+      checkShellSyntax([{ owner: 'j', key: 'script', startLine: 1, text: 'echo hi' }]);
+      const env = spy.mock.calls[0][2].env;
+      expect(env.LC_ALL).toBe('C');
+      expect(env.LANGUAGE).toBe('');
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
   test('an abnormal bash exit with empty stderr still names the failure', () => {
     jest.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
       status: null,

@@ -389,7 +389,14 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-1' }, old: null }) })
+          .mockResolvedValueOnce({
+            next: jest
+              .fn()
+              .mockResolvedValue({
+                new: { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+                old: null
+              })
+          })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
       // Erase through the proxy — this must evict the entry
@@ -418,7 +425,14 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-fresh' }, old: null }) })
+          .mockResolvedValueOnce({
+            next: jest
+              .fn()
+              .mockResolvedValue({
+                new: { _key: 'user-fresh', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+                old: null
+              })
+          })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
       dbService.getConnection.mockResolvedValueOnce(Promise.resolve(freshDb));
@@ -448,7 +462,14 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-race' }, old: null }) })
+          .mockResolvedValueOnce({
+            next: jest
+              .fn()
+              .mockResolvedValue({
+                new: { _key: 'user-race', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+                old: null
+              })
+          })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
 
       // Cache seeded before the erasure starts

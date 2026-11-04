@@ -20,13 +20,8 @@ block call an unscripted endpoint makes the stub exit 97 — the block captures
 every exit code, so the scenario ends red on a transport verdict naming
 "curl exit 97" (loud either way); drift is caught both ways.
 
-Provenance: during the #1289 cycle this class of scratch harness caught a
-real implementation bug an xhigh-effort code review missed — the curl
-exit-code capture sat inside the command substitution, so the assignment
-vanished into the subshell and every transport failure looked like a clean
-exit. Committed (option 1 of #1337) so the guard semantics stay
-regression-proofed and future review rounds mutate + verify instead of
-eyeballing shell in YAML.
+Provenance: the #1289 cycle story this harness exists for is told once,
+its README (§Why it exists) — kept there, not duplicated here.
 
 Exit codes: 0 = all scenarios pass, 1 = at least one scenario failed.
 """
@@ -335,7 +330,7 @@ def run_scenario(sc, helper, block, workdir):
     shim = os.path.join(workdir, "shim")
     os.makedirs(shim, exist_ok=True)
     for tool, target in (
-        ("curl", os.path.join(HERE, "stub-curl")),
+        ("curl", os.path.join(HERE, "stub_curl.py")),
         ("sleep", "/bin/true"),
     ):
         link = os.path.join(shim, tool)
@@ -399,12 +394,16 @@ def main():
     failed = 0
     with tempfile.TemporaryDirectory(prefix="provisioning-harness-") as workdir:
         for sc in scs:
-            problems, _unused = run_scenario(sc, helper, block, workdir)
+            problems, output = run_scenario(sc, helper, block, workdir)
             if problems:
                 failed += 1
                 print(f"FAIL {sc['name']}")
                 for p in problems:
                     print(f"  - {p}")
+                # The block's own output is the diagnosis: print it under the
+                # problem lines so a red scenario explains itself in place.
+                for line in output.splitlines():
+                    print(f"  | {line}")
             else:
                 print(f"ok   {sc['name']}")
     print(f"{len(scs) - failed}/{len(scs)} scenarios pass")

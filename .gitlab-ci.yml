@@ -499,7 +499,6 @@ workflow:
       CLIENT_ATTEMPTS=0
       TOKEN_FIRST_STATUS=""
       TOKEN_BODY=""
-      TOKEN_REJECT_DETAIL=""
       TOKEN_REJECT_RUN=0
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
@@ -529,7 +528,9 @@ workflow:
             TOKEN_REJECT_DETAIL=$(printf '%s' "$KC_RAW" | sed '$d' \
               | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
           fi
-          if [ "$TOKEN_STATUS" = "401" ] && [ -n "$TOKEN_REJECT_DETAIL" ]; then
+          # DETAIL is reset unconditionally above and assigned only in the
+          # 401 branch — non-empty ⟹ a definitive OAuth rejection answer.
+          if [ -n "$TOKEN_REJECT_DETAIL" ]; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else
             TOKEN_REJECT_RUN=0
@@ -639,11 +640,15 @@ workflow:
       ROPC_LAST_ANSWERED=""
       for i in 1 2 3 4 5; do
         rm -f /tmp/ropc-probe-body.json
-        ROPC_CURL_RC=0
-        ROPC_STATUS=$(curl -sk --connect-timeout 5 --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
-          "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+        # Routed through kc_curl (#1334's one guarded capture path): curl's
+        # last-flag-wins semantics let the probe override the helper's
+        # --max-time, and -o moves the body to the file so the stdout capture
+        # carries only the status trailer.
+        kc_curl POST "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+          -o /tmp/ropc-probe-body.json --max-time 15 \
           -d "client_id=genie-app" -d "grant_type=password" \
-          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials"
+        ROPC_STATUS=$STATUS
         case "$ROPC_STATUS" in
           # Transient statuses retry even with a clean curl exit; any other
           # definitive status with a clean exit classifies immediately, and
@@ -652,10 +657,10 @@ workflow:
           408|425|429) ;;
           [234][0-9][0-9])
             ROPC_LAST_ANSWERED="$ROPC_STATUS"
-            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
+            if [ "$CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
           [56][0-9][0-9]) ROPC_LAST_ANSWERED="$ROPC_STATUS" ;;
         esac
-        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
+        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${CURL_RC})"
         { [ "$i" -lt 5 ] && sleep 5; } || true
       done
       # A truncated 200 token response can land in the body of a transport
@@ -680,7 +685,7 @@ workflow:
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
             ;;
           *)
-            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
             ;;
         esac
         exit 1

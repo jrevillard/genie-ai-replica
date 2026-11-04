@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# PATH shim named `curl`: execs the scenario-driven stub (see stub_curl.py).
-# readlink -f resolves the harness's symlink so the wrapper works from any
-# shim directory.
-exec python3 "$(dirname "$(readlink -f "$0")")/stub_curl.py" "$@"

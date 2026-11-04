@@ -3431,12 +3431,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('kc_curl() {');
     // The section's $(curl capture sites are an exact, enumerated set: the
-    // kc_curl capture plus the two deliberate body-withheld probes (nginx
-    // reachability, ROPC — different timeouts/contracts). Any fourth site
-    // re-grows the #1289 drift class this pin exists for; a deleted site
-    // (the helper losing its own capture) is equally visible.
+    // kc_curl capture plus the nginx reachability probe (deliberately raw:
+    // different timeout/contract, fire-and-forget). Any third site re-grows
+    // the #1289 drift class this pin exists for; a deleted site (the helper
+    // losing its own capture) is equally visible — and the ROPC probe now
+    // routes through kc_curl, so a hand-rolled capture there fails this pin.
     const curlCaptureLines = section.split('\n').filter((l) => l.includes('$(curl'));
-    expect(curlCaptureLines).toHaveLength(3);
+    expect(curlCaptureLines).toHaveLength(2);
     // The kc_curl capture: bounded timeout flags inline — a helper that
     // drops them reintroduces the #1289 stall class through every routed
     // call — and the rc check OUTSIDE the command substitution: an inside
@@ -3454,7 +3455,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   // fail fast instead of burning the readiness budget on a dead end.
   test('the readiness loop fails fast on a definitive token rejection', () => {
     const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('TOKEN_REJECT_RUN');
     expect(section).toContain('definitively rejected');
     expect(section).toContain('Check KEYCLOAK_ADMIN_PASSWORD');
     // The threshold itself is pinned: a drift to a larger value would

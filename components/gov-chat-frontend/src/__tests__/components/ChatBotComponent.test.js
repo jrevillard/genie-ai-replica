@@ -2904,6 +2904,67 @@ describe('ChatBotComponent', () => {
       expect(lastError).toBe('chatbot.loading');
     });
 
+    it('a composer entry with NO title and NO scope refuses too (#1382) — the verdict is placement-independent', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const notificationService = require('../../services/notificationService');
+      notificationService.error.mockClear();
+
+      vm.serviceCategories = [];
+      vm.serviceCategoriesStatus = 'loaded';
+      // The same shape the grid refuses as a dead tile — an id, no
+      // title, no category, no labels, no prompt — routed to the
+      // composer. The old gate covered only scope-declaring entries,
+      // so this one read as just-chat and the typed question left
+      // UNFILTERED while the grid refused itself.
+      vm.quickHelpButtons = [
+        {
+          id: 'bare-entry',
+          service: '',
+          serviceLabels: null,
+          serviceKey: 'bare-entry',
+          category: null,
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+      // The refusal names the missing title, the way the grid card's
+      // caption does — the same face both mounts show.
+      const lastError = notificationService.error.mock.calls.at(-1)[0];
+      expect(lastError).toBe('chatbot.quickHelpTitleMissing');
+    });
+
+    it('a titleless composer entry announces its id as the accessible name (#1382)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.serviceCategories = [];
+      vm.serviceCategoriesStatus = 'loaded';
+      // No title resolves: the accessible name must not be empty —
+      // the id is the string the loader's gate guarantees.
+      vm.quickHelpButtons = [
+        {
+          id: 'bare-entry',
+          service: '',
+          serviceLabels: null,
+          serviceKey: 'bare-entry',
+          category: null,
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      await wrapper.vm.$nextTick();
+
+      const composer = wrapper.findComponent({ name: 'ChatComposer' });
+      expect(composer.exists()).toBe(true);
+      expect(composer.props('accessibleName')).toBe('bare-entry');
+    });
+
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

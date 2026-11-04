@@ -303,13 +303,16 @@
              at the chat-input slot under v-else, so the two positions
              share exactly one composer instance, never two. The leading
              slot carries the entry's chat-bubble icon; the parent
-             gives it the localised title as accessible name. -->
+             gives it the localised title as accessible name, falling
+             back to the id (the loader's gate guarantees it) when no
+             title resolves — an empty accessible name announces
+             nothing. -->
         <div v-if="composerEntry" class="quick-help-composer">
           <ChatComposer
             v-model="newMessage"
             input-id="welcome-composer-input"
             :placeholder="translate('chatbot.composerPlaceholder')"
-            :accessible-name="composerEntry.service"
+            :accessible-name="composerEntry.service || composerEntry.id"
             :tint="composerEntry.styles"
             :show-actions="true"
             :attach-title="translate('chatbot.composerAttachTitle')"
@@ -2070,34 +2073,37 @@ export default {
           // tile path arms the same shape; a gate keyed on scope alone
           // dropped the prompt silently.
           Boolean(entry.hiddenPrompt));
+      // The same card the grid refuses as a dead tile refuses the
+      // composer send too: a BROKEN entry (no title, or a scope the
+      // tree cannot verify) used to fall through to the just-chat
+      // branch here and leave the typed question unfiltered while the
+      // same entry routed to the grid refused itself — a verdict that
+      // depended on placement (#1382). One verdict, both mounts. A
+      // scope the hierarchy cannot EN-name yet stays refused on the
+      // declaring path, as before (#1263).
+      if (
+        entry &&
+        (this.quickHelpCardBroken(entry) ||
+          (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
+      ) {
+        // The caption is computed HERE, on the refusing path only: it
+        // is the tile's own caption assembly (the missing title first,
+        // then the scope), and a healthy entry pays nothing for it.
+        const caption = this.quickHelpCardCaption(entry);
+        // A hierarchy still ON ITS WAY is not a configuration problem:
+        // the unavailable caption would point the operator at the
+        // wrong thing. The loading copy says what is happening — the
+        // CHAT's own copy, not the admin panel's (the toast is read by
+        // the person whose question was held, not by an operator).
+        notificationService.error(
+          caption ||
+            (this.serviceCategoriesStatus === 'loading'
+              ? this.translate('chatbot.loading', '')
+              : this.translate('chatbot.quickHelpScopeUnavailable', ''))
+        );
+        return;
+      }
       if (entryDeclaresScope) {
-        // The composer card renders BEFORE the hierarchy settles (the grid
-        // waits for it), so the same gate selectQuickHelpOption enforces
-        // has to run here too: a broken card, or a scope the tree cannot
-        // EN-name yet, installs nothing and sends nothing — the query
-        // would leave unfiltered while the chip promised the card's scope.
-        // The TITLE gate comes with it (#1263): an entry with no title
-        // installs a chip with a blank label and an empty accessible
-        // name, and the query leaves while the chip promises a scope
-        // nobody can read. The tile path refuses the same card.
-        if (this.quickHelpCardBroken(entry) || !this.quickHelpScopeIsNameable(entry.category)) {
-          // The caption is computed HERE, on the refusing path only: it
-          // is the tile's own caption assembly (the missing title first,
-          // then the scope), and a healthy entry pays nothing for it.
-          const caption = this.quickHelpCardCaption(entry);
-          // A hierarchy still ON ITS WAY is not a configuration problem:
-          // the unavailable caption would point the operator at the
-          // wrong thing. The loading copy says what is happening — the
-          // CHAT's own copy, not the admin panel's (the toast is read by
-          // the person whose question was held, not by an operator).
-          notificationService.error(
-            caption ||
-              (this.serviceCategoriesStatus === 'loading'
-                ? this.translate('chatbot.loading', '')
-                : this.translate('chatbot.quickHelpScopeUnavailable', ''))
-          );
-          return;
-        }
         // The entry's OWN declared labels and category ride along: the
         // entry is a Quick Help card like any tile, and hardcoding an
         // empty scope here sent its query unfiltered while the chip

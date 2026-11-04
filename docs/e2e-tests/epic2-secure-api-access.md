@@ -149,7 +149,7 @@ else
       --header="Content-Type: application/json" \
       --body-data='{"messages":[{"role":"user","content":"ping"}]}' \
       "http://chatqna-xeon-backend-server:8888/v1/chatqna" 2>&1 \
-    | awk '$1 ~ /^HTTP\//{print $2}' | tail -1
+    | awk '$1 ~ /^HTTP\//{print $2}' | tail -1)
   echo "Chatqna without token: HTTP ${HTTP_CODE}"
   [ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 fi

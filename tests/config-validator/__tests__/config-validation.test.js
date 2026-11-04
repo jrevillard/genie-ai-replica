@@ -2692,6 +2692,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
       'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
   });

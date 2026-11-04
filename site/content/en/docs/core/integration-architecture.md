@@ -277,18 +277,15 @@ Raw `arangojs` is reserved for migrations (`scripts/migrations/*.js`).
 
 **Protocol:** TCP (Redis protocol).
 
-**Driver:** `ioredis` v5 (used only by the translation service for caching).
+**Driver:** `ioredis` v5 (the translation cache and the user-provisioning invalidation pub/sub).
 
 **Connection details**
 
 ```javascript
-// services/translation-service.js
-const Redis = require('ioredis');
-const redis = new Redis({
-  host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
-  port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
-  password: process.env.TRANSLATION_CACHE_PASSWORD || null
-});
+// services/redis-cache-client.js — the shared factory every client on this
+// instance uses, so they cannot drift apart
+const { createRedisCacheClient } = require('./redis-cache-client');
+const redis = createRedisCacheClient();
 ```
 
 **Use cases**
@@ -296,6 +293,7 @@ const redis = new Redis({
 | Purpose | Configured by |
 |---|---|
 | Translation cache (Google Cloud / vLLM translations) | `TRANSLATION_CACHE=on`, `TRANSLATION_CACHE_HOST`, `TRANSLATION_CACHE_PORT`, `TRANSLATION_CACHE_PASSWORD` |
+| User-provisioning cache invalidation pub/sub | same `TRANSLATION_CACHE_*` variables |
 
 > **Sessions are NOT in Redis.** `services/session-service.js` stores user
 > sessions in ArangoDB (`sessions` collection). The Redis cache exists only

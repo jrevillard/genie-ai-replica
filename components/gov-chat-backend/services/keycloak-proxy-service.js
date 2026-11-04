@@ -209,6 +209,14 @@ const keycloakProxyService = {
             FILTER u._key == ${userKey}
             UPDATE u WITH {
               deleted: true,
+              // Erasure tombstone: SHA256 of iss_sub computed BEFORE it is nulled
+              // below. The provisioning UPSERT is keyed on iss_sub, which this
+              // erasure nulls — without the tombstone, a still-valid access token
+              // would re-INSERT the erased identity on the next provision cycle.
+              // SHA256(iss_sub) is not personal data and survives the nulling, so
+              // user-provisioning-service._doProvision can recognize and refuse
+              // the erased subject.
+              erased_key: u.iss_sub == null ? null : SHA256(u.iss_sub),
               erasedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW()),
               email: null,

@@ -192,6 +192,27 @@ describe('keycloak-proxy-service', () => {
       expect(updateAql.query).toContain('erasedAt: DATE_ISO8601(DATE_NOW())');
     });
 
+    it('should write the erasure tombstone (erased_key = SHA256 of iss_sub) before nulling it', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1) return Promise.resolve(mockCursor('uuid-abc'));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      const updateAql = capturedAql[1];
+      expect(updateAql.query).toContain('erased_key');
+      expect(updateAql.query).toContain('SHA256');
+    });
+
     it('should UNSET personalIdentification custom PII field', async () => {
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));

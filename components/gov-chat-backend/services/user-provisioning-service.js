@@ -102,6 +102,28 @@ const userProvisioningService = {
 
     const now = new Date().toISOString();
 
+    // Erasure tombstone check — MUST run before the UPSERT. The GDPR erasure
+    // (keycloak-proxy-service.deleteUser) nulls iss_sub on the user document, so
+    // the UPSERT below (keyed on iss_sub) would find nothing and INSERT a fresh
+    // document from the still-valid token claims, resurrecting the erased
+    // identity. The erasure path writes erased_key = SHA256(iss_sub) before
+    // nulling it; the hash is not personal data, so it survives the erasure and
+    // lets us recognize the erased subject here. The erased document is returned
+    // as-is (deleted: true) — the middleware answers 403 for deleted users.
+    const erasedCursor = await db.query(
+      aql`
+        FOR u IN users
+          FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == SHA256(${issSub})
+          RETURN u
+      `
+    );
+    const erasedUser = await erasedCursor.next();
+    if (erasedUser) {
+      logger.info(`[UserProvisioning] Blocked re-provisioning of erased user ${issSub}`);
+      _cache.set(issSub, { user: erasedUser, expiresAt: Date.now() + CACHE_TTL_MS });
+      return erasedUser;
+    }
+
     // Migrate legacy user: if a user without iss_sub shares the same email,
     // update it with iss_sub so the UPSERT below finds and updates it
     // instead of inserting a duplicate.

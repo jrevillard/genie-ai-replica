@@ -65,7 +65,9 @@ describe('UserProvisioningService', () => {
     it('should return cached user when cache is valid', async () => {
       const cachedUser = { _key: 'user-1', email: 'test@test.com' };
 
-      mockDb.query.mockResolvedValue(createMockCursor([{ new: cachedUser, old: null }]));
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup — miss
+        .mockResolvedValue(createMockCursor([{ new: cachedUser, old: null }])); // rest of provision
 
       const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
       const result1 = await userProvisioningService.provisionUser(token);
@@ -85,15 +87,19 @@ describe('UserProvisioningService', () => {
       const queryCount = { count: 0 };
       let firstCallResolve;
 
-      mockDb.query.mockImplementation(async () => {
+      mockDb.query.mockImplementation(async (aqlObj) => {
         queryCount.count++;
-        // Only block the first call (legacy lookup)
+        // Only block the first call (tombstone lookup) to keep the provision in-flight
         if (queryCount.count === 1) {
           await new Promise((r) => {
             firstCallResolve = r;
           });
         }
-        return createMockCursor([{ new: cachedUser, old: null }]);
+        // Route by query contract: tombstone miss, lookup misses, UPSERT returns the user
+        const q = aqlObj.strings.join('');
+        if (q.includes('erased_key')) return createMockCursor([]); // tombstone — miss
+        if (q.includes('UPSERT')) return createMockCursor([{ new: cachedUser, old: null }]);
+        return createMockCursor([]); // legacy lookup / deleted check — miss
       });
 
       const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub', email: 'test@test.com' };
@@ -139,8 +145,9 @@ describe('UserProvisioningService', () => {
       const legacyUser = { _key: 'user-legacy', email: 'old@test.com', iss_sub: null, name: 'Legacy Name' };
       const newUser = { _key: 'user-new', email: 'old@test.com', iss_sub: 'iss/sub-1' };
 
-      // Queries: legacy lookup → migration update → deleted check → upsert
+      // Queries: tombstone lookup → legacy lookup → migration update → deleted check → upsert
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([legacyUser])) // legacy email lookup
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(null) }) // migration UPDATE (no cursor needed)
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
@@ -155,12 +162,13 @@ describe('UserProvisioningService', () => {
       };
       const result = await userProvisioningService.provisionUser(token);
       expect(result._key).toBe('user-new');
-      expect(mockDb.query).toHaveBeenCalledTimes(4);
+      expect(mockDb.query).toHaveBeenCalledTimes(5);
     });
 
     it('should skip legacy migration when no email', async () => {
       const newUser = { _key: 'user-1', email: null };
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
 
@@ -171,12 +179,13 @@ describe('UserProvisioningService', () => {
       };
       const result = await userProvisioningService.provisionUser(token);
       expect(result._key).toBe('user-1');
-      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      expect(mockDb.query).toHaveBeenCalledTimes(3);
     });
 
     it('should handle no legacy user found', async () => {
       const newUser = { _key: 'user-1', email: 'test@test.com' };
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup (no match)
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
@@ -192,12 +201,74 @@ describe('UserProvisioningService', () => {
     });
   });
 
+  describe('_doProvision - erasure tombstone', () => {
+    // The GDPR erasure (keycloak-proxy-service.deleteUser) nulls iss_sub, email,
+    // name, sub and iss on the user document and writes erased_key = SHA256(iss_sub)
+    // as a tombstone. Provisioning must recognize the erased subject through the
+    // tombstone and never INSERT a fresh document from the still-valid token claims.
+    const erasedDoc = {
+      _key: 'user-erased',
+      deleted: true,
+      erasedAt: '2026-11-04T00:00:00.000Z',
+      email: null,
+      iss_sub: null,
+      erased_key: 'hash-of-iss-sub'
+    };
+
+    const token = {
+      iss_sub: 'iss/sub-1',
+      iss: 'https://keycloak',
+      sub: 'sub-1',
+      email: 'test@test.com'
+    };
+
+    it('should not resurrect an erased user — return the erased document and skip the UPSERT', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([erasedDoc])); // tombstone lookup — match
+
+      const result = await userProvisioningService.provisionUser(token);
+
+      expect(result._key).toBe('user-erased');
+      expect(result.deleted).toBe(true);
+      // Only the tombstone lookup ran — no legacy migration, no soft-delete check, no UPSERT
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      const { logger } = require('../../shared-lib');
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('erased user'));
+    });
+
+    it('should serve the erased document from cache on the next request', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([erasedDoc])); // tombstone lookup — match
+
+      await userProvisioningService.provisionUser(token);
+      const callsBefore = mockDb.query.mock.calls.length;
+      const result = await userProvisioningService.provisionUser(token);
+
+      expect(result._key).toBe('user-erased');
+      expect(result.deleted).toBe(true);
+      expect(mockDb.query.mock.calls.length).toBe(callsBefore);
+    });
+
+    it('should provision normally when the tombstone lookup does not match', async () => {
+      const newUser = { _key: 'user-1', email: 'test@test.com', deleted: false };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup — miss
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
+
+      const result = await userProvisioningService.provisionUser(token);
+
+      expect(result._key).toBe('user-1');
+      expect(result.deleted).toBe(false);
+    });
+  });
+
   describe('_doProvision - soft-deleted user reactivation', () => {
     it('should reactivate soft-deleted user', async () => {
       const deletedUser = { _key: 'user-del', deleted: true, deletedAt: '2026-01-01' };
       const reactivatedUser = { _key: 'user-del', deleted: false, deletedAt: null };
 
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([deletedUser])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: reactivatedUser, old: deletedUser }])); // upsert
@@ -217,6 +288,7 @@ describe('UserProvisioningService', () => {
     it('should log "User provisioned" for new user (no old doc)', async () => {
       const newUser = { _key: 'user-1', email: 'test@test.com' };
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
@@ -236,6 +308,7 @@ describe('UserProvisioningService', () => {
       const oldUser = { _key: 'user-1', email: 'test@test.com' };
       const updatedUser = { _key: 'user-1', email: 'test@test.com' };
       mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: updatedUser, old: oldUser }])); // upsert

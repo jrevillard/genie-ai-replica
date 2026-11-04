@@ -493,6 +493,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request loudly rather than silently feeding a zero into the truncation
   budget. (#631)
 
+### Security
+
+- **GDPR erasure is now permanent: an erased user can no longer be silently re-created by their own still-valid access token.** Deleting a user (admin erasure) blanked their profile in the database, but an access token issued before the deletion kept working, and the automatic re-provisioning it triggered found no record to match against — so it inserted a fresh profile from the token, restoring the erased email, name and roles as if the erasure had never happened. The erasure now also writes a non-personal tombstone that re-provisioning checks first, so an erased identity stays erased: the caller keeps receiving "account deactivated" until their token expires. (#1432)
+
 ## [3.0.0] - 2026-10-30
 
 ### Added

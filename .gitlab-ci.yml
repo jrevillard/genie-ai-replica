@@ -3521,6 +3521,11 @@ config:validate:
   # job 403-flake with the 2026-09-02/03 instance artifact-download problem.
   dependencies: []
   before_script:
+    # The config-validator suite includes the shell-syntax gate (#1306,
+    # #1322): it shell-extracts the .gitlab-ci.yml script blocks and runs
+    # `bash -n` on each. The node:20-alpine image ships no bash — without
+    # this install the gate throws instead of running.
+    - apk add --no-cache bash
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
     - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm ci

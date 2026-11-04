@@ -258,9 +258,10 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
 
     expect(caught).toBeTruthy();
     expect(caught.message).toMatch(/was deleted mid-provisioning/);
-    // The account can be recreated by the next attempt, so the retry
-    // budget must be allowed to save the provisioning.
-    expect(caught.transient).toBe(true);
+    // Fatal, not transient: the converge-only contract has no self-heal
+    // (a retry would recreate the account), so the message must name the
+    // cause instead.
+    expect(caught.transient).toBeFalsy();
   });
 
   test('a failed email probe fails loudly instead of guessing', async () => {
@@ -364,6 +365,6 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
 
     expect(caught).toBeTruthy();
     expect(caught.message).toMatch(/deleted between the lookup and the password reset/);
-    expect(caught.transient).toBe(true);
+    expect(caught.transient).toBeFalsy();
   });
 });

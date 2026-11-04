@@ -43,9 +43,9 @@ function bodyText(res) {
 }
 
 // The account the create answered for is gone: a concurrent cleanup or an
-// operator purge deleted it between two requests. A later attempt
-// recreates it, so the verdict is transient — the message still names the
-// cause.
+// operator purge deleted it between two requests. The verdict is FATAL —
+// the converge-only contract deliberately has no self-heal (a retry would
+// recreate the account), so the message must name the cause instead.
 const ACCOUNT_VANISHED = 'the account was deleted mid-provisioning (a concurrent cleanup or an operator purge)';
 
 // The transient retry waits on a CONDITION (Keycloak answering without a
@@ -410,9 +410,9 @@ async function convergeUser(adminToken, realm, userData) {
             `${email}: an email conflict; remove or rename that account (or change the fixture email)`
         );
       }
-      throw transientError(
+      throw new Error(
         `${err.message} — the create answered 409, but no account carries ${email} either: ` +
-          `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}`
+          `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`
       );
     }
     throw err;
@@ -429,11 +429,11 @@ async function convergeUser(adminToken, realm, userData) {
     if (resetRes.status === 404) {
       // The account was just looked up by its exact username: a 404 here
       // means it was deleted between that lookup and this reset — not a
-      // password problem. A later attempt recreates the account, so the
-      // verdict is transient.
-      throw transientError(
+      // password problem. The verdict is fatal (the converge-only contract
+      // has no self-heal), and the message names the cause.
+      throw new Error(
         `Cannot converge the password of ${username} (${user.id}): HTTP 404 — the account ` +
-          `was deleted between the lookup and the password reset, so ${ACCOUNT_VANISHED}`
+          `was deleted between the lookup and the password reset, so ${ACCOUNT_VANISHED}; re-run the provisioning`
       );
     }
     if (resetRes.status !== 204) {

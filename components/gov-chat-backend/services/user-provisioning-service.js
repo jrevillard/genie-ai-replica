@@ -1,7 +1,9 @@
 'use strict';
 
 const { aql } = require('arangojs');
+const Redis = require('ioredis');
 const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const keycloakAuthService = require('./keycloak-auth-service');
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -15,11 +17,37 @@ const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
  * profile change must land on the next request, not within the TTL) and
  * one indexed read detects an out-of-band soft-delete of the underlying
  * document (reactivation must never be served from a stale copy).
+ *
+ * Reactivation is gated on Keycloak itself (#1438): a soft-deleted user is
+ * only re-activated when Keycloak — the authoritative source of account
+ * state — reports the account enabled, so an admin disable is not silently
+ * undone by a still-valid JWT from another device.
+ *
+ * Cache evictions are broadcast over Redis pub/sub (#1443) so a scaled-out
+ * backend does not keep serving a pre-erasure profile from another
+ * replica's cache for the remainder of the TTL. It reuses the Redis
+ * instance the translation cache already uses (TRANSLATION_CACHE_* vars);
+ * a Redis outage degrades to the pre-existing behavior — a local-only
+ * eviction bounded by the TTL.
  */
 
 /** In-memory cache: iss_sub → { user, expiresAt } */
 const _cache = new Map();
 const CACHE_TTL_MS = 60_000;
+
+/** Pub/sub channel carrying iss_sub eviction broadcasts between replicas. */
+const INVALIDATION_CHANNEL = 'user-provisioning:invalidate';
+
+let _publisher = null;
+let _subscriber = null;
+
+function createRedisClient() {
+  return new Redis({
+    host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
+    port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
+    password: process.env.TRANSLATION_CACHE_PASSWORD || null
+  });
+}
 
 /**
  * Bumped on every cache eviction. A provision that started before an eviction
@@ -161,6 +189,37 @@ function evictExpired() {
   }
 }
 
+/**
+ * Local half of an eviction: drop the cache line and bump the epoch so an
+ * in-flight provision that started before this eviction does not re-cache
+ * its pre-eviction result. Used by invalidateCache and the pub/sub handler.
+ */
+function evictLocal(issSub) {
+  _cache.delete(issSub);
+  _cacheEpoch++;
+}
+
+/**
+ * Broadcast an eviction to the other replicas over the Redis pub/sub channel.
+ * Fire-and-forget: a publish failure must not break the caller (the GDPR
+ * erasure path), it only degrades the other replicas to the TTL bound.
+ */
+function publishInvalidation(issSub) {
+  try {
+    if (!_publisher) {
+      _publisher = createRedisClient();
+      _publisher.on('error', (err) => {
+        logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
+      });
+    }
+    _publisher.publish(INVALIDATION_CHANNEL, issSub).catch((err) => {
+      logger.warn('[UserProvisioning] Invalidation publish failed', { error: err.message });
+    });
+  } catch (err) {
+    logger.warn('[UserProvisioning] Invalidation publish failed', { error: err.message });
+  }
+}
+
 let _initialized = false;
 
 /**
@@ -190,6 +249,14 @@ const userProvisioningService = {
     _lastRevalWarnAt = 0;
     _initialized = false;
     _cacheEpoch = 0;
+    if (_publisher) {
+      _publisher.disconnect();
+      _publisher = null;
+    }
+    if (_subscriber) {
+      _subscriber.disconnect();
+      _subscriber = null;
+    }
   },
 
   /**
@@ -227,15 +294,40 @@ const userProvisioningService = {
     // retryable, not permanently skipped by the flag.
     _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
+
+    // Cross-replica invalidation subscriber (#1443). Fire-and-forget setup:
+    // a Redis outage must not crash the boot — it only degrades eviction to
+    // the TTL bound. Best-effort: retryable at the next boot.
+    try {
+      _subscriber = createRedisClient();
+      _subscriber.on('error', (err) => {
+        logger.warn('[UserProvisioning] Invalidation subscriber error', { error: err.message });
+      });
+      _subscriber.on('message', (channel, issSub) => {
+        if (channel === INVALIDATION_CHANNEL && issSub) {
+          evictLocal(issSub);
+        }
+      });
+      _subscriber.subscribe(INVALIDATION_CHANNEL);
+    } catch (subscriberError) {
+      logger.warn('[UserProvisioning] Failed to start invalidation subscriber — evictions stay local', {
+        error: subscriberError.message
+      });
+      _subscriber = null;
+    }
   },
 
   /**
    * Provision or update a user from a verified JWT payload
    * @param {Object} decodedToken - Verified JWT payload (with iss_sub added by keycloak-auth-service)
-   * @returns {Promise<Object>} User document from ArangoDB (re-activates soft-deleted users)
+   * @param {Object} [authContext] - { token, issuer } — the verified bearer
+   *   token and its issuer. Required for reactivation: the gate consults
+   *   Keycloak with the very token that was verified (#1438). Omitting it
+   *   fail-closes any reactivation (the account state cannot be confirmed).
+   * @returns {Promise<Object>} User document from ArangoDB (re-activates soft-deleted users only when Keycloak confirms the account enabled)
    * @throws {Error} On ArangoDB connection or query failure
    */
-  async provisionUser(decodedToken) {
+  async provisionUser(decodedToken, authContext) {
     const issSub = decodedToken.iss_sub;
     if (!issSub) {
       throw new Error('Missing iss_sub in decoded token');
@@ -281,7 +373,7 @@ const userProvisioningService = {
       const isRefusal = user && user.deleted === true;
       const stale = checkClaims && !profileMatches(user, decodedToken);
       if (!isRefusal && (_cacheEpoch !== epochAtEntry || stale)) {
-        return this.provisionUser(decodedToken);
+        return this.provisionUser(decodedToken, authContext);
       }
       return user;
     };
@@ -293,7 +385,7 @@ const userProvisioningService = {
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result
-    const provisionPromise = this._doProvision(decodedToken).finally(() => {
+    const provisionPromise = this._doProvision(decodedToken, authContext).finally(() => {
       _locks.delete(issSub);
     });
     _locks.set(issSub, provisionPromise);
@@ -303,7 +395,7 @@ const userProvisioningService = {
   /**
    * Internal provisioning logic — called once per user per cache cycle
    */
-  async _doProvision(decodedToken) {
+  async _doProvision(decodedToken, authContext) {
     const issSub = decodedToken.iss_sub;
     const epochAtStart = _cacheEpoch;
     const db = await dbService.getConnection('default');
@@ -388,6 +480,31 @@ const userProvisioningService = {
     const deletedUser = await checkCursor.next();
     const isReactivation = !!deletedUser;
     if (isReactivation) {
+      // Reactivation gate (#1438): Keycloak is the authoritative source of
+      // account state. A soft-deleted document may mean an admin disabled
+      // the account (via the expired-token introspection path) — flipping
+      // deleted:false on a still-valid JWT from another device would
+      // silently undo the disable. Fail-closed: Keycloak must confirm the
+      // account enabled (and the caller must supply the auth context to
+      // ask) before the UPSERT may clear the deleted flag.
+      const keycloakStatus =
+        authContext && authContext.token && authContext.issuer
+          ? await keycloakAuthService.checkUserStatusInKeycloak(authContext.token, authContext.issuer)
+          : null;
+      // active/disabled are inverse pairs in the helper's contract — checking
+      // active alone is the whole gate
+      const keycloakEnabled = !!(keycloakStatus && keycloakStatus.active);
+      if (!keycloakEnabled) {
+        logger.info(
+          `[UserProvisioning] Reactivation refused — Keycloak did not confirm the account enabled: ${issSub}`
+        );
+        if (_cacheEpoch === epochAtStart) {
+          // Cache the refusal like the erasure tombstone's: within the TTL
+          // the next request is refused without re-consulting Keycloak
+          _cache.set(issSub, { user: deletedUser, expiresAt: Date.now() + CACHE_TTL_MS });
+        }
+        return deletedUser;
+      }
       logger.info(`[UserProvisioning] User re-activated: ${issSub}`);
     }
 
@@ -470,15 +587,17 @@ const userProvisioningService = {
   },
 
   /**
-   * Evict a user from the in-memory provisioning cache.
-   * Called by the GDPR erasure (keycloak-proxy-service.deleteUser) so the
-   * pre-erasure profile stops being served for the remainder of the cache TTL.
+   * Evict a user from the provisioning cache, locally and on every other
+   * replica (Redis pub/sub broadcast, #1443). Called by the GDPR erasure
+   * (keycloak-proxy-service.deleteUser) so the pre-erasure profile stops
+   * being served — locally immediately, elsewhere within the publish's
+   * propagation instead of the cache TTL.
    * @param {string} issSub - User identifier (iss#sub format)
    * @returns {void}
    */
   invalidateCache(issSub) {
-    _cache.delete(issSub);
-    _cacheEpoch++;
+    evictLocal(issSub);
+    publishInvalidation(issSub);
   },
 
   /**

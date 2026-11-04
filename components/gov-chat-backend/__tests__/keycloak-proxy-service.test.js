@@ -38,6 +38,14 @@ jest.mock(
   { virtual: true }
 );
 
+// The provisioner now requires keycloak-auth-service (the #1438 reactivation
+// gate), which loads the ESM-only `jose` package — mock it so this suite
+// (which transitively loads the provisioner) never parses it as CommonJS
+jest.mock('jose', () => ({
+  jwtVerify: jest.fn(),
+  createRemoteJWKSet: jest.fn()
+}));
+
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
 

@@ -33,10 +33,20 @@ jest.mock(
     dbService: {
       getConnection: jest.fn()
     },
-    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
+    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
   }),
   { virtual: true }
 );
+
+// The provisioner now requires keycloak-auth-service (the #1438 reactivation
+// gate), which loads the ESM-only `jose` package — mock it so this suite
+// (which transitively loads the provisioner) never parses it as CommonJS
+jest.mock('jose', () => require('./mocks/jose'));
+
+// The erasure path evicts the provisioning cache, which now broadcasts over
+// Redis (#1443) — mock the client so no test opens a real connection handle
+jest.mock('ioredis', () => require('./mocks/ioredis'));
 
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
@@ -72,6 +82,8 @@ describe('keycloak-proxy-service', () => {
     // clearAllMocks keeps queued mockResolvedValueOnce entries — drop them so
     // a failed test cannot leak its queued connections into the next one.
     dbService.getConnection.mockReset();
+    // Per the shared ioredis mock's contract: drop clients a previous test created
+    require('ioredis').instances.length = 0;
   });
 
   afterEach(() => {

@@ -14,7 +14,8 @@ jest.mock(
       debug: jest.fn()
     },
     dbService: { getConnection: jest.fn() },
-    erasureTombstoneKey: require('../../../shared/lib/erasure-tombstone').erasureTombstoneKey
+    erasureTombstoneKey: require('../../../shared/lib/erasure-tombstone').erasureTombstoneKey,
+    parsePositiveInt: require('../../../shared/lib/validation-utils').parsePositiveInt
   }),
   { virtual: true }
 );
@@ -22,6 +23,17 @@ jest.mock(
 jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
 }));
+
+// #1438: the reactivation gate consults Keycloak through this helper
+const mockCheckUserStatusInKeycloak = jest.fn();
+jest.mock('../../services/keycloak-auth-service', () => ({
+  checkUserStatusInKeycloak: (...args) => mockCheckUserStatusInKeycloak(...args)
+}));
+
+// #1443: cross-replica invalidation rides the existing Redis instance
+jest.mock('ioredis', () => require('../mocks/ioredis'));
+
+const AUTH = { token: 'test-token', issuer: 'https://keycloak' };
 
 let userProvisioningService;
 let mockDb;
@@ -37,6 +49,9 @@ function createMockCursor(results) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+
+  const MockRedis = require('ioredis');
+  MockRedis.instances.length = 0;
 
   mockDb = {
     query: jest.fn(),
@@ -185,8 +200,9 @@ describe('UserProvisioningService', () => {
         }
         return createMockCursor([]); // legacy lookups (call 3)
       });
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
 
-      const result2 = await userProvisioningService.provisionUser(baseToken);
+      const result2 = await userProvisioningService.provisionUser(baseToken, AUTH);
       expect(result2.deleted).toBe(false);
       expect(result2.active).toBe(true);
     });
@@ -798,6 +814,7 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([deletedUser])) // deleted check
         .mockResolvedValueOnce(createMockCursor([{ new: reactivatedUser, old: deletedUser }])) // upsert — UPDATE
         .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check — miss
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
 
       const token = {
         iss_sub: 'iss/sub-1',
@@ -805,7 +822,7 @@ describe('UserProvisioningService', () => {
         sub: 'sub-1',
         email: 'test@test.com'
       };
-      const result = await userProvisioningService.provisionUser(token);
+      const result = await userProvisioningService.provisionUser(token, AUTH);
       expect(result.deleted).toBe(false);
     });
   });
@@ -854,6 +871,31 @@ describe('UserProvisioningService', () => {
   });
 
   describe('markUserAsDeleted', () => {
+    it('must broadcast the invalidation only after the UPDATE committed', async () => {
+      // A broadcast sent before the UPDATE commits lets another replica
+      // evict, re-provision (its deleted-check still misses) and re-cache
+      // the still-active profile — so at the instant the UPDATE result is
+      // handed back, no publish may have run yet
+      let publishedAtCommit = false;
+      const MockRedis = require('ioredis');
+      mockDb.query.mockImplementation(async () => ({
+        next: jest.fn(async () => {
+          MockRedis.instances.forEach((i) => {
+            if (i.publish.mock.calls.length > 0) publishedAtCommit = true;
+          });
+          return { _key: 'user-1', deleted: true };
+        })
+      }));
+
+      await userProvisioningService.markUserAsDeleted('iss/sub-1');
+
+      expect(publishedAtCommit).toBe(false);
+      // The broadcast itself still happens — after the commit
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      expect(publisher).toBeDefined();
+      expect(publisher.publish).toHaveBeenCalledWith('user-provisioning:invalidate', expect.any(String));
+    });
+
     it('should mark user as deleted and log', async () => {
       const deletedUser = { _key: 'user-1', deleted: true };
       mockDb.query.mockResolvedValue(createMockCursor([deletedUser]));
@@ -867,6 +909,383 @@ describe('UserProvisioningService', () => {
       await userProvisioningService.markUserAsDeleted('iss/sub-unknown');
       const { logger } = require('../../shared-lib');
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('not found for deletion'));
+    });
+  });
+
+  describe('provisionUser - Keycloak-gated reactivation (#1438)', () => {
+    const deletedUser = { _key: 'user-del', deleted: true, deletedAt: '2026-01-01' };
+    const reactivatedUser = {
+      _key: 'user-del',
+      deleted: false,
+      deletedAt: null,
+      name: null,
+      emailVerified: false,
+      roles: [],
+      email: 'test@test.com'
+    };
+    const token = {
+      iss_sub: 'iss/sub-1',
+      iss: 'https://keycloak',
+      sub: 'sub-1',
+      email: 'test@test.com'
+    };
+
+    // Deleted-check answers "reactivation"; the remaining queries are misses
+    function mockReactivationQueries() {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([deletedUser])) // deleted check → reactivation
+        .mockResolvedValueOnce(createMockCursor([{ new: reactivatedUser, old: deletedUser }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check — miss
+    }
+
+    it('should reactivate when Keycloak reports the account enabled', async () => {
+      mockReactivationQueries();
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
+
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+      expect(result.deleted).toBe(false);
+      expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledWith(AUTH.token, AUTH.issuer);
+    });
+
+    it('should refuse reactivation when Keycloak reports the account disabled', async () => {
+      mockReactivationQueries();
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: false, disabled: true });
+
+      const queriesBefore = mockDb.query.mock.calls.length;
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+
+      // The UPSERT must NOT run — the disable is not silently undone
+      expect(mockDb.query.mock.calls.length).toBe(queriesBefore + 3); // tombstone + legacy + deleted check only
+      expect(result.deleted).toBe(true);
+
+      // The refusal is cached like the tombstone's: within the TTL the next
+      // request is refused without re-consulting Keycloak or the database
+      const cached = await userProvisioningService.provisionUser(token, AUTH);
+      expect(cached.deleted).toBe(true);
+      expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledTimes(1);
+    });
+
+    it('should refuse reactivation when the Keycloak status check fails (fail-closed)', async () => {
+      mockReactivationQueries();
+      mockCheckUserStatusInKeycloak.mockResolvedValue(null);
+
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+      expect(result.deleted).toBe(true);
+    });
+
+    it('must not cache the refusal of an inconclusive Keycloak check (re-ask next request)', async () => {
+      // A transient Keycloak failure must not poison the cache for the TTL:
+      // once Keycloak recovers the account IS reactivated on the next
+      // request, without waiting out the 60 s
+      mockReactivationQueries();
+      mockCheckUserStatusInKeycloak.mockResolvedValueOnce(null);
+
+      await userProvisioningService.provisionUser(token, AUTH);
+
+      // Next request: Keycloak answers — the reactivation must run the full
+      // chain (the refusal was NOT cached) and the UPSERT proceeds.
+      // mockReset between the phases: a Once queue survives clearAllMocks,
+      // so a leftover answer would leak into the next test's gate.
+      mockDb.query.mockReset();
+      mockReactivationQueries();
+      mockCheckUserStatusInKeycloak.mockReset();
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+      expect(result.deleted).toBe(false);
+      expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledTimes(1);
+    });
+
+    it('should refuse reactivation when no auth context is supplied (fail-closed)', async () => {
+      mockReactivationQueries();
+
+      const result = await userProvisioningService.provisionUser(token);
+      expect(result.deleted).toBe(true);
+      expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+    });
+
+    it('must gate the legacy-migration path too (a soft-deleted legacy doc is a reactivation)', async () => {
+      // A pre-iss_sub document that was soft-deleted out-of-band must not be
+      // migrated (reactivated) without Keycloak's confirmation either
+      const legacyDeleted = { _key: 'legacy-del', iss_sub: null, deleted: true, email: 'test@test.com' };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([legacyDeleted])); // legacy lookup — matches
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: false, disabled: true });
+
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+      expect(result.deleted).toBe(true);
+      // No migration UPDATE, no deleted-check, no UPSERT
+      expect(mockDb.query.mock.calls.length).toBe(2);
+    });
+
+    it('should migrate a soft-deleted legacy user when Keycloak confirms enabled', async () => {
+      const legacyDeleted = { _key: 'legacy-del', iss_sub: null, deleted: true, email: 'test@test.com' };
+      const migrated = {
+        _key: 'legacy-del',
+        iss_sub: 'iss/sub-1',
+        deleted: false,
+        deletedAt: null,
+        name: null,
+        emailVerified: false,
+        roles: [],
+        email: 'test@test.com'
+      };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([legacyDeleted])) // legacy lookup — matches
+        .mockResolvedValueOnce(createMockCursor([])) // migration UPDATE
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — iss_sub path now misses (already migrated)
+        .mockResolvedValueOnce(createMockCursor([{ new: migrated, old: legacyDeleted }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check
+      mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
+
+      const result = await userProvisioningService.provisionUser(token, AUTH);
+      expect(result.deleted).toBe(false);
+      expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledWith(AUTH.token, AUTH.issuer);
+    });
+
+    it('should not consult Keycloak on the non-reactivation path', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
+        .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss (no reactivation)
+        .mockResolvedValueOnce(
+          createMockCursor([
+            {
+              new: { _key: 'u', deleted: false, name: null, emailVerified: false, roles: [], email: 'test@test.com' },
+              old: null
+            }
+          ])
+        ) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check
+
+      await userProvisioningService.provisionUser(token, AUTH);
+      expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cross-replica cache invalidation (#1443)', () => {
+    const MockRedis = require('ioredis');
+    const token = {
+      iss_sub: 'iss/sub-1',
+      iss: 'https://keycloak',
+      sub: 'sub-1',
+      email: 'test@test.com'
+    };
+
+    it('should broadcast an invalidation to the Redis channel', async () => {
+      userProvisioningService.invalidateCache('iss/sub-1');
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      expect(publisher).toBeDefined();
+      const [channel, payload] = publisher.publish.mock.calls[0];
+      expect(channel).toBe('user-provisioning:invalidate');
+      // The envelope carries the origin so the publisher's own subscriber
+      // can drop the loopback delivery (its local eviction already ran)
+      const envelope = JSON.parse(payload);
+      expect(envelope.issSub).toBe('iss/sub-1');
+      expect(typeof envelope.origin).toBe('string');
+    });
+
+    it('should not throw when the publish fails', async () => {
+      userProvisioningService.invalidateCache('iss/sub-1'); // creates the publisher
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      publisher.publish.mockRejectedValue(new Error('redis down'));
+
+      expect(() => userProvisioningService.invalidateCache('iss/sub-2')).not.toThrow();
+      // Drain the microtask queue so the fire-and-forget rejection lands
+      await new Promise((r) => setImmediate(r));
+      const { logger } = require('../../shared-lib');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalidation publish failed'),
+        expect.any(Object)
+      );
+    });
+
+    it('should subscribe to the invalidation channel at initialization', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      expect(subscriber).toBeDefined();
+      expect(subscriber.subscribe).toHaveBeenCalledWith('user-provisioning:invalidate');
+    });
+
+    it('should evict the local cache when a remote invalidation arrives', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      // Warm the cache with one full provision
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+      await userProvisioningService.provisionUser(token);
+
+      // Remote replica erased/marked the user: it broadcasts, we receive
+      handler('user-provisioning:invalidate', JSON.stringify({ origin: 'other-replica', issSub: 'iss/sub-1' }));
+
+      // The next provision must NOT be served from the cache — it re-runs
+      // the full chain (5 queries again)
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([{ new: { ...cachedUser, deleted: true }, old: null }]))
+        .mockResolvedValueOnce(createMockCursor([]));
+      const result = await userProvisioningService.provisionUser(token);
+      expect(result.deleted).toBe(true); // fresh provision, not the warm cached copy
+    });
+
+    it('must not re-broadcast a received invalidation', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      handler('user-provisioning:invalidate', JSON.stringify({ origin: 'other-replica', issSub: 'iss/sub-1' }));
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      expect(publisher).toBeUndefined();
+    });
+
+    it('must ignore its own loopback delivery (no double eviction)', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+      userProvisioningService.invalidateCache('iss/warm-1'); // creates the publisher
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      const ownOrigin = JSON.parse(publisher.publish.mock.calls[0][1]).origin;
+
+      // Warm the cache with one full provision
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      await userProvisioningService.provisionUser(token);
+
+      // The publisher's own subscriber receives the same message — it must
+      // be dropped, or the local eviction runs twice (extra epoch bump)
+      handler('user-provisioning:invalidate', JSON.stringify({ origin: ownOrigin, issSub: 'iss/sub-1' }));
+
+      // The cache is still warm: the next provision costs one revalidation read only
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const before = mockDb.query.mock.calls.length;
+      await userProvisioningService.provisionUser(token);
+      expect(mockDb.query.mock.calls.length).toBe(before + 1);
+    });
+
+    it('must ignore a malformed payload without crashing or evicting', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      expect(() => handler('user-provisioning:invalidate', 'not-json')).not.toThrow();
+
+      // Warm the cache with one full provision
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      await userProvisioningService.provisionUser(token);
+
+      // A truthy NON-STRING issSub is malformed too: evicting nothing while
+      // still bumping the global cache epoch would discard unrelated
+      // in-flight provisions — it must be dropped untouched
+      expect(() => handler('user-provisioning:invalidate', JSON.stringify({ origin: 'x', issSub: 123 }))).not.toThrow();
+
+      // The cache is still warm: the next provision costs one revalidation read
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const before = mockDb.query.mock.calls.length;
+      await userProvisioningService.provisionUser(token);
+      expect(mockDb.query.mock.calls.length).toBe(before + 1);
+    });
+
+    it('must not discard in-flight provisions on a malformed message', async () => {
+      // A malformed envelope (truthy non-string issSub) must not bump the
+      // epoch: a provision in flight when it arrives would be discarded and
+      // re-run its whole query chain for nothing
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      const user = { _key: 'user-ok', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      const tombstoneCursor = {
+        next: jest.fn(async () => {
+          handler('user-provisioning:invalidate', JSON.stringify({ origin: 'x', issSub: 123 }));
+          return undefined;
+        })
+      };
+      mockDb.query
+        .mockResolvedValueOnce(tombstoneCursor) // tombstone — malformed message mid-flight
+        .mockResolvedValueOnce(createMockCursor([])) // legacy
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: user, old: null }])) // upsert
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+      // The provision's own result is served — it was NOT discarded as stale
+      expect(result._key).toBe('user-ok');
+    });
+
+    it('must not cache a provision that spanned a remote invalidation', async () => {
+      await userProvisioningService.initialize();
+      const subscriber = MockRedis.instances.find((i) => i.subscribe.mock.calls.length > 0);
+      const handler = subscriber.on.mock.calls.find((c) => c[0] === 'message')[1];
+
+      const staleUser = { _key: 'user-stale', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+      const freshUser = { _key: 'user-fresh', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
+
+      // The tombstone lookup's cursor triggers a REMOTE invalidation (as an
+      // erasure committing on another replica would) while the provision is
+      // between its queries — the epoch bump must discard this provision's
+      // own result, or the pre-erasure profile gets cached for the TTL.
+      const tombstoneCursor = {
+        next: jest.fn(async () => {
+          handler('user-provisioning:invalidate', JSON.stringify({ origin: 'other-replica', issSub: 'iss/sub-1' }));
+          return undefined;
+        })
+      };
+      mockDb.query
+        .mockResolvedValueOnce(tombstoneCursor) // tombstone lookup — miss, remote eviction mid-flight
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: staleUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])) // post-INSERT re-check — miss
+        // The caller's re-provision (epoch moved while this provision ran):
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: freshUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+      // The post-remote-eviction re-provision's result is served — the
+      // discarded provision must not win
+      expect(result._key).toBe('user-fresh');
+    });
+
+    it('should not crash initialization when the subscriber cannot be created', async () => {
+      jest.isolateModules(() => {
+        userProvisioningService = require('../../services/user-provisioning-service');
+      });
+      userProvisioningService._reset();
+      const MockRedisBroken = require('ioredis');
+      MockRedisBroken.mockImplementationOnce(() => {
+        throw new Error('redis connection refused');
+      });
+      await expect(userProvisioningService.initialize()).resolves.not.toThrow();
     });
   });
 });

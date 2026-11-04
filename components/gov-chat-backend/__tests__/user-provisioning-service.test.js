@@ -19,7 +19,8 @@ jest.mock(
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
     },
-    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
+    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
   }),
   { virtual: true }
 );
@@ -27,6 +28,17 @@ jest.mock(
 // Mock arangojs aql template tag
 jest.mock('arangojs', () => ({
   aql: jest.fn((strings, ...values) => ({ _aql: true, strings, values }))
+}));
+
+// markUserAsDeleted evicts the cache, which now broadcasts over Redis
+// (#1443) — mock the client so no suite opens a real connection handle
+jest.mock('ioredis', () => require('./mocks/ioredis'));
+
+// Reactivation gate: these tests exercise the enabled path, so Keycloak
+// always confirms the account (the fail-closed branches live in
+// __tests__/services/user-provisioning-service.test.js)
+jest.mock('../services/keycloak-auth-service', () => ({
+  checkUserStatusInKeycloak: jest.fn().mockResolvedValue({ active: true, disabled: false })
 }));
 
 const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
@@ -218,7 +230,10 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result.email).toBe('newemail@example.com');
       const upsertCall = mockQuery.mock.calls[3][0];
@@ -274,7 +289,10 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result).not.toBeNull();
       expect(result.deleted).toBe(false);
@@ -326,7 +344,10 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result.email).toBe('newemail@example.com');
       expect(result.name).toBe('New Name');
@@ -366,7 +387,10 @@ describe('userProvisioningService', () => {
       const { logger } = require('../shared-lib');
       logger.info.mockClear();
 
-      await userProvisioningService.provisionUser(decoded);
+      await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User re-activated'));
     });

@@ -395,6 +395,9 @@ class UserProfileService {
       // would destroy soft-delete/GDPR state.
       const preservedData = {};
       for (const field of SYSTEM_PRESERVED_FIELDS) {
+        if (field === 'updatedAt') {
+          continue; // bumped to now below, not carried over
+        }
         if (currentUserDoc[field] !== undefined) {
           preservedData[field] = currentUserDoc[field];
         }

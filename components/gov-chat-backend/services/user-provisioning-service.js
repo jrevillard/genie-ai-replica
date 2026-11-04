@@ -41,6 +41,7 @@ const INVALIDATION_CHANNEL = 'user-provisioning:invalidate';
 
 let _publisher = null;
 let _subscriber = null;
+let _pubsubStarted = false;
 
 function createRedisClient(clientOptions = {}) {
   return new Redis({
@@ -308,6 +309,7 @@ const userProvisioningService = {
       _subscriber.disconnect();
       _subscriber = null;
     }
+    _pubsubStarted = false;
   },
 
   /**
@@ -348,18 +350,31 @@ const userProvisioningService = {
 
     // Cross-replica invalidation pub/sub (#1443). Fire-and-forget setup:
     // a Redis outage must not crash the boot — it only degrades eviction to
-    // the TTL bound. Best-effort: retryable at the next boot.
+    // the TTL bound. Best-effort: retryable at the next boot. Started once:
+    // the _initialized flag below is only set after the awaited index work,
+    // so two overlapping initialize() calls would otherwise create two
+    // subscribers and every broadcast would be applied twice per replica.
+    if (_pubsubStarted) {
+      return;
+    }
+    _pubsubStarted = true;
     // The publisher is created here (not lazily at the first eviction) so
     // its connection handshake is done long before the first erasure — a
     // publish issued before the connection is 'ready' would be rejected
     // and the first post-boot invalidation lost.
     try {
+      // A lazily-created fallback client (an invalidation that fired before
+      // boot reached this point) must be disconnected, not orphaned
+      if (_publisher) {
+        _publisher.disconnect();
+        _publisher = null;
+      }
       _publisher = createRedisClient();
       _publisher.on('error', (err) => {
         logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
       });
     } catch (publisherError) {
-      logger.warn('[UserProvisioning] Failed to create invalidation publisher — evictions stay local', {
+      logger.warn('[UserProvisioning] Failed to create Invalidation publisher — evictions stay local', {
         error: publisherError.message
       });
       _publisher = null;
@@ -403,7 +418,7 @@ const userProvisioningService = {
         });
       });
     } catch (subscriberError) {
-      logger.warn('[UserProvisioning] Failed to start invalidation subscriber — evictions stay local', {
+      logger.warn('[UserProvisioning] Failed to start Invalidation subscriber — evictions stay local', {
         error: subscriberError.message
       });
       _subscriber = null;

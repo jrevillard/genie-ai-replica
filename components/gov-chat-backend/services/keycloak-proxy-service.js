@@ -205,15 +205,11 @@ const keycloakProxyService = {
     const issSub = resolved.issSub;
     logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
-    // NOTE: no cache eviction here — the only eviction is the post-commit one
-    // below (#1483). invalidateCache broadcasts over Redis pub/sub, and a
+    // No eviction here: invalidateCache broadcasts over Redis pub/sub, and a
     // pre-commit broadcast makes the other replicas evict and re-provision
-    // against the not-yet-erased document, re-caching the live profile with a
-    // fresh TTL until the post-commit broadcast closes it again (for the
-    // remaining TTL if that publish is lost). Same ordering as
-    // markUserAsDeleted: evict only AFTER the write that changed the state.
-    // Local staleness during the erase window is bounded by the revalidation
-    // (a cached hit re-reads the deleted flag) and the TTL.
+    // against the not-yet-erased document (#1483). Evict only after the
+    // erasure commits — the same ordering as markUserAsDeleted. Erase-window
+    // staleness is bounded by the cache revalidation and the TTL.
 
     // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
     // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
@@ -287,9 +283,10 @@ const keycloakProxyService = {
         `
       );
       logger.info('[KeycloakProxy] User erased', { userKey });
-      // Re-evict AFTER the erasure commits: a provision that raced the erasure
-      // may have re-cached the pre-erasure profile after the pre-delete
-      // eviction above (see #1440 for the residual INSERT-level window).
+      // The only eviction, and it happens AFTER the erasure commits: a
+      // provision that raced the erasure may have re-cached the pre-erasure
+      // profile, and this broadcast closes it (see #1440 for the residual
+      // INSERT-level window the re-check covers).
       if (issSub) {
         userProvisioningService.invalidateCache(issSub);
       }

@@ -433,19 +433,14 @@ const keycloakAuthService = {
       // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
         const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
-        if (typeof wwwAuthenticate === 'string') {
-          if (wwwAuthenticate.includes('error_description="User disabled"')) {
-            return { active: false, disabled: true };
-          }
-          // A header was present but named no reason we act on — say so, or the
-          // generic "may be expired" warn below would hide that the header
-          // simply did not match
-          logger.warn(
-            `[KeycloakAuth] Keycloak UserInfo returned 401 with an unmatched WWW-Authenticate (${wwwAuthenticate}) — treating as ambiguous`
-          );
-          return null;
+        if (typeof wwwAuthenticate === 'string' && wwwAuthenticate.includes('error_description="User disabled"')) {
+          return { active: false, disabled: true };
         }
-        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
+        // Still ambiguous. When a WWW-Authenticate was present but named a
+        // reason we don't act on, log it — the generic "may be expired" alone
+        // would hide that the header simply did not match.
+        const headerNote = wwwAuthenticate ? ` (WWW-Authenticate: ${wwwAuthenticate})` : '';
+        logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
         return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)

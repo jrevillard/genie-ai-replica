@@ -843,8 +843,7 @@ describe('keycloakAuthService', () => {
         response: {
           status: 401,
           headers: {
-            'www-authenticate':
-              'Bearer realm="genie", error="invalid_token", error_description="User disabled"'
+            'www-authenticate': 'Bearer realm="genie", error="invalid_token", error_description="User disabled"'
           }
         }
       });

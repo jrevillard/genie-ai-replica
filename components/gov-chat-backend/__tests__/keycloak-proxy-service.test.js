@@ -61,6 +61,25 @@ function mockCursor(result) {
   return { next: jest.fn().mockResolvedValue(result) };
 }
 
+// The five queries provisionUser runs when nothing blocks it (tombstone,
+// legacy-migration, deleted-check, UPSERT, post-INSERT re-check): all miss,
+// the UPSERT inserts the given key. Shared by the erasure-ordering tests —
+// the pipeline order lives here and only here.
+function mockProvisionChain(key) {
+  return jest
+    .fn()
+    .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
+    .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
+    .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
+    .mockResolvedValueOnce({
+      next: jest.fn().mockResolvedValue({
+        new: { _key: key, email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+        old: null
+      })
+    })
+    .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
+}
+
 function setupDbForResolve(result = { sub: 'uuid-12345', issSub: 'https://kc.example#sub-1' }) {
   // deleteUser makes TWO queries (UUID resolve + erasure) on TWO getConnection
   // calls — queue both explicitly so no queued value leaks in from another test.
@@ -520,20 +539,7 @@ describe('keycloak-proxy-service', () => {
       // Seed the real provisioning cache: provision the user through the
       // actual service (its DB is the mocked shared-lib dbService).
       keycloakProxyService._clearTokenCache();
-      const seedDb = {
-        query: jest
-          .fn()
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({
-            next: jest.fn().mockResolvedValue({
-              new: { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-              old: null
-            })
-          })
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
-      };
+      const seedDb = { query: mockProvisionChain('user-1') };
       // Erase through the proxy — this must evict the entry
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
       const eraseDb = { query: jest.fn() };
@@ -554,20 +560,7 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
 
       // Next provision must NOT serve the cached pre-erasure profile
-      const freshDb = {
-        query: jest
-          .fn()
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({
-            next: jest.fn().mockResolvedValue({
-              new: { _key: 'user-fresh', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-              old: null
-            })
-          })
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
-      };
+      const freshDb = { query: mockProvisionChain('user-fresh') };
       dbService.getConnection.mockResolvedValueOnce(Promise.resolve(freshDb));
       const after = await userProvisioningService.provisionUser({
         iss_sub: issSub,
@@ -591,20 +584,7 @@ describe('keycloak-proxy-service', () => {
 
       // Cache seeded before the erasure starts (provision through the real service)
       keycloakProxyService._clearTokenCache();
-      const provisionChain = () =>
-        jest
-          .fn()
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({
-            next: jest.fn().mockResolvedValue({
-              new: { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-              old: null
-            })
-          })
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
-      const seedDb = { query: provisionChain() };
+      const seedDb = { query: mockProvisionChain('user-1') };
       dbService.getConnection.mockResolvedValueOnce(Promise.resolve(seedDb));
       await userProvisioningService.provisionUser(claims);
 
@@ -640,19 +620,7 @@ describe('keycloak-proxy-service', () => {
       const issSub = 'https://kc.example#sub-1';
       const claims = { iss_sub: issSub, iss: 'https://kc.example', sub: 'sub-1', email: 'test@test.com' };
 
-      const provisionChain = () =>
-        jest
-          .fn()
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({
-            next: jest.fn().mockResolvedValue({
-              new: { _key: 'user-race', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-              old: null
-            })
-          })
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
+      const provisionChain = () => mockProvisionChain('user-race');
 
       // Cache seeded before the erasure starts
       keycloakProxyService._clearTokenCache();

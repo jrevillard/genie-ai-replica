@@ -530,12 +530,18 @@ export default {
         await this.fetchUserData();
         // The reset has committed and the outcome is already announced; a
         // local-preferences failure must not surface as a failed reset.
+        // Display preferences survive the wipe: the user asked to reset
+        // their profile data and chat history, not their look-and-feel.
         try {
-          const themeValue = localStorage.getItem('theme');
-          const langValue = localStorage.getItem('userLocale');
+          const preserved = {};
+          for (const key of ['theme', 'userLocale', 'fontSize', 'emailUpdates', 'soundNotifications']) {
+            const value = localStorage.getItem(key);
+            if (value !== null) preserved[key] = value;
+          }
           localStorage.clear();
-          if (themeValue) localStorage.setItem('theme', themeValue);
-          if (langValue) localStorage.setItem('userLocale', langValue);
+          for (const [key, value] of Object.entries(preserved)) {
+            localStorage.setItem(key, value);
+          }
         } catch (storageError) {
           console.error('[SETTINGS] Error clearing local preferences:', storageError);
         }

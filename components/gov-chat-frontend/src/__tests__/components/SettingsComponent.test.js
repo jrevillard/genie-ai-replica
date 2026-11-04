@@ -173,3 +173,51 @@ describe('SettingsComponent — resetUserData notification', () => {
     expect(mockNotificationWarning).not.toHaveBeenCalled();
   });
 });
+
+describe('SettingsComponent — resetUserData preserves display preferences', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  test('keeps theme, locale, font size and notification toggles across the clear', async () => {
+    localStorage.setItem('theme', 'dark');
+    localStorage.setItem('userLocale', 'fr');
+    localStorage.setItem('fontSize', '80');
+    localStorage.setItem('emailUpdates', 'true');
+    localStorage.setItem('soundNotifications', 'false');
+    // A key the reset owns — chat cache leftovers and the like — must go.
+    localStorage.setItem('junkCacheKey', 'wipe-me');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem('theme')).toBe('dark');
+    expect(localStorage.getItem('userLocale')).toBe('fr');
+    expect(localStorage.getItem('fontSize')).toBe('80');
+    expect(localStorage.getItem('emailUpdates')).toBe('true');
+    expect(localStorage.getItem('soundNotifications')).toBe('false');
+    expect(localStorage.getItem('junkCacheKey')).toBeNull();
+  });
+
+  test('does not write display-preference keys that were absent before the reset', async () => {
+    localStorage.setItem('theme', 'light');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem('theme')).toBe('light');
+    expect(localStorage.getItem('userLocale')).toBeNull();
+    expect(localStorage.getItem('fontSize')).toBeNull();
+    expect(localStorage.getItem('emailUpdates')).toBeNull();
+    expect(localStorage.getItem('soundNotifications')).toBeNull();
+  });
+});

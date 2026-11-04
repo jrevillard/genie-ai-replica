@@ -259,12 +259,20 @@ workflow:
         fi
       done < env
     - |
-      for var in EMAIL_FROM EMAIL_HOST KEYCLOAK_VERIFY_EMAIL; do
+      # KEYCLOAK_VERIFY_EMAIL is deliberately NOT rewritten here (#1330): the
+      # env template carries the line commented, so the old grep-guarded
+      # rewrite was dead code — and had it ever fired, an uncommented
+      # template line would have silently flipped the CI realm to
+      # verifyEmail: false. The effective e2e posture is the compose default
+      # (true), pinned by the config-validator (the env template must not set
+      # the var uncommented) and asserted at provisioning time by the
+      # fixture-health gate (fresh accounts ship emailVerified + no required
+      # actions).
+      for var in EMAIL_FROM EMAIL_HOST; do
         if grep -q "^${var}=$" .env; then
           case "$var" in
             EMAIL_FROM) sed -i "s|^${var}=.*|${var}=noreply@ci-genie-ai.local|" .env ;;
             EMAIL_HOST) sed -i "s|^${var}=.*|${var}=localhost|" .env ;;
-            KEYCLOAK_VERIFY_EMAIL) sed -i "s|^${var}=.*|${var}=false|" .env ;;
           esac
         fi
       done
@@ -294,15 +302,19 @@ workflow:
     - docker compose pull frontend backend document-repository nginx kong-config db-migrations keycloak keycloak-config postgres-init || true
     - docker compose up -d --no-build || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     - |
+      # Bounded curls (#1332): a backend that accepts the TCP connection but
+      # never answers would otherwise stall the job to its timeout — a dead
+      # call must fall through to the next loop iteration (or fail the hard
+      # gate below loudly), which is what the loop structure intends.
       for i in $(seq 1 60); do
-        if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+        if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf --connect-timeout 5 --max-time 10 http://localhost:3000/api/health > /dev/null 2>&1; then
           echo "Backend healthy"
           break
         fi
         echo "Waiting for backend... ($i/60)"
         sleep 5
       done
-    - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf --connect-timeout 5 --max-time 10 http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     # #1227 runtime contract gate: sweep the LIVE stack — long-term root
     # processes, init one-shot discipline, root-owned files on the host
     # binds. The static suite cannot see any of this; without this call
@@ -414,9 +426,10 @@ workflow:
           *)   echo "$1" ;;
         esac
       }
-      # Shared response parsing, same concatenation contract as http_label:
-      # curl captures the response with -w '\n%{http_code}', so the status is
-      # the last line and the body is everything before it.
+      # Shared response parsing, same concatenation contract as http_label
+      # (the kc_curl helper below is their only consumer): curl captures the
+      # response with -w '\n%{http_code}', so the status is the last line and
+      # the body is everything before it.
       resp_status() {
         local s
         s=$(printf '%s' "$1" | tail -n1)
@@ -427,6 +440,25 @@ workflow:
       }
       resp_body() {
         printf '%s' "$1" | sed '$d' | head -c 200
+      }
+      # One shared curl for every Keycloak provisioning call (#1334): one
+      # capture path, one flag set. Sets STATUS / BODY / CURL_RC / KC_RAW as
+      # globals; BODY is the display form (first 200 chars), KC_RAW keeps the
+      # untruncated body-with-trailer for machine parsing. curl's exit code
+      # is captured OUTSIDE the command substitution — inside $( ), an
+      # assignment vanishes into the subshell and every transport failure
+      # looks like a clean exit (the real bug the stub-curl harness caught
+      # during #1289). A non-zero CURL_RC means the answer may be truncated
+      # mid-transfer: the status is only trustworthy on a clean exit, so
+      # every caller here is a retry loop that classifies CURL_RC alongside
+      # STATUS (a truncated answer retries; it is never read as a verdict).
+      kc_curl() {
+        local _kc_method=$1 _kc_url=$2
+        shift 2
+        CURL_RC=0
+        KC_RAW=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X "$_kc_method" "$_kc_url" "$@") || CURL_RC=$?
+        STATUS=$(resp_status "$KC_RAW")
+        BODY=$(resp_body "$KC_RAW")
       }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
@@ -467,24 +499,67 @@ workflow:
       CLIENT_ATTEMPTS=0
       TOKEN_FIRST_STATUS=""
       TOKEN_BODY=""
+      TOKEN_REJECT_RUN=0
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
           TOKEN_ATTEMPTS=$((TOKEN_ATTEMPTS+1))
-          TOKEN_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          kc_curl POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
             -d "client_id=admin-cli" -d "username=admin" \
-            --data-urlencode "password=${KC_PWD}" -d "grant_type=password" || true)
-          TOKEN_STATUS=$(resp_status "$TOKEN_RESP")
+            --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
+          TOKEN_STATUS=$STATUS
           [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
-          TOKEN_BODY=$(resp_body "$TOKEN_RESP")
-          ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
+          TOKEN_BODY=$BODY
+          ADMIN_TOKEN=$(printf '%s' "$KC_RAW" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
+          # #1319: a 401 carrying an OAuth error body is a deterministic
+          # credentials rejection — retrying cannot heal it, and every failed
+          # attempt feeds Keycloak's brute-force protector (which can lock
+          # the admin account itself, turning a misconfiguration into an
+          # admin-lockout incident). Fail fast after 3 consecutive
+          # rejections — enough to ride out a one-off proxy hiccup mimicking
+          # a 401 — and keep the full 180s budget reserved for transient
+          # conditions (no connection yet, 5xx, realm-import 404 races).
+          # The error field is parsed from KC_RAW (the full capture, like
+          # the token parse above) — the 200-char display BODY can truncate
+          # the JSON before the error member and would hide a real
+          # rejection. The parse only runs on a 401: other statuses reset.
+          TOKEN_REJECT_DETAIL=""
+          if [ "$TOKEN_STATUS" = "401" ]; then
+            TOKEN_REJECT_DETAIL=$(printf '%s' "$KC_RAW" | sed '$d' \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
+          fi
+          # DETAIL is reset unconditionally above and assigned only in the
+          # 401 branch — non-empty ⟹ a definitive OAuth rejection answer.
+          if [ -n "$TOKEN_REJECT_DETAIL" ]; then
+            TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
+          else
+            TOKEN_REJECT_RUN=0
+          fi
+          if [ "$TOKEN_REJECT_RUN" -ge 3 ]; then
+            echo "ERROR: master admin token definitively rejected (HTTP 401, error '${TOKEN_REJECT_DETAIL}') on ${TOKEN_REJECT_RUN} consecutive attempts — a credentials rejection cannot heal on retry and further attempts feed Keycloak's brute-force protector; failing fast instead of burning the readiness budget. Check KEYCLOAK_ADMIN_PASSWORD."
+            exit 1
+          fi
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
           CLIENT_ATTEMPTS=$((CLIENT_ATTEMPTS+1))
-          CLIENT_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-          CLIENT_STATUS=$(resp_status "$CLIENT_RESP")
-          CLIENT_FOUND=$(printf '%s' "$CLIENT_RESP" | sed '$d' \
+          kc_curl GET "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
+            -H "Authorization: Bearer $ADMIN_TOKEN"
+          CLIENT_STATUS=$STATUS
+          # #1320: the admin token was acquired by THIS loop, so a 401 on
+          # the client lookup is a definitive authentication failure of that
+          # token — the known cause is a master realm Access Token Lifespan
+          # shorter than this readiness wait. Retrying with the same token
+          # cannot heal it, and silently re-acquiring would mask the
+          # configuration drift; fail with the actual answer instead. Only a
+          # clean-exit answer is definitive: a non-zero curl rc means the
+          # status may sit over a truncated body (the #1334 round-6 class) —
+          # the loop retries, and a genuinely expired token answers cleanly
+          # on the next attempt.
+          if [ "$CLIENT_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
+            echo "ERROR: master admin token rejected during the genie-app client lookup (HTTP 401, body: ${BODY:-none}) — the token this run acquired is no longer valid (master realm Access Token Lifespan shorter than the readiness wait is the known cause); failing instead of retrying with a dead token."
+            exit 1
+          fi
+          CLIENT_FOUND=$(printf '%s' "$KC_RAW" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, list) and d else '')" 2>/dev/null || true)
         fi
         if [ -n "$CLIENT_FOUND" ]; then
@@ -504,7 +579,20 @@ workflow:
           echo "The first attempt answered $(http_label "$TOKEN_FIRST_STATUS") — the per-iteration wait lines above show how the status evolved."
         fi
         if [ -n "$TOKEN_BODY" ]; then
-          echo "response body: ${TOKEN_BODY}"
+          # A 200 whose body was cut mid-transfer leaves a token PREFIX here
+          # (the access_token member prints before the cut) — withhold token
+          # material from the job log. The pattern requires the member WITH a
+          # value start (`"access_token":` plus optional space), so an
+          # interception page that merely names the field stays visible — it
+          # is the diagnostic itself.
+          case "$TOKEN_BODY" in
+            *'"access_token":'*|*'"access_token": '*)
+              echo "response body: <withheld — token response material>"
+              ;;
+            *)
+              echo "response body: ${TOKEN_BODY}"
+              ;;
+          esac
         fi
         case "$TOKEN_STATUS" in
           200)
@@ -554,11 +642,15 @@ workflow:
       ROPC_LAST_ANSWERED=""
       for i in 1 2 3 4 5; do
         rm -f /tmp/ropc-probe-body.json
-        ROPC_CURL_RC=0
-        ROPC_STATUS=$(curl -sk --connect-timeout 5 --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
-          "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+        # Routed through kc_curl (#1334's one guarded capture path): curl's
+        # last-flag-wins semantics let the probe override the helper's
+        # --max-time, and -o moves the body to the file so the stdout capture
+        # carries only the status trailer.
+        kc_curl POST "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+          -o /tmp/ropc-probe-body.json --max-time 15 \
           -d "client_id=genie-app" -d "grant_type=password" \
-          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials"
+        ROPC_STATUS=$STATUS
         case "$ROPC_STATUS" in
           # Transient statuses retry even with a clean curl exit; any other
           # definitive status with a clean exit classifies immediately, and
@@ -567,10 +659,10 @@ workflow:
           408|425|429) ;;
           [234][0-9][0-9])
             ROPC_LAST_ANSWERED="$ROPC_STATUS"
-            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
+            if [ "$CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
           [56][0-9][0-9]) ROPC_LAST_ANSWERED="$ROPC_STATUS" ;;
         esac
-        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
+        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${CURL_RC})"
         { [ "$i" -lt 5 ] && sleep 5; } || true
       done
       # A truncated 200 token response can land in the body of a transport
@@ -595,7 +687,7 @@ workflow:
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
             ;;
           *)
-            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
             ;;
         esac
         exit 1
@@ -2890,11 +2982,16 @@ lint:python:
   script:
     - ruff check genie-ai-overlay/
     - ruff format --check genie-ai-overlay/
+    # The provisioning harness ships Python too — outside every gate before
+    # this line existed, so style debt accumulated invisibly.
+    - ruff check tests/ci-provisioning/
+    - ruff format --check tests/ci-provisioning/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "genie-ai-overlay/**/*.py"
         - "genie-ai-overlay/pyproject.toml"
+        - "tests/ci-provisioning/**/*.py"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -3719,6 +3816,36 @@ config:docs-links:
         - "site/content/**/*"
         - "site/scripts/**/*"
         - "site/hugo.toml"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# The e2e provisioning-block stub-curl harness (#1337): executes the
+# Keycloak provisioning/readiness script item of .e2e_web_base under a
+# scripted stub curl — the guard semantics (retry classes, honest-status
+# echoes, loud failures) become regression-proofed instead of eyeballed.
+# Provenance: the scratch version caught a real bug the code review missed
+# during #1289 (see tests/ci-provisioning/README.md).
+config:provisioning-harness:
+  image: python:3.11-slim
+  stage: config
+  interruptible: true
+  dependencies: []
+  before_script:
+    - pip install --cache-dir .cache/pip "pyyaml==6.0.2"
+  cache:
+    - key: provisioning-harness-pyyaml
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - provisioning-harness-
+  script:
+    - bash tests/ci-provisioning/run.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "tests/ci-provisioning/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

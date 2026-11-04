@@ -3370,7 +3370,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
       ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
       ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
@@ -3405,7 +3405,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
-      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
     const walkJs = (dir, label, skipPaths) => {
       for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -3419,6 +3419,101 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       }
     };
     walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
+  });
+
+  // #1334: every provisioning call routes through the shared kc_curl helper
+  // — one capture path (status trailer + body + curl exit code captured
+  // OUTSIDE the command substitution) so the transient-classifier drift that
+  // produced #1289 round 1 cannot regrow. The retry loops classify CURL_RC
+  // inline; a status captured over a truncated body must stay distinguishable
+  // from a clean answer.
+  test('the shared kc_curl helper owns every provisioning capture', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('kc_curl() {');
+    // The section's $(curl capture sites are an exact, enumerated set: the
+    // kc_curl capture plus the nginx reachability probe (deliberately raw:
+    // different timeout/contract, fire-and-forget). Any third site re-grows
+    // the #1289 drift class this pin exists for; a deleted site (the helper
+    // losing its own capture) is equally visible — and the ROPC probe now
+    // routes through kc_curl, so a hand-rolled capture there fails this pin.
+    const curlCaptureLines = section.split('\n').filter((l) => l.includes('$(curl'));
+    expect(curlCaptureLines).toHaveLength(2);
+    // The kc_curl capture: bounded timeout flags inline — a helper that
+    // drops them reintroduces the #1289 stall class through every routed
+    // call — and the rc check OUTSIDE the command substitution: an inside
+    // form (`... "$@" || CURL_RC=$?)`) ends the line with the
+    // substitution's closing paren and every transport failure looks like
+    // a clean exit again.
+    const kcCapture = curlCaptureLines.filter(
+      (l) => l.includes('KC_RAW=$(curl -sk --connect-timeout 5 --max-time 10') && l.endsWith(') || CURL_RC=$?')
+    );
+    expect(kcCapture).toHaveLength(1);
+  });
+
+  // #1319: a definitive 401 OAuth rejection cannot heal on retry and every
+  // failed attempt feeds Keycloak's brute-force protector — the loop must
+  // fail fast instead of burning the readiness budget on a dead end.
+  test('the readiness loop fails fast on a definitive token rejection', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('definitively rejected');
+    expect(section).toContain('Check KEYCLOAK_ADMIN_PASSWORD');
+    // The threshold itself is pinned: a drift to a larger value would
+    // silently restore the burn-the-budget behavior the fail-fast exists
+    // to remove.
+    expect(section).toContain('[ "$TOKEN_REJECT_RUN" -ge 3 ]');
+  });
+
+  // #1320: the admin token is acquired by the loop itself — a 401 on the
+  // client lookup is a definitive authentication failure of that token, not
+  // a readiness condition. Pin the fail-fast (no silent re-acquisition).
+  test('a 401 on the client lookup fails instead of retrying a dead token', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('rejected during the genie-app client lookup');
+    expect(section).toContain('failing instead of retrying with a dead token');
+  });
+});
+
+// #1330: the CI e2e realm's email-verification posture is the compose
+// default (KEYCLOAK_VERIFY_EMAIL:-true → configs/keycloak/genie-realm.yaml
+// verifyEmail), asserted at provisioning time by the fixture-health gate
+// (fresh accounts ship emailVerified + no required actions). The deploy-job
+// rewrite that "guarded" the posture was dead code — the env template
+// carries the line commented, so its grep never matched. The template must
+// KEEP the knob commented: an uncommented line would flip the CI realm
+// posture silently, with no test observing the change.
+describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
+  test('the env template keeps KEYCLOAK_VERIFY_EMAIL commented out', () => {
+    const parsed = parseEnvTemplate(ENV_FILE);
+    // No active definition — the compose default is the single source of
+    // the e2e posture.
+    expect(parsed.variables.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(0);
+    // The knob stays documented (commented) so operators can see it exists.
+    expect(parsed.documented.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(1);
+  });
+
+  test('the deploy job carries no KEYCLOAK_VERIFY_EMAIL rewrite', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    // Only the explanatory comment may mention the var — any rewrite
+    // machinery (loop entry, sed arm) is forbidden outright.
+    const lines = content.split('\n').filter((l) => l.includes('KEYCLOAK_VERIFY_EMAIL'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\s*#/);
+  });
+
+  test('compose pins the default posture the e2e suite runs', () => {
+    // Through the shared compose parser, not a raw-text grep: the parser
+    // already resolves ${VAR:-default} forms and skips comment lines, so
+    // the pin asserts the semantic (a default of true) rather than one
+    // spelling of it.
+    expect(parseComposeEnvVars(COMPOSE_FILE)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'KEYCLOAK_VERIFY_EMAIL',
+          default: 'true',
+          hasDefault: true
+        })
+      ])
+    );
   });
 });
 

@@ -1,7 +1,8 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const userProvisioningService = require('./user-provisioning-service');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -28,8 +29,10 @@ const keycloakProxyService = {
   /**
    * Resolve a Keycloak UUID from an ArangoDB user record
    * @param {string} userKey - ArangoDB _key
-   * @returns {Promise<string>} Keycloak UUID (sub field)
-   * @throws {Error} If user not found or sub field missing
+   * @returns {Promise<{sub: string|null, issSub: string|null}>} The Keycloak UUID (sub field)
+   *   and the provisioning identifier (iss_sub); either may be null (user never logged
+   *   in via Keycloak, or record already erased)
+   * @throws {Error} If user not found
    */
   async _resolveKeycloakUserId(userKey) {
     const db = await dbService.getConnection('default');
@@ -37,16 +40,16 @@ const keycloakProxyService = {
       aql`
         FOR u IN users
           FILTER u._key == ${userKey}
-          RETURN u.sub
+          RETURN { sub: u.sub, issSub: u.iss_sub }
       `
     );
-    const sub = await cursor.next();
+    const user = await cursor.next();
 
-    if (!sub) {
-      throw new Error(`User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
+    if (!user) {
+      throw new Error(`User ${userKey} not found`);
     }
 
-    return sub;
+    return { sub: user.sub || null, issSub: user.issSub || null };
   },
 
   /**
@@ -185,22 +188,40 @@ const keycloakProxyService = {
    * @throws {Error} If ArangoDB erasure fails after Keycloak delete (partial erasure state)
    */
   async deleteUser(userKey) {
-    const uuid = await this._resolveKeycloakUserId(userKey);
+    const resolved = await this._resolveKeycloakUserId(userKey);
+    const uuid = resolved.sub;
+    const issSub = resolved.issSub;
     logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
-    // Delete from Keycloak first (authoritative source)
-    try {
-      await this._adminApiCall('DELETE', `/users/${uuid}`);
-    } catch (error) {
-      if (error.status === 404) {
-        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { userKey, uuid });
-        return;
+    // Evict the provisioning cache BEFORE erasing, so the middleware stops
+    // serving the pre-erasure profile for the remainder of the cache TTL.
+    if (issSub) {
+      userProvisioningService.invalidateCache(issSub);
+    }
+
+    // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
+    // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
+    // the ArangoDB record may still hold the user's PII, and the erasure —
+    // including the provisioning tombstone — must happen regardless.
+    if (uuid) {
+      try {
+        await this._adminApiCall('DELETE', `/users/${uuid}`);
+      } catch (error) {
+        if (error.status !== 404) {
+          throw error;
+        }
+        logger.info('[KeycloakProxy] User already deleted from Keycloak, continuing with ArangoDB erasure', {
+          userKey,
+          uuid
+        });
       }
-      throw error;
+    } else {
+      logger.warn('[KeycloakProxy] No Keycloak UUID on user record, skipping Keycloak delete', { userKey });
     }
 
     // Then erase PII from ArangoDB
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
+    const erasedKey = issSub ? erasureTombstoneKey(issSub) : null;
     const db = await dbService.getConnection('default');
     try {
       await db.query(
@@ -209,14 +230,15 @@ const keycloakProxyService = {
             FILTER u._key == ${userKey}
             UPDATE u WITH {
               deleted: true,
-              // Erasure tombstone: SHA256 of iss_sub computed BEFORE it is nulled
-              // below. The provisioning UPSERT is keyed on iss_sub, which this
-              // erasure nulls — without the tombstone, a still-valid access token
-              // would re-INSERT the erased identity on the next provision cycle.
-              // SHA256(iss_sub) is not personal data and survives the nulling, so
-              // user-provisioning-service._doProvision can recognize and refuse
-              // the erased subject.
-              erased_key: u.iss_sub == null ? null : SHA256(u.iss_sub),
+              // Erasure tombstone: the SHA-256 digest of iss_sub, computed before
+              // that field is nulled below. The provisioning UPSERT is keyed on
+              // iss_sub, which this erasure nulls — without the tombstone, a
+              // still-valid access token would re-INSERT the erased identity on
+              // the next provision cycle. The digest is pseudonymous: it cannot
+              // be reversed to the subject it was derived from, and it is
+              // retained solely so user-provisioning-service can recognize and
+              // refuse the erased subject at provisioning time.
+              erased_key: ${erasedKey},
               erasedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW()),
               email: null,

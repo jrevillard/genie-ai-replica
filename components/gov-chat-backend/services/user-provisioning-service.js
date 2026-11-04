@@ -1,7 +1,7 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -53,6 +53,17 @@ const userProvisioningService = {
   async initialize() {
     if (_initialized) return;
     _initialized = true;
+    // Erasure tombstone lookup index. Sparse: only erased documents carry
+    // erased_key, so live-user provisioning never touches the index tree.
+    // Ensured here (idempotent, boot-time) rather than only in the migration
+    // script so existing deployments pick it up without an ops step.
+    const db = await dbService.getConnection('default');
+    await db.collection('users').ensureIndex({
+      type: 'persistent',
+      fields: ['erased_key'],
+      sparse: true,
+      name: 'idx_users_erased_key'
+    });
     logger.info('[UserProvisioning] Schema initialization complete');
   },
 
@@ -106,20 +117,28 @@ const userProvisioningService = {
     // (keycloak-proxy-service.deleteUser) nulls iss_sub on the user document, so
     // the UPSERT below (keyed on iss_sub) would find nothing and INSERT a fresh
     // document from the still-valid token claims, resurrecting the erased
-    // identity. The erasure path writes erased_key = SHA256(iss_sub) before
-    // nulling it; the hash is not personal data, so it survives the erasure and
-    // lets us recognize the erased subject here. The erased document is returned
-    // as-is (deleted: true) — the middleware answers 403 for deleted users.
+    // identity. The erasure path leaves behind a pseudonymous marker —
+    // erased_key, the SHA-256 digest of iss_sub written before the nulling —
+    // which is retained for the sole purpose of recognizing (and refusing) the
+    // erased subject at provisioning time. The digest is bound from here (not
+    // computed in AQL) so the sparse index on erased_key serves the lookup. The
+    // erased document is returned as-is (deleted: true) — the middleware answers
+    // 403 for deleted users.
+    const erasedKey = erasureTombstoneKey(issSub);
     const erasedCursor = await db.query(
       aql`
         FOR u IN users
-          FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == SHA256(${issSub})
+          FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
           RETURN u
       `
     );
     const erasedUser = await erasedCursor.next();
     if (erasedUser) {
-      logger.info(`[UserProvisioning] Blocked re-provisioning of erased user ${issSub}`);
+      // Log the tombstone digest prefix only — persisting the erased iss_sub
+      // here would re-materialize the identity this check exists to protect.
+      logger.info(
+        `[UserProvisioning] Blocked re-provisioning of erased user (tombstone ${erasedKey.substring(0, 12)})`
+      );
       _cache.set(issSub, { user: erasedUser, expiresAt: Date.now() + CACHE_TTL_MS });
       return erasedUser;
     }
@@ -227,6 +246,17 @@ const userProvisioningService = {
     }
 
     return user;
+  },
+
+  /**
+   * Evict a user from the in-memory provisioning cache.
+   * Called by the GDPR erasure (keycloak-proxy-service.deleteUser) so the
+   * pre-erasure profile stops being served for the remainder of the cache TTL.
+   * @param {string} issSub - User identifier (iss#sub format)
+   * @returns {void}
+   */
+  invalidateCache(issSub) {
+    _cache.delete(issSub);
   },
 
   /**

@@ -13,7 +13,8 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    dbService: { getConnection: jest.fn() }
+    dbService: { getConnection: jest.fn() },
+    erasureTombstoneKey: (issSub) => require('crypto').createHash('sha256').update(issSub).digest('hex')
   }),
   { virtual: true }
 );
@@ -35,7 +36,10 @@ function createMockCursor(results) {
 beforeEach(() => {
   jest.clearAllMocks();
 
-  mockDb = { query: jest.fn() };
+  mockDb = {
+    query: jest.fn(),
+    collection: jest.fn().mockReturnValue({ ensureIndex: jest.fn().mockResolvedValue({}) })
+  };
   const { dbService } = require('../../shared-lib');
   dbService.getConnection.mockResolvedValue(mockDb);
 
@@ -229,6 +233,13 @@ describe('UserProvisioningService', () => {
 
       expect(result._key).toBe('user-erased');
       expect(result.deleted).toBe(true);
+      // Tombstone lookup contract: match on erased_key bound to the SHA-256
+      // digest of the token's iss_sub, on a document whose iss_sub was nulled.
+      const tombstoneQuery = mockDb.query.mock.calls[0][0];
+      expect(tombstoneQuery.strings.join('')).toContain('u.erased_key ==');
+      expect(tombstoneQuery.strings.join('')).toContain('u.iss_sub == null');
+      const expectedDigest = require('crypto').createHash('sha256').update('iss/sub-1').digest('hex');
+      expect(tombstoneQuery.values[0]).toBe(expectedDigest);
       // Only the tombstone lookup ran — no legacy migration, no soft-delete check, no UPSERT
       expect(mockDb.query).toHaveBeenCalledTimes(1);
       const { logger } = require('../../shared-lib');

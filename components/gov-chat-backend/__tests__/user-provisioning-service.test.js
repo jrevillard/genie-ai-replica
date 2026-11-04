@@ -18,7 +18,8 @@ jest.mock(
     },
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
-    }
+    },
+    erasureTombstoneKey: (issSub) => require('crypto').createHash('sha256').update(issSub).digest('hex')
   }),
   { virtual: true }
 );

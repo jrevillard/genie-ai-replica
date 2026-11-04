@@ -169,6 +169,7 @@ const userProvisioningService = {
     };
 
     const updateDoc = {
+      sub: decodedToken.sub,
       email: decodedToken.email || null,
       name: decodedToken.name || decodedToken.preferred_username || null,
       emailVerified: decodedToken.email_verified || false,

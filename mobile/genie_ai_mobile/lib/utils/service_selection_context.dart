@@ -25,13 +25,16 @@ categoryContextFromSelection(Map<String, dynamic> selection) {
   final String categoryName =
       selection['name']?.toString() ?? 'Unknown Service';
   // BOTH spellings travel to the chat: display (name) and the EN wire
-  // labels (the SSOT the retriever filters on).
+  // labels (the SSOT the retriever filters on). The labels tolerate the
+  // same shape the web's button mapping tolerates: a bare String is ONE
+  // label — the hard List cast would crash on it instead.
   final String categoryNameEn = selection['categoryNameEn']?.toString() ?? '';
-  final List<String> serviceLabelsEn =
-      (selection['serviceLabelsEn'] as List<dynamic>? ?? const <dynamic>[])
-          .map((e) => e.toString())
-          .where((e) => e.isNotEmpty)
-          .toList();
+  final rawLabels = selection['serviceLabelsEn'];
+  final List<String> serviceLabelsEn = rawLabels is List
+      ? rawLabels.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+      : rawLabels is String && rawLabels.isNotEmpty
+      ? <String>[rawLabels]
+      : <String>[];
   // How many services were picked: a picked service with no EN
   // translation contributes no label, and the chat must refuse the
   // send instead of quietly narrowing the query to the category.

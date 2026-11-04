@@ -2987,78 +2987,88 @@ describe('ChatBotComponent', () => {
 
     it('the broken face waits for the hierarchy to settle (#1382)', async () => {
       // Hold the hierarchy's answer: the window under test is the one
-      // where the config has landed but the tree has not.
+      // where the config has landed but the tree has not. The finally
+      // restores the resolved mock even on a mid-test failure — a
+      // leaked pending promise would push every later test into a
+      // loading state far from the real breakage.
       const serviceTreeService = require('../../services/serviceTreeService');
       let resolveTree;
-      serviceTreeService.getAllCategories.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveTree = resolve;
-          })
-      );
-      const wrapper = await mountWithButtons([
-        {
-          id: 'scope-entry',
-          title: { en: 'Crops card' },
-          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
-          serviceLabels: ['Crops'],
-          category: '2',
-          placement: 'composer'
-        }
-      ]);
-      const vm = wrapper.vm;
-      // The tree is still ON ITS WAY: the scope cannot be verified yet,
-      // and the composer mounts before the grid settles — flashing the
-      // error face here would name a failure recovery is about to end.
-      expect(vm.serviceCategoriesStatus).toBe('loading');
-      expect(vm.composerBrokenFace).toBe(false);
-      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(false);
-      expect(wrapper.find('[data-testid="welcome-composer-leading-mark"]').exists()).toBe(true);
+      try {
+        serviceTreeService.getAllCategories.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveTree = resolve;
+            })
+        );
+        const wrapper = await mountWithButtons([
+          {
+            id: 'scope-entry',
+            title: { en: 'Crops card' },
+            icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+            serviceLabels: ['Crops'],
+            category: '2',
+            placement: 'composer'
+          }
+        ]);
+        const vm = wrapper.vm;
+        // The tree is still ON ITS WAY: the scope cannot be verified
+        // yet, and the composer mounts before the grid settles —
+        // flashing the error face here would name a failure recovery is
+        // about to end.
+        expect(vm.serviceCategoriesStatus).toBe('loading');
+        expect(vm.composerBrokenFace).toBe(false);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="welcome-composer-leading-mark"]').exists()).toBe(true);
 
-      // Settled: a scope the tree cannot EN-name (an empty tree) is a
-      // real failure — the face appears.
-      resolveTree([]);
-      await flushPromises();
+        // Settled: a scope the tree cannot EN-name (an empty tree) is a
+        // real failure — the face appears.
+        resolveTree([]);
+        await flushPromises();
 
-      expect(vm.composerBrokenFace).toBe(true);
-      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
-      // Restore the resolved mock the rest of the suite reads.
-      mockLiveTree([]);
+        expect(vm.composerBrokenFace).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      } finally {
+        mockLiveTree([]);
+      }
     });
 
     it('a TITLE-broken entry shows the face while the hierarchy is still loading (#1382)', async () => {
       // The title half of the verdict is a configuration fact: the
       // hierarchy has nothing to do with it, so the face must not wait
-      // for the tree the way the scope half does.
+      // for the tree the way the scope half does. Same finally-restore
+      // as the settle test: a pending tree mock must not leak.
       const serviceTreeService = require('../../services/serviceTreeService');
       let resolveTree;
-      serviceTreeService.getAllCategories.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveTree = resolve;
-          })
-      );
-      const wrapper = await mountWithButtons([
-        {
-          id: 'titleless-entry',
-          title: { en: '' },
-          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
-          category: null,
-          placement: 'composer'
-        }
-      ]);
-      const vm = wrapper.vm;
+      try {
+        serviceTreeService.getAllCategories.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveTree = resolve;
+            })
+        );
+        const wrapper = await mountWithButtons([
+          {
+            id: 'titleless-entry',
+            title: { en: '' },
+            icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+            category: null,
+            placement: 'composer'
+          }
+        ]);
+        const vm = wrapper.vm;
 
-      expect(vm.serviceCategoriesStatus).toBe('loading');
-      expect(vm.composerBrokenFace).toBe(true);
-      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
-        'chatbot.quickHelpTitleMissing'
-      );
+        expect(vm.serviceCategoriesStatus).toBe('loading');
+        expect(vm.composerBrokenFace).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
+          'chatbot.quickHelpTitleMissing'
+        );
 
-      resolveTree([]);
-      await flushPromises();
-      mockLiveTree([]);
+        resolveTree([]);
+        await flushPromises();
+      } finally {
+        mockLiveTree([]);
+      }
     });
 
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {

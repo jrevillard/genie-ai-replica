@@ -54,4 +54,15 @@ void main() {
     });
     expect(context.serviceCount, 2);
   });
+
+  test(
+    'a bare-String serviceLabelsEn is ONE label, the shape the web mapping tolerates',
+    () {
+      final context = categoryContextFromSelection(<String, dynamic>{
+        'serviceLabelsEn': 'Births',
+      });
+      expect(context.serviceLabelsEn, ['Births']);
+      expect(context.serviceCount, 1);
+    },
+  );
 }

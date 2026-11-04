@@ -184,10 +184,47 @@ describe('ServiceCategoryService', () => {
       expect(result._key).toBe('svc-1');
       expect(result.status).toBe('updated');
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Updated' });
-      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
-        expect.objectContaining({ languageCode: 'EN', translation: 'Updated' }),
-        expect.objectContaining({ overwrite: true })
+      // One upsert round trip carries the EN row and the payload rows.
+      const docs = mockDb.query.mock.calls[0][0].values[0];
+      expect(docs).toHaveLength(2);
+      expect(docs[0]).toEqual(
+        expect.objectContaining({ _key: 'svc-1_EN', languageCode: 'EN', translation: 'Updated' })
       );
+      expect(docs[1]).toEqual(
+        expect.objectContaining({ _key: 'svc-1_FR', languageCode: 'FR', translation: 'Mis a jour' })
+      );
+    });
+
+    it('sets createdAt on INSERT only — the UPDATE half never touches it', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateServiceWithTranslations('svc-1', {
+        nameEN: 'Updated',
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
+      });
+
+      const text = mockDb.query.mock.calls[0][0].strings.join('|');
+      // The INSERT half assigns both timestamps; the UPDATE half refreshes
+      // only translation/isActive/updatedAt — the creation timestamp of an
+      // existing row must survive every edit of its owner.
+      expect(text).toMatch(/INSERT\s+MERGE\(doc,\s*\{\s*createdAt:/);
+      expect(text).toMatch(/UPDATE\s*\{\s*translation:\s*doc\.translation,\s*isActive:\s*true,\s*updatedAt:/);
+      expect(text).not.toMatch(/UPDATE[^|]*createdAt/);
+    });
+
+    it('removes rows the payload no longer carries, keeping the payload keys', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateServiceWithTranslations('svc-1', {
+        nameEN: 'Updated',
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
+      });
+
+      // Upsert round trip + GC round trip.
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      const gc = mockDb.query.mock.calls[1][0];
+      expect(gc.strings.join('|')).toMatch(/REMOVE/);
+      expect(gc.values[3]).toEqual(['svc-1_EN', 'svc-1_FR']);
     });
 
     it('stores a trimmed nameEN on the parent document and the EN translation', async () => {
@@ -199,10 +236,8 @@ describe('ServiceCategoryService', () => {
       });
 
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Padded Name' });
-      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
-        expect.objectContaining({ languageCode: 'EN', translation: 'Padded Name' }),
-        expect.anything()
-      );
+      const docs = mockDb.query.mock.calls[0][0].values[0];
+      expect(docs[0]).toEqual(expect.objectContaining({ languageCode: 'EN', translation: 'Padded Name' }));
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
@@ -220,7 +255,6 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow('unexpected shape');
 
       // no mutation at all: the EN upsert and the REMOVE must not run
-      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -231,7 +265,6 @@ describe('ServiceCategoryService', () => {
           translations: [{ languageCode: 'fr', translation: 'a' }, null]
         })
       ).rejects.toThrow('unexpected shape');
-      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -244,10 +277,8 @@ describe('ServiceCategoryService', () => {
       });
 
       expect(result.status).toBe('updated');
-      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
-        expect.objectContaining({ _key: 'svc-1_FR', languageCode: 'FR', translation: 'Mis a jour' }),
-        expect.anything()
-      );
+      const docs = mockDb.query.mock.calls[0][0].values[0];
+      expect(docs[1]).toEqual(expect.objectContaining({ _key: 'svc-1_FR', languageCode: 'FR' }));
     });
 
     it('should throw when service does not exist', async () => {
@@ -312,7 +343,6 @@ describe('ServiceCategoryService', () => {
           translations: [{ languageCode: 'fr', translation: 123 }]
         })
       ).rejects.toThrow('unexpected shape');
-      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -326,7 +356,6 @@ describe('ServiceCategoryService', () => {
           ]
         })
       ).rejects.toThrow('Duplicate languageCode');
-      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -335,7 +364,9 @@ describe('ServiceCategoryService', () => {
 
       await service.updateServiceWithTranslations('svc-1', { nameEN: 'Renamed' });
 
-      expect(mockDb.query).not.toHaveBeenCalled();
+      // The EN upsert only — no GC pass runs.
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.mock.calls[0][0].values[0]).toHaveLength(1);
     });
 
     it('treats an explicit empty translations array as clear-all', async () => {
@@ -343,8 +374,9 @@ describe('ServiceCategoryService', () => {
 
       await service.updateServiceWithTranslations('svc-1', { nameEN: 'Renamed', translations: [] });
 
-      expect(mockDb.query).toHaveBeenCalled();
-      expect(mockServiceTranslations.save).toHaveBeenCalledTimes(1); // EN upsert only
+      // Upsert (EN row only) + GC removing every non-EN row of the owner.
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      expect(mockDb.query.mock.calls[1][0].values[3]).toEqual(['svc-1_EN']);
     });
 
     it('rejects an EN entry — the English name is owned by nameEN', async () => {
@@ -354,7 +386,6 @@ describe('ServiceCategoryService', () => {
           translations: [{ languageCode: 'en', translation: 'Impots' }]
         })
       ).rejects.toThrow("must not include 'EN'");
-      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
     });
   });
 
@@ -702,6 +733,22 @@ describe('ServiceCategoryService', () => {
       ]);
     });
 
+    it('answers a typed 404 for an unknown category id — same contract as the write paths', async () => {
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.getCategoryTranslations('ghost-cat');
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
+      // The translations query must not run for a category that does not exist.
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
     it('should throw Error when categoryKey is missing', async () => {
       await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
     });
@@ -713,6 +760,21 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.getServiceTranslations('svc-1');
       expect(result).toHaveLength(1);
+    });
+
+    it('answers a typed 404 for an unknown service id — same contract as the write paths', async () => {
+      mockServices.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.getServiceTranslations('ghost-svc');
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
+      expect(mockDb.query).not.toHaveBeenCalled();
     });
 
     it('should throw Error when serviceKey is missing', async () => {
@@ -761,10 +823,12 @@ describe('ServiceCategoryService', () => {
       });
 
       expect(result).toEqual({ _key: 'cat-1', status: 'updated' });
-      expect(mockServiceCategoryTranslations.save).toHaveBeenCalledWith(
-        expect.objectContaining({ languageCode: 'EN', translation: 'Updated' }),
-        expect.objectContaining({ overwrite: true })
+      const docs = mockDb.query.mock.calls[0][0].values[0];
+      expect(docs).toHaveLength(2);
+      expect(docs[0]).toEqual(
+        expect.objectContaining({ _key: 'cat-1_EN', languageCode: 'EN', translation: 'Updated' })
       );
+      expect(docs[1]).toEqual(expect.objectContaining({ _key: 'cat-1_FR', languageCode: 'FR' }));
       expect(mockServiceCategories.update).toHaveBeenCalledWith('cat-1', { nameEN: 'Updated' });
     });
 
@@ -784,7 +848,6 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
 
-      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -795,7 +858,6 @@ describe('ServiceCategoryService', () => {
           translations: [{ languageCode: 'fr', translation: 123 }]
         })
       ).rejects.toThrow('unexpected shape');
-      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -809,7 +871,6 @@ describe('ServiceCategoryService', () => {
           ]
         })
       ).rejects.toThrow('Duplicate languageCode');
-      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
@@ -818,7 +879,9 @@ describe('ServiceCategoryService', () => {
 
       await service.updateCategoryWithTranslations('cat-1', { nameEN: 'Renamed' });
 
-      expect(mockDb.query).not.toHaveBeenCalled();
+      // The EN upsert only — no GC pass runs.
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.mock.calls[0][0].values[0]).toHaveLength(1);
     });
 
     it('treats an explicit empty translations array as clear-all', async () => {
@@ -826,8 +889,9 @@ describe('ServiceCategoryService', () => {
 
       await service.updateCategoryWithTranslations('cat-1', { nameEN: 'Renamed', translations: [] });
 
-      expect(mockDb.query).toHaveBeenCalled();
-      expect(mockServiceCategoryTranslations.save).toHaveBeenCalledTimes(1); // EN upsert only
+      // Upsert (EN row only) + GC removing every non-EN row of the owner.
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      expect(mockDb.query.mock.calls[1][0].values[3]).toEqual(['cat-1_EN']);
     });
   });
 });

@@ -238,7 +238,10 @@ const keycloakProxyService = {
     // Whether the erasure UPDATE committed — a failure BEFORE it did must not
     // destroy the uploads (the database record is still intact and an
     // operator may repair the account); a failure AFTER it did must still
-    // clean them up.
+    // clean them up. Known window: a lost response AFTER a server-side
+    // commit (connection reset, proxy timeout) leaves the flag false — the
+    // conservative direction (files survive an erased account), healable
+    // only by an operator retrying the erasure.
     let erasureCommitted = false;
     try {
       await db.query(

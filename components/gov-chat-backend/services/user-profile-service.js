@@ -400,9 +400,12 @@ class UserProfileService {
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
       const fieldsPreserved = rows[0];
-      logger.debug('UserProfileService.preserving_fields', {
+      // The preserve SET is static; which of its fields the document actually
+      // carried is decided server-side by KEEP — so this log reports the set
+      // definition, not per-document carried fields.
+      logger.debug('UserProfileService.preserve_set', {
         userKey,
-        fields: preserveFields
+        size: preserveFields.length
       });
       logger.info('UserProfileService.user_document_replaced', { userKey });
 

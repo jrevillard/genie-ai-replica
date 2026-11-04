@@ -390,12 +390,10 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({
-            next: jest
-              .fn()
-              .mockResolvedValue({
-                new: { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-                old: null
-              })
+            next: jest.fn().mockResolvedValue({
+              new: { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+              old: null
+            })
           })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
@@ -426,12 +424,10 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({
-            next: jest
-              .fn()
-              .mockResolvedValue({
-                new: { _key: 'user-fresh', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-                old: null
-              })
+            next: jest.fn().mockResolvedValue({
+              new: { _key: 'user-fresh', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+              old: null
+            })
           })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
@@ -463,12 +459,10 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({
-            next: jest
-              .fn()
-              .mockResolvedValue({
-                new: { _key: 'user-race', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
-                old: null
-              })
+            next: jest.fn().mockResolvedValue({
+              new: { _key: 'user-race', email: 'test@test.com', name: null, emailVerified: false, roles: [] },
+              old: null
+            })
           })
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
 

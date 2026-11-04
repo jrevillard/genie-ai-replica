@@ -77,6 +77,22 @@ function releaseSlot() {
  * them, it does not die for them. */
 async function stampSources(repoId, fileIds) {
   const db = await getDb();
+  // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
+  // repo id so doc-repo's serve paths can refuse locally (no okf-server
+  // round-trip at download time). Read at stamp moment from the repo doc —
+  // the Access-panel toggle re-propagates on every later flip.
+  let restricted = false;
+  try {
+    const repoDoc = await db.collection(COLLECTION).document(repoId);
+    restricted = Boolean(repoDoc && repoDoc.acl && repoDoc.acl.restricted);
+  } catch (err) {
+    if (!isArangoNotFound(err)) {
+      logger.warn('okf_restricted stamp: repo doc unreadable — stamping unrestricted (non-fatal)', {
+        repo_id: repoId,
+        error: err.message
+      });
+    }
+  }
   const metas = [];
   let stampFailures = 0;
   for (const file_id of fileIds) {
@@ -103,7 +119,7 @@ async function stampSources(repoId, fileIds) {
     try {
       await authedAxios.patch(
         `${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`,
-        { okf_repo_id: repoId },
+        { okf_repo_id: repoId, okf_restricted: restricted },
         { timeout: 10000 }
       );
     } catch (err) {
@@ -155,6 +171,61 @@ async function stampSources(repoId, fileIds) {
     logger.warn('source_documents stamp failed (non-fatal)', { repo_id: repoId, error: err.message });
   }
   return metas;
+}
+
+/**
+ * D4 (W4 story 2, 2026-11-04): re-propagate the repo's restriction snapshot
+ * onto every stamped source file AFTER the import — the Access-panel toggle
+ * (PUT /:repo_id/access) calls this on every flip so a repo restricted mid-
+ * life does not leave its sources downloadable. Best-effort per file (same
+ * contract as stampSources): the toggle itself has already succeeded and a
+ * doc-repo hiccup must never undo it — the caller audits the result so a
+ * stale snapshot is VISIBLE (named drift risk of the snapshot mechanism).
+ * A source doc that is already gone (repo delete hard-purges backing files)
+ * counts as settled, not failed.
+ *
+ * @param {string} repoId
+ * @param {boolean} restricted
+ * @returns {Promise<{repo_id, restricted, patched: string[], failed: Array<{file_id, error}>, gone: string[], total: number}>}
+ */
+async function propagateRestrictedToSources(repoId, restricted) {
+  const db = await getDb();
+  let fileIds; // the catch returns, so every fall-through use is assigned
+  try {
+    const repoDoc = await db.collection(COLLECTION).document(repoId);
+    fileIds = (repoDoc && repoDoc.source_documents || []).map((s) => s && s.file_id).filter(Boolean);
+  } catch (err) {
+    logger.warn('okf_restricted propagation: repo doc unreadable — nothing propagated', {
+      repo_id: repoId,
+      error: err.message
+    });
+    return { repo_id: repoId, restricted, patched: [], failed: [], gone: [], total: 0 };
+  }
+  const patched = [];
+  const failed = [];
+  const gone = [];
+  for (const file_id of fileIds) {
+    try {
+      await authedAxios.patch(
+        `${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`,
+        { okf_restricted: restricted },
+        { timeout: 10000 }
+      );
+      patched.push(file_id);
+    } catch (err) {
+      // 404 = the backing file is already gone (delete cascade) — settled.
+      if (err && err.response && err.response.status === 404) gone.push(file_id);
+      else failed.push({ file_id, error: err && err.message ? err.message : String(err) });
+    }
+  }
+  if (failed.length > 0) {
+    logger.warn(
+      `okf_restricted propagation: ${failed.length}/${fileIds.length} source file(s) NOT updated — ` +
+        'their snapshot may be stale (a restricted repo whose sources still serve). Audit + re-toggle to repair.',
+      { repo_id: repoId, restricted, failed: failed.map((f) => f.file_id) }
+    );
+  }
+  return { repo_id: repoId, restricted, patched, failed, gone, total: fileIds.length };
 }
 
 // ── fetch + convert ─────────────────────────────────────────────────────────
@@ -870,6 +941,9 @@ module.exports = {
   live,
   // shared doc-repo envelope unwrap (lifecycle-service + crawl-conversion-service)
   docRepoFileOf,
+  // D4: the restricted-snapshot stamp + the Access-toggle propagation
+  stampSources,
+  propagateRestrictedToSources,
   // exported for unit tests (pure functions)
   segmentMarkdown,
   draftWholeMarkdown,

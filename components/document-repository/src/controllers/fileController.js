@@ -104,6 +104,34 @@ const isOkfServiceCaller = (req) => {
   return callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
 };
 
+// D4 (chat-source resolution, 2026-11-04): okf_restricted is okf-server's
+// LOCAL snapshot of the source repo's 6-1c restriction — stamped by the
+// import (producer-service.stampSources) and re-propagated by the
+// Access-panel toggle (propagateRestrictedToSources). The serve paths refuse
+// a restricted backing file to callers who are neither Admin nor okf-service:
+// the citizen-facing "original source" link (W5) must not become a side door
+// around the repo fence, and doc-repo must not need okf-server reachable at
+// download time (that is WHY the restriction is a stamped snapshot). 403, not
+// 404: the file exists in doc-repo's own inventory — this is an authorization
+// refusal the UI can render as an honest "source unavailable", distinct from
+// WS2's delete-protection 403 and from the okf-server fence's anti-enum 404.
+const mayServeOkfRestricted = (req) => {
+  const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
+  // Case-insensitive like isOkfServiceCaller — the token's role spelling has
+  // drifted across realms ('Admin' policy vs lowercase claims) and the refusal
+  // must key on the ROLE, not its casing.
+  return callerRoles.some((r) => String(r).toLowerCase() === 'admin') || isOkfServiceCaller(req);
+};
+const assertServeAllowed = (file, req) => {
+  if (file && file.okf_restricted === true && !mayServeOkfRestricted(req)) {
+    throw {
+      status: 403,
+      error: 'OKF_RESTRICTED',
+      message: 'This document belongs to a restricted OKF repository and cannot be downloaded or viewed without access'
+    };
+  }
+};
+
 // DW-426 (review 2026-10-29 round 3): ONE IN-list AQL replaces the per-file
 // getMetadataById loop (~N round-trips → 1).
 // Review !622 wave 2 (#78677): this guard now FAILS CLOSED — a failed lookup
@@ -188,7 +216,14 @@ const updateFileSchema = Joi.object({
   // Loose string (not .uuid()), matching repo_id above: repository ids in this
   // system are not guaranteed UUID-shaped, and the stamp must be clearable on
   // detach. Additive: this only widens the whitelist.
-  okf_repo_id: Joi.string().allow(null, '').max(256).optional()
+  okf_repo_id: Joi.string().allow(null, '').max(256).optional(),
+  // D4 (chat-source resolution, 2026-11-04): okf-server's LOCAL snapshot of
+  // the source repo's 6-1c restriction, stamped beside okf_repo_id by the
+  // import and re-propagated by the Access-panel toggle. Serve paths refuse
+  // a restricted backing file to callers who are neither Admin nor
+  // okf-service (assertServeAllowed) — no runtime dependency on okf-server,
+  // per the W4 mechanism decision (stamped restricted snapshot).
+  okf_restricted: Joi.boolean().optional()
 });
 
 // --- NEW SCHEMAS ADDED ---
@@ -654,6 +689,8 @@ class FileController {
     try {
       const { fileId } = req.params;
       const { file, filePath } = await this._getFileAndPath(fileId);
+      // D4: the serve gate runs BEFORE any bytes move (see assertServeAllowed).
+      assertServeAllowed(file, req);
 
       // Set appropriate headers, use file_name as the filename
       res.setHeader('Content-Disposition', buildContentDisposition('attachment', file.file_name));
@@ -702,10 +739,16 @@ class FileController {
       for (const fileId of fileIds) {
         try {
           const { file, filePath } = await this._getFileAndPath(fileId);
+          // D4: per-file refusal — the zip carries an honest error entry
+          // naming the refusal, not a fake "could not find".
+          assertServeAllowed(file, req);
           archive.file(filePath, { name: file.file_name });
-        } catch {
-          // Optionally, add a text file with error info for missing files
-          archive.append(`Error: Could not find file with ID ${fileId}\n`, { name: `ERROR_${fileId}.txt` });
+        } catch (err) {
+          // Optionally, add a text file with error info for missing files.
+          // D4: when the failure carries a code (OKF_RESTRICTED), name it —
+          // a refusal must not masquerade as a missing file.
+          const reason = err && err.error ? `${err.error}: ${err.message}` : `Could not find file with ID ${fileId}`;
+          archive.append(`Error: ${reason}\n`, { name: `ERROR_${fileId}.txt` });
         }
       }
 
@@ -742,7 +785,11 @@ class FileController {
   async viewFile(req, res) {
     try {
       const { fileId } = req.params;
-      const { file, base64String } = await this._getFileBase64(fileId);
+      // D4: same shape as the ingest path's byte-reader split — run the
+      // refusal guard on the metadata BEFORE paying for the base64 copies.
+      const { file, filePath } = await this._getFileAndPath(fileId);
+      assertServeAllowed(file, req);
+      const base64String = await this._readFileBase64(filePath);
 
       // construct response with file information and base64 string
       res.json({
@@ -779,6 +826,8 @@ class FileController {
     try {
       const { fileId } = req.params;
       const { file, filePath } = await this._getFileAndPath(fileId);
+      // D4: the serve gate runs BEFORE any bytes move (see assertServeAllowed).
+      assertServeAllowed(file, req);
 
       // Set appropriate headers for viewing in browser
       res.setHeader('Content-Disposition', buildContentDisposition('inline', file.file_name));

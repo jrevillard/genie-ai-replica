@@ -704,7 +704,6 @@ describe('Configuration Validation Suite', () => {
     };
 
     test('both guard knobs are piped in the okf-server compose block with an empty default (code default applies)', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       for (const name of Object.keys(GUARD_KNOBS)) {
@@ -784,7 +783,6 @@ describe('Configuration Validation Suite', () => {
   // verdict=unknown with an honest note (never a fake score).
   describe('Story 1-8g: OKF corpus-probe rerank endpoint plumbing', () => {
     test('OKF_RERANK_ENDPOINT is piped in the okf-server compose block with an empty default', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_ENDPOINT=\$\{OKF_RERANK_ENDPOINT:-\}/);
@@ -796,7 +794,6 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('OKF_RERANK_TOKEN is piped in the okf-server compose block with an empty default', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=\$\{OKF_RERANK_TOKEN:-\}/);
@@ -1062,9 +1059,9 @@ describe('Configuration Validation Suite', () => {
   // cosmetic.
   describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
     const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
-    const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
+    const blockStart = composeLines.findIndex((l) => /^ {2}dataprep-arango-service:/.test(l));
     let blockEnd = blockStart + 1;
-    while (blockEnd < composeLines.length && !/^  [a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
+    while (blockEnd < composeLines.length && !/^ {2}[a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
     const dataprepBlock = composeLines.slice(blockStart, blockEnd).join('\n');
 
     const composeDefaults = {};
@@ -1234,7 +1231,7 @@ describe('Configuration Validation Suite', () => {
         // Block ends at the next line indented exactly 2 spaces (the next
         // top-level key) — body lines are 4+ so /\n  \S/ skips them.
         const rest = composeText.slice(start + 10);
-        const next = rest.match(/\n  \S/);
+        const next = rest.match(/\n {2}\S/);
         const block = composeText.slice(start, next ? start + 10 + next.index : undefined);
         expect(block).toMatch(/profiles: \["okf"\]/);
         expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
@@ -3370,7 +3367,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
       ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
       ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
@@ -3405,7 +3402,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
-      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
     const walkJs = (dir, label, skipPaths) => {
       for (const name of fs.readdirSync(dir, { withFileTypes: true })) {

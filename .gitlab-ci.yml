@@ -2842,6 +2842,42 @@ lint:okf-server:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+lint:config-validator:
+  extends: .lint_node
+  # Companion to config:validate (#1408): the package ships its own
+  # lint/format scripts but no CI job ran them — new validators (the
+  # #1306/#1322 shell gate, and anything after) could ship with ESLint
+  # violations and Prettier drift behind a green pipeline.
+  variables:
+    # Same full-depth fetch lint:backend documents (2026-10-19): the
+    # default depth-20 fetch on a reused runner workspace left stale
+    # bytes of files unchanged within the shallow window — prettier then
+    # checked the wrong copy of a file this job exists to gate.
+    GIT_DEPTH: 0
+  before_script:
+    - cd tests/config-validator && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - tests/config-validator/package-lock.json
+        prefix: lint-config-validator
+      paths:
+        - tests/config-validator/node_modules/
+      fallback_keys:
+        - "lint-config-validator-$CI_DEFAULT_BRANCH"
+        - "lint-config-validator-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "tests/config-validator/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Format the scripts of the documentation site.  They live outside every
 # component directory, so no component's own lint job covers them; the
 # checker is CI-critical code, so it gets the same Prettier gate as the rest

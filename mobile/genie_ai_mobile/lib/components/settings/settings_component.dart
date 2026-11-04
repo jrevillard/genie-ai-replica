@@ -195,15 +195,9 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        final tokens = ThemeManager().tokens;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: tokens.surface,
-            content: Text(
-              tr("settings.cannotOpenAccountConsole"),
-              style: TextStyle(color: tokens.fg),
-            ),
-          ),
+        _showSettingsSnackBar(
+          ScaffoldMessenger.of(context),
+          "settings.cannotOpenAccountConsole",
         );
       }
     }
@@ -243,15 +237,9 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               }
             } catch (e) {
               if (mounted) {
-                final tokens = ThemeManager().tokens;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: tokens.surface,
-                    content: Text(
-                      tr("accountDeletionFailed"),
-                      style: TextStyle(color: tokens.fg),
-                    ),
-                  ),
+                _showSettingsSnackBar(
+                  ScaffoldMessenger.of(context),
+                  "accountDeletionFailed",
                 );
               }
             }
@@ -269,23 +257,68 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       content: Text(tr("settings.confirmResetUserData")),
       actions: [
         DsButton(
+          key: const Key('settings_reset_cancel_button'),
           label: tr("settings.cancel"),
           variant: DsButtonVariant.ghost,
           onPressed: () => Navigator.pop(context),
         ),
         DsButton(
+          key: const Key('settings_reset_confirm_button'),
           label: tr("settings.reset"),
           variant: DsButtonVariant.primary,
           onPressed: () async {
             Navigator.pop(context);
+            // Captured before any await: the outcome SnackBars must render
+            // even if the user navigates away mid-reset (the widget's own
+            // context would be defunct by then).
+            final messenger = ScaffoldMessenger.of(context);
             setState(() {
               _isLoading = true;
             });
-            await _userService.resetUserData();
-            _fetchUserData();
+            try {
+              final response = await _userService.resetUserData();
+              if (response['filesDeletionFailed'] == true) {
+                _showSettingsSnackBar(
+                  messenger,
+                  "settings.userDataResetFilesFailed",
+                );
+              }
+              if (!mounted) return;
+              await _fetchUserData();
+            } catch (e) {
+              debugPrint("[SETTINGS] Error resetting user data: $e");
+              _showSettingsSnackBar(
+                messenger,
+                "settings.failedToResetUserData",
+              );
+            } finally {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            }
           },
         ),
       ],
+    );
+  }
+
+  /// Shows a themed SnackBar with a translated settings message on the
+  /// given messenger. The reset-outcome notifications use the same
+  /// surface-on-fg style as the screen's other SnackBars; the messenger is
+  /// captured by the caller before any await so a mid-reset navigation
+  /// cannot lose the message.
+  void _showSettingsSnackBar(
+    ScaffoldMessengerState messenger,
+    String messageKey,
+  ) {
+    final tokens = ThemeManager().tokens;
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.surface,
+        content: Text(tr(messageKey), style: TextStyle(color: tokens.fg)),
+      ),
     );
   }
 
@@ -655,7 +688,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               _buildActionBtnCard(
                 tr("settings.resetUserData"),
                 tr("settings.resetUserDataDesc"),
-                isOnline ? _showResetDataWorkflow : null,
+                isOnline && !_isLoading ? _showResetDataWorkflow : null,
                 key: const Key('settings_reset_data_button'),
                 overrideColor: tokens.danger,
               ),

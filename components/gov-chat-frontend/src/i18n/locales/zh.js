@@ -957,6 +957,7 @@ export default {
     },
     processing: '处理中...',
     userDataReset: '您的资料数据已成功重置。',
+    userDataResetFilesFailed: '您的资料数据已重置，但部分存储的文件无法删除。请联系管理员。',
     failedToResetUserData: '重置您的资料数据失败。请稍后再试。',
     unableToLoadUser: '无法加载用户信息。请重试。',
     retry: '重试',

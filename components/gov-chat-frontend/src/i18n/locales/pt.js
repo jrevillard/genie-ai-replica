@@ -985,6 +985,8 @@ export default {
     },
     processing: 'Processando...',
     userDataReset: 'Seus dados de perfil foram redefinidos com sucesso.',
+    userDataResetFilesFailed:
+      'Seus dados de perfil foram redefinidos, mas alguns arquivos armazenados não puderam ser removidos. Por favor, contate um administrador.',
     failedToResetUserData: 'Falha ao redefinir seus dados de perfil. Por favor, tente novamente mais tarde.',
     unableToLoadUser: 'Incapaz de carregar informações do usuário. Por favor, tente novamente.',
     retry: 'Tentar Novamente',

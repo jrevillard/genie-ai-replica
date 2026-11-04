@@ -430,9 +430,10 @@ async function convergeUser(adminToken, realm, userData) {
             probeErr.httpStatus
           );
         }
-        if (probeErr.invalidPayload) {
-          // Keycloak answered with a broken payload: the probe could not
-          // run, and that is not a transport break.
+        if (probeErr.invalidPayload || probeErr.nonJsonBody) {
+          // Keycloak answered — with a broken payload or with something
+          // that is not JSON. The probe could not run, and that is not a
+          // transport break: retrying it would only burn the budget.
           throw new Error(
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
               `could not run: ${probeErr.message}`

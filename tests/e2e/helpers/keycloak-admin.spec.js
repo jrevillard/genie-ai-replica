@@ -318,6 +318,27 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     );
   });
 
+  test('a non-JSON probe answer is a permanent failure, not a transport break', async () => {
+    // The nginx HTML fallback for a wrong path answers 404 with HTML: the
+    // endpoint answered, so the retry budget must not burn on it.
+    const notJson = new Error(
+      'GET /auth/admin/realms/genie/users?email=testadmin%40e2e.test returned a non-JSON body (HTTP 404): <html>...'
+    );
+    notJson.nonJsonBody = true;
+    routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { throws: notJson }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBeFalsy();
+    expect(caught.message).toMatch(/non-JSON body \(HTTP 404\)/);
+  });
+
   test('a transport failure of the probe is transient, so the retry budget can save the provisioning', async () => {
     routes = [
       POST_USERS_409,

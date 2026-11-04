@@ -203,6 +203,8 @@ module.exports = (serviceCategoryService) => {
    *                   text:
    *                     type: string
    *                     example: "Santé et services sociaux"
+   *       '404':
+   *         description: The category does not exist
    *       '500':
    *         description: Server error
    */
@@ -242,6 +244,8 @@ module.exports = (serviceCategoryService) => {
    *     responses:
    *       '200':
    *         description: A list of translation objects
+   *       '404':
+   *         description: The service does not exist
    *       '500':
    *         description: Server error
    */

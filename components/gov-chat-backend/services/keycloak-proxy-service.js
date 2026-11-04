@@ -2,6 +2,7 @@
 
 const { aql } = require('arangojs');
 const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const { GOV_PROFILE_SECTIONS } = require('../constants/jit-fields');
 const userProvisioningService = require('./user-provisioning-service');
 const userProfileService = require('./user-profile-service');
 
@@ -11,6 +12,14 @@ const PROXY_CLIENT_ID = process.env.KEYCLOAK_PROXY_CLIENT_ID;
 const PROXY_CLIENT_SECRET = process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
 
 const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
+
+// Gov-profile sections and email-adjacent state nulled by the GDPR erasure,
+// derived from the shared constant — a profile section added to
+// GOV_PROFILE_SECTIONS is written AND erased; a hand-copied list here would
+// silently leak it past account deletion.
+const ERASURE_SECTION_NULLS = Object.fromEntries(
+  [...GOV_PROFILE_SECTIONS, 'emailVerified', 'pendingEmailChange', 'customSettings'].map((field) => [field, null])
+);
 
 // Service account token cache (lazy refresh on 401)
 let cachedToken = null;
@@ -231,7 +240,7 @@ const keycloakProxyService = {
         aql`
           FOR u IN users
             FILTER u._key == ${userKey}
-            UPDATE u WITH {
+            UPDATE u WITH MERGE({
               deleted: true,
               // Tombstone digest — contract: shared/lib/erasure-tombstone.js.
               // Written BEFORE iss_sub is nulled below, so provisioning can
@@ -249,20 +258,8 @@ const keycloakProxyService = {
               iss: null,
               iss_sub: null,
               roles: [],
-              active: false,
-              personalIdentification: null,
-              emailVerified: null,
-              pendingEmailChange: null,
-              customSettings: null,
-              civilRegistration: null,
-              addressResidency: null,
-              identityTravel: null,
-              healthMedical: null,
-              employment: null,
-              financialTax: null,
-              criminalLegal: null,
-              transportation: null
-            } IN users
+              active: false
+            }, ${ERASURE_SECTION_NULLS}) IN users
         `
       );
       // Remove any duplicate document a racing provision may have INSERTed
@@ -289,31 +286,27 @@ const keycloakProxyService = {
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
-      // The erasure UPDATE may already be committed (a late duplicate-removal
-      // failure lands here) — attempt the uploads cleanup before surfacing
-      // the error, so a committed erasure never leaves the files behind.
+      // The erasure UPDATE may already be committed — still clean the uploads.
       await this._cleanupUploads(userKey);
       throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
         cause: arangoError
       });
     }
 
-    // Remove the uploaded files (ID/health/financial documents) — the erasure
-    // is committed by now, so a deletion failure must not answer 500 for an
-    // erasure that already happened: warn and report success (same contract
-    // as resetUserData's filesDeletionFailed handling).
+    // Files cleanup (see _cleanupUploads for the failure contract).
     await this._cleanupUploads(userKey);
   },
 
   /**
    * Remove the user's uploaded files directory, tolerating failure (warn only).
-   * Used by the erasure paths — a cleanup failure after a committed erasure
-   * must not fail the operation that already erased the account.
+   * Runs on both erasure paths (success and PARTIAL_ERASURE) — the erasure
+   * UPDATE may already be committed when a failure surfaces, so a cleanup
+   * failure must never fail the operation that already erased the account.
    * @param {string} userKey - ArangoDB _key
    */
   async _cleanupUploads(userKey) {
     try {
-      await userProfileService.deleteUserFiles({ _key: userKey });
+      await userProfileService.deleteUserFiles(userKey);
     } catch (fileError) {
       logger.warn('[KeycloakProxy] Uploaded files deletion failed after erasure', {
         userKey,

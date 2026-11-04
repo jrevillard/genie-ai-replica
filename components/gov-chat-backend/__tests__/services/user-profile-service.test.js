@@ -251,7 +251,7 @@ describe('UserProfileService', () => {
 
   describe('deleteUserFiles', () => {
     it('should remove user directory when it exists', async () => {
-      await userProfileService.deleteUserFiles({ _key: 'user-1' });
+      await userProfileService.deleteUserFiles('user-1');
       expect(mockFsTracker.rmCalls.length).toBe(1);
       expect(mockFsTracker.rmCalls[0][0]).toContain('Uploads/user-1');
       expect(mockFsTracker.rmCalls[0][1]).toEqual({ recursive: true, force: true });
@@ -259,7 +259,7 @@ describe('UserProfileService', () => {
 
     it('should do nothing when directory does not exist', async () => {
       mockFsTracker.existsResults = false;
-      await userProfileService.deleteUserFiles({ _key: 'user-1' });
+      await userProfileService.deleteUserFiles('user-1');
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
   });
@@ -275,6 +275,13 @@ describe('UserProfileService', () => {
     const boundPreserveList = () => {
       const [boundQuery] = mockDb.query.mock.calls[0];
       return boundQuery.values.find((v) => Array.isArray(v));
+    };
+
+    // Reset with the standard queue and return the bound preserve list
+    const resetAndCapture = async () => {
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
+      await userProfileService.resetUserData('user-1');
+      return boundPreserveList();
     };
 
     it('should reset the document with a single server-side preserve query', async () => {
@@ -294,10 +301,7 @@ describe('UserProfileService', () => {
     });
 
     it('should preserve the identity fields the provisioning UPSERT matches on', async () => {
-      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
-      await userProfileService.resetUserData('user-1');
-
-      const preserveList = boundPreserveList();
+      const preserveList = await resetAndCapture();
       // Identity fields survive — the provisioning UPSERT matches on iss_sub,
       // the legacy migration matches on email. Losing either INSERTs a husk doc.
       expect(preserveList).toEqual(expect.arrayContaining(['iss_sub', 'sub', 'iss', 'email', 'name']));
@@ -315,10 +319,7 @@ describe('UserProfileService', () => {
     });
 
     it('should preserve the soft-delete and GDPR audit markers', async () => {
-      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
-      await userProfileService.resetUserData('user-1');
-
-      const preserveList = boundPreserveList();
+      const preserveList = await resetAndCapture();
       expect(preserveList).toEqual(expect.arrayContaining(['deleted', 'deletedAt', 'erasedAt', 'erased_key']));
     });
 
@@ -329,11 +330,9 @@ describe('UserProfileService', () => {
       // Limit: the query itself is exercised through the mock — the KEEP/MERGE
       // AQL semantics are validated by the CI contract run against real
       // ArangoDB, not here.
-      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
-      await userProfileService.resetUserData('user-1');
+      const preserveList = await resetAndCapture();
 
       const { SYSTEM_PRESERVED_FIELDS } = require('../../constants/jit-fields');
-      const preserveList = boundPreserveList();
       expect(preserveList).toEqual(SYSTEM_PRESERVED_FIELDS.filter((f) => f !== 'updatedAt'));
       // The preserve set is read from the STORED document server-side (the
       // KEEP loop variable), never from a client-facing profile read.
@@ -342,8 +341,7 @@ describe('UserProfileService', () => {
     });
 
     it('should not carry updatedAt over from the stored document (bumped server-side)', async () => {
-      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
-      await userProfileService.resetUserData('user-1');
+      await resetAndCapture();
 
       const preserveList = boundPreserveList();
       expect(preserveList).not.toContain('updatedAt');
@@ -352,10 +350,7 @@ describe('UserProfileService', () => {
     });
 
     it('should wipe the profile data (not part of the preserve set)', async () => {
-      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
-      await userProfileService.resetUserData('user-1');
-
-      const preserveList = boundPreserveList();
+      const preserveList = await resetAndCapture();
       expect(preserveList).not.toContain('personalIdentification');
       expect(preserveList).not.toContain('customSettings');
     });

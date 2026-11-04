@@ -66,4 +66,27 @@ const USER_PREFERENCE_FIELDS = ['theme', 'fontSize', 'language', 'emailUpdates',
 // the contract is described by.
 const RESET_PRESERVED_FIELDS = [...SYSTEM_PRESERVED_FIELDS, ...USER_PREFERENCE_FIELDS];
 
-module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS, USER_PREFERENCE_FIELDS, RESET_PRESERVED_FIELDS };
+// Gov-profile sections the profile-update endpoint writes onto the users
+// document (user-profile-service). Single source for the writer and the GDPR
+// erasure nuller (keycloak-proxy-service): a section added here is written
+// AND erased — one missed copy is PII surviving account deletion.
+const GOV_PROFILE_SECTIONS = [
+  'personalIdentification',
+  'civilRegistration',
+  'addressResidency',
+  'identityTravel',
+  'healthMedical',
+  'employment',
+  'financialTax',
+  'criminalLegal',
+  'transportation'
+];
+
+module.exports = {
+  JIT_FORWARD_FIELDS,
+  JIT_PROTECTED_FIELDS,
+  SYSTEM_PRESERVED_FIELDS,
+  USER_PREFERENCE_FIELDS,
+  RESET_PRESERVED_FIELDS,
+  GOV_PROFILE_SECTIONS
+};

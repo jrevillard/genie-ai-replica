@@ -4,7 +4,7 @@ const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
-const { JIT_PROTECTED_FIELDS, RESET_PRESERVED_FIELDS } = require('../constants/jit-fields');
+const { JIT_PROTECTED_FIELDS, RESET_PRESERVED_FIELDS, GOV_PROFILE_SECTIONS } = require('../constants/jit-fields');
 
 class UserProfileService {
   constructor() {
@@ -227,18 +227,10 @@ class UserProfileService {
       }
     }
 
-    // Step 2: Define known sections for file handling only
-    const sections = [
-      'personalIdentification',
-      'civilRegistration',
-      'addressResidency',
-      'identityTravel',
-      'healthMedical',
-      'employment',
-      'financialTax',
-      'criminalLegal',
-      'transportation'
-    ];
+    // Step 2: Known sections for file handling only — the shared constant is
+    // also the GDPR erasure nuller's source, so a section added there is
+    // written here AND erased on account deletion.
+    const sections = GOV_PROFILE_SECTIONS;
 
     // Step 3: Handle file uploads only for known sections
     for (const section of sections) {
@@ -353,9 +345,8 @@ class UserProfileService {
     }
   }
 
-  async deleteUserFiles(user) {
+  async deleteUserFiles(userKey) {
     const startTime = Date.now();
-    const userKey = user._key;
     const userDir = sanitizePath(this.uploadDir, userKey);
 
     logger.info('UserProfileService.delete_user_files_start', { userKey });
@@ -422,7 +413,7 @@ class UserProfileService {
       // caller knows files may remain on disk.
       let filesDeletionFailed = false;
       try {
-        await this.deleteUserFiles({ _key: userKey });
+        await this.deleteUserFiles(userKey);
       } catch (fileError) {
         filesDeletionFailed = true;
         logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {

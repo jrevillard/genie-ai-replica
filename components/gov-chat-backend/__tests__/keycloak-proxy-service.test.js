@@ -309,13 +309,18 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
 
       const updateAql = capturedAql[1];
-      expect(updateAql.query).toContain('personalIdentification: null');
+      expect(updateAql.query).toContain('"personalIdentification":null');
     });
 
-    it('should null every gov-profile section on the erased document (#1441)', async () => {
+    it('should null every profile section and email-adjacent field on the erased document (#1441)', async () => {
       // The users document also carries the gov-profile sections written by
-      // user-profile-service — nulling only personalIdentification leaves
+      // user-profile-service, plus email-adjacent state and the aggregated
+      // customSettings — nulling only the basic identity fields leaves
       // health/financial/criminal data readable on the deleted: true doc.
+      // The list below is an INDEPENDENT copy of what the erasure must null:
+      // production derives from the GOV_PROFILE_SECTIONS constant, so a field
+      // dropped from the constant turns this test red (mutation gate) while
+      // the single source keeps writer and eraser in lockstep.
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
@@ -333,7 +338,10 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
 
       const updateAql = capturedAql[1];
-      const sections = [
+      // The section nulls travel as a MERGE bind parameter — the aql test
+      // mock inlines bind values as JSON.
+      const expectedNulled = [
+        'personalIdentification',
         'civilRegistration',
         'addressResidency',
         'identityTravel',
@@ -341,37 +349,14 @@ describe('keycloak-proxy-service', () => {
         'employment',
         'financialTax',
         'criminalLegal',
-        'transportation'
+        'transportation',
+        'emailVerified',
+        'pendingEmailChange',
+        'customSettings'
       ];
-      for (const section of sections) {
-        expect(updateAql.query).toContain(`${section}: null`);
+      for (const field of expectedNulled) {
+        expect(updateAql.query).toContain(`"${field}":null`);
       }
-    });
-
-    it('should null the email-adjacent and custom fields on the erased document (#1441)', async () => {
-      // emailVerified and pendingEmailChange carry account/email data;
-      // customSettings aggregates user-written custom sections — all PII
-      // under the route's "erases all PII" claim.
-      keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
-
-      const capturedAql = [];
-      const db = {
-        query: jest.fn().mockImplementation((aqlObj) => {
-          capturedAql.push(aqlObj);
-          if (capturedAql.length === 1)
-            return Promise.resolve(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
-          return Promise.resolve({});
-        })
-      };
-      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
-
-      await keycloakProxyService.deleteUser('user-key');
-
-      const updateAql = capturedAql[1];
-      expect(updateAql.query).toContain('emailVerified: null');
-      expect(updateAql.query).toContain('pendingEmailChange: null');
-      expect(updateAql.query).toContain('customSettings: null');
     });
 
     it('should delete the uploaded files directory after the erasure commits (#1441)', async () => {
@@ -386,7 +371,7 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
 
-      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith({ _key: 'user-key' });
+      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith('user-key');
     });
 
     it('should still succeed when the uploaded-files deletion fails after the erasure (#1441)', async () => {
@@ -423,7 +408,7 @@ describe('keycloak-proxy-service', () => {
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
       await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure');
-      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith({ _key: 'user-key' });
+      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith('user-key');
     });
 
     it('should log "User erased" message (distinct from soft-delete)', async () => {

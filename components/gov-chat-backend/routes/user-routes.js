@@ -158,7 +158,8 @@ module.exports = (userService) => {
         ...result
       });
     } catch (error) {
-      const status = error.statusCode === 404 ? 404 : 500;
+      // Typed errors (AppError) carry their own status; anything else is 500.
+      const status = error.statusCode || 500;
       logger.error(`[RESET DATA] Error resetting user data: ${error.message}`, { stack: error.stack });
       res.status(status).json({
         success: false,

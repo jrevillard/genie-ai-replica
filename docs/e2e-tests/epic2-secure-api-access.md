@@ -55,12 +55,15 @@ fi
 # timeouts surface as 4xx/5xx/no output). The bound sits above the backend's
 # 120 s OPEA worker timeout to leave margin for the rest of the request path —
 # a cold vLLM can legitimately take a minute.
-if curl -sk --max-time 180 https://localhost/api/queries -X POST -H "Content-Type: application/json" \
+PROBE_CODE=$(curl -sk --max-time 180 https://localhost/api/queries -X POST -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"ping"}],"sessionId":"e2e-phase-f"}' \
-  -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "201"; then
+  -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null)
+if [ "$PROBE_CODE" = "201" ]; then
   echo "OPEA infrastructure detected - running Phase F tests"
+elif [ "$PROBE_CODE" = "401" ]; then
+  echo "FATAL: probe rejected with 401 - this is a token problem, not an OPEA outage; re-acquire \$USER_TOKEN"; exit 1
 else
-  echo "OPEA services not fully available - Phase F tests will be limited to the backend-side verification (token validation and user resolution)"
+  echo "OPEA services not fully available (probe answered HTTP ${PROBE_CODE:-none}) - Phase F tests will be limited to the backend-side verification (token validation and user resolution)"
   echo "Set DEPLOY_OPEA=1 in .env and redeploy for full Phase F coverage"
 fi
 ```
@@ -90,9 +93,9 @@ RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
 USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
-# Verify this request resolved the ArangoDB _key — the profile-retrieval log
-# entry carries the userKey (no output is a failure; the quoted field makes
-# the match exact, and --since bounds the window to this request)
+# Verify the profile-retrieval log carries the ArangoDB _key (no output is a
+# failure; the quoted field makes the match exact, and --since bounds the
+# window — any entry for this _key within the window satisfies it)
 docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" \
   || { echo "FATAL: no profile-retrieval log entry for the resolved _key"; exit 1; }
 ```
@@ -193,21 +196,24 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
     "credentials": [{ "type": "password", "value": "e2epass123", "temporary": false }]
   }'
 
-# Get user token from genie realm
-USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+# Get user token from genie realm — phase-local name ($USER_TOKEN is the
+# Phase 0 testuser token; never shadow it)
+E2E_TEST_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
+[ -n "$E2E_TEST_TOKEN" ] && [ "$E2E_TEST_TOKEN" != "null" ] || { echo "FATAL: ROPC login for e2e-test-user failed"; exit 1; }
 
 # Resolve the _key from the user's own profile — see README
 # "Resolving test accounts" (never key an account by email)
 USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+  -H "Authorization: Bearer $E2E_TEST_TOKEN" | jq -r '._key')
 # Fail loudly here — a silent "null" would surface far from the cause
 [ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
 echo "User _key: $USER_KEY"
 
-# The _key-resolving request above already went through the auth middleware —
-# verify its profile-retrieval log entry carries that _key
+# The _key-resolving request above went through the auth middleware — verify
+# the profile-retrieval log carries that _key (window-bounded: any entry for
+# this _key within the window satisfies it)
 docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" \
   || { echo "FATAL: no profile-retrieval log entry for the resolved _key"; exit 1; }
 # Expected: a log entry whose userKey equals the resolved _key
@@ -246,6 +252,18 @@ HTTP_CODE=$(curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -o /dev/null -w "%{http_code}")
 echo "Invalid token: HTTP ${HTTP_CODE}"
 [ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
+
+# Structurally valid token with a tampered signature — this is the case
+# that reaches Keycloak JWKS verification (the two above fail earlier, as
+# malformed)
+TAMPERED=$(printf '%s' "$USER_TOKEN" | sed 's/.$/x/')
+HTTP_CODE=$(curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
+  -H "Authorization: Bearer $TAMPERED" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Tampered token"}]}' \
+  -o /dev/null -w "%{http_code}")
+echo "Tampered signature: HTTP ${HTTP_CODE}"
+[ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 ```
 
 > **Note:** The backend middleware is the first auth gate — a token it rejects never reaches an OPEA service. Downstream validation of the tokens it does forward is covered by Test F.2.
@@ -271,25 +289,33 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 [ -n "$USER_TOKEN" ] && [ "$USER_TOKEN" != "null" ] || { echo "FATAL: ROPC login for testuser failed"; exit 1; }
 
-# Make chat query
-RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Verify response structure"}],"sessionId":"e2e-phase-f"}')
+# Make chat query (like F.2, this half needs a real OPEA pipeline — it is
+# skipped when chatqna is not deployed)
+if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.5 requires the OPEA pipeline"
+else
+  HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
+    -H "Authorization: Bearer $USER_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Verify response structure"}],"sessionId":"e2e-phase-f"}' \
+    -o /tmp/f5-body.json -w "%{http_code}")
+  [ "$HTTP_CODE" = "201" ] || { echo "FATAL: expected 201, got ${HTTP_CODE}"; exit 1; }
+  RESPONSE=$(cat /tmp/f5-body.json)
 
-# Verify top-level response structure
-echo "$RESPONSE" | jq 'keys | sort'
-# Expected: ["metadata","queryId","response","responseTime"]
+  # Verify top-level response structure
+  echo "$RESPONSE" | jq 'keys | sort'
+  # Expected: ["metadata","queryId","response","responseTime"]
 
-# Verify the chatqna metadata contract keys are present
-echo "$RESPONSE" | jq -e '.metadata | has("source_documents") and has("filter_labels") and has("retrieval_confidence_score") and has("confidence_score") and has("is_grounded")' > /dev/null \
-  || { echo "FATAL: metadata contract keys missing"; exit 1; }
-echo "metadata contract keys present"
+  # Verify the chatqna metadata contract keys are present
+  echo "$RESPONSE" | jq -e '.metadata | has("source_documents") and has("filter_labels") and has("retrieval_confidence_score") and has("confidence_score") and has("is_grounded")' > /dev/null \
+    || { echo "FATAL: metadata contract keys missing"; exit 1; }
+  echo "metadata contract keys present"
 
-# Verify the OPEA answer came through
-RESP_LEN=$(echo "$RESPONSE" | jq '.response | length')
-[ "$RESP_LEN" -gt 0 ] 2>/dev/null || { echo "FATAL: empty or missing .response in the chat answer"; exit 1; }
-echo "response length: ${RESP_LEN}"
+  # Verify the OPEA answer came through
+  RESP_LEN=$(echo "$RESPONSE" | jq '.response | length')
+  [ "$RESP_LEN" -gt 0 ] 2>/dev/null || { echo "FATAL: empty or missing .response in the chat answer"; exit 1; }
+  echo "response length: ${RESP_LEN}"
+fi
 ```
 
 **Expected Behavior:**
@@ -392,8 +418,10 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
 # belong to Phase 0/Phase I; never shadow them)
 GENIE_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie-realm-user&password=geniepass123&grant_type=password' | jq -r '.access_token')
+[ -n "$GENIE_TOKEN" ] && [ "$GENIE_TOKEN" != "null" ] || { echo "FATAL: ROPC login for genie-realm-user failed"; exit 1; }
 GENIE2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
+[ -n "$GENIE2_TOKEN" ] && [ "$GENIE2_TOKEN" != "null" ] || { echo "FATAL: ROPC login for genie2-realm-user failed"; exit 1; }
 
 # Look up user keys from each user's own profile (each realm provisions its
 # own ArangoDB user, so the _key differs per realm) — resolve via /api/me,
@@ -439,16 +467,24 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 [ -n "$USER_TOKEN" ] && [ "$USER_TOKEN" != "null" ] || { echo "FATAL: ROPC login for testuser failed"; exit 1; }
 
-# Make chat query (full round-trip)
-RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')
+# Make chat query (full round-trip — needs a real OPEA pipeline; skipped
+# when chatqna is not deployed)
+if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.8 requires the OPEA pipeline"
+else
+  HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
+    -H "Authorization: Bearer $USER_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}' \
+    -o /tmp/f8-body.json -w "%{http_code}")
+  [ "$HTTP_CODE" = "201" ] || { echo "FATAL: expected 201, got ${HTTP_CODE}"; exit 1; }
+  RESPONSE=$(cat /tmp/f8-body.json)
 
-# Verify the retrieval metadata survived the round-trip
-echo "$RESPONSE" | jq -e '.metadata.is_grounded != null' > /dev/null \
-  || { echo "FATAL: metadata.is_grounded missing after the round-trip"; exit 1; }
-echo "metadata.is_grounded present"
+  # Verify the retrieval metadata survived the round-trip
+  echo "$RESPONSE" | jq -e '.metadata.is_grounded != null' > /dev/null \
+    || { echo "FATAL: metadata.is_grounded missing after the round-trip"; exit 1; }
+  echo "metadata.is_grounded present"
+fi
 ```
 
 **Expected Behavior:**

@@ -16,7 +16,7 @@
 // cached value is deterministic across the test file. The IIFE fallback
 // ("unknown" when `clamdscan` is absent) is intentionally not covered here
 // because it requires reloading the module under a different `child_process`
-// stub — covered manually via runtime smoke (see `tests/melt-correlation/`).
+// stub — covered manually via runtime smoke against the deployed service.
 
 // AD-20 signature cache — stub `child_process` BEFORE securityService.js
 // is required so the IIFE picks up the deterministic return value rather

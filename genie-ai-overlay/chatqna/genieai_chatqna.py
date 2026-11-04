@@ -880,6 +880,17 @@ TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 TRANSLATION_MSG_OVERHEAD_CHARS = 20
 
 
+def _is_blank_message_content(content: object) -> bool:
+    """True when a message's content is blank text.
+
+    The request model permits multimodal content — a list of typed parts —
+    so a content value is only blank when it is a string with nothing but
+    whitespace; a list always carries its own parts and is never treated as
+    blank (and never handed to string methods).
+    """
+    return isinstance(content, str) and not content.strip()
+
+
 def _refuse_oversized_query(history: str) -> None:
     """Refuse a single-message query over the translation character budget.
 
@@ -4130,7 +4141,7 @@ class ChatQnAService:
                 return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
             flattened_history_string = _flatten_history_string(messages_to_process)
-            if not any(message.get("content", "").strip() for message in messages_to_process):
+            if all(_is_blank_message_content(message.get("content", "")) for message in messages_to_process):
                 # A history of blank messages would only harvest the model's
                 # junk reply as the embedded query, and there is no content
                 # to translate. The flattened string alone cannot be checked:
@@ -4651,7 +4662,6 @@ class ChatQnAService:
         # embedded as it is.
         history_language = detected_language or original_language
 
-        translated_history_string = ""
         # What the embedder will be fed: a translated query, the English
         # source passed through, or — when the history translator fell back —
         # the untranslated source language. The fallback does not fail the
@@ -4725,8 +4735,8 @@ class ChatQnAService:
                     # history with NO established language keeps the
                     # documented passthrough_unknown_language — already a
                     # degraded value on the runbook filter.
-                    if english_established and not any(
-                        message.get("content", "").strip() for message in messages_to_process
+                    if english_established and all(
+                        _is_blank_message_content(message.get("content", "")) for message in messages_to_process
                     ):
                         logger.warning("History translation asked for blank messages; reporting it as a fallback.")
                         query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR

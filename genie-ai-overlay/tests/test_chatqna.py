@@ -4960,14 +4960,21 @@ async def test_the_passthrough_truncates_an_oversized_newest_message_like_the_tr
     assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
 
 
+# The language matrix the overflow-refusal tests run over: the contract is
+# language-independent, so every language path gets the same scenario.
+_OVERFLOW_LANGUAGES = [
+    pytest.param("es", id="non-english"),
+    pytest.param("en", id="english"),
+]
+
+# The refusal must also hold when NO language was established (auto mode
+# over a detection crash): the passthrough branch refuses before the
+# healthy-status decision, not inside it.
+_OVERFLOW_LANGUAGES_INCLUDING_UNKNOWN = _OVERFLOW_LANGUAGES + [pytest.param(None, id="no-established-language")]
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "language",
-    [
-        pytest.param("es", id="non-english"),
-        pytest.param("en", id="english"),
-    ],
-)
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES_INCLUDING_UNKNOWN)
 async def test_an_oversized_single_message_query_is_refused_with_a_422(language):
     """A query that does not fit the translation window must not be embedded
     untranslated into the English space: the turn is refused with the 422 the
@@ -4975,7 +4982,8 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422(language)
     care about the language (issue #1366): an oversized English question gets
     the same refusal as the same-length question in another language, instead
     of passing whole and failing later at the embedder with a less actionable
-    error."""
+    error — and the refusal does not depend on a language having been
+    established at all."""
     svc = create_chatqna_service()
     mock_client = AsyncMock()
     with (
@@ -4996,13 +5004,7 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422(language)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "language",
-    [
-        pytest.param("es", id="non-english"),
-        pytest.param("en", id="english"),
-    ],
-)
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES)
 async def test_an_empty_single_message_query_is_a_fallback_on_both_language_paths(language):
     """A blank query is a fallback, not a refusal — whatever language the
     turn asked for: the translation path blank-guards before the budget
@@ -5019,13 +5021,7 @@ async def test_an_empty_single_message_query_is_a_fallback_on_both_language_path
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "language",
-    [
-        pytest.param("es", id="non-english"),
-        pytest.param("en", id="english"),
-    ],
-)
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES)
 async def test_an_all_blank_history_is_a_fallback_on_both_language_paths(language):
     """An all-blank multi-message history is a fallback too — the passthrough
     must not report it as a healthy `passthrough_english` while the
@@ -5042,6 +5038,21 @@ async def test_an_all_blank_history_is_a_fallback_on_both_language_paths(languag
         )
 
     assert payload["metadata"]["query_translation_status"] == "fallback_error"
+
+
+@pytest.mark.asyncio
+async def test_a_multimodal_content_history_is_not_treated_as_blank():
+    """Multimodal content — a list of typed parts, which the request model
+    permits — is never blank: the blank guard reads strings only, so a
+    list-content history answers normally instead of crashing on a string
+    method (AttributeError → 500 on a request the pre-#1366 passthrough
+    answered)."""
+    svc = create_chatqna_service()
+    multimodal_history = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000):
+        payload = await _full_flow_payload(svc, stream=False, language="en", messages=multimodal_history)
+
+    assert payload["metadata"]["query_translation_status"] == "passthrough_english"
 
 
 @pytest.mark.asyncio

@@ -146,6 +146,77 @@ describe('ci shell gate: extraction', () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain('nope');
     });
+
+    test('an anchor defined on a script key can be aliased later', () => {
+      const content = ['job-one:', '  script: &s |', '    echo anchored', 'job-two:', '  script: *s'].join('\n');
+      const { blocks, errors } = extractCiShellBlocks(content);
+      expect(errors).toEqual([]);
+      // Two shells run: job-one's own script, and job-two through the
+      // alias — both are checked.
+      expect(blocks.map((b) => b.text)).toEqual(['echo anchored', 'echo anchored']);
+    });
+
+    test('an item-level anchor can be aliased from another job', () => {
+      const content = ['job-one:', '  script:', '    - &first echo hi', 'job-two:', '  script:', '    - *first'].join(
+        '\n'
+      );
+      const { blocks, errors } = extractCiShellBlocks(content);
+      expect(errors).toEqual([]);
+      expect(blocks.filter((b) => b.text === 'echo hi')).toHaveLength(2);
+    });
+
+    test('a scalar anchor body aliases as one block', () => {
+      const content = ['.common: &common', '  echo hello', '', 'job:', '  script: *common'].join('\n');
+      const { blocks, errors } = extractCiShellBlocks(content);
+      expect(errors).toEqual([]);
+      expect(blocks.map((b) => b.text)).toEqual(['echo hello']);
+    });
+
+    test('a mapping anchor body aliased into a script is a loud error', () => {
+      const content = ['.tmpl: &tmpl', '  image: alpine', '', 'job:', '  script: *tmpl'].join('\n');
+      const { errors } = extractCiShellBlocks(content);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toMatch(/mapping|tmpl/);
+    });
+  });
+
+  test('a folded block scalar folds like the runtime shell receives it', () => {
+    // Runtime: the fold joins the two quoted fragments with a space — valid.
+    // Verbatim extraction would see an unterminated quote and false-fail.
+    const content = 'job:\n  script:\n    - >\n      echo "a\n      b"\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(checkShellSyntax(blocks)).toEqual([]);
+    expect(blocks[0].text).toBe('echo "a b"');
+  });
+
+  test('a more-indented line inside a folded scalar stays literal', () => {
+    const content = 'job:\n  script:\n    - >\n      echo a\n        echo b\n      echo c\n';
+    const { blocks } = extractCiShellBlocks(content);
+    // The break into the more-indented b stays literal (folding never
+    // applies around a more-indented line); c is back at the base indent,
+    // but the break after a more-indented line stays literal too.
+    expect(blocks[0].text).toBe('echo a\n  echo b\necho c');
+  });
+
+  test('a flow-style job definition is a loud unhandled shape', () => {
+    const content = 'job: {script: ["echo a"]}\n';
+    const { errors } = extractCiShellBlocks(content);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/flow/);
+  });
+
+  test('a script key with a space before the colon still extracts', () => {
+    const content = 'job:\n  script :\n    - echo hi\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo hi']);
+  });
+
+  test('extraction errors carry the checker error shape', () => {
+    const tagged = 'job:\n  script: !reference [.x]\n';
+    const { errors } = extractCiShellBlocks(tagged);
+    expect(errors[0]).toMatchObject({ owner: 'job', key: 'script', startLine: 2 });
   });
 });
 

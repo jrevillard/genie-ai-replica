@@ -925,6 +925,31 @@ container_scanning:
 .chatqna_server_source_changes: &chatqna_server_source_changes
   [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
+# Same idiom for the five OPEA module images (#1233): one anchor per module,
+# referenced by every job of that module — build, smoke, scan, promote and
+# contract. A path addition cannot drift between "rebuild the image" and
+# "run the contract lane" again.
+#
+# Two anchors per module because the contract lane's list has no
+# configs/ssl/**/* (the contract job runs in the image, not in a container
+# that would serve TLS), while the image jobs do.
+.dataprep_source_changes: &dataprep_source_changes
+  [ "genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+.dataprep_contract_changes: &dataprep_contract_changes
+  [ "genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+.retriever_source_changes: &retriever_source_changes
+  [ "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+.retriever_contract_changes: &retriever_contract_changes
+  [ "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+.reranker_source_changes: &reranker_source_changes
+  [ "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+.reranker_contract_changes: &reranker_contract_changes
+  [ "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+.embedding_source_changes: &embedding_source_changes
+  [ "genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+.textgen_source_changes: &textgen_source_changes
+  [ "genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+
 .build_template: &build_template
   stage: build
   image: docker:28
@@ -1164,14 +1189,14 @@ contract:retriever-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_contract_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_contract_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_contract_changes
 
 
 contract:reranker:
@@ -1193,14 +1218,14 @@ contract:reranker:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_contract_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_contract_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_contract_changes
 contract:dataprep-arango:
   <<: *contract_template
   needs:
@@ -1218,14 +1243,14 @@ contract:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_contract_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_contract_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_contract_changes
 
 contract:chatqna-server:
   <<: *contract_template
@@ -2156,14 +2181,14 @@ build:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
 
 # Smoke-test the dataprep candidate image: import the docling stack + the
 # GENIE overlay module. Catches runtime ImportErrors that a green build does
@@ -2199,14 +2224,14 @@ smoke:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
 
 
 scan:dataprep-arango:
@@ -2225,14 +2250,14 @@ scan:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
 
 promote:dataprep-arango:
   <<: *promote_template
@@ -2251,14 +2276,14 @@ promote:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *dataprep_source_changes
 
 # genie-ai-retriever-arango
 build:retriever-arango:
@@ -2277,14 +2302,14 @@ build:retriever-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
 
 scan:retriever-arango:
   <<: *scan_template
@@ -2302,14 +2327,14 @@ scan:retriever-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
 
 promote:retriever-arango:
   <<: *promote_template
@@ -2328,14 +2353,14 @@ promote:retriever-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *retriever_source_changes
 
 # genie-ai-reranker
 build:reranker:
@@ -2354,14 +2379,14 @@ build:reranker:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
 
 scan:reranker:
   <<: *scan_template
@@ -2379,14 +2404,14 @@ scan:reranker:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
 
 promote:reranker:
   <<: *promote_template
@@ -2405,14 +2430,14 @@ promote:reranker:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *reranker_source_changes
 
 # genie-ai-embedding
 build:embedding:
@@ -2431,14 +2456,14 @@ build:embedding:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
 
 scan:embedding:
   <<: *scan_template
@@ -2456,14 +2481,14 @@ scan:embedding:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
 
 promote:embedding:
   <<: *promote_template
@@ -2482,14 +2507,14 @@ promote:embedding:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *embedding_source_changes
 
 # genie-ai-textgen
 build:textgen:
@@ -2508,14 +2533,14 @@ build:textgen:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
 
 scan:textgen:
   <<: *scan_template
@@ -2533,14 +2558,14 @@ scan:textgen:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
 
 promote:textgen:
   <<: *promote_template
@@ -2559,14 +2584,14 @@ promote:textgen:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *textgen_source_changes
 
 # genie-ai-postgres-init
 build:postgres-init:

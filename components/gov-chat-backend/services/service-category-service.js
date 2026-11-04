@@ -794,7 +794,10 @@ class ServiceCategoryService {
   /**
    * Get all translations for a specific category
    * @param {String} categoryKey - The _key of the category
-   * @returns {Promise<Array>} A list of translation objects
+   * @returns {Promise<Array>} A list of translation objects (possibly empty
+   *   — an existing category with no translation yet is a valid empty set)
+   * @throws {NotFoundError} The category does not exist (typed 404, same
+   *   contract as the write paths)
    */
   async getCategoryTranslations(categoryKey) {
     await this.init(); // Ensure service is initialized
@@ -832,7 +835,10 @@ class ServiceCategoryService {
   /**
    * Get all translations for a specific service
    * @param {String} serviceKey - The _key of the service
-   * @returns {Promise<Array>} A list of translation objects
+   * @returns {Promise<Array>} A list of translation objects (possibly empty
+   *   — an existing service with no translation yet is a valid empty set)
+   * @throws {NotFoundError} The service does not exist (typed 404, same
+   *   contract as the write paths)
    */
   async getServiceTranslations(serviceKey) {
     await this.init(); // Ensure service is initialized

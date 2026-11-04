@@ -286,28 +286,12 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               _fetchUserData();
               if (!mounted) return;
               if (response['filesDeletionFailed'] == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: ThemeManager().tokens.surface,
-                    content: Text(
-                      tr("settings.userDataResetFilesFailed"),
-                      style: TextStyle(color: ThemeManager().tokens.fg),
-                    ),
-                  ),
-                );
+                _showSettingsSnackBar("settings.userDataResetFilesFailed");
               }
             } catch (e) {
               debugPrint("[SETTINGS] Error resetting user data: $e");
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: ThemeManager().tokens.surface,
-                    content: Text(
-                      tr("settings.failedToResetUserData"),
-                      style: TextStyle(color: ThemeManager().tokens.fg),
-                    ),
-                  ),
-                );
+                _showSettingsSnackBar("settings.failedToResetUserData");
               }
             } finally {
               if (mounted) {
@@ -319,6 +303,19 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           },
         ),
       ],
+    );
+  }
+
+  /// Shows a themed SnackBar with a translated settings message. The
+  /// reset-outcome notifications use the same surface-on-fg style as the
+  /// screen's other SnackBars.
+  void _showSettingsSnackBar(String messageKey) {
+    final tokens = ThemeManager().tokens;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.surface,
+        content: Text(tr(messageKey), style: TextStyle(color: tokens.fg)),
+      ),
     );
   }
 

@@ -20,6 +20,7 @@ jest.mock('../../services/userService', () => ({
   }
 }));
 
+const mockI18nT = jest.fn((key) => key);
 const mockNotificationSuccess = jest.fn();
 const mockNotificationWarning = jest.fn();
 const mockNotificationError = jest.fn();
@@ -57,8 +58,6 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
 const enMessages = require('../../i18n/locales/en').default;
-const fs = require('fs');
-const path = require('path');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -75,7 +74,7 @@ async function buildWrapper() {
       mocks: {
         $i18n: {
           locale: 'en',
-          t: (key) => key
+          t: mockI18nT
         },
         $store: {
           getters: {
@@ -144,19 +143,23 @@ describe('SettingsComponent — resetUserData notification', () => {
       'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
     );
     expect(mockNotificationSuccess).not.toHaveBeenCalled();
+    // The component resolved the warning through the settings key — not a
+    // hard-coded literal — and the locale string the translators maintain
+    // matches the fallback shown above.
+    expect(mockI18nT).toHaveBeenCalledWith('settings.userDataResetFilesFailed', expect.anything());
+    expect(enMessages.settings.userDataResetFilesFailed).toBe(
+      'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
+    );
   });
 
   test('the warning key exists in the en locale and is used by the component', () => {
     // The component's translate() falls back to the hardcoded literal when
-    // $t cannot resolve, so a key typo degrades silently — pin both sides:
-    // the locale string the translators maintain and the key the component
-    // actually references.
+    // $t cannot resolve, so a key typo degrades silently — the $i18n.t spy
+    // assertion in the warning test pins the key the component actually
+    // references; this one pins the locale string the translators maintain.
     const warning =
       'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.';
     expect(enMessages.settings.userDataResetFilesFailed).toBe(warning);
-
-    const source = fs.readFileSync(path.join(__dirname, '..', '..', 'components', 'SettingsComponent.vue'), 'utf8');
-    expect(source).toContain("'settings.userDataResetFilesFailed'");
   });
 
   test('keeps the error path untouched when the request fails', async () => {

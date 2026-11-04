@@ -688,7 +688,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               _buildActionBtnCard(
                 tr("settings.resetUserData"),
                 tr("settings.resetUserDataDesc"),
-                isOnline ? _showResetDataWorkflow : null,
+                isOnline && !_isLoading ? _showResetDataWorkflow : null,
                 key: const Key('settings_reset_data_button'),
                 overrideColor: tokens.danger,
               ),

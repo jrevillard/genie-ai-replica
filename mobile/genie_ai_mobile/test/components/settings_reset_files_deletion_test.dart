@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -21,10 +22,18 @@ import '../helpers/theme_helper.dart';
 /// the behaviour is unchanged (no notification). A failed reset call shows
 /// the failure SnackBar and clears the loading state.
 class MockCurrentUserApi implements CurrentUserApi {
-  MockCurrentUserApi({this.resetBody = const {}, this.resetStatus = 200});
+  MockCurrentUserApi({
+    this.resetBody = const {},
+    this.resetStatus = 200,
+    this.resetGate,
+  });
 
   final Map<String, dynamic> resetBody;
   final int resetStatus;
+
+  /// When set, the reset call only completes once the test resolves it —
+  /// used to hold the reset in flight while asserting on the loading state.
+  final Completer<void>? resetGate;
 
   @override
   Future<http.Response> apiMeGetWithHttpInfo({String? data}) async {
@@ -40,6 +49,8 @@ class MockCurrentUserApi implements CurrentUserApi {
 
   @override
   Future<http.Response> apiMeResetDataPostWithHttpInfo() async {
+    final gate = resetGate;
+    if (gate != null) await gate.future;
     return http.Response(jsonEncode(resetBody), resetStatus);
   }
 
@@ -155,6 +166,58 @@ void main() {
       await unmount(tester);
     },
   );
+
+  testWidgets('does not re-open the reset flow while a reset is in flight', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final api = MockCurrentUserApi(
+      resetBody: {'filesDeletionFailed': true},
+      resetGate: gate,
+    );
+    setupLightTokens();
+    I18nService().changeLanguage('en');
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [currentUserApiProvider.overrideWithValue(api)],
+        child: testApp(
+          SettingsComponent(
+            user: {'name': 'Test User', 'email': 'test@example.test'},
+          ),
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+
+    final resetTile = find.byKey(const Key('settings_reset_data_button'));
+    await tester.ensureVisible(resetTile);
+    await pumpFrames(tester);
+    await tester.tap(resetTile);
+    await pumpFrames(tester);
+    await tester.tap(find.byKey(const Key('settings_reset_confirm_button')));
+    // Let the confirm handler start the reset call, which is now parked
+    // on the gate: the screen is in its loading state.
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    // A second tap on the still-rendered Reset card must be a no-op: no
+    // second confirm modal may open for one in-flight reset.
+    await tester.tap(resetTile);
+    await pumpFrames(tester);
+    expect(
+      find.byKey(const Key('settings_reset_confirm_button')),
+      findsNothing,
+    );
+
+    gate.complete();
+    await pumpFrames(tester);
+    final warningText = I18nService().translate(
+      'settings.userDataResetFilesFailed',
+    );
+    expect(find.widgetWithText(SnackBar, warningText), findsOneWidget);
+    await unmount(tester);
+  });
 
   testWidgets(
     'shows the failure SnackBar and clears loading when the reset call fails',

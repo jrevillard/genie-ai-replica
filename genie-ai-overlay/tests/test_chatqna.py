@@ -5040,6 +5040,10 @@ async def test_a_reply_translation_overflow_is_counted_as_a_refusal_on_the_count
     assert refusal["error"] == "true"
     assert refusal["abstained"] == "true"
     assert refusal["abstention_reason"] == "translation_input_too_long"
+    # Same-turn consistency: the refusal names the retrieval source the
+    # in-span rule reports (retriever_parameters is built at this point),
+    # not the pre-span request fallback the query-path site needs.
+    assert refusal["retrieval_source"] == "hybrid"
 
 
 # ===========================================================================

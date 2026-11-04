@@ -5188,13 +5188,16 @@ class ChatQnAService:
             # attributes the refusal itself — without it a reply-translation
             # overflow is invisible as a refusal on the counter (the query-path
             # site cannot double count because it raises before that block).
+            # retrieval_source uses the in-span rule so the refusal record
+            # names the same source as the turn's success record; sync is
+            # literal because a stream request returned before this point.
             chat_requests_total.add(
                 1,
                 _chat_request_metric_attrs(
-                    response_type="streaming" if chat_request.stream else "sync",
+                    response_type="sync",
                     abstained="true",
                     error="true",
-                    retrieval_source=getattr(chat_request, "search_type", None) or "similarity_score_threshold",
+                    retrieval_source=getattr(retriever_parameters, "search_type", "hybrid"),
                     abstention_reason="translation_input_too_long",
                 ),
             )

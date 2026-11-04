@@ -34,14 +34,15 @@ class SseMetadataEvent extends SseEvent {
   /// report the same thing.
   final String? queryTranslationStatus;
 
-  /// Chatqna metadata keys outside the known set above, carried verbatim so a
-  /// new diagnostic field reaches mobile without a parser edit. The backend
-  /// parser (query-service.js) passes chatqna's unknown metadata keys through
-  /// the same way; a field-by-field whitelist here is how `abstained`,
-  /// `abstention_reason`, `filter_labels` and `self_confidence` were each lost
-  /// on mobile until a hand edit. The known fields (`type`,
-  /// `source_documents`, `confidence_score`, `is_grounded`, `responseTime`,
-  /// `query_translation_status`) are normalized above and never appear here.
+  /// Chatqna metadata keys outside the known set above, carried verbatim on
+  /// the parsed event so a new diagnostic field survives the parser boundary
+  /// without a parser edit. The backend parser (query-service.js) passes
+  /// chatqna's unknown metadata keys through the same way; a field-by-field
+  /// whitelist here is how `abstained`, `abstention_reason`, `filter_labels`
+  /// and `self_confidence` were each lost on mobile until a hand edit. The
+  /// known fields (`type`, `source_documents`, `confidence_score`,
+  /// `is_grounded`, `responseTime`, `query_translation_status`) are
+  /// normalized above and never appear here.
   final Map<String, dynamic> extra;
 
   const SseMetadataEvent({
@@ -148,14 +149,19 @@ class SseParser {
   };
 
   SseMetadataEvent _parseMetadata(Map<String, dynamic> json) {
-    final extra = <String, dynamic>{
-      for (final entry in json.entries) if (!_knownMetadataKeys.contains(entry.key)) entry.key: entry.value,
-    };
+    final extra = <String, dynamic>{};
+    json.forEach((key, value) {
+      if (!_knownMetadataKeys.contains(key)) {
+        extra[key] = value;
+      }
+    });
     return SseMetadataEvent(
       sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
       confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
       isGrounded: json['is_grounded'] as bool? ?? false,
-      responseTime: json['responseTime'] as int?,
+      // Tolerant num cast, like confidenceScore above: a double from the wire
+      // must degrade this one field, not throw and drop the whole event.
+      responseTime: (json['responseTime'] as num?)?.toInt(),
       queryTranslationStatus: json['query_translation_status'] as String?,
       extra: extra,
     );

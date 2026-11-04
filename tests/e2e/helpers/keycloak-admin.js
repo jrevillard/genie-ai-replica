@@ -637,12 +637,13 @@ async function rotateRealmKeys(adminToken, realm) {
   // the Location header (/…/components/<id>): the id is read from the
   // header, never from the body.
   const location = newKeyRes.headers && newKeyRes.headers.location;
-  if (!location) {
+  const newKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
+  if (!newKeyId) {
     throw new Error(
-      'Failed to generate new key: Keycloak answered 201 without a Location header — the new key id cannot be resolved'
+      `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
+        `(${location || 'none'}) — the new key id cannot be resolved`
     );
   }
-  const newKeyId = location.split('/').filter(Boolean).pop();
 
   // Demote old keys (set active to false)
   for (const oldKey of existingKeys) {

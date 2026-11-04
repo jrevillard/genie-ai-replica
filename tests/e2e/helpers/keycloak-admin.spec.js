@@ -506,7 +506,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { status: 403, data: null }]];
 
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
-      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replace('.', '\\.')} could not run`)
+      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run`)
     );
   });
 
@@ -609,8 +609,29 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/answered 201 without a Location header/);
+    expect(caught.message).toMatch(/answered 201 without a usable Location header/);
     // No old key was demoted behind a creation whose id was never resolved.
+    expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
+  });
+
+  test('a Location header carrying no id segment fails loudly instead of yielding garbage', async () => {
+    // A proxy-rewritten or truncated header answers with the collection
+    // URL only: reading its last segment would mint the id 'components'.
+    routes = [
+      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+      ['POST', COMPONENTS_PATH, { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/` } }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/answered 201 without a usable Location header/);
     expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
   });
 });

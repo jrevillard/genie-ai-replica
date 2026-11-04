@@ -3452,8 +3452,12 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
           walkSpecs(entryPath);
         } else if (name.name.endsWith('.spec.js')) {
           const source = fs.readFileSync(entryPath, 'utf-8');
-          const fromFixtures = /require\((['"`])[^)]*helpers\/e2e-fixtures\1\)/.test(source);
-          const fromChatbot = /require\((['"`])[^)]*helpers\/chatbot\1\)/.test(source);
+          // The basename is matched, not the 'helpers/' prefix: a spec
+          // living inside tests/e2e/helpers/ (next to both modules)
+          // requires them as './e2e-fixtures' and './chatbot', and mixes
+          // the paths just the same.
+          const fromFixtures = /require\((['"`])[^'"`]*e2e-fixtures\1\)/.test(source);
+          const fromChatbot = /require\((['"`])[^'"`]*chatbot\1\)/.test(source);
           if (fromFixtures && fromChatbot) {
             violations.push(path.relative(e2eRoot, entryPath));
           }

@@ -118,9 +118,10 @@ describe('userProvisioningService', () => {
     });
 
     it('should backfill sub in the UPDATE doc for sub-less existing users', async () => {
-      // Documents provisioned between iss_sub (dce4c29ee) and sub (cf76b3d85)
-      // carry iss_sub but no sub. Every re-login takes the UPSERT UPDATE path,
-      // which must write sub (idempotent — iss_sub match guarantees identity).
+      // The UPDATE doc is built solely from the decoded JWT — the stored doc
+      // does not influence it. The sub-less fixture stands for a doc that had
+      // lost (or never gained) the field; the UPDATE path must write sub
+      // unconditionally (idempotent — the iss_sub match guarantees identity).
       const existingUserWithoutSub = {
         _key: 'users/789',
         iss_sub: ISS_SUB,

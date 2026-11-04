@@ -79,11 +79,19 @@ test.describe('Document Search', () => {
     await statusFilter.selectOption('pending');
     await filesResponse;
 
-    // The response has arrived; getDocumentTableRows reads once, without
-    // retrying — wait for the table to render the filtered rows first.
+    // The response has arrived; the table may still be painting the rows
+    // from BEFORE the filter (the pre-filter table already listed rows).
+    // getDocumentTableRows reads once, without retrying — hold until the
+    // rendered rows ARE the filter's own response payload before reading
+    // them.
+    const expectedNames = ((await filesResponse.json()).data || [])
+      .map((f) => f.file_name)
+      .sort();
     await expect
-      .poll(async () => (await getDocumentTableRows(page)).length, { timeout: 10000 })
-      .toBeGreaterThanOrEqual(1);
+      .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
+        timeout: 10000,
+      })
+      .toEqual(expectedNames);
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

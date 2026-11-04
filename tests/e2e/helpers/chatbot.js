@@ -125,9 +125,12 @@ async function sendMessage(page, message) {
  *
  * The loading spinner is transient — a fast answer mounts and hides it
  * between two polls — so neither its appearance nor its absence is an
- * observable of the turn's state. The durable outcome is the last bot
- * bubble carrying content: the send handler mounts it as an empty
- * placeholder, and only the completed turn fills it.
+ * observable of the turn's START. The completion signal is two-fold:
+ * the last bot bubble carries content (the send handler mounts it as an
+ * empty placeholder and the streamed answer fills it), and the spinner
+ * is gone (the app hides it only once the turn is complete — an answer
+ * that never started leaves no content, so the first gate already
+ * fails).
  */
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
@@ -135,6 +138,7 @@ async function waitForBotResponse(page, options = {}) {
   await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(/\S/, {
     timeout,
   });
+  await expect(page.locator('.loading-spinner')).toBeHidden({ timeout });
 }
 
 /**

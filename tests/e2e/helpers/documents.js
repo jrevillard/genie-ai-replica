@@ -90,17 +90,17 @@ async function searchDocuments(page, query) {
   // response's file list — a response the table has not painted is not a
   // settled state, and getDocumentTableRows reads once, without retrying.
   // The wait is bound before the fill so the response cannot be missed,
-  // and the predicate matches the query in the URL so the clear's own
-  // refresh cannot answer for the search. A missed response fails here:
-  // the request IS the search.
-  const filesResponsePromise = page.waitForResponse(
-    (r) =>
-      r.url().includes('/api/files') &&
-      (!query || r.url().includes(`search=${encodeURIComponent(query)}`)),
-    {
-      timeout: 5000,
-    }
-  );
+  // and the predicate matches the DECODED search param exactly, so a
+  // background refresh or another control's request (including the
+  // clear's own, whose search param differs) cannot answer for this
+  // search. A missed response fails here: the request IS the search.
+  const filesResponsePromise = page.waitForResponse((r) => {
+    if (!r.url().includes('/api/files')) return false;
+    const match = r.url().match(/[?&]search=([^&]*)/);
+    return decodeURIComponent(match ? match[1] : '') === (query || '');
+  }, {
+    timeout: 5000,
+  });
   if (query) {
     await searchInput.fill(query);
   }

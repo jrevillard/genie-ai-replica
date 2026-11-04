@@ -15,6 +15,7 @@
 // and writes the failure message, because a message that does not name
 // the measurement it is about is worth nothing in a CI log.
 
+const { expect } = require('@playwright/test');
 const { loginViaUI } = require('./chatbot');
 
 // The welcome composer's own resting viewport. The height is a
@@ -69,20 +70,25 @@ async function waitForBannerSettled(page) {
       height: Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)
     };
   });
-  const deadline = Date.now() + COMPOSITING_TIMEOUT_MS;
+  // The settled frame, sampled with spacing: four consecutive captures
+  // 250 ms apart must agree byte for byte. The spacing closes both
+  // windows a tighter loop leaves open — two captures back-to-back can
+  // be identical by accident before the compositor's one-shot settle
+  // lands, and back-to-back captures on a repainting page hammer the
+  // compositor instead of sampling it.
   let prev = await page.screenshot({ clip, type: 'png' });
-  while (true) {
-    const next = await page.screenshot({ clip, type: 'png' });
-    if (next.equals(prev)) return;
-    if (Date.now() > deadline) {
-      throw new Error(
-        'The banner compositing never settled: consecutive captures of ' +
-          '.quick-help-banner still differ after ' +
-          `${COMPOSITING_TIMEOUT_MS}ms — the page is repainting under the sampler.`
-      );
-    }
-    prev = next;
-  }
+  let identicalStreak = 0;
+  await expect
+    .poll(
+      async () => {
+        const next = await page.screenshot({ clip, type: 'png' });
+        identicalStreak = next.equals(prev) ? identicalStreak + 1 : 0;
+        prev = next;
+        return identicalStreak;
+      },
+      { timeout: COMPOSITING_TIMEOUT_MS, interval: 250 }
+    )
+    .toBeGreaterThanOrEqual(3);
 }
 
 /**

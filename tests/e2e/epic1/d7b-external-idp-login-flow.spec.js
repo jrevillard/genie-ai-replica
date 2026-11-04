@@ -64,6 +64,11 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
   const adminToken = (await adminTokenRes.json()).access_token;
   const authHeaders = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
+  // Set by the restore in the inner finally. The realm restore must not
+  // throw over a flow failure that is already propagating: the flow error
+  // is the root cause, so the restore failure travels WITH it.
+  let restoreFailure = null;
+
   try {
     // Step 1: Temporarily disable the VERIFY_EMAIL required action (test environment only)
     // When verifyEmail=true on the realm, Keycloak adds VERIFY_EMAIL as a required action
@@ -129,12 +134,15 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
           { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
         );
       } catch (restoreError) {
-        throw new Error(
+        restoreFailure =
           `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +
-            `(brokered logins skip email verification) until keycloak-config-cli ` +
-            `re-runs on the next deploy. Restore error: ${restoreError.message}`,
-        );
+          `(brokered logins skip email verification) until keycloak-config-cli ` +
+          `re-runs on the next deploy. Restore error: ${restoreError.message}`;
       }
+    }
+
+    if (restoreFailure) {
+      throw new Error(restoreFailure);
     }
 
     await context.close();
@@ -154,6 +162,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         `  Error: ${error.message}\n` +
         `  Final URL: ${errorUrl}\n` +
         `  Page body (first 500 chars): ${errorBody}\n` +
+        (restoreFailure ? `  ${restoreFailure}\n` : '') +
         `  Hint: Run Phase D Steps 1-5 in docs/e2e-tests/epic1-keycloak-foundation.md first`,
     );
   }

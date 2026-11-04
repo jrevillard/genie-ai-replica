@@ -4,7 +4,6 @@ import 'dart:async';
 
 // Service Imports
 import 'package:genie_ai_mobile/services/user_service.dart';
-import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -282,12 +281,40 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
             setState(() {
               _isLoading = true;
             });
-            final response = await _userService.resetUserData();
-            _fetchUserData();
-            if (response['filesDeletionFailed'] == true) {
-              NotificationService.warning(
-                tr("settings.userDataResetFilesFailed"),
-              );
+            try {
+              final response = await _userService.resetUserData();
+              _fetchUserData();
+              if (!mounted) return;
+              if (response['filesDeletionFailed'] == true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: ThemeManager().tokens.surface,
+                    content: Text(
+                      tr("settings.userDataResetFilesFailed"),
+                      style: TextStyle(color: ThemeManager().tokens.fg),
+                    ),
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint("[SETTINGS] Error resetting user data: $e");
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: ThemeManager().tokens.surface,
+                    content: Text(
+                      tr("settings.failedToResetUserData"),
+                      style: TextStyle(color: ThemeManager().tokens.fg),
+                    ),
+                  ),
+                );
+              }
+            } finally {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
             }
           },
         ),

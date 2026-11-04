@@ -983,7 +983,7 @@ export default {
     },
     processing: 'E ntse e sebetsa...',
     userDataReset: 'Datha ya profaele ya hao e setilwe botjha ka katleho.',
-    userDataResetFilesFailed: 'Datha ya profaele ya hao e setilwe botjha, empa datha tse ling tsa boleng ha ea tlosa. Ka kopo ikopanye le motsamaisi.',
+    userDataResetFilesFailed: 'Datha ya profaele ya hao e setilwe botjha, empa faele tse ling tsa boleng ha ea tlosa. Ka kopo ikopanye le motsamaisi.',
     failedToResetUserData: 'Ho hlolehile ho seta datha ya profaele ya hao botjha. Ka kopo leka hape hamorao.',
     unableToLoadUser: 'E sitwa ho kenya tlhahisoleseding ya mosebedisi. Ka kopo leka hape.',
     retry: 'Leka hape',

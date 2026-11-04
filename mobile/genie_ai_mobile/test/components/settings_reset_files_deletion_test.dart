@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -11,21 +10,22 @@ import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/services/notification_service.dart';
 
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
 /// The reset-data confirmation must surface the backend's
 /// `filesDeletionFailed` flag: when the uploads directory could not be
-/// removed after the committed reset, the user gets a WARNING instead of
-/// silence, because files that may contain personal data are still on disk.
-/// When the flag is absent (backends without it) or false, the behaviour is
-/// unchanged (no notification).
+/// removed after the committed reset, the user gets a warning SnackBar
+/// instead of silence, because files that may contain personal data are
+/// still on disk. When the flag is absent (backends without it) or false,
+/// the behaviour is unchanged (no notification). A failed reset call shows
+/// the failure SnackBar and clears the loading state.
 class MockCurrentUserApi implements CurrentUserApi {
-  MockCurrentUserApi({this.resetBody = const {}});
+  MockCurrentUserApi({this.resetBody = const {}, this.resetStatus = 200});
 
   final Map<String, dynamic> resetBody;
+  final int resetStatus;
 
   @override
   Future<http.Response> apiMeGetWithHttpInfo({String? data}) async {
@@ -41,7 +41,7 @@ class MockCurrentUserApi implements CurrentUserApi {
 
   @override
   Future<http.Response> apiMeResetDataPostWithHttpInfo() async {
-    return http.Response(jsonEncode(resetBody), 200);
+    return http.Response(jsonEncode(resetBody), resetStatus);
   }
 
   @override
@@ -58,7 +58,6 @@ class MockCurrentUserApi implements CurrentUserApi {
 
 void main() {
   tearDown(() {
-    NotificationService.resetForTesting();
     resetThemeManager();
     I18nService().changeLanguage('en');
   });
@@ -74,13 +73,13 @@ void main() {
     }
   }
 
-  Future<List<NotificationEvent>> pumpAndReset(
+  /// Drives the real user path: opens the settings screen, taps the reset
+  /// tile, confirms the modal, and lets the reset flow complete. Returns
+  /// once the reset's outcome SnackBar (if any) has been pumped in.
+  Future<void> driveResetFlow(
     WidgetTester tester,
     MockCurrentUserApi api,
   ) async {
-    final events = <NotificationEvent>[];
-    final sub = NotificationService.events.listen(events.add);
-
     setupLightTokens();
     I18nService().changeLanguage('en');
 
@@ -104,39 +103,55 @@ void main() {
 
     await tester.tap(find.widgetWithText(DsButton, 'Reset'));
     await pumpFrames(tester);
-
-    // Unmount so the framework's final tree walk sees no live subtree.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await pumpFrames(tester);
-
-    // AWAITS sub.cancel() deadlocks this Flutter build's test framework at
-    // test completion (idle runner after the body returns); schedule the
-    // cancellation without awaiting it — the events are already captured.
-    unawaited(sub.cancel());
-    return events;
   }
 
-  testWidgets('shows a warning notification when filesDeletionFailed is true', (
+  /// Unmounts the screen after the assertions: removing the tree dismisses
+  /// the SnackBar, so this must not run before the outcome is checked.
+  Future<void> unmount(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpFrames(tester);
+  }
+
+  testWidgets('shows a warning SnackBar when filesDeletionFailed is true', (
     tester,
   ) async {
-    final events = await pumpAndReset(
+    await driveResetFlow(
       tester,
       MockCurrentUserApi(resetBody: {'filesDeletionFailed': true}),
     );
 
-    expect(events, hasLength(1));
-    expect(events.single.type, NotificationType.warning);
-    expect(
-      events.single.message,
-      I18nService().translate('settings.userDataResetFilesFailed'),
+    final warningText = I18nService().translate(
+      'settings.userDataResetFilesFailed',
     );
+    expect(find.widgetWithText(SnackBar, warningText), findsOneWidget);
+    // The loading state was cleared after the reset flow.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await unmount(tester);
   });
 
-  testWidgets('emits no notification when the flag is absent (older backend)', (
+  testWidgets('shows no notification when the flag is absent (older backend)', (
     tester,
   ) async {
-    final events = await pumpAndReset(tester, MockCurrentUserApi());
+    await driveResetFlow(tester, MockCurrentUserApi());
 
-    expect(events, isEmpty);
+    final warningText = I18nService().translate(
+      'settings.userDataResetFilesFailed',
+    );
+    expect(find.widgetWithText(SnackBar, warningText), findsNothing);
+    await unmount(tester);
   });
+
+  testWidgets(
+    'shows the failure SnackBar and clears loading when the reset call fails',
+    (tester) async {
+      await driveResetFlow(tester, MockCurrentUserApi(resetStatus: 500));
+
+      final failureText = I18nService().translate(
+        'settings.failedToResetUserData',
+      );
+      expect(find.widgetWithText(SnackBar, failureText), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await unmount(tester);
+    },
+  );
 }

@@ -964,7 +964,7 @@ export default {
     },
     processing: 'A ka baara...',
     userDataReset: 'I la moo-kibaroo fitita benta.',
-    userDataResetFilesFailed: 'I la moo-kibaroo fitita benta, koma kabaata kumoy mana faga ben. I si a ñining tugung.',
+    userDataResetFilesFailed: 'I la moo-kibaroo fitita benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.',
     failedToResetUserData: 'Moo-kibaroo fiti mang ben. I si a ñining tugung.',
     unableToLoadUser: 'Moo kibaro looti mang ben. I si a ñining tugung.',
     retry: 'Ñining tugung',

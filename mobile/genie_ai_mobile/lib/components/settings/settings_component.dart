@@ -283,8 +283,8 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
             });
             try {
               final response = await _userService.resetUserData();
-              _fetchUserData();
               if (!mounted) return;
+              await _fetchUserData();
               if (response['filesDeletionFailed'] == true) {
                 _showSettingsSnackBar("settings.userDataResetFilesFailed");
               }

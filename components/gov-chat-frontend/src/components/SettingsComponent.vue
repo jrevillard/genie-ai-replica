@@ -515,7 +515,7 @@ export default {
       try {
         this.isLoading = true;
         const response = await userService.resetUserData();
-        if (response && response.filesDeletionFailed) {
+        if (response && response.filesDeletionFailed === true) {
           notificationService.warning(
             this.translate(
               'settings.userDataResetFilesFailed',

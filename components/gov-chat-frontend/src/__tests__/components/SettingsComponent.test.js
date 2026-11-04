@@ -9,7 +9,7 @@
  * unconditional success message, and degrade to the success message when the
  * flag is absent (backends without the flag) or explicitly false.
  */
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 
 const mockGetProfile = jest.fn();
 const mockResetUserData = jest.fn();
@@ -66,6 +66,11 @@ const SettingsComponent = require('../../components/SettingsComponent.vue').defa
 async function buildWrapper() {
   const wrapper = mount(SettingsComponent, {
     global: {
+      stubs: {
+        // DsModal teleports its dialog to <body>; keep it in place so the
+        // test can drive the confirm button through the component tree.
+        teleport: true
+      },
       mocks: {
         $i18n: {
           locale: 'en',
@@ -89,6 +94,23 @@ async function buildWrapper() {
   return wrapper;
 }
 
+// Drives the real user path: click the reset tile, confirm the modal, and
+// let the reset flow complete — so the confirm-dialog wiring is exercised.
+async function resetViaModal(wrapper) {
+  const resetTile = wrapper
+    .findAll('button')
+    .find((b) => b.text() === 'Reset User Data');
+  await resetTile.trigger('click');
+  await wrapper.vm.$nextTick();
+
+  const confirmButton = wrapper
+    .findAll('button')
+    .find((b) => b.text() === 'Reset');
+  await confirmButton.trigger('click');
+  await flushPromises();
+  await wrapper.vm.$nextTick();
+}
+
 describe('SettingsComponent — resetUserData notification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -102,7 +124,7 @@ describe('SettingsComponent — resetUserData notification', () => {
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
 
-    await wrapper.vm.resetUserData();
+    await resetViaModal(wrapper);
 
     expect(mockResetUserData).toHaveBeenCalledTimes(1);
     expect(mockNotificationSuccess).toHaveBeenCalledWith('Your profile data has been successfully reset.');
@@ -113,7 +135,7 @@ describe('SettingsComponent — resetUserData notification', () => {
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({ filesDeletionFailed: false });
 
-    await wrapper.vm.resetUserData();
+    await resetViaModal(wrapper);
 
     expect(mockNotificationSuccess).toHaveBeenCalledWith('Your profile data has been successfully reset.');
     expect(mockNotificationWarning).not.toHaveBeenCalled();
@@ -123,7 +145,7 @@ describe('SettingsComponent — resetUserData notification', () => {
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({ filesDeletionFailed: true });
 
-    await wrapper.vm.resetUserData();
+    await resetViaModal(wrapper);
 
     expect(mockNotificationWarning).toHaveBeenCalledWith(
       'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
@@ -135,7 +157,7 @@ describe('SettingsComponent — resetUserData notification', () => {
     const wrapper = await buildWrapper();
     mockResetUserData.mockRejectedValue(new Error('boom'));
 
-    await wrapper.vm.resetUserData();
+    await resetViaModal(wrapper);
 
     expect(mockNotificationError).toHaveBeenCalled();
     expect(mockNotificationSuccess).not.toHaveBeenCalled();

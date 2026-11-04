@@ -190,6 +190,10 @@ describe('ServiceCategoryService', () => {
       expect(result._key).toBe('svc-1');
       expect(result.status).toBe('updated');
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Updated' });
+      // The parent update runs BEFORE the translation write: the GC pass
+      // removes rows, so a failure after it must not have rows already
+      // gone (a failed save must leave the old rows intact).
+      expect(mockServices.update.mock.invocationCallOrder[0]).toBeLessThan(mockDb.query.mock.invocationCallOrder[0]);
       // One upsert round trip carries the EN row and the payload rows.
       const docs = mockDb.query.mock.calls[0][0].values[0];
       expect(docs).toHaveLength(2);
@@ -301,6 +305,23 @@ describe('ServiceCategoryService', () => {
           translations: [{ lang: 'fr', text: 'bad shape' }]
         })
       ).rejects.toThrow('Not found');
+    });
+
+    it('answers typed 404 when the service disappears between the check and the parent update', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServices.update.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' });
+        throw new Error('should have thrown');
+      } catch (e) {
+        // A raw driver 404 would render a 500; the race must answer the
+        // same typed 404 deleteService answers.
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
     });
 
     // One contract, three shapes of the driver error: a missing row and the

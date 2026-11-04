@@ -183,8 +183,7 @@ class ServiceCategoryService {
    * of an existing row survives every edit of its owner. Rows are
    * identified by their stored `_key` (`${ownerKey}_${LOCALE}`): a row
    * kept under any other key is not matched by the UPDATE branch and is
-   * removed by the GC pass (see #1447 for the legacy lowercase-key data
-   * the seed scripts wrote).
+   * removed by the GC pass.
    *
    * When `translations` is undefined the payload omits the field: the
    * non-EN rows are left untouched and no GC pass runs. An explicit
@@ -244,17 +243,27 @@ class ServiceCategoryService {
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
 
-      // 2. Upsert the English translation beside the payload's rows in one
+      // 2. Keep nameEN in sync on the parent service document BEFORE the
+      // translation write: the GC pass removes rows, so a failure after it
+      // must not leave the payload's dropped rows already gone while the
+      // parent still carries the old name.
+      await this.services.update(serviceKey, { nameEN });
+
+      // 3. Upsert the English translation beside the payload's rows in one
       // round trip, removing the rows the payload no longer carries.
       // nameEN stays the SSOT of the EN row — see _upsertTranslations for
       // the omitted-vs-empty-array contract.
       await this._upsertTranslations(this.serviceTranslations, 'serviceId', serviceKey, payload.translations, nameEN);
 
-      // 2b. Keep nameEN in sync on the parent service document
-      await this.services.update(serviceKey, { nameEN });
-
       return { _key: serviceKey, status: 'updated' };
     } catch (error) {
+      // A document deleted between the existence check and the update
+      // raises a raw driver 404 (no statusCode — the global middleware
+      // would render it a 500). Classify by the canonical predicate, the
+      // same race deleteService classifies.
+      if (dbService._isExpectedAbsence(error)) {
+        throw new NotFoundError(`Service ${serviceKey} not found`);
+      }
       logger.error(`Error updating service ${serviceKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }
@@ -934,8 +943,9 @@ class ServiceCategoryService {
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);
 
-      // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
-      // For now, we'll assume the main document has no fields that change here.
+      // 1. Keep nameEN in sync on the parent category document BEFORE the
+      // translation write (see the service path for the ordering rationale).
+      await this.serviceCategories.update(categoryKey, { nameEN });
 
       // 2. Upsert the English translation beside the payload's rows in one
       // round trip, removing the rows the payload no longer carries (same
@@ -949,11 +959,15 @@ class ServiceCategoryService {
         nameEN
       );
 
-      // 2b. Keep nameEN in sync on the parent category document
-      await this.serviceCategories.update(categoryKey, { nameEN });
-
       return { _key: categoryKey, status: 'updated' };
     } catch (error) {
+      // A document deleted between the existence check and the update
+      // raises a raw driver 404 (no statusCode — the global middleware
+      // would render it a 500). Classify by the canonical predicate, the
+      // same race deleteService classifies.
+      if (dbService._isExpectedAbsence(error)) {
+        throw new NotFoundError(`Category ${categoryKey} not found`);
+      }
       logger.error(`Error updating category ${categoryKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }

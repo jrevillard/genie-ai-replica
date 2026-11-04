@@ -195,6 +195,7 @@ Class | Method | HTTP request | Description
  - [ApiDatabaseBackupPost200Response](doc//ApiDatabaseBackupPost200Response.md)
  - [ApiDatabaseOptimizePost200Response](doc//ApiDatabaseOptimizePost200Response.md)
  - [ApiDatabaseOptimizePost200ResponseResultsInner](doc//ApiDatabaseOptimizePost200ResponseResultsInner.md)
+ - [ApiMeResetDataPost200Response](doc//ApiMeResetDataPost200Response.md)
  - [ApiQueriesGet200Response](doc//ApiQueriesGet200Response.md)
  - [ApiQueriesGet200ResponsePagination](doc//ApiQueriesGet200ResponsePagination.md)
  - [ApiQueriesGet200ResponseQueriesInner](doc//ApiQueriesGet200ResponseQueriesInner.md)

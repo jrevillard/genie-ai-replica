@@ -3296,23 +3296,25 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
 
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('username=testuser&exact=true');
-    expect(section).toContain("TESTUSER_EMAIL='testuser@e2e.test'");
-    expect(section).toContain("TESTUSER_PWD='TestPass123!'");
-    expect(section).toContain("u.get('email') == sys.argv[1]");
-    // both payloads take their fixture values through argv — a hardcoded
-    // literal in either payload escapes the single-source variables
-    expect(section).toContain('"value":sys.argv[2]');
-    expect(section).toContain('"value":sys.argv[1]');
-    expect(section).toContain('/reset-password');
-    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
-    expect(section).toContain('kc_curl DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
-    expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
-    expect(section).toContain('password converged');
-    expect(section).toContain('testuser recreated');
-    expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
-    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
-    expect(section.match(/^[ \t]+require_fixture_healthy$/gm) || []).toHaveLength(2);
+    const invocation = section.indexOf('node tests/e2e/provision-e2e-fixtures.js');
+    // Named guards: if either anchor line is reworded or removed, the
+    // failure must say so, not masquerade as an ordering violation.
+    if (invocation === -1) {
+      throw new Error('the venue-fixture provisioning invocation is gone from .e2e_web_base');
+    }
+    const suites = section.indexOf('npx playwright test');
+    if (suites === -1) {
+      throw new Error('the Playwright invocation line was reworded or removed in .e2e_web_base');
+    }
+    // Provisioning must run BEFORE the suites — a reorder that leaves the
+    // call present but after the Playwright item runs every spec against
+    // whatever fixtures the realm happens to carry.
+    expect(invocation).toBeLessThan(suites);
+    // The deleted inline mechanism must not grow back beside the helper:
+    // these names existed only in the bash convergence this pin replaced.
+    expect(section).not.toContain('create_testuser');
+    expect(section).not.toContain('require_testuser_id');
+    expect(section).not.toContain('require_fixture_healthy');
   });
 
   // #1334: every provisioning call routes through the shared kc_curl helper
@@ -3364,19 +3366,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('rejected during the genie-app client lookup');
     expect(section).toContain('failing instead of retrying with a dead token');
-  });
-
-  // #1333: the admin role resolves through the direct single-role endpoint —
-  // a clean 404 means the role is absent (realm import drift); a transport
-  // fault or a 5xx is a lookup failure and must not be misattributed.
-  test('the admin role uses the direct /roles/admin endpoint with a 404 verdict', () => {
-    const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('/admin/realms/genie/roles/admin');
-    expect(section).toContain("the 'admin' realm role does not exist");
-    expect(section).toContain('roles lookup hit a transport fault');
-    // The full-list lookup + client-side filter is gone.
-    expect(section).not.toContain('/admin/realms/genie/roles"');
-    expect(section).not.toContain("r['name']=='admin'");
   });
 });
 

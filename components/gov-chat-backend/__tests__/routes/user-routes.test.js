@@ -304,17 +304,6 @@ describe('POST /api/me/delete', () => {
     expect(keycloakProxyService.deleteUser).toHaveBeenCalled();
   });
 
-  it('should return 404 when user not found in Keycloak', async () => {
-    const error = new Error('User not found');
-    error.status = 404;
-    keycloakProxyService.deleteUser.mockRejectedValue(error);
-
-    const response = await authPost('/api/me/delete', {});
-
-    expect(response.status).toBe(404);
-    expect(response.body.success).toBe(false);
-  });
-
   it('should return 500 on service error', async () => {
     keycloakProxyService.deleteUser.mockRejectedValue(new Error('Keycloak down'));
 

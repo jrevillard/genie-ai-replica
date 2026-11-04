@@ -1,7 +1,8 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const userProvisioningService = require('./user-provisioning-service');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -28,8 +29,10 @@ const keycloakProxyService = {
   /**
    * Resolve a Keycloak UUID from an ArangoDB user record
    * @param {string} userKey - ArangoDB _key
-   * @returns {Promise<string>} Keycloak UUID (sub field)
-   * @throws {Error} If user not found or sub field missing
+   * @returns {Promise<{sub: string|null, issSub: string|null}>} The Keycloak UUID (sub field)
+   *   and the provisioning identifier (iss_sub); either may be null (user never logged
+   *   in via Keycloak, or record already erased)
+   * @throws {Error} If user not found
    */
   async _resolveKeycloakUserId(userKey) {
     const db = await dbService.getConnection('default');
@@ -37,16 +40,16 @@ const keycloakProxyService = {
       aql`
         FOR u IN users
           FILTER u._key == ${userKey}
-          RETURN u.sub
+          RETURN { sub: u.sub, issSub: u.iss_sub }
       `
     );
-    const sub = await cursor.next();
+    const user = await cursor.next();
 
-    if (!sub) {
-      throw new Error(`User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
+    if (!user) {
+      throw new Error(`User ${userKey} not found`);
     }
 
-    return sub;
+    return { sub: user.sub || null, issSub: user.issSub || null };
   },
 
   /**
@@ -179,28 +182,48 @@ const keycloakProxyService = {
   // ---------------------------------------------------------------------------
 
   /**
-   * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure)
+   * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure).
+   * A missing Keycloak user (already deleted, or never provisioned) is tolerated: the
+   * ArangoDB erasure — tombstone included — still runs.
    * @param {string} userKey - ArangoDB _key
-   * @throws {Error} If Keycloak user not found (404) or authentication fails
-   * @throws {Error} If ArangoDB erasure fails after Keycloak delete (partial erasure state)
+   * @throws {Error} If Keycloak authentication fails
+   * @throws {Error} If ArangoDB erasure fails after the Keycloak step (partial erasure state)
    */
   async deleteUser(userKey) {
-    const uuid = await this._resolveKeycloakUserId(userKey);
+    const resolved = await this._resolveKeycloakUserId(userKey);
+    const uuid = resolved.sub;
+    const issSub = resolved.issSub;
     logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
-    // Delete from Keycloak first (authoritative source)
-    try {
-      await this._adminApiCall('DELETE', `/users/${uuid}`);
-    } catch (error) {
-      if (error.status === 404) {
-        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { userKey, uuid });
-        return;
+    // Evict the provisioning cache BEFORE erasing, so the middleware stops
+    // serving the pre-erasure profile for the remainder of the cache TTL.
+    if (issSub) {
+      userProvisioningService.invalidateCache(issSub);
+    }
+
+    // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
+    // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
+    // the ArangoDB record may still hold the user's PII, and the erasure —
+    // including the provisioning tombstone — must happen regardless.
+    if (uuid) {
+      try {
+        await this._adminApiCall('DELETE', `/users/${uuid}`);
+      } catch (error) {
+        if (error.status !== 404) {
+          throw error;
+        }
+        logger.info('[KeycloakProxy] User already deleted from Keycloak, continuing with ArangoDB erasure', {
+          userKey,
+          uuid
+        });
       }
-      throw error;
+    } else {
+      logger.warn('[KeycloakProxy] No Keycloak UUID on user record, skipping Keycloak delete', { userKey });
     }
 
     // Then erase PII from ArangoDB
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
+    const erasedKey = issSub ? erasureTombstoneKey(issSub) : null;
     const db = await dbService.getConnection('default');
     try {
       await db.query(
@@ -209,6 +232,14 @@ const keycloakProxyService = {
             FILTER u._key == ${userKey}
             UPDATE u WITH {
               deleted: true,
+              // Tombstone digest — contract: shared/lib/erasure-tombstone.js.
+              // Written BEFORE iss_sub is nulled below, so provisioning can
+              // recognize and refuse the erased subject instead of re-INSERTing
+              // it from the still-valid token. On an already-erased document
+              // (iss_sub already null, issSub not resolvable) the existing
+              // tombstone is kept — overwriting it with null would destroy the
+              // protection on an idempotent re-delete.
+              erased_key: ${erasedKey} == null ? u.erased_key : ${erasedKey},
               erasedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW()),
               email: null,
@@ -222,7 +253,24 @@ const keycloakProxyService = {
             } IN users
         `
       );
+      // Remove any duplicate document a racing provision may have INSERTed
+      // under the same iss_sub (new _key — the UPDATE above never matches it).
+      // With iss_sub still known here, this closes the #1440 INSERT window at
+      // commit time; the provisioning re-check is the belt-and-suspenders.
+      await db.query(
+        aql`
+          FOR u IN users
+            FILTER u.iss_sub == ${issSub} AND u._key != ${userKey}
+            REMOVE u IN users
+        `
+      );
       logger.info('[KeycloakProxy] User erased', { userKey });
+      // Re-evict AFTER the erasure commits: a provision that raced the erasure
+      // may have re-cached the pre-erasure profile after the pre-delete
+      // eviction above (see #1440 for the residual INSERT-level window).
+      if (issSub) {
+        userProvisioningService.invalidateCache(issSub);
+      }
     } catch (arangoError) {
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
         userKey,

@@ -2849,11 +2849,12 @@ class TestQueryTranslationStatus:
         assert text == "USER: AAAA"
 
     @pytest.mark.asyncio
-    async def test_a_history_in_a_window_too_tight_is_still_refused_and_named(self):
+    async def test_a_history_in_a_window_too_tight_is_refused_not_embedded(self):
         """A window that cannot hold the prompt plus a full-length
-        translation still refuses at the caller: the history goes out
-        untranslated and the status names it — scaling the ceiling must not
-        turn a genuinely tight window into a doomed request."""
+        translation refuses the turn: the raise reaches the caller, which
+        answers 422 — the newest message in the history is still the query,
+        so an untranslated fallback would be embedded into the English space
+        and retrieve the wrong documents (issue #1365)."""
         svc = create_chatqna_service()
         history = [{"role": "user", "content": "A" * 13000}]
         mock_client = self._mock_client()
@@ -2866,10 +2867,8 @@ class TestQueryTranslationStatus:
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
         stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=9000))
-        with stack:
-            text, status = await svc._get_translated_history_string(history)
-        assert text.startswith("USER: AAAA")  # untranslated
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string(history)
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -3052,10 +3051,11 @@ class TestQueryTranslationStatus:
         # itself.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
 
-    async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):
+    async def test_a_generic_history_in_a_window_too_tight_is_refused_not_embedded(self):
         """A window that cannot hold the prompt plus a full-length
         translation refuses before the request goes out — the guard covers
-        the generic shape too."""
+        the generic shape too, and the refusal raises like the TranslateGemma
+        shape's instead of degrading into an untranslated fallback."""
         svc = create_chatqna_service()
         mock_client = self._mock_client(content="USER: what is X?")
         stack = self._translation_patches(mock_client, translategemma=False)
@@ -3063,10 +3063,8 @@ class TestQueryTranslationStatus:
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=256))
         stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=300))
-        with stack:
-            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
-        assert text == "USER: qué es X?"  # untranslated
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string(self.SPANISH_HISTORY)
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -4962,11 +4960,30 @@ async def test_the_passthrough_truncates_an_oversized_newest_message_like_the_tr
     assert passthrough_history == sent_prompt.split("HISTORY:\n", 1)[1]
 
 
+# The language matrix the overflow-refusal tests run over: the contract is
+# language-independent, so every language path gets the same scenario.
+_OVERFLOW_LANGUAGES = [
+    pytest.param("es", id="non-english"),
+    pytest.param("en", id="english"),
+]
+
+# The refusal must also hold when NO language was established (auto mode
+# over a detection crash): the passthrough branch refuses before the
+# healthy-status decision, not inside it.
+_OVERFLOW_LANGUAGES_INCLUDING_UNKNOWN = _OVERFLOW_LANGUAGES + [pytest.param(None, id="no-established-language")]
+
+
 @pytest.mark.asyncio
-async def test_an_oversized_single_message_query_is_refused_with_a_422():
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES_INCLUDING_UNKNOWN)
+async def test_an_oversized_single_message_query_is_refused_with_a_422(language):
     """A query that does not fit the translation window must not be embedded
     untranslated into the English space: the turn is refused with the 422 the
-    answer path returns, before the model is even asked."""
+    answer path returns, before the model is even asked. The budget does not
+    care about the language (issue #1366): an oversized English question gets
+    the same refusal as the same-length question in another language, instead
+    of passing whole and failing later at the embedder with a less actionable
+    error — and the refusal does not depend on a language having been
+    established at all."""
     svc = create_chatqna_service()
     mock_client = AsyncMock()
     with (
@@ -4975,15 +4992,67 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422():
         patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
         pytest.raises(HTTPException) as excinfo,
     ):
-        await _full_flow_payload(svc, stream=False, language="es", messages="q" * 5000)
+        await _full_flow_payload(svc, stream=False, language=language, messages="q" * 5000)
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "translation_input_too_long"
     assert excinfo.value.detail["abstention_reason"] == "translation_input_too_long"
-    # Refused before the translation model was asked, and counted like the
+    # Refused before anything was asked of any model, and counted like the
     # other failed turns.
     mock_client.post.assert_not_called()
     mock_counter.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES)
+async def test_an_empty_single_message_query_is_a_fallback_on_both_language_paths(language):
+    """A blank query is a fallback, not a refusal — whatever language the
+    turn asked for: the translation path blank-guards before the budget
+    check, so the English path must answer the same way instead of refusing
+    a 0-character query that cannot fit a budget below the overhead
+    allowance."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=12):
+        # A whitespace-only query (a blank "" would be dropped by the
+        # request builder's truthiness check).
+        payload = await _full_flow_payload(svc, stream=False, language=language, messages=" ")
+
+    assert payload["metadata"]["query_translation_status"] == "fallback_error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", _OVERFLOW_LANGUAGES)
+async def test_an_all_blank_history_is_a_fallback_on_both_language_paths(language):
+    """An all-blank multi-message history is a fallback too — the passthrough
+    must not report it as a healthy `passthrough_english` while the
+    translation path reports the identical history as degraded: the runbook
+    filter reads that as a language asymmetry that does not exist."""
+    svc = create_chatqna_service()
+    blank_history = [
+        {"role": "user", "content": "   "},
+        {"role": "assistant", "content": "\n"},
+    ]
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000):
+        payload = await _full_flow_payload(
+            svc, stream=False, language=language, messages=[dict(m) for m in blank_history]
+        )
+
+    assert payload["metadata"]["query_translation_status"] == "fallback_error"
+
+
+@pytest.mark.asyncio
+async def test_a_multimodal_content_history_is_not_treated_as_blank():
+    """Multimodal content — a list of typed parts, which the request model
+    permits — is never blank: the blank guard reads strings only, so a
+    list-content history answers normally instead of crashing on a string
+    method (AttributeError → 500 on a request the pre-#1366 passthrough
+    answered)."""
+    svc = create_chatqna_service()
+    multimodal_history = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000):
+        payload = await _full_flow_payload(svc, stream=False, language="en", messages=multimodal_history)
+
+    assert payload["metadata"]["query_translation_status"] == "passthrough_english"
 
 
 @pytest.mark.asyncio
@@ -5003,6 +5072,40 @@ async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "translation_input_too_long"
+
+
+@pytest.mark.asyncio
+async def test_a_history_the_translation_service_refuses_is_answered_with_a_422():
+    """The multi-message shape refuses a history the translation service
+    rejects (window overflow): the newest message in it is still the query,
+    so the turn is not answered from an untranslated fallback (issue #1365)
+    — the same contract the single-message shape already keeps."""
+    svc = create_chatqna_service()
+    with (
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=100000),
+        patch(
+            "chatqna.genieai_chatqna._translate_prompt",
+            new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("too long for the window")),
+        ),
+        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(
+            svc,
+            stream=False,
+            language="es",
+            messages=[
+                {"role": "user", "content": "¿qué es X?"},
+                {"role": "assistant", "content": "X es un servicio."},
+                {"role": "user", "content": "¿y cómo se usa?"},
+            ],
+        )
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
+    # Counted like the other refusal paths — the raise happens before the
+    # orchestrate-span block, so this record is the only one.
+    mock_counter.add.assert_called_once()
 
 
 @pytest.mark.asyncio

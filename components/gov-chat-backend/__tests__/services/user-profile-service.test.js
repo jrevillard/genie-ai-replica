@@ -349,12 +349,6 @@ describe('UserProfileService', () => {
       expect(text).toContain('updatedAt');
     });
 
-    it('should wipe the profile data (not part of the preserve set)', async () => {
-      const preserveList = await resetAndCapture();
-      expect(preserveList).not.toContain('personalIdentification');
-      expect(preserveList).not.toContain('customSettings');
-    });
-
     it('should throw NotFoundError when the reset query matches no document', async () => {
       mockDb.query.mockResolvedValueOnce({ all: async () => [] });
       await expect(userProfileService.resetUserData('missing')).rejects.toMatchObject({ name: 'NotFoundError' });

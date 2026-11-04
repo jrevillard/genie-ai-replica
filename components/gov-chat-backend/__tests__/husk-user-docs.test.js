@@ -14,7 +14,8 @@ const {
   findDivergences,
   HUSK_IDENTITY_FIELDS,
   HUSK_ALLOWED_FIELDS,
-  HUSK_MATCHER_AQL
+  HUSK_MATCHER_AQL,
+  HUSK_REMOVAL_AQL
 } = require('../scripts/report-husk-user-docs');
 
 // The exact shape the old resetUserData (pre-#1428) left behind.
@@ -124,5 +125,26 @@ describe('findDivergences', () => {
   it('flags AQL hits that fail the predicate', () => {
     const stray = { ...huskDoc, customSettings: { theme: 'dark' } };
     expect(findDivergences([huskDoc, stray])).toEqual([stray]);
+  });
+});
+
+describe('HUSK_REMOVAL_AQL', () => {
+  // The destructive query must re-assert the full signature — a template edit
+  // that drops the interpolation would degrade --delete to destroy-by-_key.
+  it('selects by the passed key list', () => {
+    expect(HUSK_REMOVAL_AQL).toContain('FILTER u._key IN @keys');
+  });
+
+  it('re-asserts the husk signature before removing', () => {
+    // The signature fragment is interpolated at export time; the identity
+    // FILTER lines below are its visible expansion in the built query.
+    for (const field of HUSK_IDENTITY_FIELDS) {
+      expect(HUSK_REMOVAL_AQL).toContain(`FILTER u.${field} == null`);
+    }
+  });
+
+  it('targets the collection and removes the matched documents', () => {
+    expect(HUSK_REMOVAL_AQL).toContain('FOR u IN @@collection');
+    expect(HUSK_REMOVAL_AQL.trimEnd().endsWith('REMOVE u IN @@collection')).toBe(true);
   });
 });

@@ -28,9 +28,12 @@
  *
  * Environment variables (from the shell, or a .env at the repo root):
  *   ARANGO_URL        (default http://localhost:8529)
- *   ARANGO_DB         (default genie-ai — the same default as the app and the
- *                     other standalone scripts; k8s deployments that use the
- *                     _system database must set it explicitly)
+ *   ARANGO_DB         (default genie-ai — the docker-compose default, and the
+ *                     same default as the sibling standalone scripts; the app
+ *                     code's own fallback is 'node-services', so deployments
+ *                     that rely on that, or k8s deployments using _system,
+ *                     must set ARANGO_DB explicitly — check the printed
+ *                     'Database:' line before trusting the report)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
  *   ARANGO_COLLECTION (default users)
@@ -104,6 +107,16 @@ FOR u IN @@collection
   RETURN u
 `;
 
+// The removal: keys selected by the matcher, re-filtered through the full
+// signature at removal time so a concurrent disqualifying write (e.g. a GDPR
+// soft-delete landing between SELECT and REMOVE) is skipped, not destroyed.
+const HUSK_REMOVAL_AQL = `
+FOR u IN @@collection
+  FILTER u._key IN @keys
+  ${HUSK_SIGNATURE_FILTERS_AQL}
+  REMOVE u IN @@collection
+`;
+
 // Docs with no iss_sub/sub but WITH an email: the dangerous lookalikes.
 // Legacy pre-Keycloak accounts look exactly like this and are healthy —
 // every legitimate document-creation path in the repo sets email, so these
@@ -132,12 +145,14 @@ async function main() {
 
   if (doDelete && !doConfirm) {
     console.error('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   if (!process.env.ARANGO_PASSWORD) {
     console.error('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const db = new Database({
@@ -166,7 +181,8 @@ async function main() {
     for (const doc of mismatches) {
       console.error(`  mismatched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
     }
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   let lookalikeCount = 0;
@@ -221,27 +237,33 @@ async function main() {
   // deleted:true) is left alone; a mid-way failure cannot leave an ambiguous
   // partial state.
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  await db.query(
-    `FOR u IN @@collection
-  FILTER u._key IN @keys
-  ${HUSK_SIGNATURE_FILTERS_AQL}
-  REMOVE u IN @@collection`,
-    {
-      '@collection': COLLECTION,
-      keys: husks.map((doc) => doc._key)
-    }
+  const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
+    '@collection': COLLECTION,
+    keys: husks.map((doc) => doc._key)
+  });
+  // The removal re-asserts the signature, so docs disqualified since the
+  // SELECT are skipped server-side — report what actually executed, not the
+  // selection size.
+  const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
+  const removed = typeof writesExecuted === 'number' ? writesExecuted : husks.length;
+  console.log(
+    `Done. ${removed} of ${husks.length} selected documents removed.` +
+      (removed < husks.length ? ` ${husks.length - removed} no longer matched the signature (skipped).` : '')
   );
-  for (const doc of husks) {
-    console.log(`  removed _key=${doc._key}`);
-  }
-  console.log(`Done. ${husks.length} documents removed.`);
 }
 
 if (require.main === module) {
   main().catch((err) => {
     console.error('Report failed:', err);
-    process.exit(1);
+    process.exitCode = 1;
   });
 }
 
-module.exports = { isHuskDoc, findDivergences, HUSK_IDENTITY_FIELDS, HUSK_ALLOWED_FIELDS, HUSK_MATCHER_AQL };
+module.exports = {
+  isHuskDoc,
+  findDivergences,
+  HUSK_IDENTITY_FIELDS,
+  HUSK_ALLOWED_FIELDS,
+  HUSK_MATCHER_AQL,
+  HUSK_REMOVAL_AQL
+};

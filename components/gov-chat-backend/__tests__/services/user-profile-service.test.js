@@ -2,8 +2,6 @@
 
 require('../setup-env');
 
-const { USER_PREFERENCE_FIELDS } = require('../../constants/jit-fields');
-
 // Tracker for fs operations — referenced by mock factory (Jest allows mock-prefixed vars)
 const mockFsTracker = {
   rmCalls: [],
@@ -232,6 +230,26 @@ describe('UserProfileService', () => {
       expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'email')).toBe(false);
       expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'firstName')).toBe(false);
     });
+
+    it('should strip the GDPR audit markers from profile writes', async () => {
+      // A self-service write of erased_key/deletedAt/erasedAt would defeat the
+      // tombstone (provisioning matches the digest exactly — a junk value makes
+      // the next login miss it and re-provision an erased identity) and forge
+      // the soft-delete audit trail. They are system-owned, never writable.
+      mockUsers.document.mockResolvedValueOnce({ _key: 'user-1', email: 'test@test.com' });
+      mockUsers.document.mockResolvedValueOnce({ _key: 'user-1' });
+      await userProfileService.updateUserProfile('user-1', {
+        erased_key: 'attacker-supplied',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+        erasedAt: '2026-01-01T00:00:00.000Z',
+        nickname: 'harmless'
+      });
+      const updateCall = mockUsers.update.mock.calls[0];
+      expect(updateCall[1].erased_key).toBeUndefined();
+      expect(updateCall[1].deletedAt).toBeUndefined();
+      expect(updateCall[1].erasedAt).toBeUndefined();
+      expect(updateCall[1].nickname).toBe('harmless');
+    });
   });
 
   describe('storeFile', () => {
@@ -265,139 +283,145 @@ describe('UserProfileService', () => {
   });
 
   describe('resetUserData', () => {
-    // Shape of a provisioned user doc (user-provisioning-service UPSERT + legacy migration)
-    const makeUserDoc = (overrides = {}) => ({
-      _key: 'user-1',
-      iss_sub: 'https://issuer.test|abc-123',
-      iss: 'https://issuer.test',
-      sub: 'abc-123',
-      email: 'user@test.com',
-      name: 'John Doe',
-      emailVerified: true,
-      roles: ['genie-user'],
-      active: true,
-      deleted: false,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-06-01T00:00:00.000Z',
-      ...overrides
-    });
+    // resetUserData performs ONE server-side query: the preserve set is
+    // computed inside the database (KEEP on the live document) and the
+    // REPLACE is atomic with the read — the read→modify→write race window
+    // of the old snapshot-then-replace implementation is gone.
+    const mockQueryResult = (preservedCount) => ({ all: async () => [preservedCount] });
 
-    it('should reset user data preserving createdAt', async () => {
-      mockUsers.document.mockResolvedValue(makeUserDoc());
+    // The server-side preserve set, as resetUserData binds it into the query
+    const boundPreserveList = () => {
+      const [boundQuery] = mockDb.query.mock.calls[0];
+      return boundQuery.values.find((v) => Array.isArray(v));
+    };
+
+    // Reset with the standard queue and return the bound preserve list
+    const resetAndCapture = async () => {
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
+      await userProfileService.resetUserData('user-1');
+      return boundPreserveList();
+    };
+
+    it('should reset the document with a single server-side preserve query', async () => {
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);
-      expect(result.fieldsPreserved).toBeGreaterThan(0);
-      expect(mockUsers.replace).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ createdAt: '2026-01-01T00:00:00.000Z' })
-      );
+      expect(result.fieldsPreserved).toBe(12);
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+
+      const [boundQuery] = mockDb.query.mock.calls[0];
+      const text = boundQuery.strings.join(' ? ');
+      // Atomic: the read (KEEP of the live document) and the write (REPLACE)
+      // happen in one query — no snapshot is taken client-side.
+      expect(text).toContain('REPLACE u WITH');
+      expect(text).toContain('KEEP(u,');
+      expect(boundQuery.values).toContain('user-1');
     });
 
-    it('should throw NotFoundError when user not found', async () => {
-      mockUsers.document.mockRejectedValueOnce(new Error('Not found'));
-      await expect(userProfileService.resetUserData('missing')).rejects.toThrow();
-    });
-
-    it('should preserve identity fields so provisioning re-matches the same document after reset', async () => {
-      mockUsers.document.mockResolvedValue(
-        makeUserDoc({
-          // profile data — what the reset is supposed to wipe
-          personalIdentification: { fullName: 'John Doe' },
-          customSettings: { theme: 'dark' }
-        })
-      );
-
-      await userProfileService.resetUserData('user-1');
-
-      expect(mockUsers.replace).toHaveBeenCalledTimes(1);
-      const preserved = mockUsers.replace.mock.calls[0][1];
-
+    it('should preserve the identity fields the provisioning UPSERT matches on', async () => {
+      const preserveList = await resetAndCapture();
       // Identity fields survive — the provisioning UPSERT matches on iss_sub,
       // the legacy migration matches on email. Losing either INSERTs a husk doc.
-      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
-      expect(preserved.sub).toBe('abc-123');
-      expect(preserved.iss).toBe('https://issuer.test');
-      expect(preserved.email).toBe('user@test.com');
-      expect(preserved.name).toBe('John Doe');
-      expect(preserved.emailVerified).toBe(true);
-      expect(preserved.roles).toEqual(['genie-user']);
-      expect(preserved.active).toBe(true);
-      expect(preserved.deleted).toBe(false);
-      expect(preserved.createdAt).toBe('2026-01-01T00:00:00.000Z');
-      // updatedAt is bumped to now — not carried over from the stored document
-      expect(preserved.updatedAt).not.toBe('2026-06-01T00:00:00.000Z');
-      expect(new Date(preserved.updatedAt).getTime()).toBeGreaterThan(new Date('2026-06-01T00:00:00.000Z').getTime());
-
-      // Profile data is still wiped — that is the reset's purpose
-      expect(preserved).not.toHaveProperty('personalIdentification');
-      expect(preserved).not.toHaveProperty('customSettings');
-    });
-
-    it('should preserve the client preference fields so the mobile client keeps its toggles and language', async () => {
-      // PUT /api/me stores the client display/notification preferences
-      // top-level; the reset keeps them (issue #1454) while still wiping
-      // every other user-supplied key. The doc carries exactly the fields
-      // USER_PREFERENCE_FIELDS names — dropping a field from that constant
+      expect(preserveList).toEqual(expect.arrayContaining(['iss_sub', 'sub', 'iss', 'email', 'name']));
+      expect(preserveList).toEqual(
+        expect.arrayContaining(['emailVerified', 'roles', 'active', 'deleted', 'createdAt'])
+      );
+      // Client preference fields are preserved too (#1454): PUT /api/me stores
+      // them top-level on the document and the mobile client reverts its
+      // toggles and language if the reset drops them. The list below is an
+      // independent hand-copy — dropping a field from USER_PREFERENCE_FIELDS
       // turns this test red instead of silently reverting a client pref.
-      const values = { theme: 'dark', fontSize: 80, language: 'es', emailUpdates: true, soundNotifications: false };
-      const doc = {};
-      for (const field of USER_PREFERENCE_FIELDS) doc[field] = values[field];
-      doc.personalIdentification = { fullName: 'John Doe' };
-      mockUsers.document.mockResolvedValue(makeUserDoc(doc));
-
-      await userProfileService.resetUserData('user-1');
-
-      const preserved = mockUsers.replace.mock.calls[0][1];
-      for (const field of USER_PREFERENCE_FIELDS) {
-        expect(preserved[field]).toBe(values[field]);
-      }
-      // Profile data is still wiped
-      expect(preserved).not.toHaveProperty('personalIdentification');
-    });
-
-    it('should not preserve a preference field that was absent from the stored document', async () => {
-      mockUsers.document.mockResolvedValue(makeUserDoc({ language: 'es' }));
-
-      await userProfileService.resetUserData('user-1');
-
-      const preserved = mockUsers.replace.mock.calls[0][1];
-      expect(preserved.language).toBe('es');
-      expect(preserved).not.toHaveProperty('theme');
-      expect(preserved).not.toHaveProperty('emailUpdates');
-    });
-
-    it('should not preserve a customSettings value promoted to the top level as an identity field', async () => {
-      // getUserProfile() promotes customSettings sub-keys to the top level;
-      // resetUserData reads the stored document directly, so a user-controlled
-      // customSettings entry keyed "name" can never be preserved as system-managed identity.
-      mockUsers.document.mockResolvedValue(makeUserDoc({ name: null, customSettings: { name: 'user-injected text' } }));
-
-      await userProfileService.resetUserData('user-1');
-
-      const preserved = mockUsers.replace.mock.calls[0][1];
-      expect(preserved.name).toBeNull();
-      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
+      // Which of these fields the STORED document actually carries is decided
+      // server-side by KEEP (absent fields are simply not carried over).
+      expect(preserveList).toEqual(
+        expect.arrayContaining(['theme', 'fontSize', 'language', 'emailUpdates', 'soundNotifications'])
+      );
     });
 
     it('should preserve the soft-delete and GDPR audit markers', async () => {
-      mockUsers.document.mockResolvedValue(
-        makeUserDoc({ deleted: true, deletedAt: '2026-06-01T00:00:00.000Z', erasedAt: '2026-06-02T00:00:00.000Z' })
-      );
-
-      await userProfileService.resetUserData('user-1');
-
-      const preserved = mockUsers.replace.mock.calls[0][1];
-      expect(preserved.deleted).toBe(true);
-      expect(preserved.deletedAt).toBe('2026-06-01T00:00:00.000Z');
-      expect(preserved.erasedAt).toBe('2026-06-02T00:00:00.000Z');
+      const preserveList = await resetAndCapture();
+      expect(preserveList).toEqual(expect.arrayContaining(['deleted', 'deletedAt', 'erasedAt', 'erased_key']));
     });
 
-    it('should not delete user files, not fall back to update, and rethrow when the replace fails', async () => {
-      mockUsers.document.mockResolvedValue(makeUserDoc());
-      mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
+    it('should preserve the exact system-owned set (nothing more, nothing less)', async () => {
+      // The expected list below is an INDEPENDENT hand-copy of the preserve
+      // set: production derives from SYSTEM_PRESERVED_FIELDS, so a field
+      // dropped from the constant (the #1432 tombstone-loss class) turns this
+      // test red instead of comparing the constant against itself, and a
+      // field added beyond the constant would survive a reset it must not.
+      // Limit: the query itself is exercised through the mock — its AQL text
+      // and bind structure are rendered with the REAL arangojs tag in
+      // reset-preserve-aql.test.js; full database semantics (KEEP/MERGE/
+      // REPLACE against a live ArangoDB) are covered only by the manual E2E
+      // phases (docs/e2e-tests/).
+      const preserveList = await resetAndCapture();
 
-      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow('replace fail');
-      expect(mockUsers.update).not.toHaveBeenCalled();
+      const expectedPreserved = [
+        'email',
+        'firstName',
+        'lastName',
+        'username',
+        'name',
+        'roles',
+        'enabled',
+        'disabled',
+        'active',
+        'deleted',
+        'iss',
+        'iss_sub',
+        'sub',
+        'createdAt',
+        'emailVerified',
+        'pendingEmailChange',
+        'deletedAt',
+        'erasedAt',
+        'erased_key',
+        // Client preference fields (#1454) — the user's look-and-feel,
+        // preserved by the reset like the system-owned set above.
+        'theme',
+        'fontSize',
+        'language',
+        'emailUpdates',
+        'soundNotifications'
+      ];
+      expect([...preserveList].sort()).toEqual(expectedPreserved.sort());
+      // The preserve set is read from the STORED document server-side (the
+      // KEEP loop variable), never from a client-facing profile read.
+      const text = mockDb.query.mock.calls[0][0].strings.join(' ? ');
+      expect(text).toContain('KEEP(u,');
+    });
+
+    it('should not carry updatedAt over from the stored document (bumped server-side)', async () => {
+      await resetAndCapture();
+
+      const preserveList = boundPreserveList();
+      expect(preserveList).not.toContain('updatedAt');
+      const text = mockDb.query.mock.calls[0][0].strings.join(' ? ');
+      expect(text).toContain('updatedAt');
+    });
+
+    it('should throw NotFoundError when the reset query matches no document', async () => {
+      mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+      await expect(userProfileService.resetUserData('missing')).rejects.toMatchObject({ name: 'NotFoundError' });
+      expect(mockFsTracker.rmCalls.length).toBe(0);
+    });
+
+    it('should not log an expected 404 as an error with stack', async () => {
+      // A missing user is an ordinary 404 — logging it error-grade with a
+      // stack on every occurrence trains alerting noise.
+      const { logger } = require('../../shared-lib');
+      mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+
+      await expect(userProfileService.resetUserData('missing')).rejects.toMatchObject({ name: 'NotFoundError' });
+
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it('should not delete user files and rethrow when the reset query fails', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('query fail'));
+
+      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow('query fail');
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
 
@@ -405,7 +429,7 @@ describe('UserProfileService', () => {
       // The reset is applied once the document write commits; a leftover
       // uploads directory (rm EACCES/EBUSY) must not answer 500 for a
       // reset that already happened — but the caller must be told.
-      mockUsers.document.mockResolvedValue(makeUserDoc());
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
       mockFsTracker.rmImplementation = () => Promise.reject(new Error('EACCES: permission denied'));
 
       const result = await userProfileService.resetUserData('user-1');
@@ -415,7 +439,7 @@ describe('UserProfileService', () => {
     });
 
     it('should not report filesDeletionFailed when user files are deleted cleanly', async () => {
-      mockUsers.document.mockResolvedValue(makeUserDoc());
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
 
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);

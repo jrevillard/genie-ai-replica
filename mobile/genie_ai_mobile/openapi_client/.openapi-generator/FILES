@@ -51,6 +51,7 @@ doc/ApiDatabaseBackupPost200Response.md
 doc/ApiDatabaseOptimizePost200Response.md
 doc/ApiDatabaseOptimizePost200ResponseResultsInner.md
 doc/ApiMeDeletePost200Response.md
+doc/ApiMeResetDataPost200Response.md
 doc/ApiQueriesGet200Response.md
 doc/ApiQueriesGet200ResponsePagination.md
 doc/ApiQueriesGet200ResponseQueriesInner.md
@@ -188,6 +189,7 @@ lib/model/api_database_backup_post200_response.dart
 lib/model/api_database_optimize_post200_response.dart
 lib/model/api_database_optimize_post200_response_results_inner.dart
 lib/model/api_me_delete_post200_response.dart
+lib/model/api_me_reset_data_post200_response.dart
 lib/model/api_queries_get200_response.dart
 lib/model/api_queries_get200_response_pagination.dart
 lib/model/api_queries_get200_response_queries_inner.dart
@@ -298,6 +300,7 @@ test/api_database_backup_post200_response_test.dart
 test/api_database_optimize_post200_response_results_inner_test.dart
 test/api_database_optimize_post200_response_test.dart
 test/api_me_delete_post200_response_test.dart
+test/api_me_reset_data_post200_response_test.dart
 test/api_queries_get200_response_pagination_test.dart
 test/api_queries_get200_response_queries_inner_test.dart
 test/api_queries_get200_response_test.dart

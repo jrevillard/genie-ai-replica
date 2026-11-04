@@ -3,6 +3,7 @@
 const { aql } = require('arangojs');
 const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
+const { GOV_PROFILE_SECTIONS } = require('../constants/jit-fields');
 const userProvisioningService = require('./user-provisioning-service');
 const userProfileService = require('./user-profile-service');
 
@@ -12,6 +13,14 @@ const PROXY_CLIENT_ID = process.env.KEYCLOAK_PROXY_CLIENT_ID;
 const PROXY_CLIENT_SECRET = process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
 
 const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
+
+// Gov-profile sections and email-adjacent state nulled by the GDPR erasure,
+// derived from the shared constant — a profile section added to
+// GOV_PROFILE_SECTIONS is written AND erased; a hand-copied list here would
+// silently leak it past account deletion.
+const ERASURE_SECTION_NULLS = Object.fromEntries(
+  [...GOV_PROFILE_SECTIONS, 'emailVerified', 'pendingEmailChange', 'customSettings'].map((field) => [field, null])
+);
 
 // Service account token cache (lazy refresh on 401)
 let cachedToken = null;
@@ -231,12 +240,20 @@ const keycloakProxyService = {
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
     const erasedKey = issSub ? erasureTombstoneKey(issSub) : null;
     const db = await dbService.getConnection('default');
+    // Whether the erasure UPDATE committed — a failure BEFORE it did must not
+    // destroy the uploads (the database record is still intact and an
+    // operator may repair the account); a failure AFTER it did must still
+    // clean them up. Known window: a lost response AFTER a server-side
+    // commit (connection reset, proxy timeout) leaves the flag false — the
+    // conservative direction (files survive an erased account), healable
+    // only by an operator retrying the erasure.
+    let erasureCommitted = false;
     try {
       await db.query(
         aql`
           FOR u IN users
             FILTER u._key == ${userKey}
-            UPDATE u WITH {
+            UPDATE u WITH MERGE({
               deleted: true,
               // Tombstone digest — contract: shared/lib/erasure-tombstone.js.
               // Written BEFORE iss_sub is nulled below, so provisioning can
@@ -254,11 +271,11 @@ const keycloakProxyService = {
               iss: null,
               iss_sub: null,
               roles: [],
-              active: false,
-              personalIdentification: null
-            } IN users
+              active: false
+            }, ${ERASURE_SECTION_NULLS}) IN users
         `
       );
+      erasureCommitted = true;
       // Remove any duplicate document a racing provision may have INSERTed
       // under the same iss_sub (new _key — the UPDATE above never matches it).
       // With iss_sub still known here, this closes the #1440 INSERT window at
@@ -278,14 +295,23 @@ const keycloakProxyService = {
         userProvisioningService.invalidateCache(issSub);
       }
     } catch (arangoError) {
+      // The erasure UPDATE may already be committed (a late duplicate-removal
+      // failure lands here) — still clean the uploads; if the UPDATE itself
+      // failed, the record is intact and the uploads must survive it.
+      if (erasureCommitted) {
+        await this._cleanupUploads(userKey);
+      }
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
         userKey,
         error: arangoError.message,
-        state: 'PARTIAL_ERASURE'
+        state: erasureCommitted ? 'ERASURE_COMMITTED_LATE_FAILURE' : 'PARTIAL_ERASURE'
       });
-      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
-        cause: arangoError
-      });
+      throw new Error(
+        erasureCommitted
+          ? 'Duplicate-cleanup failed after a committed erasure'
+          : 'Partial erasure: user deleted from Keycloak but ArangoDB erasure failed',
+        { cause: arangoError }
+      );
     }
 
     // Files cleanup runs only after the erasure committed — a failed pre-commit

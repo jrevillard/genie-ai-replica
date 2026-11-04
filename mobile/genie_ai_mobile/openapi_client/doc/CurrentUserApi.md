@@ -184,7 +184,7 @@ void (empty response body)
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiMeResetDataPost**
-> apiMeResetDataPost()
+> ApiMeResetDataPost200Response apiMeResetDataPost()
 
 Reset user profile data
 
@@ -199,7 +199,8 @@ import 'package:openapi/api.dart';
 final api_instance = CurrentUserApi();
 
 try {
-    api_instance.apiMeResetDataPost();
+    final result = api_instance.apiMeResetDataPost();
+    print(result);
 } catch (e) {
     print('Exception when calling CurrentUserApi->apiMeResetDataPost: $e\n');
 }
@@ -210,7 +211,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiMeResetDataPost200Response**](ApiMeResetDataPost200Response.md)
 
 ### Authorization
 
@@ -219,7 +220,7 @@ void (empty response body)
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

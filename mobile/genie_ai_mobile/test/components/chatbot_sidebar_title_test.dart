@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/service_selection_context.dart';
 import 'package:http/http.dart' as http;
 
 import '../helpers/chatbot_harness.dart';
@@ -74,23 +75,17 @@ void main() {
               child: ServiceTreePanel(
                 onSelectionChange: (selection) {
                   // The page's own mapping (main.dart's
-                  // _onServiceSelected): display name and EN
-                  // wire labels travel to the chat together.
-                  final serviceLabelsEn =
-                      (selection['serviceLabelsEn'] as List<dynamic>? ??
-                              const <dynamic>[])
-                          .map((e) => e.toString())
-                          .where((e) => e.isNotEmpty)
-                          .toList();
+                  // _onServiceSelected), applied through the SHARED
+                  // helper: display name and EN wire labels travel to
+                  // the chat together, and the mapping cannot drift
+                  // between this test and production.
+                  final context = categoryContextFromSelection(selection);
                   chatKey?.currentState?.setCategoryContext(
-                    selection['category_id'] ?? selection['id'] ?? '',
-                    selection['name'] ?? 'Unknown Service',
-                    categoryNameEn:
-                        selection['categoryNameEn']?.toString() ?? '',
-                    serviceLabelsEn: serviceLabelsEn,
-                    serviceCount:
-                        (selection['serviceCount'] as num?)?.toInt() ??
-                        serviceLabelsEn.length,
+                    context.categoryId,
+                    context.categoryName,
+                    categoryNameEn: context.categoryNameEn,
+                    serviceLabelsEn: context.serviceLabelsEn,
+                    serviceCount: context.serviceCount,
                   );
                 },
               ),

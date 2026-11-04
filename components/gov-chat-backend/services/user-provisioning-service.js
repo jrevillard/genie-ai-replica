@@ -25,6 +25,25 @@ const CACHE_TTL_MS = 60_000;
 const _locks = new Map();
 
 /**
+ * Memoized connection proxy for the per-request revalidation read.
+ * dbService.getConnection re-runs a health-check query on every call;
+ * the returned proxy is self-healing, so it is held here instead —
+ * the hot path then costs exactly one query per revalidation.
+ */
+let _dbPromise = null;
+let _lastRevalWarnAt = 0;
+
+function getDb() {
+  if (!_dbPromise) {
+    _dbPromise = dbService.getConnection('default').catch((err) => {
+      _dbPromise = null; // allow the next call to retry
+      throw err;
+    });
+  }
+  return _dbPromise;
+}
+
+/**
  * Profile fields the UPSERT derives from the JWT claims.
  */
 function profileFromToken(decodedToken) {
@@ -64,15 +83,21 @@ function profileMatches(cachedUser, decodedToken) {
  */
 async function isSoftDeleted(cachedUser) {
   try {
-    const db = await dbService.getConnection('default');
+    const db = await getDb();
     const cursor = await db.query(aql`
       FOR u IN users
         FILTER u._key == ${cachedUser._key} AND u.deleted == true
-        RETURN u
+        LIMIT 1
+        RETURN u._key
     `);
     return !!(await cursor.next());
   } catch (err) {
-    logger.warn(`[UserProvisioning] Soft-delete revalidation failed, serving cached copy: ${err.message}`);
+    // Fail open (bounded by the TTL) — but warn at most once per TTL so a
+    // DB outage does not put a warn line on every authenticated request
+    if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
+      _lastRevalWarnAt = Date.now();
+      logger.warn(`[UserProvisioning] Soft-delete revalidation failed, serving cached copies: ${err.message}`);
+    }
     return false;
   }
 }
@@ -99,6 +124,8 @@ const userProvisioningService = {
   _reset() {
     _cache.clear();
     _locks.clear();
+    _dbPromise = null;
+    _lastRevalWarnAt = 0;
     _initialized = false;
   },
 
@@ -173,15 +200,19 @@ const userProvisioningService = {
 
     const now = new Date().toISOString();
 
+    // Derive the profile fields from the single claims→profile mapping —
+    // the same one profileMatches compares against, so a new profile field
+    // cannot be written by the UPSERT while escaping cache revalidation
+    const profile = profileFromToken(decodedToken);
+
     // Migrate legacy user: if a user without iss_sub shares the same email,
     // update it with iss_sub so the UPSERT below finds and updates it
     // instead of inserting a duplicate.
-    const email = decodedToken.email || null;
-    if (email) {
+    if (profile.email) {
       const legacyCursor = await db.query(
         aql`
           FOR u IN users
-            FILTER u.email == ${email} AND u.iss_sub == null
+            FILTER u.email == ${profile.email} AND u.iss_sub == null
             RETURN u
         `
       );
@@ -196,9 +227,9 @@ const userProvisioningService = {
                 iss_sub: ${issSub},
                 iss: ${decodedToken.iss},
                 sub: ${decodedToken.sub},
-                name: ${decodedToken.name || decodedToken.preferred_username || legacyUser.name || null},
-                emailVerified: ${decodedToken.email_verified || false},
-                roles: ${decodedToken.realm_access?.roles || []},
+                name: ${profile.name || legacyUser.name},
+                emailVerified: ${profile.emailVerified},
+                roles: ${profile.roles},
                 active: true,
                 deleted: false,
                 deletedAt: null,
@@ -229,10 +260,7 @@ const userProvisioningService = {
       iss_sub: issSub,
       iss: decodedToken.iss,
       sub: decodedToken.sub,
-      email: decodedToken.email || null,
-      name: decodedToken.name || decodedToken.preferred_username || null,
-      emailVerified: decodedToken.email_verified || false,
-      roles: decodedToken.realm_access?.roles || [],
+      ...profile,
       active: true,
       deleted: false,
       createdAt: now,
@@ -240,11 +268,8 @@ const userProvisioningService = {
     };
 
     const updateDoc = {
+      ...profile,
       sub: decodedToken.sub,
-      email: decodedToken.email || null,
-      name: decodedToken.name || decodedToken.preferred_username || null,
-      emailVerified: decodedToken.email_verified || false,
-      roles: decodedToken.realm_access?.roles || [],
       updatedAt: now,
       ...(isReactivation ? { deleted: false, deletedAt: null, active: true } : {})
     };

@@ -32,6 +32,11 @@ function checkShellSyntax(blocks) {
     }
     groups.get(groupKey).push(block);
   }
+  // The runner runs before_script before script, whatever order the YAML
+  // mapping lists them in — order the group the same way.
+  for (const items of groups.values()) {
+    items.sort((a, b) => (a.key === 'before_script' ? 0 : 1) - (b.key === 'before_script' ? 0 : 1));
+  }
 
   const errors = [];
   for (const items of groups.values()) {

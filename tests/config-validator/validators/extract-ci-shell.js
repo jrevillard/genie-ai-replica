@@ -46,7 +46,7 @@ const TOP_KEY_RE = /^([^\s#][^#]*):\s*(?:&(\S+)\s*)?(?:#.*)?$/;
 // Column-0 key whose anchored value is an inline scalar (.common: &common
 // echo hello) — aliasable shell, recorded as a one-line block.
 const TOP_KEY_ANCHOR_SCALAR_RE = /^([^\s#][^#]*):\s*&(\S+)\s+([^#]*?)\s*(?:#.*)?$/;
-const ITEM_RE = /^(\s*)-\s+(.*)$/;
+const ITEM_RE = /^(\s*)-(?:\s+(.*))?$/;
 // The block scalar header grammar after the `|`/`>` style char: optional
 // indentation indicator and chomping modifier in either order, then an
 // optional comment. One shared fragment — BLOCK_SCALAR_RE and
@@ -79,7 +79,6 @@ const NON_JOB_FLOW_KEYS = new Set([
   'include',
   'stages',
   'variables',
-  'default',
   'before_script',
   'after_script',
   'script',
@@ -87,6 +86,32 @@ const NON_JOB_FLOW_KEYS = new Set([
   'services',
   'pages'
 ]);
+
+// The runner executes the YAML VALUE, not the quoted source text. A
+// single-quoted item is always a balanced bash word, so gating the source
+// text would pass anything inside it — unquote first.
+const unquoteYaml = (text) => {
+  if (text.length >= 2 && text.startsWith("'") && text.endsWith("'")) {
+    return text.slice(1, -1).replace(/''/g, "'");
+  }
+  if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+    const escapes = { b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
+    return text.slice(1, -1).replace(/\\(["\\/bfnrt])/g, (match, c) => escapes[c] || c);
+  }
+  return text;
+};
+
+// Split a flow sequence body into its entries (`[.a, .b]` → ['.a', '.b']);
+// a plain value is a one-entry list.
+const splitFlowList = (value) => {
+  if (!value.startsWith('[')) {
+    return [value];
+  }
+  return value
+    .slice(1, -1)
+    .split(',')
+    .map((s) => s.trim());
+};
 
 // YAML strips a block scalar's indentation relative to its first non-blank
 // line before handing the text to bash, so the gate strips the same amount
@@ -267,14 +292,22 @@ function extractCiShellBlocks(content) {
       }
       const itemMatch = line.match(ITEM_RE);
       if (!itemMatch) {
+        if (line.trimStart().startsWith('#')) {
+          i += 1; // a comment between items is YAML layout, not the end of the list
+          continue;
+        }
         if (indent <= keyIndent) {
           break; // next sibling key — the list is over
         }
-        i += 1; // stray comment between items — not shell
+        i += 1; // stray line between items — not shell
         continue;
       }
       const dashIndent = itemMatch[1].length;
       let itemText = itemMatch[2];
+      if (itemText === undefined || itemText === '') {
+        i += 1; // a null item — no shell
+        continue;
+      }
       if (itemText.startsWith('!')) {
         // YAML tag (e.g. `- !reference [...]`): not shell, and not a shape
         // this parser models — loud error, never a silent coverage gap.
@@ -325,9 +358,13 @@ function extractCiShellBlocks(content) {
       } else {
         // Plain scalar item: a line, plus any deeper-indented continuation
         // lines folded YAML-style (space between lines, newline across a
-        // blank line).
+        // blank line). A quoted item is a single scalar — unquote it and
+        // take it as it stands.
         const itemLine = i + 1;
-        const folded = collectPlain(itemText, dashIndent, i + 1);
+        const quoted = itemText.startsWith("'") || itemText.startsWith('"');
+        const folded = quoted
+          ? { text: unquoteYaml(itemText), next: i + 1 }
+          : collectPlain(itemText, dashIndent, i + 1);
         i = folded.next;
         const block = { owner, key, startLine: itemLine, text: folded.text };
         blocks.push(block);
@@ -341,6 +378,7 @@ function extractCiShellBlocks(content) {
 
   let owner = null;
   let jobIndent = null; // the body indent of the current top-level mapping
+  const mergeSites = []; // inherited script sources, resolved after the scan
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -358,6 +396,13 @@ function extractCiShellBlocks(content) {
         anchors.set(topKey[2], { kind: 'col0', owner, bodyStart: i + 1 });
       }
       i += 1;
+      if (owner === 'variables') {
+        // The global variables block is data — a variable named `script`
+        // is not a job script. Skip the whole mapping.
+        while (i < lines.length && (lines[i].trim() === '' || lines[i].match(/^ */)[0].length > 0)) {
+          i += 1;
+        }
+      }
       continue;
     }
 
@@ -381,6 +426,48 @@ function extractCiShellBlocks(content) {
     // nested line — script keys must sit exactly there.
     if (jobIndent === null && line.trim() && !line.trimStart().startsWith('#')) {
       jobIndent = line.match(/^ */)[0].length;
+    }
+
+    // Inherited scripts: a merged template (`<<: *tpl`) and an extended
+    // base (`extends: .base`) run their script INSIDE the job that
+    // inherits them. Recorded here, resolved after the scan.
+    const mergeLine = line.match(/^(\s*)<<:\s*\*(\S+)\s*$/);
+    if (mergeLine && jobIndent !== null && mergeLine[1].length === jobIndent) {
+      mergeSites.push({ jobOwner: owner, anchorName: mergeLine[2], kind: 'merge', startLine: i + 1 });
+      i += 1;
+      continue;
+    }
+    const extendsLine = line.match(/^(\s*)extends:\s*(.*)$/);
+    if (extendsLine && jobIndent !== null && extendsLine[1].length === jobIndent) {
+      const targets = [];
+      const inlineValue = extendsLine[2].trim();
+      if (inlineValue) {
+        const list = splitFlowList(inlineValue);
+        for (const t of list) {
+          const name = t.replace(/^['"]|['"]$/g, '');
+          if (name) {
+            targets.push(name);
+          }
+        }
+      } else {
+        let j = i + 1;
+        while (j < lines.length) {
+          const item = lines[j].match(/^(\s*)-\s*(.+)$/);
+          if (!item || item[1].length <= jobIndent) {
+            break;
+          }
+          targets.push(item[2].trim().replace(/^['"]|['"]$/g, ''));
+          j += 1;
+        }
+        i = j;
+      }
+      for (const baseOwner of targets) {
+        mergeSites.push({ jobOwner: owner, baseOwner, kind: 'extends', startLine: i + 1 });
+      }
+      if (inlineValue) {
+        i += 1;
+      }
+      continue;
     }
 
     const keyMatch = jobIndent !== null ? line.match(KEY_RE) : null;
@@ -479,8 +566,10 @@ function extractCiShellBlocks(content) {
       i += 1;
     } else if (rest !== '') {
       // Inline scalar (`script: npm test`) — one line of shell, plus any
-      // deeper-indented plain-scalar continuation lines folded in.
-      const folded = collectPlain(rest, keyIndent, i + 1);
+      // deeper-indented plain-scalar continuation lines folded in. A
+      // quoted value is unquoted first: the runner executes the value.
+      const quoted = rest.startsWith("'") || rest.startsWith('"');
+      const folded = quoted ? { text: unquoteYaml(rest), next: i + 1 } : collectPlain(rest, keyIndent, i + 1);
       const block = { owner, key, startLine: i + 1, text: folded.text };
       blocks.push(block);
       if (itemName) {
@@ -496,6 +585,55 @@ function extractCiShellBlocks(content) {
       }
       i = parseList(i + 1, keyIndent, owner, key);
     }
+  }
+
+  // Resolve inherited scripts: a merged template or an extended base runs
+  // its script inside the inheriting job. YAML merge (`<<:`) replaces a
+  // key the job defines itself; GitLab's `extends` concatenates the base
+  // script before the job's own and lets the job override before_script
+  // and after_script.
+  if (mergeSites.length > 0) {
+    const inherited = new Map(); // job owner -> inherited blocks
+    const droppedSources = new Set(); // templates/bases that never run alone
+    for (const site of mergeSites) {
+      const sourceOwner = site.kind === 'merge' ? (anchors.get(site.anchorName) || {}).owner : site.baseOwner;
+      if (!sourceOwner) {
+        pushError({
+          owner: site.jobOwner,
+          key: null,
+          startLine: site.startLine,
+          message: `unknown ${site.kind} source for job "${site.jobOwner}"`
+        });
+        continue;
+      }
+      const ownKeys = new Set(blocks.filter((b) => b.owner === site.jobOwner).map((b) => b.key));
+      const copies = inherited.get(site.jobOwner) || [];
+      for (const sb of blocks.filter((b) => b.owner === sourceOwner)) {
+        const include = site.kind === 'merge' ? !ownKeys.has(sb.key) : sb.key === 'script' || !ownKeys.has(sb.key);
+        if (include) {
+          copies.push({ ...sb, owner: site.jobOwner });
+        }
+      }
+      inherited.set(site.jobOwner, copies);
+      droppedSources.add(sourceOwner);
+    }
+    const assembled = [];
+    const emitted = new Set();
+    for (const b of blocks) {
+      const copies = inherited.get(b.owner);
+      if (copies && !emitted.has(b.owner)) {
+        emitted.add(b.owner);
+        assembled.push(...copies);
+      }
+      assembled.push(b);
+    }
+    for (const [jobOwner, copies] of inherited) {
+      if (!emitted.has(jobOwner)) {
+        assembled.push(...copies);
+      }
+    }
+    blocks.length = 0;
+    blocks.push(...assembled.filter((b) => !droppedSources.has(b.owner)));
   }
   return { blocks, errors };
 }

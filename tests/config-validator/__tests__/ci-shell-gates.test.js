@@ -273,6 +273,12 @@ describe('ci shell gate: extraction', () => {
     expect(errors[0].owner).toBe('job');
   });
 
+  test('a flow-style default is a loud unhandled shape (it runs for every job)', () => {
+    const { errors } = extractCiShellBlocks('default: {before_script: ["echo hi"]}\n');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/flow-style/);
+  });
+
   test('a column-0 anchor with an inline scalar value aliases cleanly', () => {
     const content = ['.common: &common echo hello', '', 'job:', '  script: *common'].join('\n');
     const { blocks, errors } = extractCiShellBlocks(content);
@@ -302,6 +308,88 @@ describe('ci shell gate: extraction', () => {
     const { blocks, errors } = extractCiShellBlocks(content);
     expect(errors).toEqual([]);
     expect(blocks.map((b) => b.text)).toEqual(['echo hi']);
+  });
+
+  test('a quoted item is unquoted before it is parsed as shell', () => {
+    // The runner executes the YAML VALUE, not the quoted source text: a
+    // quoted item is always a balanced bash word, so gating the source
+    // text would pass anything.
+    const content = "job:\n  script:\n    - 'echo \"unterminated'\n";
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks[0].text).toBe('echo "unterminated');
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('a double-quoted item is unquoted with its escapes', () => {
+    const content = 'job:\n  script:\n    - "echo \\"unterminated"\n';
+    const { blocks } = extractCiShellBlocks(content);
+    expect(blocks[0].text).toBe('echo "unterminated');
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('a comment inside a script list does not truncate it', () => {
+    const content = 'job:\n  script:\n    - echo one\n  # a comment\n    - echo "unterminated\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(2);
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('a null item is skipped without truncating the list', () => {
+    const content = 'job:\n  script:\n    -\n    - echo "unterminated\n';
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('before_script runs before script whatever the YAML order', () => {
+    // The runner concatenates before_script first: 'if true; then' then
+    // 'fi' is a valid script; the reverse order is not.
+    const content = [
+      'job:',
+      '  script:',
+      '    - fi',
+      '  before_script:',
+      '    - if true; then',
+      '    - echo body'
+    ].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('a merged template runs its script in the merging job', () => {
+    const content = ['.tpl: &tpl', '  script:', '    - echo "unterminated', 'job:', '  <<: *tpl'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].owner).toBe('job');
+    expect(checkShellSyntax(blocks)).toHaveLength(1);
+  });
+
+  test('an extended base runs its script in the extending job', () => {
+    const content = [
+      '.base:',
+      '  script:',
+      '    - echo base',
+      'job:',
+      '  extends: .base',
+      '  script:',
+      '    - echo own'
+    ].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.owner)).toEqual(['job', 'job']);
+    expect(blocks.map((b) => b.text)).toEqual(['echo base', 'echo own']);
+  });
+
+  test('a global variables block is data, never shell', () => {
+    const content = ['variables:', '  script: "echo global"', '', 'job:', '  script:', '    - echo real'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.text)).toEqual(['echo real']);
   });
 });
 
@@ -501,10 +589,10 @@ describe('ci shell gate: the real .gitlab-ci.yml', () => {
     // partial set and the gate is gone while still green. The floor guards
     // against wholesale collapse; the named owners guard against a shape
     // regression that silently drops one extraction family (a plain-key
-    // config job, the alias-carrying e2e base, another namespaced job).
+    // job, a job inheriting a template's script, a namespaced config job).
     expect(blocks.length).toBeGreaterThanOrEqual(40);
     const owners = new Set(blocks.map((b) => b.owner));
-    for (const expected of ['.e2e_web_base', 'config:validate', 'config:docs-links']) {
+    for (const expected of ['e2e:playwright', 'build:frontend', 'config:validate']) {
       expect(owners.has(expected)).toBe(true);
     }
   });

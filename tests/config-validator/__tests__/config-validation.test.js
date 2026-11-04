@@ -3286,6 +3286,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
 // "simplification" that re-grows a bash path beside the helper fails this
 // pin instead of silently reintroducing a second mechanism.
 describe('the venue-fixture provisioning in .e2e_web_base', () => {
+  // Required, not grepped, for the role pins. CONSTRAINT: this module must
+  // stay dependency-free — the config:validate CI job installs ONLY this
+  // component's node_modules, so a require of @playwright/test or a
+  // sibling helper here would fail this job with module-not-found far
+  // from the edit that caused it.
+  const FIXTURES_PATH = path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js');
+  const { E2E_FIXTURES } = require(FIXTURES_PATH);
   let content;
 
   beforeAll(() => {
@@ -3318,7 +3325,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   });
 
   test('the fixtures module is the single definition of the venue users', () => {
-    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    const fixtures = fs.readFileSync(FIXTURES_PATH, 'utf-8');
     expect(fixtures).toContain("username: 'testuser'");
     // The CI venue's email domain (e2e.test) is the fixture contract. The
     // docs-side agreement is asserted in the credentials test below,
@@ -3331,7 +3338,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // drive ADMIN_ONLY surfaces as testadmin; testuser does NOT (#1402:
     // the parity role had no consumer) and no other fixture has a
     // consumer to justify a role either.
-    const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
     expect(E2E_FIXTURES.filter((f) => 'realmRoles' in f).map((f) => f.username)).toEqual(['testadmin']);
     expect(E2E_FIXTURES.find((f) => f.username === 'testadmin').realmRoles).toEqual(['admin']);
   });
@@ -3341,7 +3347,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // derives from the definition, so a new fixture's password is scanned
     // without touching this pin. A password-less fixture entry is named,
     // not silently scanned for the literal "undefined".
-    const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
     const fixturePasswords = E2E_FIXTURES.map((f) => f.password);
     const passwordless = E2E_FIXTURES.filter((f) => !f.password).map((f) => f.username);
     if (passwordless.length > 0) {
@@ -3350,7 +3355,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixturePasswords.length).toBeGreaterThanOrEqual(3);
     // The credential accessors and the derived login credentials live in
     // the fixtures module — beside the data they read.
-    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    const fixtures = fs.readFileSync(FIXTURES_PATH, 'utf-8');
     expect(fixtures).toContain("credentialsOf('testuser')");
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");

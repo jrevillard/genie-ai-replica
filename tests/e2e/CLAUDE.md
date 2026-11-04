@@ -119,7 +119,9 @@ an existing account (password reset, role assignment, and the
 admin-granting role removed from every fixture that does not declare it);
 it fails loudly on
 an account the realm left in a broken login state (disabled, unverified,
-carrying a required action) and names the cause.
+carrying a required action), and on an account that still holds the
+admin role after a strip attempt (granted through the realm
+default-roles composite or a group) — and names the cause.
 
 ## CI
 

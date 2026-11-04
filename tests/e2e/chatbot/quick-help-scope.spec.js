@@ -288,9 +288,11 @@ test.describe('Quick Help scope states', () => {
     const streamed = await watchQueries(page);
     await broken.first().click();
 
-    // The refusal is synchronous, so nothing waits on the click — the
-    // retrying no-turn assertion is the observation window: a leaked
-    // send would mount a user turn and fail it.
+    // The refusal is synchronous — nothing waits on the click, so these
+    // are instant negative checks: at click time no turn is mounted and
+    // nothing is on the query path. A send that escaped the synchronous
+    // refusal after this instant is the send-time guard's subject (the
+    // test below), not this one's.
     await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
     expect(streamed(), 'a broken card must not reach the query path').toBe(false);
 

@@ -70,21 +70,15 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     await sendMessage(page, 'Tell me about public services');
 
     // Progressive rendering: the bubble's text grows as SSE chunks arrive.
-    // The poll holds until the text observed first has grown — a bubble
-    // that only ever renders its full text in one frame fails the poll.
+    // The baseline is captured once the turn has started (content in the
+    // placeholder) — a number the growth matcher can compare against —
+    // and the poll holds until the text has grown past it: a bubble that
+    // only ever renders its full text in one frame fails the poll.
     const botBubble = page.locator('.chat-message.bot .message-bubble').last();
-    let firstLength = null;
+    await expect(botBubble).toContainText(/\S/, { timeout: 30000 });
+    const firstLength = (await botBubble.innerText()).trim().length;
     await expect
-      .poll(
-        async () => {
-          const text = (await botBubble.innerText()).trim();
-          if (firstLength === null) {
-            firstLength = text.length;
-          }
-          return text.length;
-        },
-        { timeout: 30000 }
-      )
+      .poll(async () => (await botBubble.innerText()).trim().length, { timeout: 30000 })
       .toBeGreaterThan(firstLength);
 
     // Completion: the full answer is in, and the spinner is gone

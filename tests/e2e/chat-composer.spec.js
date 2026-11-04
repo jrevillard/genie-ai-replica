@@ -482,13 +482,16 @@ test.describe('composer field', () => {
     await field.click();
     // The focus ring may trail the focus through a transition — wait for
     // it to paint before reading the computed styles.
+    // The testid and the class land on the SAME element — the composer
+    // root (the testid falls through onto it) — so the selector is a
+    // compound, not a descendant chain.
     await expect
       .poll(
         () =>
           page.evaluate(
             () =>
               getComputedStyle(
-                document.querySelector('[data-testid="welcome-composer"] .chat-composer')
+                document.querySelector('[data-testid="welcome-composer"].chat-composer')
               ).boxShadow
           ),
         { timeout: 5000 }
@@ -496,7 +499,7 @@ test.describe('composer field', () => {
       .not.toBe('none');
 
     const rings = await page.evaluate(() => {
-      const pill = document.querySelector('[data-testid="welcome-composer"] .chat-composer');
+      const pill = document.querySelector('[data-testid="welcome-composer"].chat-composer');
       const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
       const p = pill ? getComputedStyle(pill) : null;
       const t = ta ? getComputedStyle(ta) : null;

@@ -115,7 +115,10 @@ async function searchDocuments(page, query) {
   const filesResponsePromise = page.waitForResponse((r) => {
     if (!r.url().includes('/api/files')) return false;
     const match = r.url().match(/[?&]search=([^&]*)/);
-    return decodeURIComponent(match ? match[1] : '') === (query || '');
+    // `+` is a space in query-string form encoding; decode it before
+    // comparing, or a two-word query never matches its own response.
+    const decoded = match ? decodeURIComponent(match[1].replace(/\+/g, '%20')) : '';
+    return decoded === (query || '');
   }, {
     timeout: 5000,
   });

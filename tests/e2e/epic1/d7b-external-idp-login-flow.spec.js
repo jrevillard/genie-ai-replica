@@ -126,13 +126,18 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       ).not.toBeVisible({ timeout: 15000 });
     } finally {
       // Step 7: Re-enable VERIFY_EMAIL required action.
-      // Note: Keycloak 26 removes (unregisters) the action when disabled.
+      // Note: Keycloak 26 removes (unregisters) the action when disabled,
+      // so the restore PUT can 404 — and apiContext returns a response on
+      // non-2xx instead of throwing, so the status is checked explicitly.
       // It will be fully restored by keycloak-config-cli on next deploy.
       try {
-        await apiContext.put(
+        const restoreRes = await apiContext.put(
           'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
           { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
         );
+        if (!restoreRes.ok()) {
+          throw new Error(`HTTP ${restoreRes.status()}`);
+        }
       } catch (restoreError) {
         restoreFailure =
           `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +

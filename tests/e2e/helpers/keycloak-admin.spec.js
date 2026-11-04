@@ -54,10 +54,6 @@ const USERNAME_LOOKUP = new RegExp(
 const EMAIL_LOOKUP = new RegExp(
   `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}&exact=true$`
 );
-// The widened probe (case-insensitive owners) queries without the exact flag.
-const EMAIL_LOOKUP_WIDE = new RegExp(
-  `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}$`
-);
 const RESET_PASSWORD_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/reset-password$`);
 
 test.beforeEach(() => {
@@ -150,6 +146,23 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(caught).toBeTruthy();
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot read the realm role admin of genie: HTTP 503/);
+  });
+
+  test('a non-JSON answer to the create is a permanent failure, not a transport break', async () => {
+    const notJson = new Error('POST /auth/admin/realms/genie/users returned a non-JSON body (HTTP 502): <html>...');
+    notJson.nonJsonBody = true;
+    routes = [['POST', USERS_PATH, { throws: notJson }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBeFalsy();
+    expect(caught.message).toMatch(/non-JSON body \(HTTP 502\)/);
   });
 
   test('a non-JSON answer is a permanent failure, not a transport break', async () => {
@@ -259,32 +272,13 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
 test.describe('convergeUser diagnoses a 409 whose username lookup misses', () => {
   const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
   const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
-  const EMAIL_PROBE = (data) => [
-    ['GET', EMAIL_LOOKUP, { status: 200, data }],
-    ['GET', EMAIL_LOOKUP_WIDE, { status: 200, data }],
-  ];
+  const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
       ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
-    ];
-
-    await expect(convergeUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
-      new RegExp(`${ADMIN_FIXTURE.email}: an email conflict`)
-    );
-  });
-
-  test('an owner whose email differs only in case is still an email conflict', async () => {
-    // The realm rejects duplicate emails case-insensitively, so the probe
-    // must widen to a case-insensitive match.
-    const upper = ADMIN_FIXTURE.email.toUpperCase();
-    routes = [
-      POST_USERS_409,
-      USERNAME_LOOKUP_MISS,
-      ['GET', EMAIL_LOOKUP, { status: 200, data: [] }],
-      ['GET', EMAIL_LOOKUP_WIDE, { status: 200, data: [{ username: 'someone-else', email: upper }] }],
     ];
 
     await expect(convergeUser('tok', REALM, ADMIN_USER)).rejects.toThrow(

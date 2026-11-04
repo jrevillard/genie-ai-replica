@@ -79,13 +79,12 @@ const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
  * @param {string} value - The exact value
  * @returns {Promise<object[]>} The matching user representations
  */
-async function findUsers(adminToken, realm, field, value, { exact = true } = {}) {
+async function findUsers(adminToken, realm, field, value) {
   let searchRes;
   try {
-    const exactParam = exact ? '&exact=true' : '';
     searchRes = await request(
       'GET',
-      `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}${exactParam}`,
+      `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}&exact=true`,
       {
         headers: { Authorization: `Bearer ${adminToken}` },
       }
@@ -120,25 +119,6 @@ async function findUsers(adminToken, realm, field, value, { exact = true } = {})
     throw error;
   }
   return searchRes.data;
-}
-
-/**
- * The accounts that own an email address. The realm rejects a duplicate
- * email case-insensitively, so an owner whose address differs only in case
- * still conflicts: the exact lookup is widened to a case-insensitive match
- * when it finds nothing.
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {string} email - The email address
- * @returns {Promise<object[]>} The accounts owning that address
- */
-async function emailOwners(adminToken, realm, email) {
-  const exact = await findUsers(adminToken, realm, 'email', email);
-  if (exact.length > 0) return exact;
-
-  const wanted = email.toLowerCase();
-  const candidates = await findUsers(adminToken, realm, 'email', email, { exact: false });
-  return candidates.filter((user) => (user.email || '').toLowerCase() === wanted);
 }
 
 /**
@@ -293,11 +273,15 @@ async function createUser(adminToken, realm, userData) {
       lastName: lastName || 'Test',
       enabled,
       emailVerified: true,
-      credentials: userData.password ? [{
-        type: 'password',
-        value: userData.password,
-        temporary: false,
-      }] : undefined,
+      credentials: userData.password
+        ? [
+            {
+              type: 'password',
+              value: userData.password,
+              temporary: false,
+            },
+          ]
+        : undefined,
     },
   });
 
@@ -385,8 +369,9 @@ async function convergeUser(adminToken, realm, userData) {
   } catch (err) {
     // A transport-level failure (connection refused, timeout) rejects the
     // promise instead of answering — Keycloak not listening yet is the
-    // most likely transient, and it must not kill the provisioning.
-    throw transientError(`Cannot reach the Keycloak admin API: ${err.message}`);
+    // most likely transient, and it must not kill the provisioning. An
+    // answer that is not JSON is permanent: the endpoint answered.
+    throw requestFailure(err, 'the user creation');
   }
 
   const status = res.status;
@@ -418,7 +403,10 @@ async function convergeUser(adminToken, realm, userData) {
       // sends the operator hunting for a conflict that does not exist.
       let owners;
       try {
-        owners = await emailOwners(adminToken, realm, email);
+        // The exact lookup is enough: Keycloak stores emails lowercased and
+        // its exact search compares them case-insensitively (measured on
+        // the live realm), so an owner that differs only in case is found.
+        owners = await findUsers(adminToken, realm, 'email', email);
       } catch (probeErr) {
         if (probeErr.httpStatus !== undefined) {
           // Keycloak answered: the probe's verdict is the cause (an
@@ -569,11 +557,9 @@ async function rotateRealmKeys(adminToken, realm) {
   const realmId = (await getRealmSettings(adminToken, realm)).id;
 
   // Get existing key providers
-  const keysRes = await request(
-    'GET',
-    `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`,
-    { headers: { Authorization: `Bearer ${adminToken}` } },
-  );
+  const keysRes = await request('GET', `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
   const existingKeys = keysRes.data || [];
   const oldKeyIds = existingKeys.map((k) => k.id);
 

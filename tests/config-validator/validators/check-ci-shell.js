@@ -55,7 +55,14 @@ function checkShellSyntax(blocks) {
       cursor += block.text.split('\n').length; // the separator adds no line
       return block.text;
     });
-    const run = childProcess.spawnSync('bash', ['-n'], { input: parts.join('\n'), encoding: 'utf8' });
+    // LC_ALL=C pins the locale so the parsed stderr (the `line (\d+)`
+    // mapping and the forwarded message) is locale-independent — bash's
+    // localized messages (`ligne 3`, #1423) would drop the line attribution.
+    const run = childProcess.spawnSync('bash', ['-n'], {
+      input: parts.join('\n'),
+      encoding: 'utf8',
+      env: { ...process.env, LC_ALL: 'C', LANGUAGE: '' }
+    });
     if (run.error) {
       throw new Error(`cannot run bash -n: ${run.error.message}`);
     }

@@ -372,9 +372,13 @@ describe('Swagger Configuration', () => {
       }
     };
 
-    it('default server URL carries no /api suffix (annotated paths already start with /api)', () => {
+    it('default server URL is relative (swagger-ui resolves it against the page origin)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const url = swaggerOptions.definition.servers[0].url;
+        // A relative URL makes Try-it-out target the origin the docs page is
+        // served from — same-origin in dev AND behind the gateway, so no
+        // mixed-content or CSP connect-src failure on https deployments.
+        expect(url).toBe('/');
         expect(url).not.toMatch(/\/api\/?$/);
       });
     });
@@ -406,10 +410,11 @@ describe('Swagger Configuration', () => {
           expect(specPath).toMatch(/^\/api\//);
         }
 
-        // swagger-ui's Try-it-out executes servers[0].url + path.
+        // swagger-ui's Try-it-out executes servers[0].url + path. The
+        // relative default joins to a same-origin absolute-path request.
         const url = swaggerOptions.definition.servers[0].url;
         const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
-        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).toBe(annotatedPath);
         expect(joined).not.toContain('/api/api');
       });
     });

@@ -19,7 +19,13 @@ module.exports = {
       // routes already start with /api, and swagger-ui resolves each
       // request as servers[0].url + path. A suffixed URL makes Try-it-out
       // build doubled /api/api/... request URLs.
-      url: process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`,
+      // The default is RELATIVE: swagger-ui resolves it against the page
+      // origin, so Try-it-out works in dev AND through the gateway — an
+      // absolute localhost default targets the browser's own machine in
+      // every deployed topology (only nginx 80/443 is exposed) and is
+      // blocked twice more on https (mixed content + CSP connect-src).
+      // Set API_URL to pin an absolute base for external tooling.
+      url: process.env.API_URL || '/',
       description: 'Development server'
     }
   ],

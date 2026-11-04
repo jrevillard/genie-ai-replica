@@ -253,6 +253,17 @@ const keycloakProxyService = {
             } IN users
         `
       );
+      // Remove any duplicate document a racing provision may have INSERTed
+      // under the same iss_sub (new _key — the UPDATE above never matches it).
+      // With iss_sub still known here, this closes the #1440 INSERT window at
+      // commit time; the provisioning re-check is the belt-and-suspenders.
+      await db.query(
+        aql`
+          FOR u IN users
+            FILTER u.iss_sub == ${issSub} AND u._key != ${userKey}
+            REMOVE u IN users
+        `
+      );
       logger.info('[KeycloakProxy] User erased', { userKey });
       // Re-evict AFTER the erasure commits: a provision that raced the erasure
       // may have re-cached the pre-erasure profile after the pre-delete

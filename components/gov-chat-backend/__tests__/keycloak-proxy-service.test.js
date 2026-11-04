@@ -170,7 +170,32 @@ describe('keycloak-proxy-service', () => {
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
       await keycloakProxyService.deleteUser('user-key');
-      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.query).toHaveBeenCalledTimes(3); // resolve + erasure + duplicate cleanup
+    });
+
+    it('should remove racing duplicates by iss_sub at erasure commit time', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1)
+            return Promise.resolve(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      // Third query: with iss_sub still known, remove documents a racing
+      // provision inserted under it (new _key the erasure UPDATE never matches)
+      const cleanupAql = capturedAql[2];
+      expect(cleanupAql.query).toContain('u.iss_sub ==');
+      expect(cleanupAql.query).toContain('u._key !=');
+      expect(cleanupAql.query).toContain('REMOVE');
     });
 
     it('should nullify all PII fields (email, name, sub, iss, iss_sub)', async () => {
@@ -190,7 +215,7 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
 
-      expect(capturedAql).toHaveLength(2);
+      expect(capturedAql).toHaveLength(3); // resolve + erasure + duplicate cleanup
       const updateAql = capturedAql[1];
       expect(updateAql).toHaveProperty('query');
       expect(updateAql.query).toContain('email: null');
@@ -295,7 +320,7 @@ describe('keycloak-proxy-service', () => {
 
       // First delete
       await keycloakProxyService.deleteUser('user-key');
-      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.query).toHaveBeenCalledTimes(3); // resolve + erasure + duplicate cleanup
 
       // Second delete - Keycloak will return 404 (user already gone) and the
       // ArangoDB document is already erased (iss_sub nulled, tombstone set).
@@ -316,7 +341,7 @@ describe('keycloak-proxy-service', () => {
 
       // Keycloak 404 should NOT throw — erasure is idempotent
       await expect(keycloakProxyService.deleteUser('user-key')).resolves.not.toThrow();
-      expect(db.query).toHaveBeenCalledTimes(2); // resolve + erasure (404 did not abort)
+      expect(db.query).toHaveBeenCalledTimes(3); // resolve + erasure + duplicate cleanup (404 did not abort)
 
       // The existing tombstone must survive the re-erasure (kept, not nulled)
       const reAql = db.query.mock.calls[1][0];
@@ -345,7 +370,7 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
 
-      expect(capturedAql).toHaveLength(2);
+      expect(capturedAql).toHaveLength(3); // resolve + erasure + duplicate cleanup
       expect(capturedAql[1].query).toContain('erased_key');
       expect(capturedAql[1].query).toContain('deleted: true');
     });

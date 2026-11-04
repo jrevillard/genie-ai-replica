@@ -231,7 +231,9 @@ describe('userProvisioningService', () => {
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) }) // check finds deleted user
-        .mockResolvedValue(mockCursor); // upsert returns reactivated user
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
+        .mockResolvedValue(mockCursor); // default
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
       const decoded = {
@@ -246,8 +248,8 @@ describe('userProvisioningService', () => {
       expect(result.deletedAt).toBeNull();
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // UPSERT should have been called after legacy + soft-delete check
-      // (UPDATE path — old document present, so no post-INSERT re-check)
-      expect(mockQuery).toHaveBeenCalledTimes(4); // tombstone + legacy + soft-delete + upsert
+      // (+ unconditional post-UPSERT re-check)
+      expect(mockQuery).toHaveBeenCalledTimes(5); // tombstone + legacy + soft-delete + upsert + re-check
     });
 
     it('should update JIT fields from JWT when re-activating soft-deleted user', async () => {
@@ -279,6 +281,8 @@ describe('userProvisioningService', () => {
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
@@ -320,6 +324,8 @@ describe('userProvisioningService', () => {
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 

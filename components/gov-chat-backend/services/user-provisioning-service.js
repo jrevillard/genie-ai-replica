@@ -43,6 +43,21 @@ function evictExpired() {
 
 let _initialized = false;
 
+/**
+ * The erasure tombstone lookup — the single definition of the filter that
+ * recognizes an erased subject. Used both by the entry check in _doProvision
+ * and its post-UPSERT re-check; the two MUST stay identical.
+ * @param {string} erasedKey - SHA-256 digest of the token's iss_sub
+ * @returns {Object} aql query
+ */
+function tombstoneLookup(erasedKey) {
+  return aql`
+    FOR u IN users
+      FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
+      RETURN u
+  `;
+}
+
 const userProvisioningService = {
   /**
    * Clear cache and reset initialization flag.
@@ -52,6 +67,7 @@ const userProvisioningService = {
     _cache.clear();
     _locks.clear();
     _initialized = false;
+    _cacheEpoch = 0;
   },
 
   /**
@@ -62,10 +78,11 @@ const userProvisioningService = {
     if (_initialized) return;
     // Erasure tombstone lookup index. NOT sparse: the optimizer cannot prove
     // a bound equality value is non-null, so a sparse index may be skipped and
-    // the lookup degrade to a full scan — a persistent index already excludes
-    // documents lacking the field. Ensured here (idempotent, boot-time) rather
-    // than only in the migration script so existing deployments pick it up
-    // without an ops step.
+    // the lookup degrade to a full scan. (A non-sparse persistent index does
+    // index documents lacking the field as null — sparse is the variant that
+    // excludes them — which is why the explicit choice matters here.) Ensured
+    // here (idempotent, boot-time) rather than only in the migration script so
+    // existing deployments pick it up without an ops step.
     try {
       const db = await dbService.getConnection('default');
       await db.collection('users').ensureIndex({
@@ -119,14 +136,21 @@ const userProvisioningService = {
     // the pre-erasure profile.
     const epochAtEntry = _cacheEpoch;
 
+    // Staleness gate shared by both paths: if an eviction happened while the
+    // provision ran, the result predates it (e.g. the GDPR erasure committed)
+    // — re-provision through provisionUser so the retry re-enters the lock
+    // machinery instead of racing another stale waiter.
+    const finishOrReprovision = (user) => {
+      if (_cacheEpoch !== epochAtEntry) {
+        return this.provisionUser(decodedToken);
+      }
+      return user;
+    };
+
     // If a provisioning is already in-flight for this user, wait for it
     const inFlight = _locks.get(issSub);
     if (inFlight) {
-      const user = await inFlight;
-      if (_cacheEpoch !== epochAtEntry) {
-        return this._doProvision(decodedToken);
-      }
-      return user;
+      return finishOrReprovision(await inFlight);
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result
@@ -134,11 +158,7 @@ const userProvisioningService = {
       _locks.delete(issSub);
     });
     _locks.set(issSub, provisionPromise);
-    const user = await provisionPromise;
-    if (_cacheEpoch !== epochAtEntry) {
-      return this._doProvision(decodedToken);
-    }
-    return user;
+    return finishOrReprovision(await provisionPromise);
   },
 
   /**
@@ -159,13 +179,7 @@ const userProvisioningService = {
     // see initialize()). The erased document is returned as-is
     // (deleted: true) — the middleware answers 403 for deleted users.
     const erasedKey = erasureTombstoneKey(issSub);
-    const erasedCursor = await db.query(
-      aql`
-        FOR u IN users
-          FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
-          RETURN u
-      `
-    );
+    const erasedCursor = await db.query(tombstoneLookup(erasedKey));
     const erasedUser = await erasedCursor.next();
     if (erasedUser) {
       // Log the tombstone digest prefix only — persisting the erased iss_sub
@@ -274,28 +288,31 @@ const userProvisioningService = {
 
     const user = result.new;
 
-    if (!result.old) {
-      // Fresh INSERT: the erasure may have committed between the tombstone
-      // check above and this UPSERT (the #1440 race window). Re-run the
-      // tombstone lookup; if the subject was erased in that window, remove the
-      // document this provision just created (nothing references it yet — the
-      // middleware has not seen it) and serve the erased document instead.
-      const recheckCursor = await db.query(
-        aql`
-          FOR u IN users
-            FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
-            RETURN u
-        `
+    // Re-run the tombstone lookup on EVERY provision result: the erasure may
+    // have committed between the entry check and this UPSERT (the #1440 race
+    // window) — on a fresh INSERT the result is a resurrected duplicate; on an
+    // UPDATE it may have refreshed a racer's duplicate. Either way the result
+    // document is removed (the erasure never sees it — it carries a new _key)
+    // and the erased document is served instead.
+    const recheckCursor = await db.query(tombstoneLookup(erasedKey));
+    const erasedInWindow = await recheckCursor.next();
+    if (erasedInWindow) {
+      logger.info(
+        `[UserProvisioning] Removed a provision written for an erased user (tombstone ${erasedKey.substring(0, 12)})`
       );
-      const erasedInWindow = await recheckCursor.next();
-      if (erasedInWindow) {
-        logger.info(`[UserProvisioning] Removed a provision inserted for an erased user (tombstone ${erasedKey.substring(0, 12)})`);
+      try {
         await db.query(aql`REMOVE { _key: ${user._key} } IN users`);
-        if (_cacheEpoch === epochAtStart) {
-          _cache.set(issSub, { user: erasedInWindow, expiresAt: Date.now() + CACHE_TTL_MS });
-        }
-        return erasedInWindow;
+      } catch (removeError) {
+        // A concurrent waiter may have removed it first (error 1202) — the
+        // erasure wins either way; never 500 an erased caller for losing it.
+        logger.warn('[UserProvisioning] Duplicate removal raced another provision', {
+          error: removeError.message
+        });
       }
+      if (_cacheEpoch === epochAtStart) {
+        _cache.set(issSub, { user: erasedInWindow, expiresAt: Date.now() + CACHE_TTL_MS });
+      }
+      return erasedInWindow;
     }
 
     // Store in cache — skipped if an eviction happened while this provision

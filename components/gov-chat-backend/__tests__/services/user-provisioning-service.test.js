@@ -165,8 +165,9 @@ describe('UserProvisioningService', () => {
             return { new: preUser, old: preOld };
           }
         }) // A: upsert — returns the pre-erasure profile
-        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // A: re-provision tombstone — erased
-        .mockResolvedValueOnce(createMockCursor([erasedDoc])); // B: re-provision tombstone — erased
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // A: own-path post-UPSERT re-check — erased
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // A: wrapper re-provision tombstone — erased
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])); // B: wrapper re-provision tombstone — erased
 
       const p1 = userProvisioningService.provisionUser(token);
       await new Promise((r) => setImmediate(r)); // let A hold the lock
@@ -180,6 +181,54 @@ describe('UserProvisioningService', () => {
       expect(r1.deleted).toBe(true);
       expect(r2._key).toBe('user-erased');
       expect(r2.deleted).toBe(true);
+    });
+  });
+
+  describe('provisionUser - post-UPSERT re-check on the UPDATE path', () => {
+    it('must not return a racer-duplicate refreshed after the erasure committed', async () => {
+      // Provision B's UPSERT matched a duplicate a racer inserted before the
+      // erasure committed (result.old truthy — the UPDATE path). The re-check
+      // must still catch the erasure, remove the refreshed duplicate and serve
+      // the erased document.
+      const dupDoc = { _key: 'user-dup', deleted: false, iss_sub: 'iss/sub-1', email: 'test@test.com' };
+      const existingDoc = { _key: 'user-dup', deleted: false };
+      const erasedDoc = { _key: 'user-erased', deleted: true, iss_sub: null, erased_key: 'digest' };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss (pre-commit)
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: dupDoc, old: existingDoc }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // post-UPSERT re-check — erased
+        .mockResolvedValueOnce({}); // REMOVE of the refreshed duplicate
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+
+      expect(result._key).toBe('user-erased');
+      expect(result.deleted).toBe(true);
+      // The duplicate (not the tombstone document) was removed
+      const removeCall = mockDb.query.mock.calls.find((c) => JSON.stringify(c[0].values || []).includes('user-dup'));
+      expect(removeCall).toBeDefined();
+    });
+
+    it('must still serve the erased document when the duplicate removal loses a race', async () => {
+      const dupDoc = { _key: 'user-dup', deleted: false, iss_sub: 'iss/sub-1', email: 'test@test.com' };
+      const existingDoc = { _key: 'user-dup', deleted: false };
+      const erasedDoc = { _key: 'user-erased', deleted: true, iss_sub: null, erased_key: 'digest' };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: dupDoc, old: existingDoc }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // post-UPSERT re-check — erased
+        .mockRejectedValue({ arangoError: true, message: 'document not found (1202)' }); // REMOVE lost the race
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+
+      // The erasure wins either way — the caller is never 500-ed for it
+      expect(result._key).toBe('user-erased');
+      expect(result.deleted).toBe(true);
     });
   });
 
@@ -201,7 +250,9 @@ describe('UserProvisioningService', () => {
       // The resurrected document is gone and the erased document is served
       expect(result._key).toBe('user-erased');
       expect(result.deleted).toBe(true);
-      const removeCall = mockDb.query.mock.calls.find((c) => JSON.stringify(c[0].values || []).includes('user-resurrected'));
+      const removeCall = mockDb.query.mock.calls.find((c) =>
+        JSON.stringify(c[0].values || []).includes('user-resurrected')
+      );
       expect(removeCall).toBeDefined();
     });
   });
@@ -276,7 +327,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([legacyUser])) // legacy email lookup
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(null) }) // migration UPDATE (no cursor needed)
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: legacyUser }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: legacyUser }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',
@@ -287,7 +339,7 @@ describe('UserProvisioningService', () => {
       };
       const result = await userProvisioningService.provisionUser(token);
       expect(result._key).toBe('user-new');
-      expect(mockDb.query).toHaveBeenCalledTimes(5);
+      expect(mockDb.query).toHaveBeenCalledTimes(6);
     });
 
     it('should skip legacy migration when no email', async () => {
@@ -406,7 +458,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([deletedUser])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: reactivatedUser, old: deletedUser }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: reactivatedUser, old: deletedUser }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',
@@ -447,7 +500,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: updatedUser, old: oldUser }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: updatedUser, old: oldUser }])) // upsert — UPDATE
+        .mockResolvedValueOnce(createMockCursor([])); // post-UPSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',

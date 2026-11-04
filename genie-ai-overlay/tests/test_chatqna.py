@@ -3438,6 +3438,41 @@ class TestAssembleSourceDocuments:
         assert grounded is True
 
     @pytest.mark.asyncio
+    async def test_okf_concept_source_carries_bundle_version_provenance(self):
+        """CAP-1 (chat-source resolution): bundle_version rides the retriever's
+        provenance envelope into the minted okf-concept source — additive keys
+        only. A provenance envelope without bundle_version (pre-CAP-1 payload,
+        persisted-conversation replay) mints the byte-identical source minus
+        that one key."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(side_effect=[None, None])
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.85},
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+            provenance_by_doc={
+                "d1": {
+                    "graph_name": "OKF_demo_v1",
+                    "repo_id": "demo",
+                    "concept_id": "f1",
+                    "bundle_version": 3,
+                },
+                "d2": {"graph_name": "OKF_demo_v1", "repo_id": "demo", "concept_id": "f2"},
+            },
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
+        assert [d["document_id"] for d in docs] == ["f1", "f2"]
+        assert docs[0]["source"] == "okf-concept"
+        assert docs[0]["repo_id"] == "demo"
+        assert docs[0]["bundle_version"] == 3
+        assert "bundle_version" not in docs[1]
+        assert 0.90 < confidence <= 0.95
+        assert grounded is True
+
+    @pytest.mark.asyncio
     async def test_sigmoid_calibration_applied_end_to_end(self, monkeypatch):
         """Calibration must actually be applied inside _assemble_source_documents,
         not just exist as an unused helper (guards against someone removing the

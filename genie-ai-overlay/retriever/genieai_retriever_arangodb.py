@@ -191,6 +191,14 @@ ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 
+# CAP-1 (chat-source resolution spec): OKF chunk citations carry repo_id +
+# bundle_version as FIRST-CLASS data — resolved by joining okf_concepts_meta on
+# (graph_name, concept_id), never by parsing OKF_ graph-name strings downstream.
+# The meta rows carry graph_name themselves (concept-meta-service.js buildMetaDoc),
+# so the join is exact per repo and NATURALLY EMPTY for legacy graphs (no meta row
+# ever names a legacy graph) — no prefix sniffing anywhere.
+OKF_CONCEPTS_META_COLLECTION = "okf_concepts_meta"
+
 # Deployment default for the per-request ``fetch_k``. Mirrors the constant
 # chatqna builds from the same environment variable (genieai_chatqna.py:503).
 DEFAULT_RETRIEVER_FETCH_K = 20
@@ -1831,6 +1839,41 @@ class GenieaiArangoRetriever(OpeaComponent):
                         if cid:
                             fid = file_id_by_key.get(cid)
                             r["doc"].metadata["file_ids"] = [fid] if fid else []
+                    # CAP-1 identity enrichment: resolve repo_id + bundle_version
+                    # from okf_concepts_meta (join on graph_name + concept_id —
+                    # first-class data, no graph-name parsing). Additive and
+                    # failure-isolated: a meta join that cannot run (collection
+                    # absent, transient DB error) leaves the chunk's metadata
+                    # untouched exactly as before — the same graceful-degradation
+                    # contract as the hybrid channel above; it never breaks the leg.
+                    try:
+                        identity_aql = f"""
+                            FOR doc IN `{collection_name}`
+                                FILTER doc._key IN @chunk_ids
+                                LET meta = FIRST(
+                                    FOR m IN {OKF_CONCEPTS_META_COLLECTION}
+                                        FILTER m.graph_name == @graph_name
+                                            AND m.concept_id == doc.{ARANGO_FILE_ID_FIELD}
+                                        RETURN m
+                                )
+                                RETURN {{key: doc._key, repo_id: meta.repo_id, bundle_version: meta.bundle_version}}
+                        """
+                        identity_by_key = {
+                            row["key"]: row
+                            for row in self.db.aql.execute(
+                                identity_aql, bind_vars={"chunk_ids": chunk_ids, "graph_name": graph_name}
+                            )
+                        }
+                        for r in search_res:
+                            cid = r["doc"].id
+                            if cid:
+                                ident = identity_by_key.get(cid) or {}
+                                if ident.get("repo_id"):
+                                    r["doc"].metadata["repo_id"] = ident["repo_id"]
+                                if ident.get("bundle_version") is not None:
+                                    r["doc"].metadata["bundle_version"] = ident["bundle_version"]
+                    except Exception as e:
+                        logger.error(f"OKF identity enrichment failed (chunk identity left as-is): {e}")
                 logger.info(f"Adding file id metadata after similarity search: {search_res}")
 
             #######################################################################
@@ -2206,8 +2249,11 @@ def _attach_provenance(items, graph_name, repo_id=None):
     Pure function — no I/O. `concept_id` is the chunk's `file_id` (the
     content-only-chunking invariant — chunk `file_id == concept_id`, see
     ingest-service.js:1109) and is preserved verbatim from chunk metadata.
-    `repo_id` is optional — only known when the chat-side resolver maps
-    graph→repo at request time (Story 1.2). Missing items are skipped
+    `repo_id` and `bundle_version` (CAP-1) arrive as chunk metadata from the
+    leg's okf_concepts_meta enrichment join — the wholesale `dict(metadata)`
+    copy carries them without this attacher knowing their names. The legacy
+    `repo_id` parameter stays for the Story 1.2 chat-side resolver path;
+    nothing passes it today. Missing items are skipped
     silently (zero-hit per missing graph is the orchestrator's job, not
     this attacher's).
     """

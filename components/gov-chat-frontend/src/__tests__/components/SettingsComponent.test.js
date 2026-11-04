@@ -183,6 +183,10 @@ describe('SettingsComponent — resetUserData notification', () => {
 describe('SettingsComponent — resetUserData preserves display preferences', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // clearAllMocks keeps implementations — drop the sibling describe's
+    // mockRejectedValue/mockResolvedValue leftovers so each test here is
+    // self-contained.
+    mockResetUserData.mockReset();
     localStorage.clear();
   });
 
@@ -211,6 +215,16 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     expect(localStorage.getItem('emailUpdates')).toBe('true');
     expect(localStorage.getItem('soundNotifications')).toBe('false');
     expect(localStorage.getItem('junkCacheKey')).toBeNull();
+    // Full-inventory closure: nothing beyond the five display preferences
+    // survives the reset — a key added to the preserve list without being
+    // a display preference shows up here and turns the test red.
+    expect(Object.keys(localStorage).sort()).toEqual([
+      'emailUpdates',
+      'fontSize',
+      'soundNotifications',
+      'theme',
+      'userLocale'
+    ]);
   });
 
   test('does not write display-preference keys that were absent before the reset', async () => {
@@ -232,7 +246,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // Drift guard: a display preference added to save() but missed by the
     // reset's preserve list — or dropped from it — would silently revert
     // on the next reset. This pins the two key sets to each other at the
-    // localStorage boundary save() actually writes.
+    // localStorage boundary the Save button actually writes.
     const written = [];
     const setItem = Storage.prototype.setItem;
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
@@ -241,7 +255,9 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     });
 
     const wrapper = await buildWrapper();
-    await wrapper.vm.save();
+    const saveButton = wrapper.findAll('button').find((b) => b.text() === 'Save Settings');
+    await saveButton.trigger('click');
+    await flushPromises();
 
     // The contract is the key SET save() touches (a key written twice is
     // fine; a sixth key or a missing one is the drift this pins).

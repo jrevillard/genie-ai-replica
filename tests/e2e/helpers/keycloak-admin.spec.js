@@ -1,7 +1,14 @@
 const { test, expect } = require('@playwright/test');
 const auth = require('./auth');
 const { E2E_FIXTURES } = require('./e2e-fixtures');
-const { assignRealmRoles, removeRealmRoles, convergeUser, effectiveRealmRoles } = require('./keycloak-admin');
+const {
+  assignRealmRoles,
+  removeRealmRoles,
+  convergeUser,
+  effectiveRealmRoles,
+  createUser,
+  rotateRealmKeys,
+} = require('./keycloak-admin');
 
 /**
  * Unit spec for the Keycloak admin helper's role resolution and the
@@ -21,7 +28,7 @@ function fakeRequest(method, path) {
   for (const [m, pattern, answer] of routes) {
     if (m === method && pattern.test(path)) {
       if (answer.throws) return Promise.reject(answer.throws);
-      return Promise.resolve({ status: answer.status, data: answer.data });
+      return Promise.resolve({ status: answer.status, data: answer.data, headers: answer.headers });
     }
   }
   return Promise.reject(new Error(`fake transport: no route for ${method} ${path}`));
@@ -55,6 +62,13 @@ const EMAIL_LOOKUP = new RegExp(
   `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}&exact=true$`
 );
 const RESET_PASSWORD_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/reset-password$`);
+
+// Shared 409-diagnosis routes: both convergeUser's and createUser's
+// describes run the same shape, so one definition keeps them in
+// lockstep.
+const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
+const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
+const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
 test.beforeEach(() => {
   routes = [];
@@ -302,9 +316,6 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
 });
 
 test.describe('convergeUser diagnoses a 409 whose username lookup misses', () => {
-  const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
-  const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
-  const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
@@ -460,5 +471,169 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
     expect(caught).toBeTruthy();
     expect(caught.message).toMatch(/deleted between the lookup and the password reset/);
     expect(caught.transient).toBeFalsy();
+  });
+});
+
+test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
+  test('an account owning the fixture email is named as an email conflict', async () => {
+    routes = [
+      POST_USERS_409,
+      USERNAME_LOOKUP_MISS,
+      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
+    ];
+
+    await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
+      new RegExp(`${ADMIN_FIXTURE.email.replaceAll('.', '\\.')}: an email conflict`)
+    );
+    expect(calls.some((call) => call.includes('email='))).toBe(true);
+  });
+
+  test('an empty email probe names the account as deleted mid-provisioning', async () => {
+    routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { status: 200, data: [] }]];
+
+    let caught;
+    try {
+      await createUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/was deleted mid-provisioning/);
+    expect(caught.transient).toBeFalsy();
+  });
+
+  test('a failed email probe fails loudly instead of guessing', async () => {
+    routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { status: 403, data: null }]];
+
+    await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
+      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run`)
+    );
+  });
+
+  test('a username lookup that FAILED diagnoses nothing about the account', async () => {
+    // The account's state is unknown when the lookup itself failed: the
+    // email-ownership probe must not turn that into a conflict verdict.
+    routes = [POST_USERS_409, ['GET', USERNAME_LOOKUP, { status: 401, data: null }]];
+
+    let caught;
+    try {
+      await createUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 401/);
+    expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
+
+  test('a create that did NOT answer 409 is reported as-is, with no probe', async () => {
+    // The diagnosis exists for the 409 shape only: a vanished account on a
+    // 201 create has no conflict to explain, and probing would invent one.
+    routes = [
+      ['POST', USERS_PATH, { status: 201, data: null }],
+      ['GET', USERNAME_LOOKUP, { status: 200, data: [] }],
+    ];
+
+    let caught;
+    try {
+      await createUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/User testadmin not found in realm genie/);
+    expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
+});
+
+test.describe('rotateRealmKeys reads the new key id from the Location header', () => {
+  const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
+  const OLD_KEYS = [
+    {
+      id: 'old-key-1',
+      name: 'rsa-generated',
+      providerId: 'rsa-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['0'], enabled: ['true'], active: ['true'] },
+    },
+    {
+      id: 'old-key-2',
+      name: 'rsa-generated-rotated-1',
+      providerId: 'rsa-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['100'], enabled: ['true'], active: ['false'] },
+    },
+  ];
+
+  // The two reads every rotation performs before the create: the realm's
+  // id and the existing key providers.
+  const BASE_ROUTES = [
+    ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+    ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+  ];
+
+  test('returns the id parsed from the Location header, not the empty body', async () => {
+    routes = [
+      ...BASE_ROUTES,
+      [
+        'POST',
+        COMPONENTS_PATH,
+        {
+          status: 201,
+          data: null,
+          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
+        },
+      ],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-[12]$/, { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('new-key-id');
+    expect(result.oldKeyIds).toEqual(['old-key-1', 'old-key-2']);
+    // Both old keys were demoted.
+    const putCalls = calls.filter((c) => c.startsWith('PUT '));
+    expect(putCalls).toHaveLength(2);
+  });
+
+  test('a 201 without a Location header fails loudly instead of returning null', async () => {
+    routes = [...BASE_ROUTES, ['POST', COMPONENTS_PATH, { status: 201, data: null }]];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/answered 201 without a usable Location header/);
+    // No old key was demoted behind a creation whose id was never resolved.
+    expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
+  });
+
+  test('a Location header carrying no id segment fails loudly instead of yielding garbage', async () => {
+    // A proxy-rewritten or truncated header answers with the collection
+    // URL only: reading its last segment would mint the id 'components'.
+    routes = [
+      ...BASE_ROUTES,
+      ['POST', COMPONENTS_PATH, { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/` } }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/answered 201 without a usable Location header/);
+    expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
   });
 });

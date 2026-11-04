@@ -24,13 +24,15 @@ const mockI18nT = jest.fn((key) => key);
 const mockNotificationSuccess = jest.fn();
 const mockNotificationWarning = jest.fn();
 const mockNotificationError = jest.fn();
+const mockNotificationInfo = jest.fn();
 
 jest.mock('../../services/notificationService', () => ({
   __esModule: true,
   default: {
     success: mockNotificationSuccess,
     warning: mockNotificationWarning,
-    error: mockNotificationError
+    error: mockNotificationError,
+    info: mockNotificationInfo
   }
 }));
 
@@ -44,6 +46,7 @@ jest.mock('../../utils/ThemeManager', () => ({
   themeManager: {
     getCurrentTheme: jest.fn().mockReturnValue('light'),
     applyTheme: jest.fn(),
+    setTheme: jest.fn(),
     getFontSize: jest.fn().mockReturnValue(16),
     applyFontSize: jest.fn(),
     getCurrentLanguage: jest.fn().mockReturnValue('en'),
@@ -58,6 +61,7 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
 const enMessages = require('../../i18n/locales/en').default;
+const { DISPLAY_PREF_KEYS } = require('../../utils/displayPrefKeys');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -75,6 +79,9 @@ async function buildWrapper() {
         $i18n: {
           locale: 'en',
           t: mockI18nT
+        },
+        $router: {
+          push: jest.fn()
         },
         $store: {
           getters: {
@@ -171,5 +178,88 @@ describe('SettingsComponent — resetUserData notification', () => {
     expect(mockNotificationError).toHaveBeenCalled();
     expect(mockNotificationSuccess).not.toHaveBeenCalled();
     expect(mockNotificationWarning).not.toHaveBeenCalled();
+  });
+});
+
+describe('SettingsComponent — resetUserData preserves display preferences', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // clearAllMocks keeps implementations — drop the sibling describe's
+    // mockRejectedValue/mockResolvedValue leftovers so each test here is
+    // self-contained.
+    mockResetUserData.mockReset();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    jest.restoreAllMocks();
+  });
+
+  test('keeps every display preference across the clear', async () => {
+    const seeded = {
+      theme: 'dark',
+      userLocale: 'fr',
+      fontSize: '80',
+      emailUpdates: 'true',
+      soundNotifications: 'false'
+    };
+    for (const key of DISPLAY_PREF_KEYS) {
+      localStorage.setItem(key, seeded[key] || `value-of-${key}`);
+    }
+    // A key the reset owns — chat cache leftovers and the like — must go.
+    localStorage.setItem('junkCacheKey', 'wipe-me');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    for (const key of DISPLAY_PREF_KEYS) {
+      expect(localStorage.getItem(key)).toBe(seeded[key] || `value-of-${key}`);
+    }
+    expect(localStorage.getItem('junkCacheKey')).toBeNull();
+    // Full-inventory closure: exactly the preserve list survives, nothing
+    // else. Combined with the save() drift guard below, both directions of
+    // drift between save()'s keys and DISPLAY_PREF_KEYS turn red.
+    expect(Object.keys(localStorage).sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
+  });
+
+  test('does not write display-preference keys that were absent before the reset', async () => {
+    localStorage.setItem(DISPLAY_PREF_KEYS[0], 'light');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem(DISPLAY_PREF_KEYS[0])).toBe('light');
+    for (const key of DISPLAY_PREF_KEYS.slice(1)) {
+      expect(localStorage.getItem(key)).toBeNull();
+    }
+    expect(Object.keys(localStorage)).toEqual([DISPLAY_PREF_KEYS[0]]);
+  });
+
+  test('the keys save() persists are exactly the ones the reset preserves', async () => {
+    // Drift guard: a display preference added to save() but missed by the
+    // reset's preserve list — or dropped from it — would silently revert
+    // on the next reset. This pins the two key sets to each other at the
+    // localStorage boundary the Save button actually writes.
+    const written = [];
+    const setItem = Storage.prototype.setItem;
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
+      written.push(key);
+      setItem.call(localStorage, key, value);
+    });
+
+    const wrapper = await buildWrapper();
+    const saveButton = wrapper.findAll('button').find((b) => b.text() === 'Save Settings');
+    await saveButton.trigger('click');
+    await flushPromises();
+
+    // The contract is the key SET save() touches (a key written twice is
+    // fine; any divergence from DISPLAY_PREF_KEYS is the drift this pins —
+    // a missing key reverts on reset, an extra one is never a preference).
+    expect([...new Set(written)].sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
   });
 });

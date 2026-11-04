@@ -43,6 +43,26 @@ const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.ym
 const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
+// The extension shape set Playwright's default testMatch accepts — one
+// fragment shared by the executed-spec selection, the walk's JS-file gate
+// and the import-path pin so the three cannot drift.
+const JS_EXT_SRC = '[cm]?[jt]sx?';
+
+// Pure selection of the executed files from a directory listing — the
+// units below pin the boundary and the testMatch shapes on synthetic
+// listings, the real-tree pin anchors them to the actual invocation.
+const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
+
+// The module-path matcher the import-path pin runs over spec sources,
+// built once: the basename is matched (not the 'helpers/' prefix, and
+// not a longer module name merely ending in the same fragment), the
+// extension is optional, and both require() and ESM `from` spellings
+// are in the net — whatever spelling imports the module mixes the
+// credential paths just the same.
+const importPathRe = (moduleName) =>
+  new RegExp('(?:require\\(\\s*|from\\s+)([\'"`])(?:[^\'"`]*/)?' + moduleName + '(\\.' + JS_EXT_SRC + ')?\\1');
+
 describe('Configuration Validation Suite', () => {
   let envParsed;
   let composeVars;
@@ -2647,10 +2667,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // stays exact). Playwright's default testMatch glob
   // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
   // t, then a REQUIRED s (the trailing ? quantifies only the x), then
-  // optional x — the selection regex below mirrors that shape set exactly
-  // (the config test pins that the default is still in force), so every
-  // spelling Playwright would run counts as executed and none it would
-  // not.
+  // optional x — the selection regex (EXECUTED_SPEC_RE, module top)
+  // mirrors that shape set exactly (the config test pins that the
+  // default is still in force), so every spelling Playwright would run
+  // counts as executed and none it would not.
   const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
@@ -2659,16 +2679,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  // The extension shape set Playwright's default testMatch accepts — one
-  // fragment shared by the executed-spec selection and the walk's JS-file
-  // gate so the two cannot drift.
-  const JS_EXT_SRC = '[cm]?[jt]sx?';
-
-  // Pure selection of the executed files from a directory listing — the
-  // units below pin the boundary and the testMatch shapes on synthetic
-  // listings, the real-tree pin above anchors them to the actual invocation.
-  const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
-  const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
   const scanTargets = (files, executedGlobs) =>
     files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
 
@@ -3291,6 +3301,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   // from the edit that caused it.
   const FIXTURES_PATH = path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js');
   const { E2E_FIXTURES } = require(FIXTURES_PATH);
+  const e2eRoot = path.join(ROOT, 'tests/e2e');
   let content;
 
   beforeAll(() => {
@@ -3298,6 +3309,20 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   });
 
   const sectionOf = (job) => gitlabSection(content, job);
+
+  // The one tree walker the tests/e2e source-scan pins share: visit(path,
+  // source) per file matching extRe, pruning whole skipPaths entries.
+  const walkE2eFiles = (dir, skipPaths, extRe, visit) => {
+    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, name.name);
+      if (skipPaths && skipPaths.has(entryPath)) continue;
+      if (name.isDirectory()) {
+        walkE2eFiles(entryPath, skipPaths, extRe, visit);
+      } else if (extRe.test(name.name)) {
+        visit(entryPath, fs.readFileSync(entryPath, 'utf-8'));
+      }
+    }
+  };
 
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
@@ -3404,7 +3429,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         }
       }
     };
-    const e2eRoot = path.join(ROOT, 'tests/e2e');
     const exclusions = new Set([
       // epic2's two self-created fixture users (genie2's testuser2,
       // k1's noroles-e2e) legitimately carry their own password literals;
@@ -3414,18 +3438,81 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'fixtures'), // upload seed files
       path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
-    const walkJs = (dir, label, skipPaths) => {
-      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        const entryPath = path.join(dir, name.name);
-        if (skipPaths && skipPaths.has(entryPath)) continue;
-        if (name.isDirectory()) {
-          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
-        } else if (/\.(js|cjs|mjs)$/.test(name.name)) {
-          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
-        }
+    walkE2eFiles(e2eRoot, exclusions, /\.(js|cjs|mjs)$/, (entryPath, source) => {
+      assertNoFixturePassword(`tests/e2e${entryPath.slice(e2eRoot.length)}`, source);
+    });
+  });
+
+  // #1422: the do-not-mix half of the credential import-path convention
+  // (tests/e2e/CLAUDE.md § Fixtures) is executable: a spec that needs only
+  // credentials requires them from helpers/e2e-fixtures.js, and a spec
+  // that also logs in takes them from the same helpers/chatbot.js require
+  // as loginViaUI — never both in one file. This pin asserts exactly that
+  // half: a spec carrying BOTH requires fails here.
+  // Scope limit, stated so the pin is not mistaken for full enforcement:
+  // the other half ("a spec that needs credentials takes them from a
+  // sanctioned path") is NOT enforceable by this check, because requiring
+  // NEITHER path is legitimate — a spec may need no venue credential at
+  // all (pure UI or config specs, the ragas suite, epic2's realm-local
+  // specs). Telling a credential-taking spec from a credential-free one
+  // from the source alone would need a per-file classification this pin
+  // deliberately does not attempt.
+  test('a spec file never mixes the two sanctioned credential paths', () => {
+    const violations = [];
+    let walked = 0;
+    // The file filter is the EXECUTED_SPEC_RE itself, not a narrower
+    // '.spec.js' literal: whatever Playwright would execute is in the
+    // pin's net, under the same shape the executed-set pin enforces.
+    // Positive control: the detector really detects. Without this, a
+    // one-character regex slip would silence the pin into a vacuous
+    // pass forever — the walked floor below proves only that files were
+    // visited, not that detection works (the sibling executed-set units
+    // pin their shapes on synthetic listings; same discipline here).
+    const mixedSource = "require('../helpers/e2e-fixtures');\nrequire('./helpers/chatbot');";
+    if (!(importPathRe('e2e-fixtures').test(mixedSource) && importPathRe('chatbot').test(mixedSource))) {
+      throw new Error(
+        'the import-path detector no longer matches a synthetic mixed file — fix the matcher, not the suite'
+      );
+    }
+    if (importPathRe('e2e-fixtures').test("require('./provision-e2e-fixtures');")) {
+      throw new Error('the import-path detector matches a longer module name (provision-e2e-fixtures) as e2e-fixtures');
+    }
+    if (importPathRe('e2e-fixtures').test("import { credentialsOf } from '../helpers/e2e-fixtures';") === false) {
+      throw new Error('the import-path detector misses an ESM from-import');
+    }
+    walkE2eFiles(e2eRoot, null, EXECUTED_SPEC_RE, (entryPath, source) => {
+      walked += 1;
+      // Commented-out requires are not imports — of either spelling —:
+      // a refactor leftover must not fail a file whose live imports are
+      // clean.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+      const fromFixtures = importPathRe('e2e-fixtures').test(code);
+      const fromChatbot = importPathRe('chatbot').test(code);
+      if (fromFixtures && fromChatbot) {
+        violations.push(path.relative(e2eRoot, entryPath));
       }
-    };
-    walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
+    });
+    // The walk must have actually visited the suite: a broken walker
+    // (wrong root, dead filter) would pass the check below vacuously.
+    // The floor is deliberately low — a suite that legitimately shrinks
+    // under it should RAISE-or-REMOVE this guard consciously, never
+    // silently: the message then says the walker is broken, and it lies
+    // only when nobody revisited the number.
+    if (walked < 20) {
+      throw new Error(
+        `the import-path walk visited only ${walked} spec files — the walker is broken, not the suite clean`
+      );
+    }
+    if (violations.length > 0) {
+      throw new Error(
+        'spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ' +
+          'helpers/chatbot in one file): ' +
+          violations.join(', ') +
+          ' — take credentials from ' +
+          'helpers/e2e-fixtures.js alone, or from the same helpers/chatbot.js require as loginViaUI ' +
+          '(tests/e2e/CLAUDE.md § Fixtures)'
+      );
+    }
   });
 
   // #1334: every provisioning call routes through the shared kc_curl helper

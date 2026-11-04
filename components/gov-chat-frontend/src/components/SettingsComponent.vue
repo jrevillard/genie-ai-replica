@@ -217,6 +217,7 @@ import LanguageSelector from '@/components/LanguageSelector.vue';
 import DsButton from '@/components/ds/Button.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
+import { DISPLAY_PREF_KEYS } from '@/utils/displayPrefKeys';
 
 export default {
   name: 'SettingsComponent',
@@ -531,11 +532,15 @@ export default {
         // The reset has committed and the outcome is already announced; a
         // local-preferences failure must not surface as a failed reset.
         try {
-          const themeValue = localStorage.getItem('theme');
-          const langValue = localStorage.getItem('userLocale');
+          const preserved = {};
+          for (const key of DISPLAY_PREF_KEYS) {
+            const value = localStorage.getItem(key);
+            if (value !== null) preserved[key] = value;
+          }
           localStorage.clear();
-          if (themeValue) localStorage.setItem('theme', themeValue);
-          if (langValue) localStorage.setItem('userLocale', langValue);
+          for (const [key, value] of Object.entries(preserved)) {
+            localStorage.setItem(key, value);
+          }
         } catch (storageError) {
           console.error('[SETTINGS] Error clearing local preferences:', storageError);
         }

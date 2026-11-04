@@ -244,10 +244,8 @@ class ServiceCategoryService {
 
       // 2. Upsert the English translation beside the payload's rows in one
       // round trip, removing the rows the payload no longer carries.
-      // nameEN stays the SSOT of the EN row. The payload handling is the
-      // same as the category path: an omitted translations array leaves
-      // the non-EN rows untouched, an explicit empty array is the
-      // clear-all.
+      // nameEN stays the SSOT of the EN row — see _upsertTranslations for
+      // the omitted-vs-empty-array contract.
       await this._upsertTranslations(this.serviceTranslations, 'serviceId', serviceKey, payload.translations, nameEN);
 
       // 2b. Keep nameEN in sync on the parent service document
@@ -939,7 +937,8 @@ class ServiceCategoryService {
 
       // 2. Upsert the English translation beside the payload's rows in one
       // round trip, removing the rows the payload no longer carries (same
-      // write as the service path).
+      // write as the service path — see _upsertTranslations for the
+      // omitted-vs-empty-array contract).
       await this._upsertTranslations(
         this.serviceCategoryTranslations,
         'serviceCategoryId',

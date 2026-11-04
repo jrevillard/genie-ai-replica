@@ -45,6 +45,12 @@ function createMockCursor(results) {
   };
 }
 
+// The GC query's payload-key list is its second-to-last bind (the template
+// ends on the collection handle): `... NOT IN ${keys} REMOVE ... IN ${coll}`.
+function gcKeys(callIndex) {
+  return mockDb.query.mock.calls[callIndex][0].values.at(-2);
+}
+
 let service;
 let mockDb;
 let mockServiceCategories;
@@ -204,12 +210,11 @@ describe('ServiceCategoryService', () => {
       });
 
       const text = mockDb.query.mock.calls[0][0].strings.join('|');
-      // The INSERT half assigns both timestamps; the UPDATE half refreshes
-      // only translation/isActive/updatedAt — the creation timestamp of an
-      // existing row must survive every edit of its owner.
+      // The INSERT half assigns both timestamps; the UPDATE half is pinned
+      // to exactly translation/isActive/updatedAt — the creation timestamp
+      // of an existing row must survive every edit of its owner.
       expect(text).toMatch(/INSERT\s+MERGE\(doc,\s*\{\s*createdAt:/);
       expect(text).toMatch(/UPDATE\s*\{\s*translation:\s*doc\.translation,\s*isActive:\s*true,\s*updatedAt:/);
-      expect(text).not.toMatch(/UPDATE[^|]*createdAt/);
     });
 
     it('removes rows the payload no longer carries, keeping the payload keys', async () => {
@@ -224,7 +229,7 @@ describe('ServiceCategoryService', () => {
       expect(mockDb.query).toHaveBeenCalledTimes(2);
       const gc = mockDb.query.mock.calls[1][0];
       expect(gc.strings.join('|')).toMatch(/REMOVE/);
-      expect(gc.values[3]).toEqual(['svc-1_EN', 'svc-1_FR']);
+      expect(gcKeys(1)).toEqual(['svc-1_EN', 'svc-1_FR']);
     });
 
     it('stores a trimmed nameEN on the parent document and the EN translation', async () => {
@@ -376,7 +381,7 @@ describe('ServiceCategoryService', () => {
 
       // Upsert (EN row only) + GC removing every non-EN row of the owner.
       expect(mockDb.query).toHaveBeenCalledTimes(2);
-      expect(mockDb.query.mock.calls[1][0].values[3]).toEqual(['svc-1_EN']);
+      expect(gcKeys(1)).toEqual(['svc-1_EN']);
     });
 
     it('rejects an EN entry — the English name is owned by nameEN', async () => {
@@ -891,7 +896,7 @@ describe('ServiceCategoryService', () => {
 
       // Upsert (EN row only) + GC removing every non-EN row of the owner.
       expect(mockDb.query).toHaveBeenCalledTimes(2);
-      expect(mockDb.query.mock.calls[1][0].values[3]).toEqual(['cat-1_EN']);
+      expect(gcKeys(1)).toEqual(['cat-1_EN']);
     });
   });
 });

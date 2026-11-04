@@ -4145,8 +4145,6 @@ class ChatQnAService:
                 # as the embedded query, and there is nothing to translate.
                 logger.warning("History translation asked for an empty message; reporting it as a fallback.")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR
-            # The budget check runs before the language map below — see
-            # _refuse_oversized_query for the ordering invariant.
             _refuse_oversized_query(history)
 
         # The target steers the prompt, so it is resolved against the language
@@ -4216,15 +4214,10 @@ class ChatQnAService:
                 f"in original language. Error: {e}"
             )
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
-        except TranslationInputTooLongError as e:
-            # Same contract as the single-message shape: a prompt that does
-            # not fit the translation window refuses the turn instead of
-            # embedding the untranslated history — the newest message in it
-            # is still the query, so the fallback would look up the wrong
-            # documents in the English space (issue #1365). The caller
-            # answers 422.
-            logger.warning(f"History translation refused: {e}")
-            raise
+        # A TranslationInputTooLongError is NOT caught here: a prompt that
+        # does not fit the translation window refuses the turn in either
+        # shape (the newest message in the history is still the query), and
+        # the caller's single handler logs, counts and answers 422.
         except TranslationFailedError as e:
             logger.error(f"History translation failed: {e}")
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR

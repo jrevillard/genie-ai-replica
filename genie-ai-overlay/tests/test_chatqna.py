@@ -4961,10 +4961,21 @@ async def test_the_passthrough_truncates_an_oversized_newest_message_like_the_tr
 
 
 @pytest.mark.asyncio
-async def test_an_oversized_single_message_query_is_refused_with_a_422():
+@pytest.mark.parametrize(
+    "language",
+    [
+        pytest.param("es", id="non-english"),
+        pytest.param("en", id="english"),
+    ],
+)
+async def test_an_oversized_single_message_query_is_refused_with_a_422(language):
     """A query that does not fit the translation window must not be embedded
     untranslated into the English space: the turn is refused with the 422 the
-    answer path returns, before the model is even asked."""
+    answer path returns, before the model is even asked. The budget does not
+    care about the language (issue #1366): an oversized English question gets
+    the same refusal as the same-length question in another language, instead
+    of passing whole and failing later at the embedder with a less actionable
+    error."""
     svc = create_chatqna_service()
     mock_client = AsyncMock()
     with (
@@ -4973,36 +4984,13 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422():
         patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
         pytest.raises(HTTPException) as excinfo,
     ):
-        await _full_flow_payload(svc, stream=False, language="es", messages="q" * 5000)
+        await _full_flow_payload(svc, stream=False, language=language, messages="q" * 5000)
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "translation_input_too_long"
     assert excinfo.value.detail["abstention_reason"] == "translation_input_too_long"
-    # Refused before the translation model was asked, and counted like the
+    # Refused before anything was asked of any model, and counted like the
     # other failed turns.
-    mock_client.post.assert_not_called()
-    mock_counter.add.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_an_oversized_english_single_message_query_is_refused_with_a_422():
-    """The single-message budget is language-independent (issue #1366): an
-    oversized English question gets the same 422 as the same-length question
-    in another language, instead of passing whole and failing later at the
-    embedder with a less actionable error."""
-    svc = create_chatqna_service()
-    mock_client = AsyncMock()
-    with (
-        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000),
-        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
-        pytest.raises(HTTPException) as excinfo,
-    ):
-        await _full_flow_payload(svc, stream=False, language="en", messages="q" * 5000)
-
-    assert excinfo.value.status_code == 422
-    assert excinfo.value.detail["error"] == "translation_input_too_long"
-    # Refused before anything was asked of any model.
     mock_client.post.assert_not_called()
     mock_counter.add.assert_called_once()
 

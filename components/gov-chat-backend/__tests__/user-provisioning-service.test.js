@@ -144,6 +144,7 @@ describe('userProvisioningService', () => {
       await userProvisioningService.provisionUser(decoded);
 
       const upsertCall = mockQuery.mock.calls[2][0];
+      expect(upsertCall.values[1].sub).toBe(mockJwtPayload.sub); // INSERT doc
       const updateDoc = upsertCall.values[2]; // 3rd interpolated value
       expect(updateDoc.sub).toBe(mockJwtPayload.sub);
     });

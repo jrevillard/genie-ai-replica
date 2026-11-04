@@ -323,9 +323,7 @@ describe('UserProfileService', () => {
       expect(preserved.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // updatedAt is bumped to now — not carried over from the stored document
       expect(preserved.updatedAt).not.toBe('2026-06-01T00:00:00.000Z');
-      expect(new Date(preserved.updatedAt).getTime()).toBeGreaterThan(
-        new Date('2026-06-01T00:00:00.000Z').getTime()
-      );
+      expect(new Date(preserved.updatedAt).getTime()).toBeGreaterThan(new Date('2026-06-01T00:00:00.000Z').getTime());
 
       // Profile data is still wiped — that is the reset's purpose
       expect(preserved).not.toHaveProperty('personalIdentification');

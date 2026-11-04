@@ -49,11 +49,14 @@ describe('userProvisioningService', () => {
     // Use mockResolvedValue (reusable) for legacy so tests without email skip it.
     const noLegacyCursor = { next: jest.fn().mockResolvedValue(undefined) };
     const noTombstoneCursor = { next: jest.fn().mockResolvedValue(undefined) };
+    const noRecheckCursor = { next: jest.fn().mockResolvedValue(undefined) };
     mockQuery
       .mockResolvedValueOnce(noTombstoneCursor) // erasure tombstone: no match
       .mockResolvedValueOnce(noLegacyCursor) // legacy migration: no legacy user (consumed when email present)
       .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
-      .mockResolvedValue(mockCursor); // upsert: returns { new, old }
+      .mockResolvedValueOnce(mockCursor) // upsert: returns { new, old } (per-test next())
+      .mockResolvedValueOnce(noRecheckCursor) // post-INSERT re-check: no match
+      .mockResolvedValue(mockCursor); // default for any further query
   });
 
   describe('provisionUser', () => {
@@ -80,7 +83,7 @@ describe('userProvisioningService', () => {
 
       const result = await userProvisioningService.provisionUser(decoded);
 
-      expect(mockQuery).toHaveBeenCalledTimes(4); // tombstone + legacy + soft-delete + upsert
+      expect(mockQuery).toHaveBeenCalledTimes(5); // tombstone + legacy + soft-delete + upsert + INSERT re-check
       expect(mockCursor.next).toHaveBeenCalledTimes(1);
       expect(result).toEqual(newUser);
     });
@@ -243,6 +246,7 @@ describe('userProvisioningService', () => {
       expect(result.deletedAt).toBeNull();
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // UPSERT should have been called after legacy + soft-delete check
+      // (UPDATE path — old document present, so no post-INSERT re-check)
       expect(mockQuery).toHaveBeenCalledTimes(4); // tombstone + legacy + soft-delete + upsert
     });
 
@@ -329,6 +333,9 @@ describe('userProvisioningService', () => {
     });
 
     it('should throw error when ArangoDB query fails', async () => {
+      // Drop the default Once chain so the rejection is the effective behavior
+      mockQuery.mockReset();
+      mockCursor.next.mockReset();
       mockQuery.mockRejectedValue(new Error('Connection refused'));
 
       const decoded = {

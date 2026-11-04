@@ -182,10 +182,12 @@ const keycloakProxyService = {
   // ---------------------------------------------------------------------------
 
   /**
-   * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure)
+   * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure).
+   * A missing Keycloak user (already deleted, or never provisioned) is tolerated: the
+   * ArangoDB erasure — tombstone included — still runs.
    * @param {string} userKey - ArangoDB _key
-   * @throws {Error} If Keycloak user not found (404) or authentication fails
-   * @throws {Error} If ArangoDB erasure fails after Keycloak delete (partial erasure state)
+   * @throws {Error} If Keycloak authentication fails
+   * @throws {Error} If ArangoDB erasure fails after the Keycloak step (partial erasure state)
    */
   async deleteUser(userKey) {
     const resolved = await this._resolveKeycloakUserId(userKey);

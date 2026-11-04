@@ -66,8 +66,8 @@ const userProvisioningService = {
     // documents lacking the field. Ensured here (idempotent, boot-time) rather
     // than only in the migration script so existing deployments pick it up
     // without an ops step.
-    const db = await dbService.getConnection('default');
     try {
+      const db = await dbService.getConnection('default');
       await db.collection('users').ensureIndex({
         type: 'persistent',
         fields: ['erased_key'],
@@ -75,9 +75,11 @@ const userProvisioningService = {
         name: 'idx_users_erased_key'
       });
     } catch (indexError) {
-      // A missing users collection (fresh, not-yet-migrated database) or an
-      // ArangoDB hiccup must not crash the boot. The tombstone protection is
-      // unaffected — only the lookup speed degrades until the next boot.
+      // A missing users collection (fresh, not-yet-migrated database), an
+      // unreachable ArangoDB or any other boot-time hiccup must not crash the
+      // boot — initialize() never rejected before this index existed. The
+      // tombstone protection is unaffected; only the lookup speed degrades
+      // until the next successful boot.
       logger.warn('[UserProvisioning] Failed to ensure erased_key index — tombstone lookups scan until next boot', {
         error: indexError.message
       });
@@ -111,10 +113,20 @@ const userProvisioningService = {
       return cached.user;
     }
 
+    // An eviction while a provision is in flight (e.g. the GDPR erasure
+    // committing) means any result computed before it is stale: the awaiting
+    // caller is re-provisioned so it observes post-eviction state instead of
+    // the pre-erasure profile.
+    const epochAtEntry = _cacheEpoch;
+
     // If a provisioning is already in-flight for this user, wait for it
     const inFlight = _locks.get(issSub);
     if (inFlight) {
-      return inFlight;
+      const user = await inFlight;
+      if (_cacheEpoch !== epochAtEntry) {
+        return this._doProvision(decodedToken);
+      }
+      return user;
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result
@@ -122,7 +134,11 @@ const userProvisioningService = {
       _locks.delete(issSub);
     });
     _locks.set(issSub, provisionPromise);
-    return provisionPromise;
+    const user = await provisionPromise;
+    if (_cacheEpoch !== epochAtEntry) {
+      return this._doProvision(decodedToken);
+    }
+    return user;
   },
 
   /**
@@ -196,8 +212,11 @@ const userProvisioningService = {
               } IN users
           `
         );
-        // Invalidate any cache for this iss_sub to force fresh read after migration
-        this.invalidateCache(issSub);
+        // Evict this iss_sub's cache line so the UPSERT's own cache write
+        // reflects the migrated profile. Plain delete: this is the provision's
+        // own eviction — no epoch bump, or the wrapper would treat its own
+        // result as stale and re-provision needlessly.
+        _cache.delete(issSub);
       }
     }
 
@@ -254,6 +273,30 @@ const userProvisioningService = {
     }
 
     const user = result.new;
+
+    if (!result.old) {
+      // Fresh INSERT: the erasure may have committed between the tombstone
+      // check above and this UPSERT (the #1440 race window). Re-run the
+      // tombstone lookup; if the subject was erased in that window, remove the
+      // document this provision just created (nothing references it yet — the
+      // middleware has not seen it) and serve the erased document instead.
+      const recheckCursor = await db.query(
+        aql`
+          FOR u IN users
+            FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
+            RETURN u
+        `
+      );
+      const erasedInWindow = await recheckCursor.next();
+      if (erasedInWindow) {
+        logger.info(`[UserProvisioning] Removed a provision inserted for an erased user (tombstone ${erasedKey.substring(0, 12)})`);
+        await db.query(aql`REMOVE { _key: ${user._key} } IN users`);
+        if (_cacheEpoch === epochAtStart) {
+          _cache.set(issSub, { user: erasedInWindow, expiresAt: Date.now() + CACHE_TTL_MS });
+        }
+        return erasedInWindow;
+      }
+    }
 
     // Store in cache — skipped if an eviction happened while this provision
     // was in flight (the profile may predate the eviction, e.g. an erasure)

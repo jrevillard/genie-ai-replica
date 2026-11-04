@@ -365,6 +365,7 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-1' }, old: null }) })
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
       // Erase through the proxy — this must evict the entry
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
@@ -393,6 +394,7 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-fresh' }, old: null }) })
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-INSERT re-check — miss
       };
       dbService.getConnection.mockResolvedValueOnce(Promise.resolve(freshDb));
       const after = await userProvisioningService.provisionUser({
@@ -421,7 +423,8 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
-          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-race' }, old: null }) });
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-race' }, old: null }) })
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }); // post-INSERT re-check — miss
 
       // Cache seeded before the erasure starts
       keycloakProxyService._clearTokenCache();

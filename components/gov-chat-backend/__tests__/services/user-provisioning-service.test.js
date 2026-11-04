@@ -41,6 +41,9 @@ beforeEach(() => {
     collection: jest.fn().mockReturnValue({ ensureIndex: jest.fn().mockResolvedValue({}) })
   };
   const { dbService } = require('../../shared-lib');
+  // clearAllMocks leaves queued mockResolvedValueOnce entries in place — drop
+  // them so a test that does not consume its queue cannot poison the next one.
+  dbService.getConnection.mockReset();
   dbService.getConnection.mockResolvedValue(mockDb);
 
   jest.isolateModules(() => {
@@ -120,24 +123,86 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(tombstoneCursor) // tombstone lookup — miss, evicts mid-flight
         .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
         .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
-        .mockResolvedValueOnce(createMockCursor([{ new: staleUser, old: null }])); // upsert
-
-      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
-      const result1 = await userProvisioningService.provisionUser(token);
-      expect(result1._key).toBe('user-stale');
-
-      // The stale result must NOT have been cached: the next provision must
-      // round-trip the database again.
-      const freshDbQuery = jest
-        .fn()
+        .mockResolvedValueOnce(createMockCursor([{ new: staleUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])) // post-INSERT re-check — miss
+        // The caller's re-provision (epoch moved while this provision ran):
         .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
         .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
         .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
-        .mockResolvedValueOnce(createMockCursor([{ new: freshUser, old: null }]));
-      const { dbService } = require('../../shared-lib');
-      dbService.getConnection.mockResolvedValueOnce(Promise.resolve({ query: freshDbQuery }));
-      const result2 = await userProvisioningService.provisionUser(token);
-      expect(result2._key).toBe('user-fresh');
+        .mockResolvedValueOnce(createMockCursor([{ new: freshUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result1 = await userProvisioningService.provisionUser(token);
+      // The caller never receives the stale profile: the wrapper re-provisioned
+      expect(result1._key).toBe('user-fresh');
+      // Full provision ran twice (original + caller re-provision): 10 queries
+      expect(mockDb.query).toHaveBeenCalledTimes(10);
+    });
+  });
+
+  describe('provisionUser - erasure racing an in-flight provision', () => {
+    it('must not serve the pre-erasure profile to the provision caller or a lock waiter', async () => {
+      const preUser = { _key: 'user-pre', deleted: false, email: 'test@test.com' };
+      const preOld = { _key: 'user-pre', deleted: false };
+      const erasedDoc = { _key: 'user-erased', deleted: true, iss_sub: null, erased_key: 'digest' };
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+
+      // Provision A blocks on its tombstone lookup while the erasure commits
+      // (invalidateCache) right before its UPSERT resolves.
+      let releaseA;
+      const gate = new Promise((r) => {
+        releaseA = r;
+      });
+      mockDb.query
+        .mockResolvedValueOnce({ next: () => gate.then(() => undefined) }) // A: tombstone — blocked, then miss
+        .mockResolvedValueOnce(createMockCursor([])) // A: legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // A: deleted check — miss
+        .mockResolvedValueOnce({
+          next: async () => {
+            // The erasure commits mid-provision: cache evicted (epoch bumped)
+            userProvisioningService.invalidateCache('iss/sub-1');
+            return { new: preUser, old: preOld };
+          }
+        }) // A: upsert — returns the pre-erasure profile
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // A: re-provision tombstone — erased
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])); // B: re-provision tombstone — erased
+
+      const p1 = userProvisioningService.provisionUser(token);
+      await new Promise((r) => setImmediate(r)); // let A hold the lock
+      const p2 = userProvisioningService.provisionUser(token); // B: waits on the lock
+      releaseA();
+
+      const [r1, r2] = await Promise.all([p1, p2]);
+      // Neither caller may receive the pre-erasure profile: both re-provision
+      // against the post-erasure state and get the erased document.
+      expect(r1._key).toBe('user-erased');
+      expect(r1.deleted).toBe(true);
+      expect(r2._key).toBe('user-erased');
+      expect(r2.deleted).toBe(true);
+    });
+  });
+
+  describe('provisionUser - insert racing the erasure (#1440 mitigation)', () => {
+    it('must remove a fresh INSERT whose subject was erased mid-provision', async () => {
+      const freshDoc = { _key: 'user-resurrected', deleted: false, email: 'test@test.com' };
+      const erasedDoc = { _key: 'user-erased', deleted: true, iss_sub: null, erased_key: 'digest' };
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss (erasure not yet committed)
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: freshDoc, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([erasedDoc])) // post-INSERT tombstone re-check — erased
+        .mockResolvedValueOnce({}); // REMOVE of the just-inserted document
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result = await userProvisioningService.provisionUser(token);
+
+      // The resurrected document is gone and the erased document is served
+      expect(result._key).toBe('user-erased');
+      expect(result.deleted).toBe(true);
+      const removeCall = mockDb.query.mock.calls.find((c) => JSON.stringify(c[0].values || []).includes('user-resurrected'));
+      expect(removeCall).toBeDefined();
     });
   });
 
@@ -180,7 +245,7 @@ describe('UserProvisioningService', () => {
       expect(r1._key).toBe('user-1');
       expect(r2._key).toBe('user-1');
       // First call queries are shared — second call uses in-flight lock
-      expect(queryCount.count).toBeLessThanOrEqual(4); // at most one full provision cycle
+      expect(queryCount.count).toBeLessThanOrEqual(5); // one full provision cycle + INSERT re-check
     }, 10000);
   });
 
@@ -230,7 +295,8 @@ describe('UserProvisioningService', () => {
       mockDb.query
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',
@@ -239,7 +305,7 @@ describe('UserProvisioningService', () => {
       };
       const result = await userProvisioningService.provisionUser(token);
       expect(result._key).toBe('user-1');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
+      expect(mockDb.query).toHaveBeenCalledTimes(4); // tombstone + deleted check + upsert + INSERT re-check
     });
 
     it('should handle no legacy user found', async () => {
@@ -248,7 +314,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup (no match)
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',
@@ -320,7 +387,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup — miss
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
 
       const result = await userProvisioningService.provisionUser(token);
 
@@ -358,7 +426,8 @@ describe('UserProvisioningService', () => {
         .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup
         .mockResolvedValueOnce(createMockCursor([])) // legacy lookup
         .mockResolvedValueOnce(createMockCursor([])) // deleted check
-        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])); // upsert
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: null }])) // upsert — fresh INSERT
+        .mockResolvedValueOnce(createMockCursor([])); // post-INSERT re-check — miss
 
       const token = {
         iss_sub: 'iss/sub-1',

@@ -78,9 +78,11 @@ original address and an email-keyed lookup finds nothing. Resolve accounts by:
   document by `iss_sub` (`<issuer>#<subject>`). Decode the session token's
   payload (`iss` + `sub` claims) and query
   `db.users.firstExample({iss_sub: '<iss>#<sub>'})`. This is the account's
-  stable identity: the email is venue-dependent, GDPR erasure nullifies the
-  PII fields, and every phase logs in first, which also migrates legacy
-  documents missing `iss_sub`.
+  stable identity while it exists: the email is venue-dependent, and every
+  phase logs in first, which also migrates legacy documents missing
+  `iss_sub`. **GDPR erasure nullifies `iss_sub` together with the PII
+  fields** — after erasure, the `_key` saved before the erasure is the only
+  handle on the document.
 
 Email-keyed lookups are acceptable only for accounts the phase itself created
 with a known email (e.g. `field=exactEmail` on `/api/admin/users/search`) —

@@ -47,6 +47,13 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
+# Any authenticated API call provisions/migrates the ArangoDB document (JIT
+# provisioning runs in the auth middleware) — make sure it exists before
+# querying it
+curl -sk "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -o /dev/null -w "%{http_code}" | grep -qx 200 || { echo "FATAL: provisioning call did not answer 200"; exit 1; }
+
 # Resolve the account identity from the session token — iss_sub
 # (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
 # fixture account's email is venue-dependent, so never key it by email
@@ -398,6 +405,11 @@ print(f'lastName: {u[\"lastName\"]}')
 ### Test M.4 — Email Change via Admin Proxy
 
 ```bash
+# Capture the account's current address before changing it (M.5 restores it)
+ORIGINAL_EMAIL=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['email'])")
+[ -n "$ORIGINAL_EMAIL" ] || { echo "FATAL: Keycloak returned no account for username=testuser"; exit 1; }
+
 curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
@@ -419,10 +431,12 @@ print(f'email: {u[\"email\"]}')
 ### Test M.5 — Restore Original Email (Cleanup)
 
 ```bash
+# Restore the address captured in M.4 — the venue's own address, never a
+# hardcoded fixture address (a legacy venue keeps its original one)
 curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"email":"testuser@e2e.test"}' -w "\nHTTP: %{http_code}\n"
+  -d "{\"email\":\"${ORIGINAL_EMAIL}\"}" -w "\nHTTP: %{http_code}\n"
 ```
 **Expected**: HTTP 200
 
@@ -533,7 +547,8 @@ c = json.loads(base64.urlsafe_b64decode(p))
 print(c['iss'] + '#' + c['sub'])
 " "$USER_TOKEN")
 
-# Save user _key before deletion (email will be nullified by erasure)
+# Save user _key before deletion (erasure nullifies iss_sub and the PII
+# fields, so the _key is the only handle afterwards)
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
@@ -564,18 +579,21 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 
 ```bash
 # Recreate testuser in Keycloak for GDPR tests
+# Rebuild the account with the venue's own address ($KC_EMAIL, captured in
+# M.1/M.2) — never a hardcoded fixture address
+[ -n "$KC_EMAIL" ] || { echo "FATAL: KC_EMAIL is not set (run Phase M first)"; exit 1; }
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "enabled": true,
-    "email": "testuser@e2e.test",
-    "emailVerified": true,
-    "firstName": "Test",
-    "lastName": "User",
-    "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
-  }' -w "\nHTTP: %{http_code}\n"
+  -d "{
+    \"username\": \"testuser\",
+    \"enabled\": true,
+    \"email\": \"${KC_EMAIL}\",
+    \"emailVerified\": true,
+    \"firstName\": \"Test\",
+    \"lastName\": \"User\",
+    \"credentials\": [{\"type\": \"password\", \"value\": \"TestPass123!\", \"temporary\": false}]
+  }" -w "\nHTTP: %{http_code}\n"
 # Expected: 201
 
 # Verify login works
@@ -615,7 +633,8 @@ c = json.loads(base64.urlsafe_b64decode(p))
 print(c['iss'] + '#' + c['sub'])
 " "$USER_TOKEN")
 
-# Save user _key before erasure (email will be nullified)
+# Save user _key before erasure (erasure nullifies iss_sub and the PII
+# fields, so the _key is the only handle afterwards)
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
@@ -662,18 +681,21 @@ curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/to
 
 ```bash
 # Recreate testuser to test idempotent erasure
+# Rebuild the account with the venue's own address ($KC_EMAIL, captured in
+# M.1/M.2) — never a hardcoded fixture address
+[ -n "$KC_EMAIL" ] || { echo "FATAL: KC_EMAIL is not set (run Phase M first)"; exit 1; }
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "enabled": true,
-    "email": "testuser@e2e.test",
-    "emailVerified": true,
-    "firstName": "Test",
-    "lastName": "User",
-    "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
-  }' -w "\nHTTP: %{http_code}\n"
+  -d "{
+    \"username\": \"testuser\",
+    \"enabled\": true,
+    \"email\": \"${KC_EMAIL}\",
+    \"emailVerified\": true,
+    \"firstName\": \"Test\",
+    \"lastName\": \"User\",
+    \"credentials\": [{\"type\": \"password\", \"value\": \"TestPass123!\", \"temporary\": false}]
+  }" -w "\nHTTP: %{http_code}\n"
 # Expected: 201
 
 # Login and erase
@@ -702,18 +724,21 @@ docker compose logs backend --since 60s 2>&1 | grep -i 'user erased\|account del
 
 ```bash
 # Recreate testuser for subsequent test runs
+# Rebuild the account with the venue's own address ($KC_EMAIL, captured in
+# M.1/M.2) — never a hardcoded fixture address
+[ -n "$KC_EMAIL" ] || { echo "FATAL: KC_EMAIL is not set (run Phase M first)"; exit 1; }
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "enabled": true,
-    "email": "testuser@e2e.test",
-    "emailVerified": true,
-    "firstName": "Test",
-    "lastName": "User",
-    "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
-  }' -w "\nHTTP: %{http_code}\n"
+  -d "{
+    \"username\": \"testuser\",
+    \"enabled\": true,
+    \"email\": \"${KC_EMAIL}\",
+    \"emailVerified\": true,
+    \"firstName\": \"Test\",
+    \"lastName\": \"User\",
+    \"credentials\": [{\"type\": \"password\", \"value\": \"TestPass123!\", \"temporary\": false}]
+  }" -w "\nHTTP: %{http_code}\n"
 # Expected: 201
 
 # Verify

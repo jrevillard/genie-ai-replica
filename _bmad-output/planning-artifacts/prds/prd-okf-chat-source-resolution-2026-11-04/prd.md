@@ -224,15 +224,20 @@ hand-deleted source no longer dead-locks ingest).
 **Priority:** Should Have
 
 **Description:**
-From a cited concept the citizen walks the repo's within-repo concept graph
-(`_LINKS_TO`, author + parser edges) starting at that concept (D6). Read-only,
-same scope authority as retrieval, no steward UI. Serves the repo's CURRENT
-indexed state; `bundle_version` stays provenance identity, not a time machine
-(logged assumption).
+From a cited concept the citizen opens a modal viewer (D8) that browses the
+ENTIRE repo's concept tree starting at that concept (D6 + D7) — every concept
+reachable, every concept viewable as rendered markdown. Efficient at measured
+repo scale (6k+ concepts): lightweight paginated tree index, content fetched on
+demand, the full corpus never shipped in one payload. Read-only, same scope
+authority as retrieval, no steward UI. Serves the repo's CURRENT indexed state;
+`bundle_version` stays provenance identity, not a time machine (logged
+assumption).
 
 **Acceptance Criteria:**
-- [ ] Every hop loads through the scope-authorized concept path (per-request authz)
+- [ ] Every hop and every concept fetch loads through the scope-authorized concept path (per-request authz)
 - [ ] Concepts the user could not retrieve are unreachable (dedicated test)
+- [ ] Tree-index payload bounded + paginated, pinned by test at 6k-concept scale
+- [ ] Viewer is a modal dialog per a UX design pass (create-ux-design) at story time
 - [ ] Entry affordance renders only on working cards (no dead affordance)
 - [ ] No zip extraction; DS primitives only
 
@@ -393,8 +398,9 @@ epic detail, story slices and verification anchors live in
 
 - Route + URL shape for concept content/tree (Kong path naming, content-type
   headers for open-vs-download) — for the architecture step (Phase 3), not the PRD.
-- Whether the tree view is a dialog, a route, or a split pane in the chat surface —
-  UX decision at EPIC-9 story time (DS primitives either way).
+- Tree viewer modal information architecture (tree vs list vs progressive
+  disclosure inside the dialog, mobile behaviour) — owned by the EPIC-9 UX
+  design pass (D8 resolved the surface: modal dialog).
 
 ---
 

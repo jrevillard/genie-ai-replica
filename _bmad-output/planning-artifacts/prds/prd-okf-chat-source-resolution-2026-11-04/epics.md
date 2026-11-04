@@ -187,16 +187,21 @@ both walkable — `edge-service`); current-state semantics (memlog assumption);
 no zip extraction (#1410 guardrails).
 
 **Story slices:**
-1. Neighborhood route: concept + linked concepts (ids + titles + edge source)
-   under the same user-bearer authz; per-hop authorization tests (unauthorized
-   concepts unreachable — dedicated test).
-2. Tree view: citizen-facing tree/graph view from the card, DS primitives only;
-   entry affordance only on working cards; open/UX shape (dialog vs route) fixed
-   at story time.
-3. i18n + Playwright + smoke: keys × 14; handles swept; harness extended; live run.
+1. Tree-index route: lightweight, paginated concept index (id + title + tree
+   shape) for the WHOLE repo — a 6k-concept repo never ships its full corpus in
+   one payload (bound pinned by test); same user-bearer authz; unauthorized
+   concepts excluded from the index itself.
+2. UX design + modal viewer: create-ux-design pass first (D8: the viewer is a
+   modal dialog — chat real estate is tight), then the citizen-facing modal
+   tree/browse view from the card, rendered markdown per concept via the CAP-2
+   route on demand; DS primitives only; entry affordance only on working cards.
+3. Efficiency + i18n + tests: large-repo payload bounds; per-hop authz tests
+   (unauthorized concepts unreachable); i18n × 14; Playwright handles swept;
+   smoke harness extended; live run.
 
-**Verification:** walk works from any working citation; per-hop authz enforced;
-current-state semantics documented in the UI copy.
+**Verification:** walk works from any working citation; EVERY concept's markdown
+reachable; per-hop authz enforced; tree payload bounded at scale; current-state
+semantics documented in the UI copy.
 
 ---
 

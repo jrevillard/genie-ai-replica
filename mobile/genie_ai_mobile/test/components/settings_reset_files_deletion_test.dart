@@ -11,6 +11,7 @@ import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
+import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
@@ -76,17 +77,6 @@ void main() {
     resetThemeManager();
     I18nService().changeLanguage('en');
   });
-
-  /// Pumps a bounded number of frames instead of pumpAndSettle: this test's
-  /// tree never settles in the test environment (the loading spinner's
-  /// replacement keeps a frame scheduled on every pump), so pumpAndSettle
-  /// never returns. A fixed frame budget still flushes the modal's enter and
-  /// leave animations and the reset's microtasks.
-  Future<void> pumpFrames(WidgetTester tester, {int frames = 20}) async {
-    for (var i = 0; i < frames; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-  }
 
   /// Drives the real user path: opens the settings screen, taps the reset
   /// tile, confirms the modal, and lets the reset flow complete. Returns

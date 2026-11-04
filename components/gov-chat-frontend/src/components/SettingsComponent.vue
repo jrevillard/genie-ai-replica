@@ -218,6 +218,11 @@ import DsButton from '@/components/ds/Button.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
 
+// The local display preferences the reset must keep — the same keys save()
+// persists below. Reset User Data clears profile data and chat history,
+// not the user's look-and-feel (#1444).
+const DISPLAY_PREF_KEYS = ['theme', 'userLocale', 'fontSize', 'emailUpdates', 'soundNotifications'];
+
 export default {
   name: 'SettingsComponent',
   components: {
@@ -534,7 +539,7 @@ export default {
         // their profile data and chat history, not their look-and-feel.
         try {
           const preserved = {};
-          for (const key of ['theme', 'userLocale', 'fontSize', 'emailUpdates', 'soundNotifications']) {
+          for (const key of DISPLAY_PREF_KEYS) {
             const value = localStorage.getItem(key);
             if (value !== null) preserved[key] = value;
           }

@@ -9,6 +9,7 @@ import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
+import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 import 'settings_reset_files_deletion_test.dart' show MockCurrentUserApi;
@@ -24,15 +25,6 @@ void main() {
     resetThemeManager();
     I18nService().changeLanguage('en');
   });
-
-  /// Pumps a bounded number of frames instead of pumpAndSettle: this
-  /// tree never settles in the test environment (see
-  /// settings_reset_files_deletion_test.dart).
-  Future<void> pumpFrames(WidgetTester tester, {int frames = 20}) async {
-    for (var i = 0; i < frames; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-  }
 
   testWidgets('reset keeps the stored theme and font scale', (tester) async {
     // The storage keys are ThemeManager's private constants

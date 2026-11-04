@@ -218,7 +218,6 @@ import DsButton from '@/components/ds/Button.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
 import { DISPLAY_PREF_KEYS } from '@/utils/displayPrefKeys';
-import { STORAGE_KEY as CONVERSATION_STORAGE_KEY } from '@/store/modules/conversation';
 
 export default {
   name: 'SettingsComponent',
@@ -543,15 +542,9 @@ export default {
           // wiped data straight back. The commits here leave only the fresh
           // default state for them to write.
           this.$store.commit('chatHistory/RESET');
+          // conversation/RESET also replaces the sessionStorage payload
+          // synchronously (the subscription owns that key).
           this.$store.commit('conversation/RESET');
-          // The conversation subscription persists through a 300ms debounce —
-          // remove the stale sessionStorage payload synchronously so a tab
-          // killed inside the debounce window cannot rehydrate it.
-          try {
-            sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
-          } catch (sessionError) {
-            console.error('[SETTINGS] Error clearing the session conversation state:', sessionError);
-          }
           const preserved = {};
           for (const key of DISPLAY_PREF_KEYS) {
             const value = localStorage.getItem(key);

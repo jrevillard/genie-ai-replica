@@ -59,4 +59,15 @@ const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt
 // DISPLAY_PREF_KEYS preserve list (which keeps the same keys in localStorage).
 const USER_PREFERENCE_FIELDS = ['theme', 'fontSize', 'language', 'emailUpdates', 'soundNotifications'];
 
-module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS, USER_PREFERENCE_FIELDS };
+// The complete set a destructive user-document operation carries over: the
+// merge of the two sets above, exported so the reset iterates the same name
+// the contract is described by.
+const RESET_PRESERVED_FIELDS = [...SYSTEM_PRESERVED_FIELDS, ...USER_PREFERENCE_FIELDS];
+
+module.exports = {
+  JIT_FORWARD_FIELDS,
+  JIT_PROTECTED_FIELDS,
+  SYSTEM_PRESERVED_FIELDS,
+  USER_PREFERENCE_FIELDS,
+  RESET_PRESERVED_FIELDS
+};

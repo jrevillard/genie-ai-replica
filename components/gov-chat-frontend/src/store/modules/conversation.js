@@ -42,10 +42,14 @@ function markEntryInterrupted(entry) {
   }
 }
 
-const state = () => ({
+// The fresh single-entry shape — one source of truth for the module state
+// and the full reset (a field added here must not be missed by RESET).
+const initialState = () => ({
   openId: OPEN_ID,
   conversations: { [OPEN_ID]: emptyConversation() }
 });
+
+const state = initialState;
 
 const getters = {
   openConversation: (st) => st.conversations[st.openId]
@@ -59,8 +63,7 @@ const mutations = {
   // only clears the open conversation's messages and keeps every other
   // conversation in the map, which is not enough for Reset User Data.
   RESET(st) {
-    st.openId = OPEN_ID;
-    st.conversations = { [OPEN_ID]: emptyConversation() };
+    Object.assign(st, initialState());
   },
   setTitle(st, title) {
     st.conversations[st.openId].title = title;
@@ -421,6 +424,16 @@ export function subscribeConversation(store) {
   document.addEventListener('pagehide', onPageHide);
   const unsubscribeStore = store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
+    // A full reset must replace the stored payload synchronously: the state
+    // it leaves is exactly the fresh shape (identical to an absent payload
+    // for rehydration), and persisting it here closes the debounce window a
+    // killed tab could otherwise fall inside with the wiped conversation.
+    if (mutation.type === 'conversation/RESET') {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      persistConversation(store.state.conversation);
+      return;
+    }
     const now = Date.now();
     if (!timer) firstChangeAt = now;
     if (timer) clearTimeout(timer);

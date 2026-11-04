@@ -141,6 +141,24 @@ describe('conversation persistence', () => {
     expect(raw.conversations.open.title).toBe('Persisted');
   });
 
+  it('replaces the stored payload synchronously on RESET', () => {
+    // The subscription owns the storage key: a full reset must write the
+    // fresh shape immediately — inside the debounce window a killed tab
+    // would otherwise rehydrate the wiped conversation (mutation check:
+    // revert the RESET branch in subscribeConversation and the stale
+    // payload survives the assertion below).
+    const store = freshStore();
+    const unsubscribe = subscribeConversation(store);
+    try {
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'old' });
+      store.commit('conversation/RESET');
+      const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      expect(raw.conversations.open.messages).toEqual([]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('persists mid-stream: a chunk storm cannot defer the write past the wall', () => {
     // A trailing debounce alone never fires while frames keep landing —
     // every chunk re-arms it, and a reload mid-generation would find an

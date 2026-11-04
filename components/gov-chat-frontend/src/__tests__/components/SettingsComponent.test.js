@@ -301,11 +301,9 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // The chat-history and conversation subscriptions re-persist on the next
     // mutation: an in-memory history surviving the reset would write the
     // wiped data straight back to storage (#1455). The reset must abort any
-    // in-flight generation, leave the stores in their fresh shape, and drop
-    // the sessionStorage conversation payload synchronously — the
-    // subscription persists through a debounce, so a tab killed inside the
-    // window would otherwise rehydrate the wiped conversation.
-    sessionStorage.setItem('genie.conversation.v1', '{"openId":"open"}');
+    // in-flight generation and leave the stores in their fresh shape; the
+    // sessionStorage payload replacement is the conversation subscription's
+    // own contract (pinned in the store tests).
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
 
@@ -314,6 +312,5 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     expect(mockStoreDispatch).toHaveBeenCalledWith('conversation/abortStream');
     expect(mockStoreCommit).toHaveBeenCalledWith('chatHistory/RESET');
     expect(mockStoreCommit).toHaveBeenCalledWith('conversation/RESET');
-    expect(sessionStorage.getItem('genie.conversation.v1')).toBeNull();
   });
 });

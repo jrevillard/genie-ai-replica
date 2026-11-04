@@ -2,18 +2,22 @@
 import { v4 as uuidv4 } from 'uuid';
 import chatHistoryService from '@/services/chatHistoryService';
 
+// The single default folder every fresh/wiped state carries — one source of
+// truth for state(), CLEAR_FOLDERS and RESET.
+const defaultFolders = () => [
+  {
+    id: 'default',
+    name: 'All Chats',
+    isDefault: true,
+    createdAt: new Date().toISOString()
+  }
+];
+
 export default {
   namespaced: true,
 
   state: () => ({
-    folders: [
-      {
-        id: 'default',
-        name: 'All Chats',
-        isDefault: true,
-        createdAt: new Date().toISOString()
-      }
-    ],
+    folders: defaultFolders(),
     chats: [],
     folderChats: {
       default: []
@@ -143,14 +147,7 @@ export default {
     },
 
     CLEAR_FOLDERS(state) {
-      state.folders = [
-        {
-          id: 'default',
-          name: 'All Chats',
-          isDefault: true,
-          createdAt: new Date().toISOString()
-        }
-      ];
+      state.folders = defaultFolders();
       state.folderChats = { default: [] };
     },
 
@@ -158,14 +155,7 @@ export default {
     // chats array untouched, which is not enough for Reset User Data: the
     // chats list itself is the data being wiped.
     RESET(state) {
-      state.folders = [
-        {
-          id: 'default',
-          name: 'All Chats',
-          isDefault: true,
-          createdAt: new Date().toISOString()
-        }
-      ];
+      state.folders = defaultFolders();
       state.chats = [];
       state.folderChats = { default: [] };
     }

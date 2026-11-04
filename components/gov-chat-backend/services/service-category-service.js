@@ -180,10 +180,11 @@ class ServiceCategoryService {
    *
    * The upsert sets `createdAt` only on INSERT; UPDATE refreshes only
    * `translation`, `isActive` and `updatedAt`, so the creation timestamp
-   * of an existing row survives every edit of its owner. The previous
-   * delete-then-rebuild removed and re-inserted each row on every save,
-   * which made `createdAt` silently mean "last save of the owner" (and
-   * left the EN row without one at all).
+   * of an existing row survives every edit of its owner. Rows are
+   * identified by their stored `_key` (`${ownerKey}_${LOCALE}`): a row
+   * kept under any other key is not matched by the UPDATE branch and is
+   * removed by the GC pass (see #1447 for the legacy lowercase-key data
+   * the seed scripts wrote).
    *
    * When `translations` is undefined the payload omits the field: the
    * non-EN rows are left untouched and no GC pass runs. An explicit

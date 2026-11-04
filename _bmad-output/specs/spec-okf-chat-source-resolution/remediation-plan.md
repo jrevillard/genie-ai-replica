@@ -37,7 +37,13 @@ independent and can interleave.
 
 ## No-regression inventory (every wave re-checked)
 
-- chatqna citation mint (`genieai_chatqna.py:3524-3595`) stays verbatim.
+- **Legacy query pipeline**: chatqna citation mint (`genieai_chatqna.py:3524-3595`)
+  stays verbatim; retriever enrichment is additive — legacy graph results
+  byte-identical; retrieval-mode governance, graph routing, RRF unchanged.
+- **Legacy document handling**: doc-repo upload/download/view flows unchanged;
+  every doc-repo change in this plan touches `is_bundle` rows or adds refusals on
+  RESTRICTED sources only; legacy document retract sweeps keep processing raw
+  documents exactly as today.
 - Legacy document chat path: same URLs, same dialogs, same errors-for-legit-404s.
 - 6-1c scope semantics: open mode's public-base grant, restricted fencing, both unchanged.
 - VersionsDialog behaviour for NON-retracted repos unchanged.

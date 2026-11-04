@@ -3074,11 +3074,11 @@ test:frontend:
   before_script:
     - cd components/gov-chat-frontend && npm ci
   script:
-    # --maxWorkers=2 caps concurrent jest workers: the runner's cgroup OOM
-    # reaper SIGKILLed workers on the heaviest suite 3 pipelines running
-    # (default workers = cores → peak RSS = workers × heap). Heap-limit
-    # bumps would make cgroup OOM MORE likely, not less.
-    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    # --maxWorkers=2 alone could not stop the runner's 4 GB cgroup OOM reaper
+    # (#1404): a jest worker accumulates ~2 GB RSS over the run, so two of
+    # them still overflowed the cgroup. --workerIdleMemoryLimit recycles a
+    # worker whose heap crosses the cap, keeping the job inside the limit.
+    - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -3150,9 +3150,8 @@ test:okf-server:
     - cd components/shared/lib && npm ci
     - cd - && cd components/okf-server && npm ci
   script:
-    # --maxWorkers=2 caps concurrent jest workers (cgroup OOM reaper kills
-    # default workers × heap on this suite size — see test:frontend's note).
-    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    # Same worker-memory cap as test:frontend — see its note there (#1404).
+    - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:

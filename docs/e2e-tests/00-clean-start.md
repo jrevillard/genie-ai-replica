@@ -304,10 +304,12 @@ keeps its old address.
 All three venue users are provisioned through one script over the
 `ensureUser` helper (`tests/e2e/helpers/keycloak-admin.js`):
 
-- `testuser` — the primary login user (the chat suites). Carries
-  the `admin` realm role in parity with the former inline CI assignment;
-  the documents suites themselves authenticate as `testadmin`.
-- `testadmin` — the admin-surface login (`tests/e2e/admin/`).
+- `testuser` — the primary login user (the chat suites). Carries no
+  realm role (#1402: the former parity admin role had no consumer);
+  the provisioning script strips the role from any account that
+  still carries it.
+- `testadmin` — the admin-surface login (`tests/e2e/admin/`), carrying
+  the `admin` realm role.
 - `testplain` — carries **no role granting admin access** — the non-admin
   side of the `requireAdmin` contract.
 

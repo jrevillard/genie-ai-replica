@@ -110,9 +110,14 @@ The venue fixtures (testuser, testadmin, testplain) are defined once, in
 procedure (`docs/e2e-tests/00-clean-start.md`) both run it, so a credential
 is written in one place. The specs read their login credentials from the
 same module (`credentialsOf` in `helpers/e2e-fixtures.js`; `helpers/chatbot.js`
-re-exports them beside the login helpers). The helper converges
+re-exports them beside the login helpers). The import-path convention: a spec
+that needs only credentials requires them from `helpers/e2e-fixtures.js`
+directly; a spec that also logs in takes them from the same
+`helpers/chatbot.js` require as `loginViaUI` — do not mix both paths in one
+file. The helper converges
 an existing account (password reset, role assignment, and the
-admin-granting role removed from the role-less fixture); it fails loudly on
+admin-granting role removed from every fixture that does not declare it);
+it fails loudly on
 an account the realm left in a broken login state (disabled, unverified,
 carrying a required action) and names the cause.
 

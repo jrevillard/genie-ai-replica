@@ -3324,14 +3324,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // docs-side agreement is asserted in the credentials test below,
     // against the module-derived address.
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
-    // The admin realm role is part of the pinned fixture contract (parity
-    // with the former inline CI assignment; its disposition is #1402). It
-    // is asserted INSIDE the testuser entry ([^}] cannot cross the
-    // object's closing brace), so dropping testuser's own role line fails
-    // even though testadmin's identical-looking entry would satisfy a
-    // bare containment check.
-    expect(fixtures).toMatch(/username: 'testuser',[^}]*realmRoles: \['admin'\]/);
-    expect(fixtures).toContain("username: 'testadmin'");
+    // testadmin carries the admin realm role (the documents suites drive
+    // ADMIN_ONLY surfaces as testadmin). testuser does NOT (#1402: the
+    // parity role had no consumer) — the role is asserted INSIDE the
+    // testadmin entry ([^}] cannot cross the object's closing brace), so
+    // moving the role to the wrong entry fails this pin.
+    expect(fixtures).toMatch(/username: 'testadmin',[^}]*realmRoles: \['admin'\]/);
+    expect(fixtures).toContain("username: 'testuser'");
     expect(fixtures).toContain("username: 'testplain'");
   });
 
@@ -3353,12 +3352,14 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixtures).toContain("credentialsOf('testuser')");
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
-    // The role-less fixture's DEFINING contract: it must carry no
+    // The role-less fixtures' DEFINING contract: they must carry no
     // realmRoles key at all — a granted role makes the provisioning
     // script take the assign branch and skip its effective-role
-    // assertion, silently turning the authz spec's 403 half into an
-    // admin session.
+    // assertion (testplain: silently turning the authz spec's 403 half
+    // into an admin session; testuser: re-growing the #1402 parity role
+    // no consumer justifies).
     expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
+    expect(fixtures).not.toMatch(/username: 'testuser',[^}]*realmRoles/);
     // The shell docs' manual payloads must agree with the fixture
     // credentials — convergeUser deliberately never rewrites the email,
     // and it resets the password on the already-exists path, so a
@@ -3368,6 +3369,10 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const testuser = E2E_FIXTURES.find((f) => f.username === 'testuser');
     const docChecks = [
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
+      // 00-clean-start.md carries the password literal too (payload
+      // credentials, ROPC verification curl, credentials bullet) —
+      // #1407: it stays pinned beside the epic docs.
+      ['docs/e2e-tests/00-clean-start.md', testuser.password],
       ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
       ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
       ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
@@ -3413,7 +3418,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         if (skipPaths && skipPaths.has(entryPath)) continue;
         if (name.isDirectory()) {
           walkJs(entryPath, `${label}/${name.name}`, skipPaths);
-        } else if (name.name.endsWith('.js')) {
+        } else if (/\.(js|cjs|mjs)$/.test(name.name)) {
           assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
         }
       }

@@ -407,7 +407,9 @@ describe('keycloak-proxy-service', () => {
       db.query.mockRejectedValueOnce(new Error('write conflict')); // duplicate REMOVE fails
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
-      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure');
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow(
+        'Duplicate-cleanup failed after a committed erasure'
+      );
       expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith('user-key');
     });
 

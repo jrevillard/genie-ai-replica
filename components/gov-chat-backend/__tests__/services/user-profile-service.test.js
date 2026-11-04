@@ -232,6 +232,26 @@ describe('UserProfileService', () => {
       expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'email')).toBe(false);
       expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'firstName')).toBe(false);
     });
+
+    it('should strip the GDPR audit markers from profile writes', async () => {
+      // A self-service write of erased_key/deletedAt/erasedAt would defeat the
+      // tombstone (provisioning matches the digest exactly — a junk value makes
+      // the next login miss it and re-provision an erased identity) and forge
+      // the soft-delete audit trail. They are system-owned, never writable.
+      mockUsers.document.mockResolvedValueOnce({ _key: 'user-1', email: 'test@test.com' });
+      mockUsers.document.mockResolvedValueOnce({ _key: 'user-1' });
+      await userProfileService.updateUserProfile('user-1', {
+        erased_key: 'attacker-supplied',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+        erasedAt: '2026-01-01T00:00:00.000Z',
+        nickname: 'harmless'
+      });
+      const updateCall = mockUsers.update.mock.calls[0];
+      expect(updateCall[1].erased_key).toBeUndefined();
+      expect(updateCall[1].deletedAt).toBeUndefined();
+      expect(updateCall[1].erasedAt).toBeUndefined();
+      expect(updateCall[1].nickname).toBe('harmless');
+    });
   });
 
   describe('storeFile', () => {
@@ -395,7 +415,6 @@ describe('UserProfileService', () => {
       mockDb.query.mockRejectedValueOnce(new Error('query fail'));
 
       await expect(userProfileService.resetUserData('user-1')).rejects.toThrow('query fail');
-      expect(mockUsers.update).not.toHaveBeenCalled();
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
 

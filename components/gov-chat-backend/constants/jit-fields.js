@@ -39,7 +39,13 @@ const JIT_PROTECTED_FIELDS = [
   'createdAt',
   'updatedAt',
   'emailVerified',
-  'pendingEmailChange'
+  'pendingEmailChange',
+  // Soft-delete / GDPR audit markers — system-owned, never user-writable: a
+  // self-service write of erased_key would defeat the tombstone (provisioning
+  // matches the digest exactly) and forge the deleted/erased audit trail.
+  'deletedAt',
+  'erasedAt',
+  'erased_key'
 ];
 
 // Every backend-owned field a destructive user-document operation must carry
@@ -51,7 +57,7 @@ const JIT_PROTECTED_FIELDS = [
 // independently: a field added to the strip list but missed here would let a
 // reset destroy system state (the bug this set exists to prevent), while the
 // reverse (preserved but not strip-relevant) is benign.
-const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt', 'erased_key'];
+const SYSTEM_PRESERVED_FIELDS = [...new Set([...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt', 'erased_key'])];
 
 // Client display/notification preference fields the reset must carry over.
 // PUT /api/me stores them top-level on the user document (the mobile client

@@ -299,11 +299,14 @@ const keycloakProxyService = {
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
         userKey,
         error: arangoError.message,
-        state: 'PARTIAL_ERASURE'
+        state: erasureCommitted ? 'ERASURE_COMMITTED_LATE_FAILURE' : 'PARTIAL_ERASURE'
       });
-      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
-        cause: arangoError
-      });
+      throw new Error(
+        erasureCommitted
+          ? 'Duplicate-cleanup failed after a committed erasure'
+          : 'Partial erasure: user deleted from Keycloak but ArangoDB erasure failed',
+        { cause: arangoError }
+      );
     }
 
     // Files cleanup (see _cleanupUploads for the failure contract).

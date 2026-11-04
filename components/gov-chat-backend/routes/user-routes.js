@@ -165,10 +165,12 @@ module.exports = (userService) => {
       const isTyped = error instanceof AppError;
       const status = isTyped ? error.statusCode : 500;
       const message = isTyped ? error.message : 'Failed to reset user data';
-      // Client-condition failures (404) are warn-grade — an expected outcome,
-      // not alerting noise; only server-side failures log error-grade.
+      // Client-condition failures (404) are warn-grade without a stack — an
+      // expected outcome, not alerting noise; only server-side failures log
+      // error-grade with the throw-site stack.
       const logFailedReset = status >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
-      logFailedReset(`[RESET DATA] Error resetting user data: ${error.message}`, { stack: error.stack });
+      const logContext = status >= 500 ? { stack: error.stack } : {};
+      logFailedReset(`[RESET DATA] Error resetting user data: ${error.message}`, logContext);
       res.status(status).json({
         success: false,
         message

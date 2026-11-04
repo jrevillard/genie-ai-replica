@@ -986,6 +986,7 @@ export default {
       'Sind Sie sicher, dass Sie Ihr Konto löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
     processing: 'Verarbeitung...',
     userDataReset: 'Ihre Profildaten wurden erfolgreich zurückgesetzt.',
+    userDataResetFilesFailed: 'Ihre Profildaten wurden zurückgesetzt, aber einige gespeicherte Dateien konnten nicht entfernt werden. Bitte kontaktieren Sie einen Administrator.',
     failedToResetUserData: 'Fehler beim Zurücksetzen Ihrer Profildaten. Bitte versuchen Sie es später erneut.',
     unableToLoadUser: 'Benutzerinformationen konnten nicht geladen werden. Bitte versuchen Sie es erneut.',
     retry: 'Wiederholen',

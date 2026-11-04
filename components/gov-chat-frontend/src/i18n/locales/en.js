@@ -974,6 +974,7 @@ export default {
     },
     processing: 'Processing...',
     userDataReset: 'Your profile data has been successfully reset.',
+    userDataResetFilesFailed: 'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.',
     failedToResetUserData: 'Failed to reset your profile data. Please try again later.',
     unableToLoadUser: 'Unable to load user information. Please try again.',
     retry: 'Retry',

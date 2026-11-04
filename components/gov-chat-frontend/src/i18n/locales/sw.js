@@ -979,6 +979,7 @@ export default {
     confirmDeleteAccount: 'Je, una uhakika unataka kufuta akaunti yako? Kitendo hiki hakiwezi kutenduliwa.',
     processing: 'Inachakata...',
     userDataReset: 'Data yako ya wasifu imewekwa upya kwa mafanikio.',
+    userDataResetFilesFailed: 'Data yako ya wasifu imewekwa upya, lakini baadhi ya faili zilizohifadhiwa hazikuweza kufutwa. Tafadhali wasiliana na msimamizi.',
     failedToResetUserData: 'Imeshindwa kuweka upya data yako ya wasifu. Tafadhali jaribu tena.',
     unableToLoadUser: 'Imeshindwa kupakia taarifa za mtumiaji. Tafadhali jaribu tena.',
     retry: 'Jaribu tena',

@@ -560,6 +560,8 @@ const Map<String, dynamic> enLocale = {
     "confirmChange": "Confirm Change",
     "processing": "Processing...",
     "userDataReset": "Your profile data has been successfully reset.",
+    "userDataResetFilesFailed":
+        "Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.",
     "failedToResetUserData":
         "Failed to reset your profile data. Please try again later.",
     "changingEmailTo": "Changing your email to",

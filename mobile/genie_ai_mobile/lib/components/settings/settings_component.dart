@@ -4,6 +4,7 @@ import 'dart:async';
 
 // Service Imports
 import 'package:genie_ai_mobile/services/user_service.dart';
+import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -281,8 +282,13 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
             setState(() {
               _isLoading = true;
             });
-            await _userService.resetUserData();
+            final response = await _userService.resetUserData();
             _fetchUserData();
+            if (response['filesDeletionFailed'] == true) {
+              NotificationService.warning(
+                tr("settings.userDataResetFilesFailed"),
+              );
+            }
           },
         ),
       ],

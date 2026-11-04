@@ -312,7 +312,7 @@
             v-model="newMessage"
             input-id="welcome-composer-input"
             :placeholder="translate('chatbot.composerPlaceholder')"
-            :accessible-name="composerEntry.service || composerEntry.id"
+            :accessible-name="quickHelpCardTitle(composerEntry) || composerEntry.id"
             :tint="composerEntry.styles"
             :show-actions="true"
             :attach-title="translate('chatbot.composerAttachTitle')"
@@ -2080,11 +2080,10 @@ export default {
       // same entry routed to the grid refused itself — a verdict that
       // depended on placement (#1382). One verdict, both mounts. A
       // scope the hierarchy cannot EN-name yet stays refused on the
-      // declaring path, as before (#1263).
-      if (
-        entry &&
-        (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
-      ) {
+      // declaring path, as before (#1263). handleWelcomeSend is bound
+      // only inside the v-if="composerEntry" welcome mount, so entry
+      // is never null here.
+      if (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category))) {
         // The caption is computed HERE, on the refusing path only: it
         // is the tile's own caption assembly (the missing title first,
         // then the scope), and a healthy entry pays nothing for it.

@@ -1314,7 +1314,7 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons[0].id).toBe('b');
     });
 
-    it('a "hidden" flag that is not a boolean is REPORTED, and its truthiness still decides (#1208)', async () => {
+    it('a "hidden" flag that is not a boolean still filters by its truthiness (#1208)', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const wrapper = await mountWithButtons([
         { id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' },
@@ -1328,34 +1328,11 @@ describe('ChatBotComponent', () => {
       // flag the same way, and the web does not change what it does.
       expect(vm.quickHelpButtons.map((b) => b.id)).toEqual(['plain']);
 
-      // But the typo is REPORTED: a card that silently disappears leaves
-      // no trace of the configuration mistake that hid it. (The report
-      // follows the configuration load, not the card — the buttons are
-      // applied again on every language switch.) The report names the
-      // offending button by its ID — the identity the loader's gate
-      // guarantees — and the offending value: the operator has to learn
-      // WHICH card vanished and WHAT it said.
-      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
-      expect(hiddenWarnings.length).toBeGreaterThan(0);
-      expect(String(hiddenWarnings[0][0])).toContain('quoted');
-      expect(String(hiddenWarnings[0][0])).toContain('false');
-
-      warn.mockRestore();
-    });
-
-    it('the non-boolean "hidden" report fires ONCE per button, not per locale switch', async () => {
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const wrapper = await mountWithButtons([{ id: 'quoted', title: 'Quoted', hidden: 'false', category: '1' }]);
-      const vm = wrapper.vm;
-
-      // The apply re-runs on every locale switch; one typo must stay one
-      // console line, not one line per switch.
-      await vm.applyQuickHelpButtons();
-      await vm.applyQuickHelpButtons();
-      await vm.applyQuickHelpButtons();
-
-      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
-      expect(hiddenWarnings.length).toBe(1);
+      // The TYPO is not reported here: the report lives in the loader's
+      // gate (validateQuickHelpButtons — once per configuration load,
+      // named by the id), so the apply stays a pure filter and re-running
+      // it on every locale switch cannot multiply the warning (#1361).
+      expect(warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean')).length).toBe(0);
 
       warn.mockRestore();
     });

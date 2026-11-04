@@ -104,6 +104,17 @@ const validateQuickHelpButtons = (data) => {
       );
     }
     seen.set(id, index);
+    // The "hidden" flag's shape is a property of the document, so the
+    // report lives at configuration-resolution time (#1361): one warning
+    // per malformed flag per load, named by the button's id — not one per
+    // mount or language switch, under whatever title the locale resolved.
+    // A report, not a gate: the flag's truthiness decides (deliberate
+    // parity with the mobile), so the app still boots.
+    if (button.hidden != null && typeof button.hidden !== 'boolean') {
+      console.warn(
+        `genie-ai-config.json: Quick Help button "${id}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decides (${button.hidden ? 'hidden' : 'shown'}).`
+      );
+    }
   }
 };
 

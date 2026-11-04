@@ -494,5 +494,74 @@ describe('loadConfig', () => {
 
       await expect(loadConfig()).resolves.toBeDefined();
     });
+
+    it('reports a non-boolean "hidden" flag ONCE per load, named by the button id (#1361)', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            configWithButtons([
+              { id: 'quoted', title: { en: 'Quoted' }, hidden: 'false', category: '1' },
+              { id: 'plain', title: { en: 'Plain' }, category: '2' }
+            ])
+          )
+      });
+
+      // A report, not a gate: the configuration still loads.
+      await expect(loadConfig()).resolves.toBeDefined();
+
+      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
+      expect(hiddenWarnings.length).toBe(1);
+      // The report names the offending button by its ID — the identity the
+      // gate above guarantees — and the offending value.
+      expect(String(hiddenWarnings[0][0])).toContain('quoted');
+      expect(String(hiddenWarnings[0][0])).toContain('"false"');
+      warn.mockRestore();
+    });
+
+    it('reports every malformed "hidden" flag, one warning each', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            configWithButtons([
+              { id: 'one', title: { en: 'One' }, hidden: 'false', category: '1' },
+              { id: 'two', title: { en: 'Two' }, hidden: 1, category: '2' },
+              { id: 'ok', title: { en: 'Ok' }, hidden: true, category: '3' },
+              { id: 'absent', title: { en: 'Absent' }, category: '4' }
+            ])
+          )
+      });
+
+      await expect(loadConfig()).resolves.toBeDefined();
+
+      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
+      expect(hiddenWarnings.length).toBe(2);
+      expect(String(hiddenWarnings[0][0])).toContain('one');
+      expect(String(hiddenWarnings[1][0])).toContain('two');
+      warn.mockRestore();
+    });
+
+    it('stays silent when every "hidden" flag is boolean or absent', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            configWithButtons([
+              { id: 'shown', title: { en: 'Shown' }, hidden: false, category: '1' },
+              { id: 'gone', title: { en: 'Gone' }, hidden: true, category: '2' },
+              { id: 'noflag', title: { en: 'No flag' }, category: '3' },
+              { id: 'nullflag', title: { en: 'Null flag' }, hidden: null, category: '4' }
+            ])
+          )
+      });
+
+      await expect(loadConfig()).resolves.toBeDefined();
+      expect(warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean')).length).toBe(0);
+      warn.mockRestore();
+    });
   });
 });

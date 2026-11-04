@@ -24,8 +24,10 @@ from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, ge
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
+    HUB_EMBED_TIMEOUT_SECONDS,
     LLM_MAX_RETRIES,
     LLM_TIMEOUT_SECONDS,
+    harden_hub_embed_clients,
     http_timeout,
     positive_float_env,
 )
@@ -1952,6 +1954,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
+        # #1381: comps' _initialize_embeddings builds HuggingFaceEndpointEmbeddings,
+        # whose huggingface_hub clients default to timeout=None — requests then
+        # waits forever on a wedged /embed connection behind the shared gateway,
+        # and one such call inside add_graph_documents (embed per node/edge/source)
+        # silently held an ingest thread — and a drain lane — for 30+ minutes with
+        # no log line. Bound it at the client underneath (both hub clients re-read
+        # their timeout attribute per request); the constructor kwarg route is not
+        # available because the langchain class's pydantic field set moves with the
+        # pin. See core/model_http_policy.py::HUB_EMBED_TIMEOUT_SECONDS.
+        hardened = harden_hub_embed_clients(self.embeddings)
+        if hardened:
+            logger.info(
+                f"[ embed-budget ] dataprep TEI embed clients bounded at "
+                f"{HUB_EMBED_TIMEOUT_SECONDS:.0f}s per call ({', '.join(hardened)}) "
+                f"— was unbounded (#1381)"
+            )
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
         self._log_semaphore = asyncio.Semaphore(100)

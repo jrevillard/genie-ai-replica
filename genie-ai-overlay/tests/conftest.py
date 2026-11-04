@@ -44,7 +44,14 @@ _arangodb_dp_module.OpeaArangoDataprep = type(
     "OpeaArangoDataprep",
     (),
     {
-        "__init__": lambda self, *a, **kw: None,
+        # #1381: the real parent's __init__ runs _initialize_embeddings(),
+        # which sets self.embeddings (HuggingFaceEndpointEmbeddings or the
+        # local model class). The dataprep subclass's __init__ hands that
+        # object to harden_hub_embed_clients, so the stub must mirror the
+        # parent's contract — a missing attribute would fail the subclass
+        # constructor for a shape the real parent never produces. None keeps
+        # the hardening helper silent (no client attrs to bound).
+        "__init__": lambda self, *a, **kw: setattr(self, "embeddings", None),
         "_initialize_llm": lambda self, *a, **kw: None,
     },
 )

@@ -38,7 +38,8 @@ chatqna   backend user profile, document-repository metadata  ``aiohttp``  CONTR
 retriever document summarizer ``ChatOpenAI``  ``langchain_openai``  SUMMARIZER_*
 retriever OpenAI API key probe  ``openai.OpenAI``          LLM_* (timeout only)
 retriever ``OpenAIEmbeddings``  ``langchain_openai``      EMBEDDING_*
-retriever ``HuggingFaceEndpointEmbeddings`` (TEI branch)  —  UNBUDGETED
+retriever/dataprep ``HuggingFaceEndpointEmbeddings``
+          (TEI branch) — bounded at the hub client underneath  HUB_EMBED_*
 ============================  ==========================  ==============
 
 NOT covered — vendored ``comps``, which owns the HTTP calls outright and cannot
@@ -56,12 +57,16 @@ Closing that gap needs a change to the vendored source, tracked in
 ``OVERRIDES.yaml`` under ``comps.dataprep.…`` / ``comps.cores.mega.orchestrator…``
 rather than a knob here.
 
-Two in-repo clients reach a model endpoint without a budget from this module,
-both for a library reason rather than an oversight:
+Two in-repo clients reach a model endpoint without a constructor-level budget
+from this module:
 
-* ``HuggingFaceEndpointEmbeddings`` (retriever, remote-GPU branch) — a pydantic
-  model whose accepted fields follow the pinned langchain-huggingface, so an
-  unrecognised ``timeout`` raises at construction;
+* ``HuggingFaceEndpointEmbeddings`` (retriever and dataprep, remote-GPU TEI
+  branch) — a pydantic model whose accepted fields follow the pinned
+  langchain-huggingface, so an unrecognised ``timeout`` raises at
+  construction. It IS bounded, one level down: ``harden_hub_embed_clients``
+  sets the deadline on the ``huggingface_hub`` client objects it wraps, whose
+  ``timeout`` attribute both clients re-read per request. See
+  ``HUB_EMBED_TIMEOUT_SECONDS``.
 * ``HuggingFaceBgeEmbeddings`` (retriever, local branch) — runs the embedding
   model in-process, so there is no HTTP hop to bound.
 
@@ -401,3 +406,80 @@ def http_timeout(total_seconds: float):
     import httpx
 
     return httpx.Timeout(total_seconds, connect=min(CONNECT_TIMEOUT_SECONDS, total_seconds))
+
+
+# The huggingface_hub inference clients underneath langchain-huggingface's
+# ``HuggingFaceEndpointEmbeddings`` (the TEI-embed branch both dataprep and the
+# retriever select when ``TEI_EMBEDDING_ENDPOINT`` and a Hub token are set).
+#
+# This budget closes the last unbounded model call in the overlay. Verified
+# against the pinned library (langchain-huggingface 0.3.x / huggingface_hub
+# 0.36.2): the class constructs its ``InferenceClient`` / ``AsyncInferenceClient``
+# without a ``timeout`` argument, so both carry ``timeout=None`` — and both
+# clients read the attribute at request time and pass it through verbatim
+# (``_client.py``: ``get_session().post(..., timeout=self.timeout)``;
+# ``_async_client.py``: ``aiohttp.ClientTimeout(self.timeout)`` on a
+# per-request session). ``requests`` with ``timeout=None`` waits forever for
+# the response. The endpoint sits behind the shared GPU gateway, whose failure
+# mode is precisely the one this turns from eternal into bounded: accept the
+# TCP connection, never answer (a backend wedged behind a healthy ingress —
+# its 5xx storms fail fast, its wedges do not). Live-measured as issue #1381:
+# one such embed call inside the graph write silently held an ingest thread
+# (and a drain lane) for 30+ minutes with no log line until the reaper.
+#
+# The bound is applied post-construction on the client objects — NOT as a
+# constructor kwarg on the langchain class, whose pydantic field set follows
+# the pinned langchain-huggingface version and would raise ValidationError at
+# construction if it grew or shrank (which on the retriever path would 500
+# every retrieval). ``harden_hub_embed_clients`` below is the lever; both
+# clients re-read ``self.timeout`` per request, so the attribute assignment
+# needs no restart ordering.
+#
+# 600, matching ``EMBEDDING_TIMEOUT_SECONDS``: one ``embed_documents`` call
+# carries a handful of texts against TEI, but the shared gateway can queue it
+# behind every other tenant on the box, and 600 clears a legitimately slow
+# call. Bounded-and-untightened, for the same reason the sibling budgets are:
+# each of these values is a NEW ceiling on a call that previously had none.
+#
+# Residual, stated rather than hidden: ``aiohttp.ClientTimeout(total=X)``
+# bounds the async client's total but leaves its connect phase unbounded (the
+# trap documented under ``AIOHTTP_CONNECT_TIMEOUT_SECONDS``), so an endpoint
+# that never completes TCP/DNS still hangs the async path. The sync client —
+# the one dataprep's ingest threads actually run — uses ``requests``, whose
+# float timeout bounds connect and read together. The wedge that produced
+# #1381 (connect fine, read never completes) is the bounded one on both.
+HUB_EMBED_TIMEOUT_SECONDS = positive_float_env("MODEL_HUB_EMBED_TIMEOUT_SECONDS", default=600.0)
+
+_HUB_CLIENT_ATTRS = ("client", "async_client")
+
+
+def harden_hub_embed_clients(embeddings, timeout: float | None = None) -> list[str]:
+    """Set the request deadline on the hub clients *embeddings* wraps.
+
+    ``HuggingFaceEndpointEmbeddings`` stores its ``InferenceClient`` /
+    ``AsyncInferenceClient`` on plain ``client`` / ``async_client`` attributes
+    and both read their ``timeout`` attribute per request, so assigning it
+    post-construction bounds every subsequent call without touching the
+    langchain class's version-dependent pydantic field set (a constructor
+    kwarg there raises ValidationError on a version whose field set moved,
+    which on the retriever's remote-GPU branch means every retrieval 500s).
+
+    Only attributes that EXIST and are currently ``None`` are written: a local
+    ``HuggingFaceEmbeddings`` has no hub clients (the helper returns ``[]`` and
+    the caller can log that nothing needed bounding), and a client that
+    already carries a timeout was configured on purpose — overwriting it here
+    would let this module silently override an explicit setting.
+
+    Returns the names of the attributes that were hardened, in
+    :data:`_HUB_CLIENT_ATTRS` order, so the call site logs exactly what it
+    bounded instead of a blanket claim.
+    """
+    limit = HUB_EMBED_TIMEOUT_SECONDS if timeout is None else timeout
+    hardened: list[str] = []
+    for attr in _HUB_CLIENT_ATTRS:
+        client = getattr(embeddings, attr, None)
+        if client is None or getattr(client, "timeout", "missing") is not None:
+            continue
+        client.timeout = limit
+        hardened.append(attr)
+    return hardened

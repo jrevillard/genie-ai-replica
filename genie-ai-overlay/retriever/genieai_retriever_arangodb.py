@@ -28,7 +28,13 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels
 from core.model_cache import ModelDiscoveryError, resolve_model_id
-from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
+from core.model_http_policy import (
+    HUB_EMBED_TIMEOUT_SECONDS,
+    LLM_MAX_RETRIES,
+    SUMMARIZER_TIMEOUT_SECONDS,
+    harden_hub_embed_clients,
+    http_timeout,
+)
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
 from tracing import (
@@ -106,6 +112,11 @@ from .config import (
 # bounded traversal — an overrun there must never consume the whole leg
 # timeout, which used to discard the leg's already-fused vector documents).
 TRAVERSAL_BUDGET_RESERVE_S = 0.75
+
+# #1381: the TEI branch builds a fresh HuggingFaceEndpointEmbeddings per graph
+# extraction; the "[ embed-budget ] bounded" line logs once per process via
+# this flag instead of on every request.
+_HUB_EMBED_BUDGET_LOGGED = False
 
 # DW-424 (review 2026-10-29 round 3): a timed-out fan-out leg is ABANDONED
 # (Decision E) — the awaiting task returns [] but its worker thread keeps
@@ -1550,25 +1561,40 @@ class GenieaiArangoRetriever(OpeaComponent):
                     timeout=http_timeout(EMBEDDING_TIMEOUT),
                 )
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
-                # Left unbudgeted on purpose. langchain_huggingface's
+                # #1381: bounded at the hub client underneath, NOT via a
+                # constructor kwarg. langchain_huggingface's
                 # HuggingFaceEndpointEmbeddings is a pydantic model whose
-                # accepted field set depends on the pinned version; it is not
-                # documented as taking a timeout, and a rejected kwarg raises
-                # ValidationError at construction — which, on the remote-GPU
-                # path this branch selects, would 500 every retrieval request
-                # rather than merely leave one call unbounded.
-                #
-                # The bound belongs on the huggingface_hub client underneath
-                # (its InferenceClient does take a timeout; comps does not pass
-                # one either). Closing it means passing a pre-built client via
-                # model_kwargs, which needs the field set verified against the
-                # pinned langchain-huggingface first. Recorded with the rest of
-                # the vendored-client debt in genie-ai-overlay/OVERRIDES.yaml.
+                # accepted field set depends on the pinned version; an
+                # unrecognised ``timeout`` kwarg raises ValidationError at
+                # construction — which, on the remote-GPU path this branch
+                # selects, would 500 every retrieval request. The clients the
+                # class builds for itself (huggingface_hub InferenceClient /
+                # AsyncInferenceClient) default to timeout=None — requests
+                # then waits forever on a wedged /embed connection behind the
+                # shared gateway — and both re-read their ``timeout``
+                # attribute per request, so harden_hub_embed_clients can set
+                # the deadline post-construction on those objects. Before
+                # #1381 this branch was the last unbounded model call in the
+                # overlay (recorded as vendored-client debt in
+                # OVERRIDES.yaml / build-patches/comps_http_budget_debt.py).
                 embeddings = HuggingFaceEndpointEmbeddings(
                     model=TEI_EMBEDDING_ENDPOINT,
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
                 )
+                hardened = harden_hub_embed_clients(embeddings)
+                # The TEI branch builds a fresh client per graph extraction, so
+                # the bound-applied line is logged ONCE per process — a
+                # per-request info line for a static attribute assignment would
+                # flood the log on the default topology.
+                global _HUB_EMBED_BUDGET_LOGGED
+                if hardened and not _HUB_EMBED_BUDGET_LOGGED:
+                    _HUB_EMBED_BUDGET_LOGGED = True
+                    logger.info(
+                        f"[ embed-budget ] retriever TEI embed clients bounded at "
+                        f"{HUB_EMBED_TIMEOUT_SECONDS:.0f}s per call ({', '.join(hardened)}) "
+                        f"— was unbounded (#1381)"
+                    )
                 # Issue #1035 (generalized): contrastive / instruction-tuned
                 # embedding models expect a query-side prefix at inference
                 # (per their model card) to preserve the query/passage

@@ -52,7 +52,18 @@ that position:
     Builds the TEI embedding client used at ingest for label selection, chunk
     and node embedding, and relationship embedding. It goes through
     ``huggingface_hub.AsyncInferenceClient``, whose ``timeout`` comps never
-    passes.
+    passes. **Closed (2026-11-03, #1381)** — the langchain class constructs
+    the hub clients itself and exposes them on plain ``client`` /
+    ``async_client`` attributes, and both clients re-read their ``timeout``
+    attribute per request, so post-construction hardening from in-repo code
+    reaches them without touching vendored ``comps``:
+    ``core.model_http_policy.harden_hub_embed_clients`` is applied in the
+    dataprep subclass's ``__init__`` (and in the retriever's TEI branch,
+    which builds the same class) under ``HUB_EMBED_TIMEOUT_SECONDS``. What
+    remains unbounded here is the vendored construction in comps branches
+    this overlay does not run, and the connect phase of the async client
+    (``ClientTimeout(total=...)`` drops the connect ceiling — stated in the
+    constant's comment).
 
 ``opea/embedding:1.5`` and ``opea/llm-textgen:1.5``
     No Python overlay at all — the TEI embedding microservice and the

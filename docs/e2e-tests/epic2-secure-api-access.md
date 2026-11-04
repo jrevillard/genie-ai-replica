@@ -23,7 +23,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 | Variable | Description | Defined in |
 |----------|-------------|------------|
 | `$TOKEN` | Keycloak master admin token | Phase 0 |
-| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
+| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | acquired per test (ROPC pattern: 00-clean-start Step 0.8) |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
 | `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
 
@@ -177,9 +177,14 @@ fi
 
 **Verification:**
 ```bash
-# Uses $TOKEN — the MASTER admin token from Phase 0 (see Variable Reference).
-# The genie-realm admin-cli route is not usable here: the env template ships
-# no GENIE_ADMIN_PASSWORD, so that login cannot succeed on a clean stack.
+# Re-acquire the MASTER admin token inline: Phase 0 Step 0.8 leaves $TOKEN
+# holding testuser's ROPC token, which cannot manage the realm. The
+# genie-realm admin-cli route is not usable either — the env template ships
+# GENIE_ADMIN_PASSWORD empty, so that login cannot succeed on a clean stack.
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+[ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "FATAL: master admin login failed - is KEYCLOAK_ADMIN_PASSWORD set (source .env, see Phase 0)?"; exit 1; }
+
 # Create user in genie realm (if not exists) — firstName/lastName/emailVerified
 # are required for ROPC logins to succeed (see .claude/rules/SERVER-TESTING.md)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
@@ -386,6 +391,7 @@ echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
 # genie-realm admin token cannot manage genie2 (see .claude/rules/SERVER-TESTING.md)
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+[ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "FATAL: master admin login failed - is KEYCLOAK_ADMIN_PASSWORD set (source .env, see Phase 0)?"; exit 1; }
 
 # Create a user in genie realm (firstName/lastName/emailVerified are required
 # for ROPC logins to succeed — see .claude/rules/SERVER-TESTING.md)
@@ -1246,10 +1252,14 @@ Stop Keycloak. The backend caches JWKS signing keys, so a previously-valid token
 > **IMPORTANT**: The token must be obtained **before** stopping Keycloak, and the stop + test must run in the **same shell** so the `$USER_TOKEN` variable is preserved.
 
 ```bash
-# Step 1: Get a fresh token while Keycloak is still running
+# Step 1: Get a fresh token AND warm the JWKS cache while Keycloak is still
+# running (one authenticated call — without it a cold 5-minute JWKS cache
+# forces a refetch from the stopped Keycloak and Step 2 fails)
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
+  -o /dev/null -w "JWKS cache warm-up: HTTP %{http_code}\n"
 
 # Step 2: Stop Keycloak and test in the SAME shell
 docker compose stop keycloak
@@ -1268,7 +1278,7 @@ echo "HTTP: 200 (cached JWKS validated the token)"
 
 **Expected**: `HTTP: 200` with the raw user document — the backend validates the JWT using cached JWKS keys and does not need Keycloak for every request. This is the correct behavior: the auth system is resilient to temporary Keycloak outages for already-authenticated users.
 
-> **Note**: If you see `HTTP: 401`, the likely cause is the 5-minute JWKS cache TTL: if no authenticated request ran in the last 5 minutes, the backend refetches the keys from the stopped Keycloak and verification fails. The remedy is not a shorter sleep — re-run Step 1 to get a fresh token AND make one authenticated call (e.g. `GET /api/me`) immediately before Step 2, so the JWKS cache is warm when Keycloak stops.
+> **Note**: If you see `HTTP: 401` despite the Step 1 warm-up, the JWKS cache window was missed — re-run the whole test from Step 1 (fresh token + warm-up call) before stopping Keycloak again.
 
 ```bash
 # Step 3: Restore Keycloak

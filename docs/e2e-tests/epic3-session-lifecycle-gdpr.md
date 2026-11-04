@@ -381,11 +381,16 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+RESPONSE=$(curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+echo "$RESPONSE" | head -n -1 | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
-print(f'name: {d.get(\"name\",\"N/A\")}')
-"
+name = d.get('name')
+print(f'name: {name}')
+sys.exit(0 if name == 'JIT Test' else 1)
+" || { echo "FATAL: JIT profile sync did not propagate the Keycloak change to the ArangoDB document"; exit 1; }
 ```
 **Expected**: `name: JIT Test` (profile updated from Keycloak via JIT)
 

@@ -57,7 +57,7 @@ Each step follows this format:
 | Variable | Description | Defined in |
 |----------|-------------|------------|
 | `$TOKEN` | Keycloak master admin token | Phase 0 |
-| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
+| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | acquired per test (ROPC pattern: 00-clean-start Step 0.8) |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
 | `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
 | `$KC_EMAIL` | `testuser`'s address as the venue's Keycloak account holds it — captured in M.1/M.2, reused by the Phase N recreates | Phase M |

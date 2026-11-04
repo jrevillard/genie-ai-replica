@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 International Telecommunication Union (ITU)
+# SPDX-License-Identifier: Apache-2.0
 """Stub curl driven by a JSON scenario — the engine behind harness.py (#1337).
 
 Env contract:
@@ -15,15 +17,26 @@ transport answer (timeout after headers, reset mid-body).
 
 An unscripted call exits 97 with a message on stderr: the harness must
 script every call the provisioning block makes, and a scenario that
-reaches an unscripted URL is a harness bug, not a pass.
+reaches an unscripted URL is a harness bug, not a pass. The block
+captures every exit code, so the observable outcome is the 97 riding a
+transport verdict ("curl exit 97" in the scenario output) — red either way.
 """
 
 import json
 import os
 import sys
 
-VALUE_FLAGS = {"-o", "-w", "-H", "-d", "--data", "--data-urlencode", "--data-raw",
-               "--connect-timeout", "--max-time"}
+VALUE_FLAGS = {
+    "-o",
+    "-w",
+    "-H",
+    "-d",
+    "--data",
+    "--data-urlencode",
+    "--data-raw",
+    "--connect-timeout",
+    "--max-time",
+}
 
 
 def parse_args(argv):
@@ -44,7 +57,12 @@ def parse_args(argv):
                 write_out = argv[i + 1]
             i += 2
         elif arg.startswith("--"):
-            i += 1
+            # Unknown long flag: consume its value token too, so a future
+            # "--retry 3" cannot leak "3" in as the positional URL.
+            if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                i += 2
+            else:
+                i += 1
         elif arg.startswith("-"):
             i += 1  # bundled short flags: -s -k -f -S and combinations
         else:
@@ -62,10 +80,11 @@ def main():
     if os.path.exists(state_path):
         with open(state_path) as f:
             state = json.load(f)
-    matches = [r for r in scenario["rules"]
-               if r["method"] == method and r["url"] in url]
+    matches = [
+        r for r in scenario["rules"] if r["method"] == method and r["url"] in url
+    ]
     if not matches:
-        sys.stderr.write("stub-curl: no scenario rule for %s %s\n" % (method, url))
+        sys.stderr.write(f"stub-curl: no scenario rule for {method} {url}\n")
         sys.exit(97)
     # Longest url wins: a POST to /users/<id>/role-mappings/realm also
     # contains the create rule's /users substring — the most specific rule

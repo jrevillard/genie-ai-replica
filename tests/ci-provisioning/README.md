@@ -4,16 +4,16 @@ Executes the Keycloak readiness script item of `.e2e_web_base` (root
 `.gitlab-ci.yml`) under a **stub curl** whose responses are scripted per
 scenario, plus a stub `sleep` that fast-forwards the retry loops. The block
 is extracted from the YAML with pyyaml and concatenated with the
-shared-helper item that precedes it (`http_label` / `resp_status` /
-`resp_body` / `kc_curl` / `require_clean_curl`).
+shared-helper item that precedes it (`http_label` / `resp_status` / `resp_body` / `kc_curl`).
 
 **Scope (after main's venue-fixture convergence, 3991dd474):** the block
 under test is the readiness loop (master-token acquisition, genie-app
 client visibility) and the ROPC refusal probe. The testuser/roles
 provisioning lives in `tests/e2e/provision-e2e-fixtures.js` and is
 exercised by its own suite — a scenario that drives the reduced block
-toward an unscripted endpoint exits 97 through the stub, so harness drift
-against block drift is caught both ways.
+toward an unscripted endpoint makes the stub exit 97 — the block captures
+every exit code, so the scenario ends red on a transport verdict naming
+"curl exit 97" (loud either way).
 
 ## Run
 

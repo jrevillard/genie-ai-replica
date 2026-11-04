@@ -450,8 +450,8 @@ workflow:
       # looks like a clean exit (the real bug the stub-curl harness caught
       # during #1289). A non-zero CURL_RC means the answer may be truncated
       # mid-transfer: the status is only trustworthy on a clean exit, so
-      # single-shot callers branch via require_clean_curl and retry loops
-      # classify CURL_RC alongside STATUS.
+      # every caller here is a retry loop that classifies CURL_RC alongside
+      # STATUS (a truncated answer retries; it is never read as a verdict).
       kc_curl() {
         local _kc_method=$1 _kc_url=$2
         shift 2
@@ -459,17 +459,6 @@ workflow:
         KC_RAW=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X "$_kc_method" "$_kc_url" "$@") || CURL_RC=$?
         STATUS=$(resp_status "$KC_RAW")
         BODY=$(resp_body "$KC_RAW")
-      }
-      # Transport-fault gate for single-shot provisioning calls: a non-zero
-      # curl rc (timeout after headers, reset mid-body) means the captured
-      # status may sit over a truncated body — branch on it and a transport
-      # fault is misattributed to a semantic answer (#1334 round-6 finding).
-      # Fail with the observed evidence instead.
-      require_clean_curl() {
-        if [ "$CURL_RC" -ne 0 ]; then
-          echo "ERROR: transport fault during the ${1} call (curl exit ${CURL_RC}, last HTTP $(http_label "${STATUS:-}")) — the answer may be truncated and carries no usable verdict; body: ${BODY:-none}"
-          exit 1
-        fi
       }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
@@ -589,7 +578,18 @@ workflow:
           echo "The first attempt answered $(http_label "$TOKEN_FIRST_STATUS") — the per-iteration wait lines above show how the status evolved."
         fi
         if [ -n "$TOKEN_BODY" ]; then
-          echo "response body: ${TOKEN_BODY}"
+          # A 200 whose body was cut mid-transfer leaves a token PREFIX here
+          # (the access_token member prints before the cut) — withhold token
+          # material from the job log; every other body (error JSON, an
+          # interception page) is the diagnostic itself and stays visible.
+          case "$TOKEN_BODY" in
+            *access_token*)
+              echo "response body: <withheld — token response material>"
+              ;;
+            *)
+              echo "response body: ${TOKEN_BODY}"
+              ;;
+          esac
         fi
         case "$TOKEN_STATUS" in
           200)
@@ -2975,11 +2975,16 @@ lint:python:
   script:
     - ruff check genie-ai-overlay/
     - ruff format --check genie-ai-overlay/
+    # The provisioning harness ships Python too — outside every gate before
+    # this line existed, so style debt accumulated invisibly.
+    - ruff check tests/ci-provisioning/
+    - ruff format --check tests/ci-provisioning/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "genie-ai-overlay/**/*.py"
         - "genie-ai-overlay/pyproject.toml"
+        - "tests/ci-provisioning/**/*.py"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

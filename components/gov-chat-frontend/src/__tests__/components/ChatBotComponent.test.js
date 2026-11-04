@@ -2904,6 +2904,173 @@ describe('ChatBotComponent', () => {
       expect(lastError).toBe('chatbot.loading');
     });
 
+    // The mapped shape the grid refuses as a dead tile — an id, no
+    // title, no category, no labels, no prompt — routed to the composer.
+    // The old send gate covered only scope-declaring entries, so this
+    // one read as just-chat and the typed question left UNFILTERED while
+    // the grid refused itself.
+    const bareComposerEntry = {
+      id: 'bare-entry',
+      service: '',
+      serviceLabels: null,
+      serviceKey: 'bare-entry',
+      category: null,
+      placement: 'composer',
+      icon: 'x'
+    };
+
+    it('a composer entry with NO title and NO scope refuses too (#1382) — the verdict is placement-independent', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const notificationService = require('../../services/notificationService');
+      notificationService.error.mockClear();
+
+      vm.serviceCategories = [];
+      vm.serviceCategoriesStatus = 'loaded';
+      vm.quickHelpButtons = [{ ...bareComposerEntry }];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+      // The refusal names the missing title, the way the grid card's
+      // caption does — the same face both mounts show.
+      const lastError = notificationService.error.mock.calls.at(-1)[0];
+      expect(lastError).toBe('chatbot.quickHelpTitleMissing');
+    });
+
+    it('a titleless composer entry announces its id as the accessible name (#1382)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.serviceCategories = [];
+      vm.serviceCategoriesStatus = 'loaded';
+      // No title resolves: the accessible name must not be empty —
+      // the id is the string the loader's gate guarantees.
+      vm.quickHelpButtons = [{ ...bareComposerEntry }];
+      await wrapper.vm.$nextTick();
+
+      const composer = wrapper.findComponent({ name: 'ChatComposer' });
+      expect(composer.exists()).toBe(true);
+      expect(composer.props('accessibleName')).toBe('bare-entry');
+      // The name must land on the FIELD: an aria-label on the wrapper
+      // div (role=generic) is dropped from the accessibility tree.
+      expect(composer.find('.chat-composer__field').attributes('aria-label')).toBe('bare-entry');
+    });
+
+    it('a WHITESPACE-ONLY title is no title: the entry is broken and the name falls back to the id (#1382)', async () => {
+      // A whitespace title passes a truthiness check — the gate must
+      // read the same fact the caption assembly implies: whitespace
+      // renders a blank label and announces nothing.
+      const wrapper = await mountWithButtons([
+        {
+          id: 'blank-entry',
+          title: { en: '   ' },
+          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+          category: null,
+          placement: 'composer'
+        }
+      ]);
+      const vm = wrapper.vm;
+
+      expect(vm.quickHelpCardBroken(vm.composerEntry)).toBe(true);
+      // The visible face: the error icon replaces the sparkle, and the
+      // caption names the missing title — the grid's doctrine, both
+      // mounts.
+      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
+        'chatbot.quickHelpTitleMissing'
+      );
+      // And the accessible name does not inherit the whitespace.
+      expect(wrapper.findComponent({ name: 'ChatComposer' }).props('accessibleName')).toBe('blank-entry');
+    });
+
+    it('the broken face waits for the hierarchy to settle (#1382)', async () => {
+      // Hold the hierarchy's answer: the window under test is the one
+      // where the config has landed but the tree has not. The finally
+      // restores the resolved mock even on a mid-test failure — a
+      // leaked pending promise would push every later test into a
+      // loading state far from the real breakage.
+      const serviceTreeService = require('../../services/serviceTreeService');
+      let resolveTree;
+      try {
+        serviceTreeService.getAllCategories.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveTree = resolve;
+            })
+        );
+        const wrapper = await mountWithButtons([
+          {
+            id: 'scope-entry',
+            title: { en: 'Crops card' },
+            icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+            serviceLabels: ['Crops'],
+            category: '2',
+            placement: 'composer'
+          }
+        ]);
+        const vm = wrapper.vm;
+        // The tree is still ON ITS WAY: the scope cannot be verified
+        // yet, and the composer mounts before the grid settles —
+        // flashing the error face here would name a failure recovery is
+        // about to end.
+        expect(vm.serviceCategoriesStatus).toBe('loading');
+        expect(vm.composerBrokenFace).toBe(false);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="welcome-composer-leading-mark"]').exists()).toBe(true);
+
+        // Settled: a scope the tree cannot EN-name (an empty tree) is a
+        // real failure — the face appears.
+        resolveTree([]);
+        await flushPromises();
+
+        expect(vm.composerBrokenFace).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      } finally {
+        mockLiveTree([]);
+      }
+    });
+
+    it('a TITLE-broken entry shows the face while the hierarchy is still loading (#1382)', async () => {
+      // The title half of the verdict is a configuration fact: the
+      // hierarchy has nothing to do with it, so the face must not wait
+      // for the tree the way the scope half does. Same finally-restore
+      // as the settle test: a pending tree mock must not leak.
+      const serviceTreeService = require('../../services/serviceTreeService');
+      let resolveTree;
+      try {
+        serviceTreeService.getAllCategories.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveTree = resolve;
+            })
+        );
+        const wrapper = await mountWithButtons([
+          {
+            id: 'titleless-entry',
+            title: { en: '' },
+            icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+            category: null,
+            placement: 'composer'
+          }
+        ]);
+        const vm = wrapper.vm;
+
+        expect(vm.serviceCategoriesStatus).toBe('loading');
+        expect(vm.composerBrokenFace).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
+          'chatbot.quickHelpTitleMissing'
+        );
+
+        resolveTree([]);
+        await flushPromises();
+      } finally {
+        mockLiveTree([]);
+      }
+    });
+
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

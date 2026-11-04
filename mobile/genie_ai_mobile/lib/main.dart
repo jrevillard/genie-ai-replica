@@ -39,6 +39,7 @@ import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 import 'package:genie_ai_mobile/components/settings/about_screen.dart';
+import 'package:genie_ai_mobile/utils/service_selection_context.dart';
 
 /// DEBUG ONLY: Bypasses TLS validation for local development with self-signed
 /// certificates. Tree-shaken in release builds — unused when kDebugMode is false.
@@ -411,28 +412,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _onServiceSelected(Map<String, dynamic> service) {
-    final String name = service['name'] ?? 'Unknown Service';
-    final String id = service['category_id'] ?? service['id'] ?? '';
-    // BOTH spellings travel to the chat: display (name) and the EN wire
-    // labels (the SSOT the retriever filters on).
-    final String categoryNameEn = service['categoryNameEn']?.toString() ?? '';
-    final List<String> serviceLabelsEn =
-        (service['serviceLabelsEn'] as List<dynamic>? ?? const <dynamic>[])
-            .map((e) => e.toString())
-            .where((e) => e.isNotEmpty)
-            .toList();
-    // How many services were picked: a picked service with no EN
-    // translation contributes no label, and the chat must refuse the
-    // send instead of quietly narrowing the query to the category.
-    final int serviceCount =
-        (service['serviceCount'] as num?)?.toInt() ?? serviceLabelsEn.length;
-    debugPrint("[MAIN] Service Selected: $name (ID: $id)");
+    final context = categoryContextFromSelection(service);
+    debugPrint(
+      "[MAIN] Service Selected: ${context.categoryName} "
+      "(ID: ${context.categoryId})",
+    );
     _chatBotKey.currentState?.setCategoryContext(
-      id,
-      name,
-      categoryNameEn: categoryNameEn,
-      serviceLabelsEn: serviceLabelsEn,
-      serviceCount: serviceCount,
+      context.categoryId,
+      context.categoryName,
+      categoryNameEn: context.categoryNameEn,
+      serviceLabelsEn: context.serviceLabelsEn,
+      serviceCount: context.serviceCount,
     );
   }
 

@@ -303,13 +303,18 @@
              at the chat-input slot under v-else, so the two positions
              share exactly one composer instance, never two. The leading
              slot carries the entry's chat-bubble icon; the parent
-             gives it the localised title as accessible name. -->
+             gives it the localised title as accessible name, falling
+             back to the id (the loader's gate guarantees it) when no
+             title resolves — #1382's prescribed fallback, chosen over
+             the placeholder (the accname computation's LAST resort,
+             invisible until focus) so a screen-reader user hears the
+             configured identity, not a generic invite. -->
         <div v-if="composerEntry" class="quick-help-composer">
           <ChatComposer
             v-model="newMessage"
             input-id="welcome-composer-input"
             :placeholder="translate('chatbot.composerPlaceholder')"
-            :accessible-name="composerEntry.service"
+            :accessible-name="quickHelpCardTitle(composerEntry) || composerEntry.id"
             :tint="composerEntry.styles"
             :show-actions="true"
             :attach-title="translate('chatbot.composerAttachTitle')"
@@ -319,7 +324,21 @@
             @send="handleWelcomeSend"
           >
             <template #leading>
+              <!-- The broken card's face, the grid's doctrine: a broken
+                   entry is a VISIBLE failure, not one the user discovers
+                   at the first refused send. quickHelpCardBroken already
+                   splits the halves — the scope half waits for the
+                   hierarchy, the title half (a configuration fact) does
+                   not. -->
+              <AlertTriangle
+                v-if="composerBrokenFace"
+                class="composer-leading-mark config-error-icon"
+                :size="22"
+                aria-hidden="true"
+                data-testid="welcome-composer-error-icon"
+              />
               <Sparkles
+                v-else
                 class="composer-leading-mark"
                 :size="22"
                 aria-hidden="true"
@@ -327,6 +346,12 @@
               />
             </template>
           </ChatComposer>
+          <!-- The tile's own caption, below the composer: the diagnosis
+               the operator reads (the missing title first, then the
+               scope) — the same assembly the grid card shows. -->
+          <div v-if="composerBrokenFace" class="quick-help-error-caption" data-testid="welcome-composer-error-caption">
+            {{ quickHelpCardCaption(composerEntry) }}
+          </div>
         </div>
 
         <!-- The grid waits for the hierarchy: a button carries a scope,
@@ -928,6 +953,17 @@ export default {
     composerEntry() {
       return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
     },
+    // The broken composer entry's visible face. The gate is the same
+    // quickHelpCardBroken verdict the grid card renders, and it already
+    // splits its halves correctly: the SCOPE half reports nothing while
+    // the hierarchy is loading, and the TITLE half is a configuration
+    // fact the hierarchy has nothing to do with — it can break the face
+    // the moment the config lands. False when no composer entry is
+    // mounted at all.
+    composerBrokenFace() {
+      const entry = this.composerEntry;
+      return !!entry && this.quickHelpCardBroken(entry);
+    },
     // The grid keeps every entry whose placement is not the composer —
     // again, the explicit field, not a heuristic from category / action
     // presence. The seven product configs only ever set this on the
@@ -1441,13 +1477,17 @@ export default {
     },
 
     // The card's title, or null when it carries none. An EMPTY title is
-    // no title: the card renders a blank label, and the press gate
-    // refuses it (selectQuickHelpOption) — a silent dead tap. The
-    // mobile twin reads the same fact from the parsed button's own
-    // 'resolvedTitle'; the web's mapped button carries the resolved
-    // title in `service`.
+    // no title — and so is a WHITESPACE-ONLY one: it renders a blank
+    // label and reads as nothing, so the trim is what keeps the press
+    // gate, the caption assembly and the composer's accessible-name
+    // fallback honest. The mobile twin reads the same fact from the
+    // parsed button's own 'resolvedTitle'; the web's mapped button
+    // carries the resolved title in `service`.
     quickHelpCardTitle(button) {
-      return (button && button.service) || null;
+      // The String() coercion: resolveConfigText passes non-string
+      // config values through (a numeric title reaches this as a
+      // number), and this method is read on every tile's render.
+      return String((button && button.service) || '').trim() || null;
     },
 
     // The card's DISPLAY verdict — the twin of the press gate. The
@@ -2070,34 +2110,40 @@ export default {
           // tile path arms the same shape; a gate keyed on scope alone
           // dropped the prompt silently.
           Boolean(entry.hiddenPrompt));
+      // The same card the grid refuses as a dead tile refuses the
+      // composer send too: a BROKEN entry (no title, or a scope the
+      // tree cannot verify) used to fall through to the just-chat
+      // branch here and leave the typed question unfiltered while the
+      // same entry routed to the grid refused itself — a verdict that
+      // depended on placement (#1382). One verdict, both mounts. A
+      // scope the hierarchy cannot EN-name yet stays refused on the
+      // declaring path, as before (#1263). The entry null-guard stays:
+      // handleWelcomeSend is bound only inside the v-if="composerEntry"
+      // welcome mount today, but the scope machinery below dereferences
+      // the button without a null guard — a future second binding gets
+      // the just-chat degrade, not a TypeError.
+      if (
+        entry &&
+        (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
+      ) {
+        // The caption is computed HERE, on the refusing path only: it
+        // is the tile's own caption assembly (the missing title first,
+        // then the scope), and a healthy entry pays nothing for it.
+        const caption = this.quickHelpCardCaption(entry);
+        // A hierarchy still ON ITS WAY is not a configuration problem:
+        // the unavailable caption would point the operator at the
+        // wrong thing. The loading copy says what is happening — the
+        // CHAT's own copy, not the admin panel's (the toast is read by
+        // the person whose question was held, not by an operator).
+        notificationService.error(
+          caption ||
+            (this.serviceCategoriesStatus === 'loading'
+              ? this.translate('chatbot.loading', '')
+              : this.translate('chatbot.quickHelpScopeUnavailable', ''))
+        );
+        return;
+      }
       if (entryDeclaresScope) {
-        // The composer card renders BEFORE the hierarchy settles (the grid
-        // waits for it), so the same gate selectQuickHelpOption enforces
-        // has to run here too: a broken card, or a scope the tree cannot
-        // EN-name yet, installs nothing and sends nothing — the query
-        // would leave unfiltered while the chip promised the card's scope.
-        // The TITLE gate comes with it (#1263): an entry with no title
-        // installs a chip with a blank label and an empty accessible
-        // name, and the query leaves while the chip promises a scope
-        // nobody can read. The tile path refuses the same card.
-        if (this.quickHelpCardBroken(entry) || !this.quickHelpScopeIsNameable(entry.category)) {
-          // The caption is computed HERE, on the refusing path only: it
-          // is the tile's own caption assembly (the missing title first,
-          // then the scope), and a healthy entry pays nothing for it.
-          const caption = this.quickHelpCardCaption(entry);
-          // A hierarchy still ON ITS WAY is not a configuration problem:
-          // the unavailable caption would point the operator at the
-          // wrong thing. The loading copy says what is happening — the
-          // CHAT's own copy, not the admin panel's (the toast is read by
-          // the person whose question was held, not by an operator).
-          notificationService.error(
-            caption ||
-              (this.serviceCategoriesStatus === 'loading'
-                ? this.translate('chatbot.loading', '')
-                : this.translate('chatbot.quickHelpScopeUnavailable', ''))
-          );
-          return;
-        }
         // The entry's OWN declared labels and category ride along: the
         // entry is a Quick Help card like any tile, and hardcoding an
         // empty scope here sent its query unfiltered while the chip
@@ -4159,6 +4205,14 @@ export default {
 .quick-help-composer .chat-composer {
   --composer-width: var(--qh-composer-ratio);
   margin-inline: auto;
+}
+
+/* The broken entry's caption sits UNDER the bar, aligned WITH it: the
+   same ratio and the same centering — a full-width caption would hang
+   past the bar's left edge on both sides. */
+.quick-help-composer .quick-help-error-caption {
+  width: var(--qh-composer-ratio);
+  margin: var(--space-xs) auto 0;
 }
 
 /* The welcome composer's leading mark is the reference's sparkles, drawn

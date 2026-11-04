@@ -31,7 +31,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 
 ## Phase F: Token Forwarding to OPEA Services (Service-to-Service Authentication)
 
-**Scope:** This phase tests how the backend authenticates its calls to OPEA services, conditional on OPEA infrastructure availability. There are no `X-User-Id`/`X-User-Roles`/`X-Issuer` headers: the caller's Bearer token is forwarded on every OPEA call, and each downstream service validates it independently against Keycloak's JWKS. User identity is resolved server-side from the JWT — the auth middleware attaches the provisioned ArangoDB user document to `req.user` and the raw JWT claims to `req.claims`.
+**Scope:** This phase tests how the backend authenticates its calls to OPEA services, conditional on OPEA infrastructure availability. There are no `X-User-Id`/`X-User-Roles`/`X-Issuer` headers: the caller's Bearer token is forwarded on every OPEA call, and the chatqna service validates it against Keycloak's JWKS before answering (the internal retriever/reranker hops carry no auth of their own — they are only reachable through chatqna on the internal network). User identity is resolved server-side from the JWT — the auth middleware attaches the provisioned ArangoDB user document to `req.user` and the raw JWT claims to `req.claims`.
 
 **Important:** Token forwarding is verified behaviorally — an OPEA call without a Bearer token is rejected (HTTP 401 by chatqna), and a forwarded token is validated via Keycloak JWKS — plus authenticated endpoint responses (`GET /api/me`).
 
@@ -40,7 +40,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Keycloak authentication working (tested in Phase A)
 - JWT tokens successfully validated (Stories 1.3, 2.2)
-- Backend auth middleware resolves the user server-side (JIT provisioning keyed by the `{iss}#{sub}` identity; the resolved document's `_key` is the identity attached to the request)
+- Backend auth middleware resolves the user server-side (JIT provisioning keyed by the `{iss}#{sub}` identity; profile reads attach the resolved document — its `_key` — to the request, while chat query documents store the composite `{iss}#{sub}` as their `userId`)
 
 **Conditional Execution:**
 ```bash
@@ -52,9 +52,10 @@ fi
 # Check if OPEA services are responding
 # The chat endpoint (POST /api/queries -> the OPEA pipeline) is a reliable
 # indicator that the OPEA stack is up (success is HTTP 201; failures and
-# timeouts surface as 4xx/5xx/no output). The bound matches the backend's
-# own OPEA worker timeout — a cold vLLM can legitimately take a minute.
-if curl -sk --max-time 120 https://localhost/api/queries -X POST -H "Content-Type: application/json" \
+# timeouts surface as 4xx/5xx/no output). The bound sits above the backend's
+# 120 s OPEA worker timeout to leave margin for the rest of the request path —
+# a cold vLLM can legitimately take a minute.
+if curl -sk --max-time 180 https://localhost/api/queries -X POST -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"ping"}],"sessionId":"e2e-phase-f"}' \
   -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "201"; then
   echo "OPEA infrastructure detected - running Phase F tests"
@@ -108,7 +109,7 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 **Given** an authenticated request is made to an OPEA service endpoint
 **When** the backend calls an OPEA service via the worker thread (`opea-worker.js`)
 **Then** the caller's `Authorization: Bearer` header is forwarded on the OPEA HTTP request
-- **And** the downstream service validates that token independently against Keycloak's JWKS
+- **And** the chatqna service validates that token against Keycloak's JWKS before answering
 
 **Verification:**
 ```bash
@@ -116,44 +117,46 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
-# Make a chat query — it can only succeed if the backend forwarded the
-# Bearer token AND chatqna validated it against Keycloak JWKS
-# (POST /api/queries is the chat endpoint; the bound matches the backend's
-# OPEA worker timeout — a cold vLLM can legitimately take a minute)
-HTTP_CODE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Hello E2E test"}],"sessionId":"e2e-phase-f"}' \
-  -o /dev/null -w "%{http_code}")
-echo "Chat with forwarded token: HTTP ${HTTP_CODE}"
-[ "$HTTP_CODE" = "201" ] || { echo "FATAL: expected 201, got ${HTTP_CODE}"; exit 1; }
+# Requires DEPLOY_OPEA=1: both halves of this test call chatqna
+if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - run F.1/F.3 for the backend-side verification"
+else
+  # Make a chat query — it can only succeed if the backend forwarded the
+  # Bearer token AND chatqna validated it against Keycloak JWKS
+  # (POST /api/queries is the chat endpoint; the bound sits above the
+  # backend's 120 s OPEA worker timeout — a cold vLLM can take a minute)
+  HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
+    -H "Authorization: Bearer $USER_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Hello E2E test"}],"sessionId":"e2e-phase-f"}' \
+    -o /dev/null -w "%{http_code}")
+  echo "Chat with forwarded token: HTTP ${HTTP_CODE}"
+  [ "$HTTP_CODE" = "201" ] || { echo "FATAL: expected 201, got ${HTTP_CODE}"; exit 1; }
 
-# From inside the network, chatqna without a Bearer token is rejected —
-# the same auth gate the forwarded token just passed. Requires DEPLOY_OPEA=1.
-if docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
+  # From inside the network, chatqna without a Bearer token is rejected —
+  # the same auth gate the forwarded token just passed.
   # Pick the backend container explicitly: the name filter would otherwise
   # also match the chatqna container (its compose name contains
-  # "backend-server"). The backend runtime image ships wget (not curl).
+  # "backend-server"). The backend runtime image ships wget (not curl);
+  # the body travels via --body-data (--post-data is rejected with --method).
   BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v chatqna | head -1)
   [ -n "$BACKEND_CID" ] || { echo "FATAL: backend container not found"; exit 1; }
   HTTP_CODE=$(docker exec "$BACKEND_CID" \
     wget -q -O /dev/null --server-response --method=POST \
       --header="Content-Type: application/json" \
-      --post-data='{"messages":[{"role":"user","content":"ping"}]}' \
+      --body-data='{"messages":[{"role":"user","content":"ping"}]}' \
       "http://chatqna-xeon-backend-server:8888/v1/chatqna" 2>&1 \
     | awk '/HTTP/{print $2}' | tail -1) || true
   echo "Chatqna without token: HTTP ${HTTP_CODE}"
   [ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
-else
-  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - backend-side verification only"
 fi
 ```
 
-> **Note:** Full OPEA verification requires `DEPLOY_OPEA=1` in `.env`. Without OPEA services, the chat query fails — only the token-validation half of this test can run.
+> **Note:** Both halves of this test require `DEPLOY_OPEA=1` in `.env`. Without OPEA services the test skips — F.1/F.3 cover the backend-side verification.
 
 **Expected Behavior:**
-- The OPEA service receives the caller's `Authorization: Bearer` header unchanged
-- The forwarded token is validated independently by chatqna against Keycloak JWKS
+- chatqna receives the caller's `Authorization: Bearer` header unchanged
+- The forwarded token is validated by chatqna against Keycloak JWKS
 - An OPEA call without a Bearer token is rejected with HTTP 401 (`Missing or malformed Authorization header`)
 
 ---
@@ -210,9 +213,9 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 > **Note:** This test uses the user profile endpoint and backend log inspection.
 
 **Expected Behavior:**
-- The identity the backend attaches to every request is the ArangoDB `_key` of the provisioned document
+- Profile reads attach the resolved ArangoDB document — its `_key` is the identity those requests carry
 - Different users from different realms have unique ArangoDB `_key` values
-- No collision between user identities across realms
+- No collision between user identities across realms (chat query documents store the composite `{iss}#{sub}` as `userId`, never a realm-mingled identity)
 
 ---
 
@@ -225,19 +228,21 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 **Verification:**
 ```bash
 # No Authorization header at all
-curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
+HTTP_CODE=$(curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"No token"}]}' \
-  -o /dev/null -w "No token: HTTP %{http_code}\n"
-# Expected: HTTP 401
+  -o /dev/null -w "%{http_code}")
+echo "No token: HTTP ${HTTP_CODE}"
+[ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 
 # Token that fails JWKS validation
-curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
+HTTP_CODE=$(curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer not-a-real-token" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Bad token"}]}' \
-  -o /dev/null -w "Invalid token: HTTP %{http_code}\n"
-# Expected: HTTP 401
+  -o /dev/null -w "%{http_code}")
+echo "Invalid token: HTTP ${HTTP_CODE}"
+[ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 ```
 
 > **Note:** The backend middleware is the first auth gate — a token it rejects never reaches an OPEA service. Downstream validation of the tokens it does forward is covered by Test F.2.
@@ -263,7 +268,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query
-RESPONSE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
+RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Verify response structure"}],"sessionId":"e2e-phase-f"}')
@@ -299,6 +304,7 @@ echo "$RESPONSE" | jq -r '.response'
 # Token for e2e-test-user (created in Test F.3 — no realm roles assigned)
 NO_ROLES_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
+[ -n "$NO_ROLES_TOKEN" ] && [ "$NO_ROLES_TOKEN" != "null" ] || { echo "FATAL: ROPC login for e2e-test-user failed"; exit 1; }
 
 # Verify the token has no realm roles
 python3 -c "
@@ -315,13 +321,13 @@ print('realm roles:', (c.get('realm_access') or {}).get('roles'))
 HTTP_CODE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN" -o /dev/null -w "%{http_code}")
 echo "Profile with no roles: HTTP ${HTTP_CODE}"
-# Expected: HTTP 200
+[ "$HTTP_CODE" = "200" ] || { echo "FATAL: expected 200, got ${HTTP_CODE}"; exit 1; }
 
 # Role-gated endpoints deny from the JWT claims
 HTTP_CODE=$(curl -sk -X GET "https://localhost/api/admin/system-health" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN" -o /dev/null -w "%{http_code}")
 echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
-# Expected: HTTP 403 (Admin access required)
+[ "$HTTP_CODE" = "403" ] || { echo "FATAL: expected 403 (Admin access required), got ${HTTP_CODE}"; exit 1; }
 ```
 
 > **Note:** Roles are read fresh from the JWT (`req.claims.realm_access.roles`) on every request — never from the ArangoDB user document, which may be cached.
@@ -417,7 +423,7 @@ GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 
 ### Test F.8 — OPEA Compatibility: End-to-End Chat With Forwarded Token
 
-**Given** OPEA services validate the forwarded Bearer token against Keycloak's JWKS
+**Given** the chatqna service validates the forwarded Bearer token against Keycloak's JWKS
 **When** a full chat round-trip runs (backend -> chatqna -> retrieval -> LLM)
 **Then** the OPEA services function normally with the forwarded token
 **And** the retrieval metadata comes back intact (the response-shape checks themselves are Test F.5's)
@@ -429,7 +435,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query (full round-trip)
-RESPONSE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
+RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')
@@ -935,12 +941,24 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 # Test genie realm token (original) — /api/me returns the raw user document
 echo "=== Genie realm token ==="
 curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", \"N/A\")}')"
+  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+import sys,json
+d = json.load(sys.stdin)
+name = d.get('name')
+print(f'User: {name}')
+sys.exit(0 if name and d.get('_key') else 1)
+" || { echo "FATAL: genie-realm /api/me did not return a resolved user document"; exit 1; }
 
 # Test genie2 realm token
 echo "=== Genie2 realm token ==="
 curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", \"N/A\")}')"
+  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "
+import sys,json
+d = json.load(sys.stdin)
+name = d.get('name')
+print(f'User: {name}')
+sys.exit(0 if name and d.get('_key') else 1)
+" || { echo "FATAL: genie2-realm /api/me did not return a resolved user document"; exit 1; }
 ```
 
 **Expected**: Both return `HTTP: 200` with user profile data. Each user has a different identity in ArangoDB.

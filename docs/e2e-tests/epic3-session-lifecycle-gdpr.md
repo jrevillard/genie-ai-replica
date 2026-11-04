@@ -432,8 +432,8 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# A soft-deleted user is blocked by the auth middleware (403), so an HTTP 200
-# with the raw user document already proves the JIT reactivation ran
+# Provisioning reactivates the soft-deleted user during the request, so an
+# HTTP 200 with the raw user document already proves the JIT reactivation ran
 RESPONSE=$(curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
   -w "\n%{http_code}")
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }

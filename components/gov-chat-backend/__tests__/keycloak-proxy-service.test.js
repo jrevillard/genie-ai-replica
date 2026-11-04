@@ -45,9 +45,11 @@ function mockCursor(result) {
   return { next: jest.fn().mockResolvedValue(result) };
 }
 
-function setupDbForResolve(result = 'uuid-12345') {
-  const db = { query: jest.fn().mockResolvedValueOnce(mockCursor(result)) };
-  dbService.getConnection.mockResolvedValueOnce(db);
+function setupDbForResolve(result = { sub: 'uuid-12345', issSub: 'https://kc.example#sub-1' }) {
+  // deleteUser makes TWO queries (UUID resolve + erasure) on TWO getConnection
+  // calls — queue both explicitly so no queued value leaks in from another test.
+  const db = { query: jest.fn().mockResolvedValueOnce(mockCursor(result)).mockResolvedValue({}) };
+  dbService.getConnection.mockResolvedValueOnce(Promise.resolve(db)).mockResolvedValueOnce(Promise.resolve(db));
   return db;
 }
 
@@ -67,6 +69,15 @@ function mockOkResponse(status = 204) {
 describe('keycloak-proxy-service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // clearAllMocks keeps queued mockResolvedValueOnce entries — drop them so
+    // a failed test cannot leak its queued connections into the next one.
+    dbService.getConnection.mockReset();
+  });
+
+  afterEach(() => {
+    // The eviction/race tests seed the real provisioning cache — clear it
+    // even when an assertion fails mid-test, so nothing leaks to the next test.
+    require('../services/user-provisioning-service')._reset();
   });
 
   afterAll(() => {

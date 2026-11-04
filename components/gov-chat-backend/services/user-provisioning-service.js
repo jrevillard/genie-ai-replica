@@ -18,6 +18,14 @@ const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
 const _cache = new Map();
 const CACHE_TTL_MS = 60_000;
 
+/**
+ * Bumped on every cache eviction. A provision that started before an eviction
+ * (e.g. the GDPR erasure's) must not re-cache its pre-eviction result after
+ * the eviction — the epoch check at cache-write time discards it, so the next
+ * request re-provisions against the post-eviction state.
+ */
+let _cacheEpoch = 0;
+
 /** In-flight locks: iss_sub → Promise — prevents concurrent upserts for the same user */
 const _locks = new Map();
 
@@ -59,13 +67,22 @@ const userProvisioningService = {
     // than only in the migration script so existing deployments pick it up
     // without an ops step.
     const db = await dbService.getConnection('default');
-    await db.collection('users').ensureIndex({
-      type: 'persistent',
-      fields: ['erased_key'],
-      unique: false,
-      name: 'idx_users_erased_key'
-    });
-    // Set only after the index work succeeded — a failed initialize must be
+    try {
+      await db.collection('users').ensureIndex({
+        type: 'persistent',
+        fields: ['erased_key'],
+        unique: false,
+        name: 'idx_users_erased_key'
+      });
+    } catch (indexError) {
+      // A missing users collection (fresh, not-yet-migrated database) or an
+      // ArangoDB hiccup must not crash the boot. The tombstone protection is
+      // unaffected — only the lookup speed degrades until the next boot.
+      logger.warn('[UserProvisioning] Failed to ensure erased_key index — tombstone lookups scan until next boot', {
+        error: indexError.message
+      });
+    }
+    // Set only after initialization completed — a failed initialize must be
     // retryable, not permanently skipped by the flag.
     _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
@@ -113,6 +130,7 @@ const userProvisioningService = {
    */
   async _doProvision(decodedToken) {
     const issSub = decodedToken.iss_sub;
+    const epochAtStart = _cacheEpoch;
     const db = await dbService.getConnection('default');
 
     const now = new Date().toISOString();
@@ -139,7 +157,9 @@ const userProvisioningService = {
       logger.info(
         `[UserProvisioning] Blocked re-provisioning of erased user (tombstone ${erasedKey.substring(0, 12)})`
       );
-      _cache.set(issSub, { user: erasedUser, expiresAt: Date.now() + CACHE_TTL_MS });
+      if (_cacheEpoch === epochAtStart) {
+        _cache.set(issSub, { user: erasedUser, expiresAt: Date.now() + CACHE_TTL_MS });
+      }
       return erasedUser;
     }
 
@@ -235,8 +255,11 @@ const userProvisioningService = {
 
     const user = result.new;
 
-    // Store in cache
-    _cache.set(issSub, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    // Store in cache — skipped if an eviction happened while this provision
+    // was in flight (the profile may predate the eviction, e.g. an erasure)
+    if (_cacheEpoch === epochAtStart) {
+      _cache.set(issSub, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    }
 
     // Log differentiated events
     if (!isReactivation && !result.old) {
@@ -257,6 +280,7 @@ const userProvisioningService = {
    */
   invalidateCache(issSub) {
     _cache.delete(issSub);
+    _cacheEpoch++;
   },
 
   /**

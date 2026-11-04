@@ -55,6 +55,18 @@ afterEach(() => {
 
 describe('UserProvisioningService', () => {
   describe('initialize', () => {
+    it('should not crash when the index cannot be ensured (fresh, unmigrated database)', async () => {
+      mockDb.collection = jest.fn().mockReturnValue({
+        ensureIndex: jest.fn().mockRejectedValue(new Error('collection users not found'))
+      });
+      await expect(userProvisioningService.initialize()).resolves.not.toThrow();
+      const { logger } = require('../../shared-lib');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to ensure erased_key index'),
+        expect.any(Object)
+      );
+    });
+
     it('should set initialized flag and log completion', async () => {
       await userProvisioningService.initialize();
       const { logger } = require('../../shared-lib');
@@ -69,9 +81,15 @@ describe('UserProvisioningService', () => {
     it('should return cached user when cache is valid', async () => {
       const cachedUser = { _key: 'user-1', email: 'test@test.com' };
 
+      // Call 1: full provision chain (tombstone → legacy → deleted check → UPSERT).
+      // Default: empty cursors — a second call that misses the cache fails
+      // loudly instead of reading a garbage truthy lookup.
       mockDb.query
-        .mockResolvedValueOnce(createMockCursor([])) // tombstone lookup — miss
-        .mockResolvedValue(createMockCursor([{ new: cachedUser, old: null }])); // rest of provision
+        .mockResolvedValue(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: cachedUser, old: null }])); // upsert
 
       const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
       const result1 = await userProvisioningService.provisionUser(token);
@@ -82,6 +100,44 @@ describe('UserProvisioningService', () => {
       const result2 = await userProvisioningService.provisionUser(token);
       expect(result2._key).toBe('user-1');
       expect(mockDb.query.mock.calls.length).toBe(callsBefore);
+    });
+  });
+
+  describe('provisionUser - cache epoch', () => {
+    it('must not cache a provision that spanned a cache eviction', async () => {
+      const staleUser = { _key: 'user-stale', email: 'test@test.com' };
+      const freshUser = { _key: 'user-fresh', email: 'test@test.com' };
+
+      // The tombstone lookup's cursor triggers an eviction (as the GDPR erasure
+      // would) WHILE the provision is between its queries.
+      const tombstoneCursor = {
+        next: jest.fn(async () => {
+          userProvisioningService.invalidateCache('iss/sub-1');
+          return undefined;
+        })
+      };
+      mockDb.query
+        .mockResolvedValueOnce(tombstoneCursor) // tombstone lookup — miss, evicts mid-flight
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: staleUser, old: null }])); // upsert
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'test@test.com' };
+      const result1 = await userProvisioningService.provisionUser(token);
+      expect(result1._key).toBe('user-stale');
+
+      // The stale result must NOT have been cached: the next provision must
+      // round-trip the database again.
+      const freshDbQuery = jest
+        .fn()
+        .mockResolvedValueOnce(createMockCursor([])) // tombstone — miss
+        .mockResolvedValueOnce(createMockCursor([])) // legacy — miss
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check — miss
+        .mockResolvedValueOnce(createMockCursor([{ new: freshUser, old: null }]));
+      const { dbService } = require('../../shared-lib');
+      dbService.getConnection.mockResolvedValueOnce(Promise.resolve({ query: freshDbQuery }));
+      const result2 = await userProvisioningService.provisionUser(token);
+      expect(result2._key).toBe('user-fresh');
     });
   });
 

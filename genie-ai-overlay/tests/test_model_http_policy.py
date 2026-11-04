@@ -36,6 +36,7 @@ _ENV_KEYS = (
     "VLLM_TIMEOUT",
     "MODEL_LLM_MAX_RETRIES",
     "MODEL_EMBEDDING_TIMEOUT_SECONDS",
+    "MODEL_HUB_EMBED_TIMEOUT_SECONDS",
     "MODEL_SUMMARIZER_TIMEOUT_SECONDS",
     "MODEL_RERANK_TIMEOUT_SECONDS",
     "MODEL_AUTH_TIMEOUT_SECONDS",
@@ -64,6 +65,7 @@ def _reload_with(**env):
             "llm_timeout": m.LLM_TIMEOUT_SECONDS,
             "llm_retries": m.LLM_MAX_RETRIES,
             "tei_timeout": m.EMBEDDING_TIMEOUT_SECONDS,
+            "hub_embed_timeout": m.HUB_EMBED_TIMEOUT_SECONDS,
             "rerank_timeout": m.RERANK_TIMEOUT_SECONDS,
             "control_plane_timeout": m.CONTROL_PLANE_TIMEOUT_SECONDS,
             "probe_timeout": m.PROBE_TIMEOUT_SECONDS,
@@ -442,6 +444,18 @@ class TestDefaults:
         # unbounded"; openai-python's DEFAULT_TIMEOUT of 600 means it was not.
         assert _reload_with()["tei_timeout"] == 600.0
 
+    def test_hub_embed_timeout_default(self):
+        """600, matching the sibling embed budget.
+
+        Unlike the OpenAI sibling above, this client WAS unbounded — the hub
+        clients are constructed with timeout=None and requests waits forever
+        on a wedged read (the #1381 incident). The default is therefore a new
+        ceiling like the others here, sized to clear a legitimately queued
+        call on the shared GPU gateway rather than to restate a library
+        default.
+        """
+        assert _reload_with()["hub_embed_timeout"] == 600.0
+
     def test_control_plane_timeout_default(self):
         assert _reload_with()["control_plane_timeout"] == 30.0
 
@@ -489,6 +503,10 @@ class TestInvalidValues:
 
     def test_zero_rejected(self):
         assert _reload_with(MODEL_EMBEDDING_TIMEOUT_SECONDS="0")["tei_timeout"] == 600.0
+
+    def test_hub_embed_zero_and_garbage_rejected(self):
+        assert _reload_with(MODEL_HUB_EMBED_TIMEOUT_SECONDS="0")["hub_embed_timeout"] == 600.0
+        assert _reload_with(MODEL_HUB_EMBED_TIMEOUT_SECONDS="nonsense")["hub_embed_timeout"] == 600.0
 
     def test_negative_rejected(self):
         assert _reload_with(MODEL_LLM_MAX_RETRIES="-3")["llm_retries"] == 2
@@ -1074,6 +1092,92 @@ class TestCallSitesConsumeThePolicy:
                 "remote-GPU path fails at construction."
             )
 
+    def test_the_retriever_tei_branch_is_hardened_at_the_client_underneath(self):
+        """#1381: the TEI branch bounds the hub clients post-construction.
+
+        The constructor must stay kwarg-free (the pydantic field set of the
+        pinned langchain-huggingface decides what it accepts — a kwarg it does
+        not declare 500s every remote-GPU retrieval at construction). The
+        deadline lands one level down instead: ``harden_hub_embed_clients``
+        sets the ``timeout`` attribute on the ``huggingface_hub`` client
+        objects, which both clients re-read per request. This asserts the
+        wiring exists and targets the same variable the constructor produced —
+        a harden call bound to a different name would bound nothing.
+        """
+        source = (OVERLAY_ROOT / "retriever" / "genieai_retriever_arangodb.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        # The TEI branch assigns the constructed client to a local variable.
+        ctor_targets = {
+            assign.targets[0].id
+            for assign in ast.walk(tree)
+            if isinstance(assign, ast.Assign)
+            and isinstance(assign.value, ast.Call)
+            and isinstance(assign.value.func, ast.Name)
+            and assign.value.func.id == "HuggingFaceEndpointEmbeddings"
+            and assign.targets
+            and isinstance(assign.targets[0], ast.Name)
+        }
+        assert ctor_targets, "the TEI-branch constructor moved — re-check the hardening wiring"
+        harden_targets = {
+            call.args[0].id
+            for call in ast.walk(tree)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "harden_hub_embed_clients"
+            and call.args
+            and isinstance(call.args[0], ast.Name)
+        }
+        assert harden_targets, (
+            "the retriever no longer bounds its TEI-branch hub embed clients — "
+            "the #1381 wedge (an unbounded /embed read holding the query thread) "
+            "regressed"
+        )
+        assert ctor_targets & harden_targets, (
+            f"harden_hub_embed_clients is called on {sorted(harden_targets)} but the "
+            f"constructed client lands in {sorted(ctor_targets)} — the deadline is "
+            "not reaching the object the TEI branch builds"
+        )
+
+    def test_the_dataprep_tei_embed_clients_are_hardened(self):
+        """#1381: dataprep bounds the hub clients right after the parent init.
+
+        comps' ``_initialize_embeddings`` runs inside ``super().__init__()``,
+        so the subclass's own ``__init__`` is the first in-repo code that can
+        reach ``self.embeddings``. The assertion is positional: the harden
+        call must sit in ``__init__`` — a call in a lazy path after
+        construction would leave the labeling/graph-write embed calls of the
+        FIRST ingest unbounded.
+        """
+        source = (OVERLAY_ROOT / "dataprep" / "genieai_dataprep_arangodb.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        init = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "GenieArangoDataprep":
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+                        init = item
+        assert init is not None, "GenieArangoDataprep.__init__ not found — the class moved"
+        hardens = [
+            stmt
+            for stmt in ast.walk(init)
+            if isinstance(stmt, ast.Call)
+            and isinstance(stmt.func, ast.Name)
+            and stmt.func.id == "harden_hub_embed_clients"
+        ]
+        assert hardens, (
+            "GenieArangoDataprep.__init__ no longer bounds the hub embed clients — "
+            "the #1381 wedge (an unbounded /embed read holding an ingest thread "
+            "and a drain lane) regressed"
+        )
+        # And the call targets self.embeddings — the object the parent built.
+        for call in hardens:
+            target = call.args[0]
+            assert isinstance(target, ast.Attribute) and target.attr == "embeddings", (
+                f"harden call must target self.embeddings (the parent-built client), not {ast.dump(target)}"
+            )
+        # And the import exists — the wiring is dead without it.
+        assert "harden_hub_embed_clients" in source
+
     def test_dataprep_keycloak_refresh_is_bounded(self):
         """An unbounded refresh wedges every ingestion-log writer behind it."""
         source = OVERLAY_ROOT / "dataprep" / "keycloak_service_account.py"
@@ -1334,3 +1438,63 @@ class TestCallSitesConsumeThePolicy:
         # are scanned for NEW sites and may legitimately build none yet.
         if rel in ("reranker/genieai_tei_reranker.py", "dataprep/keycloak_service_account.py"):
             assert checked, f"{rel} builds no policy ClientTimeout — the guard is covering nothing"
+
+
+class TestHubEmbedClientHardening:
+    """The harden helper itself: what it bounds, and what it must leave alone.
+
+    #1381 proved the failure mode is not "the client is slow" — it is
+    "requests with timeout=None waits forever on a wedged read". The helper
+    is a few lines of attribute assignment, but each has a wrong direction a
+    test has to pin: writing over an existing timeout would let this module
+    silently override an explicit operator setting; claiming to bound a
+    client that has no timeout attribute (the local BGE model) would make the
+    caller's log line lie; crashing on None would break the dataprep parent
+    stub and any lazy-init path.
+    """
+
+    class _Client:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+    class _HubEmbeddings:
+        def __init__(self, sync=None, async_=None):
+            self.client = sync
+            self.async_client = async_
+
+    def test_both_hub_clients_get_the_deadline(self):
+        emb = self._HubEmbeddings(self._Client(), self._Client())
+        hardened = policy.harden_hub_embed_clients(emb)
+        assert hardened == ["client", "async_client"]
+        assert emb.client.timeout == policy.HUB_EMBED_TIMEOUT_SECONDS
+        assert emb.async_client.timeout == policy.HUB_EMBED_TIMEOUT_SECONDS
+
+    def test_a_preconfigured_timeout_is_not_overwritten(self):
+        emb = self._HubEmbeddings(self._Client(timeout=42.0), self._Client())
+        hardened = policy.harden_hub_embed_clients(emb)
+        assert hardened == ["async_client"]
+        assert emb.client.timeout == 42.0
+
+    def test_a_client_missing_the_timeout_attr_is_skipped(self):
+        """A non-hub embeddings object must come back with NO hardened names.
+
+        The local BGE model class has no hub clients at all — and the caller
+        logs exactly what the helper returned, so an over-claim here is a log
+        line asserting a bound that does not exist.
+        """
+
+        class _NoTimeoutAttr:
+            pass
+
+        emb = self._HubEmbeddings(_NoTimeoutAttr(), _NoTimeoutAttr())
+        assert policy.harden_hub_embed_clients(emb) == []
+
+    def test_none_embeddings_is_safe(self):
+        """The dataprep parent stub (and a lazy-init path) can leave None."""
+        assert policy.harden_hub_embed_clients(None) == []
+
+    def test_explicit_timeout_argument_wins_over_the_constant(self):
+        emb = self._HubEmbeddings(self._Client(), self._Client())
+        policy.harden_hub_embed_clients(emb, timeout=30.0)
+        assert emb.client.timeout == 30.0
+        assert emb.async_client.timeout == 30.0

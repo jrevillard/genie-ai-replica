@@ -359,8 +359,8 @@ HUGGING_FACE_HUB_TOKEN=
 # and the vendored comps graph transformer, which has no budget of ours to set. Two clients are deliberately left unbounded: the
 # retriever's HuggingFaceEndpointEmbeddings (a pydantic model whose accepted
 # fields depend on the pinned langchain-huggingface, so passing a timeout it may
-# not declare fails at construction rather than at call time — and it is the
-# REMOTE-TEI branch, so a remote-GPU deployment is the one that has it) and its
+# not declare fails at construction rather than at call time — bounded one level
+# down instead: see MODEL_HUB_EMBED_TIMEOUT_SECONDS below) and its
 # HuggingFaceBgeEmbeddings (in-process, no HTTP hop to bound).
 # Raise these only if your model is genuinely slower than the default allows —
 # on a shared GPU they are what stops a contended endpoint from stalling an
@@ -411,9 +411,9 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   OpenAI-API branch ONLY. The TEI branch
 #                                 #   (TEI_EMBEDDING_ENDPOINT and HF_TOKEN)
 #                                 #   uses HuggingFaceEndpointEmbeddings and is
-#                                 #   deliberately unbudgeted — and that branch
-#                                 #   is the REMOTE-GPU topology, so on a remote
-#                                 #   deployment this knob does not reach it.
+#                                 #   bounded by MODEL_HUB_EMBED_TIMEOUT_
+#                                 #   SECONDS below — since #1381 that branch
+#                                 #   is no longer unbudgeted.
 #                                 #   HuggingFaceBgeEmbeddings is in-process.
 #                                 #   This call was UNBOUNDED before the knob
 #                                 #   existed: langchain-openai forwards
@@ -428,6 +428,28 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   hybrid/BM25 leg, so too low a value yields
 #                                 #   a silently EMPTY retrieval, not a visible
 #                                 #   error.
+# MODEL_HUB_EMBED_TIMEOUT_SECONDS=600 # The huggingface_hub clients under
+#                                 #   HuggingFaceEndpointEmbeddings — the TEI
+#                                 #   branch dataprep (ingest embeds) AND the
+#                                 #   retriever (query embeds) select when
+#                                 #   TEI_EMBEDDING_ENDPOINT and a Hub token are
+#                                 #   set. Bounded post-construction (the
+#                                 #   langchain class cannot take a timeout
+#                                 #   kwarg — its pydantic field set moves with
+#                                 #   the pin), because both hub clients re-read
+#                                 #   their timeout attribute per request. Was
+#                                 #   UNBOUNDED until #1381: a wedged /embed
+#                                 #   connection behind the shared GPU gateway
+#                                 #   accepts TCP but never answers, and one
+#                                 #   such call inside the graph write silently
+#                                 #   held an ingest thread (and a drain lane)
+#                                 #   for 30+ minutes with no log line. 600
+#                                 #   clears a legitimately queued call on the
+#                                 #   shared endpoint. Residual: the async
+#                                 #   client's CONNECT phase stays unbounded
+#                                 #   (aiohttp ClientTimeout(total=...) drops
+#                                 #   it); the sync client dataprep's ingest
+#                                 #   threads run bounds both.
 # MODEL_SUMMARIZER_TIMEOUT_SECONDS=600 # The retriever's document summarizer.
 #                                 #   Deliberately NOT tightened to the LLM
 #                                 #   budget: its except clause re-raises

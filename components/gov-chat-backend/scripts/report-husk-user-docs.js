@@ -28,7 +28,9 @@
  *
  * Environment variables (from the shell, or a .env at the repo root):
  *   ARANGO_URL        (default http://localhost:8529)
- *   ARANGO_DB         (default _system)
+ *   ARANGO_DB         (default genie-ai — the same default as the app and the
+ *                     other standalone scripts; k8s deployments that use the
+ *                     _system database must set it explicitly)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
  *   ARANGO_COLLECTION (default users)
@@ -84,13 +86,21 @@ function findDivergences(husks) {
 
 const IDENTITY_FILTERS_AQL = HUSK_IDENTITY_FIELDS.map((field) => `FILTER u.${field} == null`).join('\n');
 
+// The full signature as an AQL FILTER fragment, shared by the matcher and the
+// removal query — the removal re-asserts the signature so a document that was
+// soft-deleted between the SELECT and the REMOVE (or any other concurrent
+// write that disqualifies it) is not destroyed by its _key alone.
+const HUSK_SIGNATURE_FILTERS_AQL = [
+  IDENTITY_FILTERS_AQL,
+  'FILTER u.deleted == null || u.deleted == false',
+  `FILTER LENGTH(MINUS(ATTRIBUTES(u, true), [${HUSK_ALLOWED_FIELDS.map((field) => `'${field}'`).join(', ')}])) == 0`
+].join('\n  ');
+
 // ATTRIBUTES(u, true) strips the internal attributes (_key/_id/_rev); what
 // remains must be a subset of the allowed fields.
 const HUSK_MATCHER_AQL = `
 FOR u IN @@collection
-${IDENTITY_FILTERS_AQL}
-  FILTER u.deleted == null || u.deleted == false
-  FILTER LENGTH(MINUS(ATTRIBUTES(u, true), [${HUSK_ALLOWED_FIELDS.map((field) => `'${field}'`).join(', ')}])) == 0
+  ${HUSK_SIGNATURE_FILTERS_AQL}
   RETURN u
 `;
 
@@ -132,27 +142,30 @@ async function main() {
 
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || '_system',
+    databaseName: process.env.ARANGO_DB || 'genie-ai',
     auth: {
       username: process.env.ARANGO_USER || 'root',
       password: process.env.ARANGO_PASSWORD || ''
     }
   });
   const collection = db.collection(COLLECTION);
-  const total = ((await collection.count()) || {}).count || 0;
+  const total = (await collection.count()).count || 0;
 
   const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
   const husks = await huskCursor.all();
 
   // Defense against AQL/predicate divergence — abort before any destructive
-  // step if the two disagree about what a husk is.
+  // step if the two disagree about what a husk is. Only _key and attribute
+  // NAMES are printed: the mismatch documents are by definition not husks and
+  // can carry real PII, which must not reach the log store via stderr.
   const mismatches = findDivergences(husks);
   if (mismatches.length > 0) {
     console.error(
-      `ABORT: ${mismatches.length} AQL hits failed the JS husk predicate — ` +
-        'signature divergence, nothing was deleted:',
-      JSON.stringify(mismatches, null, 2)
+      `ABORT: ${mismatches.length} AQL hits failed the JS husk predicate — signature divergence, nothing was deleted:`
     );
+    for (const doc of mismatches) {
+      console.error(`  mismatched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    }
     process.exit(1);
   }
 
@@ -184,12 +197,16 @@ async function main() {
   if (husks.length > SAMPLE_LIMIT) {
     console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
   }
-  console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
-  for (const doc of lookalikes) {
-    console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
-  }
-  if (lookalikeCount > lookalikes.length) {
-    console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
+  if (doDelete) {
+    console.log('Legacy lookalikes: not measured in --delete mode (reviewed in the prior dry run).');
+  } else {
+    console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
+    for (const doc of lookalikes) {
+      console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
+    }
+    if (lookalikeCount > lookalikes.length) {
+      console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
+    }
   }
 
   if (!doDelete) {
@@ -198,13 +215,22 @@ async function main() {
   }
 
   // Destructive path — reached only with --delete --yes, after the predicate
-  // cross-check above has passed for every match. One bulk statement, so a
-  // mid-way failure cannot leave an ambiguous partial state.
+  // cross-check above has passed for every match. One bulk statement that
+  // RE-ASSERTS the husk signature, so a document concurrently disqualified
+  // between the SELECT and the REMOVE (e.g. a GDPR soft-delete writing
+  // deleted:true) is left alone; a mid-way failure cannot leave an ambiguous
+  // partial state.
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  await db.query('FOR k IN @keys REMOVE { _key: k } IN @@collection', {
-    '@collection': COLLECTION,
-    keys: husks.map((doc) => doc._key)
-  });
+  await db.query(
+    `FOR u IN @@collection
+  FILTER u._key IN @keys
+  ${HUSK_SIGNATURE_FILTERS_AQL}
+  REMOVE u IN @@collection`,
+    {
+      '@collection': COLLECTION,
+      keys: husks.map((doc) => doc._key)
+    }
+  );
   for (const doc of husks) {
     console.log(`  removed _key=${doc._key}`);
   }

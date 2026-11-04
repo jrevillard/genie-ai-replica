@@ -109,6 +109,8 @@ module.exports = (analyticsService) => {
      *                         type: integer
      *                       avgTime:
      *                         type: number
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -173,6 +175,8 @@ module.exports = (analyticsService) => {
      *                   type: number
      *       400:
      *         description: Bad request
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -234,6 +238,8 @@ module.exports = (analyticsService) => {
      *                     type: number
      *       400:
      *         description: Bad request
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -267,13 +273,20 @@ module.exports = (analyticsService) => {
      *             schema:
      *               $ref: '#/components/schemas/EventCreated'
      *       400:
-     *         description: Missing required fields
+     *         description: Missing eventType, or the legacy `data` key (refused; send the payload under `eventData`)
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token, or an authenticated token with no user identifier.
      *       500:
      *         description: Server error
      */
     router.post('/events', async (req, res) => {
       try {
-        const { eventType, eventData } = req.body;
+        // The body parsers leave req.body undefined when none matched the
+        // request's Content-Type (strict JSON mode rejects scalar bodies at
+        // the parser), so the handler always inspects one object-shaped
+        // binding.
+        const body = req.body ?? {};
+        const { eventType, eventData } = body;
 
         if (!eventType) {
           logger.warn('Missing required field: eventType');
@@ -283,6 +296,15 @@ module.exports = (analyticsService) => {
         const userId = req.user?.iss_sub;
         if (!userId) {
           return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+        }
+
+        // The stored document spells the payload `data` (Event schema) but
+        // the wire wants `eventData` (EventRequest): a body that still
+        // arrives under the legacy `data` key is refused with 400 instead
+        // of being silently stored as an empty payload.
+        if ('data' in body) {
+          logger.warn("Rejected legacy 'data' payload key on POST /api/analytics/events");
+          return res.status(400).json({ message: "Unknown field 'data': send the payload under 'eventData'." });
         }
 
         logger.info(`Recording event of type ${eventType} for user ${userId}`);
@@ -325,6 +347,8 @@ module.exports = (analyticsService) => {
      *               type: array
      *               items:
      *                 $ref: '#/components/schemas/Analytics'
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -381,6 +405,8 @@ module.exports = (analyticsService) => {
      *               type: array
      *               items:
      *                 $ref: '#/components/schemas/Event'
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -459,6 +485,8 @@ module.exports = (analyticsService) => {
      *                         type: string
      *                       value:
      *                         type: number
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */
@@ -518,6 +546,8 @@ module.exports = (analyticsService) => {
      *                           type: string
      *                         y:
      *                           type: number
+     *       401:
+     *         description: Unauthorized - Invalid or missing authentication token.
      *       500:
      *         description: Server error
      */

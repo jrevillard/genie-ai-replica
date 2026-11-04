@@ -135,7 +135,7 @@ describe('UserProvisioningService', () => {
         if (call === 1) {
           // The revalidation read must ignore GDPR-erased documents: they
           // carry deleted:true AND a nulled iss_sub, and re-provisioning one
-          // would re-materialize the erasure (#1432)
+          // would re-materialize the erasure
           expect(query.strings.join(' ')).toContain('iss_sub != null');
         }
         if (call === 1) {
@@ -191,9 +191,64 @@ describe('UserProvisioningService', () => {
       mockProvisionCycle('Old Name');
       const result1 = await userProvisioningService.provisionUser(baseToken);
 
-      mockDb.query.mockImplementation(() => new Promise(() => {})); // never resolves
-      const result2 = await userProvisioningService.provisionUser(baseToken);
-      expect(result2).toBe(result1); // fail-open after the deadline, not a hang
+      // Never-resolving read: the revalidation deadline must fail open
+      // instead of hanging the request
+      mockDb.query.mockImplementation(() => new Promise(() => {}));
+      jest.useFakeTimers();
+      try {
+        const pending = userProvisioningService.provisionUser(baseToken);
+        await jest.advanceTimersByTimeAsync(3000); // REVALIDATION_TIMEOUT_MS
+        const result2 = await pending;
+        expect(result2).toBe(result1); // fail-open after the deadline, not a hang
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should not crash on a read that rejects after the deadline has already failed open', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      // Read stalls past the deadline, then errors: the abandoned chain must
+      // be handled, or the process-level rejection handler takes the backend down
+      mockDb.query.mockImplementation(
+        () =>
+          new Promise((resolve, reject) => {
+            setTimeout(() => reject(new Error('socket reset')), 3500);
+          })
+      );
+      jest.useFakeTimers();
+      const unhandled = jest.fn();
+      process.on('unhandledRejection', unhandled);
+      try {
+        const pending = userProvisioningService.provisionUser(baseToken);
+        await jest.advanceTimersByTimeAsync(3000); // deadline wins the race
+        const result2 = await pending;
+        expect(result2).toBe(result1);
+        await jest.advanceTimersByTimeAsync(1000); // the abandoned read rejects here
+        await jest.advanceTimersByTimeAsync(0); // drain the queue so the rejection propagates
+        expect(unhandled).not.toHaveBeenCalled(); // the chain was handled, not leaked
+      } finally {
+        process.off('unhandledRejection', unhandled);
+        jest.useRealTimers();
+      }
+    });
+
+    it('should serve the cached copy when the connection acquisition itself hangs', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      const { dbService } = require('../../shared-lib');
+      dbService.getConnection.mockImplementation(() => new Promise(() => {}));
+      jest.useFakeTimers();
+      try {
+        const pending = userProvisioningService.provisionUser(baseToken);
+        await jest.advanceTimersByTimeAsync(3000);
+        const result2 = await pending;
+        expect(result2).toBe(result1);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should warn about revalidation failures at most once per TTL window', async () => {

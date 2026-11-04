@@ -76,7 +76,7 @@ function profileMatches(cachedUser, decodedToken) {
   );
 }
 
-/** Bound on how long the per-request revalidation read may delay a cache hit. */
+/** Bound on how long the per-request revalidation may delay a cache hit. */
 const REVALIDATION_TIMEOUT_MS = 3000;
 
 /**
@@ -84,33 +84,36 @@ const REVALIDATION_TIMEOUT_MS = 3000;
  * out-of-band. Looked up by the cached document's _key (which survives a
  * GDPR erasure) but matches only in-place soft-deletes: an erasure nulls
  * iss_sub, and re-provisioning an erased identity would re-materialize
- * the erasure, so the cached copy is served for it (see issue #1432).
- * On a failure or a read that outlives REVALIDATION_TIMEOUT_MS, the
- * cached copy is served: a cache hit previously required no DB access
+ * the erasure, so the cached copy is served for it. On a failure — or a
+ * revalidation (connection + query) that outlives REVALIDATION_TIMEOUT_MS —
+ * the cached copy is served: a cache hit previously required no DB access
  * at all, and the entry expires with the TTL anyway.
  */
 async function isSoftDeleted(cachedUser) {
+  let timer;
+  // Distinct from the boolean outcomes so a deadline win is never confused
+  // with a "not deleted" answer
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve('deadline'), REVALIDATION_TIMEOUT_MS);
+  });
   try {
-    const db = await getDb();
-    const read = db.query(aql`
-      FOR u IN users
-        FILTER u._key == ${cachedUser._key} AND u.deleted == true AND u.iss_sub != null
-        LIMIT 1
-        RETURN u._key
-    `);
-    let timer;
-    const deadline = new Promise((resolve) => {
-      timer = setTimeout(() => resolve(null), REVALIDATION_TIMEOUT_MS);
-    });
-    const nextResult = await Promise.race([read.then((cursor) => cursor.next()), deadline]);
-    clearTimeout(timer);
-    if (nextResult === null) {
-      // Read lost the race or found no deleted document — serve the cached
-      // copy. On a lost race the read keeps running; drop its eventual result.
-      read.catch(() => {});
+    const work = (async () => {
+      const db = await getDb();
+      const cursor = await db.query(aql`
+        FOR u IN users
+          FILTER u._key == ${cachedUser._key} AND u.deleted == true AND u.iss_sub != null
+          LIMIT 1
+          RETURN u._key
+      `);
+      return (await cursor.next()) !== null;
+    })();
+    const outcome = await Promise.race([work, deadline]);
+    if (outcome === 'deadline') {
+      // The work keeps running in the background — drop its eventual result
+      work.catch(() => {});
       return false;
     }
-    return true;
+    return outcome;
   } catch (err) {
     // Fail open (bounded by the TTL) — but warn at most once per TTL so a
     // DB outage does not put a warn line on every authenticated request
@@ -119,6 +122,8 @@ async function isSoftDeleted(cachedUser) {
       logger.warn(`[UserProvisioning] Soft-delete revalidation failed, serving cached copies: ${err.message}`);
     }
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -173,6 +173,13 @@ describe('ci shell gate: extraction', () => {
       expect(blocks.map((b) => b.text)).toEqual(['echo hello']);
     });
 
+    test('a multi-line scalar anchor body folds like a plain scalar', () => {
+      const content = ['.common: &common', '  echo one', '  echo two', '', 'job:', '  script: *common'].join('\n');
+      const { blocks, errors } = extractCiShellBlocks(content);
+      expect(errors).toEqual([]);
+      expect(blocks.map((b) => b.text)).toEqual(['echo one echo two']);
+    });
+
     test('a mapping anchor body aliased into a script is a loud error', () => {
       const content = ['.tmpl: &tmpl', '  image: alpine', '', 'job:', '  script: *tmpl'].join('\n');
       const { errors } = extractCiShellBlocks(content);
@@ -603,5 +610,17 @@ describe('ci shell gate: the real .gitlab-ci.yml', () => {
 
   test('every extracted block passes bash -n', () => {
     expect(checkShellSyntax(blocks)).toEqual([]);
+  });
+
+  test('a stray done injected into the real file turns the gate red', () => {
+    // The !674 class, against the real file: the gate must catch a broken
+    // script item in .gitlab-ci.yml itself, not only in fixtures.
+    const content = fs.readFileSync(CI_FILE, 'utf-8');
+    const mutated = content.replace(/^(\s*)script:$/m, '$1script:\n$1  - done\n');
+    expect(mutated).not.toBe(content);
+    const mutatedBlocks = extractCiShellBlocks(mutated).blocks;
+    const failures = checkShellSyntax(mutatedBlocks);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].message).toMatch(/syntax error/);
   });
 });

@@ -14,6 +14,11 @@
 //
 // A missing bash binary is a thrown error, never an empty result: a gate
 // that cannot run must not read as green.
+//
+// The reported file line is exact for literal blocks and plain items; for
+// a folded scalar the rendered text has fewer lines than the source, so
+// the hint points at the block's start line rather than at the exact
+// source line.
 
 const childProcess = require('child_process');
 

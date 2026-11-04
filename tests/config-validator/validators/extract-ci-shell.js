@@ -101,6 +101,22 @@ const unquoteYaml = (text) => {
   return text;
 };
 
+// Fold a plain scalar body the way YAML does: a break between non-blank
+// lines becomes a space, a blank line becomes a newline.
+const foldPlainBody = (bodyLines) => {
+  let out = '';
+  let pendingBlanks = 0;
+  for (const line of bodyLines) {
+    if (!line.trim()) {
+      pendingBlanks += 1;
+      continue;
+    }
+    out += (pendingBlanks > 0 ? '\n'.repeat(pendingBlanks) : out ? ' ' : '') + line.trim();
+    pendingBlanks = 0;
+  }
+  return out;
+};
+
 // Split a flow sequence body into its entries (`[.a, .b]` → ['.a', '.b']);
 // a plain value is a one-entry list.
 const splitFlowList = (value) => {
@@ -261,12 +277,14 @@ function extractCiShellBlocks(content) {
           message: `anchor *${name} has a mapping body — not shell it can be aliased into`
         });
       } else {
+        // A scalar body is a plain multi-line scalar: YAML folds its
+        // breaks into spaces.
         const { body } = collectBlockBody(k, 0);
         blocks.push({
           owner: aliaserOwner,
           key: aliaserKey,
           startLine: k + 1,
-          text: renderScalar('|', body)
+          text: foldPlainBody(body)
         });
       }
     } else if (def.kind === 'error') {

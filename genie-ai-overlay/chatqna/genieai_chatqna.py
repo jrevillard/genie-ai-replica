@@ -968,12 +968,14 @@ def _chat_request_metric_attrs(
     attribute contract (response_type / abstained / error / retrieval_source /
     abstention_reason).
 
-    Callers own the ``retrieval_source`` rule, and the two rules differ on
-    purpose: the pre-span refusal sites (translation and condense failures)
-    read the request's ``search_type`` with a ``similarity_score_threshold``
-    fallback because ``retriever_parameters`` is not built yet at that point
-    in the request, while the in-span paths read
-    ``retriever_parameters.search_type`` with a ``hybrid`` fallback. The next
+    Callers own the ``retrieval_source`` rule. Two derivations exist and they
+    agree by construction today: the pre-span refusal sites (translation and
+    condense failures) read ``chat_request.search_type`` with a
+    ``similarity_score_threshold`` fallback because ``retriever_parameters``
+    is not built yet at that point in the request, while the in-span paths
+    read ``retriever_parameters.search_type`` — which is itself built from
+    ``chat_request.search_type`` with the same fallback — behind a ``hybrid``
+    getattr fallback for a parms object that lacks the field. The next
     attribute added to the counter lands here, once.
     """
     return sanitize_attributes(
@@ -5188,19 +5190,10 @@ class ChatQnAService:
             # attributes the refusal itself — without it a reply-translation
             # overflow is invisible as a refusal on the counter (the query-path
             # site cannot double count because it raises before that block).
-            # retrieval_source uses the in-span rule so the refusal record
-            # names the same source as the turn's success record; sync is
-            # literal because a stream request returned before this point.
-            chat_requests_total.add(
-                1,
-                _chat_request_metric_attrs(
-                    response_type="sync",
-                    abstained="true",
-                    error="true",
-                    retrieval_source=getattr(retriever_parameters, "search_type", "hybrid"),
-                    abstention_reason="translation_input_too_long",
-                ),
-            )
+            # The in-span _chat_attrs rule is the right one here:
+            # retriever_parameters is built at this point, and a streamed
+            # request returned before reaching this code.
+            chat_requests_total.add(1, _chat_attrs("true", "true", "translation_input_too_long"))
             raise _translation_input_too_long_error(
                 "The translated reply exceeded the language model's input "
                 "context window. Please reduce the conversation length or "

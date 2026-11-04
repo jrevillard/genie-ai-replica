@@ -40,9 +40,8 @@ class SseMetadataEvent extends SseEvent {
   /// chatqna's unknown metadata keys through the same way; a field-by-field
   /// whitelist here is how `abstained`, `abstention_reason`, `filter_labels`
   /// and `self_confidence` were each lost on mobile until a hand edit. The
-  /// known fields (`type`, `source_documents`, `confidence_score`,
-  /// `is_grounded`, `responseTime`, `query_translation_status`) are
-  /// normalized above and never appear here.
+  /// keys in `SseParser._knownMetadataKeys` are normalized above and never
+  /// appear here.
   final Map<String, dynamic> extra;
 
   const SseMetadataEvent({

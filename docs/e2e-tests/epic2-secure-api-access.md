@@ -98,7 +98,8 @@ USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 # Verify this request resolved the ArangoDB _key — the profile-retrieval log
 # entry carries the userKey (no output is a failure; the quoted field makes
 # the match exact, and --since bounds the window to this request)
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | tail -1 | grep -F "\"userKey\":\"$USER_KEY\""
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the resolved _key"; exit 1; }
 ```
 
 > **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects the backend's profile-retrieval log to verify the request resolved the account's ArangoDB `_key`.
@@ -378,8 +379,9 @@ RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE_USER_KEY\""
-# Expected: the recent profile-retrieval entries include the genie-realm-user's _key (no output = failure)
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE_USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the genie-realm _key"; exit 1; }
+# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
 RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN" \
@@ -387,8 +389,9 @@ RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie2 realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE2_USER_KEY\""
-# Expected: the recent profile-retrieval entries include the genie2-realm-user's _key (distinct from genie)
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE2_USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the genie2-realm _key"; exit 1; }
+# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
 # The whole point of the test: distinct realms must resolve distinct ArangoDB docs
 [ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }

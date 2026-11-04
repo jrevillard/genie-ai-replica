@@ -66,13 +66,21 @@ const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
  * @returns {Promise<object[]>} The matching user representations
  */
 async function findUsers(adminToken, realm, field, value) {
-  const searchRes = await request(
-    'GET',
-    `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}&exact=true`,
-    {
-      headers: { Authorization: `Bearer ${adminToken}` }
-    }
-  );
+  let searchRes;
+  try {
+    searchRes = await request(
+      'GET',
+      `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}&exact=true`,
+      {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      }
+    );
+  } catch (err) {
+    // A transport-level failure (connection refused, timeout) is the same
+    // transient condition as the create's own: the retry budget must be
+    // allowed to save the provisioning.
+    throw transientError(`Cannot reach the Keycloak admin API for the user lookup of ${value}: ${err.message}`);
+  }
 
   // The status and the payload shape are checked: an expired admin token
   // answers 401 with an error body, and indexing that body would resolve
@@ -81,6 +89,8 @@ async function findUsers(adminToken, realm, field, value) {
     // The status travels with the error: the callers tell an HTTP verdict
     // from Keycloak (fatal, it names itself) from a transport break (the
     // retry budget may save it).
+    // The verdict itself is the caller's: it decides what the status
+    // means for its own operation (the retry budget re-derives it).
     const error = new Error(`User lookup for ${value} in realm ${realm} failed: HTTP ${searchRes.status}`);
     error.httpStatus = searchRes.status;
     throw error;
@@ -131,14 +141,13 @@ async function findRealmRole(adminToken, realm, roleName) {
     // the callers index role.id on it.
     if (!res.data || typeof res.data !== 'object' || !res.data.id) {
       throw new Error(
-        `The realm role ${roleName} of ${realm} answered HTTP 200 without a usable representation: ` +
-          `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
+        `The realm role ${roleName} of ${realm} answered HTTP 200 without a usable representation: ${bodyText(res)}`
       );
     }
     return res.data;
   }
   if (res.status === 404) return null;
-  throw new Error(`Cannot read the realm role ${roleName} of ${realm}: HTTP ${res.status} ${bodyText(res)}`);
+  failWithStatus(`Cannot read the realm role ${roleName} of ${realm}: HTTP ${res.status} ${bodyText(res)}`, res.status);
 }
 
 /**
@@ -161,11 +170,17 @@ async function resolveRealmRoles(adminToken, realm, roleNames) {
     // Keycloak answers 404 on the role endpoint for a role the realm does
     // not carry AND for a realm that does not exist. One realm read tells
     // the two apart: a missing realm is a broken venue (fatal), a missing
-    // role is a plain "not granted here".
-    try {
-      await getRealmSettings(adminToken, realm);
-    } catch (err) {
-      throw new Error(`The realm ${realm} does not exist (or is unreadable): ${err.message}`);
+    // role is a plain "not granted here". Any other verdict is the
+    // Keycloak's own — an expired admin token answers 401, and that must
+    // not be reported as a missing realm.
+    const realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (realmRes.status === 404) {
+      throw new Error(`The realm ${realm} does not exist — the venue is not provisioned`);
+    }
+    if (realmRes.status !== 200) {
+      failWithStatus(`Cannot read the realm ${realm}: HTTP ${realmRes.status} ${bodyText(realmRes)}`, realmRes.status);
     }
   }
   return { roles, missing };
@@ -326,6 +341,11 @@ async function convergeUser(adminToken, realm, userData) {
   try {
     user = await resolveUser(adminToken, realm, username);
   } catch (err) {
+    if (err.httpStatus !== undefined) {
+      // The lookup itself failed (an expired admin token answers 401): the
+      // account's state is unknown, so no diagnosis about it is possible.
+      failWithStatus(err.message, err.httpStatus);
+    }
     if (status === 409) {
       // The create answered 409 but no account carries the username: the
       // conflict has two live causes. ANOTHER account may own the fixture
@@ -339,11 +359,13 @@ async function convergeUser(adminToken, realm, userData) {
         owners = await findUsers(adminToken, realm, 'email', email);
       } catch (probeErr) {
         if (probeErr.httpStatus !== undefined) {
-          // Keycloak answered: the probe is fatal, and its verdict is the
-          // cause (an expired admin token answers 401).
-          throw new Error(
+          // Keycloak answered: the probe's verdict is the cause (an
+          // expired admin token answers 401, a rate limit 429 — the
+          // latter is transient and the retry budget may save the run).
+          failWithStatus(
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
-              `could not run (HTTP ${probeErr.httpStatus})`
+              `could not run (HTTP ${probeErr.httpStatus})`,
+            probeErr.httpStatus
           );
         }
         // A transport-level failure of the probe is transient, exactly like

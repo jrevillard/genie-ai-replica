@@ -105,6 +105,17 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(calls).not.toContain(`POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`);
   });
 
+  test('a realm read that the admin API refuses is not reported as a missing realm', async () => {
+    routes = [
+      ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
+      ['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]
+    ];
+
+    await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(
+      /Cannot read the realm genie: HTTP 401/
+    );
+  });
+
   test('a 200 without a usable representation is a hard failure naming the role', async () => {
     routes = [['GET', ROLE_PATH('admin'), { status: 200, data: null }]];
 
@@ -120,6 +131,21 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
       /Cannot read the realm role admin of genie: HTTP 403/
     );
     expect(calls).toEqual([`GET /auth/admin/realms/${REALM}/roles/admin`]);
+  });
+
+  test('a Keycloak outage during the role lookup is transient, so the retry budget can save the run', async () => {
+    routes = [['GET', ROLE_PATH('admin'), { status: 503, data: null }]];
+
+    let caught;
+    try {
+      await assignRealmRoles('tok', REALM, 'user-1', ['admin']);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot read the realm role admin of genie: HTTP 503/);
   });
 });
 
@@ -247,6 +273,25 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     expect(caught).toBeTruthy();
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the email-ownership probe/);
+  });
+
+  test('a username lookup that FAILED diagnoses nothing about the account', async () => {
+    // The account's state is unknown when the lookup itself failed: the
+    // email-ownership probe must not turn that into a conflict verdict.
+    routes = [POST_USERS_409, ['GET', USERNAME_LOOKUP, { status: 500, data: null }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 500/);
+    expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+    expect(caught.transient).toBe(true);
   });
 });
 

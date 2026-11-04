@@ -17,8 +17,13 @@
   int serviceCount,
 })
 categoryContextFromSelection(Map<String, dynamic> selection) {
-  final String categoryId = selection['category_id'] ?? selection['id'] ?? '';
-  final String categoryName = selection['name'] ?? 'Unknown Service';
+  // Every field coerces through toString(): the panel's tree is decoded
+  // JSON, and a numeric id or name in the source data must reach the
+  // chat as a String, not crash the assignment.
+  final String categoryId =
+      selection['category_id']?.toString() ?? selection['id']?.toString() ?? '';
+  final String categoryName =
+      selection['name']?.toString() ?? 'Unknown Service';
   // BOTH spellings travel to the chat: display (name) and the EN wire
   // labels (the SSOT the retriever filters on).
   final String categoryNameEn = selection['categoryNameEn']?.toString() ?? '';

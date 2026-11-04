@@ -24,9 +24,15 @@ void main() {
   test('non-string fields are coerced, and an absent serviceCount falls back '
       'to the label count', () {
     final context = categoryContextFromSelection(<String, dynamic>{
+      'category_id': 7,
+      'name': 42,
       'categoryNameEn': 42,
       'serviceLabelsEn': <dynamic>['Births', ''],
     });
+    // The tree is decoded JSON: a numeric id or name must arrive as a
+    // String, not crash the assignment.
+    expect(context.categoryId, '7');
+    expect(context.categoryName, '42');
     expect(context.categoryNameEn, '42');
     // The empty element drops — it names no label on the wire.
     expect(context.serviceLabelsEn, ['Births']);

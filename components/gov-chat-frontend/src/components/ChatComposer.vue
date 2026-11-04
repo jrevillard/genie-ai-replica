@@ -44,6 +44,7 @@
       :placeholder="placeholder"
       class="chat-composer__field prompt-textarea"
       :input-id="inputId"
+      data-testid="composer-field"
       @focus="$emit('focus', $event)"
     />
     <div class="chat-composer__actions">

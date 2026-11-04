@@ -313,9 +313,9 @@ test.describe('config / composer identity', () => {
 
     // Accessible name: aria-label on the FIELD — the wrapper div is
     // role-less, so a generic element's aria-label never reaches the
-    // accessibility tree. The field is what assistive tech reads; its
-    // id is the handle the composer declares (input-id).
-    const ariaLabel = await page.locator('#welcome-composer-input').getAttribute('aria-label');
+    // accessibility tree. The field is what assistive tech reads; the
+    // data-testid is the handle the composer declares on it.
+    const ariaLabel = await page.locator('[data-testid="composer-field"]').getAttribute('aria-label');
     expect(ariaLabel, `composer field aria-label (got ${ariaLabel})`).toBeTruthy();
 
     await ctx.close();

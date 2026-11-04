@@ -3032,6 +3032,43 @@ describe('ChatBotComponent', () => {
 
       expect(vm.composerBrokenFace).toBe(true);
       expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      // Restore the resolved mock the rest of the suite reads.
+      mockLiveTree([]);
+    });
+
+    it('a TITLE-broken entry shows the face while the hierarchy is still loading (#1382)', async () => {
+      // The title half of the verdict is a configuration fact: the
+      // hierarchy has nothing to do with it, so the face must not wait
+      // for the tree the way the scope half does.
+      const serviceTreeService = require('../../services/serviceTreeService');
+      let resolveTree;
+      serviceTreeService.getAllCategories.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveTree = resolve;
+          })
+      );
+      const wrapper = await mountWithButtons([
+        {
+          id: 'titleless-entry',
+          title: { en: '' },
+          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+          category: null,
+          placement: 'composer'
+        }
+      ]);
+      const vm = wrapper.vm;
+
+      expect(vm.serviceCategoriesStatus).toBe('loading');
+      expect(vm.composerBrokenFace).toBe(true);
+      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
+        'chatbot.quickHelpTitleMissing'
+      );
+
+      resolveTree([]);
+      await flushPromises();
+      mockLiveTree([]);
     });
 
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {

@@ -452,14 +452,15 @@ bool shouldReloadQuickHelpButtons({
 
 /// The title [button] carries, or null when it carries no title.
 ///
-/// An EMPTY title is no title: a config card with a blank title text
-/// must not blank the context bar — the caller keeps the name it has
-/// (the saved category name on a restore). One rule for every path that
-/// shows a Quick Help title. A PRESS never reaches the install with an
-/// empty title: the press gate (quickHelpPressable) refuses it first.
+/// An EMPTY title is no title — and neither is a WHITESPACE-ONLY one:
+/// a config card with a blank (or whitespace-only) title text must not
+/// blank the context bar — the caller keeps the name it has (the saved
+/// category name on a restore). One rule for every path that shows a
+/// Quick Help title. A PRESS never reaches the install with an empty
+/// title: the press gate (quickHelpPressable) refuses it first.
 String? quickHelpTitleOf(Map<String, dynamic>? button) {
   final title = button?['resolvedTitle']?.toString() ?? '';
-  return title.isNotEmpty ? title : null;
+  return title.trim().isNotEmpty ? title : null;
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button

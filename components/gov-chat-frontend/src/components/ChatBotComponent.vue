@@ -324,12 +324,10 @@
             <template #leading>
               <!-- The broken card's face, the grid's doctrine: a broken
                    entry is a VISIBLE failure, not one the user discovers
-                   at the first refused send. The grid waits for the
-                   hierarchy before rendering; the composer mounts before
-                   it settles, so the face waits with it — a hierarchy
-                   still on its way is not a configuration problem, and
-                   flashing the error icon during load would name a
-                   failure recovery is about to end. -->
+                   at the first refused send. quickHelpCardBroken already
+                   splits the halves — the scope half waits for the
+                   hierarchy, the title half (a configuration fact) does
+                   not. -->
               <AlertTriangle
                 v-if="composerBrokenFace"
                 class="composer-leading-mark config-error-icon"
@@ -953,14 +951,16 @@ export default {
     composerEntry() {
       return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
     },
-    // The broken composer entry's visible face, gated on the hierarchy
-    // having settled — the grid's own gate (quickHelpScopeSettled): a
-    // hierarchy still on its way is not a configuration problem, and
-    // the composer mounts before the grid settles. False when no
-    // composer entry is mounted at all.
+    // The broken composer entry's visible face. The gate is the same
+    // quickHelpCardBroken verdict the grid card renders, and it already
+    // splits its halves correctly: the SCOPE half reports nothing while
+    // the hierarchy is loading, and the TITLE half is a configuration
+    // fact the hierarchy has nothing to do with — it can break the face
+    // the moment the config lands. False when no composer entry is
+    // mounted at all.
     composerBrokenFace() {
       const entry = this.composerEntry;
-      return !!entry && this.quickHelpScopeSettled && this.quickHelpCardBroken(entry);
+      return !!entry && this.quickHelpCardBroken(entry);
     },
     // The grid keeps every entry whose placement is not the composer —
     // again, the explicit field, not a heuristic from category / action
@@ -1482,7 +1482,10 @@ export default {
     // parsed button's own 'resolvedTitle'; the web's mapped button
     // carries the resolved title in `service`.
     quickHelpCardTitle(button) {
-      return ((button && button.service) || '').trim() || null;
+      // The String() coercion: resolveConfigText passes non-string
+      // config values through (a numeric title reaches this as a
+      // number), and this method is read on every tile's render.
+      return String((button && button.service) || '').trim() || null;
     },
 
     // The card's DISPLAY verdict — the twin of the press gate. The
@@ -2112,10 +2115,15 @@ export default {
       // same entry routed to the grid refused itself — a verdict that
       // depended on placement (#1382). One verdict, both mounts. A
       // scope the hierarchy cannot EN-name yet stays refused on the
-      // declaring path, as before (#1263). handleWelcomeSend is bound
-      // only inside the v-if="composerEntry" welcome mount, so entry
-      // is never null here.
-      if (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category))) {
+      // declaring path, as before (#1263). The entry null-guard stays:
+      // handleWelcomeSend is bound only inside the v-if="composerEntry"
+      // welcome mount today, but the scope machinery below dereferences
+      // the button without a null guard — a future second binding gets
+      // the just-chat degrade, not a TypeError.
+      if (
+        entry &&
+        (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
+      ) {
         // The caption is computed HERE, on the refusing path only: it
         // is the tile's own caption assembly (the missing title first,
         // then the scope), and a healthy entry pays nothing for it.
@@ -4195,6 +4203,14 @@ export default {
 .quick-help-composer .chat-composer {
   --composer-width: var(--qh-composer-ratio);
   margin-inline: auto;
+}
+
+/* The broken entry's caption sits UNDER the bar, aligned WITH it: the
+   same ratio and the same centering — a full-width caption would hang
+   past the bar's left edge on both sides. */
+.quick-help-composer .quick-help-error-caption {
+  width: var(--qh-composer-ratio);
+  margin: var(--space-xs) auto 0;
 }
 
 /* The welcome composer's leading mark is the reference's sparkles, drawn

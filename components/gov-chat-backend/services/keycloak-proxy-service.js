@@ -208,8 +208,10 @@ const keycloakProxyService = {
     // No eviction here: invalidateCache broadcasts over Redis pub/sub, and a
     // pre-commit broadcast makes the other replicas evict and re-provision
     // against the not-yet-erased document (#1483). Evict only after the
-    // erasure commits — the same ordering as markUserAsDeleted. Erase-window
-    // staleness is bounded by the cache revalidation and the TTL.
+    // erasure commits — the same ordering as markUserAsDeleted. Until the
+    // commit, callers may be served the pre-erasure profile from cache (the
+    // revalidation deliberately ignores erasures); the post-commit eviction
+    // is what closes that window — on the late-failure path, the bare TTL.
 
     // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
     // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
@@ -292,9 +294,14 @@ const keycloakProxyService = {
       }
     } catch (arangoError) {
       // The erasure UPDATE may already be committed (a late duplicate-removal
-      // failure lands here) — still clean the uploads; if the UPDATE itself
-      // failed, the record is intact and the uploads must survive it.
+      // failure lands here) — still run the eviction (it sits after the
+      // duplicate removal in the try block, so a late failure skipped it) and
+      // clean the uploads; if the UPDATE itself failed, the record is intact
+      // and the uploads must survive it.
       if (erasureCommitted) {
+        if (issSub) {
+          userProvisioningService.invalidateCache(issSub);
+        }
         await this._cleanupUploads(userKey);
       }
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {

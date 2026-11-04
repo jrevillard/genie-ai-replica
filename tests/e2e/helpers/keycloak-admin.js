@@ -78,6 +78,16 @@ const ACCOUNT_VANISHED = 'the account was deleted mid-provisioning (a concurrent
 const TRANSIENT_RETRY_BUDGET_MS = 30000;
 const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
 
+// The operator wording of the two 409-conflict verdicts, shared by
+// createUser and convergeUser so the diagnosis reads the same whichever
+// entry point hit it.
+const EMAIL_CONFLICT_VERDICT = (missMessage, owner, email) =>
+  `${missMessage} — the create answered 409 because ${owner} owns ` +
+  `${email}: an email conflict; remove or rename that account (or change the fixture email)`;
+const ACCOUNT_VANISHED_VERDICT = (missMessage, username, email) =>
+  `${missMessage} — the create answered 409, but no account carries ${email} either: ` +
+  `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`;
+
 /**
  * The users of a realm matching ONE field exactly.
  * exact=true: ?username= is a prefix search otherwise — a stray
@@ -298,7 +308,40 @@ async function createUser(adminToken, realm, userData) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 
-  const user = await resolveUser(adminToken, realm, username);
+  let user;
+  try {
+    user = await resolveUser(adminToken, realm, username);
+  } catch (err) {
+    if (err.lookupFailed) {
+      // The lookup itself failed (an expired admin token answers 401, a
+      // transport break): the account's state is unknown, so no diagnosis
+      // about it is possible.
+      throw err;
+    }
+    if (userRes.status === 409) {
+      // The create answered 409 but no account carries the username: the
+      // conflict has two live causes — another account may own the fixture
+      // email (the realm forbids duplicate emails), or the account that
+      // answered 409 was DELETED between the create and this lookup. The
+      // email-ownership probe separates them (the same diagnosis
+      // convergeUser runs); createUser has no retry budget, so a failed
+      // probe is a plain failure naming the cause, not a transient one.
+      let owners;
+      try {
+        owners = await findUsers(adminToken, realm, 'email', email);
+      } catch (probeErr) {
+        throw new Error(
+          `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
+            `could not run: ${probeErr.message}`
+        );
+      }
+      if (owners.length > 0) {
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
+      }
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
+    }
+    throw err;
+  }
   await assignRealmRoles(adminToken, realm, user.id, userData.realmRoles);
 
   return user.id;
@@ -444,15 +487,9 @@ async function convergeUser(adminToken, realm, userData) {
         );
       }
       if (owners.length > 0) {
-        throw new Error(
-          `${err.message} — the create answered 409 because ${owners[0].username} owns ` +
-            `${email}: an email conflict; remove or rename that account (or change the fixture email)`
-        );
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
       }
-      throw new Error(
-        `${err.message} — the create answered 409, but no account carries ${email} either: ` +
-          `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`
-      );
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
     }
     throw err;
   }
@@ -593,8 +630,18 @@ async function rotateRealmKeys(adminToken, realm) {
     throw new Error(`Failed to generate new key: ${newKeyRes.status} ${JSON.stringify(newKeyRes.data)}`);
   }
 
-  // Extract new key ID from location header
-  const newKeyId = newKeyRes.data;
+  // The components API answers 201 with an EMPTY body — auth.request
+  // resolves an empty body as data: null — and the new component id in
+  // the Location header (/…/components/<id>): the id is read from the
+  // header, never from the body.
+  const location = newKeyRes.headers && newKeyRes.headers.location;
+  const newKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
+  if (!newKeyId) {
+    throw new Error(
+      `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
+        `(${location || 'none'}) — the new key id cannot be resolved`
+    );
+  }
 
   // Demote old keys (set active to false)
   for (const oldKey of existingKeys) {

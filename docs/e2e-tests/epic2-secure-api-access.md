@@ -343,8 +343,6 @@ echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
 
 **Verification:**
 ```bash
-# Get admin token
-TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
 # Get the MASTER admin token — Keycloak's Admin REST is realm-scoped, so a
 # genie-realm admin token cannot manage genie2 (see .claude/rules/SERVER-TESTING.md)
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \

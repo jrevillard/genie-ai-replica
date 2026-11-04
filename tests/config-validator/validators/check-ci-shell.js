@@ -61,7 +61,7 @@ function checkShellSyntax(blocks) {
     const run = childProcess.spawnSync('bash', ['-n'], {
       input: parts.join('\n'),
       encoding: 'utf8',
-      env: { ...process.env, LC_ALL: 'C' }
+      env: { ...process.env, LC_ALL: 'C', LANGUAGE: '' }
     });
     if (run.error) {
       throw new Error(`cannot run bash -n: ${run.error.message}`);

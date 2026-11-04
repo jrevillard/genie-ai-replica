@@ -102,6 +102,22 @@ describe('conversation module', () => {
     expect(open.conversationId).toBeNull();
     expect(open.relatedDocuments).toEqual([]);
   });
+
+  it('RESET drops every conversation, not only the open one', () => {
+    // Unlike resetForNewConversation, which keeps the conversations map and
+    // only clears the open entry, the full reset must leave the fresh
+    // single-entry shape — Reset User Data wipes all of it (#1455).
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.state.conversation.conversations['other-id'] = { messages: [{ sender: 'user', content: 'old' }] };
+    store.state.conversation.openId = 'other-id';
+
+    store.commit('conversation/RESET');
+
+    expect(store.state.conversation.openId).toBe('open');
+    expect(Object.keys(store.state.conversation.conversations)).toEqual(['open']);
+    expect(store.getters['conversation/openConversation'].messages).toEqual([]);
+  });
 });
 
 describe('conversation persistence', () => {
@@ -123,6 +139,24 @@ describe('conversation persistence', () => {
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(raw.openId).toBe('open');
     expect(raw.conversations.open.title).toBe('Persisted');
+  });
+
+  it('replaces the stored payload synchronously on RESET', () => {
+    // The subscription owns the storage key: a full reset must write the
+    // fresh shape immediately — inside the debounce window a killed tab
+    // would otherwise rehydrate the wiped conversation (mutation check:
+    // revert the RESET branch in subscribeConversation and the stale
+    // payload survives the assertion below).
+    const store = freshStore();
+    const unsubscribe = subscribeConversation(store);
+    try {
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'old' });
+      store.commit('conversation/RESET');
+      const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      expect(raw.conversations.open.messages).toEqual([]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('persists mid-stream: a chunk storm cannot defer the write past the wall', () => {

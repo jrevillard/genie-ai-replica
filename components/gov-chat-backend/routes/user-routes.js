@@ -191,7 +191,7 @@ module.exports = (userService) => {
       res.json({
         success: true,
         message: 'Account deleted',
-        filesDeletionFailed: Boolean(result && result.filesDeletionFailed)
+        filesDeletionFailed: result.filesDeletionFailed === true
       });
     } catch (error) {
       // deleteUser tolerates a Keycloak 404 (user already gone) internally —

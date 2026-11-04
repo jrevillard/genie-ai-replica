@@ -945,6 +945,13 @@ def _translation_input_too_long_error(message: str) -> HTTPException:
     One body for every translation surface that can refuse an input (the
     query path and the reply path): the caller consumes both, so the shape
     lives in one place.
+
+    Counter rule for any surface raising this: a refusal that fires BEFORE
+    the orchestrate-span metrics block records itself on
+    ``chat_requests_total`` right where it refuses (query path); one that
+    fires AFTER that block adds a refusal record too, because the turn was
+    already counted with the successful pipeline's attrs (reply path). A
+    surface that skips its record is invisible as a refusal on the counter.
     """
     return HTTPException(
         status_code=422,

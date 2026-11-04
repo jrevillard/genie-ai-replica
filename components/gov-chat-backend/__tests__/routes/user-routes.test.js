@@ -288,6 +288,55 @@ describe('POST /api/me/reset-data', () => {
     expect(response.status).toBe(500);
     expect(response.body.success).toBe(false);
   });
+
+  it('should return 404 when the user no longer exists (NotFoundError)', async () => {
+    // Stale _key between authentication and reset (user hard-deleted
+    // mid-session) — a NotFoundError from the service must surface as 404,
+    // not as the generic 500.
+    const { NotFoundError } = require('../../middleware/errors');
+    userProfileService.resetUserData.mockRejectedValue(new NotFoundError('User with ID user-123 not found'));
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('not found');
+  });
+
+  it('should surface filesDeletionFailed as a top-level boolean in the 200 body', async () => {
+    // #1442 contract pin: both clients read the TOP-LEVEL filesDeletionFailed
+    // flag from the reset-data response body. The route spreads the service
+    // result — if that spread ever becomes nested/enveloped or the key is
+    // renamed, every client warning branch becomes unreachable while this
+    // test goes red.
+    userProfileService.resetUserData.mockResolvedValue({
+      userKey: 'user-123',
+      fieldsPreserved: 12,
+      filesDeletionFailed: true,
+      success: true
+    });
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(200);
+    expect(typeof response.body.filesDeletionFailed).toBe('boolean');
+    expect(response.body.filesDeletionFailed).toBe(true);
+    expect(response.body.fieldsPreserved).toBe(12);
+  });
+
+  it('should report filesDeletionFailed false on a clean reset', async () => {
+    userProfileService.resetUserData.mockResolvedValue({
+      userKey: 'user-123',
+      fieldsPreserved: 12,
+      filesDeletionFailed: false,
+      success: true
+    });
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(200);
+    expect(response.body.filesDeletionFailed).toBe(false);
+  });
 });
 
 // ============================================================

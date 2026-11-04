@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
@@ -380,42 +381,38 @@ class UserProfileService {
     try {
       logger.info('UserProfileService.reset_user_data_start', { userKey });
 
-      // Read the stored document directly — getUserProfile() promotes
-      // customSettings sub-keys to the top level, and a promoted user-supplied
-      // value must never be preserved as a system-managed identity field.
-      const currentUserDoc = await this.users.document(userKey);
-      if (!currentUserDoc) {
-        logger.warn('UserProfileService.user_not_found', { userKey });
-        throw new NotFoundError(`User with ID ${userKey} not found`);
-      }
-
-      // Preserve the system-managed fields (SYSTEM_PRESERVED_FIELDS): losing
+      // Preserve the system-managed fields (RESET_PRESERVED_FIELDS): losing
       // iss_sub/email would make the provisioning UPSERT miss this document
       // on next login and INSERT a husk duplicate; losing the audit markers
       // would destroy soft-delete/GDPR state. The client preference fields
       // (USER_PREFERENCE_FIELDS) are kept too: they are the user's
       // look-and-feel, not profile data — the mobile client reverts its
-      // notification toggles and language if the reset drops them.
-      const preservedData = {};
-      for (const field of RESET_PRESERVED_FIELDS) {
-        if (field === 'updatedAt') {
-          continue; // bumped to now below, not carried over
-        }
-        if (currentUserDoc[field] !== undefined) {
-          preservedData[field] = currentUserDoc[field];
-        }
+      // notification toggles and language if the reset drops them. The
+      // preserve set is computed SERVER-SIDE (KEEP on the live document) and
+      // the REPLACE is atomic with the read — a system write landing in a
+      // client-side read→write window can no longer be clobbered by a stale
+      // snapshot. updatedAt is excluded from the preserve set and bumped by
+      // the query itself. The stored document is read server-side too —
+      // getUserProfile() promotes customSettings sub-keys to the top level,
+      // and a promoted user-supplied value must never be preserved as a
+      // system-managed identity field.
+      const preserveFields = RESET_PRESERVED_FIELDS.filter((field) => field !== 'updatedAt');
+      const cursor = await this.db.query(aql`
+        FOR u IN users
+          FILTER u._key == ${userKey}
+          REPLACE u WITH MERGE(KEEP(u, ${preserveFields}), { updatedAt: DATE_ISO8601(DATE_NOW()) }) IN users
+          RETURN LENGTH(ATTRIBUTES(KEEP(u, ${preserveFields})))
+      `);
+      const rows = await cursor.all();
+      if (rows.length === 0) {
+        logger.warn('UserProfileService.user_not_found', { userKey });
+        throw new NotFoundError(`User with ID ${userKey} not found`);
       }
-      preservedData.updatedAt = new Date().toISOString();
-
+      const fieldsPreserved = rows[0];
       logger.debug('UserProfileService.preserving_fields', {
         userKey,
-        fields: Object.keys(preservedData)
+        fields: preserveFields
       });
-
-      // A single replace — the fallback update that used to run on replace
-      // failure merged into the existing document, so it never wiped the
-      // profile data while still answering success.
-      await this.users.replace(userKey, preservedData);
       logger.info('UserProfileService.user_document_replaced', { userKey });
 
       // Files are removed only after the write succeeded — a failed reset
@@ -425,7 +422,7 @@ class UserProfileService {
       // caller knows files may remain on disk.
       let filesDeletionFailed = false;
       try {
-        await this.deleteUserFiles(currentUserDoc);
+        await this.deleteUserFiles({ _key: userKey });
       } catch (fileError) {
         filesDeletionFailed = true;
         logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {
@@ -436,13 +433,13 @@ class UserProfileService {
 
       logger.info('UserProfileService.reset_user_data_completed', {
         userKey,
-        fieldsPreserved: Object.keys(preservedData).length,
+        fieldsPreserved,
         filesDeletionFailed,
         durationMs: Date.now() - startTime
       });
       return {
         userKey,
-        fieldsPreserved: Object.keys(preservedData).length,
+        fieldsPreserved,
         filesDeletionFailed,
         success: true
       };

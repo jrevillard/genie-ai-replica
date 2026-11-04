@@ -3,6 +3,7 @@
 const { aql } = require('arangojs');
 const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
 const userProvisioningService = require('./user-provisioning-service');
+const userProfileService = require('./user-profile-service');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -249,7 +250,18 @@ const keycloakProxyService = {
               iss_sub: null,
               roles: [],
               active: false,
-              personalIdentification: null
+              personalIdentification: null,
+              emailVerified: null,
+              pendingEmailChange: null,
+              customSettings: null,
+              civilRegistration: null,
+              addressResidency: null,
+              identityTravel: null,
+              healthMedical: null,
+              employment: null,
+              financialTax: null,
+              criminalLegal: null,
+              transportation: null
             } IN users
         `
       );
@@ -279,6 +291,19 @@ const keycloakProxyService = {
       });
       throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
         cause: arangoError
+      });
+    }
+
+    // Remove the uploaded files (ID/health/financial documents) — the erasure
+    // is committed by now, so a deletion failure must not answer 500 for an
+    // erasure that already happened: warn and report success (same contract
+    // as resetUserData's filesDeletionFailed handling).
+    try {
+      await userProfileService.deleteUserFiles({ _key: userKey });
+    } catch (fileError) {
+      logger.warn('[KeycloakProxy] Uploaded files deletion failed after erasure', {
+        userKey,
+        error: fileError.message
       });
     }
   },

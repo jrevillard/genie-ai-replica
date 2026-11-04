@@ -48,6 +48,12 @@ jest.mock('jose', () => require('./mocks/jose'));
 // Redis (#1443) — mock the client so no test opens a real connection handle
 jest.mock('ioredis', () => require('./mocks/ioredis'));
 
+// Mock the uploads cleaner the erasure calls (#1441) — fs-touching singleton,
+// its behavior is covered by user-profile-service.test.js
+jest.mock('../services/user-profile-service', () => ({
+  deleteUserFiles: jest.fn().mockResolvedValue(undefined)
+}));
+
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
 
@@ -304,6 +310,102 @@ describe('keycloak-proxy-service', () => {
 
       const updateAql = capturedAql[1];
       expect(updateAql.query).toContain('personalIdentification: null');
+    });
+
+    it('should null every gov-profile section on the erased document (#1441)', async () => {
+      // The users document also carries the gov-profile sections written by
+      // user-profile-service — nulling only personalIdentification leaves
+      // health/financial/criminal data readable on the deleted: true doc.
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1)
+            return Promise.resolve(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      const updateAql = capturedAql[1];
+      const sections = [
+        'civilRegistration',
+        'addressResidency',
+        'identityTravel',
+        'healthMedical',
+        'employment',
+        'financialTax',
+        'criminalLegal',
+        'transportation'
+      ];
+      for (const section of sections) {
+        expect(updateAql.query).toContain(`${section}: null`);
+      }
+    });
+
+    it('should null the email-adjacent and custom fields on the erased document (#1441)', async () => {
+      // emailVerified and pendingEmailChange carry account/email data;
+      // customSettings aggregates user-written custom sections — all PII
+      // under the route's "erases all PII" claim.
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1)
+            return Promise.resolve(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      const updateAql = capturedAql[1];
+      expect(updateAql.query).toContain('emailVerified: null');
+      expect(updateAql.query).toContain('pendingEmailChange: null');
+      expect(updateAql.query).toContain('customSettings: null');
+    });
+
+    it('should delete the uploaded files directory after the erasure commits (#1441)', async () => {
+      const userProfileService = require('../services/user-profile-service');
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith({ _key: 'user-key' });
+    });
+
+    it('should still succeed when the uploaded-files deletion fails after the erasure (#1441)', async () => {
+      // The erasure is committed once the ArangoDB write succeeds; a leftover
+      // uploads directory (rm EACCES/EBUSY) must not answer 500 for an
+      // erasure that already happened — warn instead.
+      const userProfileService = require('../services/user-profile-service');
+      userProfileService.deleteUserFiles.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const { logger } = require('../shared-lib');
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await expect(keycloakProxyService.deleteUser('user-key')).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalled();
     });
 
     it('should log "User erased" message (distinct from soft-delete)', async () => {

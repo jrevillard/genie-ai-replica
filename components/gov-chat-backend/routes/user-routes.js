@@ -119,8 +119,26 @@ module.exports = (userService) => {
    *     responses:
    *       200:
    *         description: User profile data reset successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 message:
+   *                   type: string
+   *                 userKey:
+   *                   type: string
+   *                 fieldsPreserved:
+   *                   type: integer
+   *                 filesDeletionFailed:
+   *                   type: boolean
+   *                   description: True when the uploaded files could not be removed after the reset committed — files may remain on disk.
    *       401:
    *         description: Authentication required
+   *       404:
+   *         description: User not found
    *       500:
    *         description: Server error
    */
@@ -139,8 +157,9 @@ module.exports = (userService) => {
         ...result
       });
     } catch (error) {
+      const status = error.statusCode === 404 ? 404 : 500;
       logger.error(`[RESET DATA] Error resetting user data: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
+      res.status(status).json({
         success: false,
         message: error.message || 'Failed to reset user data'
       });

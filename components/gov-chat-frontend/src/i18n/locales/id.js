@@ -998,6 +998,8 @@ export default {
       'Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini bersifat permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus.',
     delete: 'Hapus',
     accountDeleted: 'Akun Anda telah dihapus.',
+    accountDeletedFilesFailed:
+      'Akun Anda telah dihapus, tetapi beberapa file yang tersimpan tidak dapat dihapus. Silakan hubungi administrator.',
     failedToDeleteAccount: 'Gagal menghapus akun Anda. Silakan coba lagi nanti.'
   },
   userProfile: {

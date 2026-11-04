@@ -987,6 +987,7 @@ export default {
     deleteAccountTitle: 'حذف الحساب',
     delete: 'حذف',
     accountDeleted: 'تم حذف حسابك بنجاح.',
+    accountDeletedFilesFailed: 'تم حذف حسابك، لكن تعذّر إزالة بعض الملفات المخزنة. يرجى الاتصال بالمسؤول.',
     failedToDeleteAccount: 'فشل حذف الحساب. يرجى المحاولة مرة أخرى لاحقًا.'
   },
   userProfile: {

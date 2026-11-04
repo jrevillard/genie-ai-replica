@@ -1001,6 +1001,8 @@ export default {
       'Na o na le bonnete ba hore o batla ho phumula akaunti ea hao? Mosebetsi ona o tloha oa boloka mme o ke oa khutliswa. Datha yohle ya hao e tla hlakolwa.',
     delete: 'Phumula',
     accountDeleted: 'Akaunti ea hao e phumutswe.',
+    accountDeletedFilesFailed:
+      'Akaunti ya hao e phumotse, empa faele tse ling tsa boleng ha ea tlosa. Ka kopo ikopanye le motsamaisi.',
     failedToDeleteAccount: 'Ho hloleha ho phumula akaunti ea hao. Ka kopo leka hape hamorao.'
   },
   userProfile: {

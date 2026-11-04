@@ -1000,6 +1000,8 @@ export default {
     deleteAccountTitle: 'Eliminar Cuenta',
     delete: 'Eliminar',
     accountDeleted: 'Su cuenta ha sido eliminada.',
+    accountDeletedFilesFailed:
+      'Su cuenta ha sido eliminada, pero algunos archivos almacenados no pudieron eliminarse. Por favor, contacte a un administrador.',
     failedToDeleteAccount: 'No se pudo eliminar su cuenta. Por favor, intente nuevamente más tarde.'
   },
   userProfile: {

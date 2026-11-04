@@ -995,6 +995,8 @@ export default {
     deleteAccountTitle: 'Futa Akaunti',
     delete: 'Futa',
     accountDeleted: 'Akaunti yako imefutwa.',
+    accountDeletedFilesFailed:
+      'Akaunti yako imefutwa, lakini baadhi ya faili zilizohifadhiwa hazikuweza kufutwa. Tafadhali wasiliana na msimamizi.',
     failedToDeleteAccount: 'Imeshindwa kufuta akaunti yako. Tafadhali jaribu tena baadaye.'
   },
   userProfile: {

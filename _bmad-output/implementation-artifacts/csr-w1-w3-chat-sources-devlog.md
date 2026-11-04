@@ -45,8 +45,13 @@ Process: identification agent over the full W1-W3 diff → per-finding false-pos
 
 - **#1437** — flat `uploaded_files` namespace collides across repos when two repos mint the same `concept_id` under concurrent lanes (ENOENT dead-letter + cross-repo Retracted 404s). Mitigated in the smoke (sequential drains); real fix belongs to the ingest lane.
 
+## W4 progress
+
+- **Story 1 — stamp live RE-MEASURE: DONE, 2/2 = 100%** (2026-11-04, local build, live documents-origin import through Kong: upload ×2 → `convert-from-documents` → conversion done → both files' docs carry `okf_repo_id` === the new repo). `3d3f4c484` holds live; the producer-service loud tripwire stays as backstop. Harness: `run-smoke-w4-stamp.mjs` (host-side, re-mints tokens, cleanup default full). First run 9/10 — the one FAIL was the smoke's own cleanup ordering, not the product: **the repo delete cascade HARD-deletes the repo's backing files** (`backing-file-service.js` deleteBackingFiles, the intentional hard purge — files 404'd on the post-delete retract). Script fixed (retract-before-delete, 404-tolerant, DELETE 202 accepted); the fixed cleanup path validates on the next run (story-2's live validation).
+- **Story 2 — D4 refusal (stamped restricted snapshot): pending** — okf-server Access toggle + import stamp propagate `acl.restricted` onto the stamped files docs; doc-repo serve paths (`downloadFile`/`viewFileInBrowser`/`viewFile`/`downloadMultipleFiles` — all through `_getFileAndPath`) gain the local refusal. Discovered fact that shapes it: repo delete removes stamped files entirely, retract only MARKS them — the snapshot only ever needs to exist on live files.
+
 ## Not done yet (deliberate)
 
 - Live smoke re-run with the publication-gate assertion (blocked on the build-tree sync — David's one-time reset call).
 - Browser-level citation-click pass (W3 UI behavior is unit-covered; the click-through rides W9's Playwright work or David's manual pass — the smoke leaves `OKF_SMOKE_CLEANUP=none` runs for exactly that).
-- W4–W9 per the remediation plan (W4 next: stamp re-measure + D4 stamped-snapshot refusal).
+- W4 story 2 (D4 refusal), then W5–W9 per the remediation plan.

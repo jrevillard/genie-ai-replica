@@ -12,8 +12,7 @@ const E2E_FIXTURES = [
     // The primary login user (loginViaUI's default). Carries no realm
     // role: no Playwright spec or docs phase drives an ADMIN_ONLY surface
     // as testuser (the documents suites authenticate as testadmin) — the
-    // former parity admin role was removed in #1402, and the provisioning
-    // script strips it from any account that still carries it.
+    // former parity admin role was removed in #1402.
     username: 'testuser',
     email: 'testuser@e2e.test',
     firstName: 'Test',

@@ -3428,6 +3428,42 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
   });
 
+  // #1422: the credential import-path convention (tests/e2e/CLAUDE.md §
+  // Fixtures) is executable, not prose-only: a spec that needs only
+  // credentials requires them from helpers/e2e-fixtures.js, and a spec
+  // that also logs in takes them from the same helpers/chatbot.js require
+  // as loginViaUI. The one detectable violation of that convention is a
+  // spec file carrying BOTH requires — it mixes the two paths in one
+  // file, exactly what the convention forbids.
+  test('a spec file takes its credentials from ONE of the two sanctioned paths', () => {
+    const e2eRoot = path.join(ROOT, 'tests/e2e');
+    const violations = [];
+    const walkSpecs = (dir) => {
+      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, name.name);
+        if (name.isDirectory()) {
+          walkSpecs(entryPath);
+        } else if (name.name.endsWith('.spec.js')) {
+          const source = fs.readFileSync(entryPath, 'utf-8');
+          const fromFixtures = /require\((['"`])[^)]*helpers\/e2e-fixtures\1\)/.test(source);
+          const fromChatbot = /require\((['"`])[^)]*helpers\/chatbot\1\)/.test(source);
+          if (fromFixtures && fromChatbot) {
+            violations.push(path.relative(e2eRoot, entryPath));
+          }
+        }
+      }
+    };
+    walkSpecs(e2eRoot);
+    if (violations.length > 0) {
+      throw new Error(
+        `spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ` +
+          `helpers/chatbot in one file): ${violations.join(', ')} — take credentials from ` +
+          `helpers/e2e-fixtures.js alone, or from the same helpers/chatbot.js require as loginViaUI ` +
+          `(tests/e2e/CLAUDE.md § Fixtures)`
+      );
+    }
+  });
+
   // #1334: every provisioning call routes through the shared kc_curl helper
   // — one capture path (status trailer + body + curl exit code captured
   // OUTSIDE the command substitution) so the transient-classifier drift that

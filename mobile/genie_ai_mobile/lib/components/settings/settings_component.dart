@@ -251,12 +251,14 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 );
               }
             } catch (e) {
-              if (mounted) {
-                _showSettingsSnackBar(
-                  ScaffoldMessenger.of(context),
-                  "settings.accountDeletionFailed",
-                );
-              }
+              // The captured root messenger, not ScaffoldMessenger.of(context):
+              // the user may have navigated away while the request was in
+              // flight — the outcome must still surface (same shape as the
+              // reset flow's catch below).
+              _showSettingsSnackBar(
+                messenger,
+                "settings.accountDeletionFailed",
+              );
             }
           },
         ),

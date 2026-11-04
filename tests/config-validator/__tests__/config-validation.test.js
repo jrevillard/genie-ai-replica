@@ -3428,14 +3428,21 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
   });
 
-  // #1422: the credential import-path convention (tests/e2e/CLAUDE.md §
-  // Fixtures) is executable, not prose-only: a spec that needs only
+  // #1422: the do-not-mix half of the credential import-path convention
+  // (tests/e2e/CLAUDE.md § Fixtures) is executable: a spec that needs only
   // credentials requires them from helpers/e2e-fixtures.js, and a spec
   // that also logs in takes them from the same helpers/chatbot.js require
-  // as loginViaUI. The one detectable violation of that convention is a
-  // spec file carrying BOTH requires — it mixes the two paths in one
-  // file, exactly what the convention forbids.
-  test('a spec file takes its credentials from ONE of the two sanctioned paths', () => {
+  // as loginViaUI — never both in one file. This pin asserts exactly that
+  // half: a spec carrying BOTH requires fails here.
+  // Scope limit, stated so the pin is not mistaken for full enforcement:
+  // the other half ("a spec that needs credentials takes them from a
+  // sanctioned path") is NOT enforceable by this check, because requiring
+  // NEITHER path is legitimate — a spec may need no venue credential at
+  // all (pure UI or config specs, the ragas suite, epic2's realm-local
+  // specs). Telling a credential-taking spec from a credential-free one
+  // from the source alone would need a per-file classification this pin
+  // deliberately does not attempt.
+  test('a spec file never mixes the two sanctioned credential paths', () => {
     const e2eRoot = path.join(ROOT, 'tests/e2e');
     const violations = [];
     const walkSpecs = (dir) => {

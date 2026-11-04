@@ -233,8 +233,11 @@ const keycloakProxyService = {
               // Tombstone digest — contract: shared/lib/erasure-tombstone.js.
               // Written BEFORE iss_sub is nulled below, so provisioning can
               // recognize and refuse the erased subject instead of re-INSERTing
-              // it from the still-valid token.
-              erased_key: ${erasedKey},
+              // it from the still-valid token. On an already-erased document
+              // (iss_sub already null, issSub not resolvable) the existing
+              // tombstone is kept — overwriting it with null would destroy the
+              // protection on an idempotent re-delete.
+              erased_key: ${erasedKey} == null ? u.erased_key : ${erasedKey},
               erasedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW()),
               email: null,
@@ -249,6 +252,12 @@ const keycloakProxyService = {
         `
       );
       logger.info('[KeycloakProxy] User erased', { userKey });
+      // Re-evict AFTER the erasure commits: a provision that raced the erasure
+      // may have re-cached the pre-erasure profile after the pre-delete
+      // eviction above (see #1440 for the residual INSERT-level window).
+      if (issSub) {
+        userProvisioningService.invalidateCache(issSub);
+      }
     } catch (arangoError) {
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
         userKey,

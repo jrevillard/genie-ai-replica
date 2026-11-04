@@ -52,7 +52,6 @@ const userProvisioningService = {
    */
   async initialize() {
     if (_initialized) return;
-    _initialized = true;
     // Erasure tombstone lookup index. NOT sparse: the optimizer cannot prove
     // a bound equality value is non-null, so a sparse index may be skipped and
     // the lookup degrade to a full scan — a persistent index already excludes
@@ -66,6 +65,9 @@ const userProvisioningService = {
       unique: false,
       name: 'idx_users_erased_key'
     });
+    // Set only after the index work succeeded — a failed initialize must be
+    // retryable, not permanently skipped by the flag.
+    _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
   },
 
@@ -118,8 +120,9 @@ const userProvisioningService = {
     // Erasure tombstone check — MUST run before the UPSERT: the GDPR erasure
     // nulls iss_sub (the UPSERT key), so without this check the still-valid
     // token would re-INSERT the erased identity. Contract: erasure-tombstone.js.
-    // The digest is bound from here (not computed in AQL) so the sparse index
-    // on erased_key serves the lookup. The erased document is returned as-is
+    // The digest is bound from here (not computed in AQL) so the index on
+    // erased_key serves the lookup (the index is deliberately not sparse —
+    // see initialize()). The erased document is returned as-is
     // (deleted: true) — the middleware answers 403 for deleted users.
     const erasedKey = erasureTombstoneKey(issSub);
     const erasedCursor = await db.query(

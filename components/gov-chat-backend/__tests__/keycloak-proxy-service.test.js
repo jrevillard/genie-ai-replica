@@ -286,12 +286,15 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
       expect(db.query).toHaveBeenCalledTimes(2);
 
-      // Second delete - Keycloak will return 404 (user already gone)
+      // Second delete - Keycloak will return 404 (user already gone) and the
+      // ArangoDB document is already erased (iss_sub nulled, tombstone set).
       // deleteUser() is idempotent: 404 skips the Keycloak delete but still
-      // completes the ArangoDB erasure (tombstone included)
+      // completes the ArangoDB erasure, and the existing tombstone is KEPT —
+      // overwriting it with null would let the still-valid token resurrect
+      // the identity.
       keycloakProxyService._clearTokenCache();
       db.query = jest.fn();
-      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+      db.query.mockResolvedValueOnce(mockCursor({ sub: null, issSub: null })); // already-erased doc
       db.query.mockResolvedValueOnce({}); // ArangoDB erasure must still run
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
@@ -303,6 +306,11 @@ describe('keycloak-proxy-service', () => {
       // Keycloak 404 should NOT throw — erasure is idempotent
       await expect(keycloakProxyService.deleteUser('user-key')).resolves.not.toThrow();
       expect(db.query).toHaveBeenCalledTimes(2); // resolve + erasure (404 did not abort)
+
+      // The existing tombstone must survive the re-erasure (kept, not nulled)
+      const reAql = db.query.mock.calls[1][0];
+      expect(reAql.query).toContain('u.erased_key');
+      expect(reAql.query).toContain('? u.erased_key');
     });
 
     it('should still erase ArangoDB when the Keycloak record is already gone (404)', async () => {
@@ -347,7 +355,15 @@ describe('keycloak-proxy-service', () => {
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
           .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-1' }, old: null }) })
       };
-      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(seedDb));
+      // Erase through the proxy — this must evict the entry
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+      const eraseDb = { query: jest.fn() };
+      eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub }));
+      eraseDb.query.mockResolvedValueOnce({});
+      dbService.getConnection
+        .mockResolvedValueOnce(Promise.resolve(seedDb)) // cache seeding provision
+        .mockResolvedValueOnce(Promise.resolve(eraseDb)) // deleteUser — resolve query
+        .mockResolvedValueOnce(Promise.resolve(eraseDb)); // deleteUser — erasure update
       const cached = await userProvisioningService.provisionUser({
         iss_sub: issSub,
         iss: 'https://kc.example',
@@ -356,12 +372,6 @@ describe('keycloak-proxy-service', () => {
       });
       expect(cached._key).toBe('user-1');
 
-      // Erase through the proxy — this must evict the entry
-      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
-      const eraseDb = { query: jest.fn() };
-      eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub }));
-      eraseDb.query.mockResolvedValueOnce({});
-      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(eraseDb));
       await keycloakProxyService.deleteUser('user-key');
 
       // Next provision must NOT serve the cached pre-erasure profile
@@ -385,6 +395,54 @@ describe('keycloak-proxy-service', () => {
       // the cached pre-erasure document would come back with zero queries)
       expect(freshDb.query).toHaveBeenCalled();
       expect(after._key).toBe('user-fresh');
+      userProvisioningService._reset();
+    });
+
+    it('should re-evict after the erasure, so a provision racing the erase cannot leave a stale cached profile', async () => {
+      const userProvisioningService = require('../services/user-provisioning-service');
+      userProvisioningService._reset();
+      const issSub = 'https://kc.example#sub-1';
+      const claims = { iss_sub: issSub, iss: 'https://kc.example', sub: 'sub-1', email: 'test@test.com' };
+
+      const provisionChain = () =>
+        jest
+          .fn()
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone — miss
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy — miss
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // deleted check — miss
+          .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue({ new: { _key: 'user-race' }, old: null }) });
+
+      // Cache seeded before the erasure starts
+      keycloakProxyService._clearTokenCache();
+      const seedDb = { query: provisionChain() };
+      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(seedDb));
+      await userProvisioningService.provisionUser(claims);
+
+      // A provision that RACES the erasure: it runs while deleteUser is
+      // resolving the Keycloak UUID (i.e. after the pre-delete eviction) and
+      // re-populates the cache with the pre-erasure profile.
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+      const eraseDb = { query: jest.fn() };
+      eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub })); // resolve
+      eraseDb.query.mockImplementationOnce(async () => {
+        // Concurrent provision re-caches the profile while the erasure commits
+        dbService.getConnection.mockResolvedValueOnce(Promise.resolve({ query: provisionChain() }));
+        const racing = await userProvisioningService.provisionUser(claims);
+        expect(racing._key).toBe('user-race');
+        return {};
+      });
+      dbService.getConnection
+        .mockResolvedValueOnce(Promise.resolve(eraseDb)) // deleteUser — resolve query
+        .mockResolvedValueOnce(Promise.resolve(eraseDb)); // deleteUser — erasure update
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      // The racing provision's re-cached profile must not survive the erasure
+      const freshDb = { query: provisionChain() };
+      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(freshDb));
+      const after = await userProvisioningService.provisionUser(claims);
+      expect(freshDb.query).toHaveBeenCalled(); // cache was empty — re-evicted post-erasure
+      expect(after._key).toBe('user-race');
       userProvisioningService._reset();
     });
 

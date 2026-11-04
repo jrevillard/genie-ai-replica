@@ -188,6 +188,16 @@ async function main() {
 
   console.log(`== W1-W3 chat-source smoke against ${BASE} (repos ${NAME_A} / ${NAME_R}) ==`);
 
+  // Sweep this smoke family's leftovers FIRST: a published repo from an
+  // earlier run keeps SERVING and its citations pollute the chat answer's
+  // sources (live 2026-11-04: attempt N cited attempt N-1's repo).
+  const listed = await call('GET', '/api/okf/repos', ADMIN);
+  const stale = ((listed.json && listed.json.items) || []).filter((r) => String(r.name || '').startsWith('w1-smoke-srcs-'));
+  for (const r of stale) {
+    await deleteRepo(r.repo_id);
+    console.log(`  swept stale smoke repo ${r.name} (${r.repo_id})`);
+  }
+
   // --- 1. Seed: open repo (2 concepts) + restricted repo (1 concept) ---
   console.log('[1] seed repos + approve + publish + drain');
   const alpha = [
@@ -195,14 +205,19 @@ async function main() {
     { concept_id: 'alpha_hours', body: CONCEPT('alpha_hours', 'Alpha Office Hours'), title: 'Alpha Office Hours' }
   ];
   const restricted = [{ concept_id: 'secret_alpha', body: CONCEPT('secret_alpha', 'Secret Alpha'), title: 'Secret Alpha' }];
+  // SEQUENTIAL drains, deliberately: the server minted BOTH repos' concepts
+  // as the same id (concept-1) and dataprep's uploaded_files namespace is
+  // FLAT — concurrent same-id ingests clobber each other's files (live
+  // 2026-11-04: R dead-lettered ENOENT while A's 18s ingest was mid-flight;
+  // a real ingest-namespacing bug to file separately). The smoke proves
+  // CAP-1/2/3, not ingest concurrency.
   const repoA = await makeRepo(NAME_A, alpha);
+  const rowsA = await waitIndexed(repoA.id);
   const repoR = await makeRepo(NAME_R, restricted);
-  console.log(`  minted: A=${repoA.id} R=${repoR.id}`);
   const stamped = await call('PATCH', `/api/okf/repos/${repoR.id}`, ADMIN, {
     acl: { restricted: true, required_scopes: [`okf:t:alpha-smoke-${STAMP}:admin`] }
   });
   if (stamped.status !== 200) throw new Error(`restrict ${repoR.id}: ${stamped.status} ${stamped.text.slice(0, 200)}`);
-  const rowsA = await waitIndexed(repoA.id);
   const rowsR = await waitIndexed(repoR.id);
   pass(`both repos drained to indexed (A=${rowsA.length}, R=${rowsR.length})`);
 
@@ -226,8 +241,12 @@ async function main() {
   if (adminRead.status === 200) pass('wildcard admin still reads the restricted concept');
   else fail(`admin restricted read: ${adminRead.status}`);
   const fencedList = await call('GET', `/api/okf/repos/${repoR.id}/concepts`, SCOPELESS);
-  if (fencedList.status === 404) pass('concept INDEX fenced too (listConcepts gate)');
-  else fail(`restricted concept list as scopeless: expected 404, got ${fencedList.status}`);
+  // The concept INDEX is an editor surface behind the STRICT scope gate — a
+  // scopeless caller is 403 there (the serving-read fence is the
+  // single-concept GET, asserted above). W9's citizen tree index will be a
+  // serving read with its own fence.
+  if (fencedList.status === 403) pass('concept INDEX behind the strict editor gate (403 to a scopeless caller)');
+  else fail(`restricted concept list as scopeless: expected 403 (strict gate), got ${fencedList.status}`);
 
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---
   console.log('[3] CAP-1 chat citation identity');

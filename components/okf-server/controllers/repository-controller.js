@@ -89,6 +89,21 @@ function authzForService(req) {
 }
 
 /**
+ * The READ-side verdict for the serving-reads surface (CAP-2, 2026-11-04):
+ * deriveReadAuthz is the SAME rule resolveGraphSet and getRetrievalConfig
+ * apply — super/wildcard, or open-mode scopeless (the default-open posture:
+ * a regular user's query resolves the serving set, so its citation card can
+ * read the concept that grounded it). Repo-MANAGEMENT routes keep
+ * authzForService (default-deny); only the serving read gets the open-mode
+ * fall-open, and the 6-1c restricted fence still gates EVERY caller behind
+ * it (privileged stays derived-privilege — never this verdict).
+ */
+function readAuthzForService(req) {
+  const verdict = scopeAuthzService.deriveReadAuthz(req.okfScopes, req.okfIsSuperAdmin);
+  return verdict.unrestricted ? null : verdict.authorizedRepoIds;
+}
+
+/**
  * CAP-2 (chat-source resolution spec, 2026-11-04): the 6-1c per-repo READ
  * fence for the concept-content read family. `authzForService`'s Set/null
  * filter decides which repos the caller's SCOPE LIST names; `acl.restricted`
@@ -961,7 +976,10 @@ async function getConcept(req, res, next) {
     const { repo_id, concept_id } = req.params;
     // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
     // anti-enumeration; the body must not serve what retrieval refuses).
-    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    // This handler is a SERVING READ (registered on the allowScopelessWhenOpen
+    // sub-router) — the pre-gate uses the read-side verdict, not the
+    // management default-deny.
+    const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
     await assertRepoReadableByCaller(req, repoDoc);
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
     if (!concept) {

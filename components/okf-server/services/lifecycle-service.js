@@ -493,7 +493,10 @@ async function armRagDrain(db, repoId, repo, actor, opts = {}) {
   // graph (ensure-graph re-created it at 08:18:41). Stamp every row to this
   // drain's serving name right before arming.
   const drainGraphName = graphLifecycle.versionedGraphName(repo);
-  await conceptMetaService.stampRepoGraphName(repoId, drainGraphName);
+  // CAP-1: bind every row to the version being drained (the retrieval
+  // enrichment join reads it — citations carry repo_id + bundle_version as
+  // first-class data).
+  await conceptMetaService.stampRepoGraphName(repoId, drainGraphName, repo.version != null ? repo.version : null);
   const ts = nowIso();
   await db.collection(REPOS).update(repoId, {
     rag_drain_active: true,

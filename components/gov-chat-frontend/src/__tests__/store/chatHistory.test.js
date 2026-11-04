@@ -170,6 +170,21 @@ describe('Vuex chatHistory module', () => {
     });
   });
 
+  describe('RESET mutation', () => {
+    it('should wipe the chats list as well, unlike CLEAR_FOLDERS', () => {
+      state.folders.push({ id: 'f1', name: 'Work', isDefault: false, createdAt: '2026-01-01T00:00:00.000Z' });
+      state.folderChats.f1 = ['chat-1'];
+      state.chats.push({ id: 'chat-1', title: 'Test' });
+
+      chatHistory.mutations.RESET(state);
+
+      expect(state.folders).toHaveLength(1);
+      expect(state.folders[0]).toMatchObject({ id: 'default', name: 'All Chats', isDefault: true });
+      expect(state.chats).toEqual([]);
+      expect(state.folderChats).toEqual({ default: [] });
+    });
+  });
+
   // --- AC3: Chat mutations ---
 
   describe('ADD_CHAT mutation (AC3)', () => {
@@ -497,6 +512,11 @@ describe('Vuex chatHistory module', () => {
     it('clearFolders should commit CLEAR_FOLDERS mutation', async () => {
       await chatHistory.actions.clearFolders({ commit });
       expect(commit).toHaveBeenCalledWith('CLEAR_FOLDERS');
+    });
+
+    it('resetAll should commit RESET mutation', async () => {
+      await chatHistory.actions.resetAll({ commit });
+      expect(commit).toHaveBeenCalledWith('RESET');
     });
   });
 

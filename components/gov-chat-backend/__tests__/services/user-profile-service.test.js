@@ -331,6 +331,44 @@ describe('UserProfileService', () => {
       expect(preserved).not.toHaveProperty('customSettings');
     });
 
+    it('should preserve the client preference fields so the mobile client keeps its toggles and language', async () => {
+      // PUT /api/me stores the client display/notification preferences
+      // top-level; the reset keeps them (issue #1454) while still wiping
+      // every other user-supplied key.
+      mockUsers.document.mockResolvedValue(
+        makeUserDoc({
+          theme: 'dark',
+          fontSize: 80,
+          language: 'es',
+          emailUpdates: true,
+          soundNotifications: false,
+          personalIdentification: { fullName: 'John Doe' }
+        })
+      );
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.theme).toBe('dark');
+      expect(preserved.fontSize).toBe(80);
+      expect(preserved.language).toBe('es');
+      expect(preserved.emailUpdates).toBe(true);
+      expect(preserved.soundNotifications).toBe(false);
+      // Profile data is still wiped
+      expect(preserved).not.toHaveProperty('personalIdentification');
+    });
+
+    it('should not preserve a preference field that was absent from the stored document', async () => {
+      mockUsers.document.mockResolvedValue(makeUserDoc({ language: 'es' }));
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.language).toBe('es');
+      expect(preserved).not.toHaveProperty('theme');
+      expect(preserved).not.toHaveProperty('emailUpdates');
+    });
+
     it('should not preserve a customSettings value promoted to the top level as an identity field', async () => {
       // getUserProfile() promotes customSettings sub-keys to the top level;
       // resetUserData reads the stored document directly, so a user-controlled

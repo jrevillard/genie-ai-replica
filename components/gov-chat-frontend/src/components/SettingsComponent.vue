@@ -532,6 +532,13 @@ export default {
         // The reset has committed and the outcome is already announced; a
         // local-preferences failure must not surface as a failed reset.
         try {
+          // Drop the in-session store state BEFORE the storage wipe: the
+          // chat-history and conversation subscriptions re-persist on the
+          // next mutation, so a surviving in-memory history would write the
+          // wiped data straight back. The commits here leave only the fresh
+          // default state for them to write.
+          this.$store.commit('chatHistory/RESET');
+          this.$store.commit('conversation/RESET');
           const preserved = {};
           for (const key of DISPLAY_PREF_KEYS) {
             const value = localStorage.getItem(key);

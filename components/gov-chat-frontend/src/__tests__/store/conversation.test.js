@@ -102,6 +102,22 @@ describe('conversation module', () => {
     expect(open.conversationId).toBeNull();
     expect(open.relatedDocuments).toEqual([]);
   });
+
+  it('RESET drops every conversation, not only the open one', () => {
+    // Unlike resetForNewConversation, which keeps the conversations map and
+    // only clears the open entry, the full reset must leave the fresh
+    // single-entry shape — Reset User Data wipes all of it (#1455).
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.state.conversation.conversations['other-id'] = { messages: [{ sender: 'user', content: 'old' }] };
+    store.state.conversation.openId = 'other-id';
+
+    store.commit('conversation/RESET');
+
+    expect(store.state.conversation.openId).toBe('open');
+    expect(Object.keys(store.state.conversation.conversations)).toEqual(['open']);
+    expect(store.getters['conversation/openConversation'].messages).toEqual([]);
+  });
 });
 
 describe('conversation persistence', () => {

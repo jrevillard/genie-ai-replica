@@ -55,6 +55,13 @@ const mutations = {
   resetForNewConversation(st) {
     st.conversations[st.openId] = emptyConversation();
   },
+  // Full reset to the freshly-initialized shape — resetForNewConversation
+  // only clears the open conversation's messages and keeps every other
+  // conversation in the map, which is not enough for Reset User Data.
+  RESET(st) {
+    st.openId = OPEN_ID;
+    st.conversations = { [OPEN_ID]: emptyConversation() };
+  },
   setTitle(st, title) {
     st.conversations[st.openId].title = title;
   },

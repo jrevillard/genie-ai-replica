@@ -3,7 +3,7 @@ const fs = require('fs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
-const { JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS } = require('../constants/jit-fields');
+const { JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS, USER_PREFERENCE_FIELDS } = require('../constants/jit-fields');
 
 class UserProfileService {
   constructor() {
@@ -392,9 +392,12 @@ class UserProfileService {
       // Preserve the system-managed fields (SYSTEM_PRESERVED_FIELDS): losing
       // iss_sub/email would make the provisioning UPSERT miss this document
       // on next login and INSERT a husk duplicate; losing the audit markers
-      // would destroy soft-delete/GDPR state.
+      // would destroy soft-delete/GDPR state. The client preference fields
+      // (USER_PREFERENCE_FIELDS) are kept too: they are the user's
+      // look-and-feel, not profile data — the mobile client reverts its
+      // notification toggles and language if the reset drops them.
       const preservedData = {};
-      for (const field of SYSTEM_PRESERVED_FIELDS) {
+      for (const field of [...SYSTEM_PRESERVED_FIELDS, ...USER_PREFERENCE_FIELDS]) {
         if (field === 'updatedAt') {
           continue; // bumped to now below, not carried over
         }

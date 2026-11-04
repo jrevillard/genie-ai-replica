@@ -152,6 +152,22 @@ export default {
         }
       ];
       state.folderChats = { default: [] };
+    },
+
+    // Full reset to the freshly-initialized shape — CLEAR_FOLDERS keeps the
+    // chats array untouched, which is not enough for Reset User Data: the
+    // chats list itself is the data being wiped.
+    RESET(state) {
+      state.folders = [
+        {
+          id: 'default',
+          name: 'All Chats',
+          isDefault: true,
+          createdAt: new Date().toISOString()
+        }
+      ];
+      state.chats = [];
+      state.folderChats = { default: [] };
     }
   },
 
@@ -229,6 +245,10 @@ export default {
 
     async clearFolders({ commit }) {
       commit('CLEAR_FOLDERS');
+    },
+
+    resetAll({ commit }) {
+      commit('RESET');
     }
   }
 };

@@ -45,4 +45,12 @@ const JIT_PROTECTED_FIELDS = [
 // reverse (preserved but not strip-relevant) is benign.
 const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt'];
 
-module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS };
+// Client display/notification preference fields the reset must carry over.
+// PUT /api/me stores them top-level on the user document (the mobile client
+// persists theme, fontSize, language, emailUpdates and soundNotifications
+// this way); they are the user's look-and-feel, not profile data, so a
+// destructive reset keeps them — the server-side mirror of the web client's
+// DISPLAY_PREF_KEYS preserve list (which keeps the same keys in localStorage).
+const USER_PREFERENCE_FIELDS = ['theme', 'fontSize', 'language', 'emailUpdates', 'soundNotifications'];
+
+module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS, USER_PREFERENCE_FIELDS };

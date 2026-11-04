@@ -442,7 +442,10 @@ async function deleteUser(adminToken, realm, userId) {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
 
-  if (res.status !== 204) {
+  // 404 means the user is already gone — that IS the end state every
+  // caller wants (no test account left behind). Anything else is a real
+  // failure and must fail the cleanup that asked for it.
+  if (res.status !== 204 && res.status !== 404) {
     throw new Error(`Failed to delete user ${userId}: ${res.status}`);
   }
 }

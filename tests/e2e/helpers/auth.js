@@ -32,13 +32,24 @@ function request(method, path, options = {}) {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
-        let data;
-        try {
-          data = JSON.parse(body);
-        } catch {
-          data = body;
+        // A non-JSON body is a broken endpoint, not a usable value: resolve
+        // with the raw text and the caller's status guard would report a
+        // misleading failure. Fail here with the observed body instead. An
+        // empty body resolves as null data — a 204-style success with no
+        // payload is not malformed.
+        if (body === '') {
+          resolve({ status: res.statusCode, data: null });
+          return;
         }
-        resolve({ status: res.statusCode, data });
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(body) });
+        } catch {
+          reject(
+            new Error(
+              `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
+            )
+          );
+        }
       });
     });
 
@@ -154,19 +165,22 @@ async function getUserToken(username, password, options = {}) {
  * @throws {Error} When the page session carries no token (not logged in)
  */
 async function getSessionToken(page) {
-  const token = await page.evaluate(() => {
+  const { token, parseError } = await page.evaluate(() => {
     const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
-    if (!key) return null;
+    if (!key) return { token: null };
     try {
       const user = JSON.parse(sessionStorage.getItem(key));
-      return user?.access_token || null;
-    } catch {
-      return null;
+      return { token: user?.access_token || null };
+    } catch (e) {
+      return { token: null, parseError: e.message };
     }
   });
 
   if (!token) {
-    throw new Error('No access token in the page session — the page is not logged in');
+    throw new Error(
+      'No access token in the page session — the page is not logged in' +
+        (parseError ? ` (the oidc.user entry is not valid JSON: ${parseError})` : '')
+    );
   }
   return token;
 }

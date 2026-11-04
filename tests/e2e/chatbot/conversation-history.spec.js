@@ -55,46 +55,57 @@ test.describe('Conversation history persistence', () => {
     // The cleanup's mint + list + delete sweep outlives the 60s hook default.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
+    // A failing cleanup FAILS: a conversation left behind poisons later
+    // runs (the suite's own titles match the next run's sweep), so any
+    // leftover is thrown, never warned away.
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {
-      console.warn('cleanup: cleanup login failed — skipping conversation cleanup:', e.message);
-      return null;
+      throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
-    if (!token) return;
 
     let targets = [];
+    let listFailure = null;
     // searchTerm narrows the list to the suite's own titles (the route's
     // default page is 20 — old leftovers would rotate off it unfiltered).
     const listRes = await request('GET', `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=50`, {
       headers: { Authorization: `Bearer ${token}` }
     }).catch((e) => {
-      console.error(`cleanup: conversation list failed: ${e.message}`);
+      listFailure = e.message;
       return null;
     });
     if (listRes && listRes.status === 200) {
       const list = listRes.data.conversations || listRes.data;
       targets = (Array.isArray(list) ? list : []).filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id);
     } else {
+      listFailure = listFailure || `list returned ${listRes ? listRes.status : 'no response'}`;
+      // Fall back to the ids captured in-flight so the deletes still run,
+      // but the unenumerated leftovers still fail the cleanup below.
       targets = [...createdConversationIds];
     }
 
-    let failed = 0;
+    const undeleted = [];
     for (const convId of targets) {
       try {
         const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.status < 200 || res.status >= 300) {
-          failed++;
-          console.error(`cleanup: delete of conversation ${convId} returned ${res.status}`);
+          undeleted.push({ id: convId, cause: `DELETE returned ${res.status}` });
         }
       } catch (err) {
-        failed++;
-        console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
+        undeleted.push({ id: convId, cause: err.message });
       }
     }
-    if (failed > 0) {
-      console.warn(
-        `cleanup: deleted ${targets.length - failed} of ${targets.length} conversations — leftovers will accumulate`
+    if (listFailure) {
+      throw new Error(
+        `cleanup could not enumerate leftover conversations (${listFailure}) — ` +
+          `${targets.length} in-flight ids were deleted, but any conversation saved by a failed ` +
+          `test and missed by the bookkeeping stays behind`
+      );
+    }
+    if (undeleted.length > 0) {
+      throw new Error(
+        `cleanup deleted ${targets.length - undeleted.length} of ${targets.length} conversations — ` +
+          `leftover: ${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
       );
     }
   });

@@ -76,7 +76,26 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
 }
 
 /**
- * Search documents by typing in the search input and waiting for table refresh.
+ * Hold until the rendered document table rows ARE the payload of a
+ * /api/files response. getDocumentTableRows reads once, without
+ * retrying — a response the table has not painted is not a settled
+ * state, and a single-shot read before this hold can see the rows from
+ * BEFORE the request. Takes the awaited Playwright Response.
+ */
+async function waitForTableRowsSettled(page, filesResponse) {
+  const expectedNames = ((await filesResponse.json()).data || [])
+    .map((f) => f.file_name)
+    .sort();
+  await expect
+    .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
+      timeout: 10000,
+    })
+    .toEqual(expectedNames);
+}
+
+/**
+ * Search documents by typing in the search input and waiting for the table
+ * to render the search's own response.
  */
 async function searchDocuments(page, query) {
   // DsInput renders the passed class on the input element itself — the
@@ -85,16 +104,29 @@ async function searchDocuments(page, query) {
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.clear();
   // The table refreshes on a 250 ms debounce plus a fetch: wait for the
-  // request this input triggers, then one render tick before callers read
-  // the rows (getDocumentTableRows reads once, without retrying).
-  const filesResponse = page
-    .waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 })
-    .catch(() => null);
+  // request the fill triggers, then hold until the rendered rows ARE the
+  // response's file list — a response the table has not painted is not a
+  // settled state, and getDocumentTableRows reads once, without retrying.
+  // The wait is bound before the fill so the response cannot be missed,
+  // and the predicate matches the DECODED search param exactly, so a
+  // background refresh or another control's request (including the
+  // clear's own, whose search param differs) cannot answer for this
+  // search. A missed response fails here: the request IS the search.
+  const filesResponsePromise = page.waitForResponse((r) => {
+    if (!r.url().includes('/api/files')) return false;
+    const match = r.url().match(/[?&]search=([^&]*)/);
+    // `+` is a space in query-string form encoding; decode it before
+    // comparing, or a two-word query never matches its own response.
+    const decoded = match ? decodeURIComponent(match[1].replace(/\+/g, '%20')) : '';
+    return decoded === (query || '');
+  }, {
+    timeout: 5000,
+  });
   if (query) {
     await searchInput.fill(query);
   }
-  await filesResponse;
-  await page.waitForTimeout(250);
+  const filesResponse = await filesResponsePromise;
+  await waitForTableRowsSettled(page, filesResponse);
 }
 
 /**
@@ -109,9 +141,10 @@ async function getDocumentTableRows(page) {
     const row = rows.nth(i);
     const fileName = (await row.locator('td.cell-main').innerText()).trim();
     const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
-    const status = (await statusTag.isVisible().catch(() => false))
-      ? (await statusTag.innerText()).trim()
-      : '';
+    // A row's status tag is data-driven — documents without a status render
+    // none — so the branch is on the row's shape, not on timing. isVisible
+    // answers false for an absent element; a broken locator fails the read.
+    const status = (await statusTag.isVisible()) ? (await statusTag.innerText()).trim() : '';
     const labelTags = row.locator('.label-tag');
     const labelCount = await labelTags.count();
     const labels = [];
@@ -148,46 +181,53 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   try {
     token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
   } catch (e) {
-    console.warn('cleanup: cleanup login failed — skipping document cleanup:', e.message);
-    return;
+    throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`);
   }
 
   // The search param narrows the list to the prefix itself, so one page
   // (the endpoint validates limit <= 50) covers the test documents however
   // many unrelated files the stack holds.
-  const listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  }).catch((e) => {
-    console.warn(`cleanup: file list failed (${e.message}) — nothing deleted`);
-    return null;
-  });
-  if (!listRes) return;
+  let listRes;
+  try {
+    listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    throw new Error(`cleanup: file list failed — no test document was deleted: ${e.message}`);
+  }
   if (listRes.status !== 200) {
-    console.warn(`cleanup: file list failed (HTTP ${listRes.status}) — nothing deleted`);
-    return;
+    throw new Error(`cleanup: file list failed with HTTP ${listRes.status} — no test document was deleted`);
   }
   const files = listRes.data?.data || [];
   if (files.length === 50) {
-    console.warn('cleanup: file list hit the 50-entry page cap — coverage may be partial');
+    throw new Error(
+      'cleanup: the file list hit the 50-entry page cap — the sweep cannot enumerate ' +
+        'every prefix-matching file, so deletions it cannot verify as complete must not run silently'
+    );
   }
 
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-  let failed = 0;
+  const failures = [];
   for (const f of testFiles) {
     const file_id = f.file_id || f._key || f.id;
-    const res = await request('DELETE', `/api/files/${file_id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch((e) => {
-      console.error('Cleanup: failed to delete', f.file_name, e.message);
-      return null;
-    });
+    let res = null;
+    let cause = null;
+    try {
+      res = await request('DELETE', `/api/files/${file_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      cause = e.message;
+    }
     if (!res || res.status < 200 || res.status >= 300) {
-      failed++;
-      console.error(`Cleanup: delete of ${f.file_name} returned ${res ? res.status : 'no response'}`);
+      failures.push(`${f.file_name}: ${cause || `HTTP ${res ? res.status : 'no response'}`}`);
     }
   }
-  if (failed > 0) {
-    console.warn(`cleanup: deleted ${testFiles.length - failed} of ${testFiles.length} test documents — leftovers will accumulate`);
+  if (failures.length > 0) {
+    throw new Error(
+      `cleanup: ${failures.length} of ${testFiles.length} test documents were not deleted — ` +
+        `leftover documents remain in the stack: ${failures.join('; ')}`
+    );
   }
 }
 
@@ -197,6 +237,7 @@ module.exports = {
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,
+  waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
 };

@@ -222,12 +222,11 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
   };
 
   // A held hierarchy must not be reloaded for: the reload waits for
-  // networkidle, and the held answer never settles it. A held run also
-  // gets no settle pause — the spec's own wait is the gate.
+  // networkidle, and the held answer never settles it. A held run relies
+  // on the spec's own wait — openWelcomeScreen's reload is skipped.
   const { ctx, page } = await openWelcomeScreen(browser, {
     setupPage,
-    reload: !holdHierarchy,
-    ...(holdHierarchy ? {} : { settle: 1500 })
+    reload: !holdHierarchy
   });
 
   // The composer appears only once the configuration's buttons are known:
@@ -250,10 +249,11 @@ async function watchQueries(page) {
 
 test.describe('Quick Help scope states', () => {
   test('the grid waits for the hierarchy, then renders its cards', async ({ browser }) => {
-    // The hierarchy is HELD on purpose: the window in which it is on its
-    // way is the window the settle-gate governs. Without the gate the grid
-    // would render during that window, offering cards whose scope nobody
-    // can say is valid — and a click it cannot answer is a dead click.
+    // The hierarchy is HELD on purpose: while it is on its way the grid
+    // must not exist, and the assertion below is what governs that
+    // window — while it is pending, cards whose scope nobody can say is
+    // valid must not be offered (a click they cannot answer is a dead
+    // click).
     const { ctx, page, release } = await openWelcome(browser, { holdHierarchy: true });
 
     // The configuration is applied (the composer is there) and the hierarchy
@@ -287,10 +287,14 @@ test.describe('Quick Help scope states', () => {
     // And the click sends NOTHING: no turn, no user message.
     const streamed = await watchQueries(page);
     await broken.first().click();
-    await page.waitForTimeout(1200);
 
+    // The refusal is synchronous — nothing waits on the click, so these
+    // are instant negative checks: at click time no turn is mounted and
+    // nothing is on the query path. A send that escaped the synchronous
+    // refusal after this instant is the send-time guard's subject (the
+    // test below), not this one's.
+    await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
     expect(streamed(), 'a broken card must not reach the query path').toBe(false);
-    expect(await page.locator('[data-testid="user-avatar"]').count()).toBe(0);
 
     // The tile guard refuses BEFORE anything is installed: no context item
     // appears, and the welcome screen (which only renders while NO context
@@ -381,9 +385,9 @@ test.describe('Quick Help scope states', () => {
 
     const streamed = await watchQueries(page);
     await healthy.first().click();
-    await page.waitForTimeout(1200);
 
-    expect(streamed(), 'a healthy card DOES reach the query path').toBe(true);
+    // A healthy card DOES reach the query path.
+    await expect.poll(() => streamed(), { timeout: 15000 }).toBe(true);
 
     await ctx.close();
   });

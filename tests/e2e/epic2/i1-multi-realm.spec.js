@@ -50,19 +50,17 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // stack — past the 60s project timeout the hook otherwise runs under.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
-    // Cleanup: delete test user only (realm lifecycle is managed by Phase 0)
-    try {
-      const token = await getAdminToken();
-      const searchRes = await authRequest(
-        'GET',
-        `/auth/admin/realms/${TEST_REALM}/users?username=${TEST_USER.username}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (searchRes.data && searchRes.data.length > 0) {
-        await deleteUser(token, TEST_REALM, searchRes.data[0].id);
-      }
-    } catch {
-      // Best-effort cleanup
+    // Cleanup: delete test user only (realm lifecycle is managed by Phase 0).
+    // A failed delete fails the suite and names the leftover: the account
+    // stays in genie2 until the next run's createUser (409-tolerant) reuses it.
+    const token = await getAdminToken();
+    const searchRes = await authRequest(
+      'GET',
+      `/auth/admin/realms/${TEST_REALM}/users?username=${TEST_USER.username}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (searchRes.data && searchRes.data.length > 0) {
+      await deleteUser(token, TEST_REALM, searchRes.data[0].id);
     }
   });
 

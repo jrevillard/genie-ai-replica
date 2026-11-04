@@ -73,7 +73,6 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
-    await page.waitForTimeout(1500);
 
     const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
@@ -85,7 +84,6 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     const ragasTab = page.getByRole('button', { name: /RAGAS Benchmarks/i }).first();
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
-    await page.waitForTimeout(2000);
 
     const guideButton = page.locator('.okf-ragas__help-toggle').first();
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
@@ -110,7 +108,6 @@ test.describe('the RAGAS guide documents what each error state does to the resul
       .first();
     await expect(errorsTab, 'the guide must have an errors chapter').toBeVisible({ timeout: 20000 });
     await errorsTab.click();
-    await page.waitForTimeout(600);
 
     // 5. THE TABLE — one row per state, with a meaning and an effect.
     //

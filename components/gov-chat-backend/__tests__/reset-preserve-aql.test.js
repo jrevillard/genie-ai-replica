@@ -31,7 +31,13 @@ const PRESERVE_FIELDS = [
   'pendingEmailChange',
   'deletedAt',
   'erasedAt',
-  'erased_key'
+  'erased_key',
+  // Client preference fields (#1454) — part of the production preserve set.
+  'theme',
+  'fontSize',
+  'language',
+  'emailUpdates',
+  'soundNotifications'
 ];
 
 describe('reset preserve AQL (real arangojs bind semantics)', () => {

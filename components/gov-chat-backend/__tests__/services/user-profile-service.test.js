@@ -325,7 +325,9 @@ describe('UserProfileService', () => {
       // Identity fields survive — the provisioning UPSERT matches on iss_sub,
       // the legacy migration matches on email. Losing either INSERTs a husk doc.
       expect(preserveList).toEqual(expect.arrayContaining(['iss_sub', 'sub', 'iss', 'email', 'name']));
-      expect(preserveList).toEqual(expect.arrayContaining(['emailVerified', 'roles', 'active', 'deleted', 'createdAt']));
+      expect(preserveList).toEqual(
+        expect.arrayContaining(['emailVerified', 'roles', 'active', 'deleted', 'createdAt'])
+      );
       // Client preference fields are preserved too (#1454): PUT /api/me stores
       // them top-level on the document and the mobile client reverts its
       // toggles and language if the reset drops them. The list below is an
@@ -375,7 +377,14 @@ describe('UserProfileService', () => {
         'pendingEmailChange',
         'deletedAt',
         'erasedAt',
-        'erased_key'
+        'erased_key',
+        // Client preference fields (#1454) — the user's look-and-feel,
+        // preserved by the reset like the system-owned set above.
+        'theme',
+        'fontSize',
+        'language',
+        'emailUpdates',
+        'soundNotifications'
       ];
       expect([...preserveList].sort()).toEqual(expectedPreserved.sort());
       // The preserve set is read from the STORED document server-side (the

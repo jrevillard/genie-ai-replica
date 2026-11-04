@@ -65,9 +65,9 @@ jest.mock('../../services/path-sanitizer', () => ({
   sanitizePath: jest.fn((base, name) => `${base}/${name}`)
 }));
 
-jest.mock('../../constants/jit-fields', () => ({
-  JIT_PROTECTED_FIELDS: ['email', 'firstName', 'lastName', 'username']
-}));
+jest.mock('../../constants/jit-fields', () =>
+  jest.requireActual('../../constants/jit-fields')
+);
 
 function createMockCollection() {
   return {
@@ -281,6 +281,50 @@ describe('UserProfileService', () => {
     it('should throw NotFoundError when user not found', async () => {
       mockUsers.document.mockRejectedValueOnce(new Error('Not found'));
       await expect(userProfileService.resetUserData('missing')).rejects.toThrow();
+    });
+
+    it('should preserve identity fields so provisioning re-matches the same document after reset', async () => {
+      // Shape of a provisioned user doc (user-provisioning-service UPSERT + legacy migration)
+      mockUsers.document.mockResolvedValue({
+        _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        iss: 'https://issuer.test',
+        sub: 'abc-123',
+        email: 'user@test.com',
+        name: 'John Doe',
+        emailVerified: true,
+        roles: ['genie-user'],
+        active: true,
+        deleted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+        // profile data — what the reset is supposed to wipe
+        personalIdentification: { fullName: 'John Doe' },
+        customSettings: { theme: 'dark' }
+      });
+
+      await userProfileService.resetUserData('user-1');
+
+      expect(mockUsers.replace).toHaveBeenCalledTimes(1);
+      const preserved = mockUsers.replace.mock.calls[0][1];
+
+      // Identity fields survive — the provisioning UPSERT matches on iss_sub,
+      // the legacy migration matches on email. Losing either INSERTs a husk doc.
+      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
+      expect(preserved.sub).toBe('abc-123');
+      expect(preserved.iss).toBe('https://issuer.test');
+      expect(preserved.email).toBe('user@test.com');
+      expect(preserved.name).toBe('John Doe');
+      expect(preserved.emailVerified).toBe(true);
+      expect(preserved.roles).toEqual(['genie-user']);
+      expect(preserved.active).toBe(true);
+      expect(preserved.deleted).toBe(false);
+      expect(preserved.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      expect(typeof preserved.updatedAt).toBe('string');
+
+      // Profile data is still wiped — that is the reset's purpose
+      expect(preserved).not.toHaveProperty('personalIdentification');
+      expect(preserved).not.toHaveProperty('customSettings');
     });
 
     it('should fallback to update with overwrite on replace failure', async () => {

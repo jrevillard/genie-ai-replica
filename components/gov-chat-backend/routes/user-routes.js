@@ -112,7 +112,7 @@ module.exports = (userService) => {
    * "/api/me/reset-data":
    *   post:
    *     summary: Reset user profile data
-   *     description: Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+   *     description: Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
    *     tags: [Current User]
    *     security:
    *       - KeycloakOAuth2: ['openid']

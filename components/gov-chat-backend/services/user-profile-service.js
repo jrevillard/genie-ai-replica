@@ -386,10 +386,16 @@ class UserProfileService {
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
-      const preservedData = {
-        createdAt: currentUserDoc.createdAt,
-        updatedAt: new Date().toISOString()
-      };
+      // Preserve the JIT-managed fields (identity, timestamps, soft-delete state).
+      // They are Keycloak-owned: losing iss_sub/email would make the provisioning
+      // UPSERT miss this document on next login and INSERT a husk duplicate.
+      const preservedData = {};
+      for (const field of JIT_PROTECTED_FIELDS) {
+        if (currentUserDoc[field] !== undefined) {
+          preservedData[field] = currentUserDoc[field];
+        }
+      }
+      preservedData.updatedAt = new Date().toISOString();
 
       logger.debug('UserProfileService.preserving_fields', {
         userKey,

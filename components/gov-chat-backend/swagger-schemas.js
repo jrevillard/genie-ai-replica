@@ -12,10 +12,11 @@ module.exports = {
   // minLength: 1 covers the string half of the runtime's truthiness check
   // (an empty eventType is refused with 400); additionalProperties:false
   // says the stored document's `data` spelling is NOT accepted on the wire.
-  // The runtime refuses the legacy `data` key with 400 (#1293); other
-  // unknown keys are still dropped silently. eventData is nullable because
-  // the generated Dart client emits `"eventData": null` whenever the field
-  // is omitted.
+  // The runtime refuses the legacy `data` key with 400 and still stores a
+  // truthy non-string eventType as-is; other unknown keys are dropped
+  // silently — the declared shape is not fully enforced yet (#1468).
+  // eventData is nullable because the generated Dart client emits
+  // `"eventData": null` whenever the field is omitted.
   EventRequest: {
     type: 'object',
     required: ['eventType'],

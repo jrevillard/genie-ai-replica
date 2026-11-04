@@ -281,10 +281,11 @@ module.exports = (analyticsService) => {
      */
     router.post('/events', async (req, res) => {
       try {
-        // Parsers leave req.body undefined when no parser matched the
-        // Content-Type, and a JSON scalar body arrives as a string — either
-        // way the handler only ever inspects one object-shaped binding.
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        // The body parsers leave req.body undefined when none matched the
+        // request's Content-Type (strict JSON mode rejects scalar bodies at
+        // the parser), so the handler always inspects one object-shaped
+        // binding.
+        const body = req.body ?? {};
         const { eventType, eventData } = body;
 
         if (!eventType) {

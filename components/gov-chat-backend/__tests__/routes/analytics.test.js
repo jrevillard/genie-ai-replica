@@ -381,6 +381,16 @@ describe('POST /api/analytics/events (AC6)', () => {
     expect(analyticsService.trackEvent).not.toHaveBeenCalled();
   });
 
+  it('should report the missing eventType before the legacy `data` key when both are wrong', async () => {
+    const response = await authPost('/api/analytics/events', {
+      data: { page: '/home' }
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: 'eventType is required' });
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
   it('should return 401 (not 400) for a legacy `data` body from a token with no iss_sub claim', async () => {
     userProvisioningService.provisionUser.mockResolvedValue({
       ...mockUser,

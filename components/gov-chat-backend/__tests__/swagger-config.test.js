@@ -268,7 +268,8 @@ describe('Swagger Configuration', () => {
     // `data`, so EventRequest documents the request wire and Event stays
     // the stored ArangoDB document shape. A shared schema carrying both
     // spellings made `eventData` vs `data` ambiguous to client authors —
-    // sending `data` was silently dropped (stored as {}).
+    // a body sending `data` used to be silently dropped (stored as {});
+    // the route now refuses it with 400.
     const spec = mergedSpec;
     const eventsOps = spec.paths['/api/analytics/events'];
 

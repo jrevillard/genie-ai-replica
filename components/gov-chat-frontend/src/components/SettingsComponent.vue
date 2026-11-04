@@ -220,7 +220,7 @@ import DsStateDisplay from '@/components/ds/StateDisplay.vue';
 
 // The local display preferences the reset must keep — the same keys save()
 // persists below. Reset User Data clears profile data and chat history,
-// not the user's look-and-feel (#1444).
+// not the user's look-and-feel.
 const DISPLAY_PREF_KEYS = ['theme', 'userLocale', 'fontSize', 'emailUpdates', 'soundNotifications'];
 
 export default {
@@ -535,8 +535,6 @@ export default {
         await this.fetchUserData();
         // The reset has committed and the outcome is already announced; a
         // local-preferences failure must not surface as a failed reset.
-        // Display preferences survive the wipe: the user asked to reset
-        // their profile data and chat history, not their look-and-feel.
         try {
           const preserved = {};
           for (const key of DISPLAY_PREF_KEYS) {

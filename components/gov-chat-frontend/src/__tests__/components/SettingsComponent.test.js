@@ -24,13 +24,15 @@ const mockI18nT = jest.fn((key) => key);
 const mockNotificationSuccess = jest.fn();
 const mockNotificationWarning = jest.fn();
 const mockNotificationError = jest.fn();
+const mockNotificationInfo = jest.fn();
 
 jest.mock('../../services/notificationService', () => ({
   __esModule: true,
   default: {
     success: mockNotificationSuccess,
     warning: mockNotificationWarning,
-    error: mockNotificationError
+    error: mockNotificationError,
+    info: mockNotificationInfo
   }
 }));
 
@@ -44,6 +46,7 @@ jest.mock('../../utils/ThemeManager', () => ({
   themeManager: {
     getCurrentTheme: jest.fn().mockReturnValue('light'),
     applyTheme: jest.fn(),
+    setTheme: jest.fn(),
     getFontSize: jest.fn().mockReturnValue(16),
     applyFontSize: jest.fn(),
     getCurrentLanguage: jest.fn().mockReturnValue('en'),
@@ -75,6 +78,9 @@ async function buildWrapper() {
         $i18n: {
           locale: 'en',
           t: mockI18nT
+        },
+        $router: {
+          push: jest.fn()
         },
         $store: {
           getters: {
@@ -182,6 +188,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
 
   afterEach(() => {
     localStorage.clear();
+    jest.restoreAllMocks();
   });
 
   test('keeps theme, locale, font size and notification toggles across the clear', async () => {
@@ -219,5 +226,31 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     expect(localStorage.getItem('fontSize')).toBeNull();
     expect(localStorage.getItem('emailUpdates')).toBeNull();
     expect(localStorage.getItem('soundNotifications')).toBeNull();
+  });
+
+  test('the keys save() persists are exactly the ones the reset preserves', async () => {
+    // Drift guard: a display preference added to save() but missed by the
+    // reset's preserve list — or dropped from it — would silently revert
+    // on the next reset. This pins the two key sets to each other at the
+    // localStorage boundary save() actually writes.
+    const written = [];
+    const setItem = Storage.prototype.setItem;
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
+      written.push(key);
+      setItem.call(localStorage, key, value);
+    });
+
+    const wrapper = await buildWrapper();
+    await wrapper.vm.save();
+
+    // The contract is the key SET save() touches (a key written twice is
+    // fine; a sixth key or a missing one is the drift this pins).
+    expect([...new Set(written)].sort()).toEqual([
+      'emailUpdates',
+      'fontSize',
+      'soundNotifications',
+      'theme',
+      'userLocale'
+    ]);
   });
 });

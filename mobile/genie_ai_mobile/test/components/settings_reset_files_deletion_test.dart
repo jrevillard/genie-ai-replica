@@ -1,16 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
+import '../helpers/mock_current_user_api.dart';
 import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
@@ -22,56 +20,6 @@ import '../helpers/theme_helper.dart';
 /// still on disk. When the flag is absent (backends without it) or false,
 /// the behaviour is unchanged (no notification). A failed reset call shows
 /// the failure SnackBar and clears the loading state.
-class MockCurrentUserApi implements CurrentUserApi {
-  MockCurrentUserApi({
-    this.resetBody = const {},
-    this.resetStatus = 200,
-    this.resetGate,
-  });
-
-  final Map<String, dynamic> resetBody;
-  final int resetStatus;
-
-  /// When set, the reset call only completes once the test resolves it —
-  /// used to hold the reset in flight while asserting on the loading state.
-  final Completer<void>? resetGate;
-
-  /// How many times the reset endpoint was called — lets a test observe
-  /// that the reset flow actually ran instead of only what it left behind.
-  int resetCalls = 0;
-
-  @override
-  Future<http.Response> apiMeGetWithHttpInfo({String? data}) async {
-    return http.Response(
-      jsonEncode({
-        'id': 'user-1',
-        'name': 'Test User',
-        'email': 'test@example.test',
-      }),
-      200,
-    );
-  }
-
-  @override
-  Future<http.Response> apiMeResetDataPostWithHttpInfo() async {
-    resetCalls++;
-    final gate = resetGate;
-    if (gate != null) await gate.future;
-    return http.Response(jsonEncode(resetBody), resetStatus);
-  }
-
-  @override
-  Future<http.Response> apiMePutWithHttpInfo({
-    String? data,
-    List<http.MultipartFile>? files,
-  }) async {
-    return http.Response(jsonEncode({'ok': true}), 200);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
 void main() {
   tearDown(() {
     resetThemeManager();

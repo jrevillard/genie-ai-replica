@@ -9,17 +9,16 @@ import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
+import '../helpers/mock_current_user_api.dart';
 import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
-import 'settings_reset_files_deletion_test.dart' show MockCurrentUserApi;
 
 /// The reset-data flow must leave the locally stored display preferences
 /// (theme, font scale) untouched: the user asked to reset their profile
-/// data and chat history, not their look-and-feel. The web client
-/// preserves its display preferences across the reset (#1444); this pins
-/// the same contract on mobile, where the preferences live in
-/// SharedPreferences via ThemeManager.
+/// data and chat history, not their look-and-feel. This pins the same
+/// contract the web client enforces, on the storage the mobile app keeps
+/// its display preferences in (SharedPreferences via ThemeManager).
 void main() {
   tearDown(() {
     resetThemeManager();

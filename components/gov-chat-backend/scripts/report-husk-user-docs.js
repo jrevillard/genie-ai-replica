@@ -18,8 +18,9 @@
  * (see docs/database-migrations.md). This one runs only when a human runs it.
  *
  * Usage:
- *   node report-husk-user-docs.js              # dry-run report (default)
- *   node report-husk-user-docs.js --delete     # DESTRUCTIVE: removes matched docs
+ *   node report-husk-user-docs.js                  # dry-run report (default)
+ *   node report-husk-user-docs.js --delete --yes   # DESTRUCTIVE: removes matched docs
+ *                                                  # (--delete alone only explains how to confirm)
  *
  * Environment variables (from the shell, or a .env at the repo root):
  *   ARANGO_URL        (default http://localhost:8529)
@@ -58,11 +59,24 @@ function isHuskDoc(doc) {
   if (doc.iss_sub != null || doc.sub != null || doc.email != null) {
     return false;
   }
-  if (doc.deleted === true) {
+  // Mirrors the AQL test exactly: missing, null or boolean false only —
+  // any other value ('false', 0, true) disqualifies the document.
+  if (!(doc.deleted == null || doc.deleted === false)) {
     return false;
   }
   const extraFields = Object.keys(doc).filter((key) => !key.startsWith('_') && !HUSK_ALLOWED_FIELDS.includes(key));
   return extraFields.length === 0;
+}
+
+/**
+ * Returns the AQL hits that failed the JS predicate — a non-empty result
+ * means the two sides of the signature disagree and nothing may be deleted.
+ * Exported for tests.
+ * @param {Array<Object>} husks
+ * @returns {Array<Object>}
+ */
+function findDivergences(husks) {
+  return husks.filter((doc) => !isHuskDoc(doc));
 }
 
 // ATTRIBUTES(u, true) strips the internal attributes (_key/_id/_rev); what
@@ -81,14 +95,13 @@ FOR u IN @@collection
 // Legacy pre-Keycloak accounts look exactly like this and are healthy —
 // every legitimate document-creation path in the repo sets email, so these
 // must never match the husk signature. Reported for operator context only.
-const LEGACY_LOOKALIKE_AQL = `
-FOR u IN @@collection
+const LEGACY_LOOKALIKE_FILTERS = `
   FILTER u.iss_sub == null
   FILTER u.sub == null
   FILTER u.email != null
-  LIMIT @sampleLimit
-  RETURN KEEP(u, '_key', 'createdAt', 'updatedAt')
 `;
+const LEGACY_LOOKALIKE_COUNT_AQL = `FOR u IN @@collection${LEGACY_LOOKALIKE_FILTERS}COLLECT WITH COUNT INTO c RETURN c`;
+const LEGACY_LOOKALIKE_SAMPLE_AQL = `FOR u IN @@collection${LEGACY_LOOKALIKE_FILTERS}LIMIT @sampleLimit RETURN KEEP(u, '_key', 'createdAt', 'updatedAt')`;
 
 // ---------------------------------------------------------------------------
 // Main
@@ -96,6 +109,17 @@ FOR u IN @@collection
 
 async function main() {
   const doDelete = process.argv.includes('--delete');
+  const doConfirm = process.argv.includes('--yes');
+
+  if (doDelete && !doConfirm) {
+    console.error('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
+    process.exit(1);
+  }
+
+  if (!process.env.ARANGO_PASSWORD) {
+    console.error('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
+    process.exit(1);
+  }
 
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
@@ -118,7 +142,7 @@ async function main() {
 
   // Defense against AQL/predicate divergence — abort before any destructive
   // step if the two disagree about what a husk is.
-  const mismatches = husks.filter((doc) => !isHuskDoc(doc));
+  const mismatches = findDivergences(husks);
   if (mismatches.length > 0) {
     console.error(
       `ABORT: ${mismatches.length} AQL hits failed the JS husk predicate — ` +
@@ -128,8 +152,10 @@ async function main() {
     process.exit(1);
   }
 
+  const lookalikeCountCursor = await db.query(LEGACY_LOOKALIKE_COUNT_AQL, { '@collection': COLLECTION });
+  const lookalikeCount = (await lookalikeCountCursor.next()) || 0;
   const lookalikes = [];
-  const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
+  const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_SAMPLE_AQL, {
     '@collection': COLLECTION,
     sampleLimit: SAMPLE_LIMIT
   });
@@ -151,9 +177,12 @@ async function main() {
   if (husks.length > SAMPLE_LIMIT) {
     console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
   }
-  console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikes.length}`);
+  console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
   for (const doc of lookalikes) {
     console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
+  }
+  if (lookalikeCount > lookalikes.length) {
+    console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
   }
 
   if (!doDelete) {
@@ -161,14 +190,15 @@ async function main() {
     return;
   }
 
-  // Destructive path — reached only with --delete, after the predicate
-  // cross-check above has passed for every match.
+  // Destructive path — reached only with --delete --yes, after the predicate
+  // cross-check above has passed for every match. One bulk statement, so a
+  // mid-way failure cannot leave an ambiguous partial state.
   console.log(`--delete given: removing ${husks.length} husk documents...`);
+  await db.query('FOR k IN @keys REMOVE { _key: k } IN @@collection', {
+    '@collection': COLLECTION,
+    keys: husks.map((doc) => doc._key)
+  });
   for (const doc of husks) {
-    await db.query('REMOVE u IN @@collection', {
-      '@collection': COLLECTION,
-      u: doc._key
-    });
     console.log(`  removed _key=${doc._key}`);
   }
   console.log(`Done. ${husks.length} documents removed.`);
@@ -176,9 +206,16 @@ async function main() {
 
 if (require.main === module) {
   main().catch((err) => {
-    console.error('Report failed:', err.message);
+    console.error('Report failed:', err);
     process.exit(1);
   });
 }
 
-module.exports = { isHuskDoc, HUSK_ALLOWED_FIELDS, HUSK_MATCHER_AQL, LEGACY_LOOKALIKE_AQL };
+module.exports = {
+  isHuskDoc,
+  findDivergences,
+  HUSK_ALLOWED_FIELDS,
+  HUSK_MATCHER_AQL,
+  LEGACY_LOOKALIKE_COUNT_AQL,
+  LEGACY_LOOKALIKE_SAMPLE_AQL
+};

@@ -4,7 +4,12 @@
  * aborts on divergence, and these tests pin both sides of that contract.
  */
 
-const { isHuskDoc, HUSK_ALLOWED_FIELDS, HUSK_MATCHER_AQL } = require('../scripts/report-husk-user-docs');
+const {
+  isHuskDoc,
+  findDivergences,
+  HUSK_ALLOWED_FIELDS,
+  HUSK_MATCHER_AQL
+} = require('../scripts/report-husk-user-docs');
 
 // The exact shape the old resetUserData (pre-#1428) left behind.
 const huskDoc = {
@@ -38,6 +43,13 @@ describe('isHuskDoc', () => {
 
   it('rejects a soft-deleted document (deleted: true)', () => {
     expect(isHuskDoc({ ...huskDoc, deleted: true })).toBe(false);
+  });
+
+  // Mirrors the AQL exactly (u.deleted == null || u.deleted == false): any
+  // non-boolean or truthy value disqualifies the document on both sides.
+  it('rejects non-boolean deleted values (0, "false") on both sides of the contract', () => {
+    expect(isHuskDoc({ ...huskDoc, deleted: 0 })).toBe(false);
+    expect(isHuskDoc({ ...huskDoc, deleted: 'false' })).toBe(false);
   });
 
   it('rejects a husk carrying an extra application field', () => {
@@ -91,5 +103,18 @@ describe('HUSK_MATCHER_AQL', () => {
 
   it('is a complete query (final RETURN)', () => {
     expect(HUSK_MATCHER_AQL.trimEnd().endsWith('RETURN u')).toBe(true);
+  });
+});
+
+describe('findDivergences', () => {
+  // The abort guard the script runs before any destructive step: every AQL
+  // hit must pass the JS predicate, or the run aborts without deleting.
+  it('returns nothing when every AQL hit passes the predicate', () => {
+    expect(findDivergences([huskDoc, { ...huskDoc, _key: '6789' }])).toEqual([]);
+  });
+
+  it('flags AQL hits that fail the predicate', () => {
+    const stray = { ...huskDoc, customSettings: { theme: 'dark' } };
+    expect(findDivergences([huskDoc, stray])).toEqual([stray]);
   });
 });

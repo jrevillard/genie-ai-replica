@@ -47,16 +47,22 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Get user _key (required for session creation)
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -121,16 +127,22 @@ print(f'HTTP: 200 (token still valid)')
 **Expected**: HTTP 200 `{"success": true, ...}` — token is valid, user is not yet marked deleted
 
 ```bash
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Verify user is NOT marked deleted in ArangoDB (no expired-token trigger yet)
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print('deleted: ' + u.deleted);
   "
 ```
@@ -159,16 +171,22 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /d
 ### Test L.8 — Verify User Active in ArangoDB
 
 ```bash
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Verify ArangoDB user is active and not deleted
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -182,15 +200,21 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -232,15 +256,21 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -288,6 +318,8 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 # (exact match; the fixture email is venue-dependent but Keycloak owns it)
 KC_EMAIL=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['email'])")
+# Fail loudly here — an empty address means the lookup failed, not the profile
+[ -n "$KC_EMAIL" ] || { echo "FATAL: Keycloak returned no account for username=testuser"; exit 1; }
 
 curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
@@ -301,18 +333,27 @@ print(f'email matches Keycloak: {d.get(\"email\") == \"${KC_EMAIL}\"}')
 ### Test M.2 — Get User Profile by ID
 
 ```bash
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
+# The account's current address lives in Keycloak — fetch it by username
 KC_EMAIL=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['email'])")
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Fail loudly here — an empty address means the lookup failed, not the profile
+[ -n "$KC_EMAIL" ] || { echo "FATAL: Keycloak returned no account for username=testuser"; exit 1; }
+
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Get user _key from ArangoDB
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -421,16 +462,22 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 ### Test M.8 — JIT Reactivation of Soft-Deleted User
 
 ```bash
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Soft-delete user in ArangoDB directly
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -445,7 +492,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print('deleted: ' + u.deleted);
   "
 # Expected: deleted: true
@@ -466,7 +513,7 @@ print(f'success: {d[\"success\"]}')
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -475,16 +522,22 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 ### Test M.9 — Delete User Account (Keycloak + ArangoDB)
 
 ```bash
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Save user _key before deletion (email will be nullified by erasure)
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
@@ -551,16 +604,22 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Resolve the account by username — a fixture account's email is
-# venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Resolve the account identity from the session token — iss_sub
+# (<issuer>#<subject>) is the identity JIT provisioning writes on login; a
+# fixture account's email is venue-dependent, so never key it by email
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
 
 # Save user _key before erasure (email will be nullified)
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({sub: '${KC_ID}'});
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
     print(u._key);
   " 2>/dev/null | tail -1)
 [ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }

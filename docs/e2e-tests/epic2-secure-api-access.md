@@ -104,13 +104,13 @@ curl -sk -X GET "https://localhost/api/me" \
   -H "Content-Type: application/json"
 # Expected: 200 OK with user profile data
 
-# Verify header construction via backend logs — exactly: the last X-User-Id
-# entry must be the resolved _key (a grep with no output is a failure)
-docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -1 | grep -F "$USER_KEY"
+# Verify the backend resolved the ArangoDB _key for this request — the
+# profile-retrieval log entry carries the userKey (no output is a failure;
+# the quoted field makes the match exact, not a substring hit)
+docker compose logs backend 2>&1 | grep "user_profile_retrieved" | tail -1 | grep -F "\"userKey\":\"$USER_KEY\""
 ```
 
-> **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects backend logs to verify header extraction.
+> **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects the backend's profile-retrieval log to verify the request resolved the account's ArangoDB `_key`.
 
 **Expected Behavior:**
 - Headers are correctly constructed using ArangoDB `_key` for `X-User-Id`
@@ -400,14 +400,14 @@ GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
 # Make request with genie realm token and check logs
 curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5 | grep -F "$GENIE_USER_KEY"
-# Expected: the last X-User-Id entries include the genie-realm-user's _key (no output = failure)
+docker compose logs backend 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE_USER_KEY\""
+# Expected: the profile-retrieval entries include the genie-realm-user's _key (no output = failure)
 
 # Make request with genie2 realm token and check logs
 curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5 | grep -F "$GENIE2_USER_KEY"
-# Expected: the last X-User-Id entries include the genie2-realm-user's _key (distinct from genie)
+docker compose logs backend 2>&1 | grep "user_profile_retrieved" | tail -5 | grep -F "\"userKey\":\"$GENIE2_USER_KEY\""
+# Expected: the profile-retrieval entries include the genie2-realm-user's _key (distinct from genie)
 ```
 
 > **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.

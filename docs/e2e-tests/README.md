@@ -74,13 +74,13 @@ original address and an email-keyed lookup finds nothing. Resolve accounts by:
   resolve the wrong account)
 - **own profile** — `GET /api/me` with the user's own token returns the raw
   ArangoDB document, `_key` included
-- **`sub`** — for direct ArangoDB queries: the ArangoDB user document stores
-  the Keycloak user id in `sub` (JIT provisioning); resolve username → Keycloak
-  id → `db.users.firstExample({sub: '<id>'})`. The email and other PII fields
-  are nullified by GDPR erasure; `sub` is stable until erasure. **Caveat**: user
-  documents provisioned by builds older than the introduction of the `sub`
-  field carry no `sub` and are never backfilled on login — on such a venue
-  resolve by username and use the ArangoDB `_key` instead.
+- **`iss_sub`** — for direct ArangoDB queries: JIT provisioning keys the user
+  document by `iss_sub` (`<issuer>#<subject>`). Decode the session token's
+  payload (`iss` + `sub` claims) and query
+  `db.users.firstExample({iss_sub: '<iss>#<sub>'})`. This is the account's
+  stable identity: the email is venue-dependent, GDPR erasure nullifies the
+  PII fields, and every phase logs in first, which also migrates legacy
+  documents missing `iss_sub`.
 
 Email-keyed lookups are acceptable only for accounts the phase itself created
 with a known email (e.g. `field=exactEmail` on `/api/admin/users/search`) —

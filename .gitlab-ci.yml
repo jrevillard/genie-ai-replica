@@ -3074,13 +3074,10 @@ test:frontend:
   before_script:
     - cd components/gov-chat-frontend && npm ci
   script:
-    # --maxWorkers=2 caps concurrent jest workers and --workerIdleMemoryLimit
-    # recycles a worker once its heap grows past the cap. Both are needed:
-    # the runner's cgroup OOM reaper SIGKILLed workers on 3 pipelines
-    # (#1404) because a worker accumulates ~2 GB RSS over the run, so two of
-    # them plus the main process passed the 4 GB job cgroup. Capping the
-    # worker heap keeps the job inside the cgroup without serialising the
-    # suite (--maxWorkers=1 alone doubles the wall time).
+    # --maxWorkers=2 alone could not stop the runner's 4 GB cgroup OOM reaper
+    # (#1404): a jest worker accumulates ~2 GB RSS over the run, so two of
+    # them still overflowed the cgroup. --workerIdleMemoryLimit recycles a
+    # worker whose heap crosses the cap, keeping the job inside the limit.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
@@ -3153,9 +3150,7 @@ test:okf-server:
     - cd components/shared/lib && npm ci
     - cd - && cd components/okf-server && npm ci
   script:
-    # --maxWorkers=2 caps concurrent jest workers and --workerIdleMemoryLimit
-    # recycles a worker once its heap grows past the cap (cgroup OOM reaper
-    # kills workers × heap on this suite size — see test:frontend's note).
+    # Same worker-memory cap as test:frontend — see its note there (#1404).
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:

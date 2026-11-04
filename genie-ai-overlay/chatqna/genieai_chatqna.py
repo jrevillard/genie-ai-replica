@@ -976,8 +976,8 @@ def _chat_request_metric_attrs(
     abstention_reason).
 
     Callers own the ``retrieval_source`` rule. Two derivations exist and they
-    agree by construction today: the pre-span refusal sites (translation and
-    condense failures) read ``chat_request.search_type`` with a
+    agree by construction today: the pre-span failure sites (the translation
+    refusals and the condense 503) read ``chat_request.search_type`` with a
     ``similarity_score_threshold`` fallback because ``retriever_parameters``
     is not built yet at that point in the request, while the in-span paths
     read ``retriever_parameters.search_type`` — which is itself built from

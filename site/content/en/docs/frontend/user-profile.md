@@ -131,7 +131,7 @@ All endpoints live under `/api/me` and require a Keycloak JWT (the
 | `GET` | `/api/me` | Fetch the current user's profile (including all 8 tabs). | [`user-routes.js:67`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L67) |
 | `GET` | `/api/me/context` | Convenience endpoint for the chat service — selected fields only (e.g. `language`, `country`, `labels`). | [`user-routes.js:99`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L99) |
 | `PUT` | `/api/me` | Replace the profile. Accepts `multipart/form-data` (so a future avatar upload works). | [`user-routes.js:241`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L241) |
-| `POST` | `/api/me/reset-data` | GDPR **data reset** — wipes the profile data but keeps the account. | [`user-routes.js:144`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L144) |
+| `POST` | `/api/me/reset-data` | GDPR **data reset** — wipes the profile data but keeps the account and the client display/notification preferences (theme, font size, language, notification toggles). | [`user-routes.js:144`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L144) |
 | `POST` | `/api/me/delete` | GDPR **account deletion** — deletes the account and all associated data (ArangoDB `users`, chat history, feedback). | [`user-routes.js:184`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/user-routes.js#L184) |
 
 ### `PUT /api/me` payload shape

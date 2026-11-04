@@ -26,6 +26,7 @@ const mockNotificationWarning = jest.fn();
 const mockNotificationError = jest.fn();
 const mockNotificationInfo = jest.fn();
 const mockStoreCommit = jest.fn();
+const mockStoreDispatch = jest.fn();
 
 jest.mock('../../services/notificationService', () => ({
   __esModule: true,
@@ -86,6 +87,7 @@ async function buildWrapper() {
         },
         $store: {
           commit: mockStoreCommit,
+          dispatch: mockStoreDispatch,
           getters: {
             currentUser: {
               name: 'Test User',
@@ -191,10 +193,12 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // self-contained.
     mockResetUserData.mockReset();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     jest.restoreAllMocks();
   });
 
@@ -261,12 +265,11 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     await flushPromises();
 
     // A key written twice is fine; a key save() writes that the reset does
-    // not preserve is the drift this pins.
+    // not preserve is the drift this pins. The filter form names the
+    // drifting key in the failure instead of a bare boolean mismatch.
     const writtenKeys = [...new Set(written)].sort();
     const preserveSet = new Set(DISPLAY_PREF_KEYS);
-    for (const key of writtenKeys) {
-      expect(preserveSet.has(key)).toBe(true);
-    }
+    expect(writtenKeys.filter((key) => !preserveSet.has(key))).toEqual([]);
     // save() still writes the five settings-screen keys it always did.
     expect(writtenKeys).toEqual(['emailUpdates', 'fontSize', 'soundNotifications', 'theme', 'userLocale']);
   });
@@ -297,14 +300,20 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
   test('the reset drops the in-session chat and conversation store state', async () => {
     // The chat-history and conversation subscriptions re-persist on the next
     // mutation: an in-memory history surviving the reset would write the
-    // wiped data straight back to storage (#1455). The reset must leave the
-    // stores in their fresh shape.
+    // wiped data straight back to storage (#1455). The reset must abort any
+    // in-flight generation, leave the stores in their fresh shape, and drop
+    // the sessionStorage conversation payload synchronously — the
+    // subscription persists through a debounce, so a tab killed inside the
+    // window would otherwise rehydrate the wiped conversation.
+    sessionStorage.setItem('genie.conversation.v1', '{"openId":"open"}');
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
 
     await resetViaModal(wrapper);
 
+    expect(mockStoreDispatch).toHaveBeenCalledWith('conversation/abortStream');
     expect(mockStoreCommit).toHaveBeenCalledWith('chatHistory/RESET');
     expect(mockStoreCommit).toHaveBeenCalledWith('conversation/RESET');
+    expect(sessionStorage.getItem('genie.conversation.v1')).toBeNull();
   });
 });

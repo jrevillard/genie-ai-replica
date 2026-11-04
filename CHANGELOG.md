@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`server.key` → group `101`, mode 0640) so the unprivileged nginx
   can read the private key.
 
+### Fixed
+
+- **Reset User Data no longer reverts the client display/notification preferences.** The backend reset kept only system-managed identity fields, so the mobile client's server-stored theme, font size, language and notification toggles were wiped and the app reverted them right after a reset. The reset now carries those five preference fields over. The web client's local preferences (theme, language, font size, notification toggles, sidebar layout, OKF expert mode) also survive the local wipe, and the reset now clears the in-session chat state so the wiped chat history is not written back to browser storage on the next interaction.
+
 ### Added
 
 - A static compose contract test (`tests/config-validator`) and a

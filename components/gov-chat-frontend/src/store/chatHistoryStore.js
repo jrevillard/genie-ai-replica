@@ -245,10 +245,6 @@ export default {
 
     async clearFolders({ commit }) {
       commit('CLEAR_FOLDERS');
-    },
-
-    resetAll({ commit }) {
-      commit('RESET');
     }
   }
 };

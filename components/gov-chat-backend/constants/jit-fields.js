@@ -1,8 +1,9 @@
 /**
- * JIT (Just-In-Time) provisioning field constants.
+ * JIT (Just-In-Time) provisioning field constants, plus the reset
+ * preservation sets built from them.
  *
- * These fields are managed by Keycloak during authentication and should NOT
- * be written directly to ArangoDB by user-facing profile update endpoints.
+ * The JIT_* fields are managed by Keycloak during authentication and should
+ * NOT be written directly to ArangoDB by user-facing profile update endpoints.
  *
  * JIT_FORWARD_FIELDS: Fields that should be forwarded to Keycloak Account API
  *   when a user updates their profile (e.g. email, firstName, lastName).
@@ -10,6 +11,11 @@
  * JIT_PROTECTED_FIELDS: All JIT-managed fields that are stripped from ArangoDB
  *   writes. This is a superset of JIT_FORWARD_FIELDS and includes system-managed
  *   fields like iss, sub, roles, timestamps, etc.
+ *
+ * SYSTEM_PRESERVED_FIELDS / USER_PREFERENCE_FIELDS: the fields a destructive
+ *   user-document operation (user-profile-service resetUserData) must carry
+ *   over — the JIT set plus soft-delete/GDPR audit markers, and the client
+ *   display/notification preference fields.
  */
 
 // Fields forwarded to Keycloak Account API on profile update

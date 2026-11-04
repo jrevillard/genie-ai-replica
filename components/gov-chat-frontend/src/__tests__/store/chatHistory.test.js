@@ -513,11 +513,6 @@ describe('Vuex chatHistory module', () => {
       await chatHistory.actions.clearFolders({ commit });
       expect(commit).toHaveBeenCalledWith('CLEAR_FOLDERS');
     });
-
-    it('resetAll should commit RESET mutation', async () => {
-      await chatHistory.actions.resetAll({ commit });
-      expect(commit).toHaveBeenCalledWith('RESET');
-    });
   });
 
   describe('moveChat action (AC6)', () => {

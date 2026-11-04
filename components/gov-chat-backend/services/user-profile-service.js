@@ -406,30 +406,22 @@ class UserProfileService {
         fields: Object.keys(preservedData)
       });
 
-      try {
-        await this.users.replace(userKey, preservedData);
-        logger.info('UserProfileService.user_document_replaced', { userKey });
-      } catch (replaceError) {
-        logger.warn('UserProfileService.replace_operation_failed', {
-          userKey,
-          error: replaceError.message
-        });
-
-        await this.users.update(userKey, preservedData, {
-          keepNull: true,
-          mergeObjects: false,
-          overwrite: true
-        });
-        logger.info('UserProfileService.user_document_updated_with_overwrite', { userKey });
-      }
+      // A single replace — the fallback update that used to run on replace
+      // failure merged into the existing document, so it never wiped the
+      // profile data while still answering success.
+      await this.users.replace(userKey, preservedData);
+      logger.info('UserProfileService.user_document_replaced', { userKey });
 
       // Files are removed only after the write succeeded — a failed reset
       // must not have already destroyed the user's uploads. A deletion
       // failure after a committed write must not answer 500 for a reset
-      // that already happened: warn and report success.
+      // that already happened: warn and report success with a flag so the
+      // caller knows files may remain on disk.
+      let filesDeletionFailed = false;
       try {
         await this.deleteUserFiles(currentUserDoc);
       } catch (fileError) {
+        filesDeletionFailed = true;
         logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {
           userKey,
           error: fileError.message
@@ -439,11 +431,13 @@ class UserProfileService {
       logger.info('UserProfileService.reset_user_data_completed', {
         userKey,
         fieldsPreserved: Object.keys(preservedData).length,
+        filesDeletionFailed,
         durationMs: Date.now() - startTime
       });
       return {
         userKey,
         fieldsPreserved: Object.keys(preservedData).length,
+        filesDeletionFailed,
         success: true
       };
     } catch (error) {

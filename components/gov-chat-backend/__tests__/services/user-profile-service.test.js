@@ -367,23 +367,23 @@ describe('UserProfileService', () => {
       expect(preserved.erasedAt).toBe('2026-06-02T00:00:00.000Z');
     });
 
-    it('should not delete user files when the reset write fails', async () => {
+    it('should not delete user files, not fall back to update, and rethrow when the replace fails', async () => {
       mockUsers.document.mockResolvedValue({
         _key: 'user-1',
         iss_sub: 'https://issuer.test|abc-123',
         createdAt: '2026-01-01T00:00:00.000Z'
       });
       mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
-      mockUsers.update.mockRejectedValueOnce(new Error('update fail'));
 
-      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow();
+      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow('replace fail');
+      expect(mockUsers.update).not.toHaveBeenCalled();
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
 
     it('should still succeed when user file deletion fails after the reset write', async () => {
       // The reset is applied once the document write commits; a leftover
       // uploads directory (rm EACCES/EBUSY) must not answer 500 for a
-      // reset that already happened.
+      // reset that already happened — but the caller must be told.
       mockUsers.document.mockResolvedValue({
         _key: 'user-1',
         iss_sub: 'https://issuer.test|abc-123',
@@ -393,28 +393,20 @@ describe('UserProfileService', () => {
 
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);
+      expect(result.filesDeletionFailed).toBe(true);
       expect(mockFsTracker.rmCalls.length).toBe(1);
     });
 
-    it('should fallback to update with overwrite on replace failure', async () => {
+    it('should not report filesDeletionFailed when user files are deleted cleanly', async () => {
       mockUsers.document.mockResolvedValue({
         _key: 'user-1',
         iss_sub: 'https://issuer.test|abc-123',
-        email: 'user@test.com',
         createdAt: '2026-01-01T00:00:00.000Z'
       });
-      mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
+
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);
-      expect(mockUsers.update).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({
-          createdAt: '2026-01-01T00:00:00.000Z',
-          iss_sub: 'https://issuer.test|abc-123',
-          email: 'user@test.com'
-        }),
-        expect.objectContaining({ overwrite: true })
-      );
+      expect(result.filesDeletionFailed).toBeFalsy();
     });
   });
 

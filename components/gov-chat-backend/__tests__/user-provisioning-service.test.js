@@ -117,6 +117,36 @@ describe('userProvisioningService', () => {
       expect(updateDoc.createdAt).toBeUndefined();
     });
 
+    it('should backfill sub in the UPDATE doc for sub-less existing users', async () => {
+      // Documents provisioned between iss_sub (dce4c29ee) and sub (cf76b3d85)
+      // carry iss_sub but no sub. Every re-login takes the UPSERT UPDATE path,
+      // which must write sub (idempotent — iss_sub match guarantees identity).
+      const existingUserWithoutSub = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        email: 'updated@example.com',
+        name: 'Updated Name',
+        roles: ['user'],
+        active: true,
+        deleted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: expect.any(String)
+      };
+      mockCursor.next.mockResolvedValue({ new: existingUserWithoutSub, old: { _key: 'users/789' } });
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
+      };
+
+      await userProvisioningService.provisionUser(decoded);
+
+      const upsertCall = mockQuery.mock.calls[2][0];
+      const updateDoc = upsertCall.values[2]; // 3rd interpolated value
+      expect(updateDoc.sub).toBe(mockJwtPayload.sub);
+    });
+
     it('should preserve custom fields (personalIdentification, theme) during UPSERT on re-login', async () => {
       const existingUserWithCustomFields = {
         _key: 'users/456',

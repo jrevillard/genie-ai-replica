@@ -80,14 +80,19 @@ docker run -d --name "$VL_CONTAINER" --network "$NETWORK" \
 # --- Collector (production config, read-only) --------------------------------
 # The file_storage/victoriatraces directory MUST exist or the collector exits
 # at startup ("directory must exist") — compose guarantees this via the
-# one-shot otel-collector-init service that mkdir -p's it. Reproduced here.
+# one-shot otel-collector-init service that mkdir -p's it and chowns it to
+# the collector's uid (10001). Reproduced here with a TMPFS instead of a
+# bind mount: a bind from a Windows host (Git Bash) cannot honor the chown
+# and the collector dies with "permission denied" on the queue file, while a
+# tmpfs honors uid= on every host. The smoke is ephemeral — the exporter's
+# queue gains nothing from surviving the run.
 docker run -d --name "$COLLECTOR_CONTAINER" --network "$NETWORK" \
   -e VICTORIALOGS_URL="http://${VL_CONTAINER}:9428" \
   -e VICTORIALOGS_URL_HOST="${VL_CONTAINER}" \
   -e VICTORIALOGS_TENANT_ID_ACCOUNT_ID=0 \
   -e VICTORIALOGS_TENANT_ID_PROJECT_ID=0 \
   -v "${ROOT}/configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro" \
-  -v "${STATE_DIR}/victoriatraces:/var/lib/otelcol/file_storage/victoriatraces" \
+  --tmpfs /var/lib/otelcol/file_storage/victoriatraces:rw,uid=10001 \
   "$COLLECTOR_IMAGE" --config=/etc/otelcol-contrib/config.yaml >/dev/null
 
 # --- Fast config gate --------------------------------------------------------

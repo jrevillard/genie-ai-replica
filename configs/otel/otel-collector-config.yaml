@@ -157,6 +157,15 @@ processors:
           - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
           - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
           - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+          # Bare email ADDRESSES in prose — tracebacks, access logs, generic
+          # error lines ("send failed to alice@example.com") carry no
+          # "email":"..." JSON pair for the key-based statement above to
+          # match, so they reached VL verbatim (DW-416 / #1148). Value-shape
+          # only: the structured (JSON-keyed) case is owned by the key rule;
+          # this one catches the address itself wherever it sits in a string
+          # body. Note the double escaping: \\ in this YAML single-quoted
+          # scalar reaches OTTL as \, so \\. is the regex's literal dot.
+          - 'replace_pattern(body, "(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}", "[REDACTED_EMAIL]") where IsString(body)'
           # Map bodies are NOT redacted here. When fluentd parses the
           # message into a Map (in_json-parsed records), the values are
           # typed rather than JSON-quoted, so every statement above — all

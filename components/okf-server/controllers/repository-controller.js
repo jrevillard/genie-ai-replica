@@ -970,7 +970,55 @@ async function listConcepts(req, res, next) {
  * Full meta row — frontmatter + body included — so the editor can round-trip
  * the markdown (body is persisted on the meta doc since Story 4.8-amend
  * content-only chunking).
+ *
+ * W2 security review (2026-11-04): this handler is ALSO the CAP-2 citizen
+ * content path (registered on the allowScopelessWhenOpen sub-router), so two
+ * serving gates apply beyond the restricted fence:
+ * - Publication gate — a NON-steward caller gets exactly what retrieval
+ *   serves (the servingRepos predicate: lifecycle_state === 'publish' &&
+ *   ingested_at != null). Retract keeps the meta rows (it is the reversible
+ *   edit state), drafts carry bodies from import time, and publish-to-drain
+ *   has a window — none of those may serve a citizen a body retrieval will
+ *   not ground on. Same 404 envelope as the fence (foreign / fenced /
+ *   unpublished indistinguishable) but NO audit row: this state is normal
+ *   lifecycle traffic (every persisted citation of a retracted repo degrades
+ *   through it), not an authz denial. Steward-class callers (superadmin,
+ *   wildcard scope, or a scope naming THIS repo) keep the editor contract —
+ *   the draft/retracted row IS the editor's working set.
+ * - Field projection — non-steward callers get the CAP-3 card contract
+ *   (identity + title/labels/summary/body/links), never worker internals
+ *   (last_error / pii_* / ingest bookkeeping), curation provenance, or the
+ *   Arango system fields. sources[] stays steward-only until W5 delivers it
+ *   deliberately behind the W4 serve-refusal gate (D4).
  */
+const CONCEPT_CARD_FIELDS = [
+  'repo_id',
+  'concept_id',
+  'graph_name',
+  'bundle_version',
+  'title',
+  'labels',
+  'summary',
+  'body',
+  'links'
+];
+
+/** Steward class for the publication gate: derived privilege or a scope
+ * naming THIS repo (deriveScopeAuthz is the single scope authority). */
+function callerIsStewardForRepo(req, repoId) {
+  const { isSuperAdmin, authorizedRepoIds } = callerAuthz(req);
+  return isSuperAdmin || authorizedRepoIds === null || authorizedRepoIds.has(repoId);
+}
+
+/** The CAP-3 card projection: keep only whitelisted fields that exist. */
+function projectConceptCard(concept) {
+  const card = {};
+  for (const field of CONCEPT_CARD_FIELDS) {
+    if (concept[field] !== undefined) card[field] = concept[field];
+  }
+  return card;
+}
+
 async function getConcept(req, res, next) {
   try {
     const { repo_id, concept_id } = req.params;
@@ -981,6 +1029,10 @@ async function getConcept(req, res, next) {
     // management default-deny.
     const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
     await assertRepoReadableByCaller(req, repoDoc);
+    const steward = callerIsStewardForRepo(req, repo_id);
+    if (!steward && !(repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null)) {
+      throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
     if (!concept) {
       return res.status(404).json({
@@ -988,7 +1040,7 @@ async function getConcept(req, res, next) {
         message: `Concept '${concept_id}' not found in repo '${repo_id}'`
       });
     }
-    res.status(200).json(concept);
+    res.status(200).json(steward ? concept : projectConceptCard(concept));
   } catch (err) {
     next(err);
   }

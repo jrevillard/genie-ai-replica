@@ -178,11 +178,11 @@ jest.mock('../services/scope-authz-service', () => {
   const real = jest.requireActual('../services/scope-authz-service');
   return {
     ...real,
-    deriveScopeAuthz: jest.fn((okfScopes, isSuperAdmin) =>
-      isSuperAdmin
-        ? { isSuperAdmin: true, authorizedRepoIds: null }
-        : { isSuperAdmin: false, authorizedRepoIds: new Set() }
-    )
+    // Delegate to the REAL derivation: it is a pure scope-grammar parse, and
+    // the publication-gate steward check (W2 security review) needs
+    // scope-bearing callers to land in authorizedRepoIds — a scope-ignoring
+    // stub would classify a scoped steward as a citizen.
+    deriveScopeAuthz: jest.fn((okfScopes, isSuperAdmin) => real.deriveScopeAuthz(okfScopes, isSuperAdmin))
   };
 });
 
@@ -813,7 +813,9 @@ describe('repository-controller — CAP-2 restricted-repo read fence', () => {
   const conceptMetaService = require('../services/concept-meta-service');
   const auditService = require('../services/audit-service');
   const RESTRICTED = { repo_id: 'r1', name: 'R', acl: { restricted: true, required_scopes: ['okf:t:dom:admin'] } };
-  const OPEN_REPO = { repo_id: 'r1', name: 'R' }; // no acl → never restricted
+  // no acl → never restricted; a SERVING repo is published AND ingested —
+  // the CAP-2 serving-read surface serves only the retrieval-serving state.
+  const OPEN_REPO = { repo_id: 'r1', name: 'R', lifecycle_state: 'publish', ingested_at: '2026-11-04T00:00:00Z' };
 
   const cases = (handler, svcFn, svcResult) => {
     return [
@@ -904,5 +906,133 @@ describe('repository-controller — CAP-2 restricted-repo read fence', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'repository-controller.js'), 'utf8');
     expect(src).not.toContain('x-okf-internal-secret');
     expect(src).not.toContain('internal.secret');
+  });
+});
+
+// ===========================================================================
+// W2 security review (2026-11-04) — the CAP-2 citizen content path serves
+// ONLY what retrieval serves. Two gates beyond the restricted fence:
+// (1) publication gate — non-steward callers get the servingRepos predicate
+//     (lifecycle_state==='publish' && ingested_at != null); retracted keeps
+//     meta rows, drafts carry bodies from import time, publish-to-drain has
+//     a window — none may serve a citizen. Same 404 envelope as the fence,
+//     but NO audit row (normal lifecycle traffic, not an authz denial).
+//     Stewards (superadmin / wildcard / this repo's scope) keep the editor
+//     contract — the draft/retracted row IS their working set.
+// (2) field projection — non-steward callers get the CAP-3 card contract
+//     (identity + title/labels/summary/body/links), never worker internals,
+//     curation provenance, Arango system fields, or sources[] (stays
+//     steward-only until W5 delivers it behind the W4 serve-refusal gate).
+// ===========================================================================
+describe('repository-controller — CAP-2 publication gate + card projection (W2 security review)', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const auditService = require('../services/audit-service');
+
+  const FULL_ROW = {
+    repo_id: 'r1',
+    concept_id: 'c1',
+    graph_name: 'OKF_r1',
+    bundle_version: 3,
+    title: 'Concept One',
+    labels: ['tax.a'],
+    summary: 's',
+    body: '# body',
+    links: [{ target: 'c2' }],
+    // everything below must NOT reach a citizen
+    path: 'dir/c1.md',
+    curation: { by: 'steward' },
+    sources: [{ kind: 'crawl', resource: 'x', file_id: 'f9' }],
+    pii_state: 'error',
+    pii_hits_summary: { DATE_TIME: 2 },
+    pii_scan_error: { message: 'scan failed' },
+    index_status: 'error',
+    last_error: 'axios boom http://dataprep:5000/ingest',
+    last_worker_error: 'Internal Server Error',
+    ingest_attempts: 7,
+    worker_claimed_at: '2026-11-04T00:00:00Z',
+    next_attempt_after: '2026-11-04T01:00:00Z',
+    content_hash: 'h',
+    ingest_labels: ['x'],
+    trust_tier: 'gold',
+    _key: 'k',
+    _id: 'okf_concepts_meta/k',
+    _rev: 'r'
+  };
+
+  const servingRepo = (over = {}) => ({
+    repo_id: 'r1',
+    name: 'R',
+    lifecycle_state: 'publish',
+    ingested_at: '2026-11-04T00:00:00Z',
+    ...over
+  });
+
+  beforeEach(() => {
+    conceptMetaService.getConceptMeta.mockReset();
+    conceptMetaService.getConceptMeta.mockResolvedValue({ ...FULL_ROW });
+    auditService.writeAudit.mockClear();
+  });
+
+  it('citizen + serving repo → 200 card contract only (no worker/PII/curation/system fields, no sources)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      repo_id: 'r1',
+      concept_id: 'c1',
+      graph_name: 'OKF_r1',
+      bundle_version: 3,
+      title: 'Concept One',
+      labels: ['tax.a'],
+      summary: 's',
+      body: '# body',
+      links: [{ target: 'c2' }]
+    });
+  });
+
+  it.each([
+    ['retracted', { lifecycle_state: 'retracted' }],
+    ['draft (never published)', { lifecycle_state: 'draft' }],
+    ['published but not yet drained', { lifecycle_state: 'publish', ingested_at: null }]
+  ])('citizen + %s repo → 404 REPO_NOT_FOUND, silent (no audit)', async (_label, over) => {
+    repoService.getById.mockResolvedValueOnce(servingRepo(over));
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    expect(auditService.writeAudit).not.toHaveBeenCalled();
+    expect(conceptMetaService.getConceptMeta).not.toHaveBeenCalled();
+  });
+
+  it('superadmin + retracted repo → 200 FULL row (steward editor contract intact)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'retracted' }));
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: true, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(FULL_ROW);
+  });
+
+  it('scoped steward + draft repo → 200 FULL row (the editor working set)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    const { res, next } = await drive(controller.getConcept, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r1:read']
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(FULL_ROW);
+  });
+
+  it('citizen + serving repo the caller is NOT scoped to → still the projected card (scope names restrict, not widen)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:other-repo:read']
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.body).toBe('# body');
+    expect(res.body.last_error).toBeUndefined();
   });
 });

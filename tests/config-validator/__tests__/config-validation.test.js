@@ -61,11 +61,7 @@ const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
 // are in the net — whatever spelling imports the module mixes the
 // credential paths just the same.
 const importPathRe = (moduleName) =>
-  new RegExp(
-    "(?:require\\(\\s*|from\\s+)(['\"`])(?:[^'\"`]*/)?" +
-      moduleName +
-      '(\\.' + JS_EXT_SRC + ')?\\1'
-  );
+  new RegExp('(?:require\\(\\s*|from\\s+)([\'"`])(?:[^\'"`]*/)?' + moduleName + '(\\.' + JS_EXT_SRC + ')?\\1');
 
 describe('Configuration Validation Suite', () => {
   let envParsed;
@@ -3474,7 +3470,9 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // pin their shapes on synthetic listings; same discipline here).
     const mixedSource = "require('../helpers/e2e-fixtures');\nrequire('./helpers/chatbot');";
     if (!(importPathRe('e2e-fixtures').test(mixedSource) && importPathRe('chatbot').test(mixedSource))) {
-      throw new Error('the import-path detector no longer matches a synthetic mixed file — fix the matcher, not the suite');
+      throw new Error(
+        'the import-path detector no longer matches a synthetic mixed file — fix the matcher, not the suite'
+      );
     }
     if (importPathRe('e2e-fixtures').test("require('./provision-e2e-fixtures');")) {
       throw new Error('the import-path detector matches a longer module name (provision-e2e-fixtures) as e2e-fixtures');

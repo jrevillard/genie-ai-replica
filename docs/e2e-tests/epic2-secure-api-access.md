@@ -718,7 +718,7 @@ components: {
 2. Check if `Authorization: Bearer <token>` header is present
 3. Verify the test user has the `GENIE.AI_USER` role in Keycloak:
 ```bash
-curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq '.[0].realmRoles'
 ```
 
@@ -972,7 +972,7 @@ for user in data.get('result', []):
 The `genie2` realm was created by Phase 0.6 — do NOT delete it. Only clean up the test user.
 
 ```bash
-NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 curl -sk -X DELETE "https://localhost/auth/admin/realms/genie2/users/${NOROLES_USER_ID}" \
@@ -1233,7 +1233,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
 
 ```bash
 # Find and delete the noroles user
-NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user-e2e" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user-e2e&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_USER_ID}" \

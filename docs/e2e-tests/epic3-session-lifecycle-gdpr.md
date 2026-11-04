@@ -117,21 +117,12 @@ print(f'HTTP: 200 (token still valid)')
 **Expected**: HTTP 200 `{"success": true, ...}` — token is valid, user is not yet marked deleted
 
 ```bash
-# Identity for a direct, side-effect-free DB read — see README
-# "Resolving test accounts" (never key a fixture account by email)
-ISS_SUB=$(python3 -c "
-import base64, json, sys
-p = sys.argv[1].split('.')[1]
-p += '=' * (-len(p) % 4)
-c = json.loads(base64.urlsafe_b64decode(p))
-print(c['iss'] + '#' + c['sub'])
-" "$USER_TOKEN")
-
-# Verify user is NOT marked deleted in ArangoDB (no expired-token trigger yet)
+# Verify user is NOT marked deleted in ArangoDB (direct read of the _key
+# resolved in L.4 — side-effect-free, no provisioning triggered)
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
+    var u = db.users.document('${USER_KEY}');
     print('deleted: ' + u.deleted);
   "
 ```
@@ -160,21 +151,12 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /d
 ### Test L.8 — Verify User Active in ArangoDB
 
 ```bash
-# Identity for a direct, side-effect-free DB read — see README
-# "Resolving test accounts" (never key a fixture account by email)
-ISS_SUB=$(python3 -c "
-import base64, json, sys
-p = sys.argv[1].split('.')[1]
-p += '=' * (-len(p) % 4)
-c = json.loads(base64.urlsafe_b64decode(p))
-print(c['iss'] + '#' + c['sub'])
-" "$USER_TOKEN")
-
-# Verify ArangoDB user is active and not deleted
+# Verify ArangoDB user is active and not deleted (direct read of the _key
+# resolved in L.4 — side-effect-free, no provisioning triggered)
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
+    var u = db.users.document('${USER_KEY}');
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -283,7 +265,7 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
   | jq -r --arg kc "$KC_EMAIL" '"name: \(.name // "N/A")", "email matches Keycloak: \(.email == $kc)"'
 
 ```
-**Expected**: HTTP 200; `email matches Keycloak: True` — the profile email equals the account's Keycloak address, whatever the venue provisioned; `name` non-null
+**Expected**: `email matches Keycloak: true` — the profile email equals the account's Keycloak address, whatever the venue provisioned; `name` non-null
 
 ### Test M.2 — Get User Profile by ID
 
@@ -409,10 +391,25 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 ### Test M.8 — JIT Reactivation of Soft-Deleted User
 
 ```bash
-# Soft-delete user in ArangoDB directly
-USER_KEY=$(curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
-[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
+# Soft-delete user in ArangoDB directly. Resolve the _key with a
+# cache-neutral direct read (iss_sub identity, see README "Resolving test
+# accounts"): an /api/me call here would warm the provisioning cache
+# (60s TTL) and the re-login below could then skip the JIT reactivation
+# this test exists to verify
+ISS_SUB=$(python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+print(c['iss'] + '#' + c['sub'])
+" "$USER_TOKEN")
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
+  arangosh --server.password arangopwd --javascript.execute-string "
+    db._useDatabase('genie-ai');
+    var u = db.users.firstExample({iss_sub: '${ISS_SUB}'});
+    print(u._key);
+  " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "

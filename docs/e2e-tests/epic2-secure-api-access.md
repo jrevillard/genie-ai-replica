@@ -50,9 +50,11 @@ if ! curl -sk https://localhost/auth/realms/genie/.well-known/openid-configurati
 fi
 
 # Check if OPEA services are responding
-# The chat endpoint is a reliable indicator that the OPEA stack is up
-# (success is HTTP 201; failures surface as 4xx/5xx)
-if curl -sk --max-time 15 https://localhost/api/chat -X POST -H "Content-Type: application/json" \
+# The chat endpoint (POST /api/queries -> the OPEA pipeline) is a reliable
+# indicator that the OPEA stack is up (success is HTTP 201; failures and
+# timeouts surface as 4xx/5xx/no output). The bound matches the backend's
+# own OPEA worker timeout — a cold vLLM can legitimately take a minute.
+if curl -sk --max-time 120 https://localhost/api/queries -X POST -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"ping"}],"sessionId":"e2e-phase-f"}' \
   -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "201"; then
   echo "OPEA infrastructure detected - running Phase F tests"
@@ -97,7 +99,7 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 > **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects the backend's profile-retrieval log to verify the request resolved the account's ArangoDB `_key`.
 
 **Expected Behavior:**
-- Role checks always read fresh values from the current token (`req.claims`), never from the possibly-cached ArangoDB user document
+- The profile-retrieval log entry for the request carries the resolved ArangoDB `_key` (the check above is the assertion)
 
 ---
 
@@ -116,30 +118,38 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Make a chat query — it can only succeed if the backend forwarded the
 # Bearer token AND chatqna validated it against Keycloak JWKS
-HTTP_CODE=$(curl -sk -X POST "https://localhost/api/chat" \
+# (POST /api/queries is the chat endpoint; the bound matches the backend's
+# OPEA worker timeout — a cold vLLM can legitimately take a minute)
+HTTP_CODE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello E2E test"}],"sessionId":"e2e-phase-f"}' \
   -o /dev/null -w "%{http_code}")
 echo "Chat with forwarded token: HTTP ${HTTP_CODE}"
-# Expected: HTTP 201 (query created, OPEA answer received)
+[ "$HTTP_CODE" = "201" ] || { echo "FATAL: expected 201, got ${HTTP_CODE}"; exit 1; }
 
 # From inside the network, chatqna without a Bearer token is rejected —
-# the same auth gate the forwarded token just passed. Pick the backend
-# container explicitly: the name filter would otherwise also match the
-# chatqna container (its compose name contains "backend-server")
-BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v chatqna | head -1)
-[ -n "$BACKEND_CID" ] || { echo "FATAL: backend container not found"; exit 1; }
-HTTP_CODE=$(docker exec "$BACKEND_CID" \
-  curl -s -o /dev/null -w "%{http_code}" \
-  -X POST "http://chatqna-xeon-backend-server:8888/v1/chatqna" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"ping"}]}')
-echo "Chatqna without token: HTTP ${HTTP_CODE}"
-[ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
+# the same auth gate the forwarded token just passed. Requires DEPLOY_OPEA=1.
+if docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
+  # Pick the backend container explicitly: the name filter would otherwise
+  # also match the chatqna container (its compose name contains
+  # "backend-server"). The backend runtime image ships wget (not curl).
+  BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v chatqna | head -1)
+  [ -n "$BACKEND_CID" ] || { echo "FATAL: backend container not found"; exit 1; }
+  HTTP_CODE=$(docker exec "$BACKEND_CID" \
+    wget -q -O /dev/null --server-response --method=POST \
+      --header="Content-Type: application/json" \
+      --post-data='{"messages":[{"role":"user","content":"ping"}]}' \
+      "http://chatqna-xeon-backend-server:8888/v1/chatqna" 2>&1 \
+    | awk '/HTTP/{print $2}' | tail -1) || true
+  echo "Chatqna without token: HTTP ${HTTP_CODE}"
+  [ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
+else
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - backend-side verification only"
+fi
 ```
 
-> **Note:** Full OPEA verification requires `DEPLOY_OPEA=1` in `.env`. Without OPEA services, the chat endpoint fails — only the token-validation half of this test can run.
+> **Note:** Full OPEA verification requires `DEPLOY_OPEA=1` in `.env`. Without OPEA services, the chat query fails — only the token-validation half of this test can run.
 
 **Expected Behavior:**
 - The OPEA service receives the caller's `Authorization: Bearer` header unchanged
@@ -192,7 +202,8 @@ echo "User _key: $USER_KEY"
 
 # The _key-resolving request above already went through the auth middleware —
 # verify its profile-retrieval log entry carries that _key
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" | tail -1
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the resolved _key"; exit 1; }
 # Expected: a log entry whose userKey equals the resolved _key
 ```
 
@@ -214,14 +225,14 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 **Verification:**
 ```bash
 # No Authorization header at all
-curl -sk -X POST "https://localhost/api/chat" \
+curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"No token"}]}' \
   -o /dev/null -w "No token: HTTP %{http_code}\n"
 # Expected: HTTP 401
 
 # Token that fails JWKS validation
-curl -sk -X POST "https://localhost/api/chat" \
+curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer not-a-real-token" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Bad token"}]}' \
@@ -252,7 +263,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query
-RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
+RESPONSE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Verify response structure"}],"sessionId":"e2e-phase-f"}')
@@ -261,9 +272,10 @@ RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
 echo "$RESPONSE" | jq 'keys | sort'
 # Expected: ["metadata","queryId","response","responseTime"]
 
-# Verify the chatqna metadata structure is preserved
-echo "$RESPONSE" | jq '.metadata | keys'
-# Expected: keys like "source_documents", "confidence_score", "is_grounded", ...
+# Verify the chatqna metadata contract keys are present
+echo "$RESPONSE" | jq -e '.metadata | has("source_documents") and has("filter_labels") and has("retrieval_confidence_score") and has("confidence_score") and has("is_grounded")' > /dev/null \
+  || { echo "FATAL: metadata contract keys missing"; exit 1; }
+echo "metadata contract keys present"
 
 # Verify the OPEA answer came through
 echo "$RESPONSE" | jq -r '.response'
@@ -333,7 +345,10 @@ echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+# Get the MASTER admin token — Keycloak's Admin REST is realm-scoped, so a
+# genie-realm admin token cannot manage genie2 (see .claude/rules/SERVER-TESTING.md)
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create a user in genie realm (firstName/lastName/emailVerified are required
 # for ROPC logins to succeed — see .claude/rules/SERVER-TESTING.md)
@@ -368,7 +383,8 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie-realm-user&password=geniepass123&grant_type=password' | jq -r '.access_token')
 
-USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
+# Phase-local name — $USER2_TOKEN belongs to Phase I (testuser2), never shadow it
+GENIE2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
 # Look up user keys from each user's own profile (each realm provisions its
@@ -383,7 +399,7 @@ GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
 
 RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER2_TOKEN" \
+  -H "Authorization: Bearer $GENIE2_TOKEN" \
   -w "\n%{http_code}")
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie2 realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
@@ -415,7 +431,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query (full round-trip)
-RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
+RESPONSE=$(curl -sk --max-time 120 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')

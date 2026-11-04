@@ -710,10 +710,6 @@ export default {
       serviceCategoriesStatus: 'loading',
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
-      // The button ids whose non-boolean "hidden" flag was already reported
-      // (one console warning per button per session — the apply re-runs on
-      // mount and on every locale switch).
-      quickHelpHiddenReported: [],
       // The in-flight load of the Quick Help configuration. A restore that
       // runs while it is pending must wait for it, otherwise the tag of a
       // saved conversation is looked up in an empty button list.
@@ -1889,27 +1885,11 @@ export default {
       // A button that declares no label contributes no label of its own: the
       // request is then scoped by the category label alone, which the backend
       // resolves against the live hierarchy like any other label.
-      // The hidden flag is a BOOLEAN (#1208). A hand-edited configuration
-      // that writes it as a string says nothing about what the operator
-      // meant — and the flag's TRUTHINESS decides: "false" is a
-      // non-empty string, so the card DISAPPEARS. The mobile reads the
-      // flag the same way (the parity is deliberate), so the web does
-      // not change what the flag does — it REPORTS the typo, because a
-      // card that silently vanishes leaves no trace of the
-      // configuration mistake that hid it. The report is its own pass:
-      // the filter below stays a pure filter. One report per button per
-      // session: the apply re-runs on mount and on every locale switch,
-      // and a typo must not turn into N identical console lines.
-      buttons.forEach((button) => {
-        if (button.hidden == null || typeof button.hidden === 'boolean') return;
-        if (this.quickHelpHiddenReported.includes(button.id)) return;
-        this.quickHelpHiddenReported.push(button.id);
-        // The button is NAMED in the report by its id — the identity the
-        // loader's gate guarantees every button carries.
-        console.warn(
-          `[ChatBotComponent] Quick Help button "${button.id}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
-        );
-      });
+      // The hidden flag is a BOOLEAN (#1208): its TRUTHINESS decides —
+      // "false" is a non-empty string, so the card DISAPPEARS (the mobile
+      // reads it the same way; the parity is deliberate). A mistyped
+      // flag is reported by the loader's shape report, never here
+      // (validateQuickHelpButtons, #1361): this stays a pure filter.
       // The id is the button's IDENTITY — the conversation tag carries
       // it, the restore resolves it, the grid's verdict keys on it. The
       // loader's gate (validateQuickHelpButtons) has already refused any

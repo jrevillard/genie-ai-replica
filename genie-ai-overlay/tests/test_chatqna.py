@@ -5005,6 +5005,43 @@ async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
     assert excinfo.value.detail["error"] == "translation_input_too_long"
 
 
+@pytest.mark.asyncio
+async def test_a_reply_translation_overflow_is_counted_as_a_refusal_on_the_counter():
+    """The reply-path translation-overflow 422 must land on chat_requests_total
+    with the refusal attrs: the orchestrate-span block already counted the turn
+    with the attrs of the successful pipeline run, so without an explicit
+    record the refusal is invisible as a refusal on the counter. The query-path
+    site cannot double count (it raises before that block); this one must
+    record after it."""
+    svc = create_chatqna_service()
+    recorded = []
+
+    class _Counter:
+        def add(self, amount, attributes):
+            recorded.append(attributes)
+
+    with (
+        patch.object(chatqna_module, "chat_requests_total", _Counter()),
+        patch.object(
+            svc,
+            "_finalize_llm_response",
+            new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("reply chunk too long")),
+        ),
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, history_status=("USER: qué es X?", "translated"))
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["abstention_reason"] == "translation_input_too_long"
+    # Two records: the orchestrate-span success count, then the explicit
+    # refusal record that makes the refusal filterable.
+    assert len(recorded) == 2
+    refusal = recorded[-1]
+    assert refusal["error"] == "true"
+    assert refusal["abstained"] == "true"
+    assert refusal["abstention_reason"] == "translation_input_too_long"
+
+
 # ===========================================================================
 # Test reranker input-too-long abstention (422 body through align_outputs)
 # ===========================================================================

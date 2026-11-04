@@ -62,10 +62,14 @@ is `sources[]` (CAP-4) and only for documents/crawl origins.
   deletable-in-UI-but-403 lie.
 - **WS3 live-forever**: bundle-export-service exports are permanent artifacts
   (never swept).
-- **Retract destroys versions**: backing-file-service's retract sweep REMOVEs raw
-  files and ALL bundle zips → every VersionsDialog download link for a retracted
-  repo dies (CAP-6 target). Repo delete is an intentional hard purge (David,
-  2026-10-12) — unchanged.
+- **Retract lifecycle (CORRECTED per Jerome's audit, 2026-11-04)**:
+  `backing-file-service.js` (header directive, David 2026-10-12) — retract
+  MARKS source documents `Retracted` (never deleted — the repo is in its
+  reversible edit state) and hard-deletes ONLY bundle zips, as REGENERABLE
+  artifacts of the next publish. So CAP-6's raw-file half is already correct
+  today; the actual W7 change is a DELIBERATE REVERSAL of the recorded
+  bundle-rule (per D3, retract now also KEEPS the zips). The earlier wording
+  ("sweep REMOVEs raw files") was wrong.
 - **No zip reader in doc-repo**: archiver is write-only; adm-zip extraction exists
   only in okf-server — extraction (deferred) would live there.
 
@@ -77,8 +81,13 @@ is `sources[]` (CAP-4) and only for documents/crawl origins.
 - SOURCES_NOT_RETRACTED gate (`retraction` path) fail-closes when a source files
   doc was hand-deleted → ingest permanently blocked with no remedy; downgrade must
   be deletion-aware.
-- `okf_repo_id` stamp onto `sources[]` at ingest observed failing 41/41 (all
-  attempts) — CAP-4 is gated on this fix.
+- `okf_repo_id` stamp onto `sources[]` observed failing 41/41 on 2026-10-11 —
+  **root causes already shipped on main in `3d3f4c484` (2026-10-30)**: doc-repo's
+  PATCH /api/files/:id is open to the okf-service role (`rolePolicy.js:15`
+  DOCUMENT_LIFECYCLE) and `updateFileSchema` accepts `okf_repo_id`
+  (`fileController.js:191`). The stamp is written by okf-server's
+  `producer-service.js:104-108` (PATCH to doc-repo), with a 100%-failure-rate
+  loud error. CAP-4's gate is a live RE-MEASURE (expect ~100%), not a fix.
 
 ## Infrastructure facts that bent decisions
 

@@ -116,6 +116,15 @@ per request.
 
 **Acceptance Criteria:**
 - [ ] RESTRICTED concept body refused to an ungranted user (dedicated test)
+- [ ] Concepts whose repo is NOT live/published (retracted/draft) refused
+      (dedicated test) — a persisted pre-fix citation must not resolve through
+      this route what retrieval no longer serves
+- [ ] Route mounted on the `servingReads` sub-router (the default-open
+      structural marker — outside it, scopeless citizens 403 in open mode)
+- [ ] PII parity documented: publish gate fail-closed on pii 'error', redaction
+      rewrites the stored body → served body == grounded text; a concept
+      re-flagged 'hit' after publish stays served (the steward's published body
+      is the curated truth — documented posture)
 - [ ] `x-okf-internal-secret` appears nowhere on the path (grep/test enforced)
 - [ ] No authz caching on the route (the retrieval last-known-good pattern is NOT imported)
 - [ ] open/closed scope modes both exercised in tests
@@ -301,11 +310,15 @@ VersionsDialog for live repos, and repo-delete purge all unchanged.
 
 **Priority:** Must Have
 
-**Description:** Coverage never decreases; every story extends the smoke harness and
-re-runs it live; verbose structured logging on all new/changed paths.
+**Description:** Coverage holds per component's existing gate; every story extends
+the smoke harness and re-runs it live; verbose structured logging on all
+new/changed paths.
 
 **Acceptance Criteria:**
-- [ ] jest --coverage ≥ 88.21% overall baseline on merged result
+- [ ] Per-component `jest --coverage`: every touched component ≥ its existing
+      `coverageThreshold` floor (backend 35 / frontend 65 / doc-repo 55) and the
+      CI-reported Statements% does not regress (okf-server has no floor — no
+      regression + new-code covered is its bar)
 - [ ] Smoke harness extension per story, live-verified
 
 ### NFR-006: Config neutrality
@@ -331,7 +344,7 @@ epic detail, story slices and verification anchors live in
 | EPIC-1 Retriever enrichment | W1 / MR-1 | FR-001 | 2 | Must |
 | EPIC-2 Concept content route | W2 / MR-2 | FR-002 | 3 | Must |
 | EPIC-3 Citation card branch | W3 / MR-3 | FR-003 | 3 | Must |
-| EPIC-4 Stamp fix + serve refusal | W4 / MR-4 | FR-004 (gate) | 2 | Should |
+| EPIC-4 Stamp re-measure + serve refusal | W4 / MR-4 | FR-004 (gate) | 2 | Should |
 | EPIC-5 Original-source links | W5 / MR-5 | FR-004 | 2 | Should |
 | EPIC-6 OKF artifacts view | W6 / MR-6 | FR-005 | 3 | Should |
 | EPIC-7 Retract-retention | W7 / MR-7 | FR-006 | 2 | Must |
@@ -361,7 +374,8 @@ epic detail, story slices and verification anchors live in
 ### Internal
 
 - Epic chain: EPIC-1 → EPIC-3; EPIC-2 → EPIC-3 → EPIC-5; EPIC-2 + EPIC-3 → EPIC-9.
-  EPIC-4/5/6/7/8 interleave freely (plan's ordering rationale).
+  **EPIC-4 → EPIC-5 is an ordered pair** (source links lie if the stamp is
+  unproven — dispatch as a unit); **EPIC-6/7/8 interleave freely**.
 - Reuses: `scope-authz-service` + `access-control-service` (6-1c), `okf_concepts_meta`,
   `_LINKS_TO` edges, doc-repo WS2 bundle protection, DS primitives, `okf` Vuex store.
 
@@ -388,9 +402,15 @@ epic detail, story slices and verification anchors live in
 
 - Zip-member extraction from bundles — deferred with guardrails (#1410).
 - Any redis/cache layer — deferred with revisit conditions (#1411).
+- **Mobile twin** — the Flutter app has the same dead-link chain (plus a
+  bearer-in-URL defect); named deferral with the mirror-the-web disposition:
+  **#1439**.
 - Legacy document chat-path changes; repo-delete hard-purge changes.
 - Version-pinned content views; history backfill.
 - Steward-facing tree browsing in Studio (citizen tree only; steward tooling unchanged).
+- Kong rate-limit posture on the citizen route — the `/api/okf` family carries
+  no Kong rate limit today (only express-api does); decided at the W2 story,
+  not in this PRD.
 
 ---
 

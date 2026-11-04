@@ -8,12 +8,20 @@ Ordering (from the remediation plan, architect rationale):
 - EPIC-1 before EPIC-3 — no graph-name string parsing downstream (banned pattern).
 - EPIC-2 before EPIC-3 — no affordance before its target exists.
 - EPIC-2 carries its own security review (user-facing authz — treat like 6-1c's).
-- EPIC-4 before EPIC-5 — source links lie if the stamp is broken.
-- EPIC-9 after EPIC-2 + EPIC-3; EPIC-4/5/6/7/8 interleave freely.
+- **EPIC-4 → EPIC-5 is an ORDERED PAIR** (source links lie if the stamp is
+  unproven) — dispatch them as a unit; EPIC-6/7/8 interleave freely.
+- EPIC-9 after EPIC-2 + EPIC-3; mobile disposition tracked separately (#1441).
 
-Standing per-MR gates: coverage ≥ baseline (88.21%), all suites green, i18n × 14
-locales key-identical for any new string, Playwright locators swept, smoke harness
-extended + live-run, no Co-Authored-By, no main merges without David.
+Standing per-MR gates: every touched component ≥ its existing `coverageThreshold`
+floor (backend 35 / frontend 65 / doc-repo 55; okf-server: no regression of the
+CI-reported Statements%) and no CI Statements% regression anywhere, all suites
+green, i18n × 14 locales key-identical for any new string (never author
+`okf.labErrors.*` keys — exact-21 producer pin), Playwright locators swept
+(chat/admin surfaces: `data-testid`; admin: `data-test-id` — read the component),
+smoke harness extended + live-run, no Co-Authored-By, no main merges without David.
+Tracing: W2/W9's new routes and W8's purge path get OTel spans per
+`.claude/rules/OBSERVABILITY.md` (okf-server is instrumented; Kong's OTel plugin
+is global; W1 needs no new span attribute).
 
 ---
 
@@ -81,22 +89,32 @@ conversation renders gracefully; legacy cards untouched.
 
 ---
 
-## EPIC-4: Stamp fix + restricted-source serve refusal (W4 / MR-4) — Should
+## EPIC-4: Stamp re-measure + restricted-source serve refusal (W4 / MR-4) — Should
 
 **Gates FR-004.**
 
-**Anchors:** `okf_repo_id` stamp onto `sources[]` observed failing 41/41 at ingest;
-doc-repo serve paths (`downloadFile` :653-681, `viewFileInBrowser` :778-806) get
-the D4 refusal.
+**Anchors:** the `okf_repo_id` stamp's 41/41 failure was the 2026-10-11 incident;
+its two root causes ALREADY SHIPPED on main in `3d3f4c484` (2026-10-30 —
+`rolePolicy.js:15` DOCUMENT_LIFECYCLE + `fileController.js:191` schema). The
+stamp is written by okf-server's `producer-service.js:104-108` (PATCH to
+doc-repo). doc-repo serve paths (`downloadFile` :653-681, `viewFileInBrowser`
+:778-806) get the D4 refusal.
 
 **Story slices:**
-1. Stamp fix at the ingest source (dataprep/worker side); live verification on a
-   documents-origin ingest reaches 100%.
-2. doc-repo refusal: restricted (acl.restricted) sources refused on serve paths
-   with the refusal envelope; unrestricted unchanged; bundle-protection tests
-   (`bundle-protection.test.js`) extended.
+1. Re-measure the stamp on a live documents-origin ingest (expect ~100%; the
+   loud 100%-failure error from `3d3f4c484` stays as the tripwire). Nothing to
+   fix unless the re-measure surprises.
+2. D4 refusal via a **stamped restricted snapshot on the files doc** —
+   mechanism: okf-server's Access-panel toggle + the import stamp propagate
+   `acl.restricted` onto the stamped files docs (okf-server→doc-repo PATCH is
+   a shipped precedent — producer-service). Doc-repo gains LOCAL restricted
+   knowledge: no new runtime dependency, no okf-server-outage semantics on the
+   download path. Refusal = the D4 envelope; unrestricted unchanged;
+   bundle-protection tests extended. Toggle-propagation failures audited on
+   both sides (stale-snapshot risk named and mitigated by the audit).
 
-**Verification:** stamp 100% live; refusal envelope tested; no unrestricted change.
+**Verification:** stamp ~100% live; refusal envelope tested; toggle propagates;
+no unrestricted change.
 
 ---
 
@@ -141,20 +159,24 @@ Pending-bundle deletable-but-403 lie); WS3 exports live-forever; deep-link patte
 
 ## EPIC-7: Retract-retention (W7 / MR-7) — Must
 
-**Delivers FR-006.**
+**Delivers FR-006 — a DELIBERATE REVERSAL of the recorded 2026-10-12 rule.**
 
-**Anchors:** backing-file-service retract sweep REMOVEs raw + ALL bundle zips →
-VersionsDialog links die; repo delete = intentional hard purge (2026-10-12,
-unchanged); VersionsDialog in `editor/VersionsDialog.vue`.
+**Anchors:** `backing-file-service.js` (header, David 2026-10-12): retract MARKS
+source documents `Retracted` (never deleted — already correct, untouched) and
+hard-deletes ONLY bundle zips as regenerable-by-next-publish. D3 reverses that
+bundle rule: retract = unpublish, versions stay downloadable. Repo delete =
+intentional hard purge (unchanged); VersionsDialog in `editor/VersionsDialog.vue`.
 
 **Story slices:**
-1. Sweep exemption: retract exempts `is_bundle` docs (raw files too); red→green
-   sweep tests; repo delete path untouched and asserted.
+1. The reversal: retract's sweep stops deleting `is_bundle` zips (its only
+   deletion today); the file-header directive updated to record D3's reversal
+   (a worker reading the header must not conclude the code is wrong);
+   red→green sweep tests; repo delete path untouched and asserted.
 2. UI verb honesty: retract vs delete named/explained in the UI (dialog copy +
    i18n × 14); VersionsDialog downloads verified post-retract.
 
 **Verification:** retracted repo keeps every version download; delete still
-purges; UI copy truthful.
+purges; UI copy truthful; the header records the reversal.
 
 ---
 

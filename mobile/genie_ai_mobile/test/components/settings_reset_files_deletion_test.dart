@@ -142,6 +142,22 @@ void main() {
   });
 
   testWidgets(
+    'shows no warning when the flag is explicitly false (clean reset)',
+    (tester) async {
+      await driveResetFlow(
+        tester,
+        MockCurrentUserApi(resetBody: {'filesDeletionFailed': false}),
+      );
+
+      final warningText = I18nService().translate(
+        'settings.userDataResetFilesFailed',
+      );
+      expect(find.widgetWithText(SnackBar, warningText), findsNothing);
+      await unmount(tester);
+    },
+  );
+
+  testWidgets(
     'shows the failure SnackBar and clears loading when the reset call fails',
     (tester) async {
       await driveResetFlow(tester, MockCurrentUserApi(resetStatus: 500));

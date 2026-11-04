@@ -528,11 +528,17 @@ export default {
           );
         }
         await this.fetchUserData();
-        const themeValue = localStorage.getItem('theme');
-        const langValue = localStorage.getItem('userLocale');
-        localStorage.clear();
-        if (themeValue) localStorage.setItem('theme', themeValue);
-        if (langValue) localStorage.setItem('userLocale', langValue);
+        // The reset has committed and the outcome is already announced; a
+        // local-preferences failure must not surface as a failed reset.
+        try {
+          const themeValue = localStorage.getItem('theme');
+          const langValue = localStorage.getItem('userLocale');
+          localStorage.clear();
+          if (themeValue) localStorage.setItem('theme', themeValue);
+          if (langValue) localStorage.setItem('userLocale', langValue);
+        } catch (storageError) {
+          console.error('[SETTINGS] Error clearing local preferences:', storageError);
+        }
       } catch (e) {
         console.error('[SETTINGS] Error resetting user data:', e);
         notificationService.error(

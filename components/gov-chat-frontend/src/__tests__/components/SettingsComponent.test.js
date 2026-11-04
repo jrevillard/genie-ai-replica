@@ -11,13 +11,11 @@
  */
 const { mount, flushPromises } = require('@vue/test-utils');
 
-const mockGetProfile = jest.fn();
 const mockResetUserData = jest.fn();
 
 jest.mock('../../services/userService', () => ({
   __esModule: true,
   default: {
-    getProfile: mockGetProfile,
     resetUserData: mockResetUserData
   }
 }));
@@ -58,6 +56,9 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 }));
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
+const enMessages = require('../../i18n/locales/en').default;
+const fs = require('fs');
+const path = require('path');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -114,10 +115,6 @@ async function resetViaModal(wrapper) {
 describe('SettingsComponent — resetUserData notification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetProfile.mockResolvedValue({
-      name: 'Test User',
-      email: 'test@example.test'
-    });
   });
 
   test('shows the success message when the flag is absent', async () => {
@@ -151,6 +148,21 @@ describe('SettingsComponent — resetUserData notification', () => {
       'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
     );
     expect(mockNotificationSuccess).not.toHaveBeenCalled();
+  });
+
+  test('the warning key exists in the en locale and is used by the component', () => {
+    // The component's translate() falls back to the hardcoded literal when
+    // $t cannot resolve, so a key typo degrades silently — pin both sides:
+    // the locale string the translators maintain and the key the component
+    // actually references.
+    const warning = 'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.';
+    expect(enMessages.settings.userDataResetFilesFailed).toBe(warning);
+
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'components', 'SettingsComponent.vue'),
+      'utf8'
+    );
+    expect(source).toContain("'settings.userDataResetFilesFailed'");
   });
 
   test('keeps the error path untouched when the request fails', async () => {

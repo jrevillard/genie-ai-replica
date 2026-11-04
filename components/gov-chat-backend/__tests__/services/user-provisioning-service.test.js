@@ -150,21 +150,69 @@ describe('UserProvisioningService', () => {
       expect(mockDb.query).toHaveBeenCalledTimes(4); // 3 (first cycle) + 1 (revalidation read)
     });
 
-    it('should not re-provision on a cache hit when only non-profile fields differ', async () => {
+    it('should not re-provision on a cache hit when only non-profile claims differ', async () => {
       mockProvisionCycle('Old Name');
       const result1 = await userProvisioningService.provisionUser(baseToken);
 
       mockDb.query.mockResolvedValue(createMockCursor([])); // revalidation deleted-check → not deleted
-      // iss changes per token mint but is not a profile field the UPSERT updates
-      const result2 = await userProvisioningService.provisionUser({ ...baseToken, iss: 'https://other-issuer' });
+      // jti changes on every token mint but is not a profile field the UPSERT updates
+      const result2 = await userProvisioningService.provisionUser({ ...baseToken, jti: 'mint-2' });
       expect(result2).toBe(result1);
       expect(mockDb.query).toHaveBeenCalledTimes(4);
+    });
+
+    it('should serve the cached copy when the soft-delete revalidation read fails', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      mockDb.query.mockRejectedValue(new Error('arangosh down'));
+      const result2 = await userProvisioningService.provisionUser(baseToken);
+      expect(result2).toBe(result1); // fail-open: TTL-bounded stale copy, no 500
+    });
+
+    it('should not serve a stale in-flight result to a request whose claims differ', async () => {
+      const staleUser = { _key: 'user-1', email: 'test@test.com', name: 'Old Name', emailVerified: false, roles: [] };
+      const freshUser = { _key: 'user-1', email: 'test@test.com', name: 'JIT Test', emailVerified: false, roles: [] };
+      let resolveFirstLegacy;
+      let calls = 0;
+
+      mockDb.query.mockImplementation(async () => {
+        calls++;
+        if (calls === 1) {
+          await new Promise((r) => {
+            resolveFirstLegacy = r;
+          }); // block A on its legacy lookup
+          return createMockCursor([]);
+        }
+        if (calls === 3) return createMockCursor([{ new: staleUser, old: null }]); // A upsert
+        if (calls === 6) return createMockCursor([{ new: freshUser, old: null }]); // B upsert
+        return createMockCursor([]); // legacy lookups + deleted checks
+      });
+
+      // Request A provisions with the OLD claims (holds the lock)
+      const p1 = userProvisioningService.provisionUser(baseToken);
+      await new Promise((r) => setImmediate(r));
+
+      // Request B arrives with NEW claims while A is still in flight
+      const p2 = userProvisioningService.provisionUser({ ...baseToken, name: 'JIT Test' });
+      await new Promise((r) => setImmediate(r));
+
+      resolveFirstLegacy();
+      const r1 = await p1;
+      const r2 = await p2;
+
+      expect(r1.name).toBe('Old Name'); // A served its own result
+      expect(r2.name).toBe('JIT Test'); // B re-provisioned, not served A's stale result
+      expect(calls).toBe(6); // A: 3 queries, B: full re-provision (3 queries)
     });
   });
 
   describe('provisionUser - in-flight lock', () => {
     it('should deduplicate concurrent provisioning calls', async () => {
-      const cachedUser = { _key: 'user-1', email: 'test@test.com' };
+      // Provision results always carry the full profile shape (newDoc sets
+      // every field) — the in-flight result must satisfy profileMatches to
+      // be served to the second caller
+      const cachedUser = { _key: 'user-1', email: 'test@test.com', name: null, emailVerified: false, roles: [] };
       const queryCount = { count: 0 };
       let firstCallResolve;
 

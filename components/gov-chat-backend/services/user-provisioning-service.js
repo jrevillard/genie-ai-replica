@@ -39,16 +39,42 @@ function profileFromToken(decodedToken) {
 /**
  * Whether the cached user document still matches the token's claims.
  * A mismatch means Keycloak state changed out-of-band after the copy
- * was cached.
+ * was cached. Roles are compared as a set: their order in the token is
+ * not contractually stable.
  */
 function profileMatches(cachedUser, decodedToken) {
   const expected = profileFromToken(decodedToken);
+  const cachedRoles = cachedUser.roles || [];
   return (
     expected.email === cachedUser.email &&
     expected.name === cachedUser.name &&
     expected.emailVerified === cachedUser.emailVerified &&
-    JSON.stringify(expected.roles) === JSON.stringify(cachedUser.roles || [])
+    expected.roles.length === cachedRoles.length &&
+    expected.roles.every((role) => cachedRoles.includes(role))
   );
+}
+
+/**
+ * Whether the document a cached copy points at has been soft-deleted
+ * out-of-band. Looked up by the cached document's _key — which survives
+ * GDPR erasure (it nulls iss_sub) — so both in-place soft-deletes and
+ * erasures are detected. On a query failure the cached copy is served:
+ * a cache hit previously required no DB access at all, and the entry
+ * expires with the TTL anyway.
+ */
+async function isSoftDeleted(cachedUser) {
+  try {
+    const db = await dbService.getConnection('default');
+    const cursor = await db.query(aql`
+      FOR u IN users
+        FILTER u._key == ${cachedUser._key} AND u.deleted == true
+        RETURN u
+    `);
+    return !!(await cursor.next());
+  } catch (err) {
+    logger.warn(`[UserProvisioning] Soft-delete revalidation failed, serving cached copy: ${err.message}`);
+    return false;
+  }
 }
 
 /**
@@ -110,27 +136,24 @@ const userProvisioningService = {
       if (!profileMatches(cached.user, decodedToken)) {
         // Keycloak claims changed since the copy was cached — re-provision
         _cache.delete(issSub);
+      } else if (await isSoftDeleted(cached.user)) {
+        // The underlying document was soft-deleted out-of-band — fall
+        // through to the full UPSERT (reactivation)
+        _cache.delete(issSub);
       } else {
-        // One indexed read: if the underlying document was soft-deleted
-        // out-of-band, fall through to the full UPSERT (reactivation)
-        const db = await dbService.getConnection('default');
-        const cursor = await db.query(aql`
-          FOR u IN users
-            FILTER u.iss_sub == ${issSub} AND u.deleted == true
-            RETURN u
-        `);
-        if (await cursor.next()) {
-          _cache.delete(issSub);
-        } else {
-          return cached.user;
-        }
+        return cached.user;
       }
     }
 
-    // If a provisioning is already in-flight for this user, wait for it
+    // If a provisioning is already in-flight for this user, wait for it —
+    // but only serve its result when it matches this request's claims: a
+    // profile edit landing mid-flight would otherwise be served stale once
     const inFlight = _locks.get(issSub);
     if (inFlight) {
-      return inFlight;
+      const user = await inFlight;
+      if (profileMatches(user, decodedToken)) {
+        return user;
+      }
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result

@@ -308,6 +308,39 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     expect(calls.some((call) => call.includes('email='))).toBe(false);
     expect(caught.transient).toBe(true);
   });
+
+  test('a transport failure of the username lookup stays transient and probes nothing', async () => {
+    // A network blip is not a conflict: the probe must not turn it into a
+    // hard "email conflict" verdict, and the retry budget must see it.
+    routes = [POST_USERS_409, ['GET', USERNAME_LOOKUP, { throws: new Error('connection reset by peer') }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBe(true);
+    expect(caught.message).not.toMatch(/email conflict/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
+
+  test('a broken lookup payload is a failed lookup, not a missing account', async () => {
+    routes = [POST_USERS_409, ['GET', USERNAME_LOOKUP, { status: 200, data: { error: 'not a list' } }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/answered a non-array payload/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
 });
 
 test.describe('convergeUser diagnoses a password reset on a vanished account', () => {

@@ -79,7 +79,9 @@ async function findUsers(adminToken, realm, field, value) {
     // A transport-level failure (connection refused, timeout) is the same
     // transient condition as the create's own: the retry budget must be
     // allowed to save the provisioning.
-    throw transientError(`Cannot reach the Keycloak admin API for the user lookup of ${value}: ${err.message}`);
+    const error = transientError(`Cannot reach the Keycloak admin API for the user lookup of ${value}: ${err.message}`);
+    error.lookupFailed = true;
+    throw error;
   }
 
   // The status and the payload shape are checked: an expired admin token
@@ -89,12 +91,17 @@ async function findUsers(adminToken, realm, field, value) {
     // The status travels with the error: the caller decides what it means
     // for its own operation (the retry budget re-derives the verdict).
     const error = new Error(`User lookup for ${value} in realm ${realm} failed: HTTP ${searchRes.status}`);
+    error.lookupFailed = true;
     error.httpStatus = searchRes.status;
     throw error;
   }
   if (!Array.isArray(searchRes.data)) {
+    // A broken answer is a failed lookup, but Keycloak said nothing
+    // about a status: the marker that says so is `lookupFailed`, and
+    // `httpStatus` stays unset (a 200 there would read as a verdict).
     const error = new Error(`User lookup for ${value} in realm ${realm} answered a non-array payload`);
-    error.httpStatus = searchRes.status;
+    error.lookupFailed = true;
+    error.invalidPayload = true;
     throw error;
   }
   return searchRes.data;
@@ -350,10 +357,15 @@ async function convergeUser(adminToken, realm, userData) {
   try {
     user = await resolveUser(adminToken, realm, username);
   } catch (err) {
-    if (err.httpStatus !== undefined) {
-      // The lookup itself failed (an expired admin token answers 401): the
-      // account's state is unknown, so no diagnosis about it is possible.
-      failWithStatus(err.message, err.httpStatus);
+    if (err.lookupFailed) {
+      // The lookup itself failed (an expired admin token answers 401, a
+      // transport break is transient): the account's state is unknown, so
+      // no diagnosis about it is possible — and a transient failure must
+      // keep its verdict for the retry budget.
+      if (err.httpStatus !== undefined) {
+        failWithStatus(err.message, err.httpStatus);
+      }
+      throw err;
     }
     if (status === 409) {
       // The create answered 409 but no account carries the username: the
@@ -375,6 +387,14 @@ async function convergeUser(adminToken, realm, userData) {
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
               `could not run (HTTP ${probeErr.httpStatus})`,
             probeErr.httpStatus
+          );
+        }
+        if (probeErr.invalidPayload) {
+          // Keycloak answered with a broken payload: the probe could not
+          // run, and that is not a transport break.
+          throw new Error(
+            `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
+              `could not run: ${probeErr.message}`
           );
         }
         // A transport-level failure of the probe is transient, exactly like

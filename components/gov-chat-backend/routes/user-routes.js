@@ -175,9 +175,10 @@ module.exports = (userService) => {
       logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
       res.json({ success: true, message: 'Account deleted' });
     } catch (error) {
-      const status = error.status === 404 ? 404 : 500;
+      // deleteUser tolerates a Keycloak 404 (user already gone) internally —
+      // no 404 path exists here; failures are server-side (500).
       logger.error(`[DELETE] Error deleting account: ${error.message}`, { stack: error.stack });
-      res.status(status).json({ success: false, message: error.message || 'Failed to delete account' });
+      res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
     }
   });
 

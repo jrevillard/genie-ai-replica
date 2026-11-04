@@ -11,6 +11,9 @@ const tracingBaggage = require('../../../shared/lib/tracing-baggage');
 // The canonical ArangoDB absence predicate, re-exported for real (pure
 // function, no deps) so the mocked dbService answers exactly like the real one.
 const { isExpectedAbsence } = require('../../../shared/lib/arango-absence');
+// Re-exported for real (pure function, no deps): the GDPR erasure tombstone
+// digest shared by keycloak-proxy-service and user-provisioning-service.
+const { erasureTombstoneKey } = require('../../../shared/lib/erasure-tombstone');
 
 module.exports = {
   logger: {
@@ -24,6 +27,7 @@ module.exports = {
   SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
   reconfigureLogger: jest.fn(),
   parsePositiveInt,
+  erasureTombstoneKey,
   spanAttrs,
   tracingBaggage
 };

@@ -1,7 +1,7 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -20,6 +20,14 @@ const { logger, dbService } = require('../shared-lib');
 /** In-memory cache: iss_sub → { user, expiresAt } */
 const _cache = new Map();
 const CACHE_TTL_MS = 60_000;
+
+/**
+ * Bumped on every cache eviction. A provision that started before an eviction
+ * (e.g. the GDPR erasure's) must not re-cache its pre-eviction result after
+ * the eviction — the epoch check at cache-write time discards it, so the next
+ * request re-provisions against the post-eviction state.
+ */
+let _cacheEpoch = 0;
 
 /** In-flight locks: iss_sub → Promise — prevents concurrent upserts for the same user */
 const _locks = new Map();
@@ -155,6 +163,21 @@ function evictExpired() {
 
 let _initialized = false;
 
+/**
+ * The erasure tombstone lookup — the single definition of the filter that
+ * recognizes an erased subject. Used both by the entry check in _doProvision
+ * and its post-UPSERT re-check; the two MUST stay identical.
+ * @param {string} erasedKey - SHA-256 digest of the token's iss_sub
+ * @returns {Object} aql query
+ */
+function tombstoneLookup(erasedKey) {
+  return aql`
+    FOR u IN users
+      FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
+      RETURN u
+  `;
+}
+
 const userProvisioningService = {
   /**
    * Clear cache and reset initialization flag.
@@ -166,6 +189,7 @@ const userProvisioningService = {
     _dbPromise = null;
     _lastRevalWarnAt = 0;
     _initialized = false;
+    _cacheEpoch = 0;
   },
 
   /**
@@ -174,6 +198,33 @@ const userProvisioningService = {
    */
   async initialize() {
     if (_initialized) return;
+    // Erasure tombstone lookup index. NOT sparse: the optimizer cannot prove
+    // a bound equality value is non-null, so a sparse index may be skipped and
+    // the lookup degrade to a full scan. (A non-sparse persistent index does
+    // index documents lacking the field as null — sparse is the variant that
+    // excludes them — which is why the explicit choice matters here.) Ensured
+    // here (idempotent, boot-time) rather than only in the migration script so
+    // existing deployments pick it up without an ops step.
+    try {
+      const db = await dbService.getConnection('default');
+      await db.collection('users').ensureIndex({
+        type: 'persistent',
+        fields: ['erased_key'],
+        unique: false,
+        name: 'idx_users_erased_key'
+      });
+    } catch (indexError) {
+      // A missing users collection (fresh, not-yet-migrated database), an
+      // unreachable ArangoDB or any other boot-time hiccup must not crash the
+      // boot — initialize() never rejected before this index existed. The
+      // tombstone protection is unaffected; only the lookup speed degrades
+      // until the next successful boot.
+      logger.warn('[UserProvisioning] Failed to ensure erased_key index — tombstone lookups scan until next boot', {
+        error: indexError.message
+      });
+    }
+    // Set only after initialization completed — a failed initialize must be
+    // retryable, not permanently skipped by the flag.
     _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
   },
@@ -199,6 +250,11 @@ const userProvisioningService = {
     evictExpired();
     const cached = _cache.get(issSub);
     if (cached && cached.expiresAt > Date.now()) {
+      if (cached.user && cached.user.deleted === true) {
+        // Erasure tombstone refusal — never re-provisioned, and the claims
+        // check is irrelevant: the identity does not exist anymore
+        return cached.user;
+      }
       if (!profileMatches(cached.user, decodedToken)) {
         // Keycloak claims changed since the copy was cached — re-provision
         _cache.delete(issSub);
@@ -211,15 +267,29 @@ const userProvisioningService = {
       }
     }
 
-    // If a provisioning is already in-flight for this user, wait for it —
-    // but only serve its result when it matches this request's claims: a
-    // profile edit landing mid-flight would otherwise be served stale once
+    const epochAtEntry = _cacheEpoch;
+
+    // Staleness gates. The own-provision result was just written from this
+    // token's claims, so only an eviction (e.g. the GDPR erasure committing
+    // mid-flight) can make it stale. A lock-waiter serves ANOTHER request's
+    // result, so its claims freshness must be checked too. A refusal result
+    // (the erasure tombstone's deleted document) is served as-is — it never
+    // matches the claims, and re-provisioning it would loop forever. Either
+    // stale shape re-provisions through provisionUser so the retry re-enters
+    // the lock machinery instead of racing another stale waiter.
+    const finishOrReprovision = (user, checkClaims) => {
+      const isRefusal = user && user.deleted === true;
+      const stale = checkClaims && !profileMatches(user, decodedToken);
+      if (!isRefusal && (_cacheEpoch !== epochAtEntry || stale)) {
+        return this.provisionUser(decodedToken);
+      }
+      return user;
+    };
+
+    // If a provisioning is already in-flight for this user, wait for it
     const inFlight = _locks.get(issSub);
     if (inFlight) {
-      const user = await inFlight;
-      if (profileMatches(user, decodedToken)) {
-        return user;
-      }
+      return finishOrReprovision(await inFlight, true);
     }
 
     // Create provisioning promise and lock it so concurrent requests share the result
@@ -227,7 +297,7 @@ const userProvisioningService = {
       _locks.delete(issSub);
     });
     _locks.set(issSub, provisionPromise);
-    return provisionPromise;
+    return finishOrReprovision(await provisionPromise, false);
   },
 
   /**
@@ -235,9 +305,32 @@ const userProvisioningService = {
    */
   async _doProvision(decodedToken) {
     const issSub = decodedToken.iss_sub;
+    const epochAtStart = _cacheEpoch;
     const db = await dbService.getConnection('default');
 
     const now = new Date().toISOString();
+
+    // Erasure tombstone check — MUST run before the UPSERT: the GDPR erasure
+    // nulls iss_sub (the UPSERT key), so without this check the still-valid
+    // token would re-INSERT the erased identity. Contract: erasure-tombstone.js.
+    // The digest is bound from here (not computed in AQL) so the index on
+    // erased_key serves the lookup (the index is deliberately not sparse —
+    // see initialize()). The erased document is returned as-is
+    // (deleted: true) — the middleware answers 403 for deleted users.
+    const erasedKey = erasureTombstoneKey(issSub);
+    const erasedCursor = await db.query(tombstoneLookup(erasedKey));
+    const erasedUser = await erasedCursor.next();
+    if (erasedUser) {
+      // Log the tombstone digest prefix only — persisting the erased iss_sub
+      // here would re-materialize the identity this check exists to protect.
+      logger.info(
+        `[UserProvisioning] Blocked re-provisioning of erased user (tombstone ${erasedKey.substring(0, 12)})`
+      );
+      if (_cacheEpoch === epochAtStart) {
+        _cache.set(issSub, { user: erasedUser, expiresAt: Date.now() + CACHE_TTL_MS });
+      }
+      return erasedUser;
+    }
 
     // Derive the profile fields from the single claims→profile mapping —
     // the same one profileMatches compares against, so a new profile field
@@ -276,7 +369,10 @@ const userProvisioningService = {
               } IN users
           `
         );
-        // Invalidate any cache for this iss_sub to force fresh read after migration
+        // Evict this iss_sub's cache line so the UPSERT's own cache write
+        // reflects the migrated profile. Plain delete: this is the provision's
+        // own eviction — no epoch bump, or the wrapper would treat its own
+        // result as stale and re-provision needlessly.
         _cache.delete(issSub);
       }
     }
@@ -330,8 +426,38 @@ const userProvisioningService = {
 
     const user = result.new;
 
-    // Store in cache
-    _cache.set(issSub, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    // Re-run the tombstone lookup on EVERY provision result: the erasure may
+    // have committed between the entry check and this UPSERT (the #1440 race
+    // window) — on a fresh INSERT the result is a resurrected duplicate; on an
+    // UPDATE it may have refreshed a racer's duplicate. Either way the result
+    // document is removed (the erasure never sees it — it carries a new _key)
+    // and the erased document is served instead.
+    const recheckCursor = await db.query(tombstoneLookup(erasedKey));
+    const erasedInWindow = await recheckCursor.next();
+    if (erasedInWindow) {
+      logger.info(
+        `[UserProvisioning] Removed a provision written for an erased user (tombstone ${erasedKey.substring(0, 12)})`
+      );
+      try {
+        await db.query(aql`REMOVE { _key: ${user._key} } IN users`);
+      } catch (removeError) {
+        // A concurrent waiter may have removed it first (error 1202) — the
+        // erasure wins either way; never 500 an erased caller for losing it.
+        logger.warn('[UserProvisioning] Duplicate removal raced another provision', {
+          error: removeError.message
+        });
+      }
+      if (_cacheEpoch === epochAtStart) {
+        _cache.set(issSub, { user: erasedInWindow, expiresAt: Date.now() + CACHE_TTL_MS });
+      }
+      return erasedInWindow;
+    }
+
+    // Store in cache — skipped if an eviction happened while this provision
+    // was in flight (the profile may predate the eviction, e.g. an erasure)
+    if (_cacheEpoch === epochAtStart) {
+      _cache.set(issSub, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    }
 
     // Log differentiated events
     if (!isReactivation && !result.old) {
@@ -344,6 +470,18 @@ const userProvisioningService = {
   },
 
   /**
+   * Evict a user from the in-memory provisioning cache.
+   * Called by the GDPR erasure (keycloak-proxy-service.deleteUser) so the
+   * pre-erasure profile stops being served for the remainder of the cache TTL.
+   * @param {string} issSub - User identifier (iss#sub format)
+   * @returns {void}
+   */
+  invalidateCache(issSub) {
+    _cache.delete(issSub);
+    _cacheEpoch++;
+  },
+
+  /**
    * Mark a user as deleted in ArangoDB (soft delete)
    * Called when Keycloak introspection confirms user is disabled/deleted
    * @param {string} issSub - User identifier (iss#sub format)
@@ -351,7 +489,7 @@ const userProvisioningService = {
    */
   async markUserAsDeleted(issSub) {
     // Invalidate cache so next request re-provisions (and hits deleted check)
-    _cache.delete(issSub);
+    this.invalidateCache(issSub);
 
     const db = await dbService.getConnection('default');
     const now = new Date().toISOString();

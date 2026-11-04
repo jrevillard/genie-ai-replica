@@ -27,6 +27,11 @@ module.exports = {
         sparse: true,
         name: 'idx_users_email'
       },
+      // idx_users_erased_key (erasure tombstone lookup) is NOT declared here:
+      // userProvisioningService.initialize() ensures it idempotently on every
+      // boot, which also covers deployments upgraded without re-running this
+      // migration. Keep exactly one definition — ensureIndex-by-name silently
+      // keeps a mismatched definition if the two ever drift.
 
       // sessions
       {

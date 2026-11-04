@@ -290,19 +290,28 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
-This payload matches the CI e2e provisioning fixture (`.e2e_web_base` in
-`.gitlab-ci.yml`), which converges an existing account to it on every run.
+This payload matches the venue fixture defined in
+`tests/e2e/helpers/e2e-fixtures.js`. On the already-exists path the
+provisioning script below resets the account's password and asserts its
+login-visible state (enabled, verified, no required action — failing
+loudly on drift instead of repairing it) and assigns its realm roles.
+The email is deliberately NOT rewritten (the login reads the username,
+not the email), so an account created with a previous fixture revision
+keeps its old address.
 
-#### 0.8b Create the admin-surface test users (documents and admin suites prerequisites)
+#### 0.8b Provision the venue test users (all Playwright suites prerequisite)
 
-The documents suites (`tests/e2e/documents/`) drive the upload/delete
-surfaces, which the document-repository restricts to the `admin` realm role
-(`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. The
-admin-surface specs (`tests/e2e/admin/`) need the same admin login and, on
-top of it, a login that carries **no role granting admin access** — the
-non-admin side of the `requireAdmin` contract.
+All three venue users are provisioned through one script over the
+`ensureUser` helper (`tests/e2e/helpers/keycloak-admin.js`):
 
-Both fixtures are defined in one place (`tests/e2e/helpers/admin-fixtures.js`)
+- `testuser` — the primary login user (the chat suites). Carries
+  the `admin` realm role in parity with the former inline CI assignment;
+  the documents suites themselves authenticate as `testadmin`.
+- `testadmin` — the admin-surface login (`tests/e2e/admin/`).
+- `testplain` — carries **no role granting admin access** — the non-admin
+  side of the `requireAdmin` contract.
+
+The fixtures are defined in one place (`tests/e2e/helpers/e2e-fixtures.js`)
 and provisioned by one script:
 
 ```bash
@@ -312,8 +321,8 @@ and provisioned by one script:
 # https://genieai.local:4443). The helper scripts resolve @playwright/test
 # from the root node_modules — run `npm install` at the repository root
 # first (see Prerequisites).
-node tests/e2e/provision-admin-fixtures.js
-# Expected: admin fixtures ready: testadmin, testplain
+node tests/e2e/provision-e2e-fixtures.js
+# Expected: e2e fixtures ready: testuser, testadmin, testplain
 ```
 
 The script is safe to re-run: an existing account is converged (password

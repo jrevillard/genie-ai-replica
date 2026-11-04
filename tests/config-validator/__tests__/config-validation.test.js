@@ -3127,7 +3127,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     'package-lock.json',
     'docker-compose.yaml',
     'env',
-    'tests/e2e/provision-admin-fixtures.js',
+    'tests/e2e/provision-e2e-fixtures.js',
     'configs/keycloak/**/*',
     'configs/otel/otel-collector-config.yaml'
   ];
@@ -3263,16 +3263,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 });
 
-// The testuser 409 convergence in .e2e_web_base: a stale account (disabled,
-// unverified email, lingering required action, old password) that sails
-// through provisioning fails every login-dependent spec far from the cause.
-// Pin both repair arms of the convergence — the healthy path's
-// reset-password endpoint and its 204 gate, the drifted path's delete call,
-// 204/404 gate, both create invocations, the id resolutions and the
-// fixture-health gates — so a "simplification" that keeps the verdict text
-// but drops the machinery fails this pin instead of silently reverting to
-// trust-the-409.
-describe('the testuser 409 convergence in .e2e_web_base', () => {
+// The venue-fixture provisioning in .e2e_web_base (issue #1324): all three
+// venue users (testuser, testadmin, testplain) are provisioned through the
+// one shared script (tests/e2e/provision-e2e-fixtures.js → ensureUser in
+// tests/e2e/helpers/keycloak-admin.js), never through inline bash. Pin the
+// invocation, the single fixture definition and the derived login
+// credentials — and the ABSENCE of the deleted inline convergence — so a
+// "simplification" that re-grows a bash path beside the helper fails this
+// pin instead of silently reintroducing a second mechanism.
+describe('the venue-fixture provisioning in .e2e_web_base', () => {
   let content;
 
   beforeAll(() => {
@@ -3281,25 +3280,131 @@ describe('the testuser 409 convergence in .e2e_web_base', () => {
 
   const sectionOf = (job) => gitlabSection(content, job);
 
-  test('both repair arms and their gates are present', () => {
+  test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('username=testuser&exact=true');
-    expect(section).toContain("TESTUSER_EMAIL='testuser@e2e.test'");
-    expect(section).toContain("TESTUSER_PWD='TestPass123!'");
-    expect(section).toContain("u.get('email') == sys.argv[1]");
-    // both payloads take their fixture values through argv — a hardcoded
-    // literal in either payload escapes the single-source variables
-    expect(section).toContain('"value":sys.argv[2]');
-    expect(section).toContain('"value":sys.argv[1]');
-    expect(section).toContain('/reset-password');
-    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
-    expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
-    expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
-    expect(section).toContain('password converged');
-    expect(section).toContain('testuser recreated');
-    expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
-    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
-    expect(section.match(/^[ \t]+require_fixture_healthy$/gm) || []).toHaveLength(2);
+    const invocation = section.indexOf('node tests/e2e/provision-e2e-fixtures.js');
+    // Named guards: if either anchor line is reworded or removed, the
+    // failure must say so, not masquerade as an ordering violation.
+    if (invocation === -1) {
+      throw new Error('the venue-fixture provisioning invocation is gone from .e2e_web_base');
+    }
+    const suites = section.indexOf('npx playwright test');
+    if (suites === -1) {
+      throw new Error('the Playwright invocation line was reworded or removed in .e2e_web_base');
+    }
+    // Provisioning must run BEFORE the suites — a reorder that leaves the
+    // call present but after the Playwright item runs every spec against
+    // whatever fixtures the realm happens to carry.
+    expect(invocation).toBeLessThan(suites);
+    // The deleted inline mechanism must not grow back beside the helper:
+    // these names existed only in the bash convergence this pin replaced.
+    expect(section).not.toContain('create_testuser');
+    expect(section).not.toContain('require_testuser_id');
+    expect(section).not.toContain('require_fixture_healthy');
+  });
+
+  test('the fixtures module is the single definition of the venue users', () => {
+    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    expect(fixtures).toContain("username: 'testuser'");
+    // The CI venue's email domain (e2e.test) is the fixture contract. The
+    // docs-side agreement is asserted in the credentials test below,
+    // against the module-derived address.
+    expect(fixtures).toContain("email: 'testuser@e2e.test'");
+    // The admin realm role is part of the pinned fixture contract (parity
+    // with the former inline CI assignment; its disposition is #1402). It
+    // is asserted INSIDE the testuser entry ([^}] cannot cross the
+    // object's closing brace), so dropping testuser's own role line fails
+    // even though testadmin's identical-looking entry would satisfy a
+    // bare containment check.
+    expect(fixtures).toMatch(/username: 'testuser',[^}]*realmRoles: \['admin'\]/);
+    expect(fixtures).toContain("username: 'testadmin'");
+    expect(fixtures).toContain("username: 'testplain'");
+  });
+
+  test('the venue credentials are derived, never re-sourced', () => {
+    // The fixtures module is required, not grepped: the denylist below
+    // derives from the definition, so a new fixture's password is scanned
+    // without touching this pin. A password-less fixture entry is named,
+    // not silently scanned for the literal "undefined".
+    const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
+    const fixturePasswords = E2E_FIXTURES.map((f) => f.password);
+    const passwordless = E2E_FIXTURES.filter((f) => !f.password).map((f) => f.username);
+    if (passwordless.length > 0) {
+      throw new Error(`fixture entries without a password cannot be scanned: ${passwordless.join(', ')}`);
+    }
+    expect(fixturePasswords.length).toBeGreaterThanOrEqual(3);
+    // The credential accessors and the derived login credentials live in
+    // the fixtures module — beside the data they read.
+    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    expect(fixtures).toContain("credentialsOf('testuser')");
+    expect(fixtures).toContain("credentialsOf('testadmin')");
+    expect(fixtures).toContain("credentialsOf('testplain')");
+    // The role-less fixture's DEFINING contract: it must carry no
+    // realmRoles key at all — a granted role makes the provisioning
+    // script take the assign branch and skip its effective-role
+    // assertion, silently turning the authz spec's 403 half into an
+    // admin session.
+    expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
+    // The shell docs' manual payloads must agree with the fixture
+    // credentials — convergeUser deliberately never rewrites the email,
+    // and it resets the password on the already-exists path, so a
+    // divergence would ride forever unnoticed: the documented ROPC
+    // verification in ANY phase doc would fail for the next operator
+    // with no guard.
+    const testuser = E2E_FIXTURES.find((f) => f.username === 'testuser');
+    const docChecks = [
+      ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
+      ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
+      ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+    ];
+    for (const [doc, expected] of docChecks) {
+      const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
+      if (!source.includes(expected)) {
+        throw new Error(
+          `${doc} no longer carries the testuser fixture credential — its documented ROPC verification would fail against the converged account`
+        );
+      }
+    }
+    // No venue-fixture password literal may reappear beside or after the
+    // fixtures module: every helper and spec directory under tests/e2e/
+    // must derive its credentials from it. Explicit exclusions only:
+    // epic2's k1/i1 specs mint tokens for their own ephemeral
+    // self-created users (noroles-e2e, genie2's testuser2) and
+    // legitimately carry their own password literals; fixtures/ holds
+    // the upload seed files. A NEW spec directory is scanned
+    // automatically — coverage is self-maintaining.
+    const assertNoFixturePassword = (label, source) => {
+      for (const password of fixturePasswords) {
+        if (source.includes(password)) {
+          throw new Error(
+            `${label} carries a fixture password literal (rotation ${fixturePasswords.indexOf(password) + 1} of ${fixturePasswords.length}) — derive it from the fixtures module`
+          );
+        }
+      }
+    };
+    const e2eRoot = path.join(ROOT, 'tests/e2e');
+    const exclusions = new Set([
+      // epic2's two self-created fixture users (genie2's testuser2,
+      // k1's noroles-e2e) legitimately carry their own password literals;
+      // the rest of epic2 stays scanned.
+      path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
+      path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
+      path.join(e2eRoot, 'fixtures'), // upload seed files
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+    ]);
+    const walkJs = (dir, label, skipPaths) => {
+      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, name.name);
+        if (skipPaths && skipPaths.has(entryPath)) continue;
+        if (name.isDirectory()) {
+          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
+        } else if (name.name.endsWith('.js')) {
+          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
+        }
+      }
+    };
+    walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
   });
 });
 

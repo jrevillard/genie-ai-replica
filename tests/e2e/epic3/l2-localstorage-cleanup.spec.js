@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.2 — localStorage Cleanup on Logout
 // Login, inject legacy localStorage items, trigger logout, verify they are removed.
@@ -23,8 +24,8 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     timeout: 15000,
   });
 
-  await page.fill('#username', 'testuser');
-  await page.fill('#password', 'TestPass123!');
+  await page.fill('#username', TEST_USER.username);
+  await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
   // Step 3: Wait for redirect back to the app (dashboard)

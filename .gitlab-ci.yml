@@ -405,9 +405,8 @@ workflow:
       # Use Docker service name for Keycloak OIDC compatibility.
       # curl's %{http_code} is 000 when no HTTP answer exists at all (DNS,
       # connection refused, TLS) — labeled in words for the operator. The
-      # helper is defined here, before its first use, and shared with the
-      # Keycloak provisioning item below (GitLab concatenates the script
-      # items into one shell).
+      # helper is defined here, before its first use (GitLab concatenates
+      # the script items into one shell).
       http_label() {
         case "${1:-}" in
           000) echo "000 (no HTTP response — connection-level failure)" ;;
@@ -415,10 +414,9 @@ workflow:
           *)   echo "$1" ;;
         esac
       }
-      # Shared response parsing, same concatenation contract as http_label
-      # (the Keycloak provisioning item below uses them): curl captures the
-      # response with -w '\n%{http_code}', so the status is the last line and
-      # the body is everything before it.
+      # Shared response parsing, same concatenation contract as http_label:
+      # curl captures the response with -w '\n%{http_code}', so the status is
+      # the last line and the body is everything before it.
       resp_status() {
         local s
         s=$(printf '%s' "$1" | tail -n1)
@@ -429,11 +427,6 @@ workflow:
       }
       resp_body() {
         printf '%s' "$1" | sed '$d' | head -c 200
-      }
-      # TESTUSER_EMAIL is defined by the provisioning item below; function
-      # bodies resolve variables at call time.
-      email_conflict_hint() {
-        echo "HINT: the 409 above may be an email conflict — another user owns ${TESTUSER_EMAIL}."
       }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
@@ -459,10 +452,10 @@ workflow:
         fi
       done
     - |
-      # Keycloak readiness wait + test-user provisioning. The Playwright suites
-      # log in through the browser (loginViaUI) and reuse the session token —
-      # no suite run by this job mints ROPC tokens, and the committed realm
-      # refuses direct access grants by design.
+      # Keycloak readiness wait (token + genie-app client visibility). The
+      # Playwright suites log in through the browser (loginViaUI) and reuse
+      # the session token — no suite run by this job mints ROPC tokens, and
+      # the committed realm refuses direct access grants by design.
       # All requests go through nginx/Kong — same path as production traffic.
       KC_URL="${E2E_BASE_URL}/auth"
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
@@ -538,180 +531,6 @@ workflow:
           echo "The admin API answered 404 — the genie realm import may not have completed or the /auth routing is wrong; the client configuration is not the first suspect."
         fi
         exit 1
-      fi
-      # Create test user for E2E tests (required by loginViaUI).
-      # Create-first: HTTP 201 = created, 409 = already exists (the body names
-      # the conflict — username or email). exact=true on the lookup: ?username=
-      # is a prefix search otherwise — a stray testuser2 would misdirect it.
-      TESTUSER_EMAIL='testuser@e2e.test'
-      TESTUSER_PWD='TestPass123!'
-      create_payload() {
-        python3 -c 'import json,sys; print(json.dumps({"username":"testuser","email":sys.argv[1],"emailVerified":True,"firstName":"Test","lastName":"User","enabled":True,"credentials":[{"type":"password","value":sys.argv[2],"temporary":False}]}))' "$TESTUSER_EMAIL" "$TESTUSER_PWD"
-      }
-      create_testuser() {
-        # Bounded transient retry (issue #1289 item 5): a connection-level
-        # answer (empty/000), 408/425/429 or a 5xx retries — the readiness
-        # loop above proves Keycloak answers, but a single call can still
-        # blip. A 201/409 or a definitive 4xx returns straight to the
-        # caller's convergence/verdict logic. Covering both call sites here
-        # also keeps the config-validator pin (exactly two standalone
-        # create_testuser calls) intact.
-        for CREATE_TRY in 1 2 3; do
-          CREATE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-            -d "$(create_payload)" || true)
-          CREATE_STATUS=$(resp_status "$CREATE_RESP")
-          CREATE_BODY=$(resp_body "$CREATE_RESP")
-          case "$CREATE_STATUS" in
-            ''|000|408|425|429|5[0-9][0-9]) ;;
-            *) break ;;
-          esac
-          echo "testuser create attempt ${CREATE_TRY}/3: transient failure (HTTP $(http_label "$CREATE_STATUS"))"
-          if [ "$CREATE_TRY" -lt 3 ]; then
-            sleep 2
-          fi
-        done
-        case "$CREATE_STATUS" in
-          ''|000|408|425|429|5[0-9][0-9])
-            echo "transient failures persisted through all 3 create attempts (last HTTP $(http_label "$CREATE_STATUS"))"
-            ;;
-        esac
-      }
-      require_testuser_id() {
-        LOOKUP_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-        LOOKUP_STATUS=$(resp_status "$LOOKUP_RESP")
-        USERS_JSON=$(printf '%s' "$LOOKUP_RESP" | sed '$d')
-        # One parse emits "id|healthy": fixture-healthy = enabled,
-        # emailVerified, the fixture email, and no requiredActions all read
-        # true; only password drift is invisible to this lookup (and to any
-        # probe — the realm refuses direct access grants).
-        RESOLVED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print((u.get('id') + '|' + ('yes' if u.get('enabled') is True and u.get('emailVerified') is True and u.get('email') == sys.argv[1] and not u.get('requiredActions') else 'no')) if u and u.get('id') else '|')" "$TESTUSER_EMAIL" 2>/dev/null || true)
-        USER_ID=${RESOLVED%%|*}
-        USER_HEALTHY=${RESOLVED#*|}
-        if [ -z "$USER_ID" ]; then
-          echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200), lookup HTTP $(http_label "$LOOKUP_STATUS"))"
-          if [ "$CREATE_STATUS" = "409" ] && [ "$LOOKUP_STATUS" = "200" ]; then
-            email_conflict_hint
-          fi
-          exit 1
-        fi
-      }
-      die_bad_create() {
-        echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
-        echo "response body: ${CREATE_BODY}"
-        if [ "$CREATE_STATUS" = "409" ]; then
-          email_conflict_hint
-        fi
-        exit 1
-      }
-      require_fixture_healthy() {
-        if [ "$USER_HEALTHY" != "yes" ]; then
-          echo "ERROR: the freshly provisioned testuser is not fixture-healthy (lookup HTTP $(http_label "$LOOKUP_STATUS")) — realm-level defaults are attaching state to new users; check the realm import (required actions, email verification)"
-          exit 1
-        fi
-      }
-      reset_payload() {
-        python3 -c 'import json,sys; print(json.dumps({"type":"password","value":sys.argv[1],"temporary":False}))' "$TESTUSER_PWD"
-      }
-      create_testuser
-      if [ "$CREATE_STATUS" = "409" ]; then
-        # A 409 is not done: the account may be stale — disabled, unverified
-        # email, a lingering required action, an old password from an older
-        # fixture revision — and every one of those fails the login-dependent
-        # specs far from the cause. The realm refuses direct access grants,
-        # so credential drift cannot be probed: the password is reset
-        # unconditionally via the documented reset-password endpoint. Drift
-        # in the login-visible state the lookup reads (enabled, verified
-        # email, fixture email, no required actions) means the account is
-        # deleted and
-        # recreated from the fixture payload; a user-level PUT is not used
-        # for that repair (the repo rule forbids partial user PUTs because
-        # they overwrite the credentials array, and credential handling on
-        # full PUTs is not a documented contract). Recreating replaces the
-        # Keycloak id, orphaning backend rows keyed to the previous
-        # identity — accepted on the drift path only, so the common retry
-        # against a healthy account keeps its id and its rows. The realm
-        # forbids duplicate emails, so a 409 with no resolvable testuser
-        # can only be a foreign owner of the fixture email — the resolution
-        # failure below names it.
-        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
-        require_testuser_id
-        recreate_from_scratch() {
-          create_testuser
-          if [ "$CREATE_STATUS" != "201" ]; then
-            die_bad_create
-          fi
-          require_testuser_id
-          require_fixture_healthy
-          VERDICT="testuser recreated (fixture state enforced)"
-        }
-        if [ "$USER_HEALTHY" = "yes" ]; then
-          RESET_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-            -d "$(reset_payload)" || true)
-          RESET_STATUS=$(resp_status "$RESET_RESP")
-          if [ "$RESET_STATUS" = "404" ]; then
-            echo "testuser vanished before the password reset (HTTP 404) — recreating from scratch"
-            recreate_from_scratch
-          elif [ "$RESET_STATUS" != "204" ]; then
-            echo "ERROR: testuser password reset failed (HTTP $(http_label "$RESET_STATUS")) — the stale password would fail every login-dependent spec"
-            echo "response body: $(resp_body "$RESET_RESP")"
-            exit 1
-          else
-            VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
-          fi
-        else
-          echo "testuser exists with drifted login state — deleting and recreating it"
-          # Serializing both .e2e_web_base consumers via resource_group
-          # e2e-runner is what keeps this delete+recreate free of a
-          # concurrent convergence; a third consumer of the base must keep
-          # that serialization or accept interleaved 404/409 failures.
-          DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-          DEL_STATUS=$(resp_status "$DEL_RESP")
-          DEL_BODY=$(resp_body "$DEL_RESP")
-          if [ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]; then
-            echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
-            echo "response body: ${DEL_BODY}"
-            exit 1
-          fi
-          if [ "$DEL_STATUS" = "404" ]; then
-            echo "testuser vanished between lookup and delete (HTTP 404) — recreating from scratch"
-          fi
-          recreate_from_scratch
-        fi
-      elif [ "$CREATE_STATUS" != "201" ]; then
-        die_bad_create
-      else
-        require_testuser_id
-        require_fixture_healthy
-        VERDICT="testuser created"
-      fi
-      echo "$VERDICT"
-      # Assign admin realm role to test user (required for document upload/delete)
-      ROLES_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/roles" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-      ROLES_STATUS=$(resp_status "$ROLES_RESP")
-      ADMIN_ROLE=$(printf '%s' "$ROLES_RESP" | sed '$d' \
-        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" 2>/dev/null || true)
-      if [ -n "$ADMIN_ROLE" ]; then
-        ROLE_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" || true)
-        ROLE_STATUS=$(resp_status "$ROLE_RESP")
-        ROLE_BODY=$(resp_body "$ROLE_RESP")
-        case "$ROLE_STATUS" in
-          2[0-9][0-9])
-            echo "Assigned admin role to testuser (HTTP ${ROLE_STATUS})"
-            ;;
-          *)
-            echo "WARNING: admin role assignment failed (HTTP $(http_label "$ROLE_STATUS")) — document upload/delete tests will fail; body: ${ROLE_BODY:-none}"
-            ;;
-        esac
-      else
-        echo "WARNING: Could not resolve the admin role (roles lookup: HTTP $(http_label "$ROLES_STATUS")). Document upload/delete tests may fail."
       fi
       # The realm's web client must refuse direct access grants — assert it
       # for genie-app. The credentials are deliberately bogus: the refusal
@@ -841,18 +660,18 @@ workflow:
           exit 1
           ;;
       esac
-    # testadmin (admin realm role) + testplain (no roles) for the admin
-    # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
-    # and a role-less login (testplain — requireAdmin must answer 403).
-    # The provisioning script (tests/e2e/provision-admin-fixtures.js) is the
-    # single definition of those fixtures: it converges them — bounded
-    # retry on a transient or unanswered Keycloak call, password
+    # All three venue fixtures (testuser, testadmin, testplain) are
+    # provisioned through ONE mechanism: the provisioning script
+    # (tests/e2e/provision-e2e-fixtures.js) over the ensureUser helper —
+    # bounded retry on a transient or unanswered Keycloak call, password
     # convergence on the already-exists path, role assignment, and the
     # admin-granting role removed from the role-less fixture — so a stale
     # account fails HERE instead of as a login failure minutes later.
-    # testuser above keeps its admin role for the document tests.
+    # The fixture definitions (emails, passwords, roles) live in
+    # tests/e2e/helpers/e2e-fixtures.js; the specs read their login
+    # credentials from the same module.
     - >
-      ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node tests/e2e/provision-admin-fixtures.js
+      ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node tests/e2e/provision-e2e-fixtures.js
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
@@ -3540,7 +3359,7 @@ test:flutter:
   - tests/e2e/documents/**/*
   - tests/e2e/admin/**/*
   - tests/e2e/helpers/**/*
-  - tests/e2e/provision-admin-fixtures.js
+  - tests/e2e/provision-e2e-fixtures.js
   - tests/e2e/fixtures/**/*
   - tests/e2e/theme-runtime-config.spec.js
   - playwright.config.js

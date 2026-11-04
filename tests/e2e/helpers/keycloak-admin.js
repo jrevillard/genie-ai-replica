@@ -641,7 +641,7 @@ async function rotateRealmKeys(adminToken, realm) {
   });
 
   if (newKeyRes.status !== 201) {
-    throw new Error(`Failed to generate new key: ${newKeyRes.status} ${JSON.stringify(newKeyRes.data)}`);
+    failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
   }
 
   // The components API answers 201 with an EMPTY body — auth.request
@@ -665,10 +665,22 @@ async function rotateRealmKeys(adminToken, realm) {
   // Demote old keys (set active to false)
   for (const oldKey of existingKeys) {
     const updatedConfig = { ...oldKey.config, active: ['false'] };
-    const res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: { ...oldKey, config: updatedConfig },
-    });
+    let res;
+    try {
+      res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: { ...oldKey, config: updatedConfig },
+      });
+    } catch (err) {
+      // A transport break here is past the mutation boundary: the new key
+      // already exists and signs, so the raw transport message must not
+      // bypass the re-run-safety diagnosis.
+      const failure = requestFailure(err, `the demotion of key ${oldKey.id}`);
+      failure.message +=
+        ` — the new rotated key ${newKeyId} was already created and is the active signer: ` +
+        `a re-run must NOT create a second rotated key (reuse or delete ${newKeyId})`;
+      throw failure;
+    }
     if (res.status !== 204) {
       // The realm is half-mutated: the new key signs while this old key
       // stayed active. The message names the new key so a re-run does not

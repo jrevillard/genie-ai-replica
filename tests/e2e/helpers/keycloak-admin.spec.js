@@ -692,6 +692,33 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     expect(caught.message).toMatch(/already created.*active signer/s);
   });
 
+  test('a demotion transport break carries the half-mutation diagnosis', async () => {
+    // A timeout after the create is the realistic path to a second
+    // rotated key: the raw transport message must not bypass the
+    // re-run-safety verdict this failure position exists to state.
+    routes = [
+      ...BASE_ROUTES,
+      [
+        'POST',
+        COMPONENTS_PATH,
+        { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` } },
+      ],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { throws: new Error('connection reset by peer') }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/the demotion of key old-key-1/);
+    expect(caught.message).toMatch(/new-key-id/);
+    expect(caught.message).toMatch(/already created.*active signer/s);
+  });
+
   test('a Location header carrying no id segment fails loudly instead of yielding garbage', async () => {
     // A proxy-rewritten or truncated header answers with the collection
     // URL only: reading its last segment would mint the id 'components'.

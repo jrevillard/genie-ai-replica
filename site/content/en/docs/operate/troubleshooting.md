@@ -199,11 +199,13 @@ language the query is written in:
 - **Single-message mode** (`CONTEXT_OPTION=single-message`, where the current
   question *is* the whole history): the character budget is applied on the
   English path too, so an oversized question is refused at the same budget
-  whatever language it is in. The refusal can also come from the service
-  side, on any language: a query that passes the char budget but whose
+  whatever language it is in. On a non-English query the refusal can also
+  come from the service side: a query that passes the char budget but whose
   prompt still does not fit the translation model's window (dense scripts
   run ~1 token/char, so the Latin-derived budget undercounts them) is
-  refused by the same guard the multi-message shape hits.
+  refused by the same guard the multi-message shape hits. An English query
+  is only ever refused by the char budget — it never reaches the
+  translation service.
 - **Multi-message history, service-side refusal**: when the prompt the
   translation service is asked to translate does not fit its model window —
   typically a dense-script history, where the character budget's

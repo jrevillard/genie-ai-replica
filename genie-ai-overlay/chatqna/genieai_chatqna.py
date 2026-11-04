@@ -4758,7 +4758,7 @@ class ChatQnAService:
                 ),
             )
             raise _translation_input_too_long_error(
-                "The conversation exceeded the maximum input size for this deployment. Please shorten it and try again."
+                "The input exceeded the maximum size for this deployment. Please shorten it and try again."
             ) from _e_trans_overflow
 
         if logflag:

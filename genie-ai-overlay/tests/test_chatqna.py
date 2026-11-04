@@ -5019,7 +5019,14 @@ async def test_an_empty_single_message_query_is_a_fallback_on_both_language_path
 
 
 @pytest.mark.asyncio
-async def test_an_all_blank_history_is_a_fallback_on_both_language_paths():
+@pytest.mark.parametrize(
+    "language",
+    [
+        pytest.param("es", id="non-english"),
+        pytest.param("en", id="english"),
+    ],
+)
+async def test_an_all_blank_history_is_a_fallback_on_both_language_paths(language):
     """An all-blank multi-message history is a fallback too — the passthrough
     must not report it as a healthy `passthrough_english` while the
     translation path reports the identical history as degraded: the runbook
@@ -5030,7 +5037,9 @@ async def test_an_all_blank_history_is_a_fallback_on_both_language_paths():
         {"role": "assistant", "content": "\n"},
     ]
     with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000):
-        payload = await _full_flow_payload(svc, stream=False, language="en", messages=[dict(m) for m in blank_history])
+        payload = await _full_flow_payload(
+            svc, stream=False, language=language, messages=[dict(m) for m in blank_history]
+        )
 
     assert payload["metadata"]["query_translation_status"] == "fallback_error"
 

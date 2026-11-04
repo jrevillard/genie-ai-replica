@@ -27,18 +27,18 @@
     non-empty content. DsInput's own @enter would fire either way, so
     the composer does not bind it; the wrapper owns the keydown path.
   -->
-  <div
-    class="chat-composer"
-    :style="[tintStyle, fieldCapStyle]"
-    :aria-label="accessibleName || undefined"
-    data-testid="chat-composer"
-    @keydown="onKeydown"
-  >
+  <div class="chat-composer" :style="[tintStyle, fieldCapStyle]" data-testid="chat-composer" @keydown="onKeydown">
     <div v-if="$slots.leading" class="chat-composer__leading">
       <slot name="leading" />
     </div>
+    <!-- The accessible name goes on the FIELD: the wrapper is a
+         role-less div, and a generic element's aria-label is dropped
+         from the accessibility tree — naming the div announced
+         nothing. DsInput forwards the attr onto the textarea through
+         v-bind="$attrs". -->
     <DsInput
       v-model="model"
+      :aria-label="accessibleName || undefined"
       type="textarea"
       :rows="1"
       :placeholder="placeholder"
@@ -127,8 +127,9 @@ export default {
       type: String,
       default: ''
     },
-    // Optional accessible name (welcome mode uses the just-chat entry's
-    // localized title; chat mode leaves it implicit via the textarea label).
+    // Optional accessible name of the field (welcome mode uses the
+    // entry's localized title, falling back to the entry's id when no
+    // title resolves; chat mode leaves it implicit via the placeholder).
     accessibleName: {
       type: String,
       default: ''

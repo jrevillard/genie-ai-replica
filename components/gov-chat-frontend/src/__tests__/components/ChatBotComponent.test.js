@@ -2963,6 +2963,9 @@ describe('ChatBotComponent', () => {
       const composer = wrapper.findComponent({ name: 'ChatComposer' });
       expect(composer.exists()).toBe(true);
       expect(composer.props('accessibleName')).toBe('bare-entry');
+      // The name must land on the FIELD: an aria-label on the wrapper
+      // div (role=generic) is dropped from the accessibility tree.
+      expect(composer.find('.chat-composer__field').attributes('aria-label')).toBe('bare-entry');
     });
 
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {

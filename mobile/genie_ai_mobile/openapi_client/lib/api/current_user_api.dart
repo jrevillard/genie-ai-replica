@@ -207,7 +207,7 @@ class CurrentUserApi {
 
   /// Reset user profile data
   ///
-  /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+  /// Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
   ///
   /// Note: This method returns the HTTP [Response].
   Future<Response> apiMeResetDataPostWithHttpInfo() async {
@@ -237,7 +237,7 @@ class CurrentUserApi {
 
   /// Reset user profile data
   ///
-  /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+  /// Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
   Future<void> apiMeResetDataPost() async {
     final response = await apiMeResetDataPostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {

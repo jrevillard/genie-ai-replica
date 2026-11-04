@@ -35,6 +35,10 @@ class MockCurrentUserApi implements CurrentUserApi {
   /// used to hold the reset in flight while asserting on the loading state.
   final Completer<void>? resetGate;
 
+  /// How many times the reset endpoint was called — lets a test observe
+  /// that the reset flow actually ran instead of only what it left behind.
+  int resetCalls = 0;
+
   @override
   Future<http.Response> apiMeGetWithHttpInfo({String? data}) async {
     return http.Response(
@@ -49,6 +53,7 @@ class MockCurrentUserApi implements CurrentUserApi {
 
   @override
   Future<http.Response> apiMeResetDataPostWithHttpInfo() async {
+    resetCalls++;
     final gate = resetGate;
     if (gate != null) await gate.future;
     return http.Response(jsonEncode(resetBody), resetStatus);

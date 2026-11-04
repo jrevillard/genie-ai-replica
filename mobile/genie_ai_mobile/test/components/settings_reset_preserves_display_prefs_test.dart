@@ -43,11 +43,10 @@ void main() {
     setupLightTokens();
     I18nService().changeLanguage('en');
 
+    final api = MockCurrentUserApi();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          currentUserApiProvider.overrideWithValue(MockCurrentUserApi()),
-        ],
+        overrides: [currentUserApiProvider.overrideWithValue(api)],
         child: testApp(
           SettingsComponent(
             user: {'name': 'Test User', 'email': 'test@example.test'},
@@ -75,6 +74,11 @@ void main() {
     await pumpFrames(tester);
     await tester.tap(find.byKey(const Key('settings_reset_confirm_button')));
     await pumpFrames(tester);
+
+    // The reset must actually have run: a broken confirm wiring (the reset
+    // call never fires) would leave the storage untouched and the survival
+    // assertions below green for the wrong reason.
+    expect(api.resetCalls, 1);
 
     final prefsAfterReset = await SharedPreferences.getInstance();
     expect(prefsAfterReset.getString('theme_preference'), 'dark');

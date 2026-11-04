@@ -46,6 +46,18 @@ jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn()
 }));
 
+// The erasure path evicts the provisioning cache, which now broadcasts over
+// Redis (#1443) — mock the client so no test opens a real connection handle
+jest.mock('ioredis', () => {
+  const MockRedis = jest.fn(function () {
+    this.publish = jest.fn().mockResolvedValue('1');
+    this.subscribe = jest.fn().mockResolvedValue(1);
+    this.on = jest.fn();
+    this.disconnect = jest.fn();
+  });
+  return MockRedis;
+});
+
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
 

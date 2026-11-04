@@ -45,9 +45,21 @@ function createRedisClient() {
   return new Redis({
     host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
     port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
-    password: process.env.TRANSLATION_CACHE_PASSWORD || null
+    password: process.env.TRANSLATION_CACHE_PASSWORD || null,
+    // Same resilience contract as the translation cache client: a capped
+    // retry backoff, a bounded retry count per command, and no offline
+    // queue — a Redis outage surfaces as a failed command, not a
+    // silently-growing buffer
+    retryStrategy(times) {
+      return Math.min(times * 500, 2000);
+    },
+    maxRetriesPerRequest: 3,
+    enableOfflineQueue: false
   });
 }
+
+/** Identifies this replica in invalidation envelopes so a client drops its own loopback delivery. */
+const INSTANCE_ID = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 
 /**
  * Bumped on every cache eviction. A provision that started before an eviction
@@ -212,7 +224,7 @@ function publishInvalidation(issSub) {
         logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
       });
     }
-    _publisher.publish(INVALIDATION_CHANNEL, issSub).catch((err) => {
+    _publisher.publish(INVALIDATION_CHANNEL, JSON.stringify({ origin: INSTANCE_ID, issSub })).catch((err) => {
       logger.warn('[UserProvisioning] Invalidation publish failed', { error: err.message });
     });
   } catch (err) {
@@ -235,6 +247,19 @@ function tombstoneLookup(erasedKey) {
       FILTER u.iss_sub == null AND u.deleted == true AND u.erased_key == ${erasedKey}
       RETURN u
   `;
+}
+
+/**
+ * The Keycloak account-status lookup behind the reactivation gate (#1438).
+ * Returns the helper's { active, disabled } verdict, or null when no auth
+ * context was supplied (fail-closed) or the check itself failed — null is
+ * an INCONCLUSIVE answer, never a disable confirmation.
+ */
+async function keycloakAccountStatus(authContext) {
+  if (!authContext || !authContext.token || !authContext.issuer) {
+    return null;
+  }
+  return keycloakAuthService.checkUserStatusInKeycloak(authContext.token, authContext.issuer);
 }
 
 const userProvisioningService = {
@@ -303,12 +328,30 @@ const userProvisioningService = {
       _subscriber.on('error', (err) => {
         logger.warn('[UserProvisioning] Invalidation subscriber error', { error: err.message });
       });
-      _subscriber.on('message', (channel, issSub) => {
-        if (channel === INVALIDATION_CHANNEL && issSub) {
+      _subscriber.on('message', (channel, payload) => {
+        if (channel !== INVALIDATION_CHANNEL) return;
+        try {
+          const { origin, issSub } = JSON.parse(payload);
+          if (!issSub) return;
+          // The publisher's own subscriber receives the loopback delivery —
+          // the local eviction already ran; applying it again would double-
+          // bump the epoch and discard unrelated in-flight provisions
+          if (origin === INSTANCE_ID) return;
           evictLocal(issSub);
+        } catch (parseError) {
+          logger.warn('[UserProvisioning] Malformed invalidation message ignored', {
+            error: parseError.message
+          });
         }
       });
-      _subscriber.subscribe(INVALIDATION_CHANNEL);
+      // A rejection here meets index.js's process.exit(1) unhandledRejection
+      // handler — a Redis outage must degrade eviction to the TTL bound,
+      // never crash the backend
+      _subscriber.subscribe(INVALIDATION_CHANNEL).catch((err) => {
+        logger.warn('[UserProvisioning] Invalidation subscribe failed — evictions stay local', {
+          error: err.message
+        });
+      });
     } catch (subscriberError) {
       logger.warn('[UserProvisioning] Failed to start invalidation subscriber — evictions stay local', {
         error: subscriberError.message
@@ -442,6 +485,23 @@ const userProvisioningService = {
       );
       const legacyUser = await legacyCursor.next();
       if (legacyUser) {
+        if (legacyUser.deleted === true) {
+          // Migrating a soft-deleted legacy document IS a reactivation — the
+          // same gate applies (#1438), or the admin's disable would be
+          // undone one query path earlier than the one the gate covers
+          const status = await keycloakAccountStatus(authContext);
+          if (!(status && status.active)) {
+            logger.info(
+              `[UserProvisioning] Legacy migration refused — Keycloak did not confirm the account enabled: ${issSub}`
+            );
+            if (status && _cacheEpoch === epochAtStart) {
+              // Confirmed disable only — an inconclusive answer must be
+              // re-asked on the next request, not cached for the TTL
+              _cache.set(issSub, { user: legacyUser, expiresAt: Date.now() + CACHE_TTL_MS });
+            }
+            return legacyUser;
+          }
+        }
         logger.info(`[UserProvisioning] Migrating legacy user ${legacyUser._key} → iss_sub: ${issSub}`);
         await db.query(
           aql`
@@ -487,10 +547,7 @@ const userProvisioningService = {
       // silently undo the disable. Fail-closed: Keycloak must confirm the
       // account enabled (and the caller must supply the auth context to
       // ask) before the UPSERT may clear the deleted flag.
-      const keycloakStatus =
-        authContext && authContext.token && authContext.issuer
-          ? await keycloakAuthService.checkUserStatusInKeycloak(authContext.token, authContext.issuer)
-          : null;
+      const keycloakStatus = await keycloakAccountStatus(authContext);
       // active/disabled are inverse pairs in the helper's contract — checking
       // active alone is the whole gate
       const keycloakEnabled = !!(keycloakStatus && keycloakStatus.active);
@@ -498,9 +555,12 @@ const userProvisioningService = {
         logger.info(
           `[UserProvisioning] Reactivation refused — Keycloak did not confirm the account enabled: ${issSub}`
         );
-        if (_cacheEpoch === epochAtStart) {
-          // Cache the refusal like the erasure tombstone's: within the TTL
-          // the next request is refused without re-consulting Keycloak
+        if (keycloakStatus && _cacheEpoch === epochAtStart) {
+          // Confirmed disable: cache the refusal like the erasure tombstone's
+          // — within the TTL the next request is refused without re-consulting
+          // Keycloak. An inconclusive answer (null: unreachable, ambiguous or
+          // no auth context) is NOT cached — the next request re-asks, so a
+          // recovered Keycloak reactivates without waiting out the TTL.
           _cache.set(issSub, { user: deletedUser, expiresAt: Date.now() + CACHE_TTL_MS });
         }
         return deletedUser;

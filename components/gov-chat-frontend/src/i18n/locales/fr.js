@@ -987,7 +987,8 @@ export default {
     },
     processing: 'Traitement en cours...',
     userDataReset: 'Vos données de profil ont été réinitialisées avec succès.',
-    userDataResetFilesFailed: 'Vos données de profil ont été réinitialisées, mais certains fichiers stockés n’ont pas pu être supprimés. Veuillez contacter un administrateur.',
+    userDataResetFilesFailed:
+      'Vos données de profil ont été réinitialisées, mais certains fichiers stockés n’ont pas pu être supprimés. Veuillez contacter un administrateur.',
     failedToResetUserData: 'Échec de la réinitialisation de vos données de profil. Veuillez réessayer plus tard.',
     unableToLoadUser: "Impossible de charger les informations de l'utilisateur. Veuillez réessayer.",
     user: 'Utilisateur',

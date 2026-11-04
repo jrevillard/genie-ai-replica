@@ -98,15 +98,11 @@ async function buildWrapper() {
 // Drives the real user path: click the reset tile, confirm the modal, and
 // let the reset flow complete — so the confirm-dialog wiring is exercised.
 async function resetViaModal(wrapper) {
-  const resetTile = wrapper
-    .findAll('button')
-    .find((b) => b.text() === 'Reset User Data');
+  const resetTile = wrapper.findAll('button').find((b) => b.text() === 'Reset User Data');
   await resetTile.trigger('click');
   await wrapper.vm.$nextTick();
 
-  const confirmButton = wrapper
-    .findAll('button')
-    .find((b) => b.text() === 'Reset');
+  const confirmButton = wrapper.findAll('button').find((b) => b.text() === 'Reset');
   await confirmButton.trigger('click');
   await flushPromises();
   await wrapper.vm.$nextTick();
@@ -155,13 +151,11 @@ describe('SettingsComponent — resetUserData notification', () => {
     // $t cannot resolve, so a key typo degrades silently — pin both sides:
     // the locale string the translators maintain and the key the component
     // actually references.
-    const warning = 'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.';
+    const warning =
+      'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.';
     expect(enMessages.settings.userDataResetFilesFailed).toBe(warning);
 
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', '..', 'components', 'SettingsComponent.vue'),
-      'utf8'
-    );
+    const source = fs.readFileSync(path.join(__dirname, '..', '..', 'components', 'SettingsComponent.vue'), 'utf8');
     expect(source).toContain("'settings.userDataResetFilesFailed'");
   });
 

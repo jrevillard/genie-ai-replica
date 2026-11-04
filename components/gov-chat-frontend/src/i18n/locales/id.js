@@ -980,7 +980,8 @@ export default {
     },
     processing: 'Memproses...',
     userDataReset: 'Data profil Anda berhasil diatur ulang.',
-    userDataResetFilesFailed: 'Data profil Anda telah diatur ulang, tetapi beberapa file tersimpan tidak dapat dihapus. Silakan hubungi administrator.',
+    userDataResetFilesFailed:
+      'Data profil Anda telah diatur ulang, tetapi beberapa file tersimpan tidak dapat dihapus. Silakan hubungi administrator.',
     failedToResetUserData: 'Gagal mengatur ulang data profil Anda. Silakan coba lagi nanti.',
     unableToLoadUser: 'Tidak dapat memuat informasi pengguna. Silakan coba lagi.',
     retry: 'Coba Lagi',

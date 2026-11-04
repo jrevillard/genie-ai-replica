@@ -33,7 +33,10 @@ module.exports = [
       // theme's fixtures are FreeMarker fragments) is written with double
       // quotes — which is what Prettier formats it to.
       quotes: ['error', 'single', { avoidEscape: true }],
-      indent: ['error', 2],
+      // SwitchCase: 1 matches Prettier's formatting of case labels (+2 from
+      // the switch). Without it, ESLint and Prettier fight over every future
+      // switch statement — eslint --fix loses against prettier --write.
+      indent: ['error', 2, { SwitchCase: 1 }],
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     }
   },

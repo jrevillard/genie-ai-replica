@@ -2083,8 +2083,7 @@ export default {
       // declaring path, as before (#1263).
       if (
         entry &&
-        (this.quickHelpCardBroken(entry) ||
-          (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
+        (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
       ) {
         // The caption is computed HERE, on the refusing path only: it
         // is the tile's own caption assembly (the missing title first,

@@ -1,7 +1,12 @@
 /**
  * Tests for the husk-user-document signature (scripts/report-husk-user-docs.js,
- * issue #1430). The JS predicate and the AQL matcher must agree — the script
- * aborts on divergence, and these tests pin both sides of that contract.
+ * issue #1430). The AQL matcher is generated from the same constants the JS
+ * predicate reads, so these tests pin the predicate semantics (the signature's
+ * meaning) and guard the AQL template against corruption (each FILTER clause,
+ * the deleted carve-out, the allowed-field subset, a final RETURN). The AQL's
+ * runtime semantics against a real ArangoDB cannot run in CI — it is
+ * re-validated against a throwaway ArangoDB with a synthetic corpus whenever
+ * the matcher template changes (see MR !752 for the latest validation).
  */
 
 const {

@@ -587,7 +587,7 @@ describe('loadConfig', () => {
       });
 
       await expect(loadConfig()).resolves.toBeDefined();
-      expect(warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean')).length).toBe(0);
+      expect(hiddenWarnings(warn).length).toBe(0);
       warn.mockRestore();
     });
   });

@@ -1329,9 +1329,10 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons.map((b) => b.id)).toEqual(['plain']);
 
       // The TYPO is not reported here: the report lives in the loader's
-      // gate (validateQuickHelpButtons — once per configuration load,
-      // named by the id), so the apply stays a pure filter and re-running
-      // it on every locale switch cannot multiply the warning (#1361).
+      // shape report (validateQuickHelpButtons — one warning per
+      // malformed flag per session, named by the id), so the apply stays
+      // a pure filter and re-running it on every locale switch cannot
+      // multiply the warning (#1361).
       expect(warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean')).length).toBe(0);
 
       warn.mockRestore();

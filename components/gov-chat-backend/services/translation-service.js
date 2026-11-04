@@ -33,8 +33,6 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 // yes on every deployment and make the rule unsatisfiable.
 const gpuNodeHost = process.env.GPU_NODE_HOST || '';
 
-// --- Get Redis cache settings from env ---
-
 /**
  * @class TranslationService
  * @description A proxy service for on-the-fly text translation using pluggable backends (CPU or GPU).

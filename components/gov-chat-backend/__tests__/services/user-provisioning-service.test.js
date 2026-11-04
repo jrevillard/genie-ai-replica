@@ -133,6 +133,12 @@ describe('UserProvisioningService', () => {
       mockDb.query.mockImplementation(async (query) => {
         call++;
         if (call === 1) {
+          // The revalidation read must ignore GDPR-erased documents: they
+          // carry deleted:true AND a nulled iss_sub, and re-provisioning one
+          // would re-materialize the erasure (#1432)
+          expect(query.strings.join(' ')).toContain('iss_sub != null');
+        }
+        if (call === 1) {
           // Cache-hit revalidation: answers "deleted" only for a _key-based
           // lookup — an iss_sub-based lookup must miss (GDPR erasure nulls
           // iss_sub, so detection must not depend on it)
@@ -166,6 +172,28 @@ describe('UserProvisioningService', () => {
       const result2 = await userProvisioningService.provisionUser(reordered);
       expect(result2).toBe(result1);
       expect(mockDb.query.mock.calls.length).toBe(callsBefore + 1);
+    });
+
+    it('should re-provision when the roles differ only by duplicated entries', async () => {
+      mockProvisionCycle('Old Name', ['user', 'offline_access']);
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      // ['user', 'user'] is not the same role set — a multiset compare would
+      // serve the cached copy
+      const duplicated = { ...baseToken, realm_access: { roles: ['user', 'user'] } };
+      mockProvisionCycle('Old Name', ['user']);
+      const result2 = await userProvisioningService.provisionUser(duplicated);
+      expect(result2).not.toBe(result1); // full re-provision ran
+      expect(result2.roles).toEqual(['user']);
+    });
+
+    it('should serve the cached copy when the revalidation read outlives its deadline', async () => {
+      mockProvisionCycle('Old Name');
+      const result1 = await userProvisioningService.provisionUser(baseToken);
+
+      mockDb.query.mockImplementation(() => new Promise(() => {})); // never resolves
+      const result2 = await userProvisioningService.provisionUser(baseToken);
+      expect(result2).toBe(result1); // fail-open after the deadline, not a hang
     });
 
     it('should warn about revalidation failures at most once per TTL window', async () => {
@@ -329,6 +357,34 @@ describe('UserProvisioningService', () => {
       const result = await userProvisioningService.provisionUser(token);
       expect(result._key).toBe('user-new');
       expect(mockDb.query).toHaveBeenCalledTimes(4);
+      // No bind in the migration UPDATE may be undefined — an undefined bind
+      // is dropped by arangojs's aql tag and produces malformed AQL
+      const migrationBinds = mockDb.query.mock.calls[1][0].values.flat();
+      expect(migrationBinds.length).toBeGreaterThan(0);
+      for (const bind of migrationBinds) {
+        expect(bind).not.toBeUndefined();
+      }
+    });
+
+    it('should not bind undefined in the migration UPDATE when neither the token nor the legacy document carries a name', async () => {
+      // profile.name is null (no name, no preferred_username) and the legacy
+      // document has no name field — the UPDATE must still bind null, because
+      // an undefined bind is dropped by arangojs's aql tag and corrupts the AQL
+      const legacyUser = { _key: 'user-legacy', email: 'old@test.com', iss_sub: null };
+      const newUser = { _key: 'user-new', email: 'old@test.com', iss_sub: 'iss/sub-1' };
+
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([legacyUser])) // legacy email lookup
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(null) }) // migration UPDATE
+        .mockResolvedValueOnce(createMockCursor([])) // deleted check
+        .mockResolvedValueOnce(createMockCursor([{ new: newUser, old: legacyUser }])); // upsert
+
+      const token = { iss_sub: 'iss/sub-1', iss: 'https://keycloak', sub: 'sub-1', email: 'old@test.com' };
+      await userProvisioningService.provisionUser(token);
+      const migrationBinds = mockDb.query.mock.calls[1][0].values.flat();
+      for (const bind of migrationBinds) {
+        expect(bind).not.toBeUndefined();
+      }
     });
 
     it('should skip legacy migration when no email', async () => {

@@ -58,39 +58,59 @@ function profileFromToken(decodedToken) {
 /**
  * Whether the cached user document still matches the token's claims.
  * A mismatch means Keycloak state changed out-of-band after the copy
- * was cached. Roles are compared as a set: their order in the token is
- * not contractually stable.
+ * was cached. Roles are compared order-insensitively (their order in
+ * the token is not contractually stable) and exactly (no multiset
+ * collapses).
  */
 function profileMatches(cachedUser, decodedToken) {
   const expected = profileFromToken(decodedToken);
   const cachedRoles = cachedUser.roles || [];
+  const sortedExpected = [...expected.roles].sort();
+  const sortedCached = [...cachedRoles].sort();
   return (
     expected.email === cachedUser.email &&
     expected.name === cachedUser.name &&
     expected.emailVerified === cachedUser.emailVerified &&
-    expected.roles.length === cachedRoles.length &&
-    expected.roles.every((role) => cachedRoles.includes(role))
+    sortedExpected.length === sortedCached.length &&
+    sortedExpected.every((role, index) => role === sortedCached[index])
   );
 }
 
+/** Bound on how long the per-request revalidation read may delay a cache hit. */
+const REVALIDATION_TIMEOUT_MS = 3000;
+
 /**
  * Whether the document a cached copy points at has been soft-deleted
- * out-of-band. Looked up by the cached document's _key — which survives
- * GDPR erasure (it nulls iss_sub) — so both in-place soft-deletes and
- * erasures are detected. On a query failure the cached copy is served:
- * a cache hit previously required no DB access at all, and the entry
- * expires with the TTL anyway.
+ * out-of-band. Looked up by the cached document's _key (which survives a
+ * GDPR erasure) but matches only in-place soft-deletes: an erasure nulls
+ * iss_sub, and re-provisioning an erased identity would re-materialize
+ * the erasure, so the cached copy is served for it (see issue #1432).
+ * On a failure or a read that outlives REVALIDATION_TIMEOUT_MS, the
+ * cached copy is served: a cache hit previously required no DB access
+ * at all, and the entry expires with the TTL anyway.
  */
 async function isSoftDeleted(cachedUser) {
   try {
     const db = await getDb();
-    const cursor = await db.query(aql`
+    const read = db.query(aql`
       FOR u IN users
-        FILTER u._key == ${cachedUser._key} AND u.deleted == true
+        FILTER u._key == ${cachedUser._key} AND u.deleted == true AND u.iss_sub != null
         LIMIT 1
         RETURN u._key
     `);
-    return !!(await cursor.next());
+    let timer;
+    const deadline = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), REVALIDATION_TIMEOUT_MS);
+    });
+    const nextResult = await Promise.race([read.then((cursor) => cursor.next()), deadline]);
+    clearTimeout(timer);
+    if (nextResult === null) {
+      // Read lost the race or found no deleted document — serve the cached
+      // copy. On a lost race the read keeps running; drop its eventual result.
+      read.catch(() => {});
+      return false;
+    }
+    return true;
   } catch (err) {
     // Fail open (bounded by the TTL) — but warn at most once per TTL so a
     // DB outage does not put a warn line on every authenticated request
@@ -227,7 +247,7 @@ const userProvisioningService = {
                 iss_sub: ${issSub},
                 iss: ${decodedToken.iss},
                 sub: ${decodedToken.sub},
-                name: ${profile.name || legacyUser.name},
+                name: ${profile.name || legacyUser.name || null},
                 emailVerified: ${profile.emailVerified},
                 roles: ${profile.roles},
                 active: true,

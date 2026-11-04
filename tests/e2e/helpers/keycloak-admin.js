@@ -63,14 +63,32 @@ async function resolveUser(adminToken, realm, username) {
  * @param {string} realm - Realm name
  * @param {string} roleName - Exact realm role name
  * @returns {Promise<object|null>} The role representation, or null when
- *   the realm carries no role of that name (HTTP 404)
+ *   the realm carries no role of that name (HTTP 404 on a realm that
+ *   exists)
  */
 async function findRealmRole(adminToken, realm, roleName) {
   const res = await auth.request('GET', `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`, {
     headers: { Authorization: `Bearer ${adminToken}` }
   });
-  if (res.status === 200) return res.data;
-  if (res.status === 404) return null;
+  if (res.status === 200) {
+    // A 200 with no usable representation is a broken answer, not a role:
+    // the callers index role.id on it.
+    if (!res.data || typeof res.data !== 'object' || !res.data.id) {
+      throw new Error(
+        `The realm role ${roleName} of ${realm} answered HTTP 200 without a usable representation: ` +
+          `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
+      );
+    }
+    return res.data;
+  }
+  if (res.status === 404) {
+    // Keycloak answers 404 for a role the realm does not carry AND for a
+    // realm that does not exist. The two must not be conflated: a missing
+    // realm is a broken venue (fail loudly), a missing role is a plain
+    // "not granted here" (skip on removal, named on assignment).
+    await getRealmSettings(adminToken, realm);
+    return null;
+  }
   throw new Error(
     `Cannot read the realm role ${roleName} of ${realm}: HTTP ${res.status} ` +
       `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
@@ -263,16 +281,29 @@ async function convergeUser(adminToken, realm, userData) {
       // concurrent cleanup, an operator purge). An email-ownership probe
       // separates them — blaming a vanished account on an email conflict
       // sends the operator hunting for a conflict that does not exist.
-      const probe = await auth.request(
-        'GET',
-        `/auth/admin/realms/${realm}/users?email=${encodeURIComponent(email)}&exact=true`,
-        { headers: { Authorization: `Bearer ${adminToken}` } }
-      );
-      if (probe.status !== 200 || !Array.isArray(probe.data)) {
-        throw new Error(
-          `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
-            `could not run (HTTP ${probe.status})`
+      let probe;
+      try {
+        probe = await auth.request(
+          'GET',
+          `/auth/admin/realms/${realm}/users?email=${encodeURIComponent(email)}&exact=true`,
+          { headers: { Authorization: `Bearer ${adminToken}` } }
         );
+      } catch (probeErr) {
+        // A transport-level failure of the probe is transient, exactly like
+        // the create's own: it must not kill a provisioning that the
+        // deadline-based retry exists to save.
+        throw transientError(
+          `Cannot reach the Keycloak admin API for the email-ownership probe of ${email}: ${probeErr.message}`
+        );
+      }
+      if (probe.status !== 200 || !Array.isArray(probe.data)) {
+        const message =
+          `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
+          `could not run (HTTP ${probe.status})`;
+        if (probe.status >= 500 || TRANSIENT_STATUSES.includes(probe.status)) {
+          throw transientError(message);
+        }
+        throw new Error(message);
       }
       if (probe.data.length > 0) {
         throw new Error(

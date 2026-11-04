@@ -2695,6 +2695,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
       'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
   });
@@ -3370,7 +3371,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
       ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
       ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
@@ -3405,7 +3406,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
-      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
     const walkJs = (dir, label, skipPaths) => {
       for (const name of fs.readdirSync(dir, { withFileTypes: true })) {

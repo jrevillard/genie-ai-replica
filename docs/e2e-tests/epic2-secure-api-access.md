@@ -453,7 +453,7 @@ Validates that the Swagger UI includes a Keycloak OIDC "Authorize" button, allow
 ### Prerequisites
 
 - Stack is deployed and healthy (from Phase 0)
-- Test user exists with `GENIE.AI_USER` role (from Phase 0, Step 0.9)
+- Test user exists (from Phase 0, Step 0.8) — the venue `testuser` carries no realm role
 - Swagger UI is accessible at `/api-docs` as a public route
 - Keycloak client `genie-app` is configured with correct redirect URIs
 
@@ -608,7 +608,7 @@ npx playwright test tests/e2e/epic2/g1-swagger-authorize.spec.js
 - Response code is NOT 401
 - Protected endpoint returns data
 
-**On failure**: Check that the test user has the `GENIE.AI_USER` role in Keycloak.
+**On failure**: Check the test user's provisioning state (Phase 0, Step 0.8) — the venue `testuser` carries no realm role.
 
 ---
 
@@ -714,15 +714,16 @@ components: {
 **Root causes**:
 1. Swagger UI not including the Authorization header in requests
 2. Token expired or invalid
-3. Test user lacks required role
+3. Test user mis-provisioned
 
 **Fix**:
 1. Open browser DevTools Network tab while executing a request
 2. Check if `Authorization: Bearer <token>` header is present
-3. Verify the test user has the `GENIE.AI_USER` role in Keycloak:
+3. Verify the test user exists and can log in (the venue `testuser`
+   carries no realm role — re-run the Phase 0 provisioning script if in doubt):
 ```bash
 curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | jq '.[0].realmRoles'
+  -H "Authorization: Bearer $TOKEN" | jq '.[0] | {username, enabled, emailVerified}'
 ```
 
 ---

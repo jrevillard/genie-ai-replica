@@ -3,10 +3,11 @@
  * Provision the E2E venue fixtures (testuser, testadmin, testplain).
  *
  * testuser is the primary login user (the chat suites); testadmin
- * and testplain serve the admin surface — an admin-role login and a
- * role-less one (the backend gate answers 403 for the latter). The helper
+ * serves the admin surface (an admin-role login) and testplain the
+ * role-less one (the backend gate answers 403 for it). The helper
  * converges an existing account (password reset, fixture-health check,
- * role assignment), so the script is safe to re-run.
+ * role assignment, and the admin realm role removed from any fixture
+ * that does not declare it), so the script is safe to re-run.
  *
  * Usage (from the repository root):
  *   ADMIN_TOKEN=<master admin token> BASE_URL=<edge> node tests/e2e/provision-e2e-fixtures.js
@@ -24,9 +25,10 @@ const { getAdminToken } = require('./helpers/auth');
 
 const REALM = 'genie';
 
-// The admin-granting role the non-admin fixture must NOT carry: the
-// backend gate (requireAdmin) reads the realm role, so a fixture that
-// kept it would answer 200 where the spec expects 403.
+// The admin-granting role a fixture must not carry unless it declares
+// it: the backend gate (requireAdmin) reads the realm role, so a fixture
+// that kept an undeclared admin role would answer 200 where the specs
+// expect 403 (or hold a grant no consumer justifies — #1402).
 const ADMIN_ROLE = 'admin';
 
 (async () => {
@@ -35,29 +37,36 @@ const ADMIN_ROLE = 'admin';
   // not leave one half-provisioned behind a process exit.
   for (const fixture of E2E_FIXTURES) {
     const userId = await ensureUser(adminToken, REALM, fixture);
-    if (!fixture.realmRoles || fixture.realmRoles.length === 0) {
-      // The role-less fixture: "nothing was assigned" is not "carries
-      // none" — a role granted once (by hand, or by an earlier fixture
-      // revision) would silently turn the non-admin half of the authz
-      // spec into an admin session.
+    if (!(fixture.realmRoles || []).includes(ADMIN_ROLE)) {
+      // "Nothing was assigned" is not "carries none" — a role granted
+      // once (by hand, or by an earlier fixture revision, e.g. testuser's
+      // removed parity admin role) must be stripped here: convergence
+      // never happens on its own for a role-carrying account.
       // The EFFECTIVE roles — the direct mappings plus the composites they
       // pull in (the realm's default role is one of them). Removing a
       // direct mapping cannot take away a role the realm's default
       // composite or a group grants, so the invariant is ASSERTED, not
       // assumed.
       const before = await effectiveRealmRoles(adminToken, REALM, userId);
+      let removed = [];
       if (before.includes(ADMIN_ROLE)) {
-        const removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
-        console.log(
-          `${fixture.username}: removed the drifted ${ADMIN_ROLE} role mapping (${removed.join(', ') || 'none accepted'})`
-        );
+        // removeRealmRoles returns the names it ATTEMPTED, not the
+        // mappings it actually dropped — a composite-granted role is a
+        // no-op DELETE. The success is logged only after the effective
+        // re-check below proves the role is gone.
+        removed = await removeRealmRoles(adminToken, REALM, userId, [ADMIN_ROLE]);
       }
-      const effective = await effectiveRealmRoles(adminToken, REALM, userId);
+      // The effective re-check is only needed when a removal was
+      // attempted; otherwise `before` already proved the account clean.
+      const effective = removed.length > 0 ? await effectiveRealmRoles(adminToken, REALM, userId) : before;
       if (effective.includes(ADMIN_ROLE)) {
         throw new Error(
           `${fixture.username} still holds the ${ADMIN_ROLE} realm role (effective roles: ${effective.join(', ')}) — ` +
-            'the realm default role or a group grants it; the non-admin half of the admin spec needs a role-less account'
+            'the realm default role or a group grants it; the fixture declares no admin role, so the realm import needs fixing'
         );
+      }
+      if (removed.length > 0) {
+        console.log(`${fixture.username}: stripped the drifted ${ADMIN_ROLE} role mapping (${removed.join(', ')})`);
       }
     }
   }

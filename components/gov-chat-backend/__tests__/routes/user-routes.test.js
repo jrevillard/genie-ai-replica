@@ -271,7 +271,12 @@ describe('GET /api/me/context', () => {
 // ============================================================
 describe('POST /api/me/reset-data', () => {
   it('should return 200 on successful reset', async () => {
-    userProfileService.resetUserData.mockResolvedValue({ resetFields: ['chatHistory'] });
+    userProfileService.resetUserData.mockResolvedValue({
+      userKey: 'user-123',
+      fieldsPreserved: 12,
+      filesDeletionFailed: false,
+      success: true
+    });
 
     const response = await authPost('/api/me/reset-data', {});
 

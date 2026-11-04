@@ -44,7 +44,7 @@ class ApiMeResetDataPost200Response {
   ///
   String? userKey;
 
-  /// Informational count of system-managed fields carried over from the stored document (excludes the updated-at bump).
+  /// Informational count of preserved fields (system-managed identity/audit fields plus client preferences) carried over from the stored document (excludes the updated-at bump).
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

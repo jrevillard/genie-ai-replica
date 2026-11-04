@@ -280,10 +280,7 @@ async function effectiveRealmRoles(adminToken, realm, userId) {
     headers: { Authorization: `Bearer ${adminToken}` }
   });
   if (res.status !== 200 || !Array.isArray(res.data)) {
-    throw new Error(
-      `Cannot read the effective realm roles of ${userId}: HTTP ${res.status} ` +
-        `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
-    );
+    throw new Error(`Cannot read the effective realm roles of ${userId}: HTTP ${res.status} ${bodyText(res)}`);
   }
   return res.data.map((r) => r.name);
 }

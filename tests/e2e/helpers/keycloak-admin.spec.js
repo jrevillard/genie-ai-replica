@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const auth = require('./auth');
 const { E2E_FIXTURES } = require('./e2e-fixtures');
-const { assignRealmRoles, removeRealmRoles, convergeUser } = require('./keycloak-admin');
+const { assignRealmRoles, removeRealmRoles, convergeUser, effectiveRealmRoles } = require('./keycloak-admin');
 
 /**
  * Unit spec for the Keycloak admin helper's role resolution and the
@@ -34,6 +34,9 @@ const realRequest = auth.request;
 // the venue provisioning reads, so a fixture change moves the spec with
 // it instead of silently invalidating the queries below.
 const ADMIN_FIXTURE = E2E_FIXTURES.find((f) => f.username === 'testadmin');
+if (!ADMIN_FIXTURE) {
+  throw new Error('the venue fixtures no longer carry a testadmin account — the spec cannot name it');
+}
 const ADMIN_USER = {
   username: ADMIN_FIXTURE.username,
   email: ADMIN_FIXTURE.email,
@@ -156,6 +159,32 @@ test.describe('removeRealmRoles', () => {
 
     await expect(removeRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(/The realm genie does not exist/);
     expect(calls).not.toContain(`DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`);
+  });
+});
+
+test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role list', () => {
+  test('returns the effective names from the composite mappings and never reads the roles listing', async () => {
+    const composite = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/role-mappings/realm/composite$`);
+    routes = [
+      [
+        'GET',
+        composite,
+        {
+          status: 200,
+          data: [
+            { id: 'r1', name: 'admin' },
+            { id: 'r2', name: 'default-roles-genie' }
+          ]
+        }
+      ]
+    ];
+
+    const effective = await effectiveRealmRoles('tok', REALM, 'user-1');
+
+    expect(effective).toEqual(['admin', 'default-roles-genie']);
+    // The listing endpoint is paginated — the effective roles are the
+    // MAPPINGS of the user, so the listing must not be consulted.
+    expect(calls.some((call) => call.endsWith(`/auth/admin/realms/${REALM}/roles`))).toBe(false);
   });
 });
 

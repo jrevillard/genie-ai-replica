@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
 
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
@@ -101,7 +100,7 @@ void main() {
     await tester.tap(resetTile);
     await pumpFrames(tester);
 
-    await tester.tap(find.widgetWithText(DsButton, 'Reset'));
+    await tester.tap(find.byKey(const Key('settings_reset_confirm_button')));
     await pumpFrames(tester);
   }
 

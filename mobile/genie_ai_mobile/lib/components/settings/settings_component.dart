@@ -257,11 +257,13 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       content: Text(tr("settings.confirmResetUserData")),
       actions: [
         DsButton(
+          key: const Key('settings_reset_cancel_button'),
           label: tr("settings.cancel"),
           variant: DsButtonVariant.ghost,
           onPressed: () => Navigator.pop(context),
         ),
         DsButton(
+          key: const Key('settings_reset_confirm_button'),
           label: tr("settings.reset"),
           variant: DsButtonVariant.primary,
           onPressed: () async {

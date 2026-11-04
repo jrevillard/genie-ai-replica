@@ -65,10 +65,6 @@ jest.mock('../../services/path-sanitizer', () => ({
   sanitizePath: jest.fn((base, name) => `${base}/${name}`)
 }));
 
-jest.mock('../../constants/jit-fields', () =>
-  jest.requireActual('../../constants/jit-fields')
-);
-
 function createMockCollection() {
   return {
     save: jest.fn(),

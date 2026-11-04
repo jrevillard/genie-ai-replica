@@ -36,4 +36,9 @@ const JIT_PROTECTED_FIELDS = [
   'pendingEmailChange'
 ];
 
-module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS };
+// Every backend-owned field a destructive user-document operation must carry
+// over: the JIT-managed set plus the soft-delete and GDPR erase audit
+// markers (written by userProvisioningService / keycloak-proxy-service).
+const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt'];
+
+module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS };

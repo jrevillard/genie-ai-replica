@@ -3,7 +3,7 @@ const fs = require('fs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
-const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
+const { JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS } = require('../constants/jit-fields');
 
 class UserProfileService {
   constructor() {
@@ -389,14 +389,12 @@ class UserProfileService {
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
-      // Preserve the system-managed fields: the JIT-managed set (identity,
-      // timestamps, soft-delete state) plus the provisioning/GDPR audit
-      // markers. They are Keycloak- or backend-owned: losing iss_sub/email
-      // would make the provisioning UPSERT miss this document on next login
-      // and INSERT a husk duplicate.
-      const preservedFields = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt'];
+      // Preserve the system-managed fields (SYSTEM_PRESERVED_FIELDS): losing
+      // iss_sub/email would make the provisioning UPSERT miss this document
+      // on next login and INSERT a husk duplicate; losing the audit markers
+      // would destroy soft-delete/GDPR state.
       const preservedData = {};
-      for (const field of preservedFields) {
+      for (const field of SYSTEM_PRESERVED_FIELDS) {
         if (currentUserDoc[field] !== undefined) {
           preservedData[field] = currentUserDoc[field];
         }

@@ -9,6 +9,10 @@ import 'package:openapi/api.dart';
 /// [resetGate] holds the reset in flight (loading-state assertions), and
 /// [resetCalls] lets a test observe that the reset actually ran instead
 /// of only what it left behind.
+///
+/// Distinct from the config-driven `MockCurrentUserApi` in
+/// `test/services/user_service_test.dart`, which shapes raw response
+/// bodies for the user-service contract tests and has no reset seam.
 class MockCurrentUserApi implements CurrentUserApi {
   MockCurrentUserApi({
     this.resetBody = const {},

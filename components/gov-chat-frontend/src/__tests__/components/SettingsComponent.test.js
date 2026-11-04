@@ -61,6 +61,7 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
 const enMessages = require('../../i18n/locales/en').default;
+const { DISPLAY_PREF_KEYS } = require('../../utils/displayPrefKeys');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -195,12 +196,17 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     jest.restoreAllMocks();
   });
 
-  test('keeps theme, locale, font size and notification toggles across the clear', async () => {
-    localStorage.setItem('theme', 'dark');
-    localStorage.setItem('userLocale', 'fr');
-    localStorage.setItem('fontSize', '80');
-    localStorage.setItem('emailUpdates', 'true');
-    localStorage.setItem('soundNotifications', 'false');
+  test('keeps every display preference across the clear', async () => {
+    const seeded = {
+      theme: 'dark',
+      userLocale: 'fr',
+      fontSize: '80',
+      emailUpdates: 'true',
+      soundNotifications: 'false'
+    };
+    for (const key of DISPLAY_PREF_KEYS) {
+      localStorage.setItem(key, seeded[key] || `value-of-${key}`);
+    }
     // A key the reset owns — chat cache leftovers and the like — must go.
     localStorage.setItem('junkCacheKey', 'wipe-me');
 
@@ -209,37 +215,29 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
 
     await resetViaModal(wrapper);
 
-    expect(localStorage.getItem('theme')).toBe('dark');
-    expect(localStorage.getItem('userLocale')).toBe('fr');
-    expect(localStorage.getItem('fontSize')).toBe('80');
-    expect(localStorage.getItem('emailUpdates')).toBe('true');
-    expect(localStorage.getItem('soundNotifications')).toBe('false');
+    for (const key of DISPLAY_PREF_KEYS) {
+      expect(localStorage.getItem(key)).toBe(seeded[key] || `value-of-${key}`);
+    }
     expect(localStorage.getItem('junkCacheKey')).toBeNull();
-    // Full-inventory closure: nothing beyond the five display preferences
-    // survives the reset — a key added to the preserve list without being
-    // a display preference shows up here and turns the test red.
-    expect(Object.keys(localStorage).sort()).toEqual([
-      'emailUpdates',
-      'fontSize',
-      'soundNotifications',
-      'theme',
-      'userLocale'
-    ]);
+    // Full-inventory closure: exactly the preserve list survives, nothing
+    // else. Combined with the save() drift guard below, both directions of
+    // drift between save()'s keys and DISPLAY_PREF_KEYS turn red.
+    expect(Object.keys(localStorage).sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
   });
 
   test('does not write display-preference keys that were absent before the reset', async () => {
-    localStorage.setItem('theme', 'light');
+    localStorage.setItem(DISPLAY_PREF_KEYS[0], 'light');
 
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
 
     await resetViaModal(wrapper);
 
-    expect(localStorage.getItem('theme')).toBe('light');
-    expect(localStorage.getItem('userLocale')).toBeNull();
-    expect(localStorage.getItem('fontSize')).toBeNull();
-    expect(localStorage.getItem('emailUpdates')).toBeNull();
-    expect(localStorage.getItem('soundNotifications')).toBeNull();
+    expect(localStorage.getItem(DISPLAY_PREF_KEYS[0])).toBe('light');
+    for (const key of DISPLAY_PREF_KEYS.slice(1)) {
+      expect(localStorage.getItem(key)).toBeNull();
+    }
+    expect(Object.keys(localStorage)).toEqual([DISPLAY_PREF_KEYS[0]]);
   });
 
   test('the keys save() persists are exactly the ones the reset preserves', async () => {
@@ -260,13 +258,8 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     await flushPromises();
 
     // The contract is the key SET save() touches (a key written twice is
-    // fine; a sixth key or a missing one is the drift this pins).
-    expect([...new Set(written)].sort()).toEqual([
-      'emailUpdates',
-      'fontSize',
-      'soundNotifications',
-      'theme',
-      'userLocale'
-    ]);
+    // fine; any divergence from DISPLAY_PREF_KEYS is the drift this pins —
+    // a missing key reverts on reset, an extra one is never a preference).
+    expect([...new Set(written)].sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
   });
 });

@@ -46,4 +46,12 @@ void main() {
     });
     expect(context.serviceCount, 3);
   });
+
+  test('a string serviceCount coerces like the other fields', () {
+    final context = categoryContextFromSelection(<String, dynamic>{
+      'serviceLabelsEn': <dynamic>['Births'],
+      'serviceCount': '2',
+    });
+    expect(context.serviceCount, 2);
+  });
 }

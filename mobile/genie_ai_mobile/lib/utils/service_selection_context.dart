@@ -35,8 +35,11 @@ categoryContextFromSelection(Map<String, dynamic> selection) {
   // How many services were picked: a picked service with no EN
   // translation contributes no label, and the chat must refuse the
   // send instead of quietly narrowing the query to the category.
+  // Parsed through tryParse so a string count coerces like the other
+  // fields instead of throwing on the cast.
   final int serviceCount =
-      (selection['serviceCount'] as num?)?.toInt() ?? serviceLabelsEn.length;
+      num.tryParse(selection['serviceCount']?.toString() ?? '')?.toInt() ??
+      serviceLabelsEn.length;
   return (
     categoryId: categoryId,
     categoryName: categoryName,

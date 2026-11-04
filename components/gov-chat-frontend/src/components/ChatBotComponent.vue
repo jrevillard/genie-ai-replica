@@ -305,8 +305,10 @@
              slot carries the entry's chat-bubble icon; the parent
              gives it the localised title as accessible name, falling
              back to the id (the loader's gate guarantees it) when no
-             title resolves — an empty accessible name announces
-             nothing. -->
+             title resolves — #1382's prescribed fallback, chosen over
+             the placeholder (the accname computation's LAST resort,
+             invisible until focus) so a screen-reader user hears the
+             configured identity, not a generic invite. -->
         <div v-if="composerEntry" class="quick-help-composer">
           <ChatComposer
             v-model="newMessage"

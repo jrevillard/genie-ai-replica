@@ -4,6 +4,8 @@
 // snake_case response → next(err) on failure. No business logic.
 
 const repoService = require('../services/repository-service');
+const { RepoError } = repoService;
+const accessControlService = require('../services/access-control-service');
 const conceptMetaService = require('../services/concept-meta-service');
 const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
@@ -84,6 +86,38 @@ function callerAuthz(req) {
 function authzForService(req) {
   const { isSuperAdmin, authorizedRepoIds } = callerAuthz(req);
   return isSuperAdmin ? null : authorizedRepoIds;
+}
+
+/**
+ * CAP-2 (chat-source resolution spec, 2026-11-04): the 6-1c per-repo READ
+ * fence for the concept-content read family. `authzForService`'s Set/null
+ * filter decides which repos the caller's SCOPE LIST names; `acl.restricted`
+ * is a second gate that fences a repo from non-privileged callers in BOTH
+ * scope modes — `resolveGraphSet` has applied callerMayTraverseRepo to the
+ * retrieval views since 6-1c, and these routes must not serve what retrieval
+ * refuses: a scopeless caller in open mode passed getById's unrestricted
+ * verdict and could read a RESTRICTED repo's full meta row (title, labels,
+ * body). Denial mirrors getById byte-for-byte — RepoError REPO_NOT_FOUND 404,
+ * audited — so foreign and fenced stay indistinguishable (anti-enumeration,
+ * AC7 posture). `privileged` here is DERIVED privilege only (superadmin /
+ * wildcard scope), never the open-mode "unrestricted" verdict — that exact
+ * confusion is what the 6-1c integration test caught.
+ */
+async function assertRepoReadableByCaller(req, repoDoc) {
+  const { authorizedRepoIds } = callerAuthz(req);
+  const privileged = authorizedRepoIds === null;
+  if (accessControlService.callerMayTraverseRepo(repoDoc, req.okfScopes, privileged)) return;
+  auditService
+    .writeAudit({
+      action: 'authz.denied.repo',
+      actor: (req.user && req.user.sub) || null,
+      repo_id: repoDoc && repoDoc.repo_id,
+      source_ip: req.ip
+    })
+    .catch(() => {
+      /* best-effort */
+    });
+  throw new RepoError('REPO_NOT_FOUND', `Repository ${(repoDoc && repoDoc.repo_id) || 'unknown'} not found`, 404);
 }
 
 function validate(schema, body) {
@@ -821,8 +855,10 @@ async function getPiiConceptScan(req, res, next) {
 async function getRepoManifest(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepo).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // mirrors getConcept; the manifest names every concept in the repo).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     const wantSummary = req.query.summary === '1' || req.query.summary === 'true';
     const manifest = wantSummary
       ? await conceptMetaService.ensureSummary(repo_id)
@@ -846,8 +882,10 @@ async function getRepoManifest(req, res, next) {
 async function getRepoLinks(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // the graph projection exposes the repo's structure).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     res.status(200).json(await conceptMetaService.getRepoLinks(repo_id));
   } catch (err) {
     next(err);
@@ -896,8 +934,10 @@ async function discoverFromManifests(req, res, next) {
 async function listConcepts(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // the concept index must not leak a repo whose bodies are fenced).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     const { limit, offset } = req.query || {};
     if (limit === undefined && offset === undefined) {
       const concepts = await conceptMetaService.listConceptsMeta(repo_id);
@@ -919,7 +959,10 @@ async function listConcepts(req, res, next) {
 async function getConcept(req, res, next) {
   try {
     const { repo_id, concept_id } = req.params;
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // anti-enumeration; the body must not serve what retrieval refuses).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
     if (!concept) {
       return res.status(404).json({

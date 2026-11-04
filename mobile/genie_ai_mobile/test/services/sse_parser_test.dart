@@ -117,6 +117,34 @@ void main() {
       expect(meta.queryTranslationStatus, isNull);
     });
 
+    test('passes unknown chatqna metadata keys through in extra', () {
+      // A diagnostic field chatqna adds must reach mobile without a parser
+      // edit — the backend parser passes unknown metadata keys through the
+      // same way, and the whitelist here is how abstained, abstention_reason,
+      // filter_labels and self_confidence were each lost until a hand edit.
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"abstained":false,"abstention_reason":null,"filter_labels":["health"],'
+        '"self_confidence":0.85}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.extra, {
+        'abstained': false,
+        'abstention_reason': null,
+        'filter_labels': ['health'],
+        'self_confidence': 0.85,
+      });
+    });
+
+    test('keeps known metadata keys out of extra', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"is_grounded":true,"responseTime":42,"query_translation_status":"translated"}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.extra, isEmpty);
+    });
+
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

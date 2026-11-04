@@ -166,3 +166,51 @@ describe('RightSideBarComponent FAQ language contract', () => {
     expect(call[1].headers.Authorization).toBe('Bearer mock-access-token');
   });
 });
+
+// ===========================================================================
+// CAP-3 (chat-source resolution): the sidebar's okf-concept open branch and
+// the URL display guard.
+// ===========================================================================
+jest.mock('../../utils/document-opener', () => ({
+  ...jest.requireActual('../../utils/document-opener'),
+  openOkfConcept: jest.fn(),
+  openRepositoryDocument: jest.fn()
+}));
+jest.mock('../../services/notificationService', () => ({
+  __esModule: true,
+  default: { info: jest.fn(), error: jest.fn(), success: jest.fn(), warning: jest.fn() }
+}));
+
+describe('CAP-3 okf-concept sidebar branch', () => {
+  const documentOpener = require('../../utils/document-opener');
+  const notificationService = require('../../services/notificationService').default;
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('openDocument routes a concept with repo identity through openOkfConcept', async () => {
+    const wrapper = mountSidebar();
+    documentOpener.openOkfConcept.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openDocument({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1', url: '' });
+    expect(documentOpener.openOkfConcept).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    expect(documentOpener.openRepositoryDocument).not.toHaveBeenCalled();
+    expect(wrapper.emitted('open-document')).toHaveLength(1);
+  });
+
+  it('openDocument degrades an identity-less concept to the info notice', async () => {
+    const wrapper = mountSidebar();
+    await wrapper.vm.openDocument({ id: 'old_concept', source: 'okf-concept', repoId: null, url: '' });
+    expect(documentOpener.openOkfConcept).not.toHaveBeenCalled();
+    expect(notificationService.info).toHaveBeenCalled();
+    expect(wrapper.emitted('open-document')).toBeUndefined();
+  });
+
+  it('getDisplayUrl shows no doc-repo URL for concept rows', () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.vm.getDisplayUrl({ id: 'alpha_concept', source: 'okf-concept', url: '' })).toBe('');
+    expect(wrapper.vm.getDisplayUrl({ id: 'doc-9', url: '/api/files/doc-9/download' })).toContain(
+      '/api/files/doc-9/viewbrowser'
+    );
+  });
+});

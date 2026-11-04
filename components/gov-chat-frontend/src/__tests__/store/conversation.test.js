@@ -16,6 +16,14 @@ const statusModule = require('../../store/modules/status.js').default;
 // assertions pin floor == locale.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
+// CAP-3: the store's title resolver goes through document-opener; mock the
+// fetch so title-resolution tests stay hermetic.
+jest.mock('../../utils/document-opener', () => ({
+  __esModule: true,
+  fetchOkfConceptTitle: jest.fn()
+}));
+const { fetchOkfConceptTitle } = require('../../utils/document-opener');
+
 function freshStore() {
   return createStore({
     modules: {
@@ -503,5 +511,189 @@ describe('conversation misc mutations', () => {
     const store = freshStore();
     store.commit('conversation/setContextItems', [{ service: 'A', category: 1 }]);
     expect(store.getters['conversation/openConversation'].selectedContextItems.length).toBe(1);
+  });
+});
+
+// ===========================================================================
+// CAP-3 (chat-source resolution): OKF concept citation cards. The mint names
+// a concept by its id; the doc-repository URL family cannot resolve it —
+// concept rows never take it, carry their repo identity, resolve titles
+// asynchronously, and persisted pre-W3 rows are re-identified on rehydrate.
+// ===========================================================================
+describe('CAP-3 okf concept sources', () => {
+  const { translateSources } = require('../../store/modules/conversation.js');
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    fetchOkfConceptTitle.mockReset();
+  });
+
+  it('translateSources: an enriched okf row never takes the doc-repo URL and carries its identity', () => {
+    const [row] = translateSources([
+      {
+        document_id: 'alpha_concept',
+        document_name: 'alpha_concept',
+        url: '',
+        source: 'okf-concept',
+        repo_id: 'repo-1',
+        bundle_version: 3,
+        graph_name: 'OKF_repo-1',
+        score: 0.9
+      }
+    ]);
+    expect(row.url).toBe('');
+    expect(row.source).toBe('okf-concept');
+    expect(row.repoId).toBe('repo-1');
+    expect(row.bundleVersion).toBe(3);
+    expect(row.graphName).toBe('OKF_repo-1');
+    expect(row.type).toBe('MD');
+  });
+
+  it('translateSources: a legacy document row keeps the exact pre-existing shape', () => {
+    const [row] = translateSources([{ document_id: 'doc-9', document_name: 'Report.pdf', score: 0.8 }]);
+    expect(row.url).toBe('/api/files/doc-9/download');
+    expect(row.source).toBeUndefined();
+    expect(row.repoId).toBeUndefined();
+    expect(row.type).toBe('LINK');
+  });
+
+  it('rehydrate grafts okf identity onto persisted concept rows and clears the dead URL', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [
+              { sender: 'user', content: 'q' },
+              {
+                sender: 'bot',
+                content: 'a',
+                sources: [{ id: 'alpha_concept', title: 'alpha concept', url: '/api/files/alpha_concept/download' }],
+                metadata: {
+                  source_documents: [
+                    {
+                      document_id: 'alpha_concept',
+                      document_name: 'alpha_concept',
+                      url: '',
+                      source: 'okf-concept',
+                      repo_id: 'repo-1',
+                      bundle_version: 2
+                    }
+                  ]
+                }
+              }
+            ],
+            relatedDocuments: [
+              { id: 'alpha_concept', title: 'alpha concept', url: '/api/files/alpha_concept/download' }
+            ]
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const open = store.getters['conversation/openConversation'];
+    for (const row of [...open.relatedDocuments, ...open.messages[1].sources]) {
+      expect(row.source).toBe('okf-concept');
+      expect(row.repoId).toBe('repo-1');
+      expect(row.bundleVersion).toBe(2);
+      expect(row.url).toBe('');
+    }
+  });
+
+  it('rehydrate leaves a legacy document row untouched', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [{ sender: 'user', content: 'q' }],
+            relatedDocuments: [{ id: 'doc-9', title: 'Report.pdf', url: '/api/files/doc-9/download' }]
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.url).toBe('/api/files/doc-9/download');
+    expect(row.source).toBeUndefined();
+    expect(row.repoId).toBeUndefined();
+  });
+
+  it('rehydrate marks a pre-CAP-1 concept row (no repo identity) so the UI degrades honestly', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [
+              { sender: 'user', content: 'q' },
+              {
+                sender: 'bot',
+                content: 'a',
+                sources: [{ id: 'old_concept', title: 'old concept', url: '/api/files/old_concept/download' }],
+                metadata: {
+                  source_documents: [
+                    { document_id: 'old_concept', document_name: 'old_concept', url: '', source: 'okf-concept' }
+                  ]
+                }
+              }
+            ],
+            relatedDocuments: []
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+    expect(row.source).toBe('okf-concept');
+    expect(row.repoId).toBeNull();
+    expect(row.url).toBe('');
+  });
+
+  it('resolveOkfSourceTitles swaps the id title for the frontmatter title', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'alpha_concept', title: 'alpha concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    fetchOkfConceptTitle.mockResolvedValueOnce('Alpha Concept');
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('Alpha Concept');
+    expect(row.titleResolved).toBe(true);
+    expect(fetchOkfConceptTitle).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+  });
+
+  it('resolveOkfSourceTitles keeps the id title when the concept cannot be fetched', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'ghost_concept', title: 'ghost concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    fetchOkfConceptTitle.mockResolvedValueOnce(null);
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('ghost concept');
+    expect(row.titleResolved).toBe(false);
+  });
+
+  it('resolveOkfSourceTitles skips legacy rows and rows without repo identity', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'doc-9', title: 'Report.pdf', url: '/api/files/doc-9/download' },
+      { id: 'no_repo', title: 'no repo', source: 'okf-concept', repoId: null }
+    ]);
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConceptTitle).not.toHaveBeenCalled();
   });
 });

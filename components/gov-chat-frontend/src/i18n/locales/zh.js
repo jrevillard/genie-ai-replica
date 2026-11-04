@@ -1321,6 +1321,7 @@ export default {
     copyFailed: '复制失败',
 
     documentOpenError: '无法打开文档',
+    okfSourceUnavailable: '该来源暂不可查看。',
     feedbackSubmitted: '反馈已保存',
     feedbackError: '反馈保存失败',
     feedbackMissingQueryId: '该回答尚无法评分',

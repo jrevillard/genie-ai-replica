@@ -1341,6 +1341,7 @@ export default {
     copyFailed: 'تعذر النسخ',
 
     documentOpenError: 'تعذر فتح المستند',
+    okfSourceUnavailable: 'هذا المصدر غير متاح للعرض.',
     feedbackSubmitted: 'تم حفظ الملاحظات',
     feedbackError: 'تعذر حفظ الملاحظات',
     feedbackMissingQueryId: 'لا يمكن تقييم هذه الإجابة بعد',

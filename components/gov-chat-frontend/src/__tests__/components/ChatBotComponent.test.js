@@ -80,6 +80,14 @@ jest.mock('../../services/notificationService', () => ({
   warning: mockNotificationWarning
 }));
 
+// CAP-3: the okf open flow is mocked (the real one fetches through
+// conceptService); the pure helpers stay real.
+jest.mock('../../utils/document-opener', () => ({
+  ...jest.requireActual('../../utils/document-opener'),
+  openOkfConcept: jest.fn(),
+  openRepositoryDocument: jest.fn()
+}));
+
 // Event bus mock
 const mockEventBusOn = jest.fn();
 const mockEventBusOff = jest.fn();
@@ -5726,5 +5734,66 @@ describe('Quick Help card with no title', () => {
     // card is what the user reads.
     expect(mockSubmitQueryStream).not.toHaveBeenCalled();
     expect(vm.selectedContextItems).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// CAP-3 (chat-source resolution): the okf-concept open branch. A concept
+// never goes through the doc-repository /viewbrowser flow — it opens as
+// rendered markdown through okf-server; identity-less or unavailable
+// concepts degrade to an honest info notice, never a dead link.
+// ===========================================================================
+describe('CAP-3 okf-concept open branch', () => {
+  const documentOpener = require('../../utils/document-opener');
+
+  afterEach(() => {
+    documentOpener.openOkfConcept.mockReset();
+    documentOpener.openRepositoryDocument.mockReset();
+    mockNotificationInfo.mockClear();
+    mockNotificationError.mockClear();
+  });
+
+  it('opens a concept with repo identity through openOkfConcept', async () => {
+    const wrapper = createChatBotWrapper();
+    documentOpener.openOkfConcept.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openSourceDocument({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1', url: '' });
+    expect(documentOpener.openOkfConcept).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    expect(documentOpener.openRepositoryDocument).not.toHaveBeenCalled();
+    expect(mockNotificationError).not.toHaveBeenCalled();
+    expect(mockNotificationInfo).not.toHaveBeenCalled();
+  });
+
+  it('a concept without repo identity degrades to the honest info notice', async () => {
+    const wrapper = createChatBotWrapper();
+    await wrapper.vm.openSourceDocument({ id: 'old_concept', source: 'okf-concept', repoId: null, url: '' });
+    expect(documentOpener.openOkfConcept).not.toHaveBeenCalled();
+    expect(documentOpener.openRepositoryDocument).not.toHaveBeenCalled();
+    expect(mockNotificationInfo).toHaveBeenCalledWith(enChatbot.okfSourceUnavailable);
+  });
+
+  it('an unavailable concept (restricted / retracted) shows the info notice, not an error', async () => {
+    const wrapper = createChatBotWrapper();
+    const unavailable = new Error('not available');
+    unavailable.code = 'OKF_CONCEPT_UNAVAILABLE';
+    documentOpener.openOkfConcept.mockRejectedValueOnce(unavailable);
+    await wrapper.vm.openSourceDocument({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1', url: '' });
+    expect(mockNotificationInfo).toHaveBeenCalledWith(enChatbot.okfSourceUnavailable);
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
+  it('a transport failure on a concept keeps the generic open-error wording', async () => {
+    const wrapper = createChatBotWrapper();
+    documentOpener.openOkfConcept.mockRejectedValueOnce(new Error('network down'));
+    await wrapper.vm.openSourceDocument({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1', url: '' });
+    expect(mockNotificationError).toHaveBeenCalled();
+    expect(mockNotificationInfo).not.toHaveBeenCalled();
+  });
+
+  it('a legacy document keeps the repository open flow unchanged', async () => {
+    const wrapper = createChatBotWrapper();
+    documentOpener.openRepositoryDocument.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openSourceDocument({ id: 'doc-9', url: '/api/files/doc-9/download' });
+    expect(documentOpener.openRepositoryDocument).toHaveBeenCalledWith('doc-9', null);
+    expect(documentOpener.openOkfConcept).not.toHaveBeenCalled();
   });
 });

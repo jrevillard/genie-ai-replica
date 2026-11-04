@@ -122,7 +122,13 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
-import { isExternalUrl as isExternalHref, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import {
+  isExternalUrl as isExternalHref,
+  openRepositoryDocument,
+  openOkfConcept,
+  fileTypeBadge
+} from '../utils/document-opener.js';
+import notificationService from '../services/notificationService';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
@@ -356,6 +362,28 @@ export default {
         return;
       }
 
+      // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+      // file — it opens as rendered markdown through okf-server under the
+      // caller's own scope. No repo identity (persisted pre-CAP-1 row) or an
+      // unavailable concept degrades to an honest notice, never a dead link.
+      if (doc.source === 'okf-concept') {
+        if (!doc.repoId || !doc.id) {
+          notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+          return;
+        }
+        try {
+          await openOkfConcept(doc.repoId, doc.id);
+          this.$emit('open-document', doc);
+        } catch (error) {
+          if (error && error.code === 'OKF_CONCEPT_UNAVAILABLE') {
+            notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+          } else {
+            console.error('There was a problem opening the OKF concept:', error);
+          }
+        }
+        return;
+      }
+
       try {
         await openRepositoryDocument(doc.id, this.getAuthToken());
         this.$emit('open-document', doc);
@@ -372,6 +400,12 @@ export default {
       if (!doc) return '';
       if (this.isExternalUrl(doc.url)) {
         return doc.url;
+      }
+      // CAP-3: a concept row never shows a doc-repository URL — the family
+      // cannot resolve it (the old placeholder viewbrowser link was one of
+      // the dead-link generators).
+      if (doc.source === 'okf-concept') {
+        return '';
       }
       if (doc.id) {
         return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;

@@ -1341,6 +1341,7 @@ export default {
     copyFailed: 'คัดลอกไม่สำเร็จ',
 
     documentOpenError: 'ไม่สามารถเปิดเอกสารได้',
+    okfSourceUnavailable: 'แหล่งข้อมูลนี้ไม่สามารถดูได้',
     feedbackSubmitted: 'บันทึกฟีดแบ็กแล้ว',
     feedbackError: 'บันทึกฟีดแบ็กไม่สำเร็จ',
     feedbackMissingQueryId: 'ยังไม่สามารถให้คะแนนคำตอบนี้ได้',

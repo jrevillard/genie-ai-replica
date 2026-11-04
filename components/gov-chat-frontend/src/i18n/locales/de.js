@@ -1361,6 +1361,7 @@ export default {
     copyFailed: 'Kopieren fehlgeschlagen',
 
     documentOpenError: 'Dokument konnte nicht geöffnet werden',
+    okfSourceUnavailable: 'Diese Quelle kann nicht angezeigt werden.',
     feedbackSubmitted: 'Feedback gespeichert',
     feedbackError: 'Feedback konnte nicht gespeichert werden',
     feedbackMissingQueryId: 'Diese Antwort kann noch nicht bewertet werden',

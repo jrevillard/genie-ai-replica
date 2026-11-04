@@ -477,7 +477,7 @@ import {
 } from '@lucide/vue';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isStorableTurn, translateSources } from '../store/modules/conversation';
-import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import { isExternalUrl, openRepositoryDocument, openOkfConcept, fileTypeBadge } from '../utils/document-opener.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -1130,6 +1130,32 @@ export default {
     async openSourceDocument(doc) {
       if (isExternalUrl(doc.url)) {
         window.open(doc.url, '_blank', 'noopener');
+        return;
+      }
+      // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+      // file — the /api/files family 404s it by construction. Concepts open
+      // as rendered markdown through okf-server under the caller's own
+      // scope; a concept without repo identity (persisted pre-CAP-1 row) or
+      // an unavailable one (restricted / retracted / deleted) degrades to an
+      // honest notice, never a dead link or a generic error.
+      if (doc.source === 'okf-concept') {
+        if (!doc.repoId || !doc.id) {
+          notificationService.info(
+            this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+          );
+          return;
+        }
+        try {
+          await openOkfConcept(doc.repoId, doc.id);
+        } catch (err) {
+          if (err && err.code === 'OKF_CONCEPT_UNAVAILABLE') {
+            notificationService.info(
+              this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+            );
+          } else {
+            notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+          }
+        }
         return;
       }
       try {

@@ -165,7 +165,12 @@
               </div>
 
               <div class="management-col">
-                <DsButton variant="danger" class="full-width" @click="confirmDeleteAccount">
+                <DsButton
+                  variant="danger"
+                  class="full-width"
+                  data-test-id="settings-delete-account-tile"
+                  @click="confirmDeleteAccount"
+                >
                   {{ translate('settings.deleteAccount', 'Delete my account') }}
                 </DsButton>
                 <p class="description-text danger-text">

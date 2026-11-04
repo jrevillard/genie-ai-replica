@@ -17,9 +17,12 @@ import '../helpers/theme_helper.dart';
 /// The account-deletion confirmation must surface the backend's
 /// `filesDeletionFailed` flag: when the uploads directory could not be
 /// removed after the committed erasure, the user gets a warning SnackBar
-/// before the logout redirect, because files that may contain personal data
-/// are still on disk. When the flag is absent (backends without it) or
-/// false, the behaviour is unchanged (no notification).
+/// after the logout, on the way to the login screen, because files that may
+/// contain personal data are still on disk (firing it before the logout
+/// would expire the SnackBar during the Keycloak end-session round trip).
+/// When the flag is absent (backends without it) or false, the behaviour is
+/// unchanged (no notification). A non-200 deletion shows the failure
+/// SnackBar instead.
 void main() {
   tearDown(() {
     resetThemeManager();
@@ -71,7 +74,7 @@ void main() {
   }
 
   testWidgets(
-    'shows a warning SnackBar before logout when filesDeletionFailed is true',
+    'shows a warning SnackBar on the way to the login screen when filesDeletionFailed is true',
     (tester) async {
       final api = MockCurrentUserApi(
         deleteBody: {'success': true, 'filesDeletionFailed': true},
@@ -88,6 +91,22 @@ void main() {
       await unmount(tester);
     },
   );
+
+  testWidgets('shows the failure SnackBar when the deletion call fails', (
+    tester,
+  ) async {
+    await driveDeleteFlow(
+      tester,
+      MockCurrentUserApi(deleteStatus: 500, deleteBody: {'error': 'boom'}),
+    );
+
+    final failureText = I18nService().translate(
+      'settings.accountDeletionFailed',
+    );
+    expect(find.widgetWithText(SnackBar, failureText), findsOneWidget);
+    expect(find.widgetWithText(SnackBar, 'login'), findsNothing);
+    await unmount(tester);
+  });
 
   testWidgets('shows no notification when the flag is absent (older backend)', (
     tester,

@@ -121,15 +121,18 @@ async function resetViaModal(wrapper) {
   await wrapper.vm.$nextTick();
 }
 
-// Same for the delete flow: click the delete tile, confirm the modal, let the
-// deletion complete — the warning branch must be wired through the dialog.
+// Same for the delete flow: click the delete tile (its declared test handle),
+// confirm through the dialog's own contract event, and let the deletion
+// complete — the warning branch must be wired through the dialog.
 async function deleteViaModal(wrapper) {
-  const deleteTile = wrapper.findAll('button').find((b) => b.text() === 'Delete my account');
+  const deleteTile = wrapper.find('[data-test-id="settings-delete-account-tile"]');
   await deleteTile.trigger('click');
   await wrapper.vm.$nextTick();
 
-  const confirmButton = wrapper.findAll('button').find((b) => b.text() === 'Delete');
-  await confirmButton.trigger('click');
+  const confirmDialog = [...wrapper.findAllComponents({ name: 'ConfirmDialog' })].find(
+    (d) => d.props('visible') === true
+  );
+  confirmDialog.vm.$emit('confirm');
   await flushPromises();
   await wrapper.vm.$nextTick();
 }

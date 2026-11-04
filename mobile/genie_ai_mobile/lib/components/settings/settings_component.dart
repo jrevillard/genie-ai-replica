@@ -231,15 +231,18 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
             final messenger = ScaffoldMessenger.of(context);
             try {
               final response = await _userService.deleteAccount();
-              // Surface before the logout redirect: the account is gone, the
-              // files may not be — the warning must survive the navigation.
+              await ref.read(authProvider.notifier).logout();
+              // Shown AFTER the logout, on the root messenger: a SnackBar
+              // fired before the logout would expire (its default duration)
+              // while the Keycloak end-session round trip was still running,
+              // and the user would land on the login screen with no
+              // indication that files may remain on disk.
               if (response['filesDeletionFailed'] == true) {
                 _showSettingsSnackBar(
                   messenger,
                   "settings.accountDeletedFilesFailed",
                 );
               }
-              await ref.read(authProvider.notifier).logout();
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
@@ -251,7 +254,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               if (mounted) {
                 _showSettingsSnackBar(
                   ScaffoldMessenger.of(context),
-                  "accountDeletionFailed",
+                  "settings.accountDeletionFailed",
                 );
               }
             }

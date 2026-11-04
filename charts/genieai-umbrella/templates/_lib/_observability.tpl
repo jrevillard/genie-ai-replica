@@ -69,6 +69,10 @@ transform/pii_redact:
         - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
         - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
         - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+        # Bare email addresses in prose (tracebacks, access logs, generic
+        # error lines) carry no "email":"..." JSON pair for the key rule to
+        # match. Ported verbatim from configs/otel/otel-collector-config.yaml.
+        - 'replace_pattern(body, "(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}", "[REDACTED_EMAIL]") where IsString(body)'
     - context: log
       statements:
         - 'replace_all_patterns(attributes, "value", "(?i)(?<p>(?:^|[^A-Za-z0-9]))(?<t>eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+|sk-[A-Za-z0-9]{16,}|pk-[A-Za-z0-9]{16,}|gho_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|[A-Za-z0-9_=-]{40,})(?<s>(?:$|[^A-Za-z0-9]))", "${p}[REDACTED]${s}") where IsMap(attributes)'

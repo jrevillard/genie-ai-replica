@@ -43,6 +43,9 @@ row reads the retriever block's key first, the dataprep block's own key
 second — Compose carries a single ARANGO_GRAPH_NAME knob, and an
 operator overriding the retriever key must not leave dataprep
 labeling a graph under the old name. */ -}}
+{{- /* MODEL_HUB_EMBED_TIMEOUT_SECONDS bounds a wedged /embed read on the
+TEI/HF hub clients — Compose derives the same row (issue #1381: the live
+incident held an ingest thread 30+ min with no log line). */ -}}
 {{- $tuningEnv := list
     (dict "name" "DATAPREP_COMPONENT_NAME" "value" ($opeaDataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
     (dict "name" "DATAPREP_INGEST_CONCURRENCY" "value" ($opeaDataprep.dataprepIngestConcurrency | default "1" | toString))
@@ -51,6 +54,7 @@ labeling a graph under the old name. */ -}}
     (dict "name" "DATAPREP_RECOVERY_MAX_ATTEMPTS" "value" "30")
     (dict "name" "DATAPREP_RECOVERY_RETRY_SECONDS" "value" "10")
     (dict "name" "MODEL_DETECT_TTL" "value" "60")
+    (dict "name" "MODEL_HUB_EMBED_TIMEOUT_SECONDS" "value" "600")
     (dict "name" "RETRIEVER_ARANGO_NPROBE" "value" (index ($opea.retriever | default dict) "retrieverArangoNprobe" | default "1" | toString))
     (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" (index ($opea.retriever | default dict) "retrieverArangoNumCentroids" | default "1" | toString))
     (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" (index ($opea.retriever | default dict) "retrieverArangoDistanceStrategy" | default "COSINE" | toString))

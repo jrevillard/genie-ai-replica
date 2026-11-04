@@ -34,12 +34,23 @@ class SseMetadataEvent extends SseEvent {
   /// report the same thing.
   final String? queryTranslationStatus;
 
+  /// Chatqna metadata keys outside the known set above, carried verbatim on
+  /// the parsed event so a new diagnostic field survives the parser boundary
+  /// without a parser edit. The backend parser (query-service.js) passes
+  /// chatqna's unknown metadata keys through the same way; a field-by-field
+  /// whitelist here is how `abstained`, `abstention_reason`, `filter_labels`
+  /// and `self_confidence` were each lost on mobile until a hand edit. The
+  /// keys in `SseParser._knownMetadataKeys` are normalized above and never
+  /// appear here.
+  final Map<String, dynamic> extra;
+
   const SseMetadataEvent({
     required this.sourceDocuments,
     required this.confidenceScore,
     required this.isGrounded,
     this.responseTime,
     this.queryTranslationStatus,
+    this.extra = const {},
   });
 }
 
@@ -124,17 +135,42 @@ class SseParser {
     return parseChunk('$remaining\n');
   }
 
+  /// The metadata keys the parser normalizes into typed fields. Everything
+  /// else chatqna (or the backend envelope) sends goes to
+  /// [SseMetadataEvent.extra] verbatim.
+  static const _knownMetadataKeys = {
+    'type',
+    'source_documents',
+    'confidence_score',
+    'is_grounded',
+    'responseTime',
+    'query_translation_status',
+  };
+
+  SseMetadataEvent _parseMetadata(Map<String, dynamic> json) {
+    final extra = <String, dynamic>{};
+    json.forEach((key, value) {
+      if (!_knownMetadataKeys.contains(key)) {
+        extra[key] = value;
+      }
+    });
+    return SseMetadataEvent(
+      sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
+      isGrounded: json['is_grounded'] as bool? ?? false,
+      // Tolerant num cast, like confidenceScore above: a double from the wire
+      // must degrade this one field, not throw and drop the whole event.
+      responseTime: (json['responseTime'] as num?)?.toInt(),
+      queryTranslationStatus: json['query_translation_status'] as String?,
+      extra: extra,
+    );
+  }
+
   SseEvent? _parseEvent(Map<String, dynamic> json) {
     final type = json['type'] as String?;
     return switch (type) {
       'chunk' => SseChunkEvent(json['content'] as String? ?? ''),
-      'metadata' => SseMetadataEvent(
-        sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
-        confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
-        isGrounded: json['is_grounded'] as bool? ?? false,
-        responseTime: json['responseTime'] as int?,
-        queryTranslationStatus: json['query_translation_status'] as String?,
-      ),
+      'metadata' => _parseMetadata(json),
       'translation' => SseTranslationEvent(json['content'] as String? ?? ''),
       'done' => SseDoneEvent(
         json['queryId'] as String?,

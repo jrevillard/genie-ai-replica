@@ -145,9 +145,20 @@ async function refuseUnsupportedLanguage(targetLanguage) {
 // or the answer ended before the envelope). One factory, so the two call sites
 // cannot drift into storing different key sets for the same kind of query.
 //
-// `abstained` is null here, not false. false would mean "chatqna answered and
-// chose not to abstain" — a clean low-confidence miss. This is "we never got an
-// answer", and a post-hoc AQL counting abstentions has to be able to tell them.
+// "Not recorded" is encoded per field, following the parser convention in
+// query-service.js (parseChatQnASSELine):
+// - Presence-keyed fields (self_confidence, query_translation_status) stay
+//   ABSENT. The Inspector renders the self-confidence block on
+//   hasOwnProperty, so an explicit null here would claim "feature was on,
+//   no sentinel" on a turn chatqna never answered; absence reads as
+//   "never reported" — the same meaning absence carries on the streamed
+//   path. "chatqna never answered" itself is what `abstained: null` below
+//   marks: no streamed path ever sets it to null.
+// - Value-keyed fields carry the explicit null (or the value default) the
+//   parser normalizes them to: `abstained` is null here, not false — false
+//   would mean "chatqna answered and chose not to abstain" (a clean
+//   low-confidence miss), this is "we never got an answer", and a post-hoc
+//   AQL counting abstentions has to be able to tell them.
 const emptyStreamMetadata = () => ({
   source_documents: [],
   confidence_score: 0,

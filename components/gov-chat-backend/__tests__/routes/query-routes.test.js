@@ -1508,7 +1508,12 @@ describe('GET /:queryId', () => {
       // low-confidence non-abstention.
       expect(metadata.abstained).toBeNull();
       expect(metadata.abstention_reason).toBeNull();
+      // Presence-keyed fields stay ABSENT on the fallback (emptyStreamMetadata
+      // convention, mirroring the parser): an explicit null would claim
+      // "feature on, no sentinel" on a turn chatqna never answered, and the
+      // Inspector renders the self-confidence block on hasOwnProperty.
       expect(metadata).not.toHaveProperty('self_confidence');
+      expect(metadata).not.toHaveProperty('query_translation_status');
     });
 
     // These four fields never reach the chat UI. They are the diagnostic half of

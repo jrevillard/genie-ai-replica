@@ -945,6 +945,13 @@ def _translation_input_too_long_error(message: str) -> HTTPException:
     One body for every translation surface that can refuse an input (the
     query path and the reply path): the caller consumes both, so the shape
     lives in one place.
+
+    Counter rule for any surface raising this: a refusal that fires BEFORE
+    the orchestrate-span metrics block records itself on
+    ``chat_requests_total`` right where it refuses (query path); one that
+    fires AFTER that block adds a refusal record too, because the turn was
+    already counted with the successful pipeline's attrs (reply path). A
+    surface that skips its record is invisible as a refusal on the counter.
     """
     return HTTPException(
         status_code=422,
@@ -954,6 +961,38 @@ def _translation_input_too_long_error(message: str) -> HTTPException:
             "abstained": True,
             "abstention_reason": "translation_input_too_long",
         },
+    )
+
+
+def _chat_request_metric_attrs(
+    response_type: str,
+    abstained: str,
+    error: str,
+    retrieval_source: str,
+    abstention_reason: str = "",
+) -> dict:
+    """Single builder for the chat_requests_total / chat_rag_duration_seconds
+    attribute contract (response_type / abstained / error / retrieval_source /
+    abstention_reason).
+
+    Callers own the ``retrieval_source`` rule. Two derivations exist and they
+    agree by construction today: the pre-span failure sites (the translation
+    refusals and the condense 503) read ``chat_request.search_type`` with a
+    ``similarity_score_threshold`` fallback because ``retriever_parameters``
+    is not built yet at that point in the request, while the in-span paths
+    read ``retriever_parameters.search_type`` — which is itself built from
+    ``chat_request.search_type`` with the same fallback — behind a ``hybrid``
+    getattr fallback for a parms object that lacks the field. The next
+    attribute added to the counter lands here, once.
+    """
+    return sanitize_attributes(
+        {
+            "response_type": response_type,
+            "abstained": abstained,
+            "error": error,
+            "retrieval_source": retrieval_source,
+            "abstention_reason": abstention_reason,
+        }
     )
 
 
@@ -4637,15 +4676,12 @@ class ChatQnAService:
                 )
                 chat_requests_total.add(
                     1,
-                    sanitize_attributes(
-                        {
-                            "response_type": "streaming" if chat_request.stream else "sync",
-                            "abstained": "true",
-                            "error": "true",
-                            "retrieval_source": getattr(chat_request, "search_type", None)
-                            or "similarity_score_threshold",
-                            "abstention_reason": "translation_input_too_long",
-                        }
+                    _chat_request_metric_attrs(
+                        response_type="streaming" if chat_request.stream else "sync",
+                        abstained="true",
+                        error="true",
+                        retrieval_source=getattr(chat_request, "search_type", None) or "similarity_score_threshold",
+                        abstention_reason="translation_input_too_long",
                     ),
                 )
                 raise _translation_input_too_long_error(
@@ -4743,15 +4779,11 @@ class ChatQnAService:
                     genie_params["condense_raw_query"] = last_translated_message_content
                 except HTTPException:
                     _condense_duration = time.time() - _condense_start
-                    _condense_err_attrs = sanitize_attributes(
-                        {
-                            "response_type": "streaming" if chat_request.stream else "sync",
-                            "abstained": "false",
-                            "abstention_reason": "",
-                            "error": "true",
-                            "retrieval_source": getattr(chat_request, "search_type", None)
-                            or "similarity_score_threshold",
-                        }
+                    _condense_err_attrs = _chat_request_metric_attrs(
+                        response_type="streaming" if chat_request.stream else "sync",
+                        abstained="false",
+                        error="true",
+                        retrieval_source=getattr(chat_request, "search_type", None) or "similarity_score_threshold",
                     )
                     chat_requests_total.add(1, _condense_err_attrs)
                     chat_rag_duration_seconds.record(_condense_duration, _condense_err_attrs)
@@ -4904,14 +4936,12 @@ class ChatQnAService:
                 can split a spike into stale scopes vs an over-rejecting
                 reranker.
                 """
-                return sanitize_attributes(
-                    {
-                        "response_type": "streaming" if chat_request.stream else "sync",
-                        "abstained": abstained,
-                        "error": error,
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                        "abstention_reason": abstention_reason,
-                    }
+                return _chat_request_metric_attrs(
+                    response_type="streaming" if chat_request.stream else "sync",
+                    abstained=abstained,
+                    error=error,
+                    retrieval_source=getattr(retriever_parameters, "search_type", "hybrid"),
+                    abstention_reason=abstention_reason,
                 )
 
             try:
@@ -5162,6 +5192,15 @@ class ChatQnAService:
                 f"Translation overflow at handle_request boundary: "
                 f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
             )
+            # The turn was already counted by the orchestrate-span block above,
+            # with the attrs of the successful pipeline run. This second record
+            # attributes the refusal itself — without it a reply-translation
+            # overflow is invisible as a refusal on the counter (the query-path
+            # site cannot double count because it raises before that block).
+            # The in-span _chat_attrs rule is the right one here:
+            # retriever_parameters is built at this point, and a streamed
+            # request returned before reaching this code.
+            chat_requests_total.add(1, _chat_attrs("true", "true", "translation_input_too_long"))
             raise _translation_input_too_long_error(
                 "The translated reply exceeded the language model's input "
                 "context window. Please reduce the conversation length or "

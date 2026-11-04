@@ -95,6 +95,8 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 # original address and an email lookup finds nothing
 USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+# Fail loudly here — a silent "null" would surface far from the cause
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
 # Make authenticated request to the user profile endpoint
 curl -sk -X GET "https://localhost/api/me" \
@@ -102,8 +104,10 @@ curl -sk -X GET "https://localhost/api/me" \
   -H "Content-Type: application/json"
 # Expected: 200 OK with user profile data
 
-# Verify header construction via backend logs
+# Verify header construction via backend logs — exactly: the last X-User-Id
+# entry must be the resolved _key (a grep with no output is a failure)
 docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -1 | grep -F "$USER_KEY"
 ```
 
 > **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects backend logs to verify header extraction.
@@ -190,6 +194,8 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 # already resolved by the username the token carries)
 USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+# Fail loudly here — a silent "null" would surface far from the cause
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
 echo "User _key: $USER_KEY"
 
@@ -296,6 +302,8 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-co
 # accounts, whose address depends on when the venue was provisioned)
 USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?term=e2e@example.com&field=exactEmail" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.users[0]._key')
+# Fail loudly here — a silent "null" would surface far from the cause
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: exactEmail search returned no user"; exit 1; }
 
 # Remove roles (Keycloak 26 specific approach)
 curl -sk -X PATCH "https://localhost/api/me" \
@@ -381,20 +389,25 @@ USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/op
 # own ArangoDB user, so the _key differs per realm)
 GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+# Fail loudly here — a silent "null" would surface far from the cause
+[ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
 GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN" | jq -r '._key')
+[ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
+# The whole point of the test: distinct realms must resolve distinct ArangoDB docs
+[ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }
 
 # Make request with genie realm token and check logs
 curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
-# Expected: X-User-Id contains the genie-realm-user's ArangoDB _key
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5 | grep -F "$GENIE_USER_KEY"
+# Expected: the last X-User-Id entries include the genie-realm-user's _key (no output = failure)
 
 # Make request with genie2 realm token and check logs
 curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
-# Expected: X-User-Id contains the genie2-realm-user's ArangoDB _key (different from genie)
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5 | grep -F "$GENIE2_USER_KEY"
+# Expected: the last X-User-Id entries include the genie2-realm-user's _key (distinct from genie)
 ```
 
 > **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.

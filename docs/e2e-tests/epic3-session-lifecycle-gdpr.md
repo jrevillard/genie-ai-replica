@@ -49,7 +49,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Get user _key (required for session creation)
@@ -59,6 +59,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 # Create a session (requires userId and auth token)
 SESSION_ID=$(curl -sk -X POST "https://localhost/api/sessions" \
@@ -88,7 +89,7 @@ print(f'active: {s[\"active\"]}, endTime: {s.get(\"endTime\",\"N/A\")}')
 
 ```bash
 # Disable testuser in Keycloak
-USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 curl -sk -X PUT "https://localhost/auth/admin/realms/genie/users/${USER_ID}" \
@@ -122,7 +123,7 @@ print(f'HTTP: 200 (token still valid)')
 ```bash
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Verify user is NOT marked deleted in ArangoDB (no expired-token trigger yet)
@@ -160,7 +161,7 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /d
 ```bash
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Verify ArangoDB user is active and not deleted
@@ -183,7 +184,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
@@ -192,6 +193,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 curl -sk -X POST "https://localhost/api/sessions" \
   -H "Authorization: Bearer $USER_TOKEN" -H "Content-Type: application/json" \
@@ -232,7 +234,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
@@ -241,6 +243,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 SESSION_ID=$(curl -sk -X POST "https://localhost/api/sessions" \
   -H "Authorization: Bearer $USER_TOKEN" -H "Content-Type: application/json" \
@@ -281,21 +284,28 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
+# The account's current address lives in Keycloak — fetch it by username
+# (exact match; the fixture email is venue-dependent but Keycloak owns it)
+KC_EMAIL=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['email'])")
+
 curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
-print(f'email: {d.get(\"email\",\"N/A\")}')
 print(f'name: {d.get(\"name\",\"N/A\")}')
+print(f'email matches Keycloak: {d.get(\"email\") == \"${KC_EMAIL}\"}')
 "
 ```
-**Expected**: HTTP 200; `email` is a non-null address and `name` is non-null (the fixture account's address is venue-dependent — a venue provisioned before the fixtures module keeps the original one; the account is keyed by username, never by email)
+**Expected**: HTTP 200; `email matches Keycloak: True` — the profile email equals the account's Keycloak address, whatever the venue provisioned; `name` non-null
 
 ### Test M.2 — Get User Profile by ID
 
 ```bash
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_EMAIL=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['email'])")
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Get user _key from ArangoDB
@@ -305,16 +315,18 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
-curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
-import sys,json
-d = json.load(sys.stdin)
-print(f'email: {d.get(\"email\",\"N/A\")}')
-print(f'active: {d.get(\"active\",\"N/A\")}')
-"
+# Fetch the profile BY ID — the ArangoDB document directly
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
+  arangosh --server.password arangopwd --javascript.execute-string "
+    db._useDatabase('genie-ai');
+    var u = db.users.document('${USER_KEY}');
+    print('active: ' + u.active);
+    print('email matches Keycloak: ' + (u.email === '${KC_EMAIL}'));
+  "
 ```
-**Expected**: `email` is a non-null address (venue-dependent, as in M.1), `active: true`
+**Expected**: `active: true`, `email matches Keycloak: true` — the by-ID document carries the account's Keycloak address
 
 ### Test M.3 — Update User Profile
 
@@ -330,7 +342,7 @@ curl -sk -X PUT "https://localhost/api/me" \
 
 ```bash
 # Verify in Keycloak
-curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "
 import sys,json
 u = json.load(sys.stdin)[0]
@@ -354,7 +366,7 @@ curl -sk -X PUT "https://localhost/api/me" \
 
 ```bash
 # Verify email in Keycloak
-curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "
 import sys,json
 u = json.load(sys.stdin)[0]
@@ -385,7 +397,7 @@ curl -sk -X POST "https://localhost/api/me/reset-data" \
 
 ```bash
 # Update profile in Keycloak directly (simulating external change)
-USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 curl -sk -X PUT "https://localhost/auth/admin/realms/genie/users/${USER_ID}" \
@@ -411,7 +423,7 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 ```bash
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Soft-delete user in ArangoDB directly
@@ -421,6 +433,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
@@ -464,7 +477,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 ```bash
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Save user _key before deletion (email will be nullified by erasure)
@@ -474,6 +487,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 
 curl -sk -X POST "https://localhost/api/me/delete" \
   -H "Authorization: Bearer $USER_TOKEN" \
@@ -539,7 +553,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 
 # Resolve the account by username — a fixture account's email is
 # venue-dependent (converge never rewrites it), so never key it by email
-KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+KC_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 # Save user _key before erasure (email will be nullified)
@@ -549,6 +563,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     var u = db.users.firstExample({sub: '${KC_ID}'});
     print(u._key);
   " 2>/dev/null | tail -1)
+[ -n "$USER_KEY" ] || { echo "FATAL: could not resolve the ArangoDB _key for the fixture user"; exit 1; }
 echo "User _key: $USER_KEY"
 
 # Trigger erasure (deletes Keycloak user + nullifies all PII in ArangoDB)

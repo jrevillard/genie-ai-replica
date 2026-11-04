@@ -1077,8 +1077,9 @@ async function subtitleContrast(page) {
 
 test.describe('Welcome banner invariants', () => {
   // The budget below is the default 60s per test, and one test is 12 sessions
-  // (6 viewports x 2 themes), each a browser login plus the 3s the banner's
-  // mask layer needs to settle before a pixel is sampled. At four viewports
+  // (6 viewports x 2 themes), each a browser login plus the entrance gate
+  // openWelcomeScreen applies (pixel readers pay the compositing gate once
+  // per page, inside capturePixels). At four viewports
   // that was eight sessions and fitted; at six it does not, and three of the
   // six tests were killed mid-loop by the harness with the viewport list's
   // last cell unmeasured. This raises the budget only — every floor,
@@ -1364,13 +1365,7 @@ test.describe('Welcome banner invariants', () => {
           const { ctx, page } = await openWelcomeScreen(browser, {
             viewport: { width: vp.width, height: 800 },
             theme,
-            locale,
-            // The default pause is set for the mask layer's compositing
-            // settle, which a box read does not wait on. What a box read
-            // DOES have to outlast is the banner's 650 ms entrance, which
-            // scales the box by 0.985 while it runs — so this is a
-            // whole second over the animation and nothing else.
-            settle: 1000
+            locale
           });
           const where = `${vp.label}/${theme}/${locale}`;
           const m = await veilGeometry(page);
@@ -1452,8 +1447,7 @@ test.describe('Welcome banner invariants', () => {
           const { ctx, page } = await openWelcomeScreen(browser, {
             viewport: { width: vp.width, height: 800 },
             theme,
-            locale,
-            settle: 1000
+            locale
           });
           const where = `${vp.label}/${theme}/${locale}`;
           // The title's own state in one string, so every message below can

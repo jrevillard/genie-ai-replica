@@ -5,6 +5,7 @@ const {
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,
+  waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
 } = require('../helpers/documents');
@@ -77,8 +78,13 @@ test.describe('Document Search', () => {
     // test exists to catch, and the wait must fail loudly on it.
     const filesResponse = page.waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 });
     await statusFilter.selectOption('pending');
-    await filesResponse;
-    await page.waitForTimeout(250);
+    const filterResponse = await filesResponse;
+
+    // The response has arrived; the table may still be painting the rows
+    // from BEFORE the filter (the pre-filter table already listed rows).
+    // Hold until the rendered rows ARE the filter's own response payload
+    // before reading them.
+    await waitForTableRowsSettled(page, filterResponse);
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

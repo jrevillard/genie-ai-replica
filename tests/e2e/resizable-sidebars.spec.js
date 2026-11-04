@@ -28,6 +28,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
 const { readVisualLayerState } = require('./helpers/welcome');
+const { waitForWidthSettled } = require('./helpers/layout');
 
 // The centre's usable minimum, from the quick-help grid's own
 // arithmetic: two cards of 217 px plus one 32 px gap = 466 px, so 480
@@ -126,7 +127,7 @@ async function storedOpen(page) {
 // perform did nothing. Both are now the same gesture, and the press
 // still starts on the button — so this helper also covers the case
 // that broke.
-async function dragHandle(page, selector, dx) {
+async function dragHandle(page, selector, dx, panelSel) {
   const box = await page.locator(selector).boundingBox();
   expect(box, `${selector} should have a bounding box`).not.toBeNull();
   const startX = box.x + box.width / 2;
@@ -139,7 +140,9 @@ async function dragHandle(page, selector, dx) {
     await page.mouse.move(startX + (dx * i) / 5, startY);
   }
   await page.mouse.up();
-  await page.waitForTimeout(500); // let the 0.3 s width transition settle
+  // The caller measures the geometry next, so the 0.3 s width
+  // transition the drag triggered must have run its course.
+  await waitForWidthSettled(page, panelSel);
 }
 
 // Seed the stored widths, then reload so the RESTORE path is what runs
@@ -153,7 +156,9 @@ async function seedAndReload(page, widths) {
   }, widths);
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-  await page.waitForTimeout(1800);
+  // The restore path renders the seeded widths through the 0.3 s
+  // transition; the caller measures the layout, so it must wait out.
+  await waitForWidthSettled(page, [LEFT, RIGHT]);
 }
 
 test.describe('Resizable sidebars behind one handle', () => {
@@ -169,7 +174,9 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.removeItem('sidebarOpenRight');
     });
     await gotoChatbot(page);
-    await page.waitForTimeout(2000);
+    // The panels open at their defaults through the 0.3 s transition;
+    // every measurement in these tests assumes the final geometry.
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
   });
 
   test('both handles exist, sit flush on their panel edge, and are in the tab order', async ({ page }) => {
@@ -310,7 +317,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     const before = await measure(page);
     // The strip is the left panel's RIGHT edge, so +120 slides it right
     // and the panel grows by 120 — at the centre's expense.
-    await dragHandle(page, LEFT_HANDLE, 120);
+    await dragHandle(page, LEFT_HANDLE, 120, LEFT);
     const after = await measure(page);
 
     expect(after.left.width).toBeGreaterThan(before.left.width + 100);
@@ -331,7 +338,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     const before = await measure(page);
     // The right panel's strip is its LEFT edge, so -120 slides it left
     // and the panel grows by 120.
-    await dragHandle(page, RIGHT_HANDLE, -120);
+    await dragHandle(page, RIGHT_HANDLE, -120, RIGHT);
     const after = await measure(page);
 
     expect(after.right.width).toBeGreaterThan(before.right.width + 100);
@@ -354,7 +361,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const m = await measure(page);
     // A collapsed rail is exactly as wide as the control it carries —
@@ -404,7 +411,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const openLeft = await measure(page);
     expect(
@@ -420,7 +427,9 @@ test.describe('Resizable sidebars behind one handle', () => {
 
     // Collapse the left and re-measure.
     await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
-    await page.waitForTimeout(800);
+    // The collapse animates; the measurement below asserts the final
+    // collapsed geometry.
+    await waitForWidthSettled(page, LEFT);
     const collapsedLeft = await measure(page);
     // A collapsed rail IS its handle, so "not on the outer edge" is no
     // longer a question the geometry can ask: the rail is exactly as
@@ -435,7 +444,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     ).toBeLessThanOrEqual(1);
 
     await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
-    await page.waitForTimeout(800);
+    await waitForWidthSettled(page, RIGHT);
     const collapsedBoth = await measure(page);
     expect(
       Math.abs(collapsedBoth.rightHandle.left - collapsedBoth.right.left),
@@ -457,7 +466,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const openState = async () => {
       const m = await measure(page);
@@ -471,16 +480,20 @@ test.describe('Resizable sidebars behind one handle', () => {
     // Collapse each side with the chevron, then reload. Both must come
     // back collapsed.
     await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
-    await page.waitForTimeout(700);
-    expect((await storedOpen(page)).left, 'collapsing stores "false"').toBe('false');
+    // The collapse persists its state; the assertion waits for the
+    // write rather than assuming it has landed.
+    await expect.poll(async () => (await storedOpen(page)).left, {
+      timeout: 15000,
+    }).toBe('false');
 
     await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
-    await page.waitForTimeout(700);
-    expect((await storedOpen(page)).right, 'collapsing stores "false"').toBe('false');
+    await expect.poll(async () => (await storedOpen(page)).right, {
+      timeout: 15000,
+    }).toBe('false');
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
     const collapsed = await measure(page);
     expect(collapsed.left.width, 'the left stays collapsed across a reload').toBe(collapsed.leftHandle.width);
     expect(collapsed.right.width, 'the right stays collapsed across a reload').toBe(collapsed.rightHandle.width);
@@ -488,15 +501,16 @@ test.describe('Resizable sidebars behind one handle', () => {
     // And expanding round-trips the other way.
     await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
     await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
-    await page.waitForTimeout(900);
-    expect(await storedOpen(page), 'expanding stores "true" on both keys').toEqual({
+    // The expansions persist their state; wait for both writes.
+    // Expanding stores "true" on both keys.
+    await expect.poll(() => storedOpen(page), { timeout: 15000 }).toEqual({
       left: 'true',
       right: 'true'
     });
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
     s = await openState();
     expect(s.left, 'the left comes back open').toBeGreaterThan(300);
     expect(s.right, 'the right comes back open').toBeGreaterThan(300);
@@ -517,7 +531,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.nav-right .icon-btn', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const buttons = page.locator('.nav-right .icon-btn');
     const count = await buttons.count();
@@ -525,7 +539,10 @@ test.describe('Resizable sidebars behind one handle', () => {
 
     for (let i = 0; i < count; i++) {
       await buttons.nth(i).hover();
-      await page.waitForTimeout(250);
+      // The tooltip fades in over a 0.2 s transition and only becomes
+      // measurable once it leaves `visibility: hidden` — the state the
+      // overflow read below is about.
+      await expect(buttons.nth(i).locator('.tooltip')).toBeVisible({ timeout: 15000 });
       const r = await page.evaluate(() => {
         const vp = window.innerWidth;
         const offenders = [];
@@ -637,7 +654,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // --space-lg on each side; the assertion turns the rule from
     // "trust the computed value" into a measurement.
     await page.setViewportSize({ width: 1024, height: 800 });
-    await page.waitForTimeout(2500);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const spaceLg = parseFloat(
       await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--space-lg'))
@@ -704,7 +721,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // above 320 px.
     for (const wide of [2400, 3200]) {
       await page.setViewportSize({ width: wide, height: 900 });
-      await page.waitForTimeout(2500);
+      await waitForWidthSettled(page, [LEFT, RIGHT]);
 
       const c = await page.evaluate(() => {
         const overlay = document.querySelector('.quick-help-overlay');
@@ -779,7 +796,9 @@ test.describe('Resizable sidebars behind one handle', () => {
         await page.mouse.move(startX + (dx * i) / 5, startY);
       }
       await page.mouse.up();
-      await page.waitForTimeout(500);
+      // The drag animates the panel width; the measurement must see
+      // the transition's end.
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
 
       const after = (await measure(page))[panelKey].width;
       expect(after, `${panelKey}: a drag begun on the chevron must resize (was ${before})`).toBeGreaterThan(
@@ -807,7 +826,9 @@ test.describe('Resizable sidebars behind one handle', () => {
       await page.mouse.move(x + 2, y);
       await page.mouse.move(x + 1, y);
       await page.mouse.up();
-      await page.waitForTimeout(600);
+      // The collapse animates; the width comparison must see the
+      // transition's end, not a mid-flight frame.
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
 
       expect(
         (await measure(page))[panelKey].width,
@@ -817,7 +838,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       // Reopen, and confirm the panel returns to the width it had — a
       // wobble that leaked a resize would have moved it.
       await page.locator(`${handleSel} .sidebar-handle__button`).click();
-      await page.waitForTimeout(600);
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       expect((await measure(page))[panelKey].width, `${panelKey}: the wobble must not have resized the panel`).toBe(
         before
       );
@@ -833,8 +854,9 @@ test.describe('Resizable sidebars behind one handle', () => {
       [RIGHT_HANDLE, 'right', -120]
     ]) {
       const before = (await measure(page))[panelKey].width;
-      await dragHandle(page, handleSel, dx);
-      await page.waitForTimeout(700);
+      // `dragHandle` already waits for the panel width to settle, so
+      // the geometry read below sees the transition's end.
+      await dragHandle(page, handleSel, dx, panelKey === 'left' ? LEFT : RIGHT);
       const after = (await measure(page))[panelKey].width;
       expect(after, `${panelKey}: a drag ending on the chevron must not collapse it`).toBeGreaterThan(before + 100);
     }
@@ -854,13 +876,15 @@ test.describe('Resizable sidebars behind one handle', () => {
       const before = (await measure(page))[panelKey].width;
       await page.locator(sel).focus();
       await page.keyboard.press(widenKey);
-      await page.waitForTimeout(400);
+      // The keyboard resize animates like a drag; wait for the width
+      // to settle before reading it.
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const widened = (await measure(page))[panelKey].width;
       expect(widened, `${sel}: ${widenKey} must widen the panel (was ${before})`).toBeGreaterThan(before);
 
       const narrowKey = widenKey === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
       await page.keyboard.press(narrowKey);
-      await page.waitForTimeout(400);
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const narrowed = (await measure(page))[panelKey].width;
       expect(narrowed, `${sel}: ${narrowKey} must narrow it back to ${before}`).toBeLessThan(widened);
     }
@@ -874,12 +898,14 @@ test.describe('Resizable sidebars behind one handle', () => {
       const before = (await measure(page))[panelKey].width;
 
       await page.locator(`${handleSel} .sidebar-handle__button`).click();
-      await page.waitForTimeout(600);
+      // The collapse animates; the width comparisons assert the final
+      // geometry on both sides of it.
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const collapsed = await measure(page);
       expect(collapsed[panelKey].width, `${panelKey} should be collapsed`).toBeLessThan(before);
 
       await page.locator(`${handleSel} .sidebar-handle__button`).click();
-      await page.waitForTimeout(600);
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const expanded = await measure(page);
       expect(
         expanded[panelKey].width,
@@ -899,7 +925,8 @@ test.describe('Resizable sidebars behind one handle', () => {
       [RIGHT_HANDLE, 'right', 320]
     ]) {
       // Move away from the default so the restore is observable.
-      await dragHandle(page, handleSel, panelKey === 'left' ? 150 : -150);
+      await dragHandle(page, handleSel, panelKey === 'left' ? 150 : -150,
+        panelKey === 'left' ? LEFT : RIGHT);
       expect((await measure(page))[panelKey].width, `${panelKey} should have moved off its default`).not.toBe(expected);
 
       // Double-click the STRIP, off the button. `locator.dblclick()`
@@ -909,7 +936,9 @@ test.describe('Resizable sidebars behind one handle', () => {
       // toggle the panel instead of restoring it.
       const box = await page.locator(handleSel).boundingBox();
       await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 4);
-      await page.waitForTimeout(700);
+      // The restore animates; the assertion compares the final width
+      // against the exact default.
+      await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       expect((await measure(page))[panelKey].width, `${panelKey} default should be ${expected}`).toBe(expected);
     }
   });
@@ -917,8 +946,10 @@ test.describe('Resizable sidebars behind one handle', () => {
   test('a width restored from storage is clamped to the current viewport, not applied blind', async ({ page }) => {
     // A width that is legal at 2400 px and not affordable at 1400 px.
     await page.setViewportSize({ width: 2400, height: 900 });
-    await page.waitForTimeout(800);
-    await dragHandle(page, LEFT_HANDLE, 300);
+    // The panels reflow for the new viewport; the drag's `before`
+    // baseline must come from the settled geometry.
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
+    await dragHandle(page, LEFT_HANDLE, 300, LEFT);
     const wide = await measure(page);
     expect(wide.left.width, 'the wide-viewport drag should have widened the left').toBeGreaterThan(500);
     // The right was never dragged, so it has no stored width of its
@@ -940,7 +971,9 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-    await page.waitForTimeout(2500);
+    // The restore path renders through the 0.3 s transition; the
+    // clamp assertions below read the settled geometry.
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const m = await measure(page);
     // The invariant is a property of the PAIR, not of one side. Which
@@ -972,7 +1005,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.setViewportSize({ width: 2400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
-    await page.waitForTimeout(2500);
+    await waitForWidthSettled(page, [LEFT, RIGHT]);
     expect(
       (await measure(page)).left.width,
       `the stored ${stored.left} px must come back at 2400 px — the clamp must not have overwritten it`
@@ -1007,7 +1040,9 @@ test.describe('Resizable sidebars behind one handle', () => {
 
     for (const vp of LADDER) {
       await page.setViewportSize({ width: vp, height: 900 });
-      await page.waitForTimeout(1000);
+      // The panels reflow for the new viewport before the rung's
+      // measurement is taken.
+      await waitForWidthSettled(page, [LEFT, RIGHT]);
       await seedAndReload(page, seedWidths);
 
       const m = await measure(page);

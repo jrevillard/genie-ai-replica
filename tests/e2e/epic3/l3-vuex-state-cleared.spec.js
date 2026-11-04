@@ -43,9 +43,22 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
     `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
   ).toBeTruthy();
 
+// Wait for Vue to mount — the store is reachable once __vue_app__ exists.
+async function waitForVueApp(page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const app = document.querySelector('#app');
+          return Boolean(app && app.__vue_app__);
+        }),
+      { timeout: 15000 },
+    )
+    .toBe(true);
+}
+
   // Step 4: Verify authenticated state via Vuex store
-  // Wait for Vue to mount and Vuex store to be initialized
-  await page.waitForTimeout(2000);
+  await waitForVueApp(page);
 
   const authStateBefore = await page.evaluate(() => {
     const app = document.querySelector('#app');
@@ -125,7 +138,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
 
   // Additionally verify Vuex state directly if still on app domain
   if (!isAtKeycloak) {
-    await page.waitForTimeout(2000);
+    await waitForVueApp(page);
     const authStateAfter = await page.evaluate(() => {
       const app = document.querySelector('#app');
       if (app && app.__vue_app__) {

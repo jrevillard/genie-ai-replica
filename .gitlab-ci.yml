@@ -2854,6 +2854,13 @@ release:create:
 # npm download cache (~/.npm) was never among the cached paths — every run
 # restored the archive, deleted it, and re-downloaded all tarballs. The cache
 # bought zero reuse and cost archive+extract time each run.
+#
+# Workspace residue (2026-10-19 incident): a reused runner workspace once
+# served stale bytes of keycloak-auth-service.js / tracing.js to prettier —
+# lint failed on content that was not this ref's (branch pipeline green,
+# docker repro red). The pipeline-global GIT_DEPTH: "0" full fetch is the
+# standing mitigation; if lint ever checks the wrong copy of a file, suspect
+# workspace residue first.
 .lint_component:
   extends: .lint_node
   script:

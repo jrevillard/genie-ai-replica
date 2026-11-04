@@ -33,6 +33,12 @@ cd components/gov-chat-frontend && npm ci
 # Document repository
 cd components/document-repository && npm ci
 
+# OKF server
+cd components/okf-server && npm ci
+
+# Config validator
+cd tests/config-validator && npm ci
+
 # OPEA overlay (Python venv recommended — uv per project convention)
 cd genie-ai-overlay && uv venv .venv && source .venv/bin/activate && uv pip install -e .[test]
 

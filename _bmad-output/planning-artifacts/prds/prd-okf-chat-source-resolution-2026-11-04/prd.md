@@ -280,12 +280,17 @@ single indexed ArangoDB fetch.
 
 **Priority:** Must Have
 
-**Description:** chatqna citation mint verbatim; legacy document chat path, wizard
-hand-off, VersionsDialog for live repos, and repo-delete purge all unchanged.
+**Description:** (David, 2026-11-04: this initiative must NOT interfere with or
+displace the legacy query pipeline or legacy document handling.) chatqna citation
+mint verbatim; retriever enrichment additive, legacy results byte-identical;
+legacy document chat path, doc-repo upload/download/view flows, wizard hand-off,
+VersionsDialog for live repos, and repo-delete purge all unchanged.
 
 **Acceptance Criteria:**
 - [ ] No-regression inventory (remediation plan) re-checked per wave
 - [ ] Playwright suite green; renamed locators swept
+- [ ] Legacy document handling: zero behavior change outside `is_bundle` rows and
+      RESTRICTED-source refusals
 
 ### NFR-005: Maintainability
 

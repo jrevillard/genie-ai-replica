@@ -31,7 +31,7 @@ Chat answers cite their sources. For the legacy document pipeline those citation
 # Constraints
 
 - The internal shared secret (`x-okf-internal-secret`) must NEVER appear on the user-facing chat-card path; the user bearer through `scope-authz-service` (6-1c, `OKF_SCOPE_MODE`, `acl.restricted`) is the only authority; no authz caching on serve routes (the retrieval path's last-known-good-on-5xx pattern must not be imported).
-- No-regression: legacy chat path untouched (frontend branch keyed on `source === 'okf-concept'`); chatqna's source mint stays verbatim; the retriever enrichment is purely additive; all 14 locales stay key-identical (`localeConsistency`); Playwright locators swept with any rename.
+- No-regression (David, 2026-11-04, standing emphasis): this initiative must NOT interfere with or displace the **legacy query pipeline** or **legacy document handling** — legacy chat path untouched (frontend branch keyed on `source === 'okf-concept'`); chatqna's source mint stays verbatim; the retriever enrichment is purely additive with legacy results byte-identical; doc-repo changes touch `is_bundle` rows only, never legacy upload/download/view flows; all 14 locales stay key-identical (`localeConsistency`); Playwright locators swept with any rename.
 - Authz is enforced per-request from token claims; `getAuthorizedGraphs`'s last-known-good-on-5xx caching is a retrieval-only pattern and must not reach any serve route.
 - Bundle-cache keys (if ever needed) must be per-version `bundle_file_id`, never per-repo "latest" (the bare-`limit=1` trap).
 - Reuse the DS primitives (`DsTable`/`DsDialog`/`DsPill`), the `okf` Vuex store, `okfRepoOps`, and the `?tab=…&file=` deep-link pattern; no new UX paradigms.

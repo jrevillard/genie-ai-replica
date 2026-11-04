@@ -89,9 +89,12 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Get the authenticated user's profile (this triggers header extraction in the middleware)
-# First, find the user's _key by looking up the test user
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testuser@e2e.test" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# First, find the user's _key from their own profile — resolve the account by
+# username, never by email: the venue-fixture contract never rewrites a fixture
+# account's email, so a venue provisioned before the fixtures module keeps the
+# original address and an email lookup finds nothing
+USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
 
 # Make authenticated request to the user profile endpoint
 curl -sk -X GET "https://localhost/api/me" \
@@ -182,9 +185,11 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
-# Look up the user in ArangoDB to find their _key
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# Look up the user's _key from their own profile (email-keyed admin searches
+# are not used: the search endpoint keys on term/field, and the account is
+# already resolved by the username the token carries)
+USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
 
 echo "User _key: $USER_KEY"
 
@@ -286,9 +291,11 @@ echo "$RESPONSE" | jq '.data | keys'
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Look up the test user's _key
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# Look up the test user's _key (exact-email match: this phase created the
+# account with this address, so it is deterministic — unlike the fixture
+# accounts, whose address depends on when the venue was provisioned)
+USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?term=e2e@example.com&field=exactEmail" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.users[0]._key')
 
 # Remove roles (Keycloak 26 specific approach)
 curl -sk -X PATCH "https://localhost/api/me" \
@@ -370,11 +377,12 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
-# Look up user keys in ArangoDB for both users
-GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie2@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# Look up user keys from each user's own profile (each realm provisions its
+# own ArangoDB user, so the _key differs per realm)
+GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER2_TOKEN" | jq -r '._key')
 
 # Make request with genie realm token and check logs
 curl -sk -X GET "https://localhost/api/me" \

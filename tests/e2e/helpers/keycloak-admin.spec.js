@@ -569,10 +569,16 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     },
   ];
 
+  // The two reads every rotation performs before the create: the realm's
+  // id and the existing key providers.
+  const BASE_ROUTES = [
+    ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+    ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+  ];
+
   test('returns the id parsed from the Location header, not the empty body', async () => {
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-      ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+      ...BASE_ROUTES,
       [
         'POST',
         COMPONENTS_PATH,
@@ -595,11 +601,7 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
   });
 
   test('a 201 without a Location header fails loudly instead of returning null', async () => {
-    routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-      ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
-      ['POST', COMPONENTS_PATH, { status: 201, data: null }],
-    ];
+    routes = [...BASE_ROUTES, ['POST', COMPONENTS_PATH, { status: 201, data: null }]];
 
     let caught;
     try {
@@ -618,8 +620,7 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     // A proxy-rewritten or truncated header answers with the collection
     // URL only: reading its last segment would mint the id 'components'.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-      ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+      ...BASE_ROUTES,
       ['POST', COMPONENTS_PATH, { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/` } }],
     ];
 

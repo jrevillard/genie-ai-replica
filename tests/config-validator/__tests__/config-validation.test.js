@@ -3291,6 +3291,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   // from the edit that caused it.
   const FIXTURES_PATH = path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js');
   const { E2E_FIXTURES } = require(FIXTURES_PATH);
+  const e2eRoot = path.join(ROOT, 'tests/e2e');
   let content;
 
   beforeAll(() => {
@@ -3298,6 +3299,20 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   });
 
   const sectionOf = (job) => gitlabSection(content, job);
+
+  // The one tree walker the tests/e2e source-scan pins share: visit(path,
+  // source) per file matching extRe, pruning whole skipPaths entries.
+  const walkE2eFiles = (dir, skipPaths, extRe, visit) => {
+    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, name.name);
+      if (skipPaths && skipPaths.has(entryPath)) continue;
+      if (name.isDirectory()) {
+        walkE2eFiles(entryPath, skipPaths, extRe, visit);
+      } else if (extRe.test(name.name)) {
+        visit(entryPath, fs.readFileSync(entryPath, 'utf-8'));
+      }
+    }
+  };
 
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
@@ -3404,7 +3419,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         }
       }
     };
-    const e2eRoot = path.join(ROOT, 'tests/e2e');
     const exclusions = new Set([
       // epic2's two self-created fixture users (genie2's testuser2,
       // k1's noroles-e2e) legitimately carry their own password literals;
@@ -3414,18 +3428,9 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'fixtures'), // upload seed files
       path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
-    const walkJs = (dir, label, skipPaths) => {
-      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        const entryPath = path.join(dir, name.name);
-        if (skipPaths && skipPaths.has(entryPath)) continue;
-        if (name.isDirectory()) {
-          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
-        } else if (/\.(js|cjs|mjs)$/.test(name.name)) {
-          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
-        }
-      }
-    };
-    walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
+    walkE2eFiles(e2eRoot, exclusions, /\.(js|cjs|mjs)$/, (entryPath, source) => {
+      assertNoFixturePassword(`tests/e2e${entryPath.slice(e2eRoot.length)}`, source);
+    });
   });
 
   // #1422: the do-not-mix half of the credential import-path convention
@@ -3443,28 +3448,27 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   // from the source alone would need a per-file classification this pin
   // deliberately does not attempt.
   test('a spec file never mixes the two sanctioned credential paths', () => {
-    const e2eRoot = path.join(ROOT, 'tests/e2e');
     const violations = [];
-    const walkSpecs = (dir) => {
-      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        const entryPath = path.join(dir, name.name);
-        if (name.isDirectory()) {
-          walkSpecs(entryPath);
-        } else if (name.name.endsWith('.spec.js')) {
-          const source = fs.readFileSync(entryPath, 'utf-8');
-          // The basename is matched, not the 'helpers/' prefix: a spec
-          // living inside tests/e2e/helpers/ (next to both modules)
-          // requires them as './e2e-fixtures' and './chatbot', and mixes
-          // the paths just the same.
-          const fromFixtures = /require\((['"`])[^'"`]*e2e-fixtures\1\)/.test(source);
-          const fromChatbot = /require\((['"`])[^'"`]*chatbot\1\)/.test(source);
-          if (fromFixtures && fromChatbot) {
-            violations.push(path.relative(e2eRoot, entryPath));
-          }
-        }
+    let walked = 0;
+    walkE2eFiles(e2eRoot, null, /\.spec\.js$/, (entryPath, source) => {
+      walked += 1;
+      // The basename is matched, not the 'helpers/' prefix: a spec
+      // living inside tests/e2e/helpers/ (next to both modules)
+      // requires them as './e2e-fixtures' and './chatbot', and mixes
+      // the paths just the same.
+      const fromFixtures = /require\((['"`])[^'"`]*e2e-fixtures\1\)/.test(source);
+      const fromChatbot = /require\((['"`])[^'"`]*chatbot\1\)/.test(source);
+      if (fromFixtures && fromChatbot) {
+        violations.push(path.relative(e2eRoot, entryPath));
       }
-    };
-    walkSpecs(e2eRoot);
+    });
+    // The walk must have actually visited the suite: a broken walker
+    // (wrong root, dead filter) would pass the check below vacuously.
+    if (walked < 20) {
+      throw new Error(
+        `the import-path walk visited only ${walked} spec files — the walker is broken, not the suite clean`
+      );
+    }
     if (violations.length > 0) {
       throw new Error(
         'spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ' +

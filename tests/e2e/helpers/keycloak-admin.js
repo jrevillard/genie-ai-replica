@@ -78,6 +78,16 @@ const ACCOUNT_VANISHED = 'the account was deleted mid-provisioning (a concurrent
 const TRANSIENT_RETRY_BUDGET_MS = 30000;
 const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
 
+// The operator wording of the two 409-conflict verdicts, shared by
+// createUser and convergeUser so the diagnosis reads the same whichever
+// entry point hit it.
+const EMAIL_CONFLICT_VERDICT = (missMessage, owner, email) =>
+  `${missMessage} — the create answered 409 because ${owner} owns ` +
+  `${email}: an email conflict; remove or rename that account (or change the fixture email)`;
+const ACCOUNT_VANISHED_VERDICT = (missMessage, username, email) =>
+  `${missMessage} — the create answered 409, but no account carries ${email} either: ` +
+  `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`;
+
 /**
  * The users of a realm matching ONE field exactly.
  * exact=true: ?username= is a prefix search otherwise — a stray
@@ -326,15 +336,9 @@ async function createUser(adminToken, realm, userData) {
         );
       }
       if (owners.length > 0) {
-        throw new Error(
-          `${err.message} — the create answered 409 because ${owners[0].username} owns ` +
-            `${email}: an email conflict; remove or rename that account (or change the fixture email)`
-        );
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
       }
-      throw new Error(
-        `${err.message} — the create answered 409, but no account carries ${email} either: ` +
-          `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`
-      );
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
     }
     throw err;
   }
@@ -483,15 +487,9 @@ async function convergeUser(adminToken, realm, userData) {
         );
       }
       if (owners.length > 0) {
-        throw new Error(
-          `${err.message} — the create answered 409 because ${owners[0].username} owns ` +
-            `${email}: an email conflict; remove or rename that account (or change the fixture email)`
-        );
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
       }
-      throw new Error(
-        `${err.message} — the create answered 409, but no account carries ${email} either: ` +
-          `the account named ${username} existed at create time and ${ACCOUNT_VANISHED}; re-run the provisioning`
-      );
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
     }
     throw err;
   }

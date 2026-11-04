@@ -133,6 +133,14 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(calls).toEqual([`GET /auth/admin/realms/${REALM}/roles/admin`]);
   });
 
+  test('a failed lookup with no body says so instead of printing undefined', async () => {
+    routes = [['GET', ROLE_PATH('admin'), { status: 403, data: null }]];
+
+    await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(
+      /Cannot read the realm role admin of genie: HTTP 403 \(no body\)/
+    );
+  });
+
   test('a Keycloak outage during the role lookup is transient, so the retry budget can save the run', async () => {
     routes = [['GET', ROLE_PATH('admin'), { status: 503, data: null }]];
 
@@ -148,9 +156,32 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(caught.message).toMatch(/Cannot read the realm role admin of genie: HTTP 503/);
   });
 
-  test('a non-JSON answer to the create is a permanent failure, not a transport break', async () => {
-    const notJson = new Error('POST /auth/admin/realms/genie/users returned a non-JSON body (HTTP 502): <html>...');
+  test('a non-JSON 5xx to the create is an outage: transient, so the retry budget saves the run', async () => {
+    // A Keycloak rolling restart behind the proxy answers 503 with an HTML
+    // page: the verdict follows the server's state, not the content type.
+    const notJson = new Error('POST /auth/admin/realms/genie/users returned a non-JSON body (HTTP 503): <html>...');
     notJson.nonJsonBody = true;
+    notJson.status = 503;
+    routes = [['POST', USERS_PATH, { throws: notJson }]];
+
+    let caught;
+    try {
+      await convergeUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/non-JSON body \(HTTP 503\)/);
+  });
+
+  test('a non-JSON 4xx to the create is permanent', async () => {
+    // The nginx HTML fallback for a wrong path answers 404 with HTML: the
+    // endpoint answered, and no retry will change that.
+    const notJson = new Error('POST /auth/admin/realms/genie/users returned a non-JSON body (HTTP 404): <html>...');
+    notJson.nonJsonBody = true;
+    notJson.status = 404;
     routes = [['POST', USERS_PATH, { throws: notJson }]];
 
     let caught;
@@ -162,7 +193,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
 
     expect(caught).toBeTruthy();
     expect(caught.transient).toBeFalsy();
-    expect(caught.message).toMatch(/non-JSON body \(HTTP 502\)/);
+    expect(caught.message).toMatch(/non-JSON body \(HTTP 404\)/);
   });
 
   test('a non-JSON answer is a permanent failure, not a transport break', async () => {
@@ -172,6 +203,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
       'GET /auth/admin/realms/genie/roles/admin returned a non-JSON body (HTTP 404): <html>...'
     );
     notJson.nonJsonBody = true;
+    notJson.status = 404;
     routes = [['GET', ROLE_PATH('admin'), { throws: notJson }]];
 
     let caught;
@@ -319,6 +351,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
       'GET /auth/admin/realms/genie/users?email=testadmin%40e2e.test returned a non-JSON body (HTTP 404): <html>...'
     );
     notJson.nonJsonBody = true;
+    notJson.status = 404;
     routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { throws: notJson }]];
 
     let caught;

@@ -35,15 +35,23 @@ function failWithStatus(message, status) {
 
 /**
  * The verdict for a rejected request: the transport helper rejects on a
- * transport failure AND on a non-JSON body (the endpoint answered, just
- * not with JSON — a permanent answer). Only the transport failure is
- * transient; the other keeps its own message, which names the status.
+ * transport failure AND on a body that is not JSON (the endpoint
+ * answered, just not with JSON). The verdict follows the server's state:
+ * a 5xx is an outage a retry may survive, a 4xx is permanent, and a
+ * rejection without a status is a transport break.
  * @param {Error} err - The rejection
  * @param {string} what - What was being read, for the message
  * @returns {Error} The error to throw
  */
 function requestFailure(err, what) {
-  if (err.nonJsonBody) return err;
+  if (err.status !== undefined) {
+    if (err.status >= 500 || TRANSIENT_STATUSES.includes(err.status)) {
+      const error = transientError(err.message);
+      error.httpStatus = err.status;
+      return error;
+    }
+    return err;
+  }
   return transientError(`Cannot reach the Keycloak admin API for ${what}: ${err.message}`);
 }
 
@@ -53,6 +61,7 @@ function requestFailure(err, what) {
  * @returns {string} The body as text
  */
 function bodyText(res) {
+  if (res.data === undefined || res.data === null) return '(no body)';
   return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
 }
 

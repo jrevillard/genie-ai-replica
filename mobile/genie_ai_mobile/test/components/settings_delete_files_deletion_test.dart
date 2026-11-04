@@ -104,7 +104,9 @@ void main() {
       'settings.accountDeletionFailed',
     );
     expect(find.widgetWithText(SnackBar, failureText), findsOneWidget);
-    expect(find.widgetWithText(SnackBar, 'login'), findsNothing);
+    // The failed deletion never reaches the logout/navigate tail: the login
+    // screen the success path pushes is not rendered.
+    expect(find.text('login'), findsNothing);
     await unmount(tester);
   });
 

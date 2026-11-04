@@ -44,11 +44,14 @@ function request(method, path, options = {}) {
         try {
           resolve({ status: res.statusCode, data: JSON.parse(body) });
         } catch {
-          reject(
-            new Error(
-              `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
-            )
+          const error = new Error(
+            `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
           );
+          // The endpoint answered — it just did not answer with JSON. The
+          // callers tell that from a transport failure (a refused or
+          // timed-out connection), which is the only retryable kind.
+          error.nonJsonBody = true;
+          reject(error);
         }
       });
     });

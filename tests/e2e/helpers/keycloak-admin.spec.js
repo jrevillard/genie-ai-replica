@@ -40,7 +40,7 @@ if (!ADMIN_FIXTURE) {
 const ADMIN_USER = {
   username: ADMIN_FIXTURE.username,
   email: ADMIN_FIXTURE.email,
-  password: ADMIN_FIXTURE.password
+  password: ADMIN_FIXTURE.password,
 };
 
 const REALM = 'genie';
@@ -53,6 +53,10 @@ const USERNAME_LOOKUP = new RegExp(
 );
 const EMAIL_LOOKUP = new RegExp(
   `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}&exact=true$`
+);
+// The widened probe (case-insensitive owners) queries without the exact flag.
+const EMAIL_LOOKUP_WIDE = new RegExp(
+  `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}$`
 );
 const RESET_PASSWORD_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/reset-password$`);
 
@@ -72,21 +76,21 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('resolves the role by exact name and posts its id', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
     ];
 
     await assignRealmRoles('tok', REALM, 'user-1', ['admin']);
 
     expect(calls).toEqual([
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
     ]);
   });
 
   test('names a missing role and never posts the assignment', async () => {
     routes = [
       ['GET', ROLE_PATH('ghost'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }]
+      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }],
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['ghost'])).rejects.toThrow(
@@ -98,7 +102,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('a 404 on a realm that does not exist fails loudly instead of blaming the role', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 404, data: null }]
+      ['GET', REALM_PATH, { status: 404, data: null }],
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(/The realm genie does not exist/);
@@ -108,7 +112,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('a realm read that the admin API refuses is not reported as a missing realm', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]
+      ['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }],
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(
@@ -148,6 +152,27 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(caught.message).toMatch(/Cannot read the realm role admin of genie: HTTP 503/);
   });
 
+  test('a non-JSON answer is a permanent failure, not a transport break', async () => {
+    // The nginx HTML fallback for a wrong path answers 404 with HTML: the
+    // endpoint answered, so the retry budget must not burn on it.
+    const notJson = new Error(
+      'GET /auth/admin/realms/genie/roles/admin returned a non-JSON body (HTTP 404): <html>...'
+    );
+    notJson.nonJsonBody = true;
+    routes = [['GET', ROLE_PATH('admin'), { throws: notJson }]];
+
+    let caught;
+    try {
+      await assignRealmRoles('tok', REALM, 'user-1', ['admin']);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBeFalsy();
+    expect(caught.message).toMatch(/non-JSON body \(HTTP 404\)/);
+  });
+
   test('a transport failure during the role lookup is transient too', async () => {
     routes = [['GET', ROLE_PATH('admin'), { throws: new Error('connection reset by peer') }]];
 
@@ -168,7 +193,7 @@ test.describe('removeRealmRoles', () => {
   test('removes an existing role mapping and reports the removed name', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['DELETE', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
+      ['DELETE', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
     ];
 
     const removed = await removeRealmRoles('tok', REALM, 'user-1', ['admin']);
@@ -176,14 +201,14 @@ test.describe('removeRealmRoles', () => {
     expect(removed).toEqual(['admin']);
     expect(calls).toEqual([
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
+      `DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
     ]);
   });
 
   test('a role the realm does not carry is skipped without a DELETE', async () => {
     routes = [
       ['GET', ROLE_PATH('ghost'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }]
+      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }],
     ];
 
     const removed = await removeRealmRoles('tok', REALM, 'user-1', ['ghost']);
@@ -192,13 +217,15 @@ test.describe('removeRealmRoles', () => {
     expect(calls).toEqual([`GET /auth/admin/realms/${REALM}/roles/ghost`, `GET /auth/admin/realms/${REALM}`]);
   });
 
-  test('a 404 on a realm that does not exist fails loudly instead of skipping the removal', async () => {
+  test('a realm that does not exist leaves nothing to remove', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 404, data: null }]
+      ['GET', REALM_PATH, { status: 404, data: null }],
     ];
 
-    await expect(removeRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(/The realm genie does not exist/);
+    const removed = await removeRealmRoles('tok', REALM, 'user-1', ['admin']);
+
+    expect(removed).toEqual([]);
     expect(calls).not.toContain(`DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`);
   });
 });
@@ -214,10 +241,10 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
           status: 200,
           data: [
             { id: 'r1', name: 'admin' },
-            { id: 'r2', name: 'default-roles-genie' }
-          ]
-        }
-      ]
+            { id: 'r2', name: 'default-roles-genie' },
+          ],
+        },
+      ],
     ];
 
     const effective = await effectiveRealmRoles('tok', REALM, 'user-1');
@@ -232,13 +259,32 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
 test.describe('convergeUser diagnoses a 409 whose username lookup misses', () => {
   const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
   const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
-  const EMAIL_PROBE = (data) => ['GET', EMAIL_LOOKUP, { status: 200, data }];
+  const EMAIL_PROBE = (data) => [
+    ['GET', EMAIL_LOOKUP, { status: 200, data }],
+    ['GET', EMAIL_LOOKUP_WIDE, { status: 200, data }],
+  ];
 
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }])
+      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
+    ];
+
+    await expect(convergeUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
+      new RegExp(`${ADMIN_FIXTURE.email}: an email conflict`)
+    );
+  });
+
+  test('an owner whose email differs only in case is still an email conflict', async () => {
+    // The realm rejects duplicate emails case-insensitively, so the probe
+    // must widen to a case-insensitive match.
+    const upper = ADMIN_FIXTURE.email.toUpperCase();
+    routes = [
+      POST_USERS_409,
+      USERNAME_LOOKUP_MISS,
+      ['GET', EMAIL_LOOKUP, { status: 200, data: [] }],
+      ['GET', EMAIL_LOOKUP_WIDE, { status: 200, data: [{ username: 'someone-else', email: upper }] }],
     ];
 
     await expect(convergeUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
@@ -247,7 +293,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
   });
 
   test('an empty email probe names the account as deleted mid-provisioning', async () => {
-    routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, EMAIL_PROBE([])];
+    routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ...EMAIL_PROBE([])];
 
     let caught;
     try {
@@ -276,7 +322,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      ['GET', EMAIL_LOOKUP, { throws: new Error('connection reset by peer') }]
+      ['GET', EMAIL_LOOKUP, { throws: new Error('connection reset by peer') }],
     ];
 
     let caught;
@@ -351,9 +397,9 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
       [
         'GET',
         USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] }
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
       ],
-      ['PUT', RESET_PASSWORD_PATH, { status: 404, data: null }]
+      ['PUT', RESET_PASSWORD_PATH, { status: 404, data: null }],
     ];
 
     let caught;

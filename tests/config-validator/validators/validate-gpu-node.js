@@ -193,9 +193,7 @@ function validateGpuNode(gpuComposePath, _mainComposePath) {
     if (!actualImage) {
       errors.push(`${serviceName}: missing image tag`);
     } else if (actualImage.endsWith(':latest') || !actualImage.includes(':')) {
-      errors.push(
-        `${serviceName}: unpinned image tag — "${actualImage}" (must use a versioned tag, not :latest)`
-      );
+      errors.push(`${serviceName}: unpinned image tag — "${actualImage}" (must use a versioned tag, not :latest)`);
     }
   }
 
@@ -230,8 +228,7 @@ function crossReferenceGpu(gpuComposeVars, envParsed, sharedComposeVars) {
 
   // Undocumented: in GPU compose but not in env template
   // Filter out vars shared with the main compose (documented there, not here)
-  const undocumented = [...gpuNames]
-    .filter((name) => !envNames.has(name) && !sharedComposeVars.has(name));
+  const undocumented = [...gpuNames].filter((name) => !envNames.has(name) && !sharedComposeVars.has(name));
 
   // Orphaned: in env but not in GPU compose
   // Filter out known Section 14 orphans + vars shared with main compose

@@ -31,6 +31,7 @@ void main() {
       // TODO
     });
 
+    // Informational count of system-managed fields carried over from the stored document (excludes the updated-at bump).
     // int fieldsPreserved
     test('to test the property `fieldsPreserved`', () async {
       // TODO

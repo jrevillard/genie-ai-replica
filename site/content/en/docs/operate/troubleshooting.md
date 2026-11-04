@@ -189,22 +189,31 @@ The fallback is observable in two places:
   degraded period can be found in the Trace explorer by filtering for
   anything other than `translated` / `passthrough_english`.
 
-A query sent as a **plain string** — single-message mode
-(`CONTEXT_OPTION=single-message`), where the current question *is* the whole
-history — is **refused** instead of fallen back on when it does not fit the
-translation window: the turn answers HTTP 422 (`translation_input_too_long`)
-and nothing is embedded, because the untranslated question would be looked up
-in the English space and retrieve the wrong documents. Shorten the message
-and retry. The multi-message shape keeps the fallback described above: its
-history is background, normalized for the retriever and never shown, so the
-turn is not failed.
+A query that does not fit the translation window is **refused** instead of
+fallen back on: the turn answers HTTP 422 (`translation_input_too_long`) and
+nothing is embedded, because the untranslated question would be looked up in
+the English space and retrieve the wrong documents. Shorten the message and
+retry. The refusal covers three cases, and none of them depends on the
+language the query is written in:
+
+- **Single-message mode** (`CONTEXT_OPTION=single-message`, where the current
+  question *is* the whole history): the character budget is applied on the
+  English path too, so an oversized question is refused at the same budget
+  whatever language it is in.
+- **Multi-message history, service-side refusal**: when the derived character
+  budget still overruns the model window (a dense-script history, or a
+  deployer-raised `MAX_TRANSLATION_CHARS`), the translation service refuses
+  the flattened history and the turn is refused with it — the newest message
+  in the history is still the query, so it is not answered from an
+  untranslated fallback.
 
 The multi-message shape keeps the same turns of the conversation on both
 language paths (the newest ones, within the same character budget), so the
 retriever reads the same conversation whichever language it arrived in. The
-single-message shape is not budgeted on the English path: an English question
-is embedded as it is, while the same-length question in another language is
-refused as above.
+char-budget truncation (the newest message's **tail** kept when it alone
+exceeds the budget) is still the multi-message shape's contract for an
+oversized history: only a prompt the translation service cannot fit in its
+window refuses the turn.
 
 To diagnose a degraded period:
 

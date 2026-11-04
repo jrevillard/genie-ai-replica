@@ -2849,11 +2849,12 @@ class TestQueryTranslationStatus:
         assert text == "USER: AAAA"
 
     @pytest.mark.asyncio
-    async def test_a_history_in_a_window_too_tight_is_still_refused_and_named(self):
+    async def test_a_history_in_a_window_too_tight_is_refused_not_embedded(self):
         """A window that cannot hold the prompt plus a full-length
-        translation still refuses at the caller: the history goes out
-        untranslated and the status names it — scaling the ceiling must not
-        turn a genuinely tight window into a doomed request."""
+        translation refuses the turn: the raise reaches the caller, which
+        answers 422 — the newest message in the history is still the query,
+        so an untranslated fallback would be embedded into the English space
+        and retrieve the wrong documents (issue #1365)."""
         svc = create_chatqna_service()
         history = [{"role": "user", "content": "A" * 13000}]
         mock_client = self._mock_client()
@@ -2866,10 +2867,8 @@ class TestQueryTranslationStatus:
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
         stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=9000))
-        with stack:
-            text, status = await svc._get_translated_history_string(history)
-        assert text.startswith("USER: AAAA")  # untranslated
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string(history)
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -3055,7 +3054,8 @@ class TestQueryTranslationStatus:
     async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):
         """A window that cannot hold the prompt plus a full-length
         translation refuses before the request goes out — the guard covers
-        the generic shape too."""
+        the generic shape too, and the refusal raises like the TranslateGemma
+        shape's instead of degrading into an untranslated fallback."""
         svc = create_chatqna_service()
         mock_client = self._mock_client(content="USER: what is X?")
         stack = self._translation_patches(mock_client, translategemma=False)
@@ -3063,10 +3063,8 @@ class TestQueryTranslationStatus:
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=256))
         stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=300))
-        with stack:
-            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
-        assert text == "USER: qué es X?"  # untranslated
-        assert status == "fallback_error"
+        with stack, pytest.raises(chatqna_module.TranslationInputTooLongError):
+            await svc._get_translated_history_string(self.SPANISH_HISTORY)
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -4987,6 +4985,29 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422():
 
 
 @pytest.mark.asyncio
+async def test_an_oversized_english_single_message_query_is_refused_with_a_422():
+    """The single-message budget is language-independent (issue #1366): an
+    oversized English question gets the same 422 as the same-length question
+    in another language, instead of passing whole and failing later at the
+    embedder with a less actionable error."""
+    svc = create_chatqna_service()
+    mock_client = AsyncMock()
+    with (
+        patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000),
+        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(svc, stream=False, language="en", messages="q" * 5000)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
+    # Refused before anything was asked of any model.
+    mock_client.post.assert_not_called()
+    mock_counter.add.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
     """The service's own refusal is the same overflow: it must not degrade
     into an untranslated query embedded as if it were English."""
@@ -5000,6 +5021,36 @@ async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
         pytest.raises(HTTPException) as excinfo,
     ):
         await _full_flow_payload(svc, stream=False, language="es", messages="qué es X?")
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["error"] == "translation_input_too_long"
+
+
+@pytest.mark.asyncio
+async def test_a_history_the_translation_service_refuses_is_answered_with_a_422():
+    """The multi-message shape refuses a history the translation service
+    rejects (window overflow): the newest message in it is still the query,
+    so the turn is not answered from an untranslated fallback (issue #1365)
+    — the same contract the single-message shape already keeps."""
+    svc = create_chatqna_service()
+    with (
+        patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=100000),
+        patch(
+            "chatqna.genieai_chatqna._translate_prompt",
+            new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("too long for the window")),
+        ),
+        pytest.raises(HTTPException) as excinfo,
+    ):
+        await _full_flow_payload(
+            svc,
+            stream=False,
+            language="es",
+            messages=[
+                {"role": "user", "content": "¿qué es X?"},
+                {"role": "assistant", "content": "X es un servicio."},
+                {"role": "user", "content": "¿y cómo se usa?"},
+            ],
+        )
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "translation_input_too_long"

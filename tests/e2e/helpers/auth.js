@@ -7,7 +7,7 @@ const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
  * @param {string} method - HTTP method
  * @param {string} path - URL path
  * @param {object} [options] - Additional options (headers, body)
- * @returns {Promise<{status: number, data: object}>}
+ * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
   return new Promise((resolve, reject) => {
@@ -40,11 +40,11 @@ function request(method, path, options = {}) {
         // empty body resolves as null data — a 204-style success with no
         // payload is not malformed.
         if (body === '') {
-          resolve({ status: res.statusCode, data: null });
+          resolve({ status: res.statusCode, data: null, headers: res.headers });
           return;
         }
         try {
-          resolve({ status: res.statusCode, data: JSON.parse(body) });
+          resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
         } catch {
           const error = new Error(
             `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`

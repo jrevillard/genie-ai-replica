@@ -43,6 +43,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI } = require('./helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('./helpers/welcome');
+const { waitForWidthSettled } = require('./helpers/layout');
 
 // 217 - 20 = 197 px. See the report for why this is the floor rather
 // than the unreachable target.
@@ -55,22 +56,9 @@ async function gotoChatbot(page) {
 
 // The sidebar widths animate over a 0.3 s transition and the layout
 // reflows around them. A geometry read must see the transition's end,
-// not a mid-flight frame, so the waits poll until a panel's measured
-// width holds steady across two consecutive samples — bounded by a
-// hard timeout, never by a fixed duration.
-async function waitForWidthSettled(page, selector, timeout = 15000) {
-  let prev = null;
-  await expect
-    .poll(async () => {
-      const box = await page.locator(selector).boundingBox();
-      const width = box ? Math.round(box.width) : null;
-      const settled = width !== null && prev === width;
-      prev = width;
-      return settled;
-    }, { timeout })
-    .toBe(true);
-  return prev;
-}
+// not a mid-flight frame — `waitForWidthSettled` (helpers/layout.js)
+// polls until every panel's measured width holds steady across two
+// consecutive samples, bounded by a hard timeout.
 
 // Bounding boxes overlap iff `a.left < b.right && a.right > b.left`.
 // Off-canvas sidebars have bounding rects that extend past the viewport,

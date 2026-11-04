@@ -384,8 +384,8 @@ test.describe('Quick Help scope states', () => {
     const streamed = await watchQueries(page);
     await healthy.first().click();
 
+    // A healthy card DOES reach the query path.
     await expect.poll(() => streamed(), { timeout: 15000 }).toBe(true);
-    expect(streamed(), 'a healthy card DOES reach the query path').toBe(true);
 
     await ctx.close();
   });

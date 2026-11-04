@@ -142,11 +142,20 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     }
 
     if (restoreFailure) {
-      throw new Error(restoreFailure);
+      // A restore failure on a PASSING flow is its own failure class:
+      // throw it past the flow-diagnosis handler untouched, so it is
+      // not wrapped in a URL/body/hint envelope that does not apply.
+      const error = new Error(restoreFailure);
+      error.isRestoreFailure = true;
+      throw error;
     }
 
     await context.close();
   } catch (error) {
+    if (error.isRestoreFailure) {
+      await context.close();
+      throw error;
+    }
     const errorUrl = page.url();
     let errorBody;
     try {

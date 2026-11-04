@@ -10,8 +10,9 @@
 // is off" branch returned bare from one copy and `{ hasOverlay: false }`
 // from the other.
 //
-// One implementation of each recipe is here. Nothing in this module
-// asserts — it measures and returns, and the spec names the assertion
+// One implementation of each recipe is here. The module measures and
+// returns, except for the two settle gates above — those assert, and
+// a spec names the assertion
 // and writes the failure message, because a message that does not name
 // the measurement it is about is worth nothing in a CI log.
 
@@ -32,25 +33,27 @@ const ENTRANCE_TIMEOUT_MS = 15000;
 const COMPOSITING_TIMEOUT_MS = 15000;
 
 /*
- * The settled page, as a sampler sees it. Two gates, both real
- * observables:
+ * Two gates, both real observables, split by who needs them:
  *
- * 1. The banner's entrance. gli-enter runs 650 ms of opacity and
- *    transform on .quick-help-banner, and a box read or a capture
- *    inside that window measures the animation rather than the page.
- *    The gate is the animation's own playState, so the wait ends when
- *    the page is done animating, at whatever speed the machine
- *    renders it.
+ * 1. waitForBannerEntrance — the banner's entrance. gli-enter runs
+ *    650 ms of opacity and transform on .quick-help-banner, and a box
+ *    read or a capture inside that window measures the animation
+ *    rather than the page. The gate is the animation's own playState,
+ *    so the wait ends when the page is done animating, at whatever
+ *    speed the machine renders it. Every open session passes it.
  *
- * 2. Compositing of the masked banner. A capture taken before the
- *    compositor has produced its final frame can read the scrim
- *    mid-gray instead of at its resolved alpha. Two consecutive
- *    captures of the banner's box must agree byte for byte before the
- *    page counts as settled; a banner that never stops repainting
- *    never settles, and the timeout reports that instead of letting a
- *    spec sample a moving target.
+ * 2. waitForCompositingSettled — compositing of the masked banner. A
+ *    capture taken before the compositor has produced its final frame
+ *    can read the scrim mid-gray instead of at its resolved alpha.
+ *    Four consecutive captures of the banner's box 250 ms apart must
+ *    agree byte for byte before the page counts as settled; a banner
+ *    that never stops repainting never settles, and the timeout
+ *    reports that instead of letting a spec sample a moving target.
+ *    Only pixel readers pay for it: capturePixels runs it once per
+ *    page, and waitForBannerSettled composes the two for callers that
+ *    sample pixels without capturePixels.
  */
-async function waitForBannerSettled(page) {
+async function waitForBannerEntrance(page) {
   await page.waitForFunction(
     () => {
       const banner = document.querySelector('.quick-help-banner');
@@ -59,7 +62,9 @@ async function waitForBannerSettled(page) {
     undefined,
     { timeout: ENTRANCE_TIMEOUT_MS }
   );
+}
 
+async function waitForCompositingSettled(page) {
   const clip = await page.evaluate(() => {
     const el = document.querySelector('.quick-help-banner');
     const r = el.getBoundingClientRect();
@@ -70,12 +75,6 @@ async function waitForBannerSettled(page) {
       height: Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)
     };
   });
-  // The settled frame, sampled with spacing: four consecutive captures
-  // 250 ms apart must agree byte for byte. The spacing closes both
-  // windows a tighter loop leaves open — two captures back-to-back can
-  // be identical by accident before the compositor's one-shot settle
-  // lands, and back-to-back captures on a repainting page hammer the
-  // compositor instead of sampling it.
   let prev = await page.screenshot({ clip, type: 'png' });
   let identicalStreak = 0;
   await expect
@@ -89,6 +88,11 @@ async function waitForBannerSettled(page) {
       { timeout: COMPOSITING_TIMEOUT_MS, interval: 250 }
     )
     .toBeGreaterThanOrEqual(3);
+}
+
+async function waitForBannerSettled(page) {
+  await waitForBannerEntrance(page);
+  await waitForCompositingSettled(page);
 }
 
 /**
@@ -111,10 +115,11 @@ async function waitForBannerSettled(page) {
  *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
  *             reload would never settle
  *
- * The banner is settled before the screen is returned — the entrance
- * animation is over and two consecutive captures of the banner agree
- * (see waitForBannerSettled) — so every value a caller samples is the
- * resolved page.
+ * The banner's entrance animation is over before the screen is
+ * returned (see waitForBannerEntrance) — box and geometry reads see
+ * the resolved page. Pixel reads additionally see the compositor's
+ * settled frame: capturePixels gates on it (waitForCompositingSettled)
+ * on its first capture of a page.
  *
  * Returns { ctx, page } — the caller closes ctx when it is done.
  */
@@ -144,7 +149,7 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
   }
-  await waitForBannerSettled(page);
+  await waitForBannerEntrance(page);
   return { ctx, page };
 }
 
@@ -200,7 +205,18 @@ async function readVisualLayerState(page) {
  * seconds per page state in the bridge and buy nothing: the maths
  * reads the RGBA inside the page, where the pixels already are.
  */
+// Pages whose compositing gate already ran (see waitForCompositingSettled).
+const compositingSettledPages = new WeakSet();
+
 async function capturePixels(page, clip, css) {
+  // The first pixel capture of a page pays the compositing gate once:
+  // the veil recipes capture three or four times over the same state,
+  // and each of them must read the settled frame, but the frame does
+  // not un-settle between captures.
+  if (!compositingSettledPages.has(page)) {
+    await waitForCompositingSettled(page);
+    compositingSettledPages.add(page);
+  }
   const tag = css ? await page.addStyleTag({ content: css }) : null;
   try {
     const buf = await page.screenshot({ clip, type: 'png' });

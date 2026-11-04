@@ -5,6 +5,7 @@ const {
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,
+  waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
 } = require('../helpers/documents');
@@ -81,17 +82,9 @@ test.describe('Document Search', () => {
 
     // The response has arrived; the table may still be painting the rows
     // from BEFORE the filter (the pre-filter table already listed rows).
-    // getDocumentTableRows reads once, without retrying — hold until the
-    // rendered rows ARE the filter's own response payload before reading
-    // them.
-    const expectedNames = ((await filesResponse.json()).data || [])
-      .map((f) => f.file_name)
-      .sort();
-    await expect
-      .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
-        timeout: 10000,
-      })
-      .toEqual(expectedNames);
+    // Hold until the rendered rows ARE the filter's own response payload
+    // before reading them.
+    await waitForTableRowsSettled(page, filesResponse);
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

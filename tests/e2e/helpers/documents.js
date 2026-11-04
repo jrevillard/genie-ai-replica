@@ -76,6 +76,24 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
 }
 
 /**
+ * Hold until the rendered document table rows ARE the payload of a
+ * /api/files response. getDocumentTableRows reads once, without
+ * retrying — a response the table has not painted is not a settled
+ * state, and a single-shot read before this hold can see the rows from
+ * BEFORE the request. Takes the awaited Playwright Response.
+ */
+async function waitForTableRowsSettled(page, filesResponse) {
+  const expectedNames = ((await filesResponse.json()).data || [])
+    .map((f) => f.file_name)
+    .sort();
+  await expect
+    .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
+      timeout: 10000,
+    })
+    .toEqual(expectedNames);
+}
+
+/**
  * Search documents by typing in the search input and waiting for the table
  * to render the search's own response.
  */
@@ -105,14 +123,7 @@ async function searchDocuments(page, query) {
     await searchInput.fill(query);
   }
   const filesResponse = await filesResponsePromise;
-  const expectedNames = ((await filesResponse.json()).data || [])
-    .map((f) => f.file_name)
-    .sort();
-  await expect
-    .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
-      timeout: 10000,
-    })
-    .toEqual(expectedNames);
+  await waitForTableRowsSettled(page, filesResponse);
 }
 
 /**
@@ -223,6 +234,7 @@ module.exports = {
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,
+  waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
 };

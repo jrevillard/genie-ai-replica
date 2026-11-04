@@ -87,9 +87,8 @@ test.describe('Chatbot message sending and SSE streaming', () => {
       )
       .toBeGreaterThan(firstLength);
 
+    // Completion: the full answer is in, and the spinner is gone
+    // (waitForBotResponse asserts both).
     await waitForBotResponse(page, { timeout: 120000 });
-
-    const botText = await getLastBotMessage(page);
-    expect(botText.length).toBeGreaterThan(0);
   });
 });

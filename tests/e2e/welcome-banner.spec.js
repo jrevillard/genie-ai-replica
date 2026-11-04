@@ -1077,8 +1077,9 @@ async function subtitleContrast(page) {
 
 test.describe('Welcome banner invariants', () => {
   // The budget below is the default 60s per test, and one test is 12 sessions
-  // (6 viewports x 2 themes), each a browser login plus the settle gates
-  // openWelcomeScreen applies before a pixel is sampled. At four viewports
+  // (6 viewports x 2 themes), each a browser login plus the entrance gate
+  // openWelcomeScreen applies (pixel readers pay the compositing gate once
+  // per page, inside capturePixels). At four viewports
   // that was eight sessions and fitted; at six it does not, and three of the
   // six tests were killed mid-loop by the harness with the viewport list's
   // last cell unmeasured. This raises the budget only — every floor,

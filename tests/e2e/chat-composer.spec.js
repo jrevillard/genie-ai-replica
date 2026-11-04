@@ -107,11 +107,8 @@ test.describe('chat-composer mounted state', () => {
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
     // The composer mounts once the runtime config's buttons are known —
-    // wait for it before counting.
-    await page.waitForSelector('.chat-composer', { timeout: 15000 });
-
-    const composerCount = await page.locator('.chat-composer').count();
-    expect(composerCount, 'welcome screen composer count').toBe(1);
+    // hold for it, exactly one, before reading anything else.
+    await expect(page.locator('.chat-composer'), 'welcome screen composer count').toHaveCount(1);
 
     const welcome = page.locator('.chat-composer[data-testid="welcome-composer"]');
     await expect(welcome).toBeVisible();

@@ -99,7 +99,6 @@ test.describe('Conversation V1', () => {
       .poll(async () => (await boxes()).header, { timeout: 5000 })
       .toEqual(on.header);
     const off = await boxes();
-    expect(off.header, 'the header box does not move with the layer off').toEqual(on.header);
     expect(off.input, 'the composer box does not move with the layer off').toEqual(on.input);
     expect(off.window, 'the message window box does not move with the layer off').toEqual(on.window);
     await ctx.close();
@@ -217,8 +216,8 @@ test.describe('Conversation — sources', () => {
       return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fake' });
     });
     await page.locator('[data-testid^="answer-source-card-"]').click();
+    // Opening the card fetches the document.
     await expect.poll(() => viewFetch !== null, { timeout: 15000 }).toBe(true);
-    expect(viewFetch, 'opening the card fetches the document').not.toBeNull();
     expect(viewFetch.auth, 'the fetch carries the session token').toMatch(/^Bearer /);
     await page.locator('[data-testid="answer-sources-toggle"]').click();
     expect((await state()).open, 'the section collapses').toBe(false);
@@ -244,20 +243,16 @@ test.describe('Conversation — actions', () => {
     // mask the rated state. Move away so only the rated paint is read.
     await page.mouse.move(10, 10);
     await expect(page.locator('[data-testid="answer-thumb-up"]')).toHaveAttribute('data-rated', 'true');
-    const rated = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="answer-thumb-up"]');
-      return { attr: el.getAttribute('data-rated'), bg: getComputedStyle(el).backgroundColor };
-    });
-    expect(rated.attr, 'the thumb shows its selected state').toBe('true');
-    expect(rated.bg, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
+    const rated = await page.evaluate(
+      () => getComputedStyle(document.querySelector('[data-testid="answer-thumb-up"]')).backgroundColor
+    );
+    expect(rated, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
     await expect(page.locator('.notification.success'), 'the rating confirms itself').toBeVisible();
     await page.locator('[data-testid="answer-copy"]').click();
     // The clipboard write trails the click — wait for the text to land.
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 })
       .not.toBe('');
-    const clip = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clip.length, 'the clipboard holds the answer text').toBeGreaterThan(0);
     // The button acknowledges the copy with a check mark, then reverts.
     const copiedIcon = await page.evaluate(
       () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''

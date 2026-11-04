@@ -40,23 +40,21 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Keycloak authentication working (tested in Phase A)
 - JWT tokens successfully validated (Stories 1.3, 2.2)
-- Backend auth middleware resolves the user server-side (JIT provisioning keyed by the ArangoDB `_key`)
+- Backend auth middleware resolves the user server-side (JIT provisioning keyed by the `{iss}#{sub}` identity; the resolved document's `_key` is the identity attached to the request)
 
 **Conditional Execution:**
 ```bash
 # Check if Keycloak is available (via NGINX proxy)
-if curl -sk https://localhost/auth/realms/genie/.well-known/openid-configuration > /dev/null 2>&1; then
-  echo "Keycloak available"
-else
-  echo "Keycloak NOT available - skipping Phase F"
-  return 0
+if ! curl -sk https://localhost/auth/realms/genie/.well-known/openid-configuration > /dev/null 2>&1; then
+  echo "Keycloak NOT available - resolve before running Phase F"
 fi
 
 # Check if OPEA services are responding
 # The chat endpoint is a reliable indicator that the OPEA stack is up
+# (success is HTTP 201; failures surface as 4xx/5xx)
 if curl -sk https://localhost/api/chat -X POST -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
-  -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "200"; then
+  -d '{"messages":[{"role":"user","content":"ping"}],"sessionId":"e2e-phase-f"}' \
+  -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "201"; then
   echo "OPEA infrastructure detected - running Phase F tests"
 else
   echo "OPEA services not fully available - Phase F tests will be limited to the backend-side verification (token validation and user resolution)"
@@ -123,19 +121,24 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 HTTP_CODE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Hello E2E test"}]}' \
+  -d '{"messages":[{"role":"user","content":"Hello E2E test"}],"sessionId":"e2e-phase-f"}' \
   -o /dev/null -w "%{http_code}")
 echo "Chat with forwarded token: HTTP ${HTTP_CODE}"
 # Expected: HTTP 201 (query created, OPEA answer received)
 
 # From inside the network, chatqna without a Bearer token is rejected —
-# the same auth gate the forwarded token just passed
-docker exec $(docker ps --filter name=backend --format '{{.ID}}' | head -1) \
-  curl -s -o /dev/null -w "Chatqna without token: HTTP %{http_code}\n" \
+# the same auth gate the forwarded token just passed. Pick the backend
+# container explicitly: the name filter would otherwise also match the
+# chatqna container (its compose name contains "backend-server")
+BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v chatqna | head -1)
+[ -n "$BACKEND_CID" ] || { echo "FATAL: backend container not found"; exit 1; }
+HTTP_CODE=$(docker exec "$BACKEND_CID" \
+  curl -s -o /dev/null -w "%{http_code}" \
   -X POST "http://chatqna-xeon-backend-server:8888/v1/chatqna" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"ping"}]}'
-# Expected: HTTP 401
+  -d '{"messages":[{"role":"user","content":"ping"}]}')
+echo "Chatqna without token: HTTP ${HTTP_CODE}"
+[ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 ```
 
 > **Note:** Full OPEA verification requires `DEPLOY_OPEA=1` in `.env`. Without OPEA services, the chat endpoint fails — only the token-validation half of this test can run.
@@ -159,15 +162,19 @@ docker exec $(docker ps --filter name=backend --format '{{.ID}}' | head -1) \
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Create user in genie realm (if not exists)
+# Create user in genie realm (if not exists) — firstName/lastName/emailVerified
+# are required for ROPC logins to succeed (see .claude/rules/SERVER-TESTING.md)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "e2e-test-user",
     "email": "e2e@example.com",
+    "firstName": "E2E",
+    "lastName": "Test",
+    "emailVerified": true,
     "enabled": true,
     "credentials": [{ "type": "password", "value": "e2epass123", "temporary": false }]
   }'
@@ -252,7 +259,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Verify response structure"}]}')
+  -d '{"messages":[{"role":"user","content":"Verify response structure"}],"sessionId":"e2e-phase-f"}')
 
 # Verify top-level response structure
 echo "$RESPONSE" | jq 'keys | sort'
@@ -276,7 +283,7 @@ echo "$RESPONSE" | jq -r '.response'
 
 ### Test F.6 — Missing realm_access.roles Claim Handling
 
-**Given** a JWT token from a user with no realm roles (missing or empty `realm_access.roles`)
+**Given** a JWT token from a user with no realm role assignments (`realm_access.roles` carries only Keycloak's defaults, never `admin`)
 **When** the backend auth middleware processes the request
 **Then** authentication still succeeds — roles are never required to authenticate
 - **And** role-gated endpoints deny the request from the JWT claims (`requireAdmin` -> HTTP 403)
@@ -295,7 +302,8 @@ p += '=' * (-len(p) % 4)
 c = json.loads(base64.urlsafe_b64decode(p))
 print('realm roles:', (c.get('realm_access') or {}).get('roles'))
 " "$NO_ROLES_TOKEN"
-# Expected: None or [] (no realm roles)
+# Expected: a role list that does NOT contain "admin" (Keycloak still adds
+# its default roles — offline_access, uma_authorization, default-roles-<realm>)
 
 # Authentication succeeds without roles — the profile endpoint answers
 HTTP_CODE=$(curl -sk -X GET "https://localhost/api/me" \
@@ -319,41 +327,46 @@ echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
 
 ---
 
-### Test F.7 — Multi-Realm Header Isolation
+### Test F.7 — Multi-Realm Identity Isolation
 
 **Given** two Keycloak realms exist: `genie` and `genie2`
 **When** tokens from each realm make requests
-**Then** each realm resolves a different provisioned ArangoDB document (distinct `_key`)
-**And** each request's role checks read the claims of its own realm's token independently
+**Then** each realm resolves a different provisioned ArangoDB document (distinct `_key`) — one realm's token can never address the other realm's account
+- **And** every role check reads the claims of the caller's own token (role handling is covered by Test F.6)
 
 **Verification:**
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Create user in genie realm with 'user' role
+# Create a user in genie realm (firstName/lastName/emailVerified are required
+# for ROPC logins to succeed — see .claude/rules/SERVER-TESTING.md)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "genie-realm-user",
     "email": "genie@example.com",
+    "firstName": "Genie",
+    "lastName": "User",
+    "emailVerified": true,
     "enabled": true,
-    "credentials": [{ "type": "password", "value": "geniepass123", "temporary": false }],
-    "realmRoles": [{ "id": "user", "name": "user" }]
+    "credentials": [{ "type": "password", "value": "geniepass123", "temporary": false }]
   }'
 
-# Create user in genie2 realm with 'admin' role
+# Create a user in genie2 realm
 curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "genie2-realm-user",
     "email": "genie2@example.com",
+    "firstName": "Genie2",
+    "lastName": "User",
+    "emailVerified": true,
     "enabled": true,
-    "credentials": [{ "type": "password", "value": "genie2pass123", "temporary": false }],
-    "realmRoles": [{ "id": "admin", "name": "admin" }]
+    "credentials": [{ "type": "password", "value": "genie2pass123", "temporary": false }]
   }'
 
 # Get tokens from both realms
@@ -396,7 +409,6 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 
 **Expected Behavior:**
 - Each realm resolves a unique ArangoDB `_key` (distinct provisioned user per realm)
-- Role checks reflect each realm's token claims correctly
 - No cross-contamination between realms
 
 ---
@@ -418,7 +430,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Payload preservation test"}]}')
+  -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')
 
 # Verify response structure
 echo "$RESPONSE" | jq 'keys | sort'

@@ -2848,6 +2848,12 @@ lint:config-validator:
   # lint/format scripts but no CI job ran them — new validators (the
   # #1306/#1322 shell gate, and anything after) could ship with ESLint
   # violations and Prettier drift behind a green pipeline.
+  variables:
+    # Same full-depth fetch lint:backend documents (2026-10-19): the
+    # default depth-20 fetch on a reused runner workspace left stale
+    # bytes of files unchanged within the shallow window — prettier then
+    # checked the wrong copy of a file this job exists to gate.
+    GIT_DEPTH: 0
   before_script:
     - cd tests/config-validator && npm ci
   script:

@@ -2968,6 +2968,72 @@ describe('ChatBotComponent', () => {
       expect(composer.find('.chat-composer__field').attributes('aria-label')).toBe('bare-entry');
     });
 
+    it('a WHITESPACE-ONLY title is no title: the entry is broken and the name falls back to the id (#1382)', async () => {
+      // A whitespace title passes a truthiness check — the gate must
+      // read the same fact the caption assembly implies: whitespace
+      // renders a blank label and announces nothing.
+      const wrapper = await mountWithButtons([
+        {
+          id: 'blank-entry',
+          title: { en: '   ' },
+          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+          category: null,
+          placement: 'composer'
+        }
+      ]);
+      const vm = wrapper.vm;
+
+      expect(vm.quickHelpCardBroken(vm.composerEntry)).toBe(true);
+      // The visible face: the error icon replaces the sparkle, and the
+      // caption names the missing title — the grid's doctrine, both
+      // mounts.
+      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="welcome-composer-error-caption"]').text()).toBe(
+        'chatbot.quickHelpTitleMissing'
+      );
+      // And the accessible name does not inherit the whitespace.
+      expect(wrapper.findComponent({ name: 'ChatComposer' }).props('accessibleName')).toBe('blank-entry');
+    });
+
+    it('the broken face waits for the hierarchy to settle (#1382)', async () => {
+      // Hold the hierarchy's answer: the window under test is the one
+      // where the config has landed but the tree has not.
+      const serviceTreeService = require('../../services/serviceTreeService');
+      let resolveTree;
+      serviceTreeService.getAllCategories.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveTree = resolve;
+          })
+      );
+      const wrapper = await mountWithButtons([
+        {
+          id: 'scope-entry',
+          title: { en: 'Crops card' },
+          icon: { type: 'file', value: '/config/quickhelp/x.svg' },
+          serviceLabels: ['Crops'],
+          category: '2',
+          placement: 'composer'
+        }
+      ]);
+      const vm = wrapper.vm;
+      // The tree is still ON ITS WAY: the scope cannot be verified yet,
+      // and the composer mounts before the grid settles — flashing the
+      // error face here would name a failure recovery is about to end.
+      expect(vm.serviceCategoriesStatus).toBe('loading');
+      expect(vm.composerBrokenFace).toBe(false);
+      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="welcome-composer-leading-mark"]').exists()).toBe(true);
+
+      // Settled: a scope the tree cannot EN-name (an empty tree) is a
+      // real failure — the face appears.
+      resolveTree([]);
+      await flushPromises();
+
+      expect(vm.composerBrokenFace).toBe(true);
+      expect(wrapper.find('[data-testid="welcome-composer-error-icon"]').exists()).toBe(true);
+    });
+
     it('two services sharing a DISPLAY name are two scopes (identity is the EN key)', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

@@ -322,7 +322,23 @@
             @send="handleWelcomeSend"
           >
             <template #leading>
+              <!-- The broken card's face, the grid's doctrine: a broken
+                   entry is a VISIBLE failure, not one the user discovers
+                   at the first refused send. The grid waits for the
+                   hierarchy before rendering; the composer mounts before
+                   it settles, so the face waits with it — a hierarchy
+                   still on its way is not a configuration problem, and
+                   flashing the error icon during load would name a
+                   failure recovery is about to end. -->
+              <AlertTriangle
+                v-if="composerBrokenFace"
+                class="composer-leading-mark config-error-icon"
+                :size="22"
+                aria-hidden="true"
+                data-testid="welcome-composer-error-icon"
+              />
               <Sparkles
+                v-else
                 class="composer-leading-mark"
                 :size="22"
                 aria-hidden="true"
@@ -330,6 +346,12 @@
               />
             </template>
           </ChatComposer>
+          <!-- The tile's own caption, below the composer: the diagnosis
+               the operator reads (the missing title first, then the
+               scope) — the same assembly the grid card shows. -->
+          <div v-if="composerBrokenFace" class="quick-help-error-caption" data-testid="welcome-composer-error-caption">
+            {{ quickHelpCardCaption(composerEntry) }}
+          </div>
         </div>
 
         <!-- The grid waits for the hierarchy: a button carries a scope,
@@ -931,6 +953,15 @@ export default {
     composerEntry() {
       return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
     },
+    // The broken composer entry's visible face, gated on the hierarchy
+    // having settled — the grid's own gate (quickHelpScopeSettled): a
+    // hierarchy still on its way is not a configuration problem, and
+    // the composer mounts before the grid settles. False when no
+    // composer entry is mounted at all.
+    composerBrokenFace() {
+      const entry = this.composerEntry;
+      return !!entry && this.quickHelpScopeSettled && this.quickHelpCardBroken(entry);
+    },
     // The grid keeps every entry whose placement is not the composer —
     // again, the explicit field, not a heuristic from category / action
     // presence. The seven product configs only ever set this on the
@@ -1444,13 +1475,14 @@ export default {
     },
 
     // The card's title, or null when it carries none. An EMPTY title is
-    // no title: the card renders a blank label, and the press gate
-    // refuses it (selectQuickHelpOption) — a silent dead tap. The
-    // mobile twin reads the same fact from the parsed button's own
-    // 'resolvedTitle'; the web's mapped button carries the resolved
-    // title in `service`.
+    // no title — and so is a WHITESPACE-ONLY one: it renders a blank
+    // label and reads as nothing, so the trim is what keeps the press
+    // gate, the caption assembly and the composer's accessible-name
+    // fallback honest. The mobile twin reads the same fact from the
+    // parsed button's own 'resolvedTitle'; the web's mapped button
+    // carries the resolved title in `service`.
     quickHelpCardTitle(button) {
-      return (button && button.service) || null;
+      return ((button && button.service) || '').trim() || null;
     },
 
     // The card's DISPLAY verdict — the twin of the press gate. The

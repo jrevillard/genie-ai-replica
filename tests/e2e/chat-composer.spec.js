@@ -311,10 +311,12 @@ test.describe('config / composer identity', () => {
       /--composer-tint-outline:\s*#?[0-9a-f]+/i
     );
 
-    // Accessible name: aria-label on the composer root OR the leading
-    // image alt. Either is acceptable evidence.
-    const ariaLabel = await composerRoot.getAttribute('aria-label');
-    expect(ariaLabel, `composer aria-label (got ${ariaLabel})`).toBeTruthy();
+    // Accessible name: aria-label on the FIELD — the wrapper div is
+    // role-less, so a generic element's aria-label never reaches the
+    // accessibility tree. The field is what assistive tech reads; its
+    // id is the handle the composer declares (input-id).
+    const ariaLabel = await page.locator('#welcome-composer-input').getAttribute('aria-label');
+    expect(ariaLabel, `composer field aria-label (got ${ariaLabel})`).toBeTruthy();
 
     await ctx.close();
   });
@@ -331,10 +333,7 @@ test.describe('config / composer identity', () => {
       await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
       // The background is derived from the composer's tint; wait for the
       // tint to land before reading the computed paint.
-      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute(
-        'style',
-        /--composer-tint:/i
-      );
+      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute('style', /--composer-tint:/i);
 
       const bg = await page.evaluate(() => {
         const el = document.querySelector('[data-testid="welcome-composer"]');
@@ -489,10 +488,7 @@ test.describe('composer field', () => {
       .poll(
         () =>
           page.evaluate(
-            () =>
-              getComputedStyle(
-                document.querySelector('[data-testid="welcome-composer"].chat-composer')
-              ).boxShadow
+            () => getComputedStyle(document.querySelector('[data-testid="welcome-composer"].chat-composer')).boxShadow
           ),
         { timeout: 5000 }
       )

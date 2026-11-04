@@ -391,6 +391,8 @@ describe('ServiceCategoryService', () => {
           translations: [{ languageCode: 'en', translation: 'Impots' }]
         })
       ).rejects.toThrow("must not include 'EN'");
+      // no mutation at all: validation must reject before the upsert runs
+      expect(mockDb.query).not.toHaveBeenCalled();
     });
   });
 

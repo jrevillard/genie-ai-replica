@@ -96,9 +96,10 @@ class ServiceCategoryService {
 
   /**
    * Validates the translations array of a write payload BEFORE any mutation.
-   * The update paths are delete-then-rebuild: a malformed entry that only
-   * surfaces mid-loop would leave the old translations deleted, so the whole
-   * array is checked up front and bad entries reject the request.
+   * The update paths are upsert-then-GC: a malformed entry that only
+   * surfaces mid-write would leave stale rows behind (the GC pass that
+   * removes them never runs), so the whole array is checked up front and
+   * bad entries reject the request.
    * @param {*} translations - The payload translations array (optional).
    */
   _validateTranslationsPayload(translations) {

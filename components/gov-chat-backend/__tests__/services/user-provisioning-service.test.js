@@ -263,6 +263,8 @@ describe('UserProvisioningService', () => {
       const { logger } = require('../../shared-lib');
       const revalWarns = logger.warn.mock.calls.filter((c) => String(c[0]).includes('revalidation failed'));
       expect(revalWarns).toHaveLength(1);
+      // The once-per-TTL line must identify the affected account
+      expect(revalWarns[0][0]).toContain('user document user-1');
     });
 
     it('should serve a valid cache hit with exactly one revalidation read (no UPSERT)', async () => {

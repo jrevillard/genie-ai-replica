@@ -80,6 +80,17 @@ function profileMatches(cachedUser, decodedToken) {
 const REVALIDATION_TIMEOUT_MS = 3000;
 
 /**
+ * Warn about a revalidation fail-open, at most once per TTL window so a
+ * degraded database does not put a warn line on every authenticated request.
+ */
+function warnRevalidationThrottled(message) {
+  if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
+    _lastRevalWarnAt = Date.now();
+    logger.warn(`[UserProvisioning] Soft-delete revalidation ${message}`);
+  }
+}
+
+/**
  * Whether the document a cached copy points at has been soft-deleted
  * out-of-band. Looked up by the cached document's _key (which survives a
  * GDPR erasure) but matches only in-place soft-deletes: an erasure nulls
@@ -114,22 +125,16 @@ async function isSoftDeleted(cachedUser) {
       // A DB consistently slower than the deadline fail-opens here; say so
       // (rate-limited like the failure path) so the latency and the stale
       // copies are traceable in the logs
-      if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
-        _lastRevalWarnAt = Date.now();
-        logger.warn(
-          `[UserProvisioning] Soft-delete revalidation timed out after ${REVALIDATION_TIMEOUT_MS}ms, serving cached copies`
-        );
-      }
+      warnRevalidationThrottled(
+        `timed out after ${REVALIDATION_TIMEOUT_MS}ms, serving cached copy for user document ${cachedUser._key}`
+      );
       return false;
     }
     return outcome;
   } catch (err) {
     // Fail open (bounded by the TTL) — but warn at most once per TTL so a
     // DB outage does not put a warn line on every authenticated request
-    if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
-      _lastRevalWarnAt = Date.now();
-      logger.warn(`[UserProvisioning] Soft-delete revalidation failed, serving cached copies: ${err.message}`);
-    }
+    warnRevalidationThrottled(`failed, serving cached copy for user document ${cachedUser._key}: ${err.message}`);
     return false;
   } finally {
     clearTimeout(timer);

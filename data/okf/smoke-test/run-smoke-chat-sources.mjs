@@ -254,10 +254,28 @@ async function main() {
 
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---
   console.log('[3] CAP-1 chat citation identity');
+  // WAIT for the graph set to include this run's repo: the authz-resolver
+  // caches the serving set — a chat fired seconds after ingest cites a
+  // STALE set (live 2026-11-04: attempt 13's answer cited only swept-away
+  // repos). The serving-reads /authz/graphs endpoint is the same view the
+  // carrier builds from.
+  const ownGraph = `OKF_${repoA.id}_v1`;
+  const graphDeadline = Date.now() + 300000;
+  let graphSetVisible = false;
+  while (Date.now() < graphDeadline) {
+    const g = await call('GET', '/api/okf/authz/graphs', SCOPELESS);
+    const graphs = JSON.stringify(g.json || {});
+    if (g.status === 200 && graphs.includes(repoA.id)) {
+      graphSetVisible = true;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 10000));
+  }
+  if (!graphSetVisible) throw new Error(`graph set never showed ${ownGraph} within 300s (authz-resolver cache)`);
+  pass(`graph set includes this run's repo (${ownGraph})`);
   const chat = await askChat(SCOPELESS, 'How do citizens request an alpha appointment?');
   // Only THIS run's repo is the subject — a citation from an older repo that
   // outlived its deletion (pre-fix runs) says nothing about CAP-1.
-  const ownGraph = `OKF_${repoA.id}_v1`;
   const okfSources = chat.sources.filter((s) => s.source === 'okf-concept');
   const own = okfSources.filter((s) => s.graph_name === ownGraph);
   const zombies = okfSources.length - own.length;

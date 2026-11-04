@@ -13,6 +13,7 @@ const {
   isHuskDoc,
   findDivergences,
   HUSK_IDENTITY_FIELDS,
+  HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL
@@ -64,6 +65,13 @@ describe('isHuskDoc', () => {
     expect(isHuskDoc({ ...huskDoc, name: 'Someone' })).toBe(false);
   });
 
+  // Only _key/_id/_rev are system fields — any other underscore-prefixed
+  // key is an application field and disqualifies the document (matching the
+  // AQL, which subtracts the exact allowlist from ATTRIBUTES(u)).
+  it('rejects underscore-prefixed application fields that are not system fields', () => {
+    expect(isHuskDoc({ ...huskDoc, _migration_state: 'pending' })).toBe(false);
+  });
+
   it('rejects a healthy provisioned document', () => {
     expect(
       isHuskDoc({
@@ -103,10 +111,13 @@ describe('HUSK_MATCHER_AQL', () => {
     expect(HUSK_MATCHER_AQL).toContain('FILTER u.deleted == null || u.deleted == false');
   });
 
-  it('restricts the remaining attributes to the allowed set', () => {
-    const allowedAql = `['${HUSK_ALLOWED_FIELDS.join("', '")}']`;
-    expect(HUSK_MATCHER_AQL).toContain('MINUS(ATTRIBUTES(u, true), ');
-    expect(HUSK_MATCHER_AQL).toContain(allowedAql);
+  it('restricts the remaining attributes to the exact system+allowed allowlist', () => {
+    // ATTRIBUTES(u) keeps the internal fields, and the MINUS subtracts the
+    // exact allowlist — so an underscore-prefixed non-system field counts as
+    // an extra, the same as in the JS predicate.
+    const allowlistAql = `['${[...HUSK_SYSTEM_FIELDS, ...HUSK_ALLOWED_FIELDS].join("', '")}']`;
+    expect(HUSK_MATCHER_AQL).toContain('MINUS(ATTRIBUTES(u), ');
+    expect(HUSK_MATCHER_AQL).toContain(allowlistAql);
     expect(HUSK_MATCHER_AQL).toContain(')) == 0');
   });
 
@@ -136,11 +147,15 @@ describe('HUSK_REMOVAL_AQL', () => {
   });
 
   it('re-asserts the husk signature before removing', () => {
-    // The signature fragment is interpolated at export time; the identity
-    // FILTER lines below are its visible expansion in the built query.
+    // The signature fragment is interpolated at export time; the lines below
+    // are its visible expansion in the built query — the identity absences,
+    // the soft-delete carve-out and the allowed-field subset, so a partial
+    // template edit that drops any single clause reddens the suite.
     for (const field of HUSK_IDENTITY_FIELDS) {
       expect(HUSK_REMOVAL_AQL).toContain(`FILTER u.${field} == null`);
     }
+    expect(HUSK_REMOVAL_AQL).toContain('FILTER u.deleted == null || u.deleted == false');
+    expect(HUSK_REMOVAL_AQL).toContain('MINUS(ATTRIBUTES(u), ');
   });
 
   it('targets the collection and removes the matched documents', () => {

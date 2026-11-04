@@ -28,12 +28,12 @@
  *
  * Environment variables (from the shell, or a .env at the repo root):
  *   ARANGO_URL        (default http://localhost:8529)
- *   ARANGO_DB         (default genie-ai — the docker-compose default, and the
- *                     same default as the sibling standalone scripts; the app
- *                     code's own fallback is 'node-services', so deployments
- *                     that rely on that, or k8s deployments using _system,
- *                     must set ARANGO_DB explicitly — check the printed
- *                     'Database:' line before trusting the report)
+ *   ARANGO_DB         (default genie-ai — the docker-compose default, also
+ *                     used by run-migrations.js and seed-synthetic-data.js;
+ *                     other siblings differ — the app code's own fallback is
+ *                     'node-services', create-ingestion-log.js uses
+ *                     ARANGO_DATABASE — so verify the printed 'Database:'
+ *                     line before trusting the report)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
  *   ARANGO_COLLECTION (default users)
@@ -42,12 +42,13 @@
 const { Database } = require('arangojs');
 const path = require('path');
 
-require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
-
 const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
 const SAMPLE_LIMIT = 50;
 
 // --- The husk signature, defined once --------------------------------------
+// ArangoDB's own document fields (the complete set — anything else that
+// looks internal but is not one of these disqualifies the document).
+const HUSK_SYSTEM_FIELDS = ['_key', '_id', '_rev'];
 // Identity fields the document must LACK entirely (null or missing).
 const HUSK_IDENTITY_FIELDS = ['iss_sub', 'sub', 'email'];
 // The only non-internal fields it may CARRY: the timestamps the old reset
@@ -72,7 +73,9 @@ function isHuskDoc(doc) {
   if (!(doc.deleted == null || doc.deleted === false)) {
     return false;
   }
-  const extraFields = Object.keys(doc).filter((key) => !key.startsWith('_') && !HUSK_ALLOWED_FIELDS.includes(key));
+  const extraFields = Object.keys(doc).filter(
+    (key) => !HUSK_SYSTEM_FIELDS.includes(key) && !HUSK_ALLOWED_FIELDS.includes(key)
+  );
   return extraFields.length === 0;
 }
 
@@ -96,11 +99,16 @@ const IDENTITY_FILTERS_AQL = HUSK_IDENTITY_FIELDS.map((field) => `FILTER u.${fie
 const HUSK_SIGNATURE_FILTERS_AQL = [
   IDENTITY_FILTERS_AQL,
   'FILTER u.deleted == null || u.deleted == false',
-  `FILTER LENGTH(MINUS(ATTRIBUTES(u, true), [${HUSK_ALLOWED_FIELDS.map((field) => `'${field}'`).join(', ')}])) == 0`
+  // ATTRIBUTES(u) keeps the internal fields, and MINUS subtracts the exact
+  // allowlist (system fields + allowed set) — an underscore-prefixed
+  // application field the document should not carry therefore disqualifies
+  // it here exactly as it does in the JS predicate.
+  `FILTER LENGTH(MINUS(ATTRIBUTES(u), [${[...HUSK_SYSTEM_FIELDS, ...HUSK_ALLOWED_FIELDS]
+    .map((field) => `'${field}'`)
+    .join(', ')}])) == 0`
 ].join('\n  ');
 
-// ATTRIBUTES(u, true) strips the internal attributes (_key/_id/_rev); what
-// remains must be a subset of the allowed fields.
+// What remains on a husk is exactly the system fields plus the allowed set.
 const HUSK_MATCHER_AQL = `
 FOR u IN @@collection
   ${HUSK_SIGNATURE_FILTERS_AQL}
@@ -243,16 +251,29 @@ async function main() {
   });
   // The removal re-asserts the signature, so docs disqualified since the
   // SELECT are skipped server-side — report what actually executed, not the
-  // selection size.
+  // selection size. If the stats are missing, say so and fail rather than
+  // claim success: on a destructive path the honest answer is "unknown".
   const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
-  const removed = typeof writesExecuted === 'number' ? writesExecuted : husks.length;
+  if (typeof writesExecuted !== 'number') {
+    console.error(
+      'ABORT: the removal result carried no writesExecuted stats — the actual ' +
+        'number of removed documents is unknown. Re-run the dry run to verify.'
+    );
+    process.exitCode = 1;
+    return;
+  }
   console.log(
-    `Done. ${removed} of ${husks.length} selected documents removed.` +
-      (removed < husks.length ? ` ${husks.length - removed} no longer matched the signature (skipped).` : '')
+    `Done. ${writesExecuted} of ${husks.length} selected documents removed.` +
+      (writesExecuted < husks.length
+        ? ` ${husks.length - writesExecuted} no longer matched the signature (skipped).`
+        : '')
   );
 }
 
 if (require.main === module) {
+  // Loaded only for CLI execution — requiring this module (e.g. from the
+  // tests) must not pull the operator's .env into the test process.
+  require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
   main().catch((err) => {
     console.error('Report failed:', err);
     process.exitCode = 1;
@@ -263,6 +284,7 @@ module.exports = {
   isHuskDoc,
   findDivergences,
   HUSK_IDENTITY_FIELDS,
+  HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL

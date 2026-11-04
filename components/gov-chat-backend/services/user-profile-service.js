@@ -3,7 +3,7 @@ const fs = require('fs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
-const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
+const { JIT_PROTECTED_FIELDS, SYSTEM_PRESERVED_FIELDS } = require('../constants/jit-fields');
 
 class UserProfileService {
   constructor() {
@@ -380,49 +380,67 @@ class UserProfileService {
     try {
       logger.info('UserProfileService.reset_user_data_start', { userKey });
 
-      const currentUserDoc = await this.getUserProfile(userKey);
+      // Read the stored document directly — getUserProfile() promotes
+      // customSettings sub-keys to the top level, and a promoted user-supplied
+      // value must never be preserved as a system-managed identity field.
+      const currentUserDoc = await this.users.document(userKey);
       if (!currentUserDoc) {
         logger.warn('UserProfileService.user_not_found', { userKey });
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
-      const preservedData = {
-        createdAt: currentUserDoc.createdAt,
-        updatedAt: new Date().toISOString()
-      };
+      // Preserve the system-managed fields (SYSTEM_PRESERVED_FIELDS): losing
+      // iss_sub/email would make the provisioning UPSERT miss this document
+      // on next login and INSERT a husk duplicate; losing the audit markers
+      // would destroy soft-delete/GDPR state.
+      const preservedData = {};
+      for (const field of SYSTEM_PRESERVED_FIELDS) {
+        if (field === 'updatedAt') {
+          continue; // bumped to now below, not carried over
+        }
+        if (currentUserDoc[field] !== undefined) {
+          preservedData[field] = currentUserDoc[field];
+        }
+      }
+      preservedData.updatedAt = new Date().toISOString();
 
       logger.debug('UserProfileService.preserving_fields', {
         userKey,
         fields: Object.keys(preservedData)
       });
 
-      await this.deleteUserFiles(currentUserDoc);
+      // A single replace — the fallback update that used to run on replace
+      // failure merged into the existing document, so it never wiped the
+      // profile data while still answering success.
+      await this.users.replace(userKey, preservedData);
+      logger.info('UserProfileService.user_document_replaced', { userKey });
 
+      // Files are removed only after the write succeeded — a failed reset
+      // must not have already destroyed the user's uploads. A deletion
+      // failure after a committed write must not answer 500 for a reset
+      // that already happened: warn and report success with a flag so the
+      // caller knows files may remain on disk.
+      let filesDeletionFailed = false;
       try {
-        await this.users.replace(userKey, preservedData);
-        logger.info('UserProfileService.user_document_replaced', { userKey });
-      } catch (replaceError) {
-        logger.warn('UserProfileService.replace_operation_failed', {
+        await this.deleteUserFiles(currentUserDoc);
+      } catch (fileError) {
+        filesDeletionFailed = true;
+        logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {
           userKey,
-          error: replaceError.message
+          error: fileError.message
         });
-
-        await this.users.update(userKey, preservedData, {
-          keepNull: true,
-          mergeObjects: false,
-          overwrite: true
-        });
-        logger.info('UserProfileService.user_document_updated_with_overwrite', { userKey });
       }
 
       logger.info('UserProfileService.reset_user_data_completed', {
         userKey,
         fieldsPreserved: Object.keys(preservedData).length,
+        filesDeletionFailed,
         durationMs: Date.now() - startTime
       });
       return {
         userKey,
         fieldsPreserved: Object.keys(preservedData).length,
+        filesDeletionFailed,
         success: true
       };
     } catch (error) {

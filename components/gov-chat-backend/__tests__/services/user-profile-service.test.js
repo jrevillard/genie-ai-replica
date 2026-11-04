@@ -5,7 +5,8 @@ require('../setup-env');
 // Tracker for fs operations — referenced by mock factory (Jest allows mock-prefixed vars)
 const mockFsTracker = {
   rmCalls: [],
-  existsResults: true
+  existsResults: true,
+  rmImplementation: null
 };
 
 // Mock fs BEFORE requiring service — constructor uses it
@@ -21,6 +22,9 @@ jest.mock('fs', () => ({
     readFile: jest.fn().mockResolvedValue(Buffer.from('filecontent')),
     rm: jest.fn().mockImplementation((...args) => {
       mockFsTracker.rmCalls.push(args);
+      if (mockFsTracker.rmImplementation) {
+        return mockFsTracker.rmImplementation(...args);
+      }
       return Promise.resolve();
     })
   }
@@ -65,10 +69,6 @@ jest.mock('../../services/path-sanitizer', () => ({
   sanitizePath: jest.fn((base, name) => `${base}/${name}`)
 }));
 
-jest.mock('../../constants/jit-fields', () => ({
-  JIT_PROTECTED_FIELDS: ['email', 'firstName', 'lastName', 'username']
-}));
-
 function createMockCollection() {
   return {
     save: jest.fn(),
@@ -98,6 +98,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFsTracker.rmCalls = [];
   mockFsTracker.existsResults = true;
+  mockFsTracker.rmImplementation = null;
 
   mockUsers = createMockCollection();
 
@@ -262,13 +263,25 @@ describe('UserProfileService', () => {
   });
 
   describe('resetUserData', () => {
+    // Shape of a provisioned user doc (user-provisioning-service UPSERT + legacy migration)
+    const makeUserDoc = (overrides = {}) => ({
+      _key: 'user-1',
+      iss_sub: 'https://issuer.test|abc-123',
+      iss: 'https://issuer.test',
+      sub: 'abc-123',
+      email: 'user@test.com',
+      name: 'John Doe',
+      emailVerified: true,
+      roles: ['genie-user'],
+      active: true,
+      deleted: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-06-01T00:00:00.000Z',
+      ...overrides
+    });
+
     it('should reset user data preserving createdAt', async () => {
-      mockUsers.document.mockResolvedValue({
-        _key: 'user-1',
-        email: 'user@test.com',
-        firstName: 'John',
-        createdAt: '2026-01-01T00:00:00.000Z'
-      });
+      mockUsers.document.mockResolvedValue(makeUserDoc());
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);
       expect(result.fieldsPreserved).toBeGreaterThan(0);
@@ -283,19 +296,95 @@ describe('UserProfileService', () => {
       await expect(userProfileService.resetUserData('missing')).rejects.toThrow();
     });
 
-    it('should fallback to update with overwrite on replace failure', async () => {
-      mockUsers.document.mockResolvedValue({
-        _key: 'user-1',
-        createdAt: '2026-01-01T00:00:00.000Z'
-      });
+    it('should preserve identity fields so provisioning re-matches the same document after reset', async () => {
+      mockUsers.document.mockResolvedValue(
+        makeUserDoc({
+          // profile data — what the reset is supposed to wipe
+          personalIdentification: { fullName: 'John Doe' },
+          customSettings: { theme: 'dark' }
+        })
+      );
+
+      await userProfileService.resetUserData('user-1');
+
+      expect(mockUsers.replace).toHaveBeenCalledTimes(1);
+      const preserved = mockUsers.replace.mock.calls[0][1];
+
+      // Identity fields survive — the provisioning UPSERT matches on iss_sub,
+      // the legacy migration matches on email. Losing either INSERTs a husk doc.
+      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
+      expect(preserved.sub).toBe('abc-123');
+      expect(preserved.iss).toBe('https://issuer.test');
+      expect(preserved.email).toBe('user@test.com');
+      expect(preserved.name).toBe('John Doe');
+      expect(preserved.emailVerified).toBe(true);
+      expect(preserved.roles).toEqual(['genie-user']);
+      expect(preserved.active).toBe(true);
+      expect(preserved.deleted).toBe(false);
+      expect(preserved.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      // updatedAt is bumped to now — not carried over from the stored document
+      expect(preserved.updatedAt).not.toBe('2026-06-01T00:00:00.000Z');
+      expect(new Date(preserved.updatedAt).getTime()).toBeGreaterThan(new Date('2026-06-01T00:00:00.000Z').getTime());
+
+      // Profile data is still wiped — that is the reset's purpose
+      expect(preserved).not.toHaveProperty('personalIdentification');
+      expect(preserved).not.toHaveProperty('customSettings');
+    });
+
+    it('should not preserve a customSettings value promoted to the top level as an identity field', async () => {
+      // getUserProfile() promotes customSettings sub-keys to the top level;
+      // resetUserData reads the stored document directly, so a user-controlled
+      // customSettings entry keyed "name" can never be preserved as system-managed identity.
+      mockUsers.document.mockResolvedValue(makeUserDoc({ name: null, customSettings: { name: 'user-injected text' } }));
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.name).toBeNull();
+      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
+    });
+
+    it('should preserve the soft-delete and GDPR audit markers', async () => {
+      mockUsers.document.mockResolvedValue(
+        makeUserDoc({ deleted: true, deletedAt: '2026-06-01T00:00:00.000Z', erasedAt: '2026-06-02T00:00:00.000Z' })
+      );
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.deleted).toBe(true);
+      expect(preserved.deletedAt).toBe('2026-06-01T00:00:00.000Z');
+      expect(preserved.erasedAt).toBe('2026-06-02T00:00:00.000Z');
+    });
+
+    it('should not delete user files, not fall back to update, and rethrow when the replace fails', async () => {
+      mockUsers.document.mockResolvedValue(makeUserDoc());
       mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
+
+      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow('replace fail');
+      expect(mockUsers.update).not.toHaveBeenCalled();
+      expect(mockFsTracker.rmCalls.length).toBe(0);
+    });
+
+    it('should still succeed when user file deletion fails after the reset write', async () => {
+      // The reset is applied once the document write commits; a leftover
+      // uploads directory (rm EACCES/EBUSY) must not answer 500 for a
+      // reset that already happened — but the caller must be told.
+      mockUsers.document.mockResolvedValue(makeUserDoc());
+      mockFsTracker.rmImplementation = () => Promise.reject(new Error('EACCES: permission denied'));
+
       const result = await userProfileService.resetUserData('user-1');
       expect(result.success).toBe(true);
-      expect(mockUsers.update).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ createdAt: '2026-01-01T00:00:00.000Z' }),
-        expect.objectContaining({ overwrite: true })
-      );
+      expect(result.filesDeletionFailed).toBe(true);
+      expect(mockFsTracker.rmCalls.length).toBe(1);
+    });
+
+    it('should not report filesDeletionFailed when user files are deleted cleanly', async () => {
+      mockUsers.document.mockResolvedValue(makeUserDoc());
+
+      const result = await userProfileService.resetUserData('user-1');
+      expect(result.success).toBe(true);
+      expect(result.filesDeletionFailed).toBeFalsy();
     });
   });
 

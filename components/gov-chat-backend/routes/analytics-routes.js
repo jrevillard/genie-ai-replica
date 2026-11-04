@@ -281,7 +281,11 @@ module.exports = (analyticsService) => {
      */
     router.post('/events', async (req, res) => {
       try {
-        const { eventType, eventData } = req.body ?? {};
+        // Parsers leave req.body undefined when no parser matched the
+        // Content-Type, and a JSON scalar body arrives as a string — either
+        // way the handler only ever inspects one object-shaped binding.
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const { eventType, eventData } = body;
 
         if (!eventType) {
           logger.warn('Missing required field: eventType');
@@ -297,7 +301,7 @@ module.exports = (analyticsService) => {
         // the wire wants `eventData` (EventRequest): a body that still
         // arrives under the legacy `data` key is refused with 400 instead
         // of being silently stored as an empty payload.
-        if (req.body && 'data' in req.body) {
+        if ('data' in body) {
           logger.warn("Rejected legacy 'data' payload key on POST /api/analytics/events");
           return res.status(400).json({ message: "Unknown field 'data': send the payload under 'eventData'." });
         }

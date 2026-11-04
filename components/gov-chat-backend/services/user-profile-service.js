@@ -396,7 +396,7 @@ class UserProfileService {
       `);
       const rows = await cursor.all();
       if (rows.length === 0) {
-        logger.warn('UserProfileService.user_not_found', { userKey });
+        // One warn per miss — the catch below logs it; no pre-throw duplicate.
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
       const fieldsPreserved = rows[0];

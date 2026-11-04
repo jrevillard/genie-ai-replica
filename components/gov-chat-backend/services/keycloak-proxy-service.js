@@ -315,9 +315,11 @@ const keycloakProxyService = {
 
   /**
    * Remove the user's uploaded files directory, tolerating failure (warn only).
-   * Runs on both erasure paths (success and PARTIAL_ERASURE) — the erasure
-   * UPDATE may already be committed when a failure surfaces, so a cleanup
-   * failure must never fail the operation that already erased the account.
+   * Runs on the success path and on a failure AFTER a committed erasure
+   * (ERASURE_COMMITTED_LATE_FAILURE) — never before the commit (a failed
+   * pre-commit erasure leaves the record intact and the files recoverable).
+   * A cleanup failure must never fail the operation that already erased the
+   * account.
    * @param {string} userKey - ArangoDB _key
    */
   async _cleanupUploads(userKey) {

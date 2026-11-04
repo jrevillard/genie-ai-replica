@@ -3,11 +3,13 @@
 // NO arangojs mock in this suite: the unit suite for resetUserData asserts
 // the query through the inlining aql test-mock, which proves the mock's
 // world, not the shipped one (the repo's erasure-tombstone-aql.test.js
-// precedent). This suite renders the reset query's structure with the REAL
-// aql tag and asserts the preserve list travels as a bind parameter (never
-// inlined into the query text), so a change in how the preserve set reaches
-// the database redds here. Full KEEP/MERGE/REPLACE database semantics are
-// covered only by the manual E2E phases (docs/e2e-tests/).
+// precedent). This suite renders the SAME QUERY STRUCTURE with the REAL
+// aql tag and asserts the bind semantics of that structure (the preserve
+// list travels as a bind parameter, never inlined into the query text).
+// Known limit, identical to the tombstone suite's: the template is a copy —
+// a production refactor of the query shape cannot redden this file; the
+// unit suite gates the bound values. Full KEEP/MERGE/REPLACE database
+// semantics are covered only by the manual E2E phases (docs/e2e-tests/).
 const { aql } = require('arangojs');
 
 const PRESERVE_FIELDS = [

@@ -44,12 +44,14 @@ const JIT_PROTECTED_FIELDS = [
 
 // Every backend-owned field a destructive user-document operation must carry
 // over: the JIT-managed set plus the soft-delete and GDPR erase audit
-// markers (written by userProvisioningService / keycloak-proxy-service).
+// markers (written by userProvisioningService / keycloak-proxy-service),
+// including the erasure tombstone digest (erased_key) — losing it would let
+// a still-valid token re-provision an erased identity (the #1432 class).
 // Deliberately derived from JIT_PROTECTED_FIELDS rather than listed
 // independently: a field added to the strip list but missed here would let a
 // reset destroy system state (the bug this set exists to prevent), while the
 // reverse (preserved but not strip-relevant) is benign.
-const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt'];
+const SYSTEM_PRESERVED_FIELDS = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt', 'erased_key'];
 
 // Client display/notification preference fields the reset must carry over.
 // PUT /api/me stores them top-level on the user document (the mobile client

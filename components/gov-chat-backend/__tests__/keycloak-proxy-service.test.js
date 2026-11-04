@@ -408,6 +408,24 @@ describe('keycloak-proxy-service', () => {
       expect(logger.warn).toHaveBeenCalled();
     });
 
+    it('should attempt the uploads cleanup even when the duplicate-removal query fails (#1441)', async () => {
+      // The duplicate-removal REMOVE runs after the committed erasure UPDATE;
+      // its failure must not skip the uploads cleanup — the files belong to an
+      // erased account whether or not the racing duplicate existed.
+      const userProfileService = require('../services/user-profile-service');
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' })); // resolve
+      db.query.mockResolvedValueOnce({}); // erasure UPDATE commits
+      db.query.mockRejectedValueOnce(new Error('write conflict')); // duplicate REMOVE fails
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure');
+      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith({ _key: 'user-key' });
+    });
+
     it('should log "User erased" message (distinct from soft-delete)', async () => {
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));

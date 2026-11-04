@@ -319,7 +319,26 @@ describe('UserProfileService', () => {
       await userProfileService.resetUserData('user-1');
 
       const preserveList = boundPreserveList();
-      expect(preserveList).toEqual(expect.arrayContaining(['deleted', 'deletedAt', 'erasedAt']));
+      expect(preserveList).toEqual(expect.arrayContaining(['deleted', 'deletedAt', 'erasedAt', 'erased_key']));
+    });
+
+    it('should preserve the exact system-owned set (nothing more, nothing less)', async () => {
+      // Guards both drift directions: a field dropped from the preserve set is
+      // destroyed by the REPLACE (the #1432 tombstone loss class), and a field
+      // added beyond SYSTEM_PRESERVED_FIELDS would survive a reset it must not.
+      // Limit: the query itself is exercised through the mock — the KEEP/MERGE
+      // AQL semantics are validated by the CI contract run against real
+      // ArangoDB, not here.
+      mockDb.query.mockResolvedValueOnce(mockQueryResult(12));
+      await userProfileService.resetUserData('user-1');
+
+      const { SYSTEM_PRESERVED_FIELDS } = require('../../constants/jit-fields');
+      const preserveList = boundPreserveList();
+      expect(preserveList).toEqual(SYSTEM_PRESERVED_FIELDS.filter((f) => f !== 'updatedAt'));
+      // The preserve set is read from the STORED document server-side (the
+      // KEEP loop variable), never from a client-facing profile read.
+      const text = mockDb.query.mock.calls[0][0].strings.join(' ? ');
+      expect(text).toContain('KEEP(u,');
     });
 
     it('should not carry updatedAt over from the stored document (bumped server-side)', async () => {

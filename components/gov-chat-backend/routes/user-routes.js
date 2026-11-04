@@ -132,6 +132,7 @@ module.exports = (userService) => {
    *                   type: string
    *                 fieldsPreserved:
    *                   type: integer
+   *                   description: Informational count of system-managed fields carried over from the stored document (excludes the updated-at bump).
    *                 filesDeletionFailed:
    *                   type: boolean
    *                   description: True when the uploaded files could not be removed after the reset committed — files may remain on disk.

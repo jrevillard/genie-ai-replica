@@ -289,6 +289,10 @@ const keycloakProxyService = {
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
+      // The erasure UPDATE may already be committed (a late duplicate-removal
+      // failure lands here) — attempt the uploads cleanup before surfacing
+      // the error, so a committed erasure never leaves the files behind.
+      await this._cleanupUploads(userKey);
       throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
         cause: arangoError
       });
@@ -298,6 +302,16 @@ const keycloakProxyService = {
     // is committed by now, so a deletion failure must not answer 500 for an
     // erasure that already happened: warn and report success (same contract
     // as resetUserData's filesDeletionFailed handling).
+    await this._cleanupUploads(userKey);
+  },
+
+  /**
+   * Remove the user's uploaded files directory, tolerating failure (warn only).
+   * Used by the erasure paths — a cleanup failure after a committed erasure
+   * must not fail the operation that already erased the account.
+   * @param {string} userKey - ArangoDB _key
+   */
+  async _cleanupUploads(userKey) {
     try {
       await userProfileService.deleteUserFiles({ _key: userKey });
     } catch (fileError) {

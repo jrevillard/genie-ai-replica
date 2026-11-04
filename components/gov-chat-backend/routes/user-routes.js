@@ -190,8 +190,22 @@ module.exports = (userService) => {
    *     responses:
    *       200:
    *         description: Account deleted successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 message:
+   *                   type: string
+   *                 filesDeletionFailed:
+   *                   type: boolean
+   *                   description: True when the uploaded files could not be removed after the erasure committed — files may remain on disk.
    *       401:
    *         description: Authentication required
+   *       404:
+   *         description: User not found
    *       500:
    *         description: Server error
    */
@@ -201,15 +215,30 @@ module.exports = (userService) => {
       const userKey = req.user._key;
       logger.info(`[DELETE] Account deletion requested for user ${userId}`);
 
-      await keycloakProxyService.deleteUser(userKey);
+      const result = await keycloakProxyService.deleteUser(userKey);
 
       logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
-      res.json({ success: true, message: 'Account deleted' });
+      res.json({
+        success: true,
+        message: 'Account deleted',
+        filesDeletionFailed: result.filesDeletionFailed === true
+      });
     } catch (error) {
       // deleteUser tolerates a Keycloak 404 (user already gone) internally —
-      // no 404 path exists here; failures are server-side (500).
-      logger.error(`[DELETE] Error deleting account: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
+      // a vanished ArangoDB record surfaces as a typed NotFoundError instead.
+      // Typed AppErrors carry their own status and a client-facing message;
+      // anything else (driver errors, wrapped responses) is 500 with a
+      // generic message — internal error text never reaches the client.
+      const isTyped = error instanceof AppError;
+      const status = isTyped ? error.statusCode : 500;
+      const message = isTyped ? error.message : 'Failed to delete account';
+      // Client-condition failures (404) are warn-grade without a stack — an
+      // expected outcome, not alerting noise; only server-side failures log
+      // error-grade with the throw-site stack.
+      const logFailedDelete = status >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
+      const logContext = status >= 500 ? { stack: error.stack } : {};
+      logFailedDelete(`[DELETE] Error deleting account: ${error.message}`, logContext);
+      res.status(status).json({ success: false, message });
     }
   });
 

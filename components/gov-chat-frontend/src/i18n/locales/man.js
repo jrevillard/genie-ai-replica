@@ -982,6 +982,7 @@ export default {
       'I lafiya la ka i la akaanti kpalan le ti? Nye nungo in maan, nying si tɛna kurun. I la datha bee yɛrɛ kpalan.',
     delete: 'Kpalan',
     accountDeleted: 'I la akaanti ye kpalan don.',
+    accountDeletedFilesFailed: 'I la kaunti fitita benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.',
     failedToDeleteAccount: 'Akaanti kpalan ma ɲin. I si ñining tugung hake.'
   },
   userProfile: {

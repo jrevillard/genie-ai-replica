@@ -972,6 +972,7 @@ export default {
     confirmDeleteAccount: '您确定要删除您的账户吗？此操作是永久性的，无法撤销。您的所有数据将被清除。',
     delete: '删除',
     accountDeleted: '您的账户已被删除。',
+    accountDeletedFilesFailed: '账户已删除，但部分存储文件无法删除。请联系管理员。',
     failedToDeleteAccount: '删除账户失败。请稍后重试。'
   },
   userProfile: {

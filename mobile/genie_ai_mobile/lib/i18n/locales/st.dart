@@ -561,6 +561,8 @@ const Map<String, dynamic> stLocale = {
         "Dintlha tsa profaele ya hao di setilwe botjha ka katleho.",
     "userDataResetFilesFailed":
         "Dintlha tsa profaele ya hao di setilwe botjha, empa faele tse ling tsa boleng ha ea tlosa. Ka kopo ikopanye le motsamaisi.",
+    "accountDeletedFilesFailed":
+        "Akaunti ya hao e phumotse, empa faele tse ling tsa boleng ha ea tlosa. Ka kopo ikopanye le motsamaisi.",
     "failedToResetUserData":
         "Ho hlotsoe ho seta dintlha tsa profaele ya hao botjha. Ka kopo leka hape hamorao.",
     "changingEmailTo": "Ho fetola imeile ya hao ho isa ho",

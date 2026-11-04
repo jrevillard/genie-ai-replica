@@ -1002,6 +1002,8 @@ export default {
     deleteAccountTitle: 'Konto löschen',
     delete: 'Löschen',
     accountDeleted: 'Ihr Konto wurde gelöscht.',
+    accountDeletedFilesFailed:
+      'Ihr Konto wurde gelöscht, aber einige gespeicherte Dateien konnten nicht entfernt werden. Bitte kontaktieren Sie einen Administrator.',
     failedToDeleteAccount: 'Fehler beim Löschen Ihres Kontos. Bitte versuchen Sie es später erneut.'
   },
   userProfile: {

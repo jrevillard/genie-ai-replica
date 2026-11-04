@@ -225,9 +225,24 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           variant: DsButtonVariant.danger,
           onPressed: () async {
             Navigator.pop(context);
+            // Captured before any await: the outcome SnackBar must render
+            // even if the user navigates away mid-deletion (the widget's own
+            // context would be defunct by then).
+            final messenger = ScaffoldMessenger.of(context);
             try {
-              await _userService.deleteAccount();
+              final response = await _userService.deleteAccount();
               await ref.read(authProvider.notifier).logout();
+              // Shown AFTER the logout, on the root messenger: a SnackBar
+              // fired before the logout would expire (its default duration)
+              // while the Keycloak end-session round trip was still running,
+              // and the user would land on the login screen with no
+              // indication that files may remain on disk.
+              if (response['filesDeletionFailed'] == true) {
+                _showSettingsSnackBar(
+                  messenger,
+                  "settings.accountDeletedFilesFailed",
+                );
+              }
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
@@ -236,12 +251,14 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 );
               }
             } catch (e) {
-              if (mounted) {
-                _showSettingsSnackBar(
-                  ScaffoldMessenger.of(context),
-                  "accountDeletionFailed",
-                );
-              }
+              // The captured root messenger, not ScaffoldMessenger.of(context):
+              // the user may have navigated away while the request was in
+              // flight — the outcome must still surface (same shape as the
+              // reset flow's catch below).
+              _showSettingsSnackBar(
+                messenger,
+                "settings.accountDeletionFailed",
+              );
             }
           },
         ),

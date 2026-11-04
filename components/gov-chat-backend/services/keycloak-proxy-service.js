@@ -2,6 +2,7 @@
 
 const { aql } = require('arangojs');
 const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const { NotFoundError } = require('../middleware/errors');
 const { GOV_PROFILE_SECTIONS } = require('../constants/jit-fields');
 const userProvisioningService = require('./user-provisioning-service');
 const userProfileService = require('./user-profile-service');
@@ -42,7 +43,8 @@ const keycloakProxyService = {
    * @returns {Promise<{sub: string|null, issSub: string|null}>} The Keycloak UUID (sub field)
    *   and the provisioning identifier (iss_sub); either may be null (user never logged
    *   in via Keycloak, or record already erased)
-   * @throws {Error} If user not found
+   * @throws {NotFoundError} If the user record has vanished (e.g. hard-deleted
+   *   mid-session) — a typed 404, not a server error
    */
   async _resolveKeycloakUserId(userKey) {
     const db = await dbService.getConnection('default');
@@ -56,7 +58,7 @@ const keycloakProxyService = {
     const user = await cursor.next();
 
     if (!user) {
-      throw new Error(`User ${userKey} not found`);
+      throw new NotFoundError(`User ${userKey} not found`);
     }
 
     return { sub: user.sub || null, issSub: user.issSub || null };
@@ -196,6 +198,9 @@ const keycloakProxyService = {
    * A missing Keycloak user (already deleted, or never provisioned) is tolerated: the
    * ArangoDB erasure — tombstone included — still runs.
    * @param {string} userKey - ArangoDB _key
+   * @returns {Promise<{filesDeletionFailed: boolean}>} True when the uploaded-files
+   *   cleanup failed after the erasure committed — files may remain on disk.
+   * @throws {NotFoundError} If the user record has vanished (typed 404)
    * @throws {Error} If Keycloak authentication fails
    * @throws {Error} If ArangoDB erasure fails after the Keycloak step (partial erasure state)
    */
@@ -309,27 +314,32 @@ const keycloakProxyService = {
       );
     }
 
-    // Files cleanup (see _cleanupUploads for the failure contract).
-    await this._cleanupUploads(userKey);
+    // Files cleanup runs only after the erasure committed — a failed pre-commit
+    // erasure leaves the record intact and the files recoverable. A cleanup
+    // failure must not fail the operation that already erased the account:
+    // warn and report it through the flag (see _cleanupUploads).
+    const filesDeletionFailed = await this._cleanupUploads(userKey);
+    return { filesDeletionFailed };
   },
 
   /**
    * Remove the user's uploaded files directory, tolerating failure (warn only).
-   * Runs on the success path and on a failure AFTER a committed erasure
-   * (ERASURE_COMMITTED_LATE_FAILURE) — never before the commit (a failed
-   * pre-commit erasure leaves the record intact and the files recoverable).
-   * A cleanup failure must never fail the operation that already erased the
-   * account.
+   * A cleanup failure after a committed erasure must never fail the operation
+   * that already erased the account — the caller surfaces it through the
+   * filesDeletionFailed flag instead.
    * @param {string} userKey - ArangoDB _key
+   * @returns {Promise<boolean>} True when the cleanup failed
    */
   async _cleanupUploads(userKey) {
     try {
       await userProfileService.deleteUserFiles(userKey);
+      return false;
     } catch (fileError) {
       logger.warn('[KeycloakProxy] Uploaded files deletion failed after erasure', {
         userKey,
         error: fileError.message
       });
+      return true;
     }
   },
 

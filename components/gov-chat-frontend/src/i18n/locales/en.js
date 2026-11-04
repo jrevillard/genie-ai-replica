@@ -992,6 +992,8 @@ export default {
       'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.',
     delete: 'Delete',
     accountDeleted: 'Your account has been deleted.',
+    accountDeletedFilesFailed:
+      'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.',
     failedToDeleteAccount: 'Failed to delete your account. Please try again later.'
   },
   userProfile: {

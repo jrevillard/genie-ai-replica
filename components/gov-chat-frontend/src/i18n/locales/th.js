@@ -988,6 +988,7 @@ export default {
     deleteAccountTitle: 'ลบบัญชี',
     delete: 'ลบ',
     accountDeleted: 'บัญชีของคุณถูกลบแล้ว',
+    accountDeletedFilesFailed: 'บัญชีของคุณถูกลบแล้ว แต่ไม่สามารถลบไฟล์ที่จัดเก็บบางส่วนออกได้ โปรดติดต่อผู้ดูแลระบบ',
     failedToDeleteAccount: 'ลบบัญชีไม่สำเร็จ โปรดลองอีกครั้งในภายหลัง'
   },
   userProfile: {

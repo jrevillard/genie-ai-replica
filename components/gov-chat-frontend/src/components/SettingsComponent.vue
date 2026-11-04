@@ -165,7 +165,12 @@
               </div>
 
               <div class="management-col">
-                <DsButton variant="danger" class="full-width" @click="confirmDeleteAccount">
+                <DsButton
+                  variant="danger"
+                  class="full-width"
+                  data-test-id="settings-delete-account-tile"
+                  @click="confirmDeleteAccount"
+                >
                   {{ translate('settings.deleteAccount', 'Delete my account') }}
                 </DsButton>
                 <p class="description-text danger-text">
@@ -579,7 +584,17 @@ export default {
     async deleteAccount() {
       try {
         this.isLoading = true;
-        await userService.deleteAccount();
+        const response = await userService.deleteAccount();
+        // Surface before the logout redirect: the notification must still be
+        // visible while the account is gone, the files may not be.
+        if (response && response.filesDeletionFailed === true) {
+          notificationService.warning(
+            this.translate(
+              'settings.accountDeletedFilesFailed',
+              'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.'
+            )
+          );
+        }
         await this.$store.dispatch('logout');
       } catch (e) {
         console.error('[SETTINGS] Error deleting account:', e);

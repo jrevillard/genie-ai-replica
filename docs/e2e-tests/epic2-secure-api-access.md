@@ -41,6 +41,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 - Keycloak authentication working (tested in Phase A)
 - JWT tokens successfully validated (Stories 1.3, 2.2)
 - Backend auth middleware resolves the user server-side (JIT provisioning keyed by the `{iss}#{sub}` identity; profile reads attach the resolved document — its `_key` — to the request, while chat query documents store the composite `{iss}#{sub}` as their `userId`)
+- Test F.7 additionally requires the `genie2` realm, created at Phase 0 Step 0.6 when `KEYCLOAK_ADDITIONAL_REALMS=["genie2"]` is set (the backend must also have started AFTER realm creation so its JWKS registrations include genie2)
 
 **Conditional Execution:**
 ```bash
@@ -176,15 +177,13 @@ fi
 
 **Verification:**
 ```bash
-# Phase-local admin token — $TOKEN is the MASTER admin token from Phase 0
-# (see Variable Reference); never shadow it
-GENIE_ADMIN_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
+# Uses $TOKEN — the MASTER admin token from Phase 0 (see Variable Reference).
+# The genie-realm admin-cli route is not usable here: the env template ships
+# no GENIE_ADMIN_PASSWORD, so that login cannot succeed on a clean stack.
 # Create user in genie realm (if not exists) — firstName/lastName/emailVerified
 # are required for ROPC logins to succeed (see .claude/rules/SERVER-TESTING.md)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
-  -H "Authorization: Bearer $GENIE_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "e2e-test-user",
@@ -255,8 +254,11 @@ echo "Invalid token: HTTP ${HTTP_CODE}"
 
 # Structurally valid token with a tampered signature — this is the case
 # that reaches Keycloak JWKS verification (the two above fail earlier, as
-# malformed)
-TAMPERED=$(printf '%s' "$USER_TOKEN" | sed 's/.$/x/')
+# malformed). The replacement char is chosen to differ from the original
+# last char, so the mutation can never be a no-op.
+LAST=${USER_TOKEN: -1}
+REPL=y; [ "$LAST" = "y" ] && REPL=z
+TAMPERED="${USER_TOKEN%?}${REPL}"
 HTTP_CODE=$(curl -sk --max-time 30 -X POST "https://localhost/api/queries" \
   -H "Authorization: Bearer $TAMPERED" \
   -H "Content-Type: application/json" \
@@ -292,7 +294,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 # Make chat query (like F.2, this half needs a real OPEA pipeline — it is
 # skipped when chatqna is not deployed)
 if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
-  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.5 requires the OPEA pipeline"
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.5 requires the OPEA pipeline; run F.1/F.3 for the backend-side verification"
 else
   HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
     -H "Authorization: Bearer $USER_TOKEN" \
@@ -470,7 +472,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 # Make chat query (full round-trip — needs a real OPEA pipeline; skipped
 # when chatqna is not deployed)
 if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
-  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.8 requires the OPEA pipeline"
+  echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - Test F.8 requires the OPEA pipeline; run F.1/F.3 for the backend-side verification"
 else
   HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
     -H "Authorization: Bearer $USER_TOKEN" \

@@ -432,8 +432,11 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Provisioning reactivates the soft-deleted user during the request, so an
-# HTTP 200 with the raw user document already proves the JIT reactivation ran
+# The authenticated request goes through JIT provisioning, which reactivates
+# the soft-deleted user — HTTP 200 confirms the request was served; the
+# reactivation itself is verified by the ArangoDB read below (the
+# provisioning cache can fail open and serve a stale document, so the HTTP
+# response alone is not proof)
 RESPONSE=$(curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
   -w "\n%{http_code}")
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
@@ -444,15 +447,16 @@ print(f'deleted: {d.get(\"deleted\")}')
 "
 # Expected: deleted: False
 
-# Verify reactivated in ArangoDB
-docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
+# Verify reactivated in ArangoDB — the authoritative check for this test
+REACT_STATE=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     var u = db.users.document('${USER_KEY}');
     print('deleted: ' + u.deleted + ', active: ' + u.active);
-  "
+  " 2>/dev/null | tail -1)
+echo "${REACT_STATE}"
+[ "$REACT_STATE" = "deleted: false, active: true" ] || { echo "FATAL: expected 'deleted: false, active: true', got '${REACT_STATE:-unset}'"; exit 1; }
 ```
-**Expected**: `deleted: false`, `active: true`
 
 ### Test M.9 — Delete User Account (Keycloak + ArangoDB)
 

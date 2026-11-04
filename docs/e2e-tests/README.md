@@ -8,7 +8,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 |----------|-------------|-------------|
 | [00-clean-start.md](00-clean-start.md) | Common setup: deploy stack, create test user, get tokens | Phase 0 |
 | [epic1-keycloak-foundation.md](epic1-keycloak-foundation.md) | Keycloak foundation: login redirect, JIT provisioning, external IdP | Phases A–E |
-| [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token forwarding to OPEA, JWKS refresh, multi-realm, OPEA, error display | Phases F–K |
+| [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token forwarding to OPEA, Swagger OAuth2, JWKS refresh, multi-realm, OPEA continuity, error display | Phases F–K |
 | [epic3-session-lifecycle-gdpr.md](epic3-session-lifecycle-gdpr.md) | Session management, user lifecycle, GDPR erasure | Phases L–N |
 
 ## Prerequisites

@@ -3,7 +3,7 @@
 The `status::*` label namespace is the machine-readable state of every issue.
 **One status label per issue at a time** — the issue comments carry the
 reasoning, the label carries the state. This is the whole team's convention
-(Jerome's board); every agent follows it.
+(the team's board); every agent follows it.
 
 ## The status::* lifecycle
 
@@ -28,7 +28,7 @@ reasoning, the label carries the state. This is the whole team's convention
   (sweep, gates green), review→done (the merge's auto-close is completed by
   the label check), in-progress→awaiting-operator reverts when a parking is
   stale.
-- **Operator (David)**: the human decisions — wont-fix, scope changes,
+- **Operator**: the human decisions — wont-fix, scope changes,
   judgment closes, resolving parked issues. Mechanical closes (duplicate,
   shipped-with-evidence) are sweep-executable after adversarial verification
   — carve-out defined in [TRIAGE-POLICY.md](TRIAGE-POLICY.md).
@@ -56,7 +56,12 @@ reasoning, the label carries the state. This is the whole team's convention
    flag + comments.
 7. **Sweep → review**: when an MR's gates are all green (CI success on head,
    mergeable, rebased, `Closes #iid` in the body), set the issue to
-   `status::review` and prepare the merge GO for David.
+   `status::review` and prepare the merge GO for the operator.
+8. **Dispatch order** (which issue a free seat takes next, from the
+   `status::ready-for-dev` queue): `priority::high` first (the operator's
+   override, whatever the type), then `type::bug` (something is broken),
+   then **newest first** — the current wave is the set of issues raised
+   during it, so the wave in progress drains before the older backlog.
 
 Reference: the coordination board is #1216; the post-train work plan is
 #1367. Triage policy — label axes, the backlog→ready-for-dev bridge, closing

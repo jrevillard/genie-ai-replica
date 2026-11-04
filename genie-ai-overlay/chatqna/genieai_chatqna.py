@@ -4702,6 +4702,12 @@ class ChatQnAService:
                         # established language keeps the documented
                         # passthrough_unknown_language.
                         if english_established:
+                            # Log parity with the translation path's blank
+                            # guard: a blank-input burst must look the same
+                            # in the Docker logs on both language paths.
+                            logger.warning(
+                                "History translation asked for an empty message; reporting it as a fallback."
+                            )
                             query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
                         translated_history_string = full_chat_history
                     else:
@@ -4722,6 +4728,7 @@ class ChatQnAService:
                     if english_established and not any(
                         message.get("content", "").strip() for message in messages_to_process
                     ):
+                        logger.warning("History translation asked for blank messages; reporting it as a fallback.")
                         query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
                     translated_history_string = _flatten_history_string(messages_to_process)
         except TranslationInputTooLongError as _e_trans_overflow:

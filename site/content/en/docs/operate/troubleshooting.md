@@ -199,7 +199,11 @@ language the query is written in:
 - **Single-message mode** (`CONTEXT_OPTION=single-message`, where the current
   question *is* the whole history): the character budget is applied on the
   English path too, so an oversized question is refused at the same budget
-  whatever language it is in.
+  whatever language it is in. The refusal can also come from the service
+  side, on any language: a query that passes the char budget but whose
+  prompt still does not fit the translation model's window (dense scripts
+  run ~1 token/char, so the Latin-derived budget undercounts them) is
+  refused by the same guard the multi-message shape hits.
 - **Multi-message history, service-side refusal**: when the prompt the
   translation service is asked to translate does not fit its model window —
   typically a dense-script history, where the character budget's
@@ -218,6 +222,12 @@ char-budget truncation (the newest message's **tail** kept when it alone
 exceeds the budget) is still the multi-message shape's contract for an
 oversized history: only a prompt the translation service cannot fit in its
 window refuses the turn.
+
+Blank and all-blank queries also report `fallback_error` on the English
+path, not only on the translation path — a spike of it can be blank user
+input with the translation microservice perfectly healthy. The Docker logs
+name it: the passthrough blank guard logs the same warning the translation
+path's guard does.
 
 To diagnose a degraded period:
 

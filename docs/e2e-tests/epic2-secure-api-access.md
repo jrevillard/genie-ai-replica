@@ -46,7 +46,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 ```bash
 # Check if Keycloak is available (via NGINX proxy)
 if ! curl -sk https://localhost/auth/realms/genie/.well-known/openid-configuration > /dev/null 2>&1; then
-  echo "Keycloak NOT available - resolve before running Phase F"
+  echo "FATAL: Keycloak NOT available - resolve before running Phase F"; exit 1
 fi
 
 # Check if OPEA services are responding
@@ -116,6 +116,7 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 # Get a valid token
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
+[ -n "$USER_TOKEN" ] && [ "$USER_TOKEN" != "null" ] || { echo "FATAL: ROPC login for testuser failed"; exit 1; }
 
 # Requires DEPLOY_OPEA=1: both halves of this test call chatqna
 if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; then
@@ -139,7 +140,7 @@ else
   # also match the chatqna container (its compose name contains
   # "backend-server"). The backend runtime image ships wget (not curl);
   # the body travels via --body-data (--post-data is rejected with --method).
-  BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v chatqna | head -1)
+  BACKEND_CID=$(docker ps --filter name=backend --format '{{.Names}}' | grep -v -e chatqna -e init | head -1)
   [ -n "$BACKEND_CID" ] || { echo "FATAL: backend container not found"; exit 1; }
   HTTP_CODE=$(docker exec "$BACKEND_CID" \
     wget -q -O /dev/null --server-response --method=POST \
@@ -266,6 +267,7 @@ echo "Invalid token: HTTP ${HTTP_CODE}"
 # Get test user token
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
+[ -n "$USER_TOKEN" ] && [ "$USER_TOKEN" != "null" ] || { echo "FATAL: ROPC login for testuser failed"; exit 1; }
 
 # Make chat query
 RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
@@ -283,8 +285,9 @@ echo "$RESPONSE" | jq -e '.metadata | has("source_documents") and has("filter_la
 echo "metadata contract keys present"
 
 # Verify the OPEA answer came through
-echo "$RESPONSE" | jq -r '.response'
-# Expected: the model's answer text (non-empty)
+RESP_LEN=$(echo "$RESPONSE" | jq '.response | length')
+[ "$RESP_LEN" -gt 0 ] 2>/dev/null || { echo "FATAL: empty or missing .response in the chat answer"; exit 1; }
+echo "response length: ${RESP_LEN}"
 ```
 
 **Expected Behavior:**
@@ -383,11 +386,10 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
     "credentials": [{ "type": "password", "value": "genie2pass123", "temporary": false }]
   }'
 
-# Get tokens from both realms
-USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+# Get tokens from both realms — phase-local names ($USER_TOKEN/$USER2_TOKEN
+# belong to Phase 0/Phase I; never shadow them)
+GENIE_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie-realm-user&password=geniepass123&grant_type=password' | jq -r '.access_token')
-
-# Phase-local name — $USER2_TOKEN belongs to Phase I (testuser2), never shadow it
 GENIE2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
@@ -396,7 +398,7 @@ GENIE2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/o
 # never by email (see README "Resolving test accounts"; the per-request
 # profile-retrieval log check itself is Test F.1's)
 RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Authorization: Bearer $GENIE_TOKEN" \
   -w "\n%{http_code}")
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
@@ -433,6 +435,7 @@ GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 # Get test user token
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
+[ -n "$USER_TOKEN" ] && [ "$USER_TOKEN" != "null" ] || { echo "FATAL: ROPC login for testuser failed"; exit 1; }
 
 # Make chat query (full round-trip)
 RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
@@ -441,8 +444,9 @@ RESPONSE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
   -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')
 
 # Verify the retrieval metadata survived the round-trip
-echo "$RESPONSE" | jq '.metadata.is_grounded'
-# Expected: true or false — a value, not null
+echo "$RESPONSE" | jq -e '.metadata.is_grounded != null' > /dev/null \
+  || { echo "FATAL: metadata.is_grounded missing after the round-trip"; exit 1; }
+echo "metadata.is_grounded present"
 ```
 
 **Expected Behavior:**

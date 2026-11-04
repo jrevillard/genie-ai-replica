@@ -555,6 +555,8 @@ const Map<String, dynamic> manLocale = {
     "userDataReset": "I la moo kumo kutaayaata a benta.",
     "userDataResetFilesFailed":
         "I la moo kumo kutaayaata a benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.",
+    "accountDeletedFilesFailed":
+        "I la kaunti fitita benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.",
     "failedToResetUserData":
         "I la moo kumo kutaayaa manta. A nyoofa yelamasaaying.",
     "changingEmailTo": "I la imeelo be yelema la k'a ke",

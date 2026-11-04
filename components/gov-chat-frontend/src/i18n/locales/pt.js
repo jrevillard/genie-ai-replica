@@ -1003,6 +1003,8 @@ export default {
       'Tem certeza de que deseja excluir sua conta? Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão apagados.',
     delete: 'Excluir',
     accountDeleted: 'Sua conta foi excluída.',
+    accountDeletedFilesFailed:
+      'Sua conta foi excluída, mas alguns arquivos armazenados não puderam ser removidos. Por favor, entre em contato com um administrador.',
     failedToDeleteAccount: 'Falha ao excluir sua conta. Por favor, tente novamente mais tarde.'
   },
   userProfile: {

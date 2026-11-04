@@ -1004,6 +1004,8 @@ export default {
       'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est permanente et ne peut pas être annulée. Toutes vos données seront effacées.',
     delete: 'Supprimer',
     accountDeleted: 'Votre compte a été supprimé.',
+    accountDeletedFilesFailed:
+      'Votre compte a été supprimé, mais certains fichiers stockés n’ont pas pu être supprimés. Veuillez contacter un administrateur.',
     failedToDeleteAccount: 'Échec de la suppression de votre compte. Veuillez réessayer plus tard.'
   },
   userProfile: {

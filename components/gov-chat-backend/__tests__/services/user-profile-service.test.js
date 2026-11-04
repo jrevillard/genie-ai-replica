@@ -251,7 +251,7 @@ describe('UserProfileService', () => {
 
   describe('deleteUserFiles', () => {
     it('should remove user directory when it exists', async () => {
-      await userProfileService.deleteUserFiles({ _key: 'user-1' });
+      await userProfileService.deleteUserFiles('user-1');
       expect(mockFsTracker.rmCalls.length).toBe(1);
       expect(mockFsTracker.rmCalls[0][0]).toContain('Uploads/user-1');
       expect(mockFsTracker.rmCalls[0][1]).toEqual({ recursive: true, force: true });
@@ -259,7 +259,7 @@ describe('UserProfileService', () => {
 
     it('should do nothing when directory does not exist', async () => {
       mockFsTracker.existsResults = false;
-      await userProfileService.deleteUserFiles({ _key: 'user-1' });
+      await userProfileService.deleteUserFiles('user-1');
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
   });

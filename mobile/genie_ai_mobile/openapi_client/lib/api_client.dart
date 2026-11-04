@@ -274,6 +274,8 @@ class ApiClient {
           return ApiDatabaseOptimizePost200Response.fromJson(value);
         case 'ApiDatabaseOptimizePost200ResponseResultsInner':
           return ApiDatabaseOptimizePost200ResponseResultsInner.fromJson(value);
+        case 'ApiMeDeletePost200Response':
+          return ApiMeDeletePost200Response.fromJson(value);
         case 'ApiQueriesGet200Response':
           return ApiQueriesGet200Response.fromJson(value);
         case 'ApiQueriesGet200ResponsePagination':

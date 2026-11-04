@@ -12,11 +12,13 @@
 const { mount, flushPromises } = require('@vue/test-utils');
 
 const mockResetUserData = jest.fn();
+const mockDeleteAccount = jest.fn();
 
 jest.mock('../../services/userService', () => ({
   __esModule: true,
   default: {
-    resetUserData: mockResetUserData
+    resetUserData: mockResetUserData,
+    deleteAccount: mockDeleteAccount
   }
 }));
 
@@ -119,6 +121,19 @@ async function resetViaModal(wrapper) {
   await wrapper.vm.$nextTick();
 }
 
+// Same for the delete flow: click the delete tile, confirm the modal, let the
+// deletion complete — the warning branch must be wired through the dialog.
+async function deleteViaModal(wrapper) {
+  const deleteTile = wrapper.findAll('button').find((b) => b.text() === 'Delete my account');
+  await deleteTile.trigger('click');
+  await wrapper.vm.$nextTick();
+
+  const confirmButton = wrapper.findAll('button').find((b) => b.text() === 'Delete');
+  await confirmButton.trigger('click');
+  await flushPromises();
+  await wrapper.vm.$nextTick();
+}
+
 describe('SettingsComponent — resetUserData notification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -183,6 +198,67 @@ describe('SettingsComponent — resetUserData notification', () => {
     expect(mockNotificationError).toHaveBeenCalled();
     expect(mockNotificationSuccess).not.toHaveBeenCalled();
     expect(mockNotificationWarning).not.toHaveBeenCalled();
+  });
+});
+
+describe('SettingsComponent — deleteAccount notification', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // #1460 contract mirror: the backend POST /api/me/delete may answer
+  // filesDeletionFailed: true when the uploads directory could not be removed
+  // after the committed erasure. The component must surface that warning
+  // BEFORE the logout redirect, and never warn when the flag is absent
+  // (backends without the flag) or explicitly false.
+  test('warns before logout when filesDeletionFailed is true', async () => {
+    const wrapper = await buildWrapper();
+    mockDeleteAccount.mockResolvedValue({ success: true, filesDeletionFailed: true });
+
+    await deleteViaModal(wrapper);
+
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
+    expect(mockNotificationWarning).toHaveBeenCalledWith(
+      'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.'
+    );
+    // The warning resolved through the settings key — not a hardcoded literal.
+    expect(mockI18nT).toHaveBeenCalledWith('settings.accountDeletedFilesFailed', expect.anything());
+    expect(enMessages.settings.accountDeletedFilesFailed).toBe(
+      'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.'
+    );
+    expect(mockStoreDispatch).toHaveBeenCalledWith('logout');
+  });
+
+  test('does not warn when the flag is absent', async () => {
+    const wrapper = await buildWrapper();
+    mockDeleteAccount.mockResolvedValue({ success: true });
+
+    await deleteViaModal(wrapper);
+
+    expect(mockNotificationWarning).not.toHaveBeenCalled();
+    expect(mockStoreDispatch).toHaveBeenCalledWith('logout');
+  });
+
+  test('does not warn when the flag is false', async () => {
+    const wrapper = await buildWrapper();
+    mockDeleteAccount.mockResolvedValue({ success: true, filesDeletionFailed: false });
+
+    await deleteViaModal(wrapper);
+
+    expect(mockNotificationWarning).not.toHaveBeenCalled();
+    expect(mockNotificationError).not.toHaveBeenCalled();
+    expect(mockStoreDispatch).toHaveBeenCalledWith('logout');
+  });
+
+  test('keeps the error path untouched when the request fails', async () => {
+    const wrapper = await buildWrapper();
+    mockDeleteAccount.mockRejectedValue(new Error('boom'));
+
+    await deleteViaModal(wrapper);
+
+    expect(mockNotificationError).toHaveBeenCalled();
+    expect(mockNotificationWarning).not.toHaveBeenCalled();
+    expect(mockStoreDispatch).not.toHaveBeenCalledWith('logout');
   });
 });
 

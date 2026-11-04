@@ -225,8 +225,20 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           variant: DsButtonVariant.danger,
           onPressed: () async {
             Navigator.pop(context);
+            // Captured before any await: the outcome SnackBar must render
+            // even if the user navigates away mid-deletion (the widget's own
+            // context would be defunct by then).
+            final messenger = ScaffoldMessenger.of(context);
             try {
-              await _userService.deleteAccount();
+              final response = await _userService.deleteAccount();
+              // Surface before the logout redirect: the account is gone, the
+              // files may not be — the warning must survive the navigation.
+              if (response['filesDeletionFailed'] == true) {
+                _showSettingsSnackBar(
+                  messenger,
+                  "settings.accountDeletedFilesFailed",
+                );
+              }
               await ref.read(authProvider.notifier).logout();
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(

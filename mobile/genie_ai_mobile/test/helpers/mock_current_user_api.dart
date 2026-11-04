@@ -8,7 +8,9 @@ import 'package:openapi/api.dart';
 /// tests share it: [resetBody]/[resetStatus] shape the reset outcome,
 /// [resetGate] holds the reset in flight (loading-state assertions), and
 /// [resetCalls] lets a test observe that the reset actually ran instead
-/// of only what it left behind.
+/// of only what it left behind. The delete seam mirrors the same shape:
+/// [deleteBody]/[deleteStatus] shape the deletion outcome, [deleteCalls]
+/// observes that the deletion ran.
 ///
 /// Distinct from the config-driven `MockCurrentUserApi` in
 /// `test/services/user_service_test.dart`, which shapes raw response
@@ -18,6 +20,8 @@ class MockCurrentUserApi implements CurrentUserApi {
     this.resetBody = const {},
     this.resetStatus = 200,
     this.resetGate,
+    this.deleteBody = const {},
+    this.deleteStatus = 200,
   });
 
   final Map<String, dynamic> resetBody;
@@ -29,6 +33,12 @@ class MockCurrentUserApi implements CurrentUserApi {
 
   /// How many times the reset endpoint was called.
   int resetCalls = 0;
+
+  final Map<String, dynamic> deleteBody;
+  final int deleteStatus;
+
+  /// How many times the delete endpoint was called.
+  int deleteCalls = 0;
 
   @override
   Future<http.Response> apiMeGetWithHttpInfo({String? data}) async {
@@ -48,6 +58,12 @@ class MockCurrentUserApi implements CurrentUserApi {
     final gate = resetGate;
     if (gate != null) await gate.future;
     return http.Response(jsonEncode(resetBody), resetStatus);
+  }
+
+  @override
+  Future<http.Response> apiMeDeletePostWithHttpInfo() async {
+    deleteCalls++;
+    return http.Response(jsonEncode(deleteBody), deleteStatus);
   }
 
   @override

@@ -38,6 +38,12 @@ jest.mock(
   { virtual: true }
 );
 
+// Mock the uploads cleaner the erasure calls (#1460) — fs-touching singleton,
+// its behavior is covered by user-profile-service.test.js
+jest.mock('../services/user-profile-service', () => ({
+  deleteUserFiles: jest.fn().mockResolvedValue(undefined)
+}));
+
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
 
@@ -86,11 +92,16 @@ describe('keycloak-proxy-service', () => {
   });
 
   describe('_resolveKeycloakUserId', () => {
-    it('should throw if user not found', async () => {
-      const db = { query: jest.fn().mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) };
-      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(db));
+    it('should throw a typed NotFoundError if user not found', async () => {
+      const db = { query: jest.fn().mockResolvedValue({ next: jest.fn().mockResolvedValue(undefined) }) };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
-      await expect(keycloakProxyService._resolveKeycloakUserId('missing-key')).rejects.toThrow('not found');
+      // #1459: the missing record must be a typed 404 (the route maps it),
+      // not a generic Error that lands in the 500 catch-all.
+      const { NotFoundError } = require('../middleware/errors');
+      const rejection = keycloakProxyService._resolveKeycloakUserId('missing-key');
+      await expect(rejection).rejects.toBeInstanceOf(NotFoundError);
+      await expect(rejection).rejects.toMatchObject({ statusCode: 404, message: expect.stringContaining('not found') });
     });
 
     it('should resolve Keycloak UUID and provisioning identifier', async () => {
@@ -171,6 +182,42 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
       expect(db.query).toHaveBeenCalledTimes(3); // resolve + erasure + duplicate cleanup
+    });
+
+    // #1460: the uploads cleanup result must surface through the returned
+    // flag — a failed cleanup after a committed erasure keeps the 200 but the
+    // caller (and the clients behind it) must be able to see it.
+    it('should return filesDeletionFailed=false when the uploads cleanup succeeds', async () => {
+      const userProfileService = require('../services/user-profile-service');
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await expect(keycloakProxyService.deleteUser('user-key')).resolves.toEqual({ filesDeletionFailed: false });
+      expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith('user-key');
+    });
+
+    it('should return filesDeletionFailed=true (not throw) when the uploads cleanup fails', async () => {
+      const userProfileService = require('../services/user-profile-service');
+      const { logger } = require('../shared-lib');
+      userProfileService.deleteUserFiles.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' }));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await expect(keycloakProxyService.deleteUser('user-key')).resolves.toEqual({ filesDeletionFailed: true });
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[KeycloakProxy] Uploaded files deletion failed after erasure',
+        expect.objectContaining({ userKey: 'user-key', error: 'EACCES: permission denied' })
+      );
     });
 
     it('should remove racing duplicates by iss_sub at erasure commit time', async () => {

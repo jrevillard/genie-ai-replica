@@ -30,7 +30,7 @@ void main() {
     //
     // Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
     //
-    //Future apiMeDeletePost() async
+    //Future<ApiMeDeletePost200Response> apiMeDeletePost() async
     test('test apiMeDeletePost', () async {
       // TODO
     });

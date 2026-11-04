@@ -352,9 +352,8 @@ class UserProfileService {
     }
   }
 
-  async deleteUserFiles(user) {
+  async deleteUserFiles(userKey) {
     const startTime = Date.now();
-    const userKey = user._key;
     const userDir = sanitizePath(this.uploadDir, userKey);
 
     logger.info('UserProfileService.delete_user_files_start', { userKey });
@@ -425,7 +424,7 @@ class UserProfileService {
       // caller knows files may remain on disk.
       let filesDeletionFailed = false;
       try {
-        await this.deleteUserFiles(currentUserDoc);
+        await this.deleteUserFiles(userKey);
       } catch (fileError) {
         filesDeletionFailed = true;
         logger.warn('UserProfileService.user_files_deletion_failed_after_reset', {

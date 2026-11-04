@@ -2,7 +2,6 @@
 
 require('../setup-env');
 
-
 // Tracker for fs operations — referenced by mock factory (Jest allows mock-prefixed vars)
 const mockFsTracker = {
   rmCalls: [],

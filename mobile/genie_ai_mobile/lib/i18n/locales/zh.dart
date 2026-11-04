@@ -474,8 +474,7 @@ const Map<String, dynamic> zhLocale = {
     "processing": "正在处理...",
     "userDataReset": "您的个人资料数据已成功重置。",
     "userDataResetFilesFailed": "您的个人资料数据已重置，但部分存储的文件无法删除。请联系管理员。",
-    "accountDeletedFilesFailed":
-        "账户已删除，但部分存储文件无法删除。请联系管理员。",
+    "accountDeletedFilesFailed": "账户已删除，但部分存储文件无法删除。请联系管理员。",
     "failedToResetUserData": "重置您的个人资料数据失败。请稍后再试。",
     "changingEmailTo": "正在将您的电子邮件更改为",
     "will": "将",

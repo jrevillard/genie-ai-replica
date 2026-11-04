@@ -70,36 +70,36 @@ void main() {
     await pumpFrames(tester);
   }
 
-  testWidgets('shows a warning SnackBar before logout when filesDeletionFailed is true', (
-    tester,
-  ) async {
-    final api = MockCurrentUserApi(
-      deleteBody: {'success': true, 'filesDeletionFailed': true},
-    );
-    await driveDeleteFlow(tester, api);
-
-    final warningText = I18nService().translate(
-      'settings.accountDeletedFilesFailed',
-    );
-    expect(find.widgetWithText(SnackBar, warningText), findsOneWidget);
-    // The deletion actually ran, and the flow completed: the warning was
-    // shown on the way to the login screen, not instead of it.
-    expect(api.deleteCalls, 1);
-    await unmount(tester);
-  });
-
   testWidgets(
-    'shows no notification when the flag is absent (older backend)',
+    'shows a warning SnackBar before logout when filesDeletionFailed is true',
     (tester) async {
-      await driveDeleteFlow(tester, MockCurrentUserApi());
+      final api = MockCurrentUserApi(
+        deleteBody: {'success': true, 'filesDeletionFailed': true},
+      );
+      await driveDeleteFlow(tester, api);
 
       final warningText = I18nService().translate(
         'settings.accountDeletedFilesFailed',
       );
-      expect(find.widgetWithText(SnackBar, warningText), findsNothing);
+      expect(find.widgetWithText(SnackBar, warningText), findsOneWidget);
+      // The deletion actually ran, and the flow completed: the warning was
+      // shown on the way to the login screen, not instead of it.
+      expect(api.deleteCalls, 1);
       await unmount(tester);
     },
   );
+
+  testWidgets('shows no notification when the flag is absent (older backend)', (
+    tester,
+  ) async {
+    await driveDeleteFlow(tester, MockCurrentUserApi());
+
+    final warningText = I18nService().translate(
+      'settings.accountDeletedFilesFailed',
+    );
+    expect(find.widgetWithText(SnackBar, warningText), findsNothing);
+    await unmount(tester);
+  });
 
   testWidgets(
     'shows no warning when the flag is explicitly false (clean deletion)',

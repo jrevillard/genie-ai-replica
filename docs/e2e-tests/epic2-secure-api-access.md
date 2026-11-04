@@ -80,30 +80,29 @@ fi
 
 **Verification:**
 ```bash
-# Get admin token
-TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
 # Get test user token (use existing test user)
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
-# Get the authenticated user's profile (this triggers header extraction in the middleware)
-# First, find the user's _key by looking up the test user
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testuser@e2e.test" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-
-# Make authenticated request to the user profile endpoint
-curl -sk -X GET "https://localhost/api/me" \
+# One authenticated profile request provides the log entry under test and
+# yields the _key — resolve via /api/me, never by email (see README
+# "Resolving test accounts")
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json"
-# Expected: 200 OK with user profile data
+  -H "Content-Type: application/json" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
-# Verify header construction via backend logs
-docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
+# Verify this request resolved the ArangoDB _key — the profile-retrieval log
+# entry carries the userKey (no output is a failure; the quoted field makes
+# the match exact, and --since bounds the window to this request)
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the resolved _key"; exit 1; }
 ```
 
-> **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects backend logs to verify header extraction.
+> **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects the backend's profile-retrieval log to verify the request resolved the account's ArangoDB `_key`.
 
 **Expected Behavior:**
 - Headers are correctly constructed using ArangoDB `_key` for `X-User-Id`
@@ -182,9 +181,12 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
-# Look up the user in ArangoDB to find their _key
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# Resolve the _key from the user's own profile — see README
+# "Resolving test accounts" (never key an account by email)
+USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
+# Fail loudly here — a silent "null" would surface far from the cause
+[ -n "$USER_KEY" ] && [ "$USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key"; exit 1; }
 
 echo "User _key: $USER_KEY"
 
@@ -286,10 +288,6 @@ echo "$RESPONSE" | jq '.data | keys'
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Look up the test user's _key
-USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-
 # Remove roles (Keycloak 26 specific approach)
 curl -sk -X PATCH "https://localhost/api/me" \
   -H "Authorization: Bearer $TOKEN" \
@@ -370,23 +368,33 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
-# Look up user keys in ArangoDB for both users
-GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie2@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+# Look up user keys from each user's own profile (each realm provisions its
+# own ArangoDB user, so the _key differs per realm)
+# Per realm: one profile request provides the log entry under test and yields
+# the _key — resolve via /api/me, never by email (see README "Resolving test
+# accounts")
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE_USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the genie-realm _key"; exit 1; }
+# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
-# Make request with genie realm token and check logs
-curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
-# Expected: X-User-Id contains the genie-realm-user's ArangoDB _key
+RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER2_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie2 realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
+[ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
+docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE2_USER_KEY\"" \
+  || { echo "FATAL: no profile-retrieval log entry for the genie2-realm _key"; exit 1; }
+# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
-# Make request with genie2 realm token and check logs
-curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER2_TOKEN"
-docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
-# Expected: X-User-Id contains the genie2-realm-user's ArangoDB _key (different from genie)
+# The whole point of the test: distinct realms must resolve distinct ArangoDB docs
+[ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }
 ```
 
 > **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.
@@ -713,7 +721,7 @@ components: {
 2. Check if `Authorization: Bearer <token>` header is present
 3. Verify the test user has the `GENIE.AI_USER` role in Keycloak:
 ```bash
-curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq '.[0].realmRoles'
 ```
 
@@ -967,7 +975,7 @@ for user in data.get('result', []):
 The `genie2` realm was created by Phase 0.6 — do NOT delete it. Only clean up the test user.
 
 ```bash
-NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 curl -sk -X DELETE "https://localhost/auth/admin/realms/genie2/users/${NOROLES_USER_ID}" \
@@ -1228,7 +1236,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
 
 ```bash
 # Find and delete the noroles user
-NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user-e2e" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user-e2e&exact=true" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_USER_ID}" \

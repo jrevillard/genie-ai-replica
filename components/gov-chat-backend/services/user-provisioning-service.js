@@ -105,12 +105,21 @@ async function isSoftDeleted(cachedUser) {
           LIMIT 1
           RETURN u._key
       `);
-      return (await cursor.next()) !== null;
+      // arangojs resolves an exhausted cursor's next() with undefined, not
+      // null — a truthy check is what the driver contract wants
+      return !!(await cursor.next());
     })();
     const outcome = await Promise.race([work, deadline]);
     if (outcome === 'deadline') {
-      // The work keeps running in the background — drop its eventual result
-      work.catch(() => {});
+      // A DB consistently slower than the deadline fail-opens here; say so
+      // (rate-limited like the failure path) so the latency and the stale
+      // copies are traceable in the logs
+      if (Date.now() - _lastRevalWarnAt > CACHE_TTL_MS) {
+        _lastRevalWarnAt = Date.now();
+        logger.warn(
+          `[UserProvisioning] Soft-delete revalidation timed out after ${REVALIDATION_TIMEOUT_MS}ms, serving cached copies`
+        );
+      }
       return false;
     }
     return outcome;

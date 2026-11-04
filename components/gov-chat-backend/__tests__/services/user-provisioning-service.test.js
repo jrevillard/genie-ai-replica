@@ -27,7 +27,9 @@ let mockDb;
 
 function createMockCursor(results) {
   return {
-    next: jest.fn().mockResolvedValue(results.length > 0 ? results[0] : null),
+    // Driver-faithful: arangojs resolves an exhausted cursor's next() with
+    // undefined, not null
+    next: jest.fn().mockResolvedValue(results.length > 0 ? results[0] : undefined),
     all: jest.fn().mockResolvedValue(results)
   };
 }

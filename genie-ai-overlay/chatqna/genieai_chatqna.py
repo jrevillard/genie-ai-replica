@@ -4140,14 +4140,13 @@ class ChatQnAService:
                 return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
         if isinstance(history, str):
-            # The single-message budget runs before the language map: an
-            # oversized query is refused even when the map cannot name
-            # English — the refusal must not depend on the registry's health.
             if not history.strip():
                 # An empty prompt would only harvest the model's junk reply
                 # as the embedded query, and there is nothing to translate.
                 logger.warning("History translation asked for an empty message; reporting it as a fallback.")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR
+            # The budget check runs before the language map below — see
+            # _refuse_oversized_query for the ordering invariant.
             _refuse_oversized_query(history)
 
         # The target steers the prompt, so it is resolved against the language
@@ -4700,11 +4699,9 @@ class ChatQnAService:
                 # budget, so the retriever sees the same turns of the
                 # conversation whichever language the query is written in.
                 if isinstance(full_chat_history, str):
-                    # The single-message budget does not care about the
-                    # language either (issue #1366): an oversized query gets
-                    # the same refusal on the English path as the translation
-                    # path gives it, instead of passing whole and failing
-                    # later at the embedder with a less actionable error.
+                    # The budget does not care about the language (issue
+                    # #1366): an oversized query gets the same refusal on the
+                    # English path as the translation path gives it.
                     _refuse_oversized_query(full_chat_history)
                     translated_history_string = full_chat_history
                 else:

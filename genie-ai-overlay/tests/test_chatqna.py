@@ -5039,6 +5039,7 @@ async def test_a_history_the_translation_service_refuses_is_answered_with_a_422(
             "chatqna.genieai_chatqna._translate_prompt",
             new=AsyncMock(side_effect=chatqna_module.TranslationInputTooLongError("too long for the window")),
         ),
+        patch("chatqna.genieai_chatqna.chat_requests_total") as mock_counter,
         pytest.raises(HTTPException) as excinfo,
     ):
         await _full_flow_payload(
@@ -5054,6 +5055,9 @@ async def test_a_history_the_translation_service_refuses_is_answered_with_a_422(
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "translation_input_too_long"
+    # Counted like the other refusal paths — the raise happens before the
+    # orchestrate-span block, so this record is the only one.
+    mock_counter.add.assert_called_once()
 
 
 @pytest.mark.asyncio

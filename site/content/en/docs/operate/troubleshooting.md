@@ -193,7 +193,7 @@ A query that does not fit the translation window is **refused** instead of
 fallen back on: the turn answers HTTP 422 (`translation_input_too_long`) and
 nothing is embedded, because the untranslated question would be looked up in
 the English space and retrieve the wrong documents. Shorten the message and
-retry. The refusal covers three cases, and none of them depends on the
+retry. The refusal covers two cases, and neither depends on the
 language the query is written in:
 
 - **Single-message mode** (`CONTEXT_OPTION=single-message`, where the current

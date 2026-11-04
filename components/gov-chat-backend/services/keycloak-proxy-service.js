@@ -211,7 +211,9 @@ const keycloakProxyService = {
     // erasure commits — the same ordering as markUserAsDeleted. Until the
     // commit, callers may be served the pre-erasure profile from cache (the
     // revalidation deliberately ignores erasures); the post-commit eviction
-    // is what closes that window — on the late-failure path, the bare TTL.
+    // (the finally below) closes that window. The only path left to the bare
+    // TTL is a failed erasure UPDATE (PARTIAL_ERASURE), where nothing has
+    // committed and there is nothing to announce.
 
     // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
     // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:

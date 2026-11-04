@@ -440,7 +440,8 @@ const keycloakAuthService = {
         // reason we don't act on, log it — the generic "may be expired" alone
         // would hide that the header simply did not match. Truncated: a
         // multi-challenge header is server-controlled log input.
-        const headerNote = wwwAuthenticate ? ` (WWW-Authenticate: ${wwwAuthenticate.slice(0, 120)})` : '';
+        const headerNote =
+          typeof wwwAuthenticate === 'string' ? ` (WWW-Authenticate: ${wwwAuthenticate.slice(0, 120)})` : '';
         logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
         return null;
       }

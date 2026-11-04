@@ -123,7 +123,9 @@ if ! docker ps --format '{{.Names}}' | grep -q "chatqna-xeon-backend-server"; th
   echo "SKIP: chatqna not deployed (DEPLOY_OPEA=0) - run F.1/F.3 for the backend-side verification"
 else
   # Make a chat query — it can only succeed if the backend forwarded the
-  # Bearer token AND chatqna validated it against Keycloak JWKS
+  # Bearer token AND chatqna validated it against Keycloak JWKS.
+  # (Requires a real OPEA pipeline: CONTEXT_OPTION=test-mode bypasses the
+  # OPEA call and answers 201 with a mock, exercising nothing.)
   # (POST /api/queries is the chat endpoint; the bound sits above the
   # backend's 120 s OPEA worker timeout — a cold vLLM can take a minute)
   HTTP_CODE=$(curl -sk --max-time 180 -X POST "https://localhost/api/queries" \
@@ -147,7 +149,7 @@ else
       --header="Content-Type: application/json" \
       --body-data='{"messages":[{"role":"user","content":"ping"}]}' \
       "http://chatqna-xeon-backend-server:8888/v1/chatqna" 2>&1 \
-    | awk '/HTTP/{print $2}' | tail -1) || true
+    | awk '$1 ~ /^HTTP\//{print $2}' | tail -1
   echo "Chatqna without token: HTTP ${HTTP_CODE}"
   [ "$HTTP_CODE" = "401" ] || { echo "FATAL: expected 401, got ${HTTP_CODE}"; exit 1; }
 fi
@@ -164,22 +166,22 @@ fi
 
 ### Test F.3 — The Resolved Identity Is the ArangoDB _Key
 
-**Given** multiple Keycloak realms are configured (e.g., `genie` and `genie2`)
-**When** tokens from different realms are used to make authenticated requests
-**Then** each token resolves its own provisioned ArangoDB document — the `_key` is the server-side identity:
+**Given** a Keycloak realm with a freshly created user (cross-realm isolation is Test F.7's)
+**When** the user's token makes authenticated requests
+**Then** the backend resolves that user's own provisioned ArangoDB document — the `_key` is the profile-read identity:
   - Genie realm token -> the genie-realm user's `_key` (e.g., `12345`)
-  - Genie2 realm token -> the genie2-realm user's `_key` (e.g., `67890`)
 
 **Verification:**
 ```bash
-# Get admin token
-TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+# Phase-local admin token — $TOKEN is the MASTER admin token from Phase 0
+# (see Variable Reference); never shadow it
+GENIE_ADMIN_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create user in genie realm (if not exists) — firstName/lastName/emailVerified
 # are required for ROPC logins to succeed (see .claude/rules/SERVER-TESTING.md)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $GENIE_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "e2e-test-user",
@@ -1228,7 +1230,7 @@ echo "HTTP: 200 (cached JWKS validated the token)"
 
 **Expected**: `HTTP: 200` with the raw user document — the backend validates the JWT using cached JWKS keys and does not need Keycloak for every request. This is the correct behavior: the auth system is resilient to temporary Keycloak outages for already-authenticated users.
 
-> **Note**: If you see `HTTP: 401`, the token may have expired during the wait. Re-run Step 1 to get a fresh token before Keycloak is stopped, and reduce the sleep time.
+> **Note**: If you see `HTTP: 401`, the likely cause is the 5-minute JWKS cache TTL: if no authenticated request ran in the last 5 minutes, the backend refetches the keys from the stopped Keycloak and verification fails. The remedy is not a shorter sleep — re-run Step 1 to get a fresh token AND make one authenticated call (e.g. `GET /api/me`) immediately before Step 2, so the JWKS cache is warm when Keycloak stops.
 
 ```bash
 # Step 3: Restore Keycloak

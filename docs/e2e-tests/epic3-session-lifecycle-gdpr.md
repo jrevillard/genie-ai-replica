@@ -418,14 +418,14 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
     db.users.update('${USER_KEY}', {deleted:true, active:false, deletedAt:'2026-01-01T00:00:00.000Z'});
   "
 
-# Verify soft-deleted
-docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
+# Verify soft-deleted — the whole test is vacuous if this did not take effect
+DELETED=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     var u = db.users.document('${USER_KEY}');
-    print('deleted: ' + u.deleted);
-  "
-# Expected: deleted: true
+    print(u.deleted);
+  " 2>/dev/null | tail -1)
+[ "$DELETED" = "true" ] || { echo "FATAL: soft-delete update did not take effect (deleted=${DELETED:-unset})"; exit 1; }
 
 # Re-login triggers JIT reactivation
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \

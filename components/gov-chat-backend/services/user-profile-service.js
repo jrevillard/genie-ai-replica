@@ -380,17 +380,23 @@ class UserProfileService {
     try {
       logger.info('UserProfileService.reset_user_data_start', { userKey });
 
-      const currentUserDoc = await this.getUserProfile(userKey);
+      // Read the stored document directly — getUserProfile() promotes
+      // customSettings sub-keys to the top level, and a promoted user-supplied
+      // value must never be preserved as a system-managed identity field.
+      const currentUserDoc = await this.users.document(userKey);
       if (!currentUserDoc) {
         logger.warn('UserProfileService.user_not_found', { userKey });
         throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
-      // Preserve the JIT-managed fields (identity, timestamps, soft-delete state).
-      // They are Keycloak-owned: losing iss_sub/email would make the provisioning
-      // UPSERT miss this document on next login and INSERT a husk duplicate.
+      // Preserve the system-managed fields: the JIT-managed set (identity,
+      // timestamps, soft-delete state) plus the provisioning/GDPR audit
+      // markers. They are Keycloak- or backend-owned: losing iss_sub/email
+      // would make the provisioning UPSERT miss this document on next login
+      // and INSERT a husk duplicate.
+      const preservedFields = [...JIT_PROTECTED_FIELDS, 'deletedAt', 'erasedAt'];
       const preservedData = {};
-      for (const field of JIT_PROTECTED_FIELDS) {
+      for (const field of preservedFields) {
         if (currentUserDoc[field] !== undefined) {
           preservedData[field] = currentUserDoc[field];
         }
@@ -401,8 +407,6 @@ class UserProfileService {
         userKey,
         fields: Object.keys(preservedData)
       });
-
-      await this.deleteUserFiles(currentUserDoc);
 
       try {
         await this.users.replace(userKey, preservedData);
@@ -420,6 +424,10 @@ class UserProfileService {
         });
         logger.info('UserProfileService.user_document_updated_with_overwrite', { userKey });
       }
+
+      // Files are removed only after the write succeeded — a failed reset
+      // must not have already destroyed the user's uploads.
+      await this.deleteUserFiles(currentUserDoc);
 
       logger.info('UserProfileService.reset_user_data_completed', {
         userKey,

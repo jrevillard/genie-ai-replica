@@ -327,9 +327,63 @@ describe('UserProfileService', () => {
       expect(preserved).not.toHaveProperty('customSettings');
     });
 
+    it('should not preserve a customSettings value promoted to the top level as an identity field', async () => {
+      // getUserProfile() promotes customSettings sub-keys to the top level;
+      // resetUserData reads the stored document directly, so a user-controlled
+      // customSettings entry keyed "name" can never be preserved as system-managed identity.
+      mockUsers.document.mockResolvedValue({
+        _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        email: 'user@test.com',
+        name: null,
+        customSettings: { name: 'user-injected text' },
+        createdAt: '2026-01-01T00:00:00.000Z'
+      });
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.name).toBeNull();
+      expect(preserved.iss_sub).toBe('https://issuer.test|abc-123');
+    });
+
+    it('should preserve the soft-delete and GDPR audit markers', async () => {
+      mockUsers.document.mockResolvedValue({
+        _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        email: 'user@test.com',
+        deleted: true,
+        deletedAt: '2026-06-01T00:00:00.000Z',
+        erasedAt: '2026-06-02T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      });
+
+      await userProfileService.resetUserData('user-1');
+
+      const preserved = mockUsers.replace.mock.calls[0][1];
+      expect(preserved.deleted).toBe(true);
+      expect(preserved.deletedAt).toBe('2026-06-01T00:00:00.000Z');
+      expect(preserved.erasedAt).toBe('2026-06-02T00:00:00.000Z');
+    });
+
+    it('should not delete user files when the reset write fails', async () => {
+      mockUsers.document.mockResolvedValue({
+        _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      });
+      mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
+      mockUsers.update.mockRejectedValueOnce(new Error('update fail'));
+
+      await expect(userProfileService.resetUserData('user-1')).rejects.toThrow();
+      expect(mockFsTracker.rmCalls.length).toBe(0);
+    });
+
     it('should fallback to update with overwrite on replace failure', async () => {
       mockUsers.document.mockResolvedValue({
         _key: 'user-1',
+        iss_sub: 'https://issuer.test|abc-123',
+        email: 'user@test.com',
         createdAt: '2026-01-01T00:00:00.000Z'
       });
       mockUsers.replace.mockRejectedValueOnce(new Error('replace fail'));
@@ -337,7 +391,11 @@ describe('UserProfileService', () => {
       expect(result.success).toBe(true);
       expect(mockUsers.update).toHaveBeenCalledWith(
         'user-1',
-        expect.objectContaining({ createdAt: '2026-01-01T00:00:00.000Z' }),
+        expect.objectContaining({
+          createdAt: '2026-01-01T00:00:00.000Z',
+          iss_sub: 'https://issuer.test|abc-123',
+          email: 'user@test.com'
+        }),
         expect.objectContaining({ overwrite: true })
       );
     });

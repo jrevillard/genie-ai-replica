@@ -200,12 +200,16 @@ language the query is written in:
   question *is* the whole history): the character budget is applied on the
   English path too, so an oversized question is refused at the same budget
   whatever language it is in.
-- **Multi-message history, service-side refusal**: when the derived character
-  budget still overruns the model window (a dense-script history, or a
-  deployer-raised `MAX_TRANSLATION_CHARS`), the translation service refuses
-  the flattened history and the turn is refused with it — the newest message
-  in the history is still the query, so it is not answered from an
-  untranslated fallback.
+- **Multi-message history, service-side refusal**: when the prompt the
+  translation service is asked to translate does not fit its model window —
+  typically a dense-script history, where the character budget's
+  chars-per-token estimate runs ~3× over (the budget is a Latin-script
+  estimate; dense scripts cost ~1 token/char) — the translation service
+  refuses the flattened history and the turn is refused with it — the newest
+  message in the history is still the query, so it is not answered from an
+  untranslated fallback. The mitigation is **lowering** `MAX_TRANSLATION_CHARS`
+  for the deployment's script; raising it only takes effect when the window
+  probe cannot answer (the budget then falls back to that configured value).
 
 The multi-message shape keeps the same turns of the conversation on both
 language paths (the newest ones, within the same character budget), so the

@@ -4695,8 +4695,15 @@ class ChatQnAService:
                     # The budget does not care about the language (issue
                     # #1366): an oversized query gets the same refusal on the
                     # English path as the translation path gives it.
-                    _refuse_oversized_query(full_chat_history)
-                    translated_history_string = full_chat_history
+                    if not full_chat_history.strip():
+                        # Same answer as the translation path's blank guard:
+                        # an empty query is a fallback, not a refusal —
+                        # whatever language the turn asked for.
+                        translated_history_string = full_chat_history
+                        query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
+                    else:
+                        _refuse_oversized_query(full_chat_history)
+                        translated_history_string = full_chat_history
                 else:
                     max_translation_chars = _get_max_translation_chars()
                     messages_to_process = _select_history_within_budget(

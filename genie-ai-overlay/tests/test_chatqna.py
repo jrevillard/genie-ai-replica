@@ -4996,6 +4996,22 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422(language)
 
 
 @pytest.mark.asyncio
+async def test_an_empty_single_message_query_is_a_fallback_on_both_language_paths():
+    """A blank query is a fallback, not a refusal — whatever language the
+    turn asked for: the translation path blank-guards before the budget
+    check, so the English path must answer the same way instead of refusing
+    a 0-character query that cannot fit a budget below the overhead
+    allowance."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=12):
+        # A whitespace-only query (a blank "" would be dropped by the
+        # request builder's truthiness check).
+        payload = await _full_flow_payload(svc, stream=False, language="en", messages=" ")
+
+    assert payload["metadata"]["query_translation_status"] == "fallback_error"
+
+
+@pytest.mark.asyncio
 async def test_a_query_the_translation_service_refuses_is_answered_with_a_422():
     """The service's own refusal is the same overflow: it must not degrade
     into an untranslated query embedded as if it were English."""

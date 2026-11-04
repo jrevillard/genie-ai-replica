@@ -63,7 +63,8 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
 const enMessages = require('../../i18n/locales/en').default;
-const { DISPLAY_PREF_KEYS } = require('../../utils/displayPrefKeys');
+const { DISPLAY_PREF_KEYS, RESET_PRESERVED_KEYS } = require('../../utils/displayPrefKeys');
+const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('../../services/keycloakAuthService');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -202,7 +203,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     jest.restoreAllMocks();
   });
 
-  test('keeps every display preference across the clear', async () => {
+  test('keeps every preserve-list key across the clear', async () => {
     const seeded = {
       theme: 'dark',
       userLocale: 'fr',
@@ -210,7 +211,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
       emailUpdates: 'true',
       soundNotifications: 'false'
     };
-    for (const key of DISPLAY_PREF_KEYS) {
+    for (const key of RESET_PRESERVED_KEYS) {
       localStorage.setItem(key, seeded[key] || `value-of-${key}`);
     }
     // A key the reset owns — chat cache leftovers and the like — must go.
@@ -221,14 +222,14 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
 
     await resetViaModal(wrapper);
 
-    for (const key of DISPLAY_PREF_KEYS) {
+    for (const key of RESET_PRESERVED_KEYS) {
       expect(localStorage.getItem(key)).toBe(seeded[key] || `value-of-${key}`);
     }
     expect(localStorage.getItem('junkCacheKey')).toBeNull();
     // Full-inventory closure: exactly the preserve list survives, nothing
     // else. Combined with the save() drift guard below, both directions of
-    // drift between save()'s keys and DISPLAY_PREF_KEYS turn red.
-    expect(Object.keys(localStorage).sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
+    // drift between save()'s keys and RESET_PRESERVED_KEYS turn red.
+    expect(Object.keys(localStorage).sort()).toEqual([...RESET_PRESERVED_KEYS].sort());
   });
 
   test('does not write display-preference keys that were absent before the reset', async () => {
@@ -268,7 +269,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // not preserve is the drift this pins. The filter form names the
     // drifting key in the failure instead of a bare boolean mismatch.
     const writtenKeys = [...new Set(written)].sort();
-    const preserveSet = new Set(DISPLAY_PREF_KEYS);
+    const preserveSet = new Set(RESET_PRESERVED_KEYS);
     expect(writtenKeys.filter((key) => !preserveSet.has(key))).toEqual([]);
     // save() still writes the five settings-screen keys it always did.
     expect(writtenKeys).toEqual(['emailUpdates', 'fontSize', 'soundNotifications', 'theme', 'userLocale']);
@@ -305,16 +306,16 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // Not preferences — live state: wiping the lease or the published
     // renewal user mid-renewal lets two tabs rotate the same refresh token
     // and trips Keycloak reuse detection (forced logout of every tab).
-    localStorage.setItem('genie.renew.lease', '{"tab":"t1","at":123}');
-    localStorage.setItem('genie.renew.user', '{"access_token":"x"}');
+    localStorage.setItem(RENEW_LEASE_KEY, '{"tab":"t1","at":123}');
+    localStorage.setItem(RENEW_USER_KEY, '{"access_token":"x"}');
 
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
 
     await resetViaModal(wrapper);
 
-    expect(localStorage.getItem('genie.renew.lease')).toBe('{"tab":"t1","at":123}');
-    expect(localStorage.getItem('genie.renew.user')).toBe('{"access_token":"x"}');
+    expect(localStorage.getItem(RENEW_LEASE_KEY)).toBe('{"tab":"t1","at":123}');
+    expect(localStorage.getItem(RENEW_USER_KEY)).toBe('{"access_token":"x"}');
   });
 
   test('the reset drops the in-session chat and conversation store state', async () => {

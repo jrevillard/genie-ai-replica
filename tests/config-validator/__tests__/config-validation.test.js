@@ -54,6 +54,19 @@ const JS_EXT_SRC = '[cm]?[jt]sx?';
 const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
 const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
 
+// The module-path matcher the import-path pin runs over spec sources,
+// built once: the basename is matched (not the 'helpers/' prefix, and
+// not a longer module name merely ending in the same fragment), the
+// extension is optional, and both require() and ESM `from` spellings
+// are in the net — whatever spelling imports the module mixes the
+// credential paths just the same.
+const importPathRe = (moduleName) =>
+  new RegExp(
+    "(?:require\\(\\s*|from\\s+)(['\"`])(?:[^'\"`]*/)?" +
+      moduleName +
+      '(\\.' + JS_EXT_SRC + ')?\\1'
+  );
+
 describe('Configuration Validation Suite', () => {
   let envParsed;
   let composeVars;
@@ -2658,10 +2671,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // stays exact). Playwright's default testMatch glob
   // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
   // t, then a REQUIRED s (the trailing ? quantifies only the x), then
-  // optional x — the selection regex below mirrors that shape set exactly
-  // (the config test pins that the default is still in force), so every
-  // spelling Playwright would run counts as executed and none it would
-  // not.
+  // optional x — the selection regex (EXECUTED_SPEC_RE, module top)
+  // mirrors that shape set exactly (the config test pins that the
+  // default is still in force), so every spelling Playwright would run
+  // counts as executed and none it would not.
   const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
@@ -3454,20 +3467,29 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // The file filter is the EXECUTED_SPEC_RE itself, not a narrower
     // '.spec.js' literal: whatever Playwright would execute is in the
     // pin's net, under the same shape the executed-set pin enforces.
+    // Positive control: the detector really detects. Without this, a
+    // one-character regex slip would silence the pin into a vacuous
+    // pass forever — the walked floor below proves only that files were
+    // visited, not that detection works (the sibling executed-set units
+    // pin their shapes on synthetic listings; same discipline here).
+    const mixedSource = "require('../helpers/e2e-fixtures');\nrequire('./helpers/chatbot');";
+    if (!(importPathRe('e2e-fixtures').test(mixedSource) && importPathRe('chatbot').test(mixedSource))) {
+      throw new Error('the import-path detector no longer matches a synthetic mixed file — fix the matcher, not the suite');
+    }
+    if (importPathRe('e2e-fixtures').test("require('./provision-e2e-fixtures');")) {
+      throw new Error('the import-path detector matches a longer module name (provision-e2e-fixtures) as e2e-fixtures');
+    }
+    if (importPathRe('e2e-fixtures').test("import { credentialsOf } from '../helpers/e2e-fixtures';") === false) {
+      throw new Error('the import-path detector misses an ESM from-import');
+    }
     walkE2eFiles(e2eRoot, null, EXECUTED_SPEC_RE, (entryPath, source) => {
       walked += 1;
-      // Commented-out requires are not imports: a refactor leftover must
-      // not fail a file whose live imports are clean.
-      const code = source.replace(/^[ \t]*\/\/.*$/gm, '');
-      // The basename is matched, not the 'helpers/' prefix: a spec
-      // living inside tests/e2e/helpers/ (next to both modules)
-      // requires them as './e2e-fixtures' and './chatbot', and mixes
-      // the paths just the same. The extension is optional — a require
-      // spelled './chatbot.js' mixes the paths just the same.
-      const requirePathRe = (moduleName) =>
-        new RegExp("require\\((['\"`])[^'\"`]*" + moduleName + '(\\.' + JS_EXT_SRC + ')?\\1\\)');
-      const fromFixtures = requirePathRe('e2e-fixtures').test(code);
-      const fromChatbot = requirePathRe('chatbot').test(code);
+      // Commented-out requires are not imports — of either spelling —:
+      // a refactor leftover must not fail a file whose live imports are
+      // clean.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+      const fromFixtures = importPathRe('e2e-fixtures').test(code);
+      const fromChatbot = importPathRe('chatbot').test(code);
       if (fromFixtures && fromChatbot) {
         violations.push(path.relative(e2eRoot, entryPath));
       }

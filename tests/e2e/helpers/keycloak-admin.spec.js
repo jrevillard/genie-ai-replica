@@ -63,6 +63,13 @@ const EMAIL_LOOKUP = new RegExp(
 );
 const RESET_PASSWORD_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/reset-password$`);
 
+// Shared 409-diagnosis routes: both convergeUser's and createUser's
+// describes run the same shape, so one definition keeps them in
+// lockstep.
+const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
+const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
+const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
+
 test.beforeEach(() => {
   routes = [];
   calls = [];
@@ -309,9 +316,6 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
 });
 
 test.describe('convergeUser diagnoses a 409 whose username lookup misses', () => {
-  const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
-  const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
-  const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
@@ -471,14 +475,11 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
 });
 
 test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
-  const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
-  const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
-
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      ['GET', EMAIL_LOOKUP, { status: 200, data: [{ username: 'someone-else', email: ADMIN_FIXTURE.email }] }],
+      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
     ];
 
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(

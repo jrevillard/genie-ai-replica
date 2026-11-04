@@ -43,6 +43,17 @@ const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.ym
 const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
+// The extension shape set Playwright's default testMatch accepts — one
+// fragment shared by the executed-spec selection, the walk's JS-file gate
+// and the import-path pin so the three cannot drift.
+const JS_EXT_SRC = '[cm]?[jt]sx?';
+
+// Pure selection of the executed files from a directory listing — the
+// units below pin the boundary and the testMatch shapes on synthetic
+// listings, the real-tree pin anchors them to the actual invocation.
+const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
+
 describe('Configuration Validation Suite', () => {
   let envParsed;
   let composeVars;
@@ -2659,16 +2670,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  // The extension shape set Playwright's default testMatch accepts — one
-  // fragment shared by the executed-spec selection and the walk's JS-file
-  // gate so the two cannot drift.
-  const JS_EXT_SRC = '[cm]?[jt]sx?';
-
-  // Pure selection of the executed files from a directory listing — the
-  // units below pin the boundary and the testMatch shapes on synthetic
-  // listings, the real-tree pin above anchors them to the actual invocation.
-  const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
-  const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
   const scanTargets = (files, executedGlobs) =>
     files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
 
@@ -3450,20 +3451,33 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   test('a spec file never mixes the two sanctioned credential paths', () => {
     const violations = [];
     let walked = 0;
-    walkE2eFiles(e2eRoot, null, /\.spec\.js$/, (entryPath, source) => {
+    // The file filter is the EXECUTED_SPEC_RE itself, not a narrower
+    // '.spec.js' literal: whatever Playwright would execute is in the
+    // pin's net, under the same shape the executed-set pin enforces.
+    walkE2eFiles(e2eRoot, null, EXECUTED_SPEC_RE, (entryPath, source) => {
       walked += 1;
+      // Commented-out requires are not imports: a refactor leftover must
+      // not fail a file whose live imports are clean.
+      const code = source.replace(/^[ \t]*\/\/.*$/gm, '');
       // The basename is matched, not the 'helpers/' prefix: a spec
       // living inside tests/e2e/helpers/ (next to both modules)
       // requires them as './e2e-fixtures' and './chatbot', and mixes
-      // the paths just the same.
-      const fromFixtures = /require\((['"`])[^'"`]*e2e-fixtures\1\)/.test(source);
-      const fromChatbot = /require\((['"`])[^'"`]*chatbot\1\)/.test(source);
+      // the paths just the same. The extension is optional — a require
+      // spelled './chatbot.js' mixes the paths just the same.
+      const requirePathRe = (moduleName) =>
+        new RegExp("require\\((['\"`])[^'\"`]*" + moduleName + '(\\.' + JS_EXT_SRC + ')?\\1\\)');
+      const fromFixtures = requirePathRe('e2e-fixtures').test(code);
+      const fromChatbot = requirePathRe('chatbot').test(code);
       if (fromFixtures && fromChatbot) {
         violations.push(path.relative(e2eRoot, entryPath));
       }
     });
     // The walk must have actually visited the suite: a broken walker
     // (wrong root, dead filter) would pass the check below vacuously.
+    // The floor is deliberately low — a suite that legitimately shrinks
+    // under it should RAISE-or-REMOVE this guard consciously, never
+    // silently: the message then says the walker is broken, and it lies
+    // only when nobody revisited the number.
     if (walked < 20) {
       throw new Error(
         `the import-path walk visited only ${walked} spec files — the walker is broken, not the suite clean`

@@ -482,7 +482,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     ];
 
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
-      new RegExp(`${ADMIN_FIXTURE.email}: an email conflict`)
+      new RegExp(`${ADMIN_FIXTURE.email.replaceAll('.', '\\.')}: an email conflict`)
     );
     expect(calls.some((call) => call.includes('email='))).toBe(true);
   });

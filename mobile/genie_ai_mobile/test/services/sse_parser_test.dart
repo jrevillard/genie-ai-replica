@@ -145,14 +145,6 @@ void main() {
       expect(meta.extra, isEmpty);
     });
 
-    test('extra is empty when no unknown keys are sent', () {
-      final events = parser.parseChunk(
-        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9}\n\n',
-      );
-      final meta = events[0] as SseMetadataEvent;
-      expect(meta.extra, isEmpty);
-    });
-
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

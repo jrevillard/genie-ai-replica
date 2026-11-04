@@ -117,11 +117,11 @@ describe('userProvisioningService', () => {
       expect(updateDoc.createdAt).toBeUndefined();
     });
 
-    it('should backfill sub in the UPDATE doc for sub-less existing users', async () => {
+    it('should write sub in both the INSERT and UPDATE docs unconditionally', async () => {
       // The UPDATE doc is built solely from the decoded JWT — the stored doc
-      // does not influence it. The sub-less fixture stands for a doc that had
-      // lost (or never gained) the field; the UPDATE path must write sub
-      // unconditionally (idempotent — the iss_sub match guarantees identity).
+      // does not influence it, so the write is unconditional (idempotent —
+      // the iss_sub match guarantees identity). The sub-less fixture stands
+      // for a doc that had lost (or never gained) the field.
       const existingUserWithoutSub = {
         _key: 'users/789',
         iss_sub: ISS_SUB,

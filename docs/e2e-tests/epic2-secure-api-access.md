@@ -52,7 +52,7 @@ fi
 # Check if OPEA services are responding
 # The chat endpoint is a reliable indicator that the OPEA stack is up
 # (success is HTTP 201; failures surface as 4xx/5xx)
-if curl -sk https://localhost/api/chat -X POST -H "Content-Type: application/json" \
+if curl -sk --max-time 15 https://localhost/api/chat -X POST -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"ping"}],"sessionId":"e2e-phase-f"}' \
   -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "201"; then
   echo "OPEA infrastructure detected - running Phase F tests"
@@ -97,9 +97,7 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 > **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects the backend's profile-retrieval log to verify the request resolved the account's ArangoDB `_key`.
 
 **Expected Behavior:**
-- Token verified via the cached JWKS; invalid or expired tokens are rejected before any handler runs
-- The ArangoDB user document is resolved (or provisioned) per request, keyed by its `_key`
-- JWT claims travel as `req.claims`, so role checks always read fresh values from the current token
+- Role checks always read fresh values from the current token (`req.claims`), never from the possibly-cached ArangoDB user document
 
 ---
 
@@ -192,10 +190,8 @@ USER_KEY=$(curl -sk -X GET "https://localhost/api/me" \
 
 echo "User _key: $USER_KEY"
 
-# Make a request and verify the profile-retrieval log carries that _key
-curl -sk -X GET "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN"
-
+# The _key-resolving request above already went through the auth middleware —
+# verify its profile-retrieval log entry carries that _key
 docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$USER_KEY\"" | tail -1
 # Expected: a log entry whose userKey equals the resolved _key
 ```
@@ -275,9 +271,7 @@ echo "$RESPONSE" | jq -r '.response'
 ```
 
 **Expected Behavior:**
-- The chat response carries `queryId`, `response`, `metadata` and `responseTime`
-- The `metadata` block keeps the chatqna structure (`source_documents`, `filter_labels`, `retrieval_confidence_score`, `confidence_score`, `is_grounded`)
-- Other payload fields remain unchanged across OPEA upgrades
+- Other payload fields remain unchanged across OPEA upgrades (the response and metadata shapes asserted above are the contract)
 
 ---
 
@@ -324,6 +318,7 @@ echo "Admin endpoint with no roles: HTTP ${HTTP_CODE}"
 - Missing or empty `realm_access.roles` -> authentication still succeeds
 - No crashes or errors anywhere in the middleware
 - `requireAdmin` denies with HTTP 403 when the `admin` role is absent from the token
+- The OPEA path itself is role-independent — a role-less token completing a chat is covered by Test F.8
 
 ---
 
@@ -377,19 +372,15 @@ USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/op
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
 # Look up user keys from each user's own profile (each realm provisions its
-# own ArangoDB user, so the _key differs per realm)
-# Per realm: one profile request provides the log entry under test and yields
-# the _key — resolve via /api/me, never by email (see README "Resolving test
-# accounts")
+# own ArangoDB user, so the _key differs per realm) — resolve via /api/me,
+# never by email (see README "Resolving test accounts"; the per-request
+# profile-retrieval log check itself is Test F.1's)
 RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -w "\n%{http_code}")
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$GENIE_USER_KEY" ] && [ "$GENIE_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie realm user"; exit 1; }
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE_USER_KEY\"" \
-  || { echo "FATAL: no profile-retrieval log entry for the genie-realm _key"; exit 1; }
-# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
 RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN" \
@@ -397,15 +388,12 @@ RESPONSE=$(curl -sk -X GET "https://localhost/api/me" \
 [ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: genie2 realm profile request answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
 GENIE2_USER_KEY=$(echo "$RESPONSE" | head -n -1 | jq -r '._key')
 [ -n "$GENIE2_USER_KEY" ] && [ "$GENIE2_USER_KEY" != "null" ] || { echo "FATAL: /api/me returned no _key for the genie2 realm user"; exit 1; }
-docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | grep -F "\"userKey\":\"$GENIE2_USER_KEY\"" \
-  || { echo "FATAL: no profile-retrieval log entry for the genie2-realm _key"; exit 1; }
-# Expected: the check above passes silently — any entry for this realm's _key satisfies it
 
 # The whole point of the test: distinct realms must resolve distinct ArangoDB docs
 [ "$GENIE_USER_KEY" != "$GENIE2_USER_KEY" ] || { echo "FATAL: both realms resolved the same ArangoDB _key"; exit 1; }
 ```
 
-> **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.
+> **Note:** This test uses user profile endpoints. Each user from a different realm gets a unique ArangoDB `_key`.
 
 **Expected Behavior:**
 - Each realm resolves a unique ArangoDB `_key` (distinct provisioned user per realm)
@@ -418,7 +406,7 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 **Given** OPEA services validate the forwarded Bearer token against Keycloak's JWKS
 **When** a full chat round-trip runs (backend -> chatqna -> retrieval -> LLM)
 **Then** the OPEA services function normally with the forwarded token
-**And** the answer and its metadata come back intact
+**And** the retrieval metadata comes back intact (the response-shape checks themselves are Test F.5's)
 
 **Verification:**
 ```bash
@@ -426,19 +414,11 @@ docker compose logs backend --since 1m 2>&1 | grep "user_profile_retrieved" | gr
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
-# Make chat query
+# Make chat query (full round-trip)
 RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Payload preservation test"}],"sessionId":"e2e-phase-f"}')
-
-# Verify response structure
-echo "$RESPONSE" | jq 'keys | sort'
-# Expected: ["metadata","queryId","response","responseTime"]
-
-# Verify the answer came through (not an auth error)
-echo "$RESPONSE" | jq -r '.response'
-# Expected: actual model response text, not an error object
 
 # Verify the retrieval metadata survived the round-trip
 echo "$RESPONSE" | jq '.metadata.is_grounded'
@@ -447,8 +427,6 @@ echo "$RESPONSE" | jq '.metadata.is_grounded'
 
 **Expected Behavior:**
 - OPEA services function normally with the forwarded Bearer token
-- No breaking changes to the payload structure across the round-trip
-- The answer and retrieval metadata come back intact
 
 ---
 
@@ -940,15 +918,15 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 ### Test I.3 — Verify Backend Validates Tokens from Both Realms Simultaneously
 
 ```bash
-# Test genie realm token (original)
+# Test genie realm token (original) — /api/me returns the raw user document
 echo "=== Genie realm token ==="
 curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
+  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", \"N/A\")}')"
 
 # Test genie2 realm token
 echo "=== Genie2 realm token ==="
 curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
+  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", \"N/A\")}')"
 ```
 
 **Expected**: Both return `HTTP: 200` with user profile data. Each user has a different identity in ArangoDB.
@@ -1202,11 +1180,17 @@ docker compose stop keycloak
 echo "Waiting 15 seconds for Keycloak to stop..."
 sleep 15
 
-curl -sk "https://localhost/api/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq .
+RESPONSE=$(curl -sk "https://localhost/api/me" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+# The endpoint returns the raw ArangoDB user document — no success/user wrapper
+echo "$RESPONSE" | head -n -1 | jq -e '._key' > /dev/null \
+  || { echo "FATAL: /api/me returned no _key"; exit 1; }
+echo "HTTP: 200 (cached JWKS validated the token)"
 ```
 
-**Expected**: `HTTP: 200` with `{"success": true, ...}` — the backend validates the JWT using cached JWKS keys and does not need Keycloak for every request. This is the correct behavior: the auth system is resilient to temporary Keycloak outages for already-authenticated users.
+**Expected**: `HTTP: 200` with the raw user document — the backend validates the JWT using cached JWKS keys and does not need Keycloak for every request. This is the correct behavior: the auth system is resilient to temporary Keycloak outages for already-authenticated users.
 
 > **Note**: If you see `HTTP: 401`, the token may have expired during the wait. Re-run Step 1 to get a fresh token before Keycloak is stopped, and reduce the sleep time.
 

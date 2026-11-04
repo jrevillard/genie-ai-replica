@@ -422,6 +422,9 @@ describe('loadConfig', () => {
       features: { chat: { quickHelp: { buttons } } },
       ...extra
     });
+    // The shape-report warnings, out of everything the config load may
+    // have printed — one place carries the load-bearing message token.
+    const hiddenWarnings = (warn) => warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
 
     it('accepts buttons that each carry a unique non-blank string id', async () => {
       global.fetch.mockResolvedValueOnce({
@@ -511,12 +514,12 @@ describe('loadConfig', () => {
       // A report, not a gate: the configuration still loads.
       await expect(loadConfig()).resolves.toBeDefined();
 
-      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
-      expect(hiddenWarnings.length).toBe(1);
+      const warnings = hiddenWarnings(warn);
+      expect(warnings.length).toBe(1);
       // The report names the offending button by its ID — the identity the
       // gate above guarantees — and the offending value.
-      expect(String(hiddenWarnings[0][0])).toContain('quoted');
-      expect(String(hiddenWarnings[0][0])).toContain('"false"');
+      expect(String(warnings[0][0])).toContain('quoted');
+      expect(String(warnings[0][0])).toContain('"false"');
       warn.mockRestore();
     });
 
@@ -537,10 +540,10 @@ describe('loadConfig', () => {
         await expect(loadConfig()).resolves.toBeDefined();
       }
 
-      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
-      expect(hiddenWarnings.length).toBe(2);
-      expect(String(hiddenWarnings[0][0])).toContain('quoted');
-      expect(String(hiddenWarnings[1][0])).toContain('still-mistyped');
+      const warnings = hiddenWarnings(warn);
+      expect(warnings.length).toBe(2);
+      expect(String(warnings[0][0])).toContain('quoted');
+      expect(String(warnings[1][0])).toContain('still-mistyped');
       warn.mockRestore();
     });
 
@@ -561,10 +564,10 @@ describe('loadConfig', () => {
 
       await expect(loadConfig()).resolves.toBeDefined();
 
-      const hiddenWarnings = warn.mock.calls.filter((call) => String(call[0]).includes('must be a boolean'));
-      expect(hiddenWarnings.length).toBe(2);
-      expect(String(hiddenWarnings[0][0])).toContain('one');
-      expect(String(hiddenWarnings[1][0])).toContain('two');
+      const warnings = hiddenWarnings(warn);
+      expect(warnings.length).toBe(2);
+      expect(String(warnings[0][0])).toContain('one');
+      expect(String(warnings[1][0])).toContain('two');
       warn.mockRestore();
     });
 

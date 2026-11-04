@@ -79,16 +79,16 @@ const validateConfig = (data) => {
  * with no top-level `properties` skips the schema validation but not
  * this contract.
  *
+ * A non-boolean `hidden` flag is also checked here, as a shape REPORT,
+ * never a throw (#1361) — only the id rules block a load.
+ *
  * Exported so the build-time contract test
  * (src/__tests__/config-quickhelp-contract.test.js) enforces the SAME
  * rules on the files that ship — one copy of the contract, not two.
  */
-// The button ids whose non-boolean "hidden" flag was already reported.
-// loadConfig runs more than once per page session (boot in main.js, and
-// again wherever a component re-fetches the configuration), so a
-// per-load report would print the identical warning two or more times —
-// the same multiplication this report replaced (#1361). One report per
-// button id per session, like the component-side dedup it succeeded.
+// Per-session dedup for the hidden-flag shape report: loadConfig runs
+// more than once per page (boot + component re-fetch), and one warning
+// per button id per module instance is the whole budget (#1361).
 const hiddenFlagReported = new Set();
 
 const validateQuickHelpButtons = (data) => {
@@ -116,8 +116,8 @@ const validateQuickHelpButtons = (data) => {
     // report lives at configuration-resolution time (#1361): one warning
     // per malformed flag per session, named by the button's id — not one
     // per mount or language switch, under whatever title the locale
-    // resolved. A report, not a gate: the flag's truthiness decides
-    // (deliberate parity with the mobile), so the app still boots.
+    // resolved. The flag's truthiness decides (deliberate parity with
+    // the mobile), so the app still boots.
     if (button.hidden != null && typeof button.hidden !== 'boolean' && !hiddenFlagReported.has(id)) {
       hiddenFlagReported.add(id);
       console.warn(

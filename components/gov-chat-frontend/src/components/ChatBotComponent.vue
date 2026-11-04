@@ -1885,17 +1885,11 @@ export default {
       // A button that declares no label contributes no label of its own: the
       // request is then scoped by the category label alone, which the backend
       // resolves against the live hierarchy like any other label.
-      // The hidden flag is a BOOLEAN (#1208). A hand-edited configuration
-      // that writes it as a string says nothing about what the operator
-      // meant — and the flag's TRUTHINESS decides: "false" is a
-      // non-empty string, so the card DISAPPEARS. The mobile reads the
-      // flag the same way (the parity is deliberate). The typo itself is
-      // REPORTED by the loader's shape report (validateQuickHelpButtons —
-      // one warning per malformed flag per session, named by the button's
-      // id; the id/duplicate checks are the gate, this one never blocks a
-      // load) — a shape error is a property of the document, not of the
-      // locale the UI happens to be in (#1361). The filter here stays a
-      // pure filter.
+      // The hidden flag is a BOOLEAN (#1208): its TRUTHINESS decides —
+      // "false" is a non-empty string, so the card DISAPPEARS (the mobile
+      // reads it the same way; the parity is deliberate). A mistyped
+      // flag is reported by the loader's shape report, never here
+      // (validateQuickHelpButtons, #1361): this stays a pure filter.
       // The id is the button's IDENTITY — the conversation tag carries
       // it, the restore resolves it, the grid's verdict keys on it. The
       // loader's gate (validateQuickHelpButtons) has already refused any

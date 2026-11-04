@@ -61,6 +61,12 @@ function mockCursor(result) {
   return { next: jest.fn().mockResolvedValue(result) };
 }
 
+// The invalidation broadcasts every Redis client created during the test
+// published — one entry per publish call.
+function publishedInvalidations() {
+  return require('ioredis').instances.flatMap((i) => i.publish.mock.calls);
+}
+
 // The five queries provisionUser runs when nothing blocks it (tombstone,
 // legacy-migration, deleted-check, UPSERT, post-INSERT re-check): all miss,
 // the UPSERT inserts the given key. Shared by the erasure-ordering tests —
@@ -588,8 +594,7 @@ describe('keycloak-proxy-service', () => {
       dbService.getConnection.mockResolvedValueOnce(Promise.resolve(seedDb));
       await userProvisioningService.provisionUser(claims);
 
-      const publishes = () => require('ioredis').instances.flatMap((i) => i.publish.mock.calls);
-      expect(publishes()).toHaveLength(0);
+      expect(publishedInvalidations()).toHaveLength(0);
 
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
       const eraseDb = { query: jest.fn() };
@@ -598,7 +603,7 @@ describe('keycloak-proxy-service', () => {
         // At erasure-commit time no publish may have run yet: a pre-commit
         // eviction would broadcast here and the other replicas would
         // re-provision against the not-yet-erased document (#1483)
-        expect(publishes()).toHaveLength(0);
+        expect(publishedInvalidations()).toHaveLength(0);
         return {};
       });
       dbService.getConnection
@@ -608,8 +613,8 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
 
       // Exactly one broadcast — the post-commit eviction — carrying the erased identity
-      expect(publishes()).toHaveLength(1);
-      const [channel, payload] = publishes()[0];
+      expect(publishedInvalidations()).toHaveLength(1);
+      const [channel, payload] = publishedInvalidations()[0];
       expect(channel).toBe('user-provisioning:invalidate');
       expect(JSON.parse(payload)).toEqual({ origin: expect.any(String), issSub });
     });
@@ -675,15 +680,14 @@ describe('keycloak-proxy-service', () => {
       db.query.mockRejectedValueOnce(new Error('ArangoDB connection lost')); // duplicate removal — fails
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
-      const publishes = () => require('ioredis').instances.flatMap((i) => i.publish.mock.calls);
       await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow(
         'Duplicate-cleanup failed after a committed erasure'
       );
 
       // Exactly one broadcast, despite the late failure — the committed
       // erasure closed the cache window on every replica
-      expect(publishes()).toHaveLength(1);
-      const [, payload] = publishes()[0];
+      expect(publishedInvalidations()).toHaveLength(1);
+      const [, payload] = publishedInvalidations()[0];
       expect(JSON.parse(payload)).toEqual({ origin: expect.any(String), issSub });
     });
 

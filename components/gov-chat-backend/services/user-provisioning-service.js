@@ -1,9 +1,9 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const Redis = require('ioredis');
 const { randomUUID } = require('crypto');
-const { logger, dbService, erasureTombstoneKey, parsePositiveInt } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const { createRedisCacheClient } = require('./redis-cache-client');
 const keycloakAuthService = require('./keycloak-auth-service');
 
 /**
@@ -42,24 +42,6 @@ const INVALIDATION_CHANNEL = 'user-provisioning:invalidate';
 let _publisher = null;
 let _subscriber = null;
 let _pubsubStarted = false;
-
-function createRedisClient(clientOptions = {}) {
-  return new Redis({
-    host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
-    port: parsePositiveInt(process.env.TRANSLATION_CACHE_PORT, 6379),
-    password: process.env.TRANSLATION_CACHE_PASSWORD || null,
-    // Same resilience contract as the translation cache client: a capped
-    // retry backoff, a bounded retry count per command, and no offline
-    // queue — a Redis outage surfaces as a failed command, not a
-    // silently-growing buffer
-    retryStrategy(times) {
-      return Math.min(times * 500, 2000);
-    },
-    maxRetriesPerRequest: 3,
-    enableOfflineQueue: false,
-    ...clientOptions
-  });
-}
 
 /** Identifies this replica in invalidation envelopes so a client drops its own loopback delivery. */
 const INSTANCE_ID = randomUUID();
@@ -220,7 +202,7 @@ function evictLocal(issSub) {
  * erasure path), it only degrades the other replicas to the TTL bound.
  */
 function createPublisher() {
-  const publisher = createRedisClient();
+  const publisher = createRedisCacheClient();
   publisher.on('error', (err) => {
     logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
   });
@@ -387,7 +369,7 @@ const userProvisioningService = {
       // start still delivers broadcasts — and once subscribed, ioredis
       // auto-resubscribes after every reconnect. A rejected subscribe here
       // would permanently silence reception until the next boot.
-      _subscriber = createRedisClient({
+      _subscriber = createRedisCacheClient({
         enableOfflineQueue: true,
         maxRetriesPerRequest: null
       });

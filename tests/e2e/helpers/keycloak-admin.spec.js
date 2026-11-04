@@ -613,8 +613,110 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
 
     expect(caught).toBeTruthy();
     expect(caught.message).toMatch(/answered 201 without a usable Location header/);
+    // The created key component is named: it is already ACTIVE and untracked.
+    expect(caught.message).toMatch(/rsa-generated-rotated-\d+/);
+    expect(caught.message).toMatch(/already created.*active/s);
     // No old key was demoted behind a creation whose id was never resolved.
     expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
+  });
+
+  test('a components read the admin API refuses fails loudly instead of feeding its body to .map()', async () => {
+    // An expired admin token answers 401 with an error body: indexing that
+    // body would surface as `existingKeys.map is not a function` — a
+    // TypeError with no named verdict.
+    routes = [
+      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      ['GET', COMPONENTS_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/Cannot read the existing key providers of genie: HTTP 401/);
+    // Nothing was created behind a read that failed: the realm stays untouched.
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(false);
+  });
+
+  test('a components read answering 200 with a non-array payload fails loudly instead of demoting nothing', async () => {
+    // A broken answer is not an empty key set: an empty oldKeyIds would let
+    // the create proceed and demote nothing — a half-rotation.
+    routes = [
+      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      ['GET', COMPONENTS_PATH, { status: 200, data: { error: 'not a list' } }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/answered HTTP 200 with a non-array payload/);
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(false);
+  });
+
+  test('a failed demotion names the new key that is already the active signer', async () => {
+    // The realm is half-mutated: the new key was created and signs. The
+    // message must say so, or a re-run creates a second rotated key.
+    routes = [
+      ...BASE_ROUTES,
+      [
+        'POST',
+        COMPONENTS_PATH,
+        {
+          status: 201,
+          data: null,
+          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
+        },
+      ],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { status: 403, data: null }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/Failed to demote key old-key-1: HTTP 403/);
+    expect(caught.message).toMatch(/new-key-id/);
+    expect(caught.message).toMatch(/already created.*active signer/s);
+  });
+
+  test('a demotion transport break carries the half-mutation diagnosis', async () => {
+    // A timeout after the create is the realistic path to a second
+    // rotated key: the raw transport message must not bypass the
+    // re-run-safety verdict this failure position exists to state.
+    routes = [
+      ...BASE_ROUTES,
+      [
+        'POST',
+        COMPONENTS_PATH,
+        { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` } },
+      ],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { throws: new Error('connection reset by peer') }],
+    ];
+
+    let caught;
+    try {
+      await rotateRealmKeys('tok', REALM);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/the demotion of key old-key-1/);
+    expect(caught.message).toMatch(/new-key-id/);
+    expect(caught.message).toMatch(/already created.*active signer/s);
   });
 
   test('a Location header carrying no id segment fails loudly instead of yielding garbage', async () => {
@@ -634,6 +736,8 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
 
     expect(caught).toBeTruthy();
     expect(caught.message).toMatch(/answered 201 without a usable Location header/);
+    expect(caught.message).toMatch(/rsa-generated-rotated-\d+/);
+    expect(caught.message).toMatch(/already created.*active/s);
     expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
   });
 });

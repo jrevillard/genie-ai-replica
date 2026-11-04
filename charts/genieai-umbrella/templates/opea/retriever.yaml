@@ -23,9 +23,13 @@
 {{- $ns    := .Values.namespace -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- /* MODEL_HUB_EMBED_TIMEOUT_SECONDS bounds a wedged /embed read on the
+TEI/HF hub clients — Compose derives the same row (issue #1381: the live
+incident held an ingest thread 30+ min with no log line). */ -}}
 {{- $tuningEnv := list
     (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaRetriever.arangoGraphName | default "GRAPH" | toString))
     (dict "name" "MODEL_DETECT_TTL" "value" "60")
+    (dict "name" "MODEL_HUB_EMBED_TIMEOUT_SECONDS" "value" "600")
     (dict "name" "RETRIEVER_COMPONENT_NAME" "value" ($opeaRetriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB" | toString))
     (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaRetriever.retrieverArangoK | default "20" | toString))
     (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaRetriever.retrieverArangoFetchK | default "30" | toString))

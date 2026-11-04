@@ -150,6 +150,7 @@ PAYLOAD=$(cat <<JSON
 {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"pii-smoke"}}]},"scopeLogs":[{"scope":{"name":"pii-smoke","version":"1"},"logRecords":[{"timeUnixNano":"${TIME_NS}","severityNumber":9,"severityText":"INFO","body":{"stringValue":"{\"smoke_id\":\"${TEST_ID}\",\"level\":\"info\",\"session_id\":\"abc-123\",\"email\":\"u@x.com\",\"mail\":\"v@y.z\",\"password\":\"hunter2\",\"auth_header\":\"Bearer ${BEARER_TOKEN}\",\"provider_key\":\"${APIKEY}\",\"id_token\":\"${JWT}\",\"trace_id\":\"${TRACE_ID}\"}"},"traceId":"${TRACE_ID}","attributes":[{"key":"smoke.test_id","value":{"stringValue":"${TEST_ID}"}}]},{"timeUnixNano":"${TIME_NS}","severityNumber":17,"severityText":"ERROR","body":{"stringValue":"pii-prose ${PROSE_ID}: ERROR: send failed to ${PROSE_EMAIL} after 3 retries (smtp relay timeout)"},"traceId":"${TRACE_ID}","attributes":[{"key":"smoke.test_id","value":{"stringValue":"${PROSE_ID}"}}]}]}]}]}
 JSON
 )
+echo "${PAYLOAD}" > "$TMP/payload.json"
 
 # --- Send the record through the prod collector ---
 # The payload is STREAMED into the VL container as a tar pipe (same

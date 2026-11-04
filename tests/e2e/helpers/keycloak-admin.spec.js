@@ -147,6 +147,21 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot read the realm role admin of genie: HTTP 503/);
   });
+
+  test('a transport failure during the role lookup is transient too', async () => {
+    routes = [['GET', ROLE_PATH('admin'), { throws: new Error('connection reset by peer') }]];
+
+    let caught;
+    try {
+      await assignRealmRoles('tok', REALM, 'user-1', ['admin']);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm role admin/);
+  });
 });
 
 test.describe('removeRealmRoles', () => {

@@ -86,11 +86,8 @@ async function findUsers(adminToken, realm, field, value) {
   // answers 401 with an error body, and indexing that body would resolve
   // an undefined user instead of naming the cause.
   if (searchRes.status !== 200) {
-    // The status travels with the error: the callers tell an HTTP verdict
-    // from Keycloak (fatal, it names itself) from a transport break (the
-    // retry budget may save it).
-    // The verdict itself is the caller's: it decides what the status
-    // means for its own operation (the retry budget re-derives it).
+    // The status travels with the error: the caller decides what it means
+    // for its own operation (the retry budget re-derives the verdict).
     const error = new Error(`User lookup for ${value} in realm ${realm} failed: HTTP ${searchRes.status}`);
     error.httpStatus = searchRes.status;
     throw error;
@@ -133,9 +130,16 @@ async function resolveUser(adminToken, realm, username) {
  *   exists)
  */
 async function findRealmRole(adminToken, realm, roleName) {
-  const res = await request('GET', `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`, {
-    headers: { Authorization: `Bearer ${adminToken}` }
-  });
+  let res;
+  try {
+    res = await request('GET', `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+  } catch (err) {
+    // A transport-level failure is the same transient condition as the
+    // create's own: the retry budget must be allowed to save the run.
+    throw transientError(`Cannot reach the Keycloak admin API for the realm role ${roleName}: ${err.message}`);
+  }
   if (res.status === 200) {
     // A 200 with no usable representation is a broken answer, not a role:
     // the callers index role.id on it.
@@ -173,9 +177,14 @@ async function resolveRealmRoles(adminToken, realm, roleNames) {
     // role is a plain "not granted here". Any other verdict is the
     // Keycloak's own — an expired admin token answers 401, and that must
     // not be reported as a missing realm.
-    const realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
-      headers: { Authorization: `Bearer ${adminToken}` }
-    });
+    let realmRes;
+    try {
+      realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+    } catch (err) {
+      throw transientError(`Cannot reach the Keycloak admin API to read the realm ${realm}: ${err.message}`);
+    }
     if (realmRes.status === 404) {
       throw new Error(`The realm ${realm} does not exist — the venue is not provisioned`);
     }

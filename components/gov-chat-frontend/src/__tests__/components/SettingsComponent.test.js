@@ -25,6 +25,8 @@ const mockNotificationSuccess = jest.fn();
 const mockNotificationWarning = jest.fn();
 const mockNotificationError = jest.fn();
 const mockNotificationInfo = jest.fn();
+const mockStoreCommit = jest.fn();
+const mockStoreDispatch = jest.fn();
 
 jest.mock('../../services/notificationService', () => ({
   __esModule: true,
@@ -61,7 +63,8 @@ jest.mock('../../components/LanguageSelector.vue', () => ({
 
 const SettingsComponent = require('../../components/SettingsComponent.vue').default;
 const enMessages = require('../../i18n/locales/en').default;
-const { DISPLAY_PREF_KEYS } = require('../../utils/displayPrefKeys');
+const { DISPLAY_PREF_KEYS, RESET_PRESERVED_KEYS } = require('../../utils/displayPrefKeys');
+const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('../../services/keycloakAuthService');
 
 // ---------------------------------------------------------------------------
 // Mount helper
@@ -84,6 +87,8 @@ async function buildWrapper() {
           push: jest.fn()
         },
         $store: {
+          commit: mockStoreCommit,
+          dispatch: mockStoreDispatch,
           getters: {
             currentUser: {
               name: 'Test User',
@@ -189,14 +194,16 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     // self-contained.
     mockResetUserData.mockReset();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     jest.restoreAllMocks();
   });
 
-  test('keeps every display preference across the clear', async () => {
+  test('keeps every preserve-list key across the clear', async () => {
     const seeded = {
       theme: 'dark',
       userLocale: 'fr',
@@ -204,7 +211,7 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
       emailUpdates: 'true',
       soundNotifications: 'false'
     };
-    for (const key of DISPLAY_PREF_KEYS) {
+    for (const key of RESET_PRESERVED_KEYS) {
       localStorage.setItem(key, seeded[key] || `value-of-${key}`);
     }
     // A key the reset owns — chat cache leftovers and the like — must go.
@@ -215,14 +222,14 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
 
     await resetViaModal(wrapper);
 
-    for (const key of DISPLAY_PREF_KEYS) {
+    for (const key of RESET_PRESERVED_KEYS) {
       expect(localStorage.getItem(key)).toBe(seeded[key] || `value-of-${key}`);
     }
     expect(localStorage.getItem('junkCacheKey')).toBeNull();
     // Full-inventory closure: exactly the preserve list survives, nothing
     // else. Combined with the save() drift guard below, both directions of
-    // drift between save()'s keys and DISPLAY_PREF_KEYS turn red.
-    expect(Object.keys(localStorage).sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
+    // drift between save()'s keys and RESET_PRESERVED_KEYS turn red.
+    expect(Object.keys(localStorage).sort()).toEqual([...RESET_PRESERVED_KEYS].sort());
   });
 
   test('does not write display-preference keys that were absent before the reset', async () => {
@@ -240,11 +247,12 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     expect(Object.keys(localStorage)).toEqual([DISPLAY_PREF_KEYS[0]]);
   });
 
-  test('the keys save() persists are exactly the ones the reset preserves', async () => {
-    // Drift guard: a display preference added to save() but missed by the
-    // reset's preserve list — or dropped from it — would silently revert
-    // on the next reset. This pins the two key sets to each other at the
-    // localStorage boundary the Save button actually writes.
+  test('the keys save() persists are all covered by the reset preserve list', async () => {
+    // Drift guard: a display preference written by save() but missed by the
+    // reset's preserve list would silently revert on the next reset. save()
+    // covers a subset of the preserve list — the sidebar layout keys and the
+    // OKF expert-mode flag are written by their own components, not by the
+    // Save button — so the contract is containment, not equality.
     const written = [];
     const setItem = Storage.prototype.setItem;
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
@@ -257,9 +265,73 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     await saveButton.trigger('click');
     await flushPromises();
 
-    // The contract is the key SET save() touches (a key written twice is
-    // fine; any divergence from DISPLAY_PREF_KEYS is the drift this pins —
-    // a missing key reverts on reset, an extra one is never a preference).
-    expect([...new Set(written)].sort()).toEqual([...DISPLAY_PREF_KEYS].sort());
+    // A key written twice is fine; a key save() writes that the reset does
+    // not preserve is the drift this pins. The filter form names the
+    // drifting key in the failure instead of a bare boolean mismatch.
+    const writtenKeys = [...new Set(written)].sort();
+    const preserveSet = new Set(RESET_PRESERVED_KEYS);
+    expect(writtenKeys.filter((key) => !preserveSet.has(key))).toEqual([]);
+    // save() still writes the five settings-screen keys it always did.
+    expect(writtenKeys).toEqual(['emailUpdates', 'fontSize', 'soundNotifications', 'theme', 'userLocale']);
+  });
+
+  test('preserves the layout keys no settings-screen writer touches', async () => {
+    // The sidebar layout and OKF expert-mode keys are written by their own
+    // components, not by save() — the closure test above seeds them from the
+    // preserve list itself, which cannot go red if the list loses one. Pin
+    // them here by hand so dropping a key from DISPLAY_PREF_KEYS fails.
+    localStorage.setItem('sidebarOpen', 'true');
+    localStorage.setItem('sidebarOpenRight', 'false');
+    localStorage.setItem('sidebarWidthLeft', '420');
+    localStorage.setItem('sidebarWidthRight', '310');
+    localStorage.setItem('okf.studio.expertMode', 'expert');
+    localStorage.setItem('okf.editor.panes', '{"left":260}');
+    localStorage.setItem('okf.studio.seenNarratives', '["a","b"]');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem('sidebarOpen')).toBe('true');
+    expect(localStorage.getItem('sidebarOpenRight')).toBe('false');
+    expect(localStorage.getItem('sidebarWidthLeft')).toBe('420');
+    expect(localStorage.getItem('sidebarWidthRight')).toBe('310');
+    expect(localStorage.getItem('okf.studio.expertMode')).toBe('expert');
+    expect(localStorage.getItem('okf.editor.panes')).toBe('{"left":260}');
+    expect(localStorage.getItem('okf.studio.seenNarratives')).toBe('["a","b"]');
+  });
+
+  test('preserves the live cross-tab renewal-coordination keys', async () => {
+    // Not preferences — live state: wiping the lease or the published
+    // renewal user mid-renewal lets two tabs rotate the same refresh token
+    // and trips Keycloak reuse detection (forced logout of every tab).
+    localStorage.setItem(RENEW_LEASE_KEY, '{"tab":"t1","at":123}');
+    localStorage.setItem(RENEW_USER_KEY, '{"access_token":"x"}');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem(RENEW_LEASE_KEY)).toBe('{"tab":"t1","at":123}');
+    expect(localStorage.getItem(RENEW_USER_KEY)).toBe('{"access_token":"x"}');
+  });
+
+  test('the reset drops the in-session chat and conversation store state', async () => {
+    // The chat-history and conversation subscriptions re-persist on the next
+    // mutation: an in-memory history surviving the reset would write the
+    // wiped data straight back to storage (#1455). The reset must abort any
+    // in-flight generation and leave the stores in their fresh shape; the
+    // sessionStorage payload replacement is the conversation subscription's
+    // own contract (pinned in the store tests).
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(mockStoreDispatch).toHaveBeenCalledWith('conversation/abortStream');
+    expect(mockStoreCommit).toHaveBeenCalledWith('chatHistory/RESET');
+    expect(mockStoreCommit).toHaveBeenCalledWith('conversation/RESET');
   });
 });

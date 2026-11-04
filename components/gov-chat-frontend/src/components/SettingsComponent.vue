@@ -217,7 +217,7 @@ import LanguageSelector from '@/components/LanguageSelector.vue';
 import DsButton from '@/components/ds/Button.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
-import { DISPLAY_PREF_KEYS } from '@/utils/displayPrefKeys';
+import { RESET_PRESERVED_KEYS } from '@/utils/displayPrefKeys';
 
 export default {
   name: 'SettingsComponent',
@@ -532,8 +532,21 @@ export default {
         // The reset has committed and the outcome is already announced; a
         // local-preferences failure must not surface as a failed reset.
         try {
+          // Kill any in-flight generation first: an aborted stream keeps
+          // committing chunks into the store, which would repopulate the
+          // fresh state below with the wiped conversation's tail.
+          this.$store.dispatch('conversation/abortStream');
+          // Drop the in-session store state BEFORE the storage wipe: the
+          // chat-history and conversation subscriptions re-persist on the
+          // next mutation, so a surviving in-memory history would write the
+          // wiped data straight back. The commits here leave only the fresh
+          // default state for them to write.
+          this.$store.commit('chatHistory/RESET');
+          // conversation/RESET also replaces the sessionStorage payload
+          // synchronously (the subscription owns that key).
+          this.$store.commit('conversation/RESET');
           const preserved = {};
-          for (const key of DISPLAY_PREF_KEYS) {
+          for (const key of RESET_PRESERVED_KEYS) {
             const value = localStorage.getItem(key);
             if (value !== null) preserved[key] = value;
           }

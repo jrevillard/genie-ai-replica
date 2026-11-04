@@ -49,8 +49,11 @@ let renewInFlight = null;
 // automatically; the lease fallback uses the TTL takeover). Storage
 // failures degrade to the in-tab serialisation alone.
 const RENEW_LOCK_NAME = 'genie-renew';
-const RENEW_LEASE_KEY = 'genie.renew.lease';
-const RENEW_USER_KEY = 'genie.renew.user';
+// Exported for the Reset User Data flow: localStorage.clear() would drop
+// them mid-renewal otherwise, reopening the double-rotation race this
+// coordination exists to prevent.
+export const RENEW_LEASE_KEY = 'genie.renew.lease';
+export const RENEW_USER_KEY = 'genie.renew.user';
 const RENEW_LEASE_TTL_MS = 20000;
 const RENEW_WAIT_POLL_MS = 250;
 const RENEW_SETTLE_MS = 80;

@@ -88,9 +88,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
       judgeSelects,
       'the judge/model selector must be rendered in BOTH the generation and the run form'
     ).toHaveCount(2);
-    const count = await judgeSelects.count();
-
-    for (let i = 0; i < count; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       const options = await judgeSelects
         .nth(i)
         .locator('option')

@@ -14,9 +14,15 @@ async function waitForWidthSettled(page, selectors, timeout = 15000) {
     .poll(async () => {
       const widths = await page.evaluate((list) =>
         list.map((s) => {
-          const el = document.querySelector(s);
-          if (!el) return null;
-          const rect = el.getBoundingClientRect();
+          const matches = document.querySelectorAll(s);
+          // A width read must name ONE element: a missing panel and an
+          // ambiguous selector are both defects, not a width to wait on.
+          if (matches.length !== 1) {
+            throw new Error(
+              `waitForWidthSettled: "${s}" matches ${matches.length} elements — the panel to measure is not identified`
+            );
+          }
+          const rect = matches[0].getBoundingClientRect();
           return Math.round(rect.width);
         }), sels
       );

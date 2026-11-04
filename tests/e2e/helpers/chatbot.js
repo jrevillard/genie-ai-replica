@@ -123,14 +123,19 @@ async function sendMessage(page, message) {
 /**
  * Wait for a bot response to complete in the chat window.
  *
- * The loading spinner is transient — a fast answer mounts and hides it
- * between two polls — so neither its appearance nor its absence is an
- * observable of the turn's START. The completion signal is two-fold:
- * the last bot bubble carries content (the send handler mounts it as an
- * empty placeholder and the streamed answer fills it), and the spinner
- * is gone (the app hides it only once the turn is complete — an answer
- * that never started leaves no content, so the first gate already
- * fails).
+ * The completion signal is two-fold, because neither half is enough:
+ *
+ * 1. The last bot bubble carries content. The send handler mounts it as
+ *    an empty placeholder, and the streamed answer fills it — so content
+ *    means the turn has started, not that it has ended.
+ *
+ * 2. The turn's own streaming flag is cleared. The app marks the bot
+ *    message `isStreaming` while the SSE stream is open and clears it
+ *    when the stream ends; the DOM has no marker for that (the
+ *    `.streaming-indicator` element exists only while the answer is
+ *    still EMPTY, and the `.loading-spinner` class the old helper
+ *    waited for is not in the app at all), so the flag is read from the
+ *    store the component renders from.
  */
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
@@ -138,7 +143,24 @@ async function waitForBotResponse(page, options = {}) {
   await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(/\S/, {
     timeout,
   });
-  await expect(page.locator('.loading-spinner')).toBeHidden({ timeout });
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const app = document.querySelector('#app');
+          const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
+          const messages =
+            store && store.state && store.state.conversation ? store.state.conversation.messages : [];
+          const bots = messages.filter((m) => m.sender === 'bot');
+          const last = bots[bots.length - 1];
+          // No bot message yet: the turn has not produced one, so the
+          // wait continues (null is not false).
+          return last ? Boolean(last.isStreaming) : null;
+        }),
+      { timeout }
+    )
+    .toBe(false);
 }
 
 /**

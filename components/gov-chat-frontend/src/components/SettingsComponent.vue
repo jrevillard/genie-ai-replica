@@ -210,6 +210,7 @@
 <script>
 import userService from '@/services/userService';
 import notificationService from '@/services/notificationService';
+import { RENEW_LEASE_KEY, RENEW_USER_KEY } from '@/services/keycloakAuthService';
 import { themeManager } from '@/utils/ThemeManager';
 import oidcConfig from '@/config/oidcConfig';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -545,8 +546,11 @@ export default {
           // conversation/RESET also replaces the sessionStorage payload
           // synchronously (the subscription owns that key).
           this.$store.commit('conversation/RESET');
+          // Live cross-tab renewal-coordination keys, not data: wiping them
+          // mid-renewal lets two tabs rotate the same refresh token and
+          // trips Keycloak reuse detection (forced logout of every tab).
           const preserved = {};
-          for (const key of DISPLAY_PREF_KEYS) {
+          for (const key of [...DISPLAY_PREF_KEYS, RENEW_LEASE_KEY, RENEW_USER_KEY]) {
             const value = localStorage.getItem(key);
             if (value !== null) preserved[key] = value;
           }

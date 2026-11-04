@@ -284,6 +284,8 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     localStorage.setItem('sidebarWidthLeft', '420');
     localStorage.setItem('sidebarWidthRight', '310');
     localStorage.setItem('okf.studio.expertMode', 'expert');
+    localStorage.setItem('okf.editor.panes', '{"left":260}');
+    localStorage.setItem('okf.studio.seenNarratives', '["a","b"]');
 
     const wrapper = await buildWrapper();
     mockResetUserData.mockResolvedValue({});
@@ -295,6 +297,24 @@ describe('SettingsComponent — resetUserData preserves display preferences', ()
     expect(localStorage.getItem('sidebarWidthLeft')).toBe('420');
     expect(localStorage.getItem('sidebarWidthRight')).toBe('310');
     expect(localStorage.getItem('okf.studio.expertMode')).toBe('expert');
+    expect(localStorage.getItem('okf.editor.panes')).toBe('{"left":260}');
+    expect(localStorage.getItem('okf.studio.seenNarratives')).toBe('["a","b"]');
+  });
+
+  test('preserves the live cross-tab renewal-coordination keys', async () => {
+    // Not preferences — live state: wiping the lease or the published
+    // renewal user mid-renewal lets two tabs rotate the same refresh token
+    // and trips Keycloak reuse detection (forced logout of every tab).
+    localStorage.setItem('genie.renew.lease', '{"tab":"t1","at":123}');
+    localStorage.setItem('genie.renew.user', '{"access_token":"x"}');
+
+    const wrapper = await buildWrapper();
+    mockResetUserData.mockResolvedValue({});
+
+    await resetViaModal(wrapper);
+
+    expect(localStorage.getItem('genie.renew.lease')).toBe('{"tab":"t1","at":123}');
+    expect(localStorage.getItem('genie.renew.user')).toBe('{"access_token":"x"}');
   });
 
   test('the reset drops the in-session chat and conversation store state', async () => {

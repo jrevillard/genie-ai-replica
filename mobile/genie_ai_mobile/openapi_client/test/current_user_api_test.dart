@@ -57,7 +57,7 @@ void main() {
     //
     // Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
     //
-    //Future apiMeResetDataPost() async
+    //Future<ApiMeResetDataPost200Response> apiMeResetDataPost() async
     test('test apiMeResetDataPost', () async {
       // TODO
     });

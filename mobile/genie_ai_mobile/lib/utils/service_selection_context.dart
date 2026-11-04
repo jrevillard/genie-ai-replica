@@ -8,7 +8,7 @@
 /// proving an outdated shape.
 ///
 /// Returns a record because `setCategoryContext` keeps its positional +
-/// named signature; the caller spreads the fields explicitly.
+/// named signature; the caller passes the five fields through explicitly.
 ({
   String categoryId,
   String categoryName,
@@ -17,8 +17,7 @@
   int serviceCount,
 })
 categoryContextFromSelection(Map<String, dynamic> selection) {
-  final String categoryId =
-      selection['category_id'] ?? selection['id'] ?? '';
+  final String categoryId = selection['category_id'] ?? selection['id'] ?? '';
   final String categoryName = selection['name'] ?? 'Unknown Service';
   // BOTH spellings travel to the chat: display (name) and the EN wire
   // labels (the SSOT the retriever filters on).

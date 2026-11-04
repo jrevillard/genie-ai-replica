@@ -433,8 +433,17 @@ const keycloakAuthService = {
       // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
         const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
-        if (typeof wwwAuthenticate === 'string' && wwwAuthenticate.includes('error_description="User disabled"')) {
-          return { active: false, disabled: true };
+        if (typeof wwwAuthenticate === 'string') {
+          if (wwwAuthenticate.includes('error_description="User disabled"')) {
+            return { active: false, disabled: true };
+          }
+          // A header was present but named no reason we act on — say so, or the
+          // generic "may be expired" warn below would hide that the header
+          // simply did not match
+          logger.warn(
+            `[KeycloakAuth] Keycloak UserInfo returned 401 with an unmatched WWW-Authenticate (${wwwAuthenticate}) — treating as ambiguous`
+          );
+          return null;
         }
         logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
         return null;

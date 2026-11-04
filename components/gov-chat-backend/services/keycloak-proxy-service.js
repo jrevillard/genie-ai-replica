@@ -205,12 +205,6 @@ const keycloakProxyService = {
     const issSub = resolved.issSub;
     logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
-    // Evict the provisioning cache BEFORE erasing, so the middleware stops
-    // serving the pre-erasure profile for the remainder of the cache TTL.
-    if (issSub) {
-      userProvisioningService.invalidateCache(issSub);
-    }
-
     // NOTE: no cache eviction here — the only eviction is the post-commit one
     // below (#1483). invalidateCache broadcasts over Redis pub/sub, and a
     // pre-commit broadcast makes the other replicas evict and re-provision

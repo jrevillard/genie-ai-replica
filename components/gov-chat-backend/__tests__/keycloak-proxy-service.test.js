@@ -661,8 +661,8 @@ describe('keycloak-proxy-service', () => {
       await userProvisioningService.provisionUser(claims);
 
       // A provision that RACES the erasure: it runs while deleteUser is
-      // resolving the Keycloak UUID (i.e. after the pre-delete eviction) and
-      // re-populates the cache with the pre-erasure profile.
+      // resolving the Keycloak UUID and re-populates the cache with the
+      // pre-erasure profile.
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
       const eraseDb = { query: jest.fn() };
       eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub })); // resolve

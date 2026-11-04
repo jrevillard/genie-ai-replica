@@ -411,6 +411,24 @@ describe('keycloak-proxy-service', () => {
       expect(userProfileService.deleteUserFiles).toHaveBeenCalledWith('user-key');
     });
 
+    it('should NOT destroy the uploads when the erasure UPDATE itself failed', async () => {
+      // If the UPDATE never committed, the database record is intact — an
+      // operator who repairs the database can still recover the account, so
+      // its uploaded files must survive the failed erasure (irreversible side
+      // effect only after a committed erasure).
+      const userProfileService = require('../services/user-profile-service');
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub: 'https://kc.example#sub-1' })); // resolve
+      db.query.mockRejectedValueOnce(new Error('connection blip')); // erasure UPDATE fails
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure');
+      expect(userProfileService.deleteUserFiles).not.toHaveBeenCalled();
+    });
+
     it('should log "User erased" message (distinct from soft-delete)', async () => {
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));

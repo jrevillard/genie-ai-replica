@@ -316,8 +316,10 @@ describe('POST /api/me/reset-data', () => {
   it('should return 404 when the user no longer exists (NotFoundError)', async () => {
     // Stale _key between authentication and reset (user hard-deleted
     // mid-session) — a NotFoundError from the service must surface as 404,
-    // not as the generic 500.
+    // not as the generic 500, and must not log error-grade (alerting noise
+    // for an ordinary 404 condition).
     const { NotFoundError } = require('../../middleware/errors');
+    const { logger } = require('../../shared-lib');
     userProfileService.resetUserData.mockRejectedValue(new NotFoundError('User with ID user-123 not found'));
 
     const response = await authPost('/api/me/reset-data', {});
@@ -325,6 +327,7 @@ describe('POST /api/me/reset-data', () => {
     expect(response.status).toBe(404);
     expect(response.body.success).toBe(false);
     expect(response.body.message).toContain('not found');
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   // #1442 contract pin: both clients read the TOP-LEVEL filesDeletionFailed

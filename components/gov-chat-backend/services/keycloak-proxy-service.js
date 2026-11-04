@@ -235,6 +235,11 @@ const keycloakProxyService = {
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
     const erasedKey = issSub ? erasureTombstoneKey(issSub) : null;
     const db = await dbService.getConnection('default');
+    // Whether the erasure UPDATE committed — a failure BEFORE it did must not
+    // destroy the uploads (the database record is still intact and an
+    // operator may repair the account); a failure AFTER it did must still
+    // clean them up.
+    let erasureCommitted = false;
     try {
       await db.query(
         aql`
@@ -262,6 +267,7 @@ const keycloakProxyService = {
             }, ${ERASURE_SECTION_NULLS}) IN users
         `
       );
+      erasureCommitted = true;
       // Remove any duplicate document a racing provision may have INSERTed
       // under the same iss_sub (new _key — the UPDATE above never matches it).
       // With iss_sub still known here, this closes the #1440 INSERT window at
@@ -281,13 +287,17 @@ const keycloakProxyService = {
         userProvisioningService.invalidateCache(issSub);
       }
     } catch (arangoError) {
+      // The erasure UPDATE may already be committed (a late duplicate-removal
+      // failure lands here) — still clean the uploads; if the UPDATE itself
+      // failed, the record is intact and the uploads must survive it.
+      if (erasureCommitted) {
+        await this._cleanupUploads(userKey);
+      }
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
         userKey,
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
-      // The erasure UPDATE may already be committed — still clean the uploads.
-      await this._cleanupUploads(userKey);
       throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
         cause: arangoError
       });

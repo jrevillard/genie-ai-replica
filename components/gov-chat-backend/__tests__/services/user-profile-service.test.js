@@ -324,16 +324,40 @@ describe('UserProfileService', () => {
     });
 
     it('should preserve the exact system-owned set (nothing more, nothing less)', async () => {
-      // Guards both drift directions: a field dropped from the preserve set is
-      // destroyed by the REPLACE (the #1432 tombstone loss class), and a field
-      // added beyond SYSTEM_PRESERVED_FIELDS would survive a reset it must not.
-      // Limit: the query itself is exercised through the mock — the KEEP/MERGE
-      // AQL semantics are validated by the CI contract run against real
-      // ArangoDB, not here.
+      // The expected list below is an INDEPENDENT hand-copy of the preserve
+      // set: production derives from SYSTEM_PRESERVED_FIELDS, so a field
+      // dropped from the constant (the #1432 tombstone-loss class) turns this
+      // test red instead of comparing the constant against itself, and a
+      // field added beyond the constant would survive a reset it must not.
+      // Limit: the query itself is exercised through the mock — its AQL text
+      // and bind structure are rendered with the REAL arangojs tag in
+      // reset-preserve-aql.test.js; full database semantics (KEEP/MERGE/
+      // REPLACE against a live ArangoDB) are covered only by the manual E2E
+      // phases (docs/e2e-tests/).
       const preserveList = await resetAndCapture();
 
-      const { SYSTEM_PRESERVED_FIELDS } = require('../../constants/jit-fields');
-      expect(preserveList).toEqual(SYSTEM_PRESERVED_FIELDS.filter((f) => f !== 'updatedAt'));
+      const expectedPreserved = [
+        'email',
+        'firstName',
+        'lastName',
+        'username',
+        'name',
+        'roles',
+        'enabled',
+        'disabled',
+        'active',
+        'deleted',
+        'iss',
+        'iss_sub',
+        'sub',
+        'createdAt',
+        'emailVerified',
+        'pendingEmailChange',
+        'deletedAt',
+        'erasedAt',
+        'erased_key'
+      ];
+      expect([...preserveList].sort()).toEqual(expectedPreserved.sort());
       // The preserve set is read from the STORED document server-side (the
       // KEEP loop variable), never from a client-facing profile read.
       const text = mockDb.query.mock.calls[0][0].strings.join(' ? ');

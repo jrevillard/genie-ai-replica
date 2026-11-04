@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A query that does not fit the translation window is now refused with `422 translation_input_too_long` on every path, in every language** (#751). Two turns that used to succeed (badly) now fail loudly: a multi-message conversation whose history the translation service cannot fit in its window used to be answered from the **untranslated** history embedded into the English space — retrieving the wrong documents — and now answers 422; an oversized English question in single-message mode used to be forwarded whole to the embedder and fail downstream with a less actionable error, and now answers the same 422 as the same-length question in any other language. An operator on a dense-script deployment (or one that raised `MAX_TRANSLATION_CHARS` past the model window) will see 422s replace silently degraded answers; the mitigation is in the troubleshooting runbook's translation-overflow section.
+
 ### Added
 
 - **The OKF knowledge-base documentation ships on the docs site** — the architecture overview, deployment/configuration guides (OKF variables, access control, the OKF Studio walkthrough) and the full ADR series behind the OKF pillar that landed dark in the previous releases. The feature itself remains disabled by default (`OKF_ENABLED=0`); the flip is a per-deployment decision.

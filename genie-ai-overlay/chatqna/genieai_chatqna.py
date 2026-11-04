@@ -4696,11 +4696,14 @@ class ChatQnAService:
                     # #1366): an oversized query gets the same refusal on the
                     # English path as the translation path gives it.
                     if not full_chat_history.strip():
-                        # Same answer as the translation path's blank guard:
-                        # an empty query is a fallback, not a refusal —
-                        # whatever language the turn asked for.
+                        # Same as the translation path's blank guard: an
+                        # established-English blank must not report the
+                        # healthy passthrough_english label. A blank with NO
+                        # established language keeps the documented
+                        # passthrough_unknown_language.
+                        if english_established:
+                            query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
                         translated_history_string = full_chat_history
-                        query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
                     else:
                         _refuse_oversized_query(full_chat_history)
                         translated_history_string = full_chat_history
@@ -4709,6 +4712,17 @@ class ChatQnAService:
                     messages_to_process = _select_history_within_budget(
                         full_chat_history, max_translation_chars, "passthrough"
                     )
+                    # Same as the translation path's blank guard: an
+                    # all-blank history must not report the healthy
+                    # passthrough_english label the translation path answers
+                    # with fallback_error for the identical history. A
+                    # history with NO established language keeps the
+                    # documented passthrough_unknown_language — already a
+                    # degraded value on the runbook filter.
+                    if english_established and not any(
+                        message.get("content", "").strip() for message in messages_to_process
+                    ):
+                        query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
                     translated_history_string = _flatten_history_string(messages_to_process)
         except TranslationInputTooLongError as _e_trans_overflow:
             # The query does not fit the translation window: fail loud
@@ -4737,8 +4751,7 @@ class ChatQnAService:
                 ),
             )
             raise _translation_input_too_long_error(
-                "The query exceeded the maximum input size for this "
-                "deployment. Please shorten your message and try again."
+                "The conversation exceeded the maximum input size for this deployment. Please shorten it and try again."
             ) from _e_trans_overflow
 
         if logflag:

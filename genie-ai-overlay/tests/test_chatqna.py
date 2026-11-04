@@ -3051,7 +3051,7 @@ class TestQueryTranslationStatus:
         # itself.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
 
-    async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):
+    async def test_a_generic_history_in_a_window_too_tight_is_refused_not_embedded(self):
         """A window that cannot hold the prompt plus a full-length
         translation refuses before the request goes out — the guard covers
         the generic shape too, and the refusal raises like the TranslateGemma
@@ -4996,7 +4996,14 @@ async def test_an_oversized_single_message_query_is_refused_with_a_422(language)
 
 
 @pytest.mark.asyncio
-async def test_an_empty_single_message_query_is_a_fallback_on_both_language_paths():
+@pytest.mark.parametrize(
+    "language",
+    [
+        pytest.param("es", id="non-english"),
+        pytest.param("en", id="english"),
+    ],
+)
+async def test_an_empty_single_message_query_is_a_fallback_on_both_language_paths(language):
     """A blank query is a fallback, not a refusal — whatever language the
     turn asked for: the translation path blank-guards before the budget
     check, so the English path must answer the same way instead of refusing
@@ -5006,7 +5013,24 @@ async def test_an_empty_single_message_query_is_a_fallback_on_both_language_path
     with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=12):
         # A whitespace-only query (a blank "" would be dropped by the
         # request builder's truthiness check).
-        payload = await _full_flow_payload(svc, stream=False, language="en", messages=" ")
+        payload = await _full_flow_payload(svc, stream=False, language=language, messages=" ")
+
+    assert payload["metadata"]["query_translation_status"] == "fallback_error"
+
+
+@pytest.mark.asyncio
+async def test_an_all_blank_history_is_a_fallback_on_both_language_paths():
+    """An all-blank multi-message history is a fallback too — the passthrough
+    must not report it as a healthy `passthrough_english` while the
+    translation path reports the identical history as degraded: the runbook
+    filter reads that as a language asymmetry that does not exist."""
+    svc = create_chatqna_service()
+    blank_history = [
+        {"role": "user", "content": "   "},
+        {"role": "assistant", "content": "\n"},
+    ]
+    with patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=1000):
+        payload = await _full_flow_payload(svc, stream=False, language="en", messages=[dict(m) for m in blank_history])
 
     assert payload["metadata"]["query_translation_status"] == "fallback_error"
 

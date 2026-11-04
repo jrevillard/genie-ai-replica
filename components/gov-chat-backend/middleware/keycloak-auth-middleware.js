@@ -96,10 +96,12 @@ const keycloakAuthMiddleware = {
       try {
         const decoded = await keycloakAuthService.verifyToken(token);
 
-        // Provision or update user in ArangoDB
+        // Provision or update user in ArangoDB. The auth context rides along
+        // so the provisioner's reactivation gate (#1438) can consult Keycloak
+        // with the very token that was just verified.
         let user;
         try {
-          user = await userProvisioningService.provisionUser(decoded);
+          user = await userProvisioningService.provisionUser(decoded, { token, issuer: decoded.iss });
         } catch (provisioningErr) {
           logger.error(`[KeycloakAuth Middleware] Provisioning failed: ${provisioningErr.message}`);
           return res.status(500).json({

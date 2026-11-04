@@ -1,4 +1,4 @@
-const { request } = require('./auth');
+const auth = require('./auth');
 
 /**
  * A failure that a later attempt may survive: a transport error, a
@@ -31,17 +31,19 @@ const TRANSIENT_RETRY_BASE_PAUSE_MS = 2000;
  * @returns {Promise<object>} The Keycloak user representation
  */
 async function resolveUser(adminToken, realm, username) {
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${encodeURIComponent(username)}&exact=true`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
+  const searchRes = await auth.request(
+    'GET',
+    `/auth/admin/realms/${realm}/users?username=${encodeURIComponent(username)}&exact=true`,
+    {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    }
+  );
 
   // The status and the payload shape are checked: an expired admin token
   // answers 401 with an error body, and indexing that body would resolve
   // an undefined user instead of naming the cause.
   if (searchRes.status !== 200) {
-    throw new Error(
-      `User lookup for ${username} in realm ${realm} failed: HTTP ${searchRes.status}`
-    );
+    throw new Error(`User lookup for ${username} in realm ${realm} failed: HTTP ${searchRes.status}`);
   }
   if (!Array.isArray(searchRes.data) || searchRes.data.length === 0) {
     throw new Error(`User ${username} not found in realm ${realm}`);
@@ -51,22 +53,28 @@ async function resolveUser(adminToken, realm, username) {
 }
 
 /**
- * The realm roles of a realm, as {id, name} pairs.
+ * One realm role, resolved by its EXACT name through the single-role
+ * endpoint. The roles listing endpoint is paginated (first/max), so a
+ * list-and-filter resolves only the roles that fit the first page — a
+ * role past the cutoff reads as missing and is then falsely reported as
+ * not found (or silently skipped on removal). The single-role lookup is
+ * exact and unpaginated.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @returns {Promise<object[]>} The realm roles
+ * @param {string} roleName - Exact realm role name
+ * @returns {Promise<object|null>} The role representation, or null when
+ *   the realm carries no role of that name (HTTP 404)
  */
-async function listRealmRoles(adminToken, realm) {
-  const rolesRes = await request('GET', `/auth/admin/realms/${realm}/roles`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+async function findRealmRole(adminToken, realm, roleName) {
+  const res = await auth.request('GET', `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
-  if (rolesRes.status !== 200 || !Array.isArray(rolesRes.data)) {
-    throw new Error(
-      `Cannot read the realm roles of ${realm}: HTTP ${rolesRes.status} ` +
-        `${typeof rolesRes.data === 'string' ? rolesRes.data : JSON.stringify(rolesRes.data)}`
-    );
-  }
-  return rolesRes.data;
+  if (res.status === 200) return res.data;
+  if (res.status === 404) return null;
+  throw new Error(
+    `Cannot read the realm role ${roleName} of ${realm}: HTTP ${res.status} ` +
+      `${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`
+  );
 }
 
 /**
@@ -80,21 +88,26 @@ async function listRealmRoles(adminToken, realm) {
 async function assignRealmRoles(adminToken, realm, userId, roleNames) {
   if (!roleNames || roleNames.length === 0) return;
 
-  const roles = await listRealmRoles(adminToken, realm);
-  const rolesToAssign = roles.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
-
-  const missingRoles = roleNames.filter((r) => !roles.some((avail) => avail.name === r));
+  const rolesToAssign = [];
+  const missingRoles = [];
+  const seen = new Set();
+  for (const name of roleNames) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const role = await findRealmRole(adminToken, realm, name);
+    if (role) rolesToAssign.push({ id: role.id, name: role.name });
+    else missingRoles.push(name);
+  }
   if (missingRoles.length > 0) {
     throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
   }
 
-  const assignRes = await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+  const assignRes = await auth.request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
     headers: { Authorization: `Bearer ${adminToken}` },
-    body: rolesToAssign,
+    body: rolesToAssign
   });
   if (assignRes.status !== 204 && assignRes.status !== 200) {
-    const message =
-      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`;
+    const message = `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`;
     if (assignRes.status >= 500 || TRANSIENT_STATUSES.includes(assignRes.status)) {
       throw transientError(message);
     }
@@ -112,7 +125,7 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
 async function createUser(adminToken, realm, userData) {
   const { username, email, firstName, lastName, enabled = true } = userData;
 
-  const userRes = await request('POST', `/auth/admin/realms/${realm}/users`, {
+  const userRes = await auth.request('POST', `/auth/admin/realms/${realm}/users`, {
     headers: { Authorization: `Bearer ${adminToken}` },
     body: {
       username,
@@ -121,12 +134,16 @@ async function createUser(adminToken, realm, userData) {
       lastName: lastName || 'Test',
       enabled,
       emailVerified: true,
-      credentials: userData.password ? [{
-        type: 'password',
-        value: userData.password,
-        temporary: false,
-      }] : undefined,
-    },
+      credentials: userData.password
+        ? [
+            {
+              type: 'password',
+              value: userData.password,
+              temporary: false
+            }
+          ]
+        : undefined
+    }
   });
 
   if (userRes.status !== 201 && userRes.status !== 409) {
@@ -150,13 +167,19 @@ async function createUser(adminToken, realm, userData) {
 async function removeRealmRoles(adminToken, realm, userId, roleNames) {
   if (!roleNames || roleNames.length === 0) return [];
 
-  const roles = await listRealmRoles(adminToken, realm);
-  const toRemove = roles.filter((r) => roleNames.includes(r.name)).map((r) => ({ id: r.id, name: r.name }));
+  // A role the realm does not carry cannot be mapped on the user, so a
+  // 404 lookup is a skip — the same semantics the assignment side treats
+  // as a hard failure, because removal has no state to protect.
+  const toRemove = [];
+  for (const name of new Set(roleNames)) {
+    const role = await findRealmRole(adminToken, realm, name);
+    if (role) toRemove.push({ id: role.id, name: role.name });
+  }
   if (toRemove.length === 0) return [];
 
-  const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
+  const res = await auth.request('DELETE', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
     headers: { Authorization: `Bearer ${adminToken}` },
-    body: toRemove,
+    body: toRemove
   });
   if (res.status !== 204) {
     throw new Error(`Failed to remove the realm roles of ${userId}: HTTP ${res.status}`);
@@ -173,8 +196,8 @@ async function removeRealmRoles(adminToken, realm, userId, roleNames) {
  * @returns {Promise<string[]>} The effective role names
  */
 async function effectiveRealmRoles(adminToken, realm, userId) {
-  const res = await request('GET', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  const res = await auth.request('GET', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
   if (res.status !== 200 || !Array.isArray(res.data)) {
     throw new Error(
@@ -198,7 +221,7 @@ async function convergeUser(adminToken, realm, userData) {
 
   let res;
   try {
-    res = await request('POST', `/auth/admin/realms/${realm}/users`, {
+    res = await auth.request('POST', `/auth/admin/realms/${realm}/users`, {
       headers: { Authorization: `Bearer ${adminToken}` },
       body: {
         username,
@@ -207,8 +230,8 @@ async function convergeUser(adminToken, realm, userData) {
         lastName: userData.lastName || 'Test',
         enabled: true,
         emailVerified: true,
-        credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
-      },
+        credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined
+      }
     });
   } catch (err) {
     // A transport-level failure (connection refused, timeout) rejects the
@@ -233,13 +256,34 @@ async function convergeUser(adminToken, realm, userData) {
     user = await resolveUser(adminToken, realm, username);
   } catch (err) {
     if (status === 409) {
-      // The realm forbids duplicate emails, so a 409 can also mean that
-      // ANOTHER account owns the fixture email — the username lookup then
-      // finds nothing, and the bare "not found" would point the operator
-      // at the wrong cause.
+      // The create answered 409 but no account carries the username: the
+      // conflict has two live causes. ANOTHER account may own the fixture
+      // email (the realm forbids duplicate emails), or the account that
+      // answered 409 was DELETED between the create and this lookup (a
+      // concurrent cleanup, an operator purge). An email-ownership probe
+      // separates them — blaming a vanished account on an email conflict
+      // sends the operator hunting for a conflict that does not exist.
+      const probe = await auth.request(
+        'GET',
+        `/auth/admin/realms/${realm}/users?email=${encodeURIComponent(email)}&exact=true`,
+        { headers: { Authorization: `Bearer ${adminToken}` } }
+      );
+      if (probe.status !== 200 || !Array.isArray(probe.data)) {
+        throw new Error(
+          `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
+            `could not run (HTTP ${probe.status})`
+        );
+      }
+      if (probe.data.length > 0) {
+        throw new Error(
+          `${err.message} — the create answered 409 because ${probe.data[0].username} owns ` +
+            `${email}: an email conflict; remove or rename that account (or change the fixture email)`
+        );
+      }
       throw new Error(
-        `${err.message} — the create answered 409, which may also be an email conflict ` +
-          `(another account owns ${email})`
+        `${err.message} — the create answered 409, but no account carries ${email} either: ` +
+          `the account named ${username} existed at create time and was deleted mid-provisioning ` +
+          '(a concurrent cleanup or an operator purge); re-run the provisioning'
       );
     }
     throw err;
@@ -249,10 +293,20 @@ async function convergeUser(adminToken, realm, userData) {
     // Converge the password: an account carried over from an earlier
     // fixture revision keeps its old one, and the realm refuses direct
     // access grants, so nothing else can detect the drift.
-    const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
+    const resetRes = await auth.request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
       headers: { Authorization: `Bearer ${adminToken}` },
-      body: { type: 'password', value: password, temporary: false },
+      body: { type: 'password', value: password, temporary: false }
     });
+    if (resetRes.status === 404) {
+      // The account was just looked up by its exact username: a 404 here
+      // means it was deleted between that lookup and this reset (a
+      // concurrent cleanup, an operator purge) — not a password problem.
+      throw new Error(
+        `Cannot converge the password of ${username} (${user.id}): HTTP 404 — the account ` +
+          'was deleted between the lookup and the password reset (a concurrent cleanup or an operator purge); ' +
+          're-run the provisioning'
+      );
+    }
     if (resetRes.status !== 204) {
       const message = `Failed to converge the password of ${username}: HTTP ${resetRes.status}`;
       if (resetRes.status >= 500 || TRANSIENT_STATUSES.includes(resetRes.status)) {
@@ -348,16 +402,16 @@ async function rotateRealmKeys(adminToken, realm) {
   const realmId = (await getRealmSettings(adminToken, realm)).id;
 
   // Get existing key providers
-  const keysRes = await request(
+  const keysRes = await auth.request(
     'GET',
     `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`,
-    { headers: { Authorization: `Bearer ${adminToken}` } },
+    { headers: { Authorization: `Bearer ${adminToken}` } }
   );
   const existingKeys = keysRes.data || [];
   const oldKeyIds = existingKeys.map((k) => k.id);
 
   // Generate new RSA key with higher priority (becomes active signing key)
-  const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
+  const newKeyRes = await auth.request('POST', `/auth/admin/realms/${realm}/components`, {
     headers: { Authorization: `Bearer ${adminToken}` },
     body: {
       name: `rsa-generated-rotated-${Date.now()}`,
@@ -368,9 +422,9 @@ async function rotateRealmKeys(adminToken, realm) {
         priority: ['101'],
         enabled: ['true'],
         active: ['true'],
-        keySize: ['2048'],
-      },
-    },
+        keySize: ['2048']
+      }
+    }
   });
 
   if (newKeyRes.status !== 201) {
@@ -383,9 +437,9 @@ async function rotateRealmKeys(adminToken, realm) {
   // Demote old keys (set active to false)
   for (const oldKey of existingKeys) {
     const updatedConfig = { ...oldKey.config, active: ['false'] };
-    const res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
+    const res = await auth.request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
       headers: { Authorization: `Bearer ${adminToken}` },
-      body: { ...oldKey, config: updatedConfig },
+      body: { ...oldKey, config: updatedConfig }
     });
     if (res.status !== 204) {
       throw new Error(`Failed to demote key ${oldKey.id}: ${res.status} ${JSON.stringify(res.data)}`);
@@ -402,8 +456,8 @@ async function rotateRealmKeys(adminToken, realm) {
  * @returns {Promise<object>} The realm representation
  */
 async function getRealmSettings(adminToken, realm) {
-  const res = await request('GET', `/auth/admin/realms/${realm}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  const res = await auth.request('GET', `/auth/admin/realms/${realm}`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
 
   if (res.status !== 200) {
@@ -420,9 +474,9 @@ async function getRealmSettings(adminToken, realm) {
  * @returns {Promise<void>}
  */
 async function updateRealmSettings(adminToken, realm, settings) {
-  const res = await request('PUT', `/auth/admin/realms/${realm}`, {
+  const res = await auth.request('PUT', `/auth/admin/realms/${realm}`, {
     headers: { Authorization: `Bearer ${adminToken}` },
-    body: settings,
+    body: settings
   });
 
   if (res.status !== 204) {
@@ -438,8 +492,8 @@ async function updateRealmSettings(adminToken, realm, settings) {
  * @returns {Promise<void>}
  */
 async function deleteUser(adminToken, realm, userId) {
-  const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  const res = await auth.request('DELETE', `/auth/admin/realms/${realm}/users/${userId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
 
   // 404 means the user is already gone — that IS the end state every
@@ -465,8 +519,8 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
   }
 
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  const searchRes = await auth.request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
 
   if (searchRes.status !== 200 || !Array.isArray(searchRes.data) || searchRes.data.length === 0) {
@@ -476,9 +530,9 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
   const client = searchRes.data[0];
   if (client.directAccessGrantsEnabled) return;
 
-  const res = await request('PUT', `/auth/admin/realms/${realm}/clients/${client.id}`, {
+  const res = await auth.request('PUT', `/auth/admin/realms/${realm}/clients/${client.id}`, {
     headers: { Authorization: `Bearer ${adminToken}` },
-    body: { ...client, directAccessGrantsEnabled: true },
+    body: { ...client, directAccessGrantsEnabled: true }
   });
 
   if (res.status !== 204) {
@@ -489,11 +543,13 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 module.exports = {
   createUser,
   ensureUser,
+  convergeUser,
+  assignRealmRoles,
   removeRealmRoles,
   effectiveRealmRoles,
   rotateRealmKeys,
   getRealmSettings,
   updateRealmSettings,
   deleteUser,
-  enableDirectAccessGrants,
+  enableDirectAccessGrants
 };

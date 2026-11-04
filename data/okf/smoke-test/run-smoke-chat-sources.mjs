@@ -170,6 +170,10 @@ async function askChat(token, question) {
 }
 
 async function deleteRepo(repoId) {
+  // A repo with an INGESTED version refuses delete (INGESTED_DELETE_BLOCKED,
+  // live 2026-11-04 — the sweep's silent failures left zombie serving graphs
+  // polluting later runs' citations). Retract first, then delete.
+  await call('POST', `/api/okf/repos/${repoId}/lifecycle`, ADMIN, { action: 'retract' });
   await call('DELETE', `/api/okf/repos/${repoId}`, ADMIN);
 }
 
@@ -251,18 +255,24 @@ async function main() {
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---
   console.log('[3] CAP-1 chat citation identity');
   const chat = await askChat(SCOPELESS, 'How do citizens request an alpha appointment?');
+  // Only THIS run's repo is the subject — a citation from an older repo that
+  // outlived its deletion (pre-fix runs) says nothing about CAP-1.
+  const ownGraph = `OKF_${repoA.id}_v1`;
   const okfSources = chat.sources.filter((s) => s.source === 'okf-concept');
+  const own = okfSources.filter((s) => s.graph_name === ownGraph);
+  const zombies = okfSources.length - own.length;
   if (chat.error && !okfSources.length) {
     fail(`chat call failed: ${chat.error}`);
-  } else if (!okfSources.length) {
-    fail(`no okf-concept sources in the answer (got ${chat.sources.length} sources; grounded pipeline may need the graph set to include ${repoA.id})`);
+  } else if (!own.length) {
+    fail(`no citations from this run's repo ${repoA.id} (got ${okfSources.length} okf sources from other graphs; zombies=${zombies})`);
   } else {
-    const withIdentity = okfSources.filter((s) => s.repo_id && s.bundle_version != null && s.graph_name);
-    if (withIdentity.length === okfSources.length) {
-      pass(`all ${okfSources.length} okf citations carry repo_id + bundle_version + graph_name (CAP-1 end-to-end)`);
+    const withIdentity = own.filter((s) => s.repo_id && s.bundle_version != null && s.graph_name);
+    if (withIdentity.length === own.length) {
+      pass(`all ${own.length} citations from this run carry repo_id + bundle_version + graph_name (CAP-1 end-to-end)`);
     } else {
-      fail(`identity missing on ${okfSources.length - withIdentity.length}/${okfSources.length} citations: ${JSON.stringify(okfSources).slice(0, 300)}`);
+      fail(`identity missing on ${own.length - withIdentity.length}/${own.length} citations: ${JSON.stringify(own).slice(0, 300)}`);
     }
+    if (zombies > 0) console.log(`  WARN: ${zombies} citation(s) came from a non-run graph (pre-fix leftovers)`);
   }
 
   // --- 4. Cleanup ---

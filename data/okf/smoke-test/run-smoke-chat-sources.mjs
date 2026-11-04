@@ -16,7 +16,9 @@
 // The smoke re-mints fresh tokens via mint-tokens.mjs at start (its own ROPC
 // window), sweeps orphan drafts from earlier runs, then drives the chain.
 // Cleanup: OKF_SMOKE_CLEANUP=full deletes the two smoke repos afterwards
-// (default 'none' — artifacts stay for UI inspection, like run-smoke-happy).
+// (default 'full' — a left-behind repo keeps SERVING and its identical
+// content gets cited by the next run's chat answer, breaking the identity
+// assertion; opt back into 'none' explicitly for UI inspection).
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import fs from 'node:fs';
@@ -24,7 +26,7 @@ import { execFileSync } from 'node:child_process';
 
 const TOKENS_FILE = process.env.OKF_SMOKE_TOKENS_FILE || 'data/okf/smoke-test/okf-smoke-tokens.json';
 const BASE = process.env.OKF_SMOKE_BASE || 'https://localhost';
-const CLEANUP = process.env.OKF_SMOKE_CLEANUP || 'none';
+const CLEANUP = process.env.OKF_SMOKE_CLEANUP || 'full';
 const CHAT_TIMEOUT_MS = parseInt(process.env.OKF_SMOKE_CHAT_TIMEOUT_MS || '240000', 10);
 const DRAIN_TIMEOUT_MS = parseInt(process.env.OKF_SMOKE_DRAIN_TIMEOUT_MS || '900000', 10);
 const STAMP = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);

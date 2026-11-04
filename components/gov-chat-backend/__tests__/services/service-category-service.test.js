@@ -777,6 +777,15 @@ describe('ServiceCategoryService', () => {
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
+    it('rethrows non-absence existence-check errors instead of misreporting a 404', async () => {
+      // A DB outage (or a missing collection) must surface as the fault it
+      // is, not as "Category x not found" — the exact looseness the
+      // canonical absence classifier documents as the historical bug.
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
+    });
+
     it('should throw Error when categoryKey is missing', async () => {
       await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
     });
@@ -803,6 +812,12 @@ describe('ServiceCategoryService', () => {
         expect(e.statusCode).toBe(404);
       }
       expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('rethrows non-absence existence-check errors instead of misreporting a 404', async () => {
+      mockServices.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.getServiceTranslations('svc-1')).rejects.toThrow('ECONNREFUSED');
     });
 
     it('should throw Error when serviceKey is missing', async () => {

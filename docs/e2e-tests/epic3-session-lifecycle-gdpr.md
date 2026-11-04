@@ -103,18 +103,19 @@ curl -sk "https://localhost/auth/realms/genie/protocol/openid-connect/userinfo" 
 
 ### Test L.6 — Disabled User: Existing Token Still Works Until Expiry
 
-> **Note**: Disabling a user in Keycloak does NOT invalidate existing tokens. JWT verification checks signature and expiry only. The `TOKEN_EXPIRED` + disabled-user-marking logic only triggers when the token is genuinely expired AND the user is disabled. A still-valid token from a disabled user will return `200 success`.
+> **Note**: Disabling a user in Keycloak does NOT invalidate existing tokens. JWT verification checks signature and expiry only. The `TOKEN_EXPIRED` + disabled-user-marking logic only triggers when the token is genuinely expired AND the user is disabled. A still-valid token from a disabled user is served normally (HTTP 200).
 
 ```bash
 # Existing token still works (user is disabled but token is not expired)
-curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
-import sys,json
-d = json.load(sys.stdin)
-print(f'success: {d.get(\"success\",\"N/A\")}')
-print(f'HTTP: 200 (token still valid)')
-"
+RESPONSE=$(curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+# The endpoint returns the raw ArangoDB user document — no success/user wrapper
+echo "$RESPONSE" | head -n -1 | jq -e '._key' > /dev/null \
+  || { echo "FATAL: /api/me returned no _key"; exit 1; }
+echo "HTTP: 200 (token still valid)"
 ```
-**Expected**: HTTP 200 `{"success": true, ...}` — token is valid, user is not yet marked deleted
+**Expected**: HTTP 200 with the raw user document (`_key` present) — token is valid, user is not yet marked deleted
 
 ```bash
 # Verify user is NOT marked deleted in ArangoDB (direct read of the _key
@@ -383,7 +384,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
-print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
+print(f'name: {d.get(\"name\",\"N/A\")}')
 "
 ```
 **Expected**: `name: JIT Test` (profile updated from Keycloak via JIT)
@@ -431,12 +432,17 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+# A soft-deleted user is blocked by the auth middleware (403), so an HTTP 200
+# with the raw user document already proves the JIT reactivation ran
+RESPONSE=$(curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
+  -w "\n%{http_code}")
+[ "$(echo "$RESPONSE" | tail -1)" = "200" ] || { echo "FATAL: /api/me answered HTTP $(echo "$RESPONSE" | tail -1)"; exit 1; }
+echo "$RESPONSE" | head -n -1 | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
-print(f'success: {d[\"success\"]}')
+print(f'deleted: {d.get(\"deleted\")}')
 "
-# Expected: success: true
+# Expected: deleted: False
 
 # Verify reactivated in ArangoDB
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \

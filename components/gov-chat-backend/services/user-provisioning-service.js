@@ -41,7 +41,7 @@ const INVALIDATION_CHANNEL = 'user-provisioning:invalidate';
 let _publisher = null;
 let _subscriber = null;
 
-function createRedisClient() {
+function createRedisClient(clientOptions = {}) {
   return new Redis({
     host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
     port: parsePositiveInt(process.env.TRANSLATION_CACHE_PORT, 6379),
@@ -54,7 +54,8 @@ function createRedisClient() {
       return Math.min(times * 500, 2000);
     },
     maxRetriesPerRequest: 3,
-    enableOfflineQueue: false
+    enableOfflineQueue: false,
+    ...clientOptions
   });
 }
 
@@ -218,6 +219,8 @@ function evictLocal(issSub) {
  */
 function publishInvalidation(issSub) {
   try {
+    // Fallback for a caller arriving before initialize() ran — normally the
+    // publisher was already created (and connected) at boot
     if (!_publisher) {
       _publisher = createRedisClient();
       _publisher.on('error', (err) => {
@@ -342,11 +345,34 @@ const userProvisioningService = {
     _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
 
-    // Cross-replica invalidation subscriber (#1443). Fire-and-forget setup:
+    // Cross-replica invalidation pub/sub (#1443). Fire-and-forget setup:
     // a Redis outage must not crash the boot — it only degrades eviction to
     // the TTL bound. Best-effort: retryable at the next boot.
+    // The publisher is created here (not lazily at the first eviction) so
+    // its connection handshake is done long before the first erasure — a
+    // publish issued before the connection is 'ready' would be rejected
+    // and the first post-boot invalidation lost.
     try {
-      _subscriber = createRedisClient();
+      _publisher = createRedisClient();
+      _publisher.on('error', (err) => {
+        logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
+      });
+    } catch (publisherError) {
+      logger.warn('[UserProvisioning] Failed to create invalidation publisher — evictions stay local', {
+        error: publisherError.message
+      });
+      _publisher = null;
+    }
+    try {
+      // The subscriber is the one client that WANTS the offline queue: the
+      // subscribe command must buffer until Redis answers, so a cold/slow
+      // start still delivers broadcasts — and once subscribed, ioredis
+      // auto-resubscribes after every reconnect. A rejected subscribe here
+      // would permanently silence reception until the next boot.
+      _subscriber = createRedisClient({
+        enableOfflineQueue: true,
+        maxRetriesPerRequest: null
+      });
       _subscriber.on('error', (err) => {
         logger.warn('[UserProvisioning] Invalidation subscriber error', { error: err.message });
       });
@@ -661,9 +687,6 @@ const userProvisioningService = {
    * @returns {Promise<void>}
    */
   async markUserAsDeleted(issSub) {
-    // Invalidate cache so next request re-provisions (and hits deleted check)
-    this.invalidateCache(issSub);
-
     const db = await dbService.getConnection('default');
     const now = new Date().toISOString();
 
@@ -677,6 +700,11 @@ const userProvisioningService = {
     );
 
     const result = await cursor.next();
+    // Invalidate only AFTER the UPDATE committed — a broadcast sent before
+    // it lets another replica evict, re-provision (its deleted-check still
+    // misses) and re-cache the still-active profile, recreating the very
+    // window this eviction exists to close
+    this.invalidateCache(issSub);
     if (result) {
       logger.info(`[UserProvisioning] User marked as deleted: ${issSub}`);
     } else {

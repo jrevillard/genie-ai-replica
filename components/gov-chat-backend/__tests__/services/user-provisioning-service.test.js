@@ -871,6 +871,31 @@ describe('UserProvisioningService', () => {
   });
 
   describe('markUserAsDeleted', () => {
+    it('must broadcast the invalidation only after the UPDATE committed', async () => {
+      // A broadcast sent before the UPDATE commits lets another replica
+      // evict, re-provision (its deleted-check still misses) and re-cache
+      // the still-active profile — so at the instant the UPDATE result is
+      // handed back, no publish may have run yet
+      let publishedAtCommit = false;
+      const MockRedis = require('ioredis');
+      mockDb.query.mockImplementation(async () => ({
+        next: jest.fn(async () => {
+          MockRedis.instances.forEach((i) => {
+            if (i.publish.mock.calls.length > 0) publishedAtCommit = true;
+          });
+          return { _key: 'user-1', deleted: true };
+        })
+      }));
+
+      await userProvisioningService.markUserAsDeleted('iss/sub-1');
+
+      expect(publishedAtCommit).toBe(false);
+      // The broadcast itself still happens — after the commit
+      const publisher = MockRedis.instances.find((i) => i.publish.mock.calls.length > 0);
+      expect(publisher).toBeDefined();
+      expect(publisher.publish).toHaveBeenCalledWith('user-provisioning:invalidate', expect.any(String));
+    });
+
     it('should mark user as deleted and log', async () => {
       const deletedUser = { _key: 'user-1', deleted: true };
       mockDb.query.mockResolvedValue(createMockCursor([deletedUser]));

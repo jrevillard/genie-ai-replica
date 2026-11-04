@@ -14,7 +14,8 @@ jest.mock(
       debug: jest.fn()
     },
     dbService: { getConnection: jest.fn() },
-    erasureTombstoneKey: require('../../../shared/lib/erasure-tombstone').erasureTombstoneKey
+    erasureTombstoneKey: require('../../../shared/lib/erasure-tombstone').erasureTombstoneKey,
+    parsePositiveInt: require('../../../shared/lib/validation-utils').parsePositiveInt
   }),
   { virtual: true }
 );
@@ -30,17 +31,7 @@ jest.mock('../../services/keycloak-auth-service', () => ({
 }));
 
 // #1443: cross-replica invalidation rides the existing Redis instance
-jest.mock('ioredis', () => {
-  const MockRedis = jest.fn(function () {
-    this.publish = jest.fn().mockResolvedValue('1');
-    this.subscribe = jest.fn().mockResolvedValue(1);
-    this.on = jest.fn();
-    this.disconnect = jest.fn();
-    MockRedis.instances.push(this);
-  });
-  MockRedis.instances = [];
-  return MockRedis;
-});
+jest.mock('ioredis', () => require('../mocks/ioredis'));
 
 const AUTH = { token: 'test-token', issuer: 'https://keycloak' };
 

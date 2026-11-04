@@ -2,7 +2,7 @@
 
 const { aql } = require('arangojs');
 const Redis = require('ioredis');
-const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey, parsePositiveInt } = require('../shared-lib');
 const keycloakAuthService = require('./keycloak-auth-service');
 
 /**
@@ -44,7 +44,7 @@ let _subscriber = null;
 function createRedisClient() {
   return new Redis({
     host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
-    port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
+    port: parsePositiveInt(process.env.TRANSLATION_CACHE_PORT, 6379),
     password: process.env.TRANSLATION_CACHE_PASSWORD || null,
     // Same resilience contract as the translation cache client: a capped
     // retry backoff, a bounded retry count per command, and no offline
@@ -250,16 +250,38 @@ function tombstoneLookup(erasedKey) {
 }
 
 /**
- * The Keycloak account-status lookup behind the reactivation gate (#1438).
- * Returns the helper's { active, disabled } verdict, or null when no auth
- * context was supplied (fail-closed) or the check itself failed — null is
- * an INCONCLUSIVE answer, never a disable confirmation.
+ * The reactivation gate (#1438) — the single statement of the policy shared
+ * by both write paths that clear the deleted flag (the legacy-migration
+ * UPDATE and the deleted-check UPSERT). Keycloak is the authoritative source
+ * of account state: a soft-deleted document may mean an admin disabled the
+ * account, and flipping it back on a still-valid JWT from another device
+ * would silently undo the disable.
+ *
+ * Returns the blocked document to serve when reactivation is refused, or
+ * null when Keycloak confirmed the account enabled (gate opens). Fail-closed:
+ * without an auth context — or when the check is inconclusive (null) — the
+ * answer is never treated as enabled.
  */
-async function keycloakAccountStatus(authContext) {
-  if (!authContext || !authContext.token || !authContext.issuer) {
+async function gateReactivation(authContext, issSub, blockedDoc, epochAtStart, logLabel) {
+  const status =
+    authContext && authContext.token && authContext.issuer
+      ? await keycloakAuthService.checkUserStatusInKeycloak(authContext.token, authContext.issuer)
+      : null;
+  // active/disabled are inverse pairs in the helper's contract — checking
+  // active alone is the whole gate
+  if (status && status.active) {
     return null;
   }
-  return keycloakAuthService.checkUserStatusInKeycloak(authContext.token, authContext.issuer);
+  logger.info(`[UserProvisioning] ${logLabel} refused — Keycloak did not confirm the account enabled: ${issSub}`);
+  if (status && _cacheEpoch === epochAtStart) {
+    // Confirmed disable only: cache the refusal like the erasure tombstone's
+    // — within the TTL the next request is refused without re-consulting
+    // Keycloak. An inconclusive answer (null: unreachable, ambiguous or no
+    // auth context) is NOT cached — the next request re-asks, so a recovered
+    // Keycloak reactivates without waiting out the TTL.
+    _cache.set(issSub, { user: blockedDoc, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
+  return blockedDoc;
 }
 
 const userProvisioningService = {
@@ -328,8 +350,9 @@ const userProvisioningService = {
       _subscriber.on('error', (err) => {
         logger.warn('[UserProvisioning] Invalidation subscriber error', { error: err.message });
       });
-      _subscriber.on('message', (channel, payload) => {
-        if (channel !== INVALIDATION_CHANNEL) return;
+      // 'message' only fires for channels this client subscribed to — and
+      // it subscribes to exactly one
+      _subscriber.on('message', (_channel, payload) => {
         try {
           const { origin, issSub } = JSON.parse(payload);
           if (!issSub) return;
@@ -489,17 +512,9 @@ const userProvisioningService = {
           // Migrating a soft-deleted legacy document IS a reactivation — the
           // same gate applies (#1438), or the admin's disable would be
           // undone one query path earlier than the one the gate covers
-          const status = await keycloakAccountStatus(authContext);
-          if (!(status && status.active)) {
-            logger.info(
-              `[UserProvisioning] Legacy migration refused — Keycloak did not confirm the account enabled: ${issSub}`
-            );
-            if (status && _cacheEpoch === epochAtStart) {
-              // Confirmed disable only — an inconclusive answer must be
-              // re-asked on the next request, not cached for the TTL
-              _cache.set(issSub, { user: legacyUser, expiresAt: Date.now() + CACHE_TTL_MS });
-            }
-            return legacyUser;
+          const refused = await gateReactivation(authContext, issSub, legacyUser, epochAtStart, 'Legacy migration');
+          if (refused) {
+            return refused;
           }
         }
         logger.info(`[UserProvisioning] Migrating legacy user ${legacyUser._key} → iss_sub: ${issSub}`);
@@ -540,30 +555,9 @@ const userProvisioningService = {
     const deletedUser = await checkCursor.next();
     const isReactivation = !!deletedUser;
     if (isReactivation) {
-      // Reactivation gate (#1438): Keycloak is the authoritative source of
-      // account state. A soft-deleted document may mean an admin disabled
-      // the account (via the expired-token introspection path) — flipping
-      // deleted:false on a still-valid JWT from another device would
-      // silently undo the disable. Fail-closed: Keycloak must confirm the
-      // account enabled (and the caller must supply the auth context to
-      // ask) before the UPSERT may clear the deleted flag.
-      const keycloakStatus = await keycloakAccountStatus(authContext);
-      // active/disabled are inverse pairs in the helper's contract — checking
-      // active alone is the whole gate
-      const keycloakEnabled = !!(keycloakStatus && keycloakStatus.active);
-      if (!keycloakEnabled) {
-        logger.info(
-          `[UserProvisioning] Reactivation refused — Keycloak did not confirm the account enabled: ${issSub}`
-        );
-        if (keycloakStatus && _cacheEpoch === epochAtStart) {
-          // Confirmed disable: cache the refusal like the erasure tombstone's
-          // — within the TTL the next request is refused without re-consulting
-          // Keycloak. An inconclusive answer (null: unreachable, ambiguous or
-          // no auth context) is NOT cached — the next request re-asks, so a
-          // recovered Keycloak reactivates without waiting out the TTL.
-          _cache.set(issSub, { user: deletedUser, expiresAt: Date.now() + CACHE_TTL_MS });
-        }
-        return deletedUser;
+      const refused = await gateReactivation(authContext, issSub, deletedUser, epochAtStart, 'Reactivation');
+      if (refused) {
+        return refused;
       }
       logger.info(`[UserProvisioning] User re-activated: ${issSub}`);
     }

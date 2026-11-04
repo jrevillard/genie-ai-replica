@@ -33,24 +33,13 @@ jest.mock('arangojs', () => ({
 // gate), which loads the ESM-only `jose` package — mock it so this suite
 // never parses it as CommonJS. The reactivation gate itself is exercised
 // (and keycloak-auth-service mocked) in __tests__/services/.
-jest.mock('jose', () => ({
-  jwtVerify: jest.fn(),
-  createRemoteJWKSet: jest.fn()
-}));
+jest.mock('jose', () => require('./mocks/jose'));
 
 jest.mock('axios', () => ({ get: jest.fn() }));
 
 // markUserAsDeleted evicts the cache, which now broadcasts over Redis
 // (#1443) — mock the client so no suite opens a real connection handle
-jest.mock('ioredis', () => {
-  const MockRedis = jest.fn(function () {
-    this.publish = jest.fn().mockResolvedValue('1');
-    this.subscribe = jest.fn().mockResolvedValue(1);
-    this.on = jest.fn();
-    this.disconnect = jest.fn();
-  });
-  return MockRedis;
-});
+jest.mock('ioredis', () => require('./mocks/ioredis'));
 
 // Reactivation gate: these tests exercise the enabled path, so Keycloak
 // always confirms the account (the fail-closed branches live in

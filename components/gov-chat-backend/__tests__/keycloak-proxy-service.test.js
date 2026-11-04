@@ -41,22 +41,11 @@ jest.mock(
 // The provisioner now requires keycloak-auth-service (the #1438 reactivation
 // gate), which loads the ESM-only `jose` package — mock it so this suite
 // (which transitively loads the provisioner) never parses it as CommonJS
-jest.mock('jose', () => ({
-  jwtVerify: jest.fn(),
-  createRemoteJWKSet: jest.fn()
-}));
+jest.mock('jose', () => require('./mocks/jose'));
 
 // The erasure path evicts the provisioning cache, which now broadcasts over
 // Redis (#1443) — mock the client so no test opens a real connection handle
-jest.mock('ioredis', () => {
-  const MockRedis = jest.fn(function () {
-    this.publish = jest.fn().mockResolvedValue('1');
-    this.subscribe = jest.fn().mockResolvedValue(1);
-    this.on = jest.fn();
-    this.disconnect = jest.fn();
-  });
-  return MockRedis;
-});
+jest.mock('ioredis', () => require('./mocks/ioredis'));
 
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');

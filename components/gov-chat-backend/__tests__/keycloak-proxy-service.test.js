@@ -82,6 +82,8 @@ describe('keycloak-proxy-service', () => {
     // clearAllMocks keeps queued mockResolvedValueOnce entries — drop them so
     // a failed test cannot leak its queued connections into the next one.
     dbService.getConnection.mockReset();
+    // Per the shared ioredis mock's contract: drop clients a previous test created
+    require('ioredis').instances.length = 0;
   });
 
   afterEach(() => {

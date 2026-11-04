@@ -219,15 +219,20 @@ function evictLocal(issSub) {
  * Fire-and-forget: a publish failure must not break the caller (the GDPR
  * erasure path), it only degrades the other replicas to the TTL bound.
  */
+function createPublisher() {
+  const publisher = createRedisClient();
+  publisher.on('error', (err) => {
+    logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
+  });
+  return publisher;
+}
+
 function publishInvalidation(issSub) {
   try {
     // Fallback for a caller arriving before initialize() ran — normally the
     // publisher was already created (and connected) at boot
     if (!_publisher) {
-      _publisher = createRedisClient();
-      _publisher.on('error', (err) => {
-        logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
-      });
+      _publisher = createPublisher();
     }
     _publisher.publish(INVALIDATION_CHANNEL, JSON.stringify({ origin: INSTANCE_ID, issSub })).catch((err) => {
       logger.warn('[UserProvisioning] Invalidation publish failed', { error: err.message });
@@ -369,10 +374,7 @@ const userProvisioningService = {
         _publisher.disconnect();
         _publisher = null;
       }
-      _publisher = createRedisClient();
-      _publisher.on('error', (err) => {
-        logger.warn('[UserProvisioning] Invalidation publisher error', { error: err.message });
-      });
+      _publisher = createPublisher();
     } catch (publisherError) {
       logger.warn('[UserProvisioning] Failed to create Invalidation publisher — evictions stay local', {
         error: publisherError.message
@@ -403,6 +405,10 @@ const userProvisioningService = {
           // bump the epoch and discard unrelated in-flight provisions
           if (origin === INSTANCE_ID) return;
           evictLocal(issSub);
+          // Queryable proof the broadcast was received and applied — its
+          // absence (vs a degradation warn) is what distinguishes a working
+          // pub/sub from a silently unsubscribed replica
+          logger.debug(`[UserProvisioning] Applied remote invalidation from ${origin}: ${issSub}`);
         } catch (parseError) {
           logger.warn('[UserProvisioning] Malformed invalidation message ignored', {
             error: parseError.message

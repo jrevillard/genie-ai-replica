@@ -433,16 +433,34 @@ const keycloakAuthService = {
       // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
         const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
-        if (typeof wwwAuthenticate === 'string' && wwwAuthenticate.includes('error_description="User disabled"')) {
-          return { active: false, disabled: true };
+        if (typeof wwwAuthenticate === 'string') {
+          // Require BOTH the challenge code and the description: a challenge
+          // that merely carries the phrase is not proof, and the middleware
+          // acts destructively on a confirmed disable (soft-deletes the
+          // account). Live-realm probe (Keycloak 26.8.0, 2026-11-04) answers
+          // both together; a mismatch falls back to the ambiguous null.
+          const disabled =
+            /error="invalid_token"/i.test(wwwAuthenticate) &&
+            /error_description="user disabled"/i.test(wwwAuthenticate);
+          if (disabled) {
+            return { active: false, disabled: true };
+          }
+          // Still ambiguous. When a WWW-Authenticate was present but named no
+          // reason we act on, log it — the generic "may be expired" alone
+          // would hide that the header simply did not match. Control
+          // characters stripped and the value bounded: a challenge is
+          // server-controlled log input.
+          const printable = [...wwwAuthenticate]
+            .filter((char) => {
+              const code = char.codePointAt(0);
+              return code >= 0x20 && code !== 0x7f;
+            })
+            .join('');
+          const headerNote = ` (WWW-Authenticate: ${printable.slice(0, 200)})`;
+          logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+          return null;
         }
-        // Still ambiguous. When a WWW-Authenticate was present but named a
-        // reason we don't act on, log it — the generic "may be expired" alone
-        // would hide that the header simply did not match. Truncated: a
-        // multi-challenge header is server-controlled log input.
-        const headerNote =
-          typeof wwwAuthenticate === 'string' ? ` (WWW-Authenticate: ${wwwAuthenticate.slice(0, 120)})` : '';
-        logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null');
         return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)

@@ -598,12 +598,13 @@ describe('keycloak-proxy-service', () => {
 
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
       const eraseDb = { query: jest.fn() };
+      let publishesAtCommit = null;
       eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub })); // resolve UUID
       eraseDb.query.mockImplementationOnce(async () => {
-        // At erasure-commit time no publish may have run yet: a pre-commit
-        // eviction would broadcast here and the other replicas would
-        // re-provision against the not-yet-erased document (#1483)
-        expect(publishedInvalidations()).toHaveLength(0);
+        // Recorded, not asserted: an assertion thrown inside the mocked query
+        // is swallowed by deleteUser's catch and surfaces as an unrelated
+        // 'Partial erasure' rejection.
+        publishesAtCommit = publishedInvalidations().length;
         return {};
       });
       dbService.getConnection
@@ -612,6 +613,10 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
 
+      // At erasure-commit time no publish may have run yet: a pre-commit
+      // eviction would broadcast here and the other replicas would
+      // re-provision against the not-yet-erased document (#1483)
+      expect(publishesAtCommit).toBe(0);
       // Exactly one broadcast — the post-commit eviction — carrying the erased identity
       expect(publishedInvalidations()).toHaveLength(1);
       const [channel, payload] = publishedInvalidations()[0];
@@ -638,12 +643,15 @@ describe('keycloak-proxy-service', () => {
       global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
       const revalDb = { query: jest.fn().mockResolvedValue({ next: jest.fn().mockResolvedValue(undefined) }) };
       const eraseDb = { query: jest.fn() };
+      let racingKey = null;
       eraseDb.query.mockResolvedValueOnce(mockCursor({ sub: 'uuid-abc', issSub })); // resolve
       eraseDb.query.mockImplementationOnce(async () => {
-        // Concurrent provision while the erasure commits: cache hit
+        // Concurrent provision while the erasure commits: cache hit.
+        // Recorded, not asserted — an assertion thrown inside the mocked
+        // query is swallowed by deleteUser's catch.
         dbService.getConnection.mockResolvedValueOnce(Promise.resolve(revalDb)); // revalidation read
         const racing = await userProvisioningService.provisionUser(claims);
-        expect(racing._key).toBe('user-1');
+        racingKey = racing._key;
         return {};
       });
       dbService.getConnection
@@ -652,6 +660,8 @@ describe('keycloak-proxy-service', () => {
 
       await keycloakProxyService.deleteUser('user-key');
 
+      // The racing provision was served the cached pre-erasure profile
+      expect(racingKey).toBe('user-1');
       // The post-commit eviction dropped the cached pre-erasure profile: the
       // next provision runs the full chain against the database
       const freshDb = { query: mockProvisionChain('user-fresh') };
@@ -663,7 +673,7 @@ describe('keycloak-proxy-service', () => {
     });
 
     it('evicts after a committed erasure whose duplicate-removal fails (late-failure path)', async () => {
-      // The eviction sits after the duplicate removal in the try block, so a
+      // The eviction sits right after the erasure commit, so a
       // duplicate-removal failure lands in the catch with the erasure already
       // committed — the committed erasure must still be broadcast (#1483
       // review: without this, every replica serves the erased profile for the

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { AppError } = require('../middleware/errors');
 const { logger } = require('../shared-lib');
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
@@ -158,12 +159,16 @@ module.exports = (userService) => {
         ...result
       });
     } catch (error) {
-      // Typed errors (AppError) carry their own status; anything else is 500.
-      const status = error.statusCode || 500;
+      // Typed AppErrors carry their own status and a client-facing message;
+      // anything else (driver errors, wrapped responses) is 500 with a
+      // generic message — internal error text never reaches the client.
+      const isTyped = error instanceof AppError;
+      const status = isTyped ? error.statusCode : 500;
+      const message = isTyped ? error.message : 'Failed to reset user data';
       logger.error(`[RESET DATA] Error resetting user data: ${error.message}`, { stack: error.stack });
       res.status(status).json({
         success: false,
-        message: error.message || 'Failed to reset user data'
+        message
       });
     }
   });

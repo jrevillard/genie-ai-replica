@@ -435,12 +435,17 @@ class UserProfileService {
         success: true
       };
     } catch (error) {
-      logger.error('UserProfileService.reset_user_data_failed', {
-        userKey,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
+      if (error instanceof NotFoundError) {
+        // A missing user is an ordinary 404 — warn, not error-grade with stack
+        logger.warn('UserProfileService.reset_user_data_not_found', { userKey, error: error.message });
+      } else {
+        logger.error('UserProfileService.reset_user_data_failed', {
+          userKey,
+          error: error.message,
+          stack: error.stack,
+          durationMs: Date.now() - startTime
+        });
+      }
       throw error;
     }
   }

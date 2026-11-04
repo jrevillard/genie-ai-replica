@@ -289,6 +289,30 @@ describe('POST /api/me/reset-data', () => {
     expect(response.body.success).toBe(false);
   });
 
+  it('should not trust statusCode from non-AppError errors', async () => {
+    // Only typed AppErrors map their own status — any other object carrying a
+    // statusCode property (http-errors style, a wrapped driver error) is 500.
+    const fake = new Error('upstream said so');
+    fake.statusCode = 403;
+    userProfileService.resetUserData.mockRejectedValue(fake);
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+  });
+
+  it('should not leak internal driver error text on unexpected failures', async () => {
+    // A raw driver error (e.g. an ArangoDB write-write conflict racing the
+    // atomic reset) must not surface its internal message to the client.
+    userProfileService.resetUserData.mockRejectedValue(new Error('write write conflict, retries exceeded'));
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('Failed to reset user data');
+  });
+
   it('should return 404 when the user no longer exists (NotFoundError)', async () => {
     // Stale _key between authentication and reset (user hard-deleted
     // mid-session) — a NotFoundError from the service must surface as 404,

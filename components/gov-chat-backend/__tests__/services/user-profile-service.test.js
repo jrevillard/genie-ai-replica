@@ -355,6 +355,18 @@ describe('UserProfileService', () => {
       expect(mockFsTracker.rmCalls.length).toBe(0);
     });
 
+    it('should not log an expected 404 as an error with stack', async () => {
+      // A missing user is an ordinary 404 — logging it error-grade with a
+      // stack on every occurrence trains alerting noise.
+      const { logger } = require('../../shared-lib');
+      mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+
+      await expect(userProfileService.resetUserData('missing')).rejects.toMatchObject({ name: 'NotFoundError' });
+
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
     it('should not delete user files and rethrow when the reset query fails', async () => {
       mockDb.query.mockRejectedValueOnce(new Error('query fail'));
 

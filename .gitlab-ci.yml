@@ -930,21 +930,16 @@ container_scanning:
 # contract. A path addition cannot drift between "rebuild the image" and
 # "run the contract lane" again.
 #
-# Two anchors per module because the contract lane's list has no
-# configs/ssl/**/* (the contract job runs in the image, not in a container
-# that would serve TLS), while the image jobs do.
+# Every job of a module shares the SAME list — the contract lane included.
+# The contract lane validates the image, so an image input (configs/ssl/
+# **/*, the SSL patch the images COPY) must re-run it: chatqna's contract
+# job has used the build anchor for exactly that reason.
 .dataprep_source_changes: &dataprep_source_changes
   [ "genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
-.dataprep_contract_changes: &dataprep_contract_changes
-  [ "genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/build-patches/unstructured_html_pi_patch.py", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
 .retriever_source_changes: &retriever_source_changes
   [ "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
-.retriever_contract_changes: &retriever_contract_changes
-  [ "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
 .reranker_source_changes: &reranker_source_changes
   [ "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
-.reranker_contract_changes: &reranker_contract_changes
-  [ "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/docarray_alias_shim.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
 .embedding_source_changes: &embedding_source_changes
   [ "genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/install_site_startup.sh", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 .textgen_source_changes: &textgen_source_changes
@@ -1189,14 +1184,14 @@ contract:retriever-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: *retriever_contract_changes
+        paths: *retriever_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: *retriever_contract_changes
+        paths: *retriever_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: *retriever_contract_changes
+        paths: *retriever_source_changes
 
 
 contract:reranker:
@@ -1218,14 +1213,14 @@ contract:reranker:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: *reranker_contract_changes
+        paths: *reranker_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: *reranker_contract_changes
+        paths: *reranker_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: *reranker_contract_changes
+        paths: *reranker_source_changes
 contract:dataprep-arango:
   <<: *contract_template
   needs:
@@ -1243,14 +1238,14 @@ contract:dataprep-arango:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: *dataprep_contract_changes
+        paths: *dataprep_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: *dataprep_contract_changes
+        paths: *dataprep_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: *dataprep_contract_changes
+        paths: *dataprep_source_changes
 
 contract:chatqna-server:
   <<: *contract_template

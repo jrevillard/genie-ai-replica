@@ -290,6 +290,23 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
     expect(topics.source).toBe('fallback-empty-topics');
   });
 
+  it('adopts a degraded shape ONLY from the closed-gate error — a foreign payload is not a topic', async () => {
+    // The closed-gate error is recognised by its code. An error that merely
+    // carries a `topics` payload is some other failure: adopting it would
+    // stamp foreign topics on the concepts and mislabel the failure as a
+    // missing VLLM_ENDPOINT.
+    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META, {
+      deriveTopics: async () => {
+        const err = new Error('some other failure');
+        err.topics = { topics: ['foreign'], purpose: 'not ours', source: 'somewhere-else', reason: 'not ours' };
+        throw err;
+      }
+    });
+    expect(topics.source).toBe('fallback-threw');
+    expect(topics.topics).toEqual([]);
+    for (const c of concepts) expect(c.frontmatter.topic).toBeUndefined();
+  });
+
   it('a CLOSED gate still imports — with the filename slug, and flagged as degraded', async () => {
     // The REAL leg (no injected summariser): with the gate closed it raises
     // the closed-gate error CARRYING the degraded shape, and the converter

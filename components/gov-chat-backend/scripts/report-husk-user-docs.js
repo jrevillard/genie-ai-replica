@@ -37,12 +37,26 @@
  *                     this script is the only place that variable is read)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
+ *   HUSK_SAMPLE_LIMIT (default 50 — how many entries each per-document
+ *                     listing prints before the rest are elided. Raise it for
+ *                     a one-off diagnostic run to dump the withheld keys;
+ *                     every listing honours it, including the divergence
+ *                     listing of the abort path. An empty value means "not
+ *                     set" (the default); a malformed one is REFUSED — the
+ *                     run fails rather than falling back to the default. The
+ *                     default cap is what keeps the log pipeline from being
+ *                     flooded, so raise the override only as far as the
+ *                     pipeline tolerates — for a very large run, redirect the
+ *                     output to a file)
  */
 
 const { Database } = require('arangojs');
 const path = require('path');
 
-const SAMPLE_LIMIT = 50;
+// The default cap on the per-document listings. Every listing in this script
+// goes through printSampledList below, so this constant and the
+// HUSK_SAMPLE_LIMIT override are the only two places the cap is stated.
+const DEFAULT_SAMPLE_LIMIT = 50;
 
 // --- The husk signature, defined once --------------------------------------
 // Deliberately NOT imported from constants/jit-fields.js: that module describes
@@ -163,6 +177,82 @@ LET lookalikeDocs = (
 RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
 `;
 
+/**
+ * Renders a document key as a JSON string literal, so a key copied out of a
+ * listing can be pasted straight into a query or a JSON payload without
+ * re-quoting it (issue #1507). Takes the KEY, not the document: the
+ * divergence path prints attribute NAMES only, and a helper that took a
+ * whole document would invite a caller to render more of it than that.
+ * @param {string} key
+ * @returns {string}
+ */
+function quotedKey(key) {
+  return JSON.stringify(key);
+}
+
+/**
+ * Prints a per-document listing capped at the run's effective cap, followed by
+ * ONE elision line when entries were withheld. Every per-document listing in
+ * this script goes through this helper, so the cap, the `>` boundary and the
+ * elision wording live in ONE place and the three sites cannot drift apart
+ * (issue #1508).
+ *
+ * The cap is read from the resolved run configuration (`gated.sampleLimit`),
+ * NOT from a parameter: a call site can then neither omit the cap (which
+ * would slice(0, undefined) — the WHOLE array) nor override it with a
+ * different one. The gate is the single place the cap is decided.
+ *
+ * `total` defaults to the length of `docs` and is stated separately only
+ * where the two differ: the lookalike sample is truncated SERVER-side, so
+ * the count of all lookalikes and the returned sample are different numbers.
+ * The elision line names the value that lists THIS listing in full. For a
+ * listing rendered in several parts (the abort path's two directions) that is
+ * the LARGEST part, because the override knob is global: one value has to
+ * serve every part of the listing. Separate listings keep their OWN count —
+ * the husk listing and the lookalike listing are different data sets, and a
+ * shared maximum would make the operator dump thousands of lookalikes to
+ * reach a handful of withheld husks. The remedy is worded for the REPORT the
+ * reader is holding; the abort path — where --delete is in play — passes its
+ * own (see main).
+ * @param {Object} params
+ * @param {Function} params.write - the sink (console.log / console.error)
+ * @param {Object} params.gated - the resolved run configuration, and the ONLY
+ *   source of the cap. The gate (parseAndGateArgs) is the single place the
+ *   cap is decided and rejects anything that is not a positive integer, so
+ *   `gated.sampleLimit` is always a usable cap here.
+ * @param {string} [params.label] - the noun in the elision line; omit it when
+ *   the listing's own header already says what the listing is
+ * @param {Array<Object>} params.docs - the entries to list
+ * @param {number} [params.total] - how many entries exist in this listing.
+ *   OMIT it when that is docs.length. Pass it ONLY where the two differ — the
+ *   lookalike sample is truncated SERVER-side, so there the total is the
+ *   server's count and the docs are the truncated sample. Passing
+ *   docs.length there would understate how many entries were withheld.
+ * @param {Function} params.format - renders one entry line
+ * @param {string} [params.remedy] - what to tell the operator about the
+ *   withheld entries. Defaults to the report-context advice ("re-run this
+ *   report"); the --delete and abort paths pass their own, because there the
+ *   withheld entries are about to be REMOVED, or a --delete is in play.
+ */
+function printSampledList({ write, gated, label, docs, total = docs.length, format, remedy }) {
+  const listed = docs.slice(0, gated.sampleLimit);
+  for (const doc of listed) {
+    write(format(doc));
+  }
+  const withheld = total - listed.length;
+  if (withheld > 0) {
+    const advice = remedy ?? `re-run this report with HUSK_SAMPLE_LIMIT=${total} to list them all`;
+    // The output-size caveat is appended HERE, not by each caller: the cap
+    // exists to keep the log pipeline from being flooded, so every listing
+    // that raises it must say where the output goes. A path that replaced the
+    // whole advice would otherwise be the one path without the caveat.
+    write(
+      `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ${advice} ` +
+        '(redirect the output to a file if that is many entries)'
+    );
+  }
+}
+
 // Renders a rejection value as a short cause string for an operator-facing
 // error line. Errors render as their message; anything else is stringified
 // (guarded, so a circular structure cannot crash the error path itself).
@@ -188,8 +278,8 @@ function causeOf(err) {
  * Parses the CLI arguments and the operator gates. Side effects: on a failed
  * gate it prints the reason to stderr and sets process.exitCode, then returns
  * null; when every gate passes it returns the fully resolved run
- * configuration { mode, database, collection, arangoUrl, username, password }
- * — the single source main() reads after gating. It reads only its
+ * configuration { mode, database, collection, arangoUrl, username, password,
+ * sampleLimit } — the single source main() reads after gating. It reads only its
  * parameters (no module state, no process.argv/env), which is what makes it
  * unit-testable. Exported for tests (issue #1494).
  * @param {string[]} argv
@@ -225,14 +315,58 @@ function parseAndGateArgs(argv, env) {
     );
   }
 
+  // The listing cap. An operator raises it for a one-off diagnostic run to
+  // see the entries the default cap withholds (issue #1507). A malformed
+  // override is a GATE failure, not a silent fallback: an operator who asked
+  // for 500 entries and silently gets 50 — with no notice — is back to the
+  // very confusion the override exists to remove.
+  const sampleLimit = parseSampleLimit(env.HUSK_SAMPLE_LIMIT);
+  // The gate is the ONE place the cap is decided, so it is also where the
+  // resolved value is validated — not merely that the override was
+  // well-formed. A cap that is not a positive integer would widen a listing
+  // silently (slice(0, undefined) returns the WHOLE array), and this is the
+  // only boundary that can catch it.
+  if (!Number.isSafeInteger(sampleLimit) || sampleLimit <= 0) {
+    return fail(`HUSK_SAMPLE_LIMIT must be a positive integer (got ${JSON.stringify(env.HUSK_SAMPLE_LIMIT)}).`);
+  }
+
   return {
     mode: doDelete ? 'delete' : 'report',
     database: env.ARANGO_DB,
     collection: env.ARANGO_COLLECTION || 'users',
     arangoUrl: env.ARANGO_URL || 'http://localhost:8529',
     username: env.ARANGO_USER || 'root',
-    password: env.ARANGO_PASSWORD
+    password: env.ARANGO_PASSWORD,
+    sampleLimit
   };
+}
+
+/**
+ * Resolves the listing cap: the default, or the operator's override for a
+ * one-off diagnostic run. Returns undefined for a malformed override — the
+ * caller turns that into a gate failure, because a silent fallback would hand
+ * back the same capped listing the override exists to lift (issue #1507).
+ *
+ * The accepted form is DECIMAL digits only: `Number()` would also take
+ * '0x1f', '1e3' and ' 500 ', so a typo would silently yield a different cap
+ * than the literal the operator typed.
+ *
+ * An EMPTY value means "not set" — the default. That is the shell's own
+ * convention for an unset variable (`VAR= cmd`), and the effective cap is
+ * printed in the report header, so the operator always sees the cap they
+ * got.
+ * @param {string|undefined} raw
+ * @returns {number|undefined}
+ */
+function parseSampleLimit(raw) {
+  if (raw === undefined || raw === '') {
+    return DEFAULT_SAMPLE_LIMIT;
+  }
+  if (!/^[0-9]+$/.test(raw)) {
+    return undefined;
+  }
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 /**
@@ -247,7 +381,10 @@ async function runReport(db, gated, total, husks, allDocs) {
   if (gated.mode === 'report') {
     const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
       '@collection': gated.collection,
-      sampleLimit: SAMPLE_LIMIT
+      // The server-side SLICE honours the same cap the client-side listing
+      // applies, so raising HUSK_SAMPLE_LIMIT really does surface more
+      // lookalikes instead of silently eliding them (issue #1507).
+      sampleLimit: gated.sampleLimit
     });
     const lookalikeResult = (await lookalikeCursor.next()) || {};
     lookalikeCount = lookalikeResult.count || 0;
@@ -273,15 +410,36 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
-  for (const doc of husks.slice(0, SAMPLE_LIMIT)) {
-    console.log(
-      `  husk _key=${doc._key} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
-        `attributes=${JSON.stringify(Object.keys(doc).sort())}`
-    );
-  }
-  if (husks.length > SAMPLE_LIMIT) {
-    console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
-  }
+  // The EFFECTIVE cap, not the default: an operator whose override variable is
+  // misspelled sees the cap they actually got, instead of a listing that
+  // silently stops at the default.
+  console.log(`Listing cap:   ${gated.sampleLimit} per listing (override: HUSK_SAMPLE_LIMIT)`);
+  // One closure per scope: the sink and the cap are stated ONCE per run
+  // path, so the two stdout listings cannot drift apart on either.
+  //
+  // The per-call fields are named explicitly, NOT spread: a spread would let
+  // a call site pass its own `write` or `gated` and silently override the
+  // run-wide sink and the cap — exactly the listing-to-listing drift #1508
+  // removed. With named fields, the override is not expressible.
+  const printStdoutList = ({ docs, total, label, format, remedy }) =>
+    printSampledList({ docs, total, label, format, remedy, write: console.log, gated });
+  printStdoutList({
+    docs: husks,
+    label: 'husks',
+    // On the --delete path the withheld matches are removed by THIS run, so
+    // the advice must point at a run that PRECEDES it: a re-run of the same
+    // command finds nothing, because the entries are gone by then. The line
+    // says plainly that this run removes them too — the keys are not in the
+    // listing, and no advice can put them there after the fact.
+    remedy:
+      gated.mode === 'delete'
+        ? 'these withheld entries are removed by this run too, so their keys are not listed above — ' +
+          `to review them before removing anything, re-run the report (without --delete) with HUSK_SAMPLE_LIMIT=${husks.length}`
+        : undefined,
+    format: (doc) =>
+      `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
+      `attributes=${JSON.stringify(Object.keys(doc).sort())}`
+  });
   if (unexpectedFields.length > 0) {
     console.log('Fields present outside the husk signature (not husks, never deleted):');
     for (const [key, count] of unexpectedFields) {
@@ -292,12 +450,13 @@ async function runReport(db, gated, total, husks, allDocs) {
     console.log('Legacy lookalikes: not measured in --delete mode.');
   } else {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
-    for (const doc of lookalikes) {
-      console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
-    }
-    if (lookalikeCount > lookalikes.length) {
-      console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
-    }
+    printStdoutList({
+      docs: lookalikes,
+      label: 'lookalikes',
+      // The sample is truncated SERVER-side; the count is the full number.
+      total: lookalikeCount,
+      format: (doc) => `  lookalike _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'}`
+    });
     console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
   }
 }
@@ -441,26 +600,45 @@ async function main({
     console.error(
       `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
         `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
+        `The listing below is capped at ${gated.sampleLimit} per direction. ` +
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
-    // Bounded like the other per-document listings in this script
-    // (SAMPLE_LIMIT): the abort fires on ANY divergence, and when it fires
-    // the divergence can be as large as the whole collection — an uncapped
-    // per-document listing would flood the log pipeline. The full counts
-    // stay in the ABORT header; the elision line says how many were not
-    // listed. (The fields census in runReport stays unbounded by design:
-    // one line per DISTINCT unexpected field name, not per document.)
+    // Bounded like the other per-document listings in this script: the abort
+    // fires on ANY divergence, and when it fires the divergence can be as
+    // large as the whole collection — an uncapped per-document listing would
+    // flood the log pipeline. The full counts stay in the ABORT header; the
+    // elision line says how many were not listed AND how to see them (the
+    // operator raises HUSK_SAMPLE_LIMIT for one diagnostic run — issue
+    // #1507). (The fields census in runReport stays unbounded by design: one
+    // line per DISTINCT unexpected field name, not per document.)
+    // ONE value for the whole divergence listing. The override knob is
+    // global, so the value that lists EVERY direction in full is the largest
+    // of them: naming each direction's own count would make the two lines
+    // contradict each other (the smaller value still caps the larger
+    // direction) and cost the operator a second run to see everything. This
+    // listing is the ONLY one printed on the abort path — the report below
+    // is never reached — so the largest part is also the run-wide value.
+    const divergenceLimit = Math.max(extra.length, missed.length);
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]
     ]) {
-      for (const doc of docs.slice(0, SAMPLE_LIMIT)) {
-        console.error(`  ${label} _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-      }
-      if (docs.length > SAMPLE_LIMIT) {
-        console.error(`  ... and ${docs.length - SAMPLE_LIMIT} more ${label} (not listed)`);
-      }
+      printSampledList({
+        write: console.error,
+        gated,
+        label,
+        docs,
+        // The abort fires on the --delete path too, so the advice must name
+        // the SAFE run; on a plain report the operator is already in that
+        // run, and a "(without --delete)" parenthetical would have no
+        // referent.
+        remedy:
+          gated.mode === 'delete'
+            ? `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${divergenceLimit} to list them all`
+            : `re-run this report with HUSK_SAMPLE_LIMIT=${divergenceLimit} to list them all`,
+        format: (doc) => `  ${label} _key=${quotedKey(doc._key)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
+      });
     }
     process.exitCode = 1;
     return;
@@ -500,5 +678,6 @@ module.exports = {
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL,
+  LEGACY_LOOKALIKE_AQL,
   ALL_DOCS_AQL
 };

@@ -211,11 +211,11 @@ async function downloadToBuffer(fileId, cap) {
  * conversion report carries the same fact, but the report is a record; the
  * ingestion log is where the operator looks. Non-fatal by design: a failed
  * mirror never aborts an import. */
-async function mirrorIngestionLog(fileId, level, stage, message) {
+async function mirrorIngestionLog(fileId, message) {
   try {
     await authedAxios.post(
       `${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}/ingestion-log`,
-      { level, stage, message },
+      { level: 'WARN', stage: 'OKF topics', message },
       { timeout: 10000 }
     );
   } catch (err) {
@@ -549,14 +549,9 @@ async function runDocumentsConversion(job) {
                 ? 'no LLM engine is configured (VLLM_ENDPOINT is unset)'
                 : `the topic summariser degraded (${topicsSource})`;
             entry.topics_source = topicsSource;
-            entry.warning = `LLM topics degraded — ${reason}. The file was imported without LLM-derived topics.`;
-            await mirrorIngestionLog(
-              file_id,
-              'WARN',
-              'OKF topics',
-              `[${repo_id}] LLM topics degraded — ${reason}. The file was imported without LLM-derived topics ` +
-                `(topics source: ${topicsSource}).`
-            );
+            const warning = `LLM topics degraded — ${reason}. The file was imported without LLM-derived topics.`;
+            entry.warning = warning;
+            await mirrorIngestionLog(file_id, `[${repo_id}] ${warning}`);
           }
           perFile.push(entry);
         } else {

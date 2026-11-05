@@ -194,9 +194,13 @@ SOURCES_NOT_RETRACTED fail-closes on hand-deleted sources.
    `getConceptMetaFromAnyRepo` ambiguity).
 2. Deletion-aware gate: missing source → skip + visible log line, not a
    permanent block; re-drive still works after a hand-deleted source.
+3. `deletion_reason` capture (#925 split ruling, 2026-11-05): the repo delete
+   flow records WHY it is being deleted (steward-provided reason, persisted on
+   the tombstone/audit row); the TTL-sweep half of #925 stays parked pending
+   the D3 revisit — out of scope.
 
 **Verification:** zero concept-keyed rows survive delete/retract; gate downgrade
-tested; no cross-repo deletion.
+tested; no cross-repo deletion; a delete carries its reason (audited).
 
 ---
 

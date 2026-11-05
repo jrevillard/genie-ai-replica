@@ -37,7 +37,7 @@
         {{ translate('analytics.gauge.historical', 'Historical Trends') }}
       </h3>
       <div v-for="(item, index) in computedHistoricalData" :key="index" class="trend-item">
-        <span class="label">{{ item.label }}</span>
+        <span class="label">{{ periodLabel(item.label) }}</span>
         <span class="value">{{ item.value.toFixed(2) }}%</span>
         <div class="progress" :style="{ width: `${item.value}%` }"></div>
       </div>
@@ -159,31 +159,31 @@ export default {
         // Fallback data if historicalData is empty
         data = [
           {
-            label: 'Current',
+            label: 'current',
             value: this.actualSatisfactionValue || 0,
             periodStart: new Date().toISOString(),
             periodEnd: new Date().toISOString()
           },
           {
-            label: 'Last Week',
+            label: 'week1',
             value: 0,
             periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '2 Weeks Ago',
+            label: 'week2',
             value: 0,
             periodStart: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '3 Weeks Ago',
+            label: 'week3',
             value: 0,
             periodStart: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '4 Weeks Ago',
+            label: 'week4',
             value: 0,
             periodStart: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
@@ -303,6 +303,15 @@ export default {
         return translation === key ? defaultValue : translation;
       }
       return defaultValue;
+    },
+
+    /**
+     * Translate a satisfaction period key ('current', 'week1'...'week4') into
+     * its display text. Values that are not keys (legacy plain labels) are
+     * returned unchanged.
+     */
+    periodLabel(key) {
+      return this.translate(`analytics.timePeriods.${key}`, key);
     },
 
     /**

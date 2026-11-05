@@ -525,11 +525,11 @@ export default {
           satisfactionHeatmapData: this.staticData.queryDistribution.map((category) => ({
             name: category.name,
             data: [
-              { x: '4 Weeks Ago', y: 75 + Math.random() * 10 },
-              { x: '3 Weeks Ago', y: 78 + Math.random() * 10 },
-              { x: '2 Weeks Ago', y: 80 + Math.random() * 10 },
-              { x: 'Last Week', y: 82 + Math.random() * 10 },
-              { x: 'Current', y: 85 + Math.random() * 10 }
+              { x: 'week4', y: 75 + Math.random() * 10 },
+              { x: 'week3', y: 78 + Math.random() * 10 },
+              { x: 'week2', y: 80 + Math.random() * 10 },
+              { x: 'week1', y: 82 + Math.random() * 10 },
+              { x: 'current', y: 85 + Math.random() * 10 }
             ]
           }))
         };

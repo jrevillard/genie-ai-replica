@@ -204,6 +204,15 @@ export default {
       return defaultValue;
     },
 
+    /**
+     * Translate a satisfaction period key ('current', 'week1'...'week4') into
+     * its display text. Values that are not keys (legacy plain labels) are
+     * returned unchanged.
+     */
+    periodLabel(key) {
+      return this.translate(`analytics.timePeriods.${key}`, key);
+    },
+
     checkMobile() {
       this.isMobile = window.innerWidth < 768;
     },
@@ -280,7 +289,10 @@ export default {
       const backgroundColor = theme.backgroundColor;
       const borderColor = theme.borderColor;
 
-      this.chartSeries = this.chartData;
+      this.chartSeries = this.chartData.map((category) => ({
+        ...category,
+        data: (category.data || []).map((point) => ({ ...point, x: this.periodLabel(point.x) }))
+      }));
 
       const getColorScale = () => {
         const poorText = this.translate('analytics.ratings.poor', 'Poor');

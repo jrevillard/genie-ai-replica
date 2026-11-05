@@ -529,24 +529,33 @@ describe('AnalyticsService', () => {
     });
   });
 
-  describe('getSatisfactionGaugeData - locale branches', () => {
-    it('should use French locale labels', async () => {
+  describe('getSatisfactionGaugeData - period labels', () => {
+    it('should return period keys, not localized text', async () => {
       // 5 time periods, each returns empty cursor
       for (let i = 0; i < 5; i++) {
         mockDb.query.mockResolvedValueOnce(createMockCursor([]));
       }
       const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15', 'fr');
-      expect(result.historicalData[0].label).toBe('Actuel');
-      expect(result.historicalData[1].label).toBe('Semaine dernière');
+      expect(result.historicalData.map((entry) => entry.label)).toEqual([
+        'current',
+        'week1',
+        'week2',
+        'week3',
+        'week4'
+      ]);
     });
 
-    it('should use Swahili locale labels', async () => {
-      for (let i = 0; i < 5; i++) {
-        mockDb.query.mockResolvedValueOnce(createMockCursor([]));
-      }
-      const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15', 'sw');
-      expect(result.historicalData[0].label).toBe('Sasa');
-      expect(result.historicalData[1].label).toBe('Wiki iliyopita');
+    it('should return the same period keys whatever the locale', async () => {
+      const labelsFor = async (locale) => {
+        for (let i = 0; i < 5; i++) {
+          mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+        }
+        const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15', locale);
+        return result.historicalData.map((entry) => entry.label);
+      };
+
+      expect(await labelsFor('sw')).toEqual(await labelsFor('en'));
+      expect(await labelsFor('fr')).toEqual(await labelsFor('en'));
     });
 
     it('should calculate change percentage when previousValue > 0', async () => {
@@ -583,13 +592,13 @@ describe('AnalyticsService', () => {
       expect(result.historicalData).toEqual([]);
     });
 
-    it('should handle weekly period with locale labels', async () => {
+    it('should handle weekly period with period keys', async () => {
       for (let i = 0; i < 5; i++) {
         mockDb.query.mockResolvedValueOnce(createMockCursor([{ categoryId: 'cat1', average: 4.5 }]));
       }
       const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15', 'en');
       expect(result.historicalData).toHaveLength(5);
-      expect(result.historicalData[1].label).toBe('Last Week');
+      expect(result.historicalData[1].label).toBe('week1');
       expect(result.currentValue).toBe(90); // 4.5/5 * 100 = 90
     });
   });
@@ -610,6 +619,19 @@ describe('AnalyticsService', () => {
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe('Category One');
       expect(result[0].data).toHaveLength(5); // 5 time periods
+    });
+
+    it('should use period keys as heatmap x values', async () => {
+      analyticsService.serviceCategoryService.getAllCategoriesWithServices.mockResolvedValueOnce([
+        { catKey: 'cat1', name: 'Category One' }
+      ]);
+
+      for (let i = 0; i < 5; i++) {
+        mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      }
+
+      const result = await analyticsService.getSatisfactionHeatmapData('daily', '2026-01-15', 'fr');
+      expect(result[0].data.map((point) => point.x)).toEqual(['current', 'week1', 'week2', 'week3', 'week4']);
     });
 
     it('should use fallback categories when ServiceCategoryService fails', async () => {

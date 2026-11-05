@@ -210,11 +210,16 @@ const keycloakProxyService = {
     const issSub = resolved.issSub;
     logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
-    // Evict the provisioning cache BEFORE erasing, so the middleware stops
-    // serving the pre-erasure profile for the remainder of the cache TTL.
-    if (issSub) {
-      userProvisioningService.invalidateCache(issSub);
-    }
+    // No eviction here: invalidateCache broadcasts over Redis pub/sub, and a
+    // pre-commit broadcast makes the other replicas evict and re-provision
+    // against the not-yet-erased document (#1483). Evict only after the
+    // erasure commits — the same ordering as markUserAsDeleted. Until the
+    // commit, callers may be served the pre-erasure profile from cache (the
+    // revalidation deliberately ignores erasures); the post-commit eviction
+    // closes that window. On a failed erasure UPDATE (PARTIAL_ERASURE) there
+    // is no commit to announce and no eviction — but note that a lost
+    // response after a server-side commit leaves erasureCommitted false, so
+    // that path serves the pre-erasure profile until the cache entry's TTL.
 
     // Delete from Keycloak first (authoritative source). A missing Keycloak UUID
     // or a 404 (user already deleted in Keycloak) does NOT abort the erasure:
@@ -276,10 +281,21 @@ const keycloakProxyService = {
         `
       );
       erasureCommitted = true;
+      // The only eviction, and it runs as soon as the erasure has committed: a
+      // provision that raced the erasure may have re-cached the pre-erasure
+      // profile, and this broadcast closes it (see #1440 for the residual
+      // INSERT-level window). The tombstone written by the UPDATE above makes
+      // a peer re-provision refuse, so the broadcast is safe before the
+      // duplicate removal below.
+      if (issSub) {
+        userProvisioningService.invalidateCache(issSub);
+      }
       // Remove any duplicate document a racing provision may have INSERTed
       // under the same iss_sub (new _key — the UPDATE above never matches it).
       // With iss_sub still known here, this closes the #1440 INSERT window at
       // commit time; the provisioning re-check is the belt-and-suspenders.
+      // The filter needs a non-null issSub — the null-issSub path (an
+      // already-erased record) is tracked in #1458.
       await db.query(
         aql`
           FOR u IN users
@@ -288,16 +304,14 @@ const keycloakProxyService = {
         `
       );
       logger.info('[KeycloakProxy] User erased', { userKey });
-      // Re-evict AFTER the erasure commits: a provision that raced the erasure
-      // may have re-cached the pre-erasure profile after the pre-delete
-      // eviction above (see #1440 for the residual INSERT-level window).
-      if (issSub) {
-        userProvisioningService.invalidateCache(issSub);
-      }
     } catch (arangoError) {
-      // The erasure UPDATE may already be committed (a late duplicate-removal
-      // failure lands here) — still clean the uploads; if the UPDATE itself
-      // failed, the record is intact and the uploads must survive it.
+      // A late duplicate-removal failure lands here with the erasure already
+      // committed (the eviction above already ran, right after the commit).
+      // erasureCommitted=false does NOT guarantee the record is intact: in
+      // the known lost-response-after-server-side-commit window (see the
+      // erasureCommitted declaration above) the erasure DID commit and only
+      // the answer was lost. The uploads are cleaned only on the committed
+      // path; a false erasureCommitted leaves them for an operator retry.
       if (erasureCommitted) {
         await this._cleanupUploads(userKey);
       }

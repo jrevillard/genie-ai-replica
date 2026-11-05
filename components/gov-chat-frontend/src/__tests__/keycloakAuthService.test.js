@@ -645,7 +645,11 @@ describe('cross-tab renew lease (#80800)', () => {
 
   // Seed a publication the way a real holder writes it (foreign tab id,
   // stamped at publish time) — the shared drive for every adoption test.
-  function seedForeignPublication(token, { at = Date.now() - 10, expiresAt } = {}) {
+  // Each seed gets its OWN stamp: the module memoizes what it adopted, and
+  // two tests seeding the same millisecond would make the second adoption
+  // fail for the wrong reason.
+  let seedCounter = 0;
+  function seedForeignPublication(token, { at = Date.now() - 10 - seedCounter++, expiresAt } = {}) {
     const user = createMockUser({
       access_token: token,
       ...(expiresAt !== undefined ? { expires_at: expiresAt } : {})
@@ -878,6 +882,9 @@ describe('cross-tab renew lease (#80800)', () => {
         expect.objectContaining({ access_token: 'soon-expiring-token' }),
         false
       );
+      // …and with the USER IN HAND, not a store re-read: the very instance
+      // that was stored.
+      expect(mockEventsLoad.mock.calls[0][0]).toBe(mockStoreUser.mock.calls[0][0]);
       await jest.advanceTimersByTimeAsync(10000);
       // The plain JSON object's `expired` would be undefined — a lie. The
       // rehydrated User computes it from expires_at.
@@ -950,6 +957,45 @@ describe('cross-tab renew lease (#80800)', () => {
     const second = await keycloakAuthService.signinSilent();
     expect(second.access_token).toBe('own-grant-after');
     expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a throwing access-token subscriber does not fail the renewal or silence the others (#1521 review)', async () => {
+    delete navigator.locks;
+    seedForeignPublication('subscriber-token');
+    mockGetUser.mockResolvedValue(null);
+    const bad = jest.fn(() => {
+      throw new Error('subscriber blew up');
+    });
+    const good = jest.fn();
+    keycloakAuthService.onAccessTokenUpdated(bad);
+    keycloakAuthService.onAccessTokenUpdated(good);
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('subscriber-token'); // the renewal SUCCEEDED
+      expect(bad).toHaveBeenCalled();
+      expect(good).toHaveBeenCalled(); // not silenced by the first throw
+      expect(consoleSpy).toHaveBeenCalled();
+    } finally {
+      keycloakAuthService.removeAccessTokenUpdatedCallback(bad);
+      keycloakAuthService.removeAccessTokenUpdatedCallback(good);
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it('two publications sharing a millisecond are distinguished — the second is still adoptable (#1521 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    const stamp = Date.now();
+    seedForeignPublication('first-pub-token', { at: stamp });
+    const first = await keycloakAuthService.signinSilent();
+    expect(first.access_token).toBe('first-pub-token');
+    // Same millisecond, DIFFERENT tokens: the one-shot memo must not
+    // refuse the fresh handoff.
+    seedForeignPublication('second-pub-token', { at: stamp });
+    const second = await keycloakAuthService.signinSilent();
+    expect(second.access_token).toBe('second-pub-token');
+    expect(mockSigninSilent).not.toHaveBeenCalled();
   });
 
   it('a corrupt (at-less) publication is dropped at renew entry like a non-parsing one (#1521 review)', async () => {
@@ -1224,6 +1270,30 @@ describe('cross-tab renew lease (#80800)', () => {
     // 8-line try/finally descriptor save/restore whose restore branch could
     // never meaningfully fire (jsdom HAS no navigator.locks to restore).
     // Inside the describe, the cleanup convention is the describe's own.
+    it('a holder that publishes BETWEEN the consult and the lock probe is adopted, not granted over (#1521 review)', async () => {
+      const holderUser = createMockUser({ access_token: 'gap-holder-token' });
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: {
+          request: (_name, _opts, cb) => {
+            // The holder publishes (and releases) inside the waiter's
+            // probe gap: the waiter consulted an empty slot, and the lock
+            // is free again by the time it asks.
+            window.localStorage.setItem(
+              USER_KEY,
+              JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser })
+            );
+            return Promise.resolve(cb({}));
+          }
+        }
+      });
+      mockGetUser.mockResolvedValue(null);
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('gap-holder-token'); // adopted under the lock
+      expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant on the rotated token
+    });
+
     it('a FREE lock with a publication from ANOTHER tab ADOPTS it even when stamped BEFORE this renew started (#1521)', async () => {
       Object.defineProperty(navigator, 'locks', {
         configurable: true,

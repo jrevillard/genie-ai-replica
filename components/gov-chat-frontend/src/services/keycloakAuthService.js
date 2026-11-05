@@ -2,7 +2,11 @@
  * Keycloak OIDC Authentication Service
  *
  * Wraps oidc-client-ts UserManager to provide OIDC authentication.
- * Tokens are stored in JavaScript memory only — never in localStorage, sessionStorage, or cookies.
+ * Tokens are kept in JavaScript memory only — never in sessionStorage or cookies.
+ * EXCEPTION: the cross-tab renewal handoff publishes the renewed user in
+ * same-origin localStorage (RENEW_USER_KEY) so a second tab can adopt it
+ * instead of spending a second grant on an already-rotated refresh token;
+ * the entry is wiped at logout and by the TTL cleanup at each renew entry.
  */
 
 import { UserManager, User } from 'oidc-client-ts';
@@ -189,13 +193,15 @@ function clearStaleRenewPublication() {
  * CONSUMES the offer (#1521 review): a successful read records the stamp
  * in lastAdoptedAt, so this is a one-shot per publication — tryAdoptPublication
  * is its only caller; a second reader would silently burn the adoption. */
-// The `at` of the publication THIS tab last adopted (#1521 review, loop 5):
-// re-adopting the identical publication is never legitimate — it would
-// serve the same tokens twice, and with a short-lived adopted token the
-// re-armed expiring timer re-enters signinSilent within seconds, turning
-// the handoff into a re-adoption loop for one TTL. A holder's NEXT renew
-// always publishes a new `at`.
-let lastAdoptedAt = 0;
+// The token this tab last adopted (#1521 review, loop 5): re-adopting the
+// IDENTICAL tokens is never legitimate — it would serve them twice, and
+// with a short-lived adopted token the re-armed expiring timer re-enters
+// signinSilent within seconds, turning the handoff into a re-adoption loop
+// for one TTL. Keyed on the TOKEN, not the timestamp: two publications can
+// share a millisecond while carrying different tokens (a holder's next
+// renew always publishes new tokens), and the restore path rewrites the
+// same tokens — which must stay un-adoptable.
+let lastAdoptedToken = null;
 
 function readPublishedRenew() {
   try {
@@ -203,10 +209,10 @@ function readPublishedRenew() {
     if (!raw) return null;
     const entry = JSON.parse(raw);
     if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
-    if (typeof entry.at !== 'number' || entry.at === lastAdoptedAt) return null;
+    if (!entry.user.access_token || entry.user.access_token === lastAdoptedToken) return null;
     const exp = entry.user.expires_at;
     if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
-    lastAdoptedAt = entry.at; // this exact publication is never adoptable again
+    lastAdoptedToken = entry.user.access_token; // these exact tokens are never adoptable again
     return entry.user;
   } catch {
     return null;
@@ -267,7 +273,8 @@ async function adoptPublishedUser(manager, user) {
  * tell. Restoring gives the other tabs the best available handoff: in the
  * common case (network blip before the request) the token is still valid,
  * and in the lost-response case the restored entry is dead but the waiters
- * re-grant after the TTL — the same trade as not restoring. Restored only
+ * re-grant after the TTL — the same trade as not restoring. Restored with
+ * its ORIGINAL stamp (the entry is not younger than it was), and only
  * while the slot is still empty: a newer publication (this tab's own fresh
  * one, or another tab's) outranks the saved entry. */
 async function runRawGrantAndPublish(manager) {
@@ -330,7 +337,11 @@ async function tryAdoptPublication(manager) {
  * the lock, the same trade the stale-lease takeover always made (a renew
  * wedged >20s went nowhere). */
 async function renewViaWebLock(manager, startedAt) {
-  const renewOnce = () => runRawGrantAndPublish(manager);
+  // RE-CONSULT INSIDE THE LOCK (#1521 review): the holder can publish and
+  // release BETWEEN this tab's consult and its lock probe — granting then
+  // would burn a grant on the refresh token that holder just rotated away.
+  // Under the lock the publication is read once more before any grant.
+  const renewOnce = async () => (await tryAdoptPublication(manager)) ?? runRawGrantAndPublish(manager);
   const adoptedFirst = await tryAdoptPublication(manager);
   if (adoptedFirst) return adoptedFirst;
   const held = await tryTakeLock(renewOnce);
@@ -372,6 +383,11 @@ async function renewViaLease(manager, startedAt) {
     if (adopted) return adopted;
     held = await acquireRenewLease();
   }
+  // RE-CONSULT BEFORE THE GRANT (#1521 review): the holder can publish and
+  // release the lease BETWEEN this tab's consult and its claim — granting
+  // then would burn a grant on the token that holder just rotated away.
+  const adoptedLast = await tryAdoptPublication(manager);
+  if (adoptedLast) return adoptedLast;
   return runRawGrantAndPublish(manager);
 }
 
@@ -426,7 +442,17 @@ let consecutiveRenewFailures = 0;
 function onUserLoaded(user) {
   currentUser = user;
   consecutiveRenewFailures = 0;
-  accessTokenCallbacks.forEach((cb) => cb(user));
+  // Per-subscriber isolation (#1521 review): a subscriber that throws must
+  // not abort the renewal (the renewer's failure counter would count a
+  // successful renewal as a failure and escalate to a forced logout) and
+  // must not silence the subscribers after it.
+  accessTokenCallbacks.forEach((cb) => {
+    try {
+      cb(user);
+    } catch (error) {
+      console.warn('[KeycloakAuth] Access token callback failed:', error?.message);
+    }
+  });
 }
 
 /**

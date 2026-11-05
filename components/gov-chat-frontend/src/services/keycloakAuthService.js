@@ -204,10 +204,14 @@ function readPublishedRenew() {
  * stale store). Rehydrate a real User and serve THAT (#1521 review): the
  * plain object has none of oidc's getters, so `expired` (and the
  * isAuthenticated()/escalation checks that read it) silently lie.
- * CALLBACKS (#1521 review): a granted renew reaches the auth store through
- * the addUserLoaded event; storeUser raises no oidc event, so the adopt
- * path fires the module's own callbacks itself — an adopted renewal is
- * observed exactly like a granted one. */
+ * PARITY (#1521 review, loop 3): a granted renew reaches the app store and
+ * the failure counter through oidc's addUserLoaded event; storeUser raises
+ * no oidc event, so the adopt path calls the SAME onUserLoaded body
+ * directly. TIMER RE-ARM: oidc's expiring/expired timers are ONE-SHOT and
+ * re-armed only by the grant's internal _events.load — an adoption would
+ * otherwise leave the tab without proactive silent renewal forever (its
+ * timer already fired to get here). manager.getUser() is the public path
+ * that re-arms them (raiseEvent defaults false — no userLoaded double-fire). */
 async function adoptPublishedUser(manager, user) {
   const rehydrated = new User(user);
   try {
@@ -215,8 +219,12 @@ async function adoptPublishedUser(manager, user) {
   } catch {
     /* keep the rehydrated user even if the store write fails */
   }
-  currentUser = rehydrated;
-  accessTokenCallbacks.forEach((cb) => cb(rehydrated));
+  onUserLoaded(rehydrated);
+  try {
+    await manager.getUser(); // re-arms oidc's one-shot renew timers
+  } catch {
+    /* the re-arm is best-effort — the adopted user is already served */
+  }
   return rehydrated;
 }
 
@@ -341,6 +349,22 @@ function releaseManagerEvents() {
   }
 }
 
+// Bounded-renew state (round 17, #80353): module-level so the adopted path
+// shares the counter with the granted one (was a per-initialize closure).
+let consecutiveRenewFailures = 0;
+
+/** What a successful renewal means, wherever it comes from (#1521 review):
+ * the granted path reaches this through oidc's addUserLoaded event; the
+ * adopted path calls it directly — one body, not kept-in-sync twins. Sets
+ * the module user, resets the bounded-renew failure counter (round 18,
+ * #80469: the invariant is "reset on ANY success") and commits the renewal
+ * to the app store's registered callbacks. */
+function onUserLoaded(user) {
+  currentUser = user;
+  consecutiveRenewFailures = 0;
+  accessTokenCallbacks.forEach((cb) => cb(user));
+}
+
 /**
  * Initialize the OIDC service — creates UserManager, checks for existing session,
  * and registers silent renew event listeners.
@@ -355,21 +379,13 @@ async function initialize() {
   releaseManagerEvents();
   userManager = wrapManagerSignin(new UserManager(oidcConfig));
 
-  // Bounded-renew state (round 17, #80353; reset widened round 18, #80469)
-  let consecutiveRenewFailures = 0;
+  // Bounded-renew state (round 17, #80353): a fresh manager starts from a
+  // clean failure count.
+  consecutiveRenewFailures = 0;
   const MAX_RENEW_FAILURES = 3;
 
   // Register silent renew event listeners
-  unsubscribeUserLoaded = userManager.events.addUserLoaded((user) => {
-    currentUser = user;
-    // A TIMER-driven successful renew also resets the failure counter (round
-    // 18, #80469): the documented invariant is "reset on any success", but
-    // only the error-handler's own retry reset it — three transient failures
-    // spread across days (sleep/wake, network switch) still escalated to the
-    // login check even though the last renewal succeeded.
-    consecutiveRenewFailures = 0;
-    accessTokenCallbacks.forEach((cb) => cb(user));
-  });
+  unsubscribeUserLoaded = userManager.events.addUserLoaded(onUserLoaded);
 
   // A FAILED RENEW IS NOT A DEAD SESSION (David's 2026-10-11 logout). This used
   // to call login() unconditionally, so ONE rejected refresh in a burst threw
@@ -533,10 +549,12 @@ async function signinSilent() {
   // (round 20, #80800: the module-scoped promise alone left the two-tab
   // race — the measured one — unserialised).
   if (renewInFlight) return renewInFlight;
-  // Bound the publication's disk lifetime (round 23 retention): a stale
-  // entry from a previous renew window is inadmissible to every reader, so
-  // dropping it at each renew entry costs nothing and leaves no tokens at
-  // rest past the TTL.
+  // Bound the publication's disk lifetime (round 23 retention): no tokens
+  // stay at rest past the TTL. The trade (#1521 review): a waiter arriving
+  // more than one TTL after the holder's publish finds the entry already
+  // wiped and grants on its own (possibly rotated) token — the ownership
+  // gate admits a foreign publication regardless of age, so "stale" is no
+  // longer "inadmissible to every reader". Tracked in #1535.
   clearStaleRenewPublication();
   renewInFlight = (async () => {
     const manager = getUserManager();

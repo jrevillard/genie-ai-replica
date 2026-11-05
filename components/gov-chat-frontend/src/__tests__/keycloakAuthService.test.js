@@ -863,6 +863,10 @@ describe('cross-tab renew lease (#80800)', () => {
       const user = await keycloakAuthService.signinSilent();
       expect(user.access_token).toBe('soon-expiring-token');
       expect(keycloakAuthService.isAuthenticated()).toBe(true);
+      // oidc's expiring/expired timers are one-shot and re-armed only by the
+      // grant's internal load — the adoption re-arms them through the public
+      // manager.getUser() (raiseEvent defaults false).
+      expect(mockGetUser).toHaveBeenCalled();
       await jest.advanceTimersByTimeAsync(10000);
       // The plain JSON object's `expired` would be undefined — a lie. The
       // rehydrated User computes it from expires_at.
@@ -888,6 +892,30 @@ describe('cross-tab renew lease (#80800)', () => {
     } finally {
       keycloakAuthService.removeAccessTokenUpdatedCallback(cb);
     }
+  });
+
+  it('an ADOPTED renewal resets the bounded-renew failure counter like a granted one (#1521 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+    mockSigninRedirect.mockResolvedValue(undefined);
+    await keycloakAuthService.initialize();
+    const handler = mockAddSilentRenewError.mock.calls[0][0];
+    // Two failures — one short of the escalation cap (the counter is 2).
+    await handler();
+    await handler();
+    expect(mockSigninRedirect).not.toHaveBeenCalled();
+    // An ADOPTION is a success: the counter resets (the granted path resets
+    // it through oidc's addUserLoaded event; the adopted path must too).
+    const holderUser = createMockUser({ access_token: 'adopted-after-failures' });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser }));
+    const adopted = await keycloakAuthService.signinSilent();
+    expect(adopted.access_token).toBe('adopted-after-failures');
+    // The next failure is the FIRST again (counter 1 < cap 3) — without the
+    // reset it would be the third and would escalate to login().
+    window.localStorage.removeItem(USER_KEY);
+    await handler();
+    expect(mockSigninRedirect).not.toHaveBeenCalled();
   });
 
   it('treats an owner-less (old-build) publication as its own: stale stamp → own grant (#1521)', async () => {

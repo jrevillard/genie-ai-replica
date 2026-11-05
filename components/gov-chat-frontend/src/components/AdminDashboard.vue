@@ -2,149 +2,6 @@
   <div class="admin-page">
     <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
-        <div class="sidebar">
-          <div class="nav-section">
-            <div class="nav-header">
-              {{ translate('admin.dashboard', 'Dashboard') }}
-            </div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'overview' }]"
-                  @click.prevent="setActiveTab('overview')"
-                >
-                  <i>📊</i>
-                  <span>{{ translate('admin.overview', 'Overview') }}</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div class="nav-section">
-            <div class="nav-header">
-              {{ translate('admin.contentManagement', 'CONTENT MANAGEMENT') }}
-            </div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'hierarchy' }]"
-                  @click.prevent="setActiveTab('hierarchy')"
-                >
-                  <i>🔀</i>
-                  <span>{{ translate('admin.knowledgeHierarchy', 'Knowledge Hierarchy') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'documents' }]"
-                  @click.prevent="setActiveTab('documents')"
-                >
-                  <i>📂</i>
-                  <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
-                </a>
-              </li>
-              <!-- Sidebar mirrors the tab rack 1:1 (David 2026-10-21: the
-                   Studio tab had no sidebar entry — clicking it left the
-                   menu with no active item). Rack position: after Document
-                   Management, before Database. Hidden with the OKF flag. -->
-              <li v-if="okfEnabled" class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'studio' }]"
-                  @click.prevent="setActiveTab('studio')"
-                >
-                  <i>🧪</i>
-                  <span>{{ translate('admin.tabs.studio', 'OKF Studio') }}</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div class="nav-section">
-            <div class="nav-header">
-              {{ translate('admin.system', 'System') }}
-            </div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'database' }]"
-                  @click.prevent="setActiveTab('database')"
-                >
-                  <i>💾</i>
-                  <span>{{ translate('admin.database', 'Database') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a
-                  href="#"
-                  data-test-id="admin-logs-link"
-                  :class="['nav-link', { active: activeTab === 'logs' }]"
-                  @click.prevent="setActiveTab('logs')"
-                >
-                  <i>📋</i>
-                  <span>{{ translate('admin.logs', 'Logs') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'queryInspector' }]"
-                  @click.prevent="setActiveTab('queryInspector')"
-                >
-                  <i>🔍</i>
-                  <span>{{ translate('admin.queryInspector.title', 'Query Inspector') }}</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div class="nav-section">
-            <div class="nav-header">
-              {{ translate('admin.settings', 'Settings') }}
-            </div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'security' }]"
-                  @click.prevent="setActiveTab('security')"
-                >
-                  <i>🔒</i>
-                  <span>{{ translate('admin.tabs.security', 'Security') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'users' }]"
-                  @click.prevent="setActiveTab('users')"
-                >
-                  <i>👥</i>
-                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
-                </a>
-              </li>
-              <!-- Story 8-7 (David 2026-10-20): model configurations are a
-                   PLATFORM concern — the LAST Admin Dashboard tab, not a tab
-                   buried in the Testing Lab dialog. Rides the OKF flag (its
-                   storage/API live in okf-server). -->
-              <li v-if="okfEnabled" class="nav-item">
-                <a
-                  href="#"
-                  :class="['nav-link', { active: activeTab === 'models' }]"
-                  @click.prevent="setActiveTab('models')"
-                >
-                  <i>🤖</i>
-                  <span>{{ translate('admin.tabs.models', 'Models') }}</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-        </div>
-
         <div class="main">
           <div class="header">
             <h1 class="page-title">
@@ -202,7 +59,17 @@
           </div>
 
           <div class="tabs-card">
+            <!-- UX-1 (#1512): the sidebar nav rail is gone — its icons live on
+                 the rack buttons now, one row of tabs carrying the whole
+                 navigation. The rack is the ONLY nav surface; the per-tab
+                 layouts stay responsive to the freed width. -->
             <DsTabs :tabs="adminTabs" :model-value="activeTab" @update:model-value="setActiveTab">
+              <template #tab="{ tab }">
+                <span class="admin-tab" :data-test-id="tab.testid || null">
+                  <span class="admin-tab__icon" aria-hidden="true">{{ tab.icon }}</span>
+                  <span class="admin-tab__label">{{ tab.label }}</span>
+                </span>
+              </template>
               <div class="dashboard-grid">
                 <div v-if="activeTab === 'overview'" class="dashboard-card">
                   <div class="card-header">
@@ -1823,17 +1690,21 @@ export default {
       // still loading — drained on its 'studio-ready' emit (round 18, #80478).
       pendingStudioEvents: [],
       tabs: [
-        { id: 'overview', label: 'System Health' },
-        { id: 'hierarchy', label: 'Knowledge Hierarchy' },
-        { id: 'documents', label: 'Document Management' },
-        { id: 'studio', label: 'OKF Studio' },
-        { id: 'database', label: 'Database' },
-        { id: 'logs', label: 'Logs' },
-        { id: 'queryInspector', label: 'Query Inspector' },
-        { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' },
+        // UX-1 (#1512): the icons are the sidebar rail's, relocated onto the
+        // rack (the rail itself is gone). testid preserves the ONE handle a
+        // spec used (admin-logs-link) — the E2E rule adds handles only where
+        // a spec needs them.
+        { id: 'overview', label: 'System Health', icon: '📊' },
+        { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀' },
+        { id: 'documents', label: 'Document Management', icon: '📂' },
+        { id: 'studio', label: 'OKF Studio', icon: '🧪' },
+        { id: 'database', label: 'Database', icon: '💾' },
+        { id: 'logs', label: 'Logs', icon: '📋', testid: 'admin-logs-link' },
+        { id: 'queryInspector', label: 'Query Inspector', icon: '🔍' },
+        { id: 'security', label: 'Security', icon: '🔒' },
+        { id: 'users', label: 'Users', icon: '👥' },
         // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
-        { id: 'models', label: 'Models' }
+        { id: 'models', label: 'Models', icon: '🤖' }
       ],
 
       // Loading state
@@ -2003,7 +1874,9 @@ export default {
         .filter((t) => this.okfEnabled || (t.id !== 'studio' && t.id !== 'models'))
         .map((t) => ({
           label: this.translate(`admin.tabs.${t.id}`, t.label),
-          value: t.id
+          value: t.id,
+          icon: t.icon,
+          testid: t.testid
         }));
     },
     keycloakAdminUrl() {
@@ -4094,67 +3967,33 @@ export default {
   /* Other styles handled by DsButton */
 }
 
-/* Main layout grid */
+/* Main layout grid — UX-1 (#1512): the sidebar column is gone; the rack row
+   carries the whole navigation and every tab owns the full width. */
 .dashboard {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 1fr;
   height: calc(100vh - 60px);
   overflow: hidden;
 }
 
-/* Sidebar */
-.sidebar {
-  background: var(--bg-sidebar);
-  color: var(--fg);
-  padding: var(--space-lg) var(--space-md);
-  height: 100%;
-  overflow-y: auto;
-}
-
-.nav-section {
-  margin-bottom: var(--space-lg);
-}
-
-.nav-header {
-  text-transform: uppercase;
-  font-size: var(--text-sm);
-  letter-spacing: 0.05em;
-  color: var(--muted-soft);
-  margin-bottom: var(--space-sm);
-}
-
-.nav-items {
-  list-style: none;
-}
-
-.nav-item {
-  margin-bottom: var(--space-xs);
-}
-
-.nav-link {
-  display: flex;
+/* Rack tab content (UX-1): icon + label inside the DsTabs button slot. */
+.admin-tab {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-  text-decoration: none;
-  color: var(--fg);
-  opacity: 0.7;
-  border-radius: var(--radius-md);
-  transition: all 0.15s;
-  cursor: pointer;
+  gap: var(--space-xs);
+  white-space: nowrap;
 }
 
-.nav-link:hover {
-  color: var(--fg);
-  opacity: 1;
-  background-color: var(--bg);
+.admin-tab__icon {
+  font-size: var(--text-sm);
+  line-height: 1;
 }
 
-.nav-link.active {
-  color: var(--accent);
-  opacity: 1;
-  background-color: var(--accent-muted);
-  font-weight: 600;
+/* UX-1: ten icon+label tabs must WRAP on narrow windows, not overflow —
+   the rack is now the only nav surface. Scoped :deep into this usage of
+   the DS primitive only. */
+.tabs-card :deep(.ds-tabs__nav) {
+  flex-wrap: wrap;
 }
 
 /* Main Content */
@@ -4692,10 +4531,6 @@ input:checked + .slider:before {
 
   .dashboard {
     grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    display: none;
   }
 
   .health-status,

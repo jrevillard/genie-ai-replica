@@ -204,20 +204,26 @@ function quotedKey(key) {
  * @param {string} params.label - the noun in the elision line ('' for none)
  * @param {Array<Object>} params.docs - the entries to list
  * @param {number} params.total - how many entries exist in this listing
- * @param {number} params.limit - the cap
+ * @param {number} params.limit - the cap (defaults to DEFAULT_SAMPLE_LIMIT, so
+ *   an omitted cap is BOUNDED rather than an unbounded listing)
  * @param {Function} params.format - renders one entry line
+ * @param {string} [params.remedy] - what to tell the operator about the
+ *   withheld entries. Defaults to the dry-run re-run advice; the --delete path
+ *   passes its own, because there the withheld entries are about to be
+ *   REMOVED, not left for a later look.
  */
-function printSampledList({ write, label, docs, total = docs.length, limit, format }) {
+function printSampledList({ write, label, docs, total = docs.length, limit = DEFAULT_SAMPLE_LIMIT, format, remedy }) {
   const listed = docs.slice(0, limit);
   for (const doc of listed) {
     write(format(doc));
   }
   const withheld = total - listed.length;
   if (withheld > 0) {
-    write(
-      `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ` +
-        `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all`
-    );
+    const advice =
+      remedy ??
+      `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all ` +
+        '(redirect the output to a file if that is many entries)';
+    write(`  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ${advice}`);
   }
 }
 
@@ -246,8 +252,8 @@ function causeOf(err) {
  * Parses the CLI arguments and the operator gates. Side effects: on a failed
  * gate it prints the reason to stderr and sets process.exitCode, then returns
  * null; when every gate passes it returns the fully resolved run
- * configuration { mode, database, collection, arangoUrl, username, password }
- * — the single source main() reads after gating. It reads only its
+ * configuration { mode, database, collection, arangoUrl, username, password,
+ * sampleLimit } — the single source main() reads after gating. It reads only its
  * parameters (no module state, no process.argv/env), which is what makes it
  * unit-testable. Exported for tests (issue #1494).
  * @param {string[]} argv
@@ -368,11 +374,22 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
+  // The EFFECTIVE cap, not the default: an operator whose override variable is
+  // misspelled sees the cap they actually got, instead of a listing that
+  // silently stops at the default.
+  console.log(`Listing cap:   ${gated.sampleLimit} entries per listing (override: HUSK_SAMPLE_LIMIT)`);
   // One closure per scope: the sink and the cap are stated ONCE per run
   // path, so the two stdout listings cannot drift apart on either.
   const printStdoutList = (options) => printSampledList({ write: console.log, limit: gated.sampleLimit, ...options });
   printStdoutList({
     docs: husks,
+    // On the --delete path the withheld matches are removed by THIS run, so
+    // the dry-run advice would point at documents that are about to be gone.
+    remedy:
+      gated.mode === 'delete'
+        ? 'these withheld entries are included in the removal below — ' +
+          `raise HUSK_SAMPLE_LIMIT=${husks.length} to list them all in this run's record`
+        : undefined,
     format: (doc) =>
       `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
       `attributes=${JSON.stringify(Object.keys(doc).sort())}`
@@ -536,6 +553,7 @@ async function main({
     console.error(
       `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
         `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
+        `The listing below is capped at ${gated.sampleLimit} entries per direction. ` +
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
@@ -589,6 +607,7 @@ if (require.main === module) {
 
 module.exports = {
   isHuskDoc,
+  printSampledList,
   compareSignatureSets,
   parseAndGateArgs,
   main,

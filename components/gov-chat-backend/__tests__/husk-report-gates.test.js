@@ -15,7 +15,8 @@ const {
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL,
   LEGACY_LOOKALIKE_AQL,
-  ALL_DOCS_AQL
+  ALL_DOCS_AQL,
+  printSampledList
 } = require('../scripts/report-husk-user-docs');
 
 const huskDoc = {
@@ -156,11 +157,38 @@ describe('parseAndGateArgs', () => {
     // A malformed value is a GATE failure, never a silent fallback to 50: an
     // operator who asked for 500 entries and silently gets 50 is back to the
     // very confusion the override exists to remove.
-    for (const bad of ['abc', '0', '-3', '1.5', ' ', '0x1f', '1e3', ' 500 ']) {
+    for (const bad of ['abc', '0', '-3', '1.5', ' ', '0x1f', '1e3', ' 500 ', '99999999999999999999']) {
       expect(parseAndGateArgs([], { ...gateEnv, HUSK_SAMPLE_LIMIT: bad })).toBeNull();
       expect(process.exitCode).toBe(1);
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HUSK_SAMPLE_LIMIT'));
     }
+  });
+});
+
+describe('printSampledList', () => {
+  // The helper is the single place the cap is applied, so the cap's OWN
+  // invariant lives here: a listing is NEVER unbounded. Before the default
+  // was added, an omitted limit made slice(0, undefined) return the WHOLE
+  // array — a listing with no cap at all.
+  const docs = Array.from({ length: 60 }, (_, i) => ({ _key: `k-${i}` }));
+
+  it('caps the listing at the default when the caller omits the limit', () => {
+    const written = [];
+    printSampledList({ write: (l) => written.push(l), docs, format: (d) => `  entry ${d._key}` });
+    expect(written.filter((l) => l.startsWith('  entry '))).toHaveLength(50);
+    expect(written.some((l) => l.includes('(not listed)'))).toBe(true);
+  });
+
+  it('honours an explicit cap', () => {
+    const written = [];
+    printSampledList({ write: (l) => written.push(l), docs, limit: 10, format: (d) => `  entry ${d._key}` });
+    expect(written.filter((l) => l.startsWith('  entry '))).toHaveLength(10);
+  });
+
+  it('does not list an elision line when nothing was withheld', () => {
+    const written = [];
+    printSampledList({ write: (l) => written.push(l), docs: docs.slice(0, 5), format: (d) => `  entry ${d._key}` });
+    expect(written.filter((l) => l.includes('(not listed)'))).toHaveLength(0);
   });
 });
 
@@ -488,6 +516,90 @@ describe('main safety wiring', () => {
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(stdout.split('\n').filter((l) => l.includes('lookalike _key='))).toHaveLength(60);
     expect(stdout).not.toContain('(not listed)');
+  });
+
+  it('slices the lookalikes with the cap BIND, not a literal (issue #1507)', () => {
+    // The bind assertion in the next test alone is blind to a literal: a
+    // SLICE(..., 0, 50) would still carry sampleLimit=200 in the bind and
+    // still pass, while the SERVER would keep truncating at the default.
+    // The AQL text IS the contract here (the server-side slice is executed
+    // by ArangoDB, not by the fake), so it is pinned the same way the
+    // matcher/removal templates are pinned in husk-user-docs.test.js.
+    expect(LEGACY_LOOKALIKE_AQL).toContain('SLICE(lookalikeDocs, 0, @sampleLimit)');
+  });
+
+  it('prints the husk and lookalike keys as valid JSON strings (issue #1507)', async () => {
+    // The quoted-key contract is not confined to the abort path: the stdout
+    // listings are the operator's other copy-paste source (a key pasted into
+    // a follow-up AQL query). A key carrying an apostrophe AND a double
+    // quote is what a hand-written quoting gets wrong.
+    const key = 'it\'s-a-"key"';
+    const husk = { ...huskDoc, _key: key, _id: `users/${key}` };
+    const lookalike = { _key: key, createdAt: '2025-01-01T00:00:00.000Z' };
+    const db = fakeDb({ husks: [husk], allDocs: [husk], lookalikeCount: 1, lookalikes: [lookalike] });
+    await runMain(db);
+    const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    for (const marker of ['husk _key=', 'lookalike _key=']) {
+      const line = stdout.split('\n').find((l) => l.includes(marker));
+      expect(line).toBeDefined();
+      const literal = line.slice(line.indexOf('_key=') + '_key='.length).split(' ')[0];
+      expect(() => JSON.parse(literal)).not.toThrow();
+      expect(JSON.parse(literal)).toBe(key);
+    }
+  });
+
+  it('states the EFFECTIVE cap, so a misspelled override is visible (issue #1507)', async () => {
+    // HUSK_SAMPLE_LIMIT is read from the environment, so a typo in the
+    // variable NAME is invisible: the run quietly uses the default. Printing
+    // the effective cap in the report header makes the override
+    // self-verifying — the operator sees the cap they actually got.
+    await runMain(fakeDb({}), [], { ...gateEnv, HUSK_SAMPLE_LIMIT: '200' });
+    let stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(stdout).toContain('Listing cap:   200');
+    logSpy.mockClear();
+    await runMain(fakeDb({}), [], gateEnv);
+    stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(stdout).toContain('Listing cap:   50');
+  });
+
+  it('states the effective cap on the abort path too, where no report header is printed', async () => {
+    const { extra, missed } = divergentDocs(60);
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db, ['--delete', '--yes'], { ...gateEnv, HUSK_SAMPLE_LIMIT: '200' });
+    expect(stderrText(errorSpy)).toContain('capped at 200 entries per direction');
+  });
+
+  it('does not tell the operator to list entries the same --delete run removes', async () => {
+    // On the --delete path the withheld husks are removed by THIS run, so
+    // the dry-run advice would point at documents that are about to be gone.
+    // The elision line must say what actually happens to them.
+    const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
+    const db = fakeDb({ husks, allDocs: husks, writesExecuted: 60 });
+    await runMain(db, ['--delete', '--yes']);
+    const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const elision = stdout.split('\n').find((l) => l.includes('more (not listed)'));
+    expect(elision).toBeDefined();
+    expect(elision).not.toContain('re-run the dry run');
+    expect(elision).toContain('included in the removal below');
+    // The knob still works on this path: the report is printed BEFORE the
+    // removal, so a raised cap lists the withheld matches in the audit
+    // record of the very run that removes them.
+    expect(elision).toContain('HUSK_SAMPLE_LIMIT=60');
+  });
+
+  it("reconciles the in-output advice with the cap's stated purpose (issue #1507)", async () => {
+    // The remedy names the value that lists the withheld entries in full —
+    // which for a large collection means a large dump. The file header says
+    // the cap exists to keep the log pipeline from being flooded, so the
+    // in-output advice must carry the same caveat, or the tool contradicts
+    // its own rationale.
+    const { extra, missed } = divergentDocs(60);
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db, ['--delete', '--yes']);
+    const elision = stderrText(errorSpy)
+      .split('\n')
+      .find((l) => l.includes('more over-matched'));
+    expect(elision).toContain('redirect the output to a file');
   });
 
   it('couples the lookalike server-side slice to the configured cap (issue #1507)', async () => {

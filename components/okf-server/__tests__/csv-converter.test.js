@@ -293,6 +293,9 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
       }
     });
     expect(topics.source).toBe('fallback-no-endpoint');
+    // The reason travels with the topics: the importer copies it into the
+    // import report and the file's ingestion log.
+    expect(topics.reason).toMatch(/no LLM engine is configured/);
     expect(topics.topics).toEqual(['market']); // filename slug — kept
     for (const c of concepts) expect(c.frontmatter.topic).toEqual(['market']);
   });

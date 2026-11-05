@@ -548,7 +548,11 @@ async function runDocumentsConversion(job) {
             entry.topics_source = topics.source;
             const warning = `Topics degraded — ${topics.reason}. The file was imported without LLM-derived topics.`;
             entry.warning = warning;
-            await mirrorIngestionLog(file_id, `[${repo_id}] ${warning}`);
+            // NOT awaited: the mirror is best-effort (the same channel and the
+            // same call the ingest worker fires without await — workers/ingestWorker.js),
+            // and a doc-repo round trip per file has no business on the import's
+            // critical path. The conversion report above carries the same fact.
+            mirrorIngestionLog(file_id, `[${repo_id}] ${warning}`);
           }
           perFile.push(entry);
         } else {

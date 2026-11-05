@@ -640,8 +640,20 @@ describe('keycloakAuthService', () => {
 // logout). These tests drive the lease protocol through window.localStorage
 // the way a second tab would.
 describe('cross-tab renew lease (#80800)', () => {
-  // Isolation (mock implementations + the renew keys) is the file-level
-  // beforeEach above.
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    // implementations persist across clearAllMocks — reset the two this
+    // suite drives, then let each test set what it needs
+    mockGetUser.mockReset();
+    mockSigninSilent.mockReset();
+    window.localStorage.clear();
+    // The adoption memo is module state: a logout clears it with the
+    // session, so each test starts with an empty memo.
+    await keycloakAuthService.logout().catch(() => {});
+  });
+
+  const RENEW_LEASE_KEY = 'genie.renew.lease';
+  const RENEW_USER_KEY = 'genie.renew.user';
 
   // Seed a publication the way a real holder writes it (foreign tab id,
   // stamped at publish time) — the shared drive for every adoption test.
@@ -1291,6 +1303,25 @@ describe('cross-tab renew lease (#80800)', () => {
     // 8-line try/finally descriptor save/restore whose restore branch could
     // never meaningfully fire (jsdom HAS no navigator.locks to restore).
     // Inside the describe, the cleanup convention is the describe's own.
+    it('a grant that resolves WITHOUT a user is not mistaken for a busy lock — no second grant (#1521 review)', async () => {
+      fakeLocks((_name, _opts, cb) => Promise.resolve(cb({})));
+      jest.useFakeTimers();
+      try {
+        mockGetUser.mockResolvedValue(null);
+        // The grant spends itself and returns nothing (the userless case
+        // the grant tail handles): the lock WAS held, so the renewal must
+        // end there — not fall into the poll loop and grant a second time
+        // on a refresh token the first grant may have rotated.
+        mockSigninSilent.mockResolvedValue(null);
+        const p = keycloakAuthService.signinSilent();
+        await jest.advanceTimersByTimeAsync(25000);
+        await expect(p).resolves.toBeNull();
+        expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('a holder that publishes BETWEEN the consult and the lock probe is adopted, not granted over (#1521 review)', async () => {
       const holderUser = createMockUser({ access_token: 'gap-holder-token' });
       fakeLocks((_name, _opts, cb) => {

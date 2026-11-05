@@ -205,7 +205,10 @@ function clearStaleRenewPublication() {
 // share a millisecond while carrying different tokens (a holder's next
 // renew always publishes new tokens), and the restore path rewrites the
 // same tokens — which must stay un-adoptable.
-let lastAdoptedToken = null;
+const adoptedTokens = new Set();
+// The memory is bounded: only the RECENT adoptions can be re-served, and a
+// holder's renew publishes new tokens every time (#1521 review).
+const ADOPTED_TOKEN_MEMORY = 5;
 
 function readPublishedRenew() {
   try {
@@ -213,10 +216,15 @@ function readPublishedRenew() {
     if (!raw) return null;
     const entry = JSON.parse(raw);
     if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
-    if (!entry.user.access_token || entry.user.access_token === lastAdoptedToken) return null;
+    if (!entry.user.access_token || adoptedTokens.has(entry.user.access_token)) return null;
     const exp = entry.user.expires_at;
     if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
-    lastAdoptedToken = entry.user.access_token; // these exact tokens are never adoptable again
+    // These exact tokens are never adoptable again (until the bounded
+    // memory drops them, which only a newer adoption can do).
+    adoptedTokens.add(entry.user.access_token);
+    if (adoptedTokens.size > ADOPTED_TOKEN_MEMORY) {
+      adoptedTokens.delete(adoptedTokens.values().next().value);
+    }
     return entry.user;
   } catch {
     return null;
@@ -316,7 +324,14 @@ async function runRawGrantAndPublish(manager) {
  * null (ifAvailable:true never queues; a dead holder's lock releases
  * automatically). */
 async function tryTakeLock(fn) {
-  return navigator.locks.request(RENEW_LOCK_NAME, { ifAvailable: true }, async (lock) => (lock ? fn() : null));
+  // The lock's outcome and the renewal's outcome travel SEPARATELY
+  // (#1521 review): null means "the lock was busy" (the callback never
+  // ran), while a grant that resolved WITHOUT a user returns
+  // { result: undefined } — the lock WAS held and the grant WAS spent, so
+  // the caller must not read that as "busy" and grant a second time.
+  return navigator.locks.request(RENEW_LOCK_NAME, { ifAvailable: true }, async (lock) =>
+    lock ? { result: await fn() } : null
+  );
 }
 
 /** One gate-and-adopt step, shared by both renewal paths (#1521 review):
@@ -357,13 +372,13 @@ async function renewViaWebLock(manager, startedAt) {
   const adoptedFirst = await tryAdoptPublication(manager);
   if (adoptedFirst) return adoptedFirst;
   const held = await tryTakeLock(renewOnce);
-  if (held) return held;
+  if (held) return held.result;
   while (Date.now() - startedAt < RENEW_LEASE_TTL_MS) {
     await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
     const adopted = await tryAdoptPublication(manager);
     if (adopted) return adopted;
     const got = await tryTakeLock(renewOnce);
-    if (got) return got;
+    if (got) return got.result;
   }
   return renewOnce();
 }
@@ -382,8 +397,11 @@ async function renewViaLease(manager, startedAt) {
   let held = await acquireRenewLease();
   while (!held) {
     if (Date.now() - startedAt > RENEW_LEASE_TTL_MS + RENEW_WAIT_POLL_MS) {
-      // The holder's lease is stale/dead — its renew went nowhere. Run our
-      // own (acquireRenewLease takes over an expired lease).
+      // The holder's lease is stale/dead — its renew went nowhere. TAKE IT
+      // OVER before granting (#1521 review): the lease is provably expired
+      // by now, so the claim succeeds — without it two tabs breaking out
+      // together would grant concurrently and rotate the same token.
+      await acquireRenewLease();
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
@@ -451,18 +469,23 @@ let consecutiveRenewFailures = 0;
  * to the app store's registered callbacks. */
 function onUserLoaded(user) {
   currentUser = user;
-  consecutiveRenewFailures = 0;
   // Per-subscriber isolation (#1521 review): a subscriber that throws must
   // not abort the renewal (the renewer's failure counter would count a
   // successful renewal as a failure and escalate to a forced logout) and
   // must not silence the subscribers after it.
+  let subscriberFailed = false;
   accessTokenCallbacks.forEach((cb) => {
     try {
       cb(user);
     } catch (error) {
+      subscriberFailed = true;
       console.warn('[KeycloakAuth] Access token callback failed:', error?.message);
     }
   });
+  // A failed token update is NOT a successful renewal (#1521 review): the
+  // app still holds the previous token, so the failure counter must not be
+  // reset — the escalation still fires instead of an endless 401 loop.
+  if (!subscriberFailed) consecutiveRenewFailures = 0;
 }
 
 /**
@@ -519,7 +542,10 @@ async function initialize() {
     // to log out — but stop re-arming the loop either way.
     consecutiveRenewFailures = 0;
     try {
-      const user = await getUser();
+      // The user this tab SERVES first (#1521 review): a store write that
+      // failed leaves the oidc store stale while this tab holds a valid
+      // adopted token — the store must not decide the session is dead.
+      const user = currentUser || (await getUser());
       if (user && !user.expired) return;
     } catch (escalationError) {
       console.error('[KeycloakAuth] Session check after renew failures failed:', escalationError?.message);
@@ -583,9 +609,9 @@ async function logout() {
   // one on disk (round 23 retention fix; the TTL cleanup misses a fresh
   // publication, which a logout is exactly the wrong place to keep).
   clearRenewPublication();
-  // The adoption memo holds an access-token string — a logout ends the
+  // The adoption memo holds access-token strings — a logout ends the
   // session, so the memo goes with it.
-  lastAdoptedToken = null;
+  adoptedTokens.clear();
   releaseManagerEvents();
 
   const manager = getUserManager();
@@ -655,8 +681,10 @@ async function signinSilent() {
   // (round 20, #80800: the module-scoped promise alone left the two-tab
   // race — the measured one — unserialised).
   if (renewInFlight) return renewInFlight;
-  // Bound the publication's disk lifetime (round 23 retention): no tokens
-  // stay at rest past the TTL. The trade (#1521 review): a waiter arriving
+  // Bound the publication's disk lifetime (round 23 retention): the entry is
+  // dropped once it is older than the TTL. The cleanup runs HERE, at a
+  // renew entry — an idle browser keeps the entry until its next renewal
+  // (or until logout wipes it). The trade (#1521 review): a waiter arriving
   // more than one TTL after the holder's publish finds the entry already
   // wiped and grants on its own (possibly rotated) token — the ownership
   // gate admits a foreign publication regardless of age, so "stale" is no

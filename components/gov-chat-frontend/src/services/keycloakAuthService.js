@@ -64,6 +64,10 @@ export const RENEW_USER_KEY = 'genie.renew.user';
 const RENEW_LEASE_TTL_MS = 20000;
 const RENEW_WAIT_POLL_MS = 250;
 const RENEW_SETTLE_MS = 80;
+// A seconds-since-epoch expiry stays below 1e11 until the year 5138; above
+// that it reads as milliseconds stored as seconds — corruption, not a token
+// that lives for millennia (see publishedTokenIsUsable).
+const MAX_PLAUSIBLE_EXPIRY_S = 1e11;
 const RENEW_TAB_ID = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
 
 function leaseHeldByOther() {
@@ -174,13 +178,12 @@ function clearRenewPublication() {
  * stricter of the two. It is the token-life question only: the reader
  * additionally gates on ownership and the adoption memo, and the cleanup
  * additionally drops corrupt (at-less) entries. The expiry is a
- * seconds-since-epoch stamp — a value that reads as milliseconds stored as
- * seconds (>= 1e11, past the year 5138) is corruption, not a token that
- * lives for millennia, and must be unusable to both callers (#1535
- * review). */
+ * seconds-since-epoch stamp — a value past MAX_PLAUSIBLE_EXPIRY_S reads as
+ * milliseconds stored as seconds: corruption, not a token that lives for
+ * millennia, and unusable to both callers (#1535 review). */
 function publishedTokenIsUsable(entry) {
   const exp = entry && entry.user ? entry.user.expires_at : undefined;
-  return typeof exp === 'number' && exp < 1e11 && exp * 1000 > Date.now() + 5000;
+  return typeof exp === 'number' && exp < MAX_PLAUSIBLE_EXPIRY_S && exp * 1000 > Date.now() + 5000;
 }
 
 function clearStaleRenewPublication() {
@@ -208,10 +211,10 @@ function clearStaleRenewPublication() {
  * that renew — re-serving it would skip the actual refresh. ANY OTHER
  * entry is the handoff itself and needs no recency bound beyond the token
  * bound the retention cleanup applies (#1535): the waiter may legitimately
- * start AFTER the holder finished,
- * and the holder withdraws its own entry before any new grant
- * (runRawGrantAndPublish), so an entry on disk is the holder's LATEST
- * settled publication. An owner-LESS entry can never be this tab's own —
+ * start AFTER the holder finished, and the holder withdraws its own entry
+ * before any new grant (runRawGrantAndPublish), so an entry on disk is the
+ * holder's LATEST settled publication. An owner-LESS entry can never be
+ * this tab's own —
  * this tab's publications always carry its tab id while the page lives (a
  * reload re-parents the tab's pre-reload publication as foreign; adopting
  * it re-serves the tokens the reloaded tab already holds — benign, and
@@ -227,11 +230,10 @@ function clearStaleRenewPublication() {
 // IDENTICAL tokens is never legitimate — it would serve them twice, and
 // with a short-lived adopted token the re-armed expiring timer re-enters
 // signinSilent within seconds, turning the handoff into a re-adoption loop
-// for as long as that token stays usable. Keyed on the TOKEN, not the
-// timestamp: two publications can
-// share a millisecond while carrying different tokens (a holder's next
-// renew always publishes new tokens), and the restore path rewrites the
-// same tokens — which must stay un-adoptable.
+// for as long as that token stays usable. Keyed on the TOKEN because a
+// timestamp pair cannot distinguish two publications in one millisecond (a
+// holder's next renew always publishes new tokens); the restore path
+// rewrites the same tokens — which must stay un-adoptable.
 const adoptedTokens = new Set();
 // The memory is bounded: only the RECENT adoptions can be re-served, and a
 // holder's renew publishes new tokens every time (#1521 review).

@@ -1075,19 +1075,29 @@ describe('cross-tab renew lease (#80800)', () => {
     // sense in milliseconds (>= 1e11) would read as a token living for
     // millennia — kept at every renew entry and adoptable by every waiter
     // if the usability check took it at face value.
-    const msAsSeconds = createMockUser({
-      access_token: 'ms-as-seconds-pub',
-      expires_at: Date.now() + 3600000 // ms-instead-of-s: ~1.7e12
-    });
-    window.localStorage.setItem(
-      RENEW_USER_KEY,
-      JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: msAsSeconds })
-    );
+    seedForeignPublication('ms-as-seconds-pub', { expiresAt: Date.now() + 3600000 });
     mockSigninSilent.mockRejectedValue(new Error('grant refused'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
     // The cleanup emptied the slot (and the reader refused it before the
     // grant could adopt it) — the grant failure is the only writer left.
     expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
+  });
+
+  // The READER's expired arm, pinned through the shared predicate: a plain
+  // expired (not corrupt) publication is refused for adoption and this tab
+  // spends its own grant — the arm the "SURVIVES a failed grant" test no
+  // longer exercises since it reaches the withdraw path via the memo.
+  it('the reader refuses an expired foreign publication and the tab re-grants (#1535 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    seedForeignPublication('expired-holder-token', {
+      at: Date.now(),
+      expiresAt: Math.floor(Date.now() / 1000) - 100
+    });
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-fresh-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('own-fresh-grant'); // its own grant, not the expired handoff
+    expect(mockSigninSilent).toHaveBeenCalledTimes(1);
   });
 
   it("an owner-less (old-build) publication is adoptable — it can never be this tab's own (#1521)", async () => {

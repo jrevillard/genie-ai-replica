@@ -392,14 +392,16 @@ processors:
           # access logs, ClamAV banners) — without that guard, every
           # non-matching line logged a "key not found in map" warn under
           # error_mode: ignore. All three also require severity_text to
-          # be unset (`nil`), empty, or the VL "Unspecified" placeholder —
-          # a record that already carries a real severity is never
-          # restamped, so reprocessing the same record twice leaves the
-          # same severity_text both times (the guard the block comment
-          # above promises).
-          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{" and (severity_text == nil or severity_text == "" or severity_text == "Unspecified")'
-          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]") and (severity_text == nil or severity_text == "" or severity_text == "Unspecified")'
-          - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"]) and (severity_text == nil or severity_text == "" or severity_text == "Unspecified")'
+          # be unset or the VL "Unspecified" placeholder — a record
+          # that already carries a real severity is never restamped, so
+          # reprocessing the same record twice leaves the same
+          # severity_text both times (the guard the block comment above
+          # promises). The OTTL getter for severity_text returns a
+          # plain string, so "unset" is the empty string — there is no
+          # nil to compare against.
+          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{" and (severity_text == "" or severity_text == "Unspecified")'
+          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]") and (severity_text == "" or severity_text == "Unspecified")'
+          - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"]) and (severity_text == "" or severity_text == "Unspecified")'
           # Normalise Winston JSON envelopes: replace `body` with the inner
           # `.message` field so VictoriaLogs `_msg` carries the human-readable
           # log line instead of the JSON envelope. Without this transform the

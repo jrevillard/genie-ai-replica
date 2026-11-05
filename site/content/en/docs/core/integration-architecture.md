@@ -128,12 +128,12 @@ client-side by `oidc-client-ts`.
 
 - **Base URL:** `window.APP_CONFIG?.apiUrl` (runtime config from
   `/config/genie-ai-config.json`) or `VUE_APP_API_URL` (build-time env var).
-- **Token management:** Keycloak JWT is stored **in JavaScript memory only**
-  (never in `localStorage`, `sessionStorage`, or cookies) via
-  `oidc-client-ts UserManager`. The source file
-  `src/services/keycloakAuthService.js` states explicitly:
-  *"Tokens are stored in JavaScript memory only — never in localStorage,
-  sessionStorage, or cookies."* It is injected as
+- **Token management:** the Keycloak JWT is held **in JavaScript memory**,
+  plus two documented disk footprints of `oidc-client-ts UserManager` and
+  the cross-tab renew handoff: the per-tab user store (`sessionStorage`) and
+  the handoff entry `genie.renew.user` (`localStorage`) — see
+  `src/services/keycloakAuthService.js` and
+  [Auth Flow](/docs/frontend/auth-flow/). The token is injected as
   `Authorization: Bearer <token>` on every request.
 - **CORS:** all requests go through Kong; CORS is configured at the gateway
   (`CORS_ALLOWED_ORIGINS`).

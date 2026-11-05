@@ -204,8 +204,11 @@ function clearStaleRenewPublication() {
     if (!raw) return;
     const entry = JSON.parse(raw);
     if (publishedTokenIsUsable(entry)) return;
-    // Remove ONLY the entry that was judged: a holder may have published a
-    // fresh handoff between the read above and this removal (#1535 review).
+    // Remove ONLY the entry that was judged: the key is re-read first, so a
+    // holder that published a fresh handoff between the read above and this
+    // removal keeps it. localStorage has no compare-and-swap, so a
+    // publication landing between THAT re-read and the removal is still lost
+    // — the window is what this narrows, not what it closes (#1535 review).
     if (window.localStorage.getItem(RENEW_USER_KEY) === raw) clearRenewPublication();
   } catch {
     /* a corrupt entry is worse than a stale one — drop it */

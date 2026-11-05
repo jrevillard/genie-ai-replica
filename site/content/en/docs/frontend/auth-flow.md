@@ -1,14 +1,14 @@
 ---
 title: "Auth Flow"
-description: "End-to-end Keycloak OIDC sequence in the web frontend — login redirect, callback, in-memory tokens, silent renew, and the genie_post_logout flag."
+description: "End-to-end Keycloak OIDC sequence in the web frontend — login redirect, callback, token storage (in memory, plus the per-tab and cross-tab handoff footprints), silent renew, and the genie_post_logout flag."
 weight: 4
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-05
 ---
 
-> **For frontend developers and operators.** The full OIDC sequence from "user clicks Sign in" through token rotation to logout, including the in-memory token policy and the post-logout re-auth block.
+> **For frontend developers and operators.** The full OIDC sequence from "user clicks Sign in" through token rotation to logout, including the token storage policy and the post-logout re-auth block.
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ sequenceDiagram
     U->>C: CallbackView mounts
     C->>A: dispatch('handleCallback')
     A->>A: sessionStorage.removeItem('genie_post_logout')
-    A->>S: userManager.signinRedirectCallback()<br/>exchanges code for tokens (in-memory only)
+    A->>S: userManager.signinRedirectCallback()<br/>exchanges code for tokens
     A->>A: commit('setAuth', { isAuthenticated: true, user, accessToken })
     A->>A: registerAccessTokenUpdatedCallback<br/>(silent renew path)
     Note over App: v-else-if guards become true<br/>authenticated shell renders

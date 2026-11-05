@@ -123,11 +123,16 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
   // opt-in semantics cannot drift this leg from the other three. Lazy
   // require for the same reason as the chat client below: the converter
   // stays pure for its unit tests.
-  if (!require('../vllm-model-cache').optedInVllmBase()) {
+  const modelCache = require('../vllm-model-cache');
+  try {
+    modelCache.requireOptedInBase();
+  } catch (err) {
     // Loud, like curation and topic-link: a closed gate is a
     // misconfiguration, and the legs must answer it the same way (#1228).
-    // The converter keeps the import landing and records the degradation.
-    throw require('../vllm-model-cache').llmNotConfiguredError();
+    // The error carries the degraded shape, so the converter stays generic
+    // and the import still lands with the filename slug.
+    err.topics = fallbackTopics(fileName, 'fallback-no-endpoint');
+    throw err;
   }
 
   // Lazy require: the converter is pure and unit-tested without the axios/OTel

@@ -180,12 +180,12 @@ async function listConfigs(opts = {}) {
     // enable the legs that follow the opt-in (topic links, CSV topics,
     // manifest summary) — those need VLLM_ENDPOINT. The panel warns when a
     // configuration is active while the gate is closed (#1228).
-    const llmLegsEnabled = !!modelCache.optedInVllmBase();
+    const deploymentOptIn = !!modelCache.optedInVllmBase();
     return {
       configs: rows.map((d) => mask(d, opts)),
       env_judge: envJudge,
       env_pick: ENV_PICK,
-      llm_legs_enabled: llmLegsEnabled
+      deployment_opt_in: deploymentOptIn
     };
   });
 }

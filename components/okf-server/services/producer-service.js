@@ -219,7 +219,13 @@ async function mirrorIngestionLog(fileId, message) {
       { timeout: 10000 }
     );
   } catch (err) {
-    logger.warn(`Ingestion-log mirror failed (non-fatal): ${err.message}`, { file_id: fileId });
+    // The status and the body travel with the message: a mirror that fails
+    // is exactly the case where the operator must be able to tell WHY.
+    logger.warn(`Ingestion-log mirror failed (non-fatal): ${err.message}`, {
+      file_id: fileId,
+      status: err.response && err.response.status,
+      body: err.response && err.response.data
+    });
   }
 }
 

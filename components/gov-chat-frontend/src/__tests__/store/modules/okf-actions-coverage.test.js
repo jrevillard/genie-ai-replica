@@ -902,7 +902,7 @@ describe('modelConfig actions', () => {
       configs: [{ key: 'a' }],
       env_judge: { model: 'g' },
       env_pick: null,
-      llm_legs_enabled: null
+      deployment_opt_in: null
     });
     modelConfigService.list.mockResolvedValueOnce(null);
     expect(await store.dispatch('okf/modelConfigList')).toEqual({
@@ -910,7 +910,7 @@ describe('modelConfig actions', () => {
       configs: [],
       env_judge: null,
       env_pick: null,
-      llm_legs_enabled: null
+      deployment_opt_in: null
     });
   });
 

@@ -163,22 +163,17 @@ async function convertCsv(buffer, meta, opts = {}) {
   try {
     topics = await derive({ columns: dictionary, fileName });
   } catch (err) {
-    // The gate identity comes from its one owner, so the converter and the
-    // leg cannot drift apart. Lazy require: vllm-model-cache pulls axios,
-    // and the converter stays light for its unit tests.
-    const { LLM_NOT_CONFIGURED } = require('../vllm-model-cache');
-    if (err && err.code === LLM_NOT_CONFIGURED) {
-      // The deployment opted IN to nothing: there is no engine to call.
-      // That is a misconfiguration, not a degradation — but the import
-      // must still land, so the filename slug stays (a row-group with no
-      // topic is a retrieval orphan). The file is flagged as degraded so
-      // the operator sees it (#1228).
-      logger.error('CSV topics: no LLM engine configured (VLLM_ENDPOINT unset) — imported with filename-slug topics', {
+    if (err && err.topics) {
+      // The leg already built the degraded shape and said why (it owns the
+      // vocabulary). The import must still land: the filename slug stays
+      // (a row-group with no topic is a retrieval orphan) and the file is
+      // flagged as degraded so the operator sees it (#1228).
+      logger.error(`CSV topics: ${err.topics.reason} — imported with filename-slug topics`, {
         file_id: meta && meta.file_id,
         file_name: fileName,
         code: err.code
       });
-      topics = csvTopics.fallbackTopics(fileName, 'fallback-no-endpoint');
+      topics = err.topics;
     } else {
       // Defensive: the service degrades on its own errors, so this only
       // fires if an injected/test double throws. An import must still land.

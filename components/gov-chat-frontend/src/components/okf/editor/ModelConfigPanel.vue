@@ -429,7 +429,7 @@ export default {
       configs: [],
       // The deployment opt-in for the OKF LLM legs: null = unknown (an
       // older server omits it), true = open, false = closed.
-      llmLegsEnabled: null,
+      deploymentOptIn: null,
       error: '',
       busy: false,
       formOpen: false,
@@ -461,7 +461,7 @@ export default {
      * the panel says so instead of letting the operator read the list as
      * "the legs are configured". */
     gateWarning() {
-      if (this.llmLegsEnabled !== false) return false;
+      if (this.deploymentOptIn !== false) return false;
       return this.configs.some((c) => c && c.active);
     }
   },
@@ -479,7 +479,7 @@ export default {
         this.configs = Array.isArray(res.configs) ? res.configs : [];
         // null when the server did not say — an unknown state must not read
         // as "the gate is closed".
-        this.llmLegsEnabled = res.llm_legs_enabled ?? null;
+        this.deploymentOptIn = res.deployment_opt_in ?? null;
       } else if (res && /403|forbidden|scope/i.test(res.message || '')) {
         this.error = this.translate('okf.models.adminOnly', 'Model configurations require the platform admin role.');
       } else if (res) this.error = res.message;

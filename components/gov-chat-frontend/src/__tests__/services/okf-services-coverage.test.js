@@ -350,14 +350,14 @@ describe('modelConfigService — the 8-7 judge configuration client', () => {
       configs: [{ key: 'a' }],
       env_judge: { model: 'g' },
       env_pick: { config_key: 'a' },
-      llm_legs_enabled: null
+      deployment_opt_in: null
     });
     httpService.get.mockResolvedValueOnce(ok({ configs: 'garbage' }));
     expect(await modelConfigService.list()).toEqual({
       configs: [],
       env_judge: null,
       env_pick: null,
-      llm_legs_enabled: null
+      deployment_opt_in: null
     });
   });
 

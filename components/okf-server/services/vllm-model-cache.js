@@ -593,6 +593,15 @@ function llmNotConfiguredError() {
   return err;
 }
 
+/** The base for a leg that follows the deployment opt-in — or the
+ * closed-gate error. One owner for the decision, so a leg cannot resolve
+ * the endpoint its own way and degrade quietly. */
+function requireOptedInBase() {
+  const base = optedInVllmBase();
+  if (!base) throw llmNotConfiguredError();
+  return base;
+}
+
 /** The deployment endpoint's served model, soft: base AND deployment
  * credential resolved in one place (they must never drift apart — an
  * unauthenticated probe 401s on secured endpoints and silently defeats
@@ -710,6 +719,7 @@ module.exports = {
   optedInVllmBase,
   llmNotConfiguredError,
   LLM_NOT_CONFIGURED,
+  requireOptedInBase,
   requireServedModelId,
   resolveCallModel,
   resolveDeploymentModel,

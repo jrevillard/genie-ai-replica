@@ -54,15 +54,15 @@ describe('modelConfigService.list', () => {
   });
 
   it('carries the deployment opt-in through — the panel warns on it (#1228)', async () => {
-    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, llm_legs_enabled: false } });
-    expect((await modelConfigService.list()).llm_legs_enabled).toBe(false);
-    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, llm_legs_enabled: true } });
-    expect((await modelConfigService.list()).llm_legs_enabled).toBe(true);
+    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: false } });
+    expect((await modelConfigService.list()).deployment_opt_in).toBe(false);
+    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: true } });
+    expect((await modelConfigService.list()).deployment_opt_in).toBe(true);
   });
 
   it('degrades to an empty envelope, never to undefined fields', async () => {
     httpService.get.mockResolvedValue({});
     const out = await modelConfigService.list();
-    expect(out).toEqual({ configs: [], env_judge: null, env_pick: null, llm_legs_enabled: null });
+    expect(out).toEqual({ configs: [], env_judge: null, env_pick: null, deployment_opt_in: null });
   });
 });

@@ -15,7 +15,7 @@ function actorFrom(req) {
 async function list(req, res, next) {
   try {
     // listConfigs returns the full envelope {configs, env_judge, env_pick,
-    // llm_legs_enabled} — the last one states whether the deployment opted
+    // deployment_opt_in} — the last one states whether the deployment opted
     // in to the OKF LLM legs, so the panel can warn that a configuration
     // cannot enable them (#1228).
     // The LIST is readable by any OKF user (David 2026-10-25) — the RAGAS

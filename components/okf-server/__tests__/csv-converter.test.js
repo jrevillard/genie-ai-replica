@@ -28,6 +28,14 @@ const META = {
 
 const csv = (s) => Buffer.from(s, 'utf8');
 
+// The gate tests below close the LLM opt-in; the restore keeps that from
+// reaching the next test.
+const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
+
+afterEach(() => {
+  restoreEndpoint();
+});
+
 /** Topic stub — the real summariser is exercised separately below against a
  * mocked vllmChatCompletions. */
 const stubTopics =
@@ -283,16 +291,12 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
   });
 
   it('a CLOSED gate still imports — with the filename slug, and flagged as degraded (#1228)', async () => {
-    // The leg raises `llm-not-configured`; the CONVERTER keeps the import
-    // landing (a row-group with no topic is a retrieval orphan) and RECORDS
-    // the degradation so the operator sees it.
-    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META, {
-      deriveTopics: async () => {
-        const err = new Error('llm-not-configured');
-        err.code = 'llm-not-configured';
-        throw err;
-      }
-    });
+    // The REAL leg (no injected summariser): with the gate closed it raises
+    // the closed-gate error CARRYING the degraded shape, and the converter
+    // uses that shape — the import lands with the filename slug (a row-group
+    // with no topic is a retrieval orphan) and the degradation is recorded.
+    delete process.env.VLLM_ENDPOINT;
+    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META);
     expect(topics.source).toBe('fallback-no-endpoint');
     // The reason travels with the topics: the importer copies it into the
     // import report and the file's ingestion log.
@@ -303,10 +307,7 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
 });
 
 describe('csvTopicsService — response handling', () => {
-  const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
-
   afterEach(() => {
-    restoreEndpoint();
     jest.resetModules();
   });
 

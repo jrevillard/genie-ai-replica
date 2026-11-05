@@ -48,7 +48,7 @@ export default {
       // The deployment opt-in for the OKF LLM legs (topic links, CSV topics,
       // manifest summary). null = the server did not say — an older backend
       // omits the field, and an unknown state must not read as "closed".
-      llm_legs_enabled: typeof body.llm_legs_enabled === 'boolean' ? body.llm_legs_enabled : null
+      deployment_opt_in: typeof body.deployment_opt_in === 'boolean' ? body.deployment_opt_in : null
     };
   },
   async create(payload) {

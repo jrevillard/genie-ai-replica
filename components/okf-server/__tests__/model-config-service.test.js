@@ -539,13 +539,13 @@ describe('listConfigs envelope — the deployment opt-in rides along (#1228)', (
     restoreEndpoint();
   });
 
-  test('llm_legs_enabled is false with no endpoint and true with one', async () => {
+  test('deployment_opt_in is false with no endpoint and true with one', async () => {
     // The panel warns when a named configuration is active while the legs
     // that follow the deployment opt-in are OFF — the server owns that
     // state, so it states it (the browser never sees the env).
     delete process.env.VLLM_ENDPOINT;
-    expect((await svc.listConfigs()).llm_legs_enabled).toBe(false);
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(false);
     process.env.VLLM_ENDPOINT = 'https://gpu.example:444/llm';
-    expect((await svc.listConfigs()).llm_legs_enabled).toBe(true);
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(true);
   });
 });

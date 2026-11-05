@@ -2000,7 +2000,7 @@ const actions = {
         // The deployment opt-in for the OKF LLM legs — the service owns the
         // normalisation (null when the server does not say), so the panel
         // warns only on a state it actually knows.
-        llm_legs_enabled: (envelope && envelope.llm_legs_enabled) ?? null
+        deployment_opt_in: (envelope && envelope.deployment_opt_in) ?? null
       };
     } catch (err) {
       return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };

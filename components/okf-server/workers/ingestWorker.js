@@ -30,24 +30,7 @@ const { authedAxios } = require('../services/service-token');
 const conceptMetaService = require('../services/concept-meta-service');
 const config = require('../config');
 const graphLifecycle = require('../services/graph-lifecycle-service');
-const { isArangoConflict } = require('../services/arango-errors');
-/** Connection-class failure (never executed / ack lost) — same code family
- * as db-connection-service's _isConnectionError; local because that one is
- * a private method on the shared service. */
-const CONNECTION_ERROR_CODES = [
-  'ECONNRESET',
-  'ENOTFOUND',
-  'ECONNREFUSED',
-  'ETIMEDOUT',
-  'EPIPE',
-  'EHOSTUNREACH',
-  'socket hang up'
-];
-function isConnectionClassError(err) {
-  const message = String((err && err.message) || '').toLowerCase();
-  const code = String((err && err.code) || '').toLowerCase();
-  return CONNECTION_ERROR_CODES.some((s) => message.includes(s.toLowerCase()) || code.includes(s.toLowerCase()));
-}
+const { isArangoConflict, isConnectionError } = require('../services/arango-errors');
 
 const DEFAULT_INTERVAL_MS = 15000;
 const DEFAULT_SWEEP_INTERVAL_MS = 3600000;
@@ -127,6 +110,10 @@ const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
 // still never parks (a freed slot must be claimable instantly); the LANE
 // waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
 const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
+/** 429-unclaim retry policy (issue #1391): attempts + backoff base, same
+ * env-per-policy convention as every other timing knob in this file. */
+const unclaimMaxAttempts = () => safeInt('OKF_INGEST_UNCLAIM_MAX_ATTEMPTS', 3);
+const unclaimBackoffBaseMs = () => safeIntOrZero('OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS', 500);
 let _dataprepBusyUntil = 0;
 /** File-local sleep (same idiom as rerank-client / ragas-suite-service). */
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -228,6 +215,9 @@ const CLAIM_KEEP_FIELDS = [
   'repo_id',
   'concept_id',
   'graph_name',
+  // The claim identity (#1391): the 429 unclaim CASes on THIS field — a job
+  // without its stamped claim value cannot release its claim safely.
+  'worker_claimed_at',
   'frontmatter',
   'body',
   'ingest_labels',
@@ -293,39 +283,46 @@ async function claimNextJob(db) {
   // we do not own AND let the 429 un-claim below decrement an attempt that was
   // never counted (the counter drifts below the truth and the poison-pill
   // reaper fires late). Fail the claim instead: the row is never claimed.
-  if (!(await _stampClaim(db, rows[0].repo_id, rows[0].concept_id))) {
+  const claimTs = new Date().toISOString();
+  if (!(await _stampClaim(db, rows[0].repo_id, rows[0].concept_id, rows[0].worker_claimed_at, claimTs))) {
     logger.warn('Ingest worker: claim stamp failed — row NOT claimed this cycle', {
       repo_id: rows[0].repo_id,
       concept_id: rows[0].concept_id
     });
     return null;
   }
-  // The 429 unclaim CASes on the STAMPED attempt count (#1391): the job must
-  // carry the row's post-stamp value, so mirror what _stampClaim wrote — on
-  // a CLONE (rows[0] may be a shared/read object; never mutate the read row).
+  // The 429 unclaim CASes on the STAMPED claim value (#1391): mirror what
+  // _stampClaim wrote onto a CLONE — a clean copy of the read row carrying
+  // the post-stamp claim + attempt count.
   return Object.assign({}, rows[0], {
+    worker_claimed_at: claimTs,
     ingest_attempts: (rows[0].ingest_attempts == null ? 0 : rows[0].ingest_attempts) + 1
   });
 }
 
-/** Stamp the claim on a claimed row. Returns true when the stamp landed,
- * false when it failed — the caller then treats the row as NOT claimed, so
- * every RETURNED job carries its counted attempt and _unclaimAttempt can
- * only ever un-count a real stamp (round 20, #80804). */
-async function _stampClaim(db, repoId, conceptId) {
+/** Stamp the claim on a claimed row. CAS (round-3 review, #1391): the stamp
+ * only lands while the row still carries the claim value the claim-read saw
+ * — two lanes that read the same head row cannot both stamp, the loser's
+ * UPDATE matches nothing. Returns true when the stamp landed, false when it
+ * failed (write error or lost the CAS) — the caller then treats the row as
+ * NOT claimed, so every RETURNED job carries its counted attempt and
+ * _unclaimAttempt can only ever un-count a real stamp (round 20, #80804). */
+async function _stampClaim(db, repoId, conceptId, priorClaimedAt, claimTs) {
   try {
-    await db.query(
+    const result = await db.query(
       aql`
       FOR m IN okf_concepts_meta
         FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+        FILTER m.worker_claimed_at == ${priorClaimedAt}
         UPDATE m WITH {
-          worker_claimed_at: DATE_ISO8601(DATE_NOW()),
+          worker_claimed_at: ${claimTs},
           ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
         } IN okf_concepts_meta
+        RETURN OLD._key
     `,
       {}
     );
-    return true;
+    return (await result.all()).length > 0;
   } catch (err) {
     logger.warn('Ingest worker: claim stamp failed (claim refused)', { concept_id: conceptId, error: err.message });
     return false;
@@ -343,48 +340,57 @@ async function _stampClaim(db, repoId, conceptId) {
  * returned job's attempt was STAMPED (fifo refuses the claim on a failed
  * stamp; fair stamps inside the fused statement), so this decrement always
  * un-counts a real increment — never a bare 0-row. */
-async function _unclaimAttempt(db, repoId, conceptId, expectedAttempts) {
+async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
   // Issue #1391: this write races concurrent meta writers (a user-triggered
   // repo/lifecycle op touching the same row) — on the RocksDB engine the
   // loser gets error 1200 and NOTHING is written. A single best-effort
   // attempt that loses leaves a GHOST claim: the row counts as in-flight in
-  // the fair pick for a full claim window and starves its repo. The
-  // UPDATE is a CAS on the attempt count this lane stamped (the fifo and
-  // fair claims both return the job with its STAMPED ingest_attempts): the
-  // write only lands while the row still carries OUR stamp's attempt value.
-  // A reset that requeued the row (attempts zeroed) or another lane that
-  // re-claimed it (attempts re-stamped) makes the CAS match nothing — the
-  // retry can never clear a foreign claim or double-decrement, so conflicts
-  // AND connection-class failures (statement never executed / ack lost)
-  // are both safely retryable. The attempt accounting stays in one
-  // statement (#78658). */
-  if (expectedAttempts == null) {
-    // Fail CLOSED: without the stamped count the CAS cannot be expressed,
-    // and an unguarded write could clear a foreign claim (the graph-missing
-    // reset requeues rows while lanes hold fresh claims).
-    logger.error('Ingest worker: 429 unclaim skipped — stamped attempt count unknown (ghost claim until staleness)', {
+  // the fair pick for a full claim window and starves its repo. The UPDATE
+  // is a CAS on the CLAIM VALUE this lane stamped (both claim strategies
+  // stamp a client-generated worker_claimed_at and return it on the job):
+  // the write only lands while the row still carries OUR claim. A reset
+  // that requeued the row (claim nulled) or another lane that re-claimed it
+  // (a different claim value) makes the CAS match NOTHING — the write can
+  // never clear a foreign claim or double-decrement, so conflicts AND
+  // connection-class failures (statement never executed / ack lost) are
+  // both safely retryable. The attempt accounting stays in one statement
+  // (#78658). */
+  if (claimedAt == null) {
+    // Fail CLOSED: without the stamped claim value the CAS cannot be
+    // expressed, and an unguarded write could clear a foreign claim (the
+    // graph-missing reset requeues rows while lanes hold fresh claims).
+    logger.error('Ingest worker: 429 unclaim skipped — stamped claim value unknown (ghost claim until staleness)', {
       concept_id: conceptId
     });
     return;
   }
-  const maxAttempts = 3;
+  const maxAttempts = unclaimMaxAttempts();
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await db.query(
+      const result = await db.query(
         aql`
         FOR m IN okf_concepts_meta
           FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
-          FILTER m.ingest_attempts == ${expectedAttempts}
+          FILTER m.worker_claimed_at == ${claimedAt}
           UPDATE m WITH {
             worker_claimed_at: null,
             ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
           } IN okf_concepts_meta
+          RETURN OLD._key
       `,
         {}
       );
+      if ((await result.all()).length === 0) {
+        // The CAS matched nothing — the claim was already released, reset or
+        // re-stamped by someone else. Nothing to clear; surface it so a
+        // strategy that ever returns a stale claim value is visible at once.
+        logger.warn('Ingest worker: 429 unclaim matched nothing — claim already released/reclaimed', {
+          concept_id: conceptId
+        });
+      }
       return;
     } catch (err) {
-      if (!isArangoConflict(err) && !isConnectionClassError(err)) {
+      if (!isArangoConflict(err) && !isConnectionError(err)) {
         // Not a conflict and not a connection failure (parse error, auth…) —
         // a deterministic fault no retry can fix. Surface it: the claim
         // stays stamped until staleness (the fair pick starves this repo
@@ -413,7 +419,8 @@ async function _unclaimAttempt(db, repoId, conceptId, expectedAttempts) {
         // Exponential + jittered backoff (db-connection-service idiom): a
         // bulk writer holds the row for a while, and lanes losing against
         // the same writer must not retry in lockstep.
-        await sleepMs(500 * attempt + Math.floor(Math.random() * 250));
+        const delay = unclaimBackoffBaseMs() * attempt;
+        await sleepMs(delay + Math.floor(delay * 0.25 * Math.random()));
       }
     }
   }
@@ -439,6 +446,7 @@ async function _unclaimAttempt(db, repoId, conceptId, expectedAttempts) {
  * redundant-but-harmless in this mode). */
 async function claimNextJobFair(db) {
   const cap = repoIngestCap();
+  const claimTs = new Date().toISOString();
   const run = async () => {
     const rows = await (
       await db.query(aql`
@@ -483,8 +491,10 @@ async function claimNextJobFair(db) {
           RETURN m
       )
       FILTER cand != null
+      // The claim value is generated CLIENT-side (#1391): the job must carry
+      // the exact stamped value — the 429 unclaim CASes on it.
       UPDATE cand WITH {
-        worker_claimed_at: DATE_ISO8601(DATE_NOW()),
+        worker_claimed_at: ${claimTs},
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
@@ -1043,7 +1053,7 @@ async function _processOneJob() {
         // while this lane releases. Lanes already mid-cycle still complete
         // their kick — this reduces, not prevents, concurrent retries.
         _dataprepBusyUntil = Date.now() + kick429CooldownMs();
-        await _unclaimAttempt(db, job.repo_id, conceptId, job.ingest_attempts);
+        await _unclaimAttempt(db, job.repo_id, conceptId, job.worker_claimed_at);
         logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
           concept_id: conceptId,
           cooldown_ms: kick429CooldownMs()

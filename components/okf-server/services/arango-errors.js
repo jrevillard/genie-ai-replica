@@ -105,9 +105,39 @@ function isArangoConflict(err) {
   return !!(err && (err.errorNum === 1200 || err.code === 409 || err.statusCode === 409));
 }
 
+/** Connection-class failure: the request (very likely) never reached the
+ * server or the response never came back — the operation's effect is
+ * UNKNOWN, and for idempotent statements safe to retry. UNION of the two
+ * existing classifiers (db-connection-service._isConnectionError socket
+ * codes + llm-transient-errors RETRIABLE_CODES incl. ECONNABORTED and
+ * ERR_STREAM_PREMATURE_CLOSE) plus the axios abort names, so a new
+ * connection-code lesson lands here ONCE (round-3 review #1391: the ingest
+ * worker's local copy had drifted narrower than both). */
+const CONNECTION_CODES = [
+  'ECONNRESET',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ECONNABORTED',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'EAI_AGAIN',
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'socket hang up',
+  'fetch failed'
+];
+function isConnectionError(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  const message = String(err.message || '').toLowerCase();
+  const code = String(err.code || '').toLowerCase();
+  return CONNECTION_CODES.some((c) => message.includes(c.toLowerCase()) || code.includes(c.toLowerCase()));
+}
+
 module.exports = {
   isArangoNotFound,
   isArangoCollectionNotFound,
   isArangoUniqueViolation,
-  isArangoConflict
+  isArangoConflict,
+  isConnectionError
 };

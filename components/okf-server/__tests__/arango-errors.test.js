@@ -8,7 +8,7 @@
 // collection raised errorNum 1203 / 'collection or view not found', which the
 // document-level classifier must keep EXCLUDING.
 
-const { isArangoNotFound, isArangoCollectionNotFound } = require('../services/arango-errors');
+const { isArangoNotFound, isArangoCollectionNotFound, isConnectionError } = require('../services/arango-errors');
 
 describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
   test('isArangoNotFound: 1202 and 1204 are absence', () => {
@@ -41,5 +41,30 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     expect(isArangoCollectionNotFound({ code: 404 })).toBe(false); // no bare-status fallback
     expect(isArangoCollectionNotFound(null)).toBe(false);
     expect(isArangoCollectionNotFound(undefined)).toBe(false);
+  });
+
+  // Issue #1391 round-3 review: the union of db-connection-service's socket
+  // codes and llm-transient-errors' RETRIABLE_CODES — one home so a new
+  // connection-code lesson lands once.
+  test('isConnectionError: socket codes, axios aborts and stream disconnects', () => {
+    expect(isConnectionError(Object.assign(new Error('connect ECONNREFUSED x'), { code: 'ECONNREFUSED' }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }))).toBe(true);
+    // axios abort (our own timeout) — in llm-transient-errors, not in the
+    // socket-code list.
+    expect(isConnectionError(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))).toBe(
+      true
+    );
+    expect(
+      isConnectionError(Object.assign(new Error('stream has been aborted'), { code: 'ERR_STREAM_PREMATURE_CLOSE' }))
+    ).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }))).toBe(
+      true
+    );
+    expect(isConnectionError(new Error('socket hang up'))).toBe(true);
+    expect(isConnectionError(new Error('fetch failed'))).toBe(true);
+    // Deterministic faults are NOT connection-class.
+    expect(isConnectionError(Object.assign(new Error('auth failed'), { errorNum: 11 }))).toBe(false);
+    expect(isConnectionError(new Error('AQL: parse error near FILTER'))).toBe(false);
+    expect(isConnectionError(null)).toBe(false);
   });
 });

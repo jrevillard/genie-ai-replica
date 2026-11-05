@@ -169,12 +169,42 @@ describe('main safety wiring', () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Dry run'));
   });
 
-  it('fails when the removal result carries no writesExecuted stats (outcome unknown ≠ success)', async () => {
+  it('fails when the removal result carries no writesExecuted stats — and says the removal RAN, not ABORT (issue #1505)', async () => {
+    // The removal query has already executed by the time the stats are read:
+    // leading with ABORT would imply nothing happened while an unknown number
+    // of documents may be gone. The wording must state the honest outcome.
     const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], writesExecuted: null });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('writesExecuted stats'));
+    const message = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(message).toContain('removed');
+    expect(message).toContain('unknown');
+    expect(message).not.toContain('ABORT');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
+  });
+
+  it('caps the abort listing at SAMPLE_LIMIT entries per direction and says how many were elided (issue #1505)', async () => {
+    // 60 over-matched and 60 under-matched documents: the abort fires exactly
+    // when divergence can cover the whole collection — an uncapped listing
+    // would emit one stderr line per document through the log pipeline.
+    // Mirrors the script's other listings: SAMPLE_LIMIT entries, then one
+    // "... and N more (not listed)" line per direction.
+    const extra = Array.from({ length: 60 }, (_, i) => ({
+      ...huskDoc,
+      _key: `extra-${i}`,
+      customSettings: { theme: 'dark' }
+    }));
+    const missed = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }));
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    const stderr = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const overMatched = stderr.split('\n').filter((l) => l.includes('over-matched _key='));
+    const underMatched = stderr.split('\n').filter((l) => l.includes('under-matched _key='));
+    expect(overMatched).toHaveLength(50);
+    expect(underMatched).toHaveLength(50);
+    expect(stderr).toContain('... and 10 more over-matched (not listed)');
+    expect(stderr).toContain('... and 10 more under-matched (not listed)');
   });
 
   it('fails when the database does not exist (a wrong db reads as clean)', async () => {

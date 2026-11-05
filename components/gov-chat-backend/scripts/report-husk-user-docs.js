@@ -305,11 +305,15 @@ async function runDelete(db, collectionName, husks) {
   // SELECT are skipped server-side — report what actually executed, not the
   // selection size. If the stats are missing, say so and fail rather than
   // claim success: on a destructive path the honest answer is "unknown".
+  // The wording must NOT say ABORT — the removal query has already executed
+  // by this point, so the honest lead is that an unknown number of documents
+  // may be gone (issue #1505).
   const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
   if (typeof writesExecuted !== 'number') {
     console.error(
-      'ABORT: the removal result carried no writesExecuted stats — the actual ' +
-        'number of removed documents is unknown. Re-run the dry run to verify.'
+      'REMOVED an unknown number of documents — the removal query executed but its result ' +
+        'carried no writesExecuted stats, so the actual number removed is not observable. ' +
+        'Verify with a dry run: re-run the report to see what remains.'
     );
     process.exitCode = 1;
     return;
@@ -389,11 +393,21 @@ async function main({
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
-    for (const doc of extra) {
+    // Bounded like every other listing in this script (SAMPLE_LIMIT): the
+    // abort fires precisely when the divergence can cover the whole
+    // collection, and one stderr line per document would flood the log
+    // pipeline. The elision line says how many were not listed.
+    for (const doc of extra.slice(0, SAMPLE_LIMIT)) {
       console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
     }
-    for (const doc of missed) {
+    if (extra.length > SAMPLE_LIMIT) {
+      console.error(`  ... and ${extra.length - SAMPLE_LIMIT} more over-matched (not listed)`);
+    }
+    for (const doc of missed.slice(0, SAMPLE_LIMIT)) {
       console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    }
+    if (missed.length > SAMPLE_LIMIT) {
+      console.error(`  ... and ${missed.length - SAMPLE_LIMIT} more under-matched (not listed)`);
     }
     process.exitCode = 1;
     return;

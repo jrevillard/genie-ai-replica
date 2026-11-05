@@ -397,17 +397,16 @@ async function main({
     // abort fires precisely when the divergence can cover the whole
     // collection, and one stderr line per document would flood the log
     // pipeline. The elision line says how many were not listed.
-    for (const doc of extra.slice(0, SAMPLE_LIMIT)) {
-      console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-    }
-    if (extra.length > SAMPLE_LIMIT) {
-      console.error(`  ... and ${extra.length - SAMPLE_LIMIT} more over-matched (not listed)`);
-    }
-    for (const doc of missed.slice(0, SAMPLE_LIMIT)) {
-      console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-    }
-    if (missed.length > SAMPLE_LIMIT) {
-      console.error(`  ... and ${missed.length - SAMPLE_LIMIT} more under-matched (not listed)`);
+    for (const [label, docs] of [
+      ['over-matched', extra],
+      ['under-matched', missed]
+    ]) {
+      for (const doc of docs.slice(0, SAMPLE_LIMIT)) {
+        console.error(`  ${label} _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+      }
+      if (docs.length > SAMPLE_LIMIT) {
+        console.error(`  ... and ${docs.length - SAMPLE_LIMIT} more ${label} (not listed)`);
+      }
     }
     process.exitCode = 1;
     return;

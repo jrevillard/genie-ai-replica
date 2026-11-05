@@ -59,6 +59,21 @@ async function runMain(db, argv = [], env = gateEnv) {
   return main({ argv, env, createDatabase: () => db });
 }
 
+// Collected stderr as one string — the abort/missing-stats tests assert on
+// rendered lines, not on individual console.error calls.
+const stderrText = (errorSpy) => errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+
+// n over-matched and n under-matched documents, driving both directions of
+// the divergence cross-check (issue #1505).
+const divergentDocs = (n) => ({
+  extra: Array.from({ length: n }, (_, i) => ({
+    ...huskDoc,
+    _key: `extra-${i}`,
+    customSettings: { theme: 'dark' }
+  })),
+  missed: Array.from({ length: n }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }))
+});
+
 describe('parseAndGateArgs', () => {
   let exitCode;
   let errorSpy;
@@ -176,7 +191,7 @@ describe('main safety wiring', () => {
     const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], writesExecuted: null });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
-    const message = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const message = stderrText(errorSpy);
     expect(message).toContain('removed');
     expect(message).toContain('unknown');
     // The technical cause stays named: it is what distinguishes an arangojs
@@ -192,16 +207,11 @@ describe('main safety wiring', () => {
     // would emit one stderr line per document through the log pipeline.
     // Mirrors the script's other listings: SAMPLE_LIMIT entries, then one
     // "... and N more (not listed)" line per direction.
-    const extra = Array.from({ length: 60 }, (_, i) => ({
-      ...huskDoc,
-      _key: `extra-${i}`,
-      customSettings: { theme: 'dark' }
-    }));
-    const missed = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }));
+    const { extra, missed } = divergentDocs(60);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
-    const stderr = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const stderr = stderrText(errorSpy);
     const overMatched = stderr.split('\n').filter((l) => l.includes('over-matched _key='));
     const underMatched = stderr.split('\n').filter((l) => l.includes('under-matched _key='));
     expect(overMatched).toHaveLength(50);
@@ -213,16 +223,11 @@ describe('main safety wiring', () => {
   it('lists every entry with NO elision line when divergence length equals SAMPLE_LIMIT exactly (boundary pin)', async () => {
     // Guards the '>' in the elision check: a '>=' drift would print a bogus
     // '... and 0 more (not listed)' on an exactly-full sample.
-    const extra = Array.from({ length: 50 }, (_, i) => ({
-      ...huskDoc,
-      _key: `extra-${i}`,
-      customSettings: { theme: 'dark' }
-    }));
-    const missed = Array.from({ length: 50 }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }));
+    const { extra, missed } = divergentDocs(50);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
-    const stderr = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const stderr = stderrText(errorSpy);
     expect(stderr.split('\n').filter((l) => l.includes('over-matched _key='))).toHaveLength(50);
     expect(stderr.split('\n').filter((l) => l.includes('under-matched _key='))).toHaveLength(50);
     expect(stderr).not.toContain('more over-matched');

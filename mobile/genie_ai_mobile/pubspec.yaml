@@ -1,10 +1,10 @@
 name: genie_ai_mobile
-description: "A new Flutter project."
+description: "GENIE.AI mobile client - a Flutter reference application for the GENIE RAG Framework: multilingual chat, service discovery, document management and offline mode."
 
 # Prevent accidental publishing to pub.dev.
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.10.8

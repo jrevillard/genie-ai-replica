@@ -5,7 +5,7 @@
 **Author:** ITU (International Telecommunication Union)
 **Framework:** Flutter (Dart)
 **Target Platforms:** Android, iOS, Web, Windows, macOS, Linux
-**Version:** 1.0.0+1
+**Version:** 1.1.0+2
 **License:** See project license file
 
 ---
@@ -481,6 +481,25 @@ real deployment must always set the define — see
 per-institution flavor setup.
 
 Available flavors: `dev`, `staging`, `e2e`, `itu` (plus one per institution).
+
+### Versioning
+
+The application version lives in one place only — `pubspec.yaml`:
+
+```yaml
+version: 1.1.0+2   # versionName = "1.1.0", versionCode = 2
+```
+
+- `X.Y.Z` — the version name users see. Bump it when the app gains features
+  or changes in a way a user can notice.
+- `+N` — the version code the stores use to order builds. Bump it on **every**
+  build submitted to a store, and never reuse a code that was submitted.
+
+Gradle and Xcode both read these values from `pubspec.yaml`; nothing else has
+to be edited. A CI build can override them for one build with `--build-name`
+and `--build-number`. The store-submission rules (per-deployment listings,
+version code collisions between institutions) are in the
+[Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/).
 
 ### Android Release Build
 

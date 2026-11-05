@@ -802,7 +802,7 @@ Flutter versions follow the pattern `X.Y.Z+N`:
 
 ```yaml
 # mobile/genie_ai_mobile/pubspec.yaml
-version: 1.0.0+1    # versionName = "1.0.0", versionCode = 1
+version: 1.1.0+2    # versionName = "1.1.0", versionCode = 2
 ```
 
 In `android/app/build.gradle`, the values flow automatically:

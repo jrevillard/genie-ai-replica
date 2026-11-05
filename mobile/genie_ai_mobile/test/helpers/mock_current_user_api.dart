@@ -22,10 +22,15 @@ class MockCurrentUserApi implements CurrentUserApi {
     this.resetGate,
     this.deleteBody = const {},
     this.deleteStatus = 200,
+    this.userFields = const {},
   });
 
   final Map<String, dynamic> resetBody;
   final int resetStatus;
+
+  /// Extra fields the profile endpoint returns (e.g. the account copy of
+  /// the language), merged into the default profile body.
+  final Map<String, dynamic> userFields;
 
   /// When set, the reset call only completes once the test resolves it —
   /// used to hold the reset in flight while asserting on the loading state.
@@ -47,6 +52,7 @@ class MockCurrentUserApi implements CurrentUserApi {
         'id': 'user-1',
         'name': 'Test User',
         'email': 'test@example.test',
+        ...userFields,
       }),
       200,
     );

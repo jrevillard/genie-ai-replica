@@ -598,7 +598,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # `code` is the machine-readable half of the 409 contract —
                 # consumers match on it, never on the prose. No other 409 in
                 # this service may carry it. Pin: tests/test_dataprep.py,
-                # IngestGuardTest (409 CONTRACT block).
+                # TestDocRepoIngestPayload (409 CONTRACT block).
                 return JSONResponse(
                     status_code=409,
                     content={

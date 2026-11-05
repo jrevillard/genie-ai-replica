@@ -242,7 +242,7 @@ function errorDetail(err) {
 // file failure.
 //
 // `code: 'ingest_already_running'` in the body is the contract (producer
-// pin: tests/test_dataprep.py, IngestGuardTest). It names the condition, not
+// pin: tests/test_dataprep.py, TestDocRepoIngestPayload). It names the condition, not
 // a file, so it carries no exact-fileId check — requiring the prose to still
 // name our id would reintroduce the wording dependence the code removes.
 // The prose match below is the backward-compat path for producer images

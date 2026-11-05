@@ -489,8 +489,10 @@ describe('fileController', () => {
       );
     });
 
-    // Only the guard's own conflict is carved out: a 409 that names THIS file
-    // AND says it is already running. Every other conflict is a real failure
+    // On the backward-compat prose path, only the guard's own conflict is
+    // carved out: a 409 that names THIS file AND says it is already running.
+    // (The code-first path above carves out any 409 carrying the contract
+    // code, regardless of prose.) Every other conflict is a real failure
     // and must still mark the file.
     it.each([
       ['is not the idempotency guard at all', 'Conflict: the file is locked'],

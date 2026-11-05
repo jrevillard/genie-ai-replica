@@ -409,21 +409,17 @@ function pruneCache() {
   // the container's lifetime (each stub carries the full failure, axios
   // cause included). Same count bound as the id cache, same eviction: the
   // oldest stub goes, that key re-probes.
-  while (_negative.size > MAX_CACHE_ENTRIES) {
-    _negative.delete(_negative.keys().next().value);
-  }
-  // The malformed-pair set too — a long-lived server under config churn
-  // would otherwise grow it for the container's lifetime (a redeploy that
-  // changes the deployment base doubles the pair space). The oldest pair
-  // re-warns, at most once more.
-  while (_malformedWarned.size > MAX_CACHE_ENTRIES) {
-    _malformedWarned.delete(_malformedWarned.keys().next().value);
-  }
-  // Same bound for the soft-path warn signatures: the oldest re-warns,
-  // at most once more.
-  while (_softWarned.size > MAX_CACHE_ENTRIES) {
-    _softWarned.delete(_softWarned.keys().next().value);
-  }
+  // The warned-set maps too (malformed pairs, soft-path signatures): a
+  // long-lived server under config churn would otherwise grow them for the
+  // container's lifetime. The oldest signature re-warns, at most once more.
+  const pruneOldest = (set) => {
+    while (set.size > MAX_CACHE_ENTRIES) {
+      set.delete(set.keys().next().value);
+    }
+  };
+  pruneOldest(_negative);
+  pruneOldest(_malformedWarned);
+  pruneOldest(_softWarned);
 }
 
 /** The loud no-answer error shared by both resolving variants. */
@@ -604,13 +600,11 @@ async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
     // stub; the pre-probe seams are not — the bound lives in pruneCache).
     if (!(err instanceof ModelDiscoveryError)) {
       const message = err instanceof Error ? err.message : String(err);
-      const signature = `${String(baseUrl || '')}|${message}`;
+      const url = String(baseUrl || '');
+      const signature = `${url}|${message}`;
       if (!_softWarned.has(signature)) {
         _softWarned.add(signature);
-        logger.warn('vllm_model_cache.soft_path_unexpected_error', {
-          url: String(baseUrl || ''),
-          error: message
-        });
+        logger.warn('vllm_model_cache.soft_path_unexpected_error', { url, error: message });
       }
     }
     return null;

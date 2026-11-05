@@ -2665,8 +2665,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   };
 
   // The spec files the invocation executes: real files selected by the
-  // executed targets through isExecuted (the runner's own arg semantics,
-  // mirrored below). Playwright's default testMatch glob
+  // executed targets through scanTargets (the runner's own arg semantics,
+  // mirrored there). Playwright's default testMatch glob
   // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
   // t, then a REQUIRED s (the trailing ? quantifies only the x), then
   // optional x — the selection regex (EXECUTED_SPEC_RE, module top)
@@ -2681,28 +2681,27 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isExecuted(executedGlobs, f));
-
   // How an invocation target selects a test file — EXACTLY as the runner
   // selects it. Every Playwright CLI arg becomes an UNANCHORED case-
   // insensitive regex (forceRegExp in the runner's util) tested against the
   // test file path: the file executes whenever its path CONTAINS the arg's
   // text. No anchors, no escaping — the arg is the regex. So the canonical
   // `X/**/*` entry (a trailing-slash dir arg, whose slash the canonical
-  // form folded into the glob) selects every path CONTAINING `X/` — which
-  // restores the directory boundary a plain prefix match would lose
-  // (…/chatbot/ does not match …/chatbot-v2/…) — and an exact entry selects
-  // every path containing it verbatim: a basename sibling does NOT contain
-  // the arg text and is not executed, while a nested tail-duplicate
+  // form folded into the glob) selects every path CONTAINING `X/` — the
+  // unfold below restores that slash, which IS the directory boundary a
+  // plain prefix match would lose (…/chatbot/ does not match
+  // …/chatbot-v2/…) — and an exact entry selects every path containing it
+  // verbatim: a basename sibling does NOT contain the arg text and is not
+  // executed, while a nested tail-duplicate
   // (…/helpers/tests/e2e/theme-runtime-config.spec.js) does and is.
   // Modeling the containment instead of assuming "exact file" keeps the
-  // executed set never narrower than the runner's.
-  const isExecuted = (executedGlobs, file) =>
-    executedGlobs.some((entry) => {
-      const source = entry.endsWith('/**/*') ? `${entry.slice(0, -5)}/` : entry;
-      return new RegExp(source, 'gi').test(file);
-    });
+  // executed set never narrower than the runner's. The `g` flag the runner
+  // adds is dead weight for a boolean .test and carries a lastIndex trap on
+  // a precompiled regex — 'i' alone matches identically.
+  const scanTargets = (files, executedGlobs) => {
+    const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
+    return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
+  };
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);

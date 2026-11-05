@@ -62,6 +62,16 @@ GRAFANA_OPERATOR_VERSION="${GRAFANA_OPERATOR_VERSION:-5.25.0}"
 
 READY_TIMEOUT="${READY_TIMEOUT:-5m}"
 
+# Network fetch bounds. A connection that black-holes (SYN sent, no
+# response) never returns: an unbounded curl stalls the whole run
+# forever — no error, no retry, no next step. Every fetch gets a connect
+# timeout, a total timeout and a bounded number of attempts, so a hung
+# attempt costs one bounded wait instead of the run.
+CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-10}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-60}"
+CURL_ATTEMPTS="${CURL_ATTEMPTS:-3}"
+CURL_RETRY_DELAY="${CURL_RETRY_DELAY:-10}"
+
 c_green=$'\033[32m'
 c_yellow=$'\033[33m'
 c_reset=$'\033[0m'
@@ -79,6 +89,31 @@ require_tool() {
 require_tool helm
 require_tool kubectl
 require_tool curl
+
+# fetch_to <url> <destination>
+#
+# Downloads a URL with a bounded connect timeout, a bounded total
+# timeout, and a bounded number of attempts. A black-holed connection
+# (SYN sent, no response) fails the attempt instead of stalling the
+# run; the retry makes a transient failure cheap. The last attempt's
+# failure is fatal — the caller must not proceed with a missing file.
+fetch_to() {
+  local url="$1" dest="$2" attempt=1
+  while true; do
+    if curl -fsSL \
+      --connect-timeout "${CURL_CONNECT_TIMEOUT}" \
+      --max-time "${CURL_MAX_TIME}" \
+      -o "${dest}" "${url}"; then
+      return 0
+    fi
+    if [ "${attempt}" -ge "${CURL_ATTEMPTS}" ]; then
+      die "fetch failed after ${CURL_ATTEMPTS} attempts: ${url}"
+    fi
+    warn "fetch failed (attempt ${attempt}/${CURL_ATTEMPTS}), retrying in ${CURL_RETRY_DELAY}s: ${url}"
+    attempt=$((attempt + 1))
+    sleep "${CURL_RETRY_DELAY}"
+  done
+}
 
 if ! kubectl cluster-info >/dev/null 2>&1; then
   printf 'kubectl cannot reach a cluster (context=%q). Set KUBECONFIG.\n' "${KUBECONFIG:-current}" >&2
@@ -295,8 +330,9 @@ install_sealed_secrets() {
     return 0
   fi
   log "sealed-secrets ${SEALED_SECRETS_VERSION}: install via static manifest"
-  curl -fsSL -o /tmp/sealed-secrets-controller.yaml \
-    "https://github.com/bitnami/sealed-secrets/releases/download/v${SEALED_SECRETS_VERSION}/controller.yaml"
+  fetch_to \
+    "https://github.com/bitnami/sealed-secrets/releases/download/v${SEALED_SECRETS_VERSION}/controller.yaml" \
+    /tmp/sealed-secrets-controller.yaml
   # The release manifest pins its namespaced objects to kube-system; this
   # script's convention is the sealed-secrets namespace. Rewrite before
   # applying — kubectl refuses an apply whose -n contradicts the objects

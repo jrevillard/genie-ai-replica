@@ -476,10 +476,10 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
           throw new TypeError('cache-key construction bug');
         }
       }));
-      const isolatedLogger = require('../shared-lib/logger').logger;
-      const isolatedCache = require('../services/vllm-model-cache');
-      isolatedCache.clearModelCache();
       try {
+        const isolatedLogger = require('../shared-lib/logger').logger;
+        const isolatedCache = require('../services/vllm-model-cache');
+        isolatedCache.clearModelCache();
         await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
         // One line per failure signature: a PRE-probe seam has no negative
         // stub to window it, and the base is normalized before the
@@ -501,26 +501,29 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
   });
 
   // A thrown non-Error (a bare string, say) must keep its detail: the warn
-  // is the only visibility into the soft-path bug, and `String(err)` is
-  // what carries it.
-  test('a non-Error throw keeps its detail in the warn', async () => {
+  // is the only visibility into the soft-path bug. A thrown OBJECT with a
+  // message keeps that message; anything else is stringified.
+  test.each([
+    ['bare string throw', 'bare string throw'],
+    [{ message: 'bad config', code: 'X' }, 'bad config']
+  ])('a non-Error throw %p keeps its detail in the warn', async (thrown, expected) => {
     await jest.isolateModulesAsync(async () => {
       jest.doMock('../services/llm-url', () => ({
         ...jest.requireActual('../services/llm-url'),
         openAiModelsUrl: () => {
-          throw 'bare string throw';
+          throw thrown;
         }
       }));
-      const isolatedLogger = require('../shared-lib/logger').logger;
-      const isolatedCache = require('../services/vllm-model-cache');
-      isolatedCache.clearModelCache();
       try {
+        const isolatedLogger = require('../shared-lib/logger').logger;
+        const isolatedCache = require('../services/vllm-model-cache');
+        isolatedCache.clearModelCache();
         await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
         const warns = isolatedLogger.warn.mock.calls.filter(
           (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
         );
         expect(warns).toHaveLength(1);
-        expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'bare string throw' });
+        expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: expected });
       } finally {
         jest.dontMock('../services/llm-url');
       }
@@ -538,10 +541,10 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
           throw new TypeError('cache-key construction bug');
         }
       }));
-      const isolatedLogger = require('../shared-lib/logger').logger;
-      const isolatedCache = require('../services/vllm-model-cache');
-      isolatedCache.clearModelCache();
       try {
+        const isolatedLogger = require('../shared-lib/logger').logger;
+        const isolatedCache = require('../services/vllm-model-cache');
+        isolatedCache.clearModelCache();
         isolatedLogger.warn.mockImplementationOnce(() => {
           throw new Error('transport down');
         });
@@ -573,10 +576,10 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
           throw new TypeError('cache-key construction bug');
         }
       }));
-      const isolatedLogger = require('../shared-lib/logger').logger;
-      const isolatedCache = require('../services/vllm-model-cache');
-      isolatedCache.clearModelCache();
       try {
+        const isolatedLogger = require('../shared-lib/logger').logger;
+        const isolatedCache = require('../services/vllm-model-cache');
+        isolatedCache.clearModelCache();
         for (let i = 0; i < 64; i += 1) {
           await isolatedCache.servedModelId(`http://vllm:8000/base-${i}`);
         }

@@ -68,7 +68,7 @@ const axios = require('axios');
 // rate limiting, geoip) — heavyweight for a leaf helper (see
 // components/CLAUDE.md "When deep imports are unavoidable").
 const { logger } = require('../shared-lib/logger');
-const { openAiModelsUrl } = require('./llm-url');
+const { normalizedBase, openAiModelsUrl } = require('./llm-url');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
 const PROBE_TIMEOUT_DEFAULT_MS = 10000;
@@ -275,6 +275,15 @@ function probeBudgetBucket(timeoutMs) {
   return Math.ceil(effectiveProbeBudget(timeoutMs) / 1000);
 }
 
+/** The ONE count bound for the bounded maps: the OLDEST insertion goes,
+ * so its fallback (a stale id, a warn window) goes with it and the next
+ * call re-probes / re-warns. Every bounded map in this file evicts here. */
+function pruneOldest(set) {
+  while (set.size > MAX_CACHE_ENTRIES) {
+    set.delete(set.keys().next().value);
+  }
+}
+
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
  * (a null id would hide the reason from the caller). `quiet` marks the
@@ -398,9 +407,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
  * price of the bound: the OLDEST entry goes, so its stale fallback goes
  * with it (that base re-probes on its next call). */
 function pruneCache() {
-  while (_cache.size > MAX_CACHE_ENTRIES) {
-    _cache.delete(_cache.keys().next().value); // the oldest insertion first
-  }
+  pruneOldest(_cache); // the oldest insertion goes first
   for (const [key, value] of _negative) {
     if (!negativeEntryIsLive(value.ts)) _negative.delete(key);
   }
@@ -415,11 +422,6 @@ function pruneCache() {
   // re-warns, at most once more. (The soft-path signature set is NOT
   // bounded here: its pre-probe seam never reaches this settle sweep, so
   // it bounds itself at the warn site.)
-  const pruneOldest = (set) => {
-    while (set.size > MAX_CACHE_ENTRIES) {
-      set.delete(set.keys().next().value);
-    }
-  };
   pruneOldest(_negative);
   pruneOldest(_malformedWarned);
 }
@@ -602,18 +604,23 @@ async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
     // stub, but a PRE-probe throw never reaches that machinery (nor the
     // pruneCache settle sweep) — so the signature set is bounded HERE.
     if (!(err instanceof ModelDiscoveryError)) {
-      const message = err instanceof Error ? err.message : String(err);
-      // The base is normalized the way getServedModelId normalizes it, so
-      // one pre-probe bug warns once per BASE, not once per spelling.
-      const url = String(baseUrl || '').replace(/\/+$/, '');
+      // An Error's message; a non-Error with a message keeps that; anything
+      // else is stringified so the warn stays contentful.
+      const message = err && err.message ? String(err.message) : String(err);
+      // The base is normalized by the ONE base rule (the same normalization
+      // getServedModelId cache-keys on), so one pre-probe bug warns once
+      // per BASE, not once per spelling. The bound here (not in
+      // pruneCache's settle sweep — a pre-probe throw never reaches it) is
+      // a deliberate tradeoff: past MAX_CACHE_ENTRIES distinct bases a
+      // persistent pre-probe bug degrades to warn-per-visit, which beats
+      // the unbounded growth the set exists to prevent.
+      const url = normalizedBase(baseUrl).base;
       const signature = `${url}|${message}`;
       if (!_softWarned.has(signature)) {
         try {
           logger.warn('vllm_model_cache.soft_path_unexpected_error', { url, error: message });
           _softWarned.add(signature);
-          while (_softWarned.size > MAX_CACHE_ENTRIES) {
-            _softWarned.delete(_softWarned.keys().next().value);
-          }
+          pruneOldest(_softWarned);
         } catch {
           // A throwing logger leaves the signature unrecorded — the next
           // call retries the line. The label answer is null either way.

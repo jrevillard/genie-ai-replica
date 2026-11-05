@@ -74,7 +74,13 @@ time guessing what is wrong.
 
 - The OpenAPI JSON (`GET /api-docs.json`) — a programmatic copy of all the
   schemas below, refreshed on every BFF restart. Useful for client code
-  generation and contract tests.
+  generation and contract tests. Its `servers[0].url` is **relative** (`/`):
+  the base comes from wherever you fetch the spec, and Swagger UI's
+  Try-it-out therefore targets the origin the docs page is served from
+  (same-origin, in dev and behind the gateway) — no per-deployment
+  configuration. A client generator must be given a host of its own. The
+  document-repository spec (the `/api/files` endpoints are served by that
+  service, not by the BFF) follows the same relative default.
 
 ## Verify your setup
 

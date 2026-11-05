@@ -19,8 +19,35 @@ module.exports = {
       // routes already start with /api, and swagger-ui resolves each
       // request as servers[0].url + path. A suffixed URL makes Try-it-out
       // build doubled /api/api/... request URLs.
-      url: process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`,
-      description: 'Development server'
+      // Default: RELATIVE ('/') — swagger-ui resolves it against the
+      // origin the docs page is served from, same-origin in dev and behind
+      // the gateway, so Try-it-out works in every topology without config.
+      // Deployments do not receive API_URL; its one consumer is the
+      // client-generation pin (scripts/generate-api-client.sh sets it
+      // under env -i to bake a deterministic base into the committed Dart
+      // artifacts). A value that is not an absolute http(s) URL after
+      // normalization (trim, control-character rejection, trailing-slash
+      // strip) is ignored — a scheme-only, scheme-less or broken value
+      // would serve a broken server entry. No shared helper with
+      // document-repository: the generator loads this module with bare
+      // node (no Jest mapper), where ./shared-lib does not resolve.
+      url: (() => {
+        const raw = (process.env.API_URL || '').trim();
+        // WHATWG parsing strips tab/LF/CR before parsing, so a value with
+        // an embedded control character must be rejected before the URL
+        // is built — otherwise it would be served silently rewritten.
+        if (/[\t\n\r]/.test(raw)) return '/';
+        const base = raw.replace(/\/+$/, '');
+        try {
+          // WHATWG parsing is the exact validator: it rejects scheme-only
+          // and scheme-less values; a valid URL is served verbatim
+          // (including its original scheme casing).
+          return /^https?:$/.test(new URL(base).protocol) ? base : '/';
+        } catch {
+          return '/';
+        }
+      })(),
+      description: 'API server base'
     }
   ],
   components: {

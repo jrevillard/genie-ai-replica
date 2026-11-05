@@ -372,14 +372,17 @@ describe('Swagger Configuration', () => {
       }
     };
 
-    it('default server URL carries no /api suffix (annotated paths already start with /api)', () => {
+    it('default server URL is relative (swagger-ui resolves it against the page origin)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const url = swaggerOptions.definition.servers[0].url;
-        expect(url).not.toMatch(/\/api\/?$/);
+        // A relative URL makes Try-it-out target the origin the docs page is
+        // served from — same-origin in dev AND behind the gateway, so no
+        // mixed-content or CSP connect-src failure on https deployments.
+        expect(url).toBe('/');
       });
     });
 
-    it('a custom API_URL is used verbatim as the suffix-free server base', () => {
+    it('a custom absolute API_URL is kept as the suffix-free server base (modulo trim and trailing-slash normalization)', () => {
       withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
         const url = swaggerOptions.definition.servers[0].url;
         expect(url).toBe('https://gov.example.com/gov');
@@ -391,26 +394,62 @@ describe('Swagger Configuration', () => {
       });
     });
 
-    it('server URL joined with an annotated path resolves to a single /api segment', () => {
+    it('an API_URL with a trailing slash is normalized (a raw join would build //api/... URLs)', () => {
+      withApiUrl('https://gov.example.com/', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('https://gov.example.com');
+      });
+    });
+
+    it('an API_URL is trimmed (a padded value would leak into the server URL)', () => {
+      withApiUrl('  https://gov.example.com  ', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('https://gov.example.com');
+      });
+      withApiUrl(' ', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+    });
+
+    it('an API_URL that is not an absolute http(s) URL is ignored (falls back to the relative default)', () => {
+      // A scheme-only value would survive slash-stripping as 'https:' and
+      // be served as a broken server entry; a scheme-less host or a URL
+      // with embedded whitespace resolves as / serves garbage. All fall
+      // back to '/'. Schemes are case-insensitive (RFC 3986).
+      withApiUrl('https://', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('gov.example.com', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https:// gov.example.com', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https://go\tv.example.com', ({ swaggerOptions }) => {
+        // WHATWG parsing strips tab/LF/CR before parsing, so the raw
+        // control character must be rejected before the URL is built.
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('HTTP://gov.example.com', ({ swaggerOptions }) => {
+        // Uppercase scheme is a legal absolute URL — accepted verbatim.
+        expect(swaggerOptions.definition.servers[0].url).toBe('HTTP://gov.example.com');
+      });
+    });
+
+    it('every annotated path starts with /api (Try-it-out keeps the prefix for any server base)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const spec = buildSpecWithRealFs(swaggerOptions);
 
         // A route the app actually serves, as declared in query-routes.js.
         const annotatedPath = '/api/queries/{queryId}/responsetime';
         expect(spec.paths).toHaveProperty(annotatedPath);
-        // The other half of the join invariant below: every annotated path
-        // starts with /api. An annotation without the prefix (a natural
-        // copy of the router's own mount-relative path) would make
-        // Try-it-out drop /api for that route.
+        // swagger-ui's Try-it-out executes servers[0].url + path, so every
+        // annotated path must carry the /api prefix itself. An annotation
+        // without it (a natural copy of the router's own mount-relative
+        // path) would make Try-it-out drop /api for that route. The join
+        // invariant for an absolute base is pinned by the API_URL test
+        // above; the relative default joins to the same path verbatim.
         for (const specPath of Object.keys(spec.paths)) {
           expect(specPath).toMatch(/^\/api\//);
         }
-
-        // swagger-ui's Try-it-out executes servers[0].url + path.
-        const url = swaggerOptions.definition.servers[0].url;
-        const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
-        expect(joined).toMatch(/^https?:\/\//);
-        expect(joined).not.toContain('/api/api');
       });
     });
   });

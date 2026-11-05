@@ -6,7 +6,6 @@
 
 const { jwtVerify, createRemoteJWKSet } = require('jose');
 const { logger } = require('./logger');
-const axios = require('axios');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -452,51 +451,15 @@ const keycloakAuthService = {
     return issuer;
   },
 
-  /**
-   * Check user status in Keycloak via UserInfo endpoint
-   * Called when token validation fails with 401 to determine if user was disabled/deleted
-   * @param {string} token - The rejected access/refresh token
-   * @param {string} issuer - The token's issuer URL
-   * @returns {Promise<{active: boolean, disabled: boolean}>} User status from Keycloak, or null if check failed
-   */
-  async checkUserStatusInKeycloak(token, issuer) {
-    try {
-      const userInfoUrl = `${issuer}/protocol/openid-connect/userinfo`;
-      const response = await axios.get(userInfoUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json'
-        },
-        timeout: 3000
-      });
-
-      // If we get a 200 response, user is active
-      if (response.status === 200 && response.data) {
-        return { active: true, disabled: false };
-      }
-
-      // Unexpected response
-      logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
-      return null;
-    } catch (error) {
-      // 403 explicitly indicates user is disabled/deleted
-      if (error.response && error.response.status === 403) {
-        return { active: false, disabled: true };
-      }
-      // 401 is ambiguous: expired token OR disabled user — don't take destructive action
-      if (error.response && error.response.status === 401) {
-        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
-        return null;
-      }
-      // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
-      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        logger.warn(`[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`);
-      } else {
-        logger.error(`[KeycloakAuth] Keycloak UserInfo check failed: ${error.message}`);
-      }
-      return null;
-    }
-  },
+  // No checkUserStatusInKeycloak here. A former copy of this function lived
+  // in this shared fork and mapped every 401 to null ("401 is always
+  // ambiguous") — a contract the live-realm probe of issue #1476 disproved:
+  // a disabled user's userinfo answers 401 with WWW-Authenticate
+  // error="invalid_token", error_description="User disabled", not 403.
+  // The live implementation is the backend copy
+  // (components/gov-chat-backend/services/keycloak-auth-service.js), whose
+  // 401 contract is: a 401 carrying that WWW-Authenticate marker means the
+  // user is disabled; any other 401 stays ambiguous.
 
   TokenVerificationError,
 

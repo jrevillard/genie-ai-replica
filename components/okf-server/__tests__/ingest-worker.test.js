@@ -75,6 +75,11 @@ function queryText(q) {
   return q && q.query ? String(q.query) : '';
 }
 
+/** The 429 unclaim AQL queries recorded so far (shape: clears the claim). */
+function unclaimQueries() {
+  return mockDb.query.mock.calls.map((c) => queryText(c[0])).filter((s) => s.includes('worker_claimed_at: null'));
+}
+
 function programQueries(...results) {
   let i = 0;
   mockDb.query.mockImplementation(async (q) => {
@@ -226,7 +231,11 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   });
 
   test('429 busy → back off, NO meta transition, NO crash (dataprep single-flight)', async () => {
-    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    // ingest_attempts: 1 = the STAMPED value the claim strategies return (the
+    // unclaim CAS needs it, #1391).
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
     const busy = Object.assign(new Error('429'), { response: { status: 429 } });
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(busy);
@@ -266,10 +275,15 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // Issue #1391: the unclaim UPDATE races concurrent meta writers (rocksDB
   // 1200 write-write conflict). A single best-effort write that loses the
   // race leaves a GHOST claim — the row counts as in-flight in the fair pick
-  // for a full claim window and starves its repo. The unclaim must RETRY the
-  // same single AQL until the write lands.
-  test('429 unclaim write conflict → the unclaim is retried until the write lands (#1391)', async () => {
-    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+  // for a full claim window and starves its repo. The unclaim is a CAS on
+  // the stamped attempt count and RETRIES conflicts + connection-class
+  // failures until the write lands. Fixtures carry ingest_attempts: 1 — the
+  // STAMPED value both claim strategies return (the CAS cannot be expressed
+  // without it).
+  test('429 unclaim write conflict → CAS on the stamped attempts, retried until the write lands (#1391)', async () => {
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
     let unclaims = 0;
@@ -290,11 +304,17 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
     expect(unclaims).toBe(3); // retried past the conflicts — the claim IS released
+    // The write is a CAS: it only clears the claim while the row still
+    // carries THIS lane's stamped attempt count — a reset that requeued the
+    // row or another lane that re-claimed it makes the CAS match nothing.
+    expect(unclaimQueries().every((s) => /ingest_attempts\s*==/.test(s))).toBe(true);
   });
 
   test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
     const base = mockDb.query.getMockImplementation();
@@ -317,12 +337,58 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     );
   });
 
-  // A NON-conflict failure (parse/auth/connection — effect unknown) is never
-  // retried: retrying could double-decrement. It surfaces at ERROR on the
-  // FIRST attempt (#1391).
-  test('429 unclaim non-1200 failure → no retry, error on the first attempt (#1391)', async () => {
+  // Connection-class failures (statement never executed / ack lost) ARE
+  // retried — the CAS makes even a lost-ack retry safe from double-decrement.
+  test('429 unclaim connection failure → retried like a conflict (#1391)', async () => {
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    let unclaims = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const s = queryText(q);
+      if (s.includes('worker_claimed_at: null')) {
+        unclaims += 1;
+        if (unclaims === 1) {
+          const err = new Error('connect ECONNREFUSED 127.0.0.1:8529');
+          err.code = 'ECONNREFUSED';
+          throw err;
+        }
+        return { all: async () => [] }; // second attempt lands
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaims).toBe(2);
+  });
+
+  // Fail CLOSED: without the stamped attempt count the CAS cannot be
+  // expressed, and an unguarded write could clear a foreign claim (the
+  // graph-missing reset requeues rows while lanes hold fresh claims).
+  // Both claim strategies guarantee a stamped count on a returned job, so
+  // this is defense-in-depth — exercised directly on the helper.
+  test('429 unclaim without a stamped attempt count → skipped, no unguarded write (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    const querySpy = jest.spyOn(mockDb, 'query');
+    await worker._unclaimAttempt(mockDb, REPO, 'a', undefined);
+    expect(querySpy).not.toHaveBeenCalled(); // NO unguarded write was attempted
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim skipped'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+    querySpy.mockRestore();
+  });
+
+  // A NON-retryable failure (parse/auth — deterministic fault) is never
+  // retried: it surfaces at ERROR on the FIRST attempt (#1391).
+  test('429 unclaim non-retryable failure → no retry, error on the first attempt (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
     let unclaims = 0;
@@ -331,14 +397,14 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
       if (queryText(q).includes('worker_claimed_at: null')) {
         unclaims += 1;
         const err = new Error('auth failed');
-        err.errorNum = 11; // not a write-write conflict
+        err.errorNum = 11; // not a conflict, not a connection failure
         throw err;
       }
       return base(q);
     });
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(unclaims).toBe(1); // NO retry on an unknown-effect failure
+    expect(unclaims).toBe(1); // NO retry on a deterministic fault
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('unclaim'),
       expect.objectContaining({ concept_id: 'a', error_num: 11 })

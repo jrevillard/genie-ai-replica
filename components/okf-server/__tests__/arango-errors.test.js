@@ -62,6 +62,16 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     );
     expect(isConnectionError(new Error('socket hang up'))).toBe(true);
     expect(isConnectionError(new Error('fetch failed'))).toBe(true);
+    // Transient gateway statuses (the llm-transient-errors status set) — the
+    // shape an arangojs error carries through a proxy under load.
+    expect(isConnectionError(Object.assign(new Error('Service Unavailable'), { response: { status: 503 } }))).toBe(
+      true
+    );
+    expect(isConnectionError(Object.assign(new Error('Bad Gateway'), { response: { status: 502 } }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('Too Many Requests'), { statusCode: 429 }))).toBe(true);
+    // A permanent 4xx/5xx status is NOT connection-class.
+    expect(isConnectionError(Object.assign(new Error('Forbidden'), { response: { status: 403 } }))).toBe(false);
+    expect(isConnectionError(Object.assign(new Error('Server Error'), { response: { status: 500 } }))).toBe(false);
     // Deterministic faults are NOT connection-class.
     expect(isConnectionError(Object.assign(new Error('auth failed'), { errorNum: 11 }))).toBe(false);
     expect(isConnectionError(new Error('AQL: parse error near FILTER'))).toBe(false);

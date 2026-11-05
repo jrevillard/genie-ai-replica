@@ -106,13 +106,13 @@ function isArangoConflict(err) {
 }
 
 /** Connection-class failure: the request (very likely) never reached the
- * server or the response never came back — the operation's effect is
- * UNKNOWN, and for idempotent statements safe to retry. UNION of the two
+ * server, the response never came back, or the server answered with a
+ * transient gateway status — the operation's effect is UNKNOWN, and for
+ * idempotent statements safe to retry. IN-COMPONENT union of the two
  * existing classifiers (db-connection-service._isConnectionError socket
- * codes + llm-transient-errors RETRIABLE_CODES incl. ECONNABORTED and
- * ERR_STREAM_PREMATURE_CLOSE) plus the axios abort names, so a new
- * connection-code lesson lands here ONCE (round-3 review #1391: the ingest
- * worker's local copy had drifted narrower than both). */
+ * codes + llm-transient-errors RETRIABLE_CODES and its 429/502/503/504
+ * status set) plus the axios abort names — the cross-component
+ * consolidation into shared/lib is tracked separately (#1550). */
 const CONNECTION_CODES = [
   'ECONNRESET',
   'ENOTFOUND',
@@ -126,12 +126,15 @@ const CONNECTION_CODES = [
   'socket hang up',
   'fetch failed'
 ];
+const TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
 function isConnectionError(err) {
   if (!err) return false;
   if (err.name === 'AbortError') return true;
   const message = String(err.message || '').toLowerCase();
   const code = String(err.code || '').toLowerCase();
-  return CONNECTION_CODES.some((c) => message.includes(c.toLowerCase()) || code.includes(c.toLowerCase()));
+  if (CONNECTION_CODES.some((c) => message.includes(c.toLowerCase()) || code.includes(c.toLowerCase()))) return true;
+  const status = err.response ? err.response.status : err.status != null ? err.status : err.statusCode;
+  return TRANSIENT_STATUSES.has(status);
 }
 
 module.exports = {

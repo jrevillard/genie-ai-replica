@@ -117,6 +117,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
   delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
+  delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS; // never leak the 1ms test base
 });
 
 describe('ingestWorker._processOneJob (content-only — claim a parsed meta row → POST to dataprep → wait for the callback)', () => {
@@ -303,7 +304,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // ingest_attempts: 1 / worker_claimed_at: the PRE-stamp row state — the
   // worker mirrors the post-stamp values onto the job it returns.
   test('429 unclaim write conflict → CAS on the stamped claim, retried until the write lands (#1391)', async () => {
-    process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS = '1'; // no wall-time sleeps
+    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries([
       {
         repo_id: REPO,
@@ -340,12 +341,12 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // row (claim nulled) or another lane that re-claimed it (a different
     // claim value) makes the CAS match nothing.
     expect(unclaimQueries().every((s) => /worker_claimed_at\s*==/.test(s))).toBe(true);
-    delete process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS;
+    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
   });
 
   test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS = '1'; // no wall-time sleeps
+    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries([
       {
         repo_id: REPO,
@@ -377,13 +378,13 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
       expect.stringContaining('unclaim'),
       expect.objectContaining({ concept_id: 'a' })
     );
-    delete process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS;
+    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
   });
 
   // Connection-class failures (statement never executed / ack lost) ARE
   // retried — the CAS makes even a lost-ack retry safe from double-decrement.
   test('429 unclaim connection failure → retried like a conflict (#1391)', async () => {
-    process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS = '1'; // no wall-time sleeps
+    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries([
       {
         repo_id: REPO,
@@ -415,7 +416,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
     expect(unclaims).toBe(2);
-    delete process.env.OKF_INGEST_UNCLAIM_BACKOFF_BASE_MS;
+    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
   });
 
   // Fail CLOSED: without the stamped claim value the CAS cannot be
@@ -446,6 +447,75 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
       expect.stringContaining('matched nothing'),
       expect.objectContaining({ concept_id: 'a' })
     );
+  });
+
+  // A transient gateway status (503 under load — exactly when conflict
+  // storms happen) is connection-class too: retried, not misread as a
+  // deterministic fault (round-4 review).
+  test('429 unclaim HTTP 503 → retried like a conflict (#1391)', async () => {
+    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
+    programQueries([
+      {
+        repo_id: REPO,
+        concept_id: 'a',
+        graph_name: `OKF_${REPO}`,
+        frontmatter: {},
+        body: '# a',
+        ingest_attempts: 1,
+        worker_claimed_at: null
+      }
+    ]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    let unclaims = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const s = queryText(q);
+      if (s.includes('worker_claimed_at: null')) {
+        unclaims += 1;
+        if (unclaims === 1) {
+          const err = new Error('Service Unavailable');
+          err.response = { status: 503 };
+          throw err;
+        }
+        return { all: async () => [{ key: 'u' }] };
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaims).toBe(2);
+  });
+
+  // The claim stamp gets the same transient-class retry: a connection
+  // failure that never executed is retried against the SAME CAS — a stamp
+  // that already landed makes the CAS match nothing (refusal), never a
+  // double stamp (round-4 review).
+  test('claim stamp connection failure → retried; the claim then proceeds normally', async () => {
+    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done
+    );
+    let stamps = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const s = queryText(q);
+      if (s.includes('UPDATE m WITH') && s.includes('worker_claimed_at')) {
+        stamps += 1;
+        if (stamps === 1) {
+          const err = new Error('connect ECONNRESET');
+          err.code = 'ECONNRESET';
+          throw err;
+        }
+        return { all: async () => ['2026-11-05T00:00:00.000Z'] }; // stamp landed, server value returned
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res.outcome).not.toBe('idle'); // the claim succeeded after the retry
+    expect(authedAxios.post).toHaveBeenCalled(); // the kick proceeded
+    expect(stamps).toBe(2);
   });
 
   // A NON-retryable failure (parse/auth — deterministic fault) is never

@@ -3186,7 +3186,7 @@ export default {
       autocorrect:
         'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'The lifecycle ritual ({chain}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
@@ -3346,7 +3346,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Drafts cannot be saved server-side yet; saved locally.'
+        notReady:
+          'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.',
+        repoGone:
+          'This repository is no longer available on the server — your changes stay in this browser tab only and are lost if the tab is closed or reloaded.'
       },
       mode: {
         basic: 'Basic',
@@ -3553,7 +3556,7 @@ export default {
           'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'The review ritual happens in the Editor and the Studio dashboard, one button at a time — not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -3566,7 +3569,7 @@ export default {
         frontmatterOk: 'Frontmatter tags approved',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Secure and Finish',
-        hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
+        hint: 'This repository is ready for review. Publishing never happens here — the lifecycle runs on the dashboard and in the editor, one button at a time.',
         nameOk: 'Repository name set',
         labelsOk: 'Labels selected',
         topicsOk: 'Topics reviewed',
@@ -3575,7 +3578,7 @@ export default {
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — {chain}. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3805,6 +3808,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Submit for review',
       approve: 'Approve',
       publish: 'Publish',

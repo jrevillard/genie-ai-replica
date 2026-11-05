@@ -1,22 +1,35 @@
 'use strict';
 
-// Capture the constructor options so the test can pin the shared resilience
-// contract without opening a real connection handle.
-jest.mock('ioredis', () =>
-  jest.fn(function (options) {
-    this.options = options;
-  })
-);
+// The shared ioredis mock records the constructor options, so the test can
+// pin the connection contract without opening a real connection handle.
+jest.mock('ioredis', () => require('../mocks/ioredis'));
 
 const Redis = require('ioredis');
 const { createRedisCacheClient } = require('../../services/redis-cache-client');
 
 describe('redis-cache-client factory', () => {
+  const originalEnv = {
+    TRANSLATION_CACHE_HOST: process.env.TRANSLATION_CACHE_HOST,
+    TRANSLATION_CACHE_PORT: process.env.TRANSLATION_CACHE_PORT,
+    TRANSLATION_CACHE_PASSWORD: process.env.TRANSLATION_CACHE_PASSWORD
+  };
+
   beforeEach(() => {
     Redis.mockClear();
+    Redis.instances.length = 0;
     delete process.env.TRANSLATION_CACHE_HOST;
     delete process.env.TRANSLATION_CACHE_PORT;
     delete process.env.TRANSLATION_CACHE_PASSWORD;
+  });
+
+  afterEach(() => {
+    for (const [name, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
   });
 
   test('applies the shared resilience contract defaults', () => {
@@ -46,17 +59,20 @@ describe('redis-cache-client factory', () => {
     expect(options.password).toBe('secret');
   });
 
-  test('an invalid TRANSLATION_CACHE_PORT falls back to 6379', () => {
-    // #1477 — the two hand-copied parsers used to disagree here
-    // ('0' fell back to 6379 in one and returned 0 in the other).
+  test('an unusable TRANSLATION_CACHE_PORT falls back to 6379', () => {
+    // #1477 — the two hand-copied parsers disagreed here: the translation
+    // cache's `parseInt(x,10) || 6379` fell back to 6379 while the
+    // provisioning one (`parsePositiveInt`) accepted the value as-is.
     process.env.TRANSLATION_CACHE_PORT = '0';
-
     createRedisCacheClient();
-
     expect(Redis.mock.calls[0][0].port).toBe(6379);
+
+    process.env.TRANSLATION_CACHE_PORT = '-1';
+    createRedisCacheClient();
+    expect(Redis.mock.calls[1][0].port).toBe(6379);
   });
 
-  test('caller options override the shared defaults', () => {
+  test('the subscriber may override the offline queue and the retry cap only', () => {
     // The provisioning invalidation subscriber overrides both so its
     // buffered subscribe survives a cold Redis start.
     createRedisCacheClient({ enableOfflineQueue: true, maxRetriesPerRequest: null });
@@ -64,7 +80,17 @@ describe('redis-cache-client factory', () => {
     const options = Redis.mock.calls[0][0];
     expect(options.enableOfflineQueue).toBe(true);
     expect(options.maxRetriesPerRequest).toBeNull();
-    // Everything not overridden stays shared
+    // Everything else stays shared
+    expect(options.retryStrategy(1)).toBe(500);
+    expect(options.host).toBe('localhost');
+    expect(options.port).toBe(6379);
+  });
+
+  test('the connection contract cannot be overridden', () => {
+    createRedisCacheClient({ host: 'elsewhere', retryStrategy: () => 50 });
+
+    const options = Redis.mock.calls[0][0];
+    expect(options.host).toBe('localhost');
     expect(options.retryStrategy(1)).toBe(500);
   });
 });

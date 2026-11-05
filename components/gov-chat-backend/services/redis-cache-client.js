@@ -1,6 +1,10 @@
 'use strict';
 
 const Redis = require('ioredis');
+// Deep import, not the '../shared-lib' barrel: the barrel pulls the whole
+// shared surface (security-middleware → geoip-lite, validator) into every
+// consumer, and those dependencies do not resolve from shared/lib itself.
+// A deep import keeps this module loadable on its own.
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 /**
@@ -21,28 +25,29 @@ function resolveRedisCacheSettings() {
  * instance: the translation cache itself and the provisioning invalidation
  * pub/sub.
  *
- * Every client on that instance carries the SAME resilience contract: a
- * capped retry backoff, a bounded retry count per command, and no offline
- * queue — a Redis outage surfaces as a failed command, not a
- * silently-growing buffer.
+ * The resilience contract is fixed HERE and cannot be overridden: a capped
+ * retry backoff, a bounded retry count per command, and no offline queue —
+ * a Redis outage surfaces as a failed command, not a silently-growing
+ * buffer. The two fields a caller may change are named parameters, so a
+ * divergence has to be spelled out at the call site.
  *
- * A caller whose contract differs overrides it per call: the provisioning
- * invalidation subscriber needs the offline queue (its subscribe must buffer
- * until Redis answers, so a cold start still delivers broadcasts) and no
- * per-command retry cap.
+ * Only the provisioning invalidation subscriber needs a different contract:
+ * its subscribe must buffer until Redis answers, so a cold start still
+ * delivers broadcasts (offline queue on, no per-command retry cap).
  *
- * @param {object} [clientOptions] ioredis options overriding the shared contract
+ * @param {object} [options]
+ * @param {boolean} [options.enableOfflineQueue] buffer commands while disconnected
+ * @param {number|null} [options.maxRetriesPerRequest] per-command retry cap (null = unlimited)
  * @returns {import('ioredis').Redis} the client
  */
-function createRedisCacheClient(clientOptions = {}) {
+function createRedisCacheClient({ enableOfflineQueue = false, maxRetriesPerRequest = 3 } = {}) {
   return new Redis({
     ...resolveRedisCacheSettings(),
     retryStrategy(times) {
       return Math.min(times * 500, 2000);
     },
-    maxRetriesPerRequest: 3,
-    enableOfflineQueue: false,
-    ...clientOptions
+    maxRetriesPerRequest,
+    enableOfflineQueue
   });
 }
 

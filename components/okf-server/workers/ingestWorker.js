@@ -318,20 +318,46 @@ async function _stampClaim(db, repoId, conceptId) {
  * inside the fused statement), so this decrement always un-counts a real
  * increment — never a bare 0-row. */
 async function _unclaimAttempt(db, repoId, conceptId) {
-  try {
-    await db.query(
-      aql`
-      FOR m IN okf_concepts_meta
-        FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
-        UPDATE m WITH {
-          worker_claimed_at: null,
-          ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
-        } IN okf_concepts_meta
-    `,
-      {}
-    );
-  } catch (err) {
-    logger.warn('Ingest worker: 429 unclaim failed (non-fatal)', { concept_id: conceptId, error: err.message });
+  // Issue #1391: this write races concurrent meta writers (a user-triggered
+  // repo/lifecycle op touching the same row) — on the RocksDB engine the
+  // loser gets error 1200 and NOTHING is written. A single best-effort
+  // attempt that loses leaves a GHOST claim: the row counts as in-flight in
+  // the fair pick for a full claim window and starves its repo. The conflict
+  // is transient (the winner completes in milliseconds), so retry the SAME
+  // single AQL — the attempt accounting stays in one statement (#78658).
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await db.query(
+        aql`
+        FOR m IN okf_concepts_meta
+          FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+          UPDATE m WITH {
+            worker_claimed_at: null,
+            ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
+          } IN okf_concepts_meta
+      `,
+        {}
+      );
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        // Ghost claim persists until the claim window ages it out — surface
+        // it at ERROR level (the fair pick will starve this repo meanwhile).
+        logger.error('Ingest worker: 429 unclaim failed after retries — ghost claim until staleness', {
+          concept_id: conceptId,
+          attempts: maxAttempts,
+          error: err.message
+        });
+      } else {
+        logger.warn('Ingest worker: 429 unclaim attempt failed — retrying', {
+          concept_id: conceptId,
+          attempt,
+          error: err.message
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+      }
+    }
   }
 }
 

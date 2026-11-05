@@ -263,6 +263,60 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
+  // Issue #1391: the unclaim UPDATE races concurrent meta writers (rocksDB
+  // 1200 write-write conflict). A single best-effort write that loses the
+  // race leaves a GHOST claim — the row counts as in-flight in the fair pick
+  // for a full claim window and starves its repo. The unclaim must RETRY the
+  // same single AQL until the write lands.
+  test('429 unclaim write conflict → the unclaim is retried until the write lands (#1391)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    let unclaims = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const s = queryText(q);
+      if (s.includes('worker_claimed_at: null')) {
+        unclaims += 1;
+        if (unclaims <= 2) {
+          const err = new Error('conflict: write-write');
+          err.errorNum = 1200;
+          throw err;
+        }
+        return { all: async () => [] }; // third attempt lands
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaims).toBe(3); // retried past the conflicts — the claim IS released
+  });
+
+  test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      if (queryText(q).includes('worker_claimed_at: null')) {
+        const err = new Error('conflict: write-write');
+        err.errorNum = 1200;
+        throw err;
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    // The kick refusal itself was handled (lane cools down, outcome busy) —
+    // but the failed release must surface at ERROR level so a persisting
+    // ghost claim is visible instead of a warn nobody greps for.
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+  });
+
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
     programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK

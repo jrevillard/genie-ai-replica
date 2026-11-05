@@ -157,7 +157,14 @@ function clearStaleRenewPublication() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
-    if (entry && typeof entry.at === 'number' && Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
+    if (
+      entry &&
+      typeof entry.at === 'number' &&
+      // Past the TTL in either direction: a backward clock jump after the
+      // publish would otherwise keep a full minted token set at rest (and
+      // "stale") forever (#1521 review, loop 5).
+      (Date.now() - entry.at > RENEW_LEASE_TTL_MS || entry.at > Date.now() + RENEW_LEASE_TTL_MS)
+    ) {
       clearRenewPublication();
     }
   } catch {
@@ -181,14 +188,24 @@ function clearStaleRenewPublication() {
  * without a tab id) are treated as this tab's own — during a rolling
  * deploy's mixed-version window the handoff to an old-build holder degrades
  * to per-tab grants, the pre-#1521 behavior, until every tab reloads. */
+// The `at` of the publication THIS tab last adopted (#1521 review, loop 5):
+// re-adopting the identical publication is never legitimate — it would
+// serve the same tokens twice, and with a short-lived adopted token the
+// re-armed expiring timer re-enters signinSilent within seconds, turning
+// the handoff into a re-adoption loop for one TTL. A holder's NEXT renew
+// always publishes a new `at`.
+let lastAdoptedAt = 0;
+
 function readPublishedRenew() {
   try {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return null;
     const entry = JSON.parse(raw);
     if (!entry || !entry.user || !entry.tab || entry.tab === RENEW_TAB_ID) return null;
+    if (entry.at === lastAdoptedAt) return null;
     const exp = entry.user.expires_at;
     if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
+    lastAdoptedAt = entry.at; // this exact publication is never adoptable again
     return entry.user;
   } catch {
     return null;
@@ -240,14 +257,21 @@ async function adoptPublishedUser(manager, user) {
  * starting mid-grant finds no handoff, waits under the lock/lease, and
  * adopts the FRESH publication instead of a token being rotated away. Only
  * this tab's own entry — a foreign tab's may be another waiter's only
- * valid handoff. RESTORE-ON-FAILURE (#1521 review, loop 4): a grant that
- * fails WITHOUT rotating (network blip, 5xx) leaves the withdrawn token
- * valid — put the publication back, or every other tab loses its handoff
- * for a full TTL and re-grants on already-rotated tokens. Restored only
+ * valid handoff. RESTORE-ON-FAILURE (#1521 review, loop 4): a failed grant
+ * may or may not have consumed the withdrawn token — the client cannot
+ * tell. Restoring gives the other tabs the best available handoff: in the
+ * common case (network blip before the request) the token is still valid,
+ * and in the lost-response case the restored entry is dead but the waiters
+ * re-grant after the TTL — the same trade as not restoring. Restored only
  * while the slot is still empty: a newer publication (this tab's own fresh
  * one, or another tab's) outranks the saved entry. */
 async function runRawGrantAndPublish(manager) {
-  const saved = window.localStorage.getItem(RENEW_USER_KEY);
+  let saved = null;
+  try {
+    saved = window.localStorage.getItem(RENEW_USER_KEY);
+  } catch {
+    /* storage unavailable — the grant runs without the save/restore pair */
+  }
   clearOwnRenewPublication();
   try {
     const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();

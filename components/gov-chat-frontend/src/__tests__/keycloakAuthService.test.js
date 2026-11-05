@@ -921,6 +921,45 @@ describe('cross-tab renew lease (#80800)', () => {
     window.localStorage.removeItem(USER_KEY);
     await handler();
     expect(mockSigninRedirect).not.toHaveBeenCalled();
+    // The counter is module state and persists across tests — leave it at
+    // zero (a fresh initialize() resets it) so a later test's first failure
+    // is really its first.
+    mockSigninSilent.mockResolvedValue(createMockUser());
+    await keycloakAuthService.initialize();
+  });
+
+  it('does not RE-adopt the identical publication — a second renew grants (#1521 review loop 5)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    const holderUser = createMockUser({ access_token: 'holder-pub-token' });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+    // First renew adopts the holder's publication (no grant runs):
+    const first = await keycloakAuthService.signinSilent();
+    expect(first.access_token).toBe('holder-pub-token');
+    // Second renew: re-serving the identical tokens would skip the actual
+    // refresh (and with a short-lived token, loop the expiring timer). The
+    // adopted-at memo makes this tab grant instead.
+    mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'own-grant-after' }));
+    const second = await keycloakAuthService.signinSilent();
+    expect(second.access_token).toBe('own-grant-after');
+    expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a publication stamped far into the FUTURE (clock jump) is dropped at renew entry, not kept forever (#1521 review loop 5)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant' }));
+    // A backward clock jump after the publish leaves `at` in the future —
+    // a full minted token set must not sit at rest past the TTL.
+    const futureUser = createMockUser({ access_token: 'future-stamped-pub' });
+    window.localStorage.setItem(
+      USER_KEY,
+      JSON.stringify({ at: Date.now() + 30000, tab: 'holder-tab', user: futureUser })
+    );
+    await keycloakAuthService.signinSilent();
+    // The future entry is gone; this tab's own grant republished the slot.
+    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    expect(entry.user.access_token).toBe('own-grant');
   });
 
   it('treats an owner-less (old-build) publication as its own → own grant (#1521)', async () => {

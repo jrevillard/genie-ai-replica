@@ -78,6 +78,11 @@ void main() async {
     return;
   }
 
+  // Restore the language the user last selected on this device, before the
+  // first frame: the app opens in that language instead of falling back to
+  // English. A stored language this deployment does not serve is ignored.
+  await I18nService().restoreLanguage();
+
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 

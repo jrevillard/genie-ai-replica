@@ -153,7 +153,10 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           "createdAt": userMap['createdAt'] ?? "",
         };
 
-        if (userMap['language'] != null) {
+        // The language is client-authoritative like the theme and the font
+        // scale: the account copy only seeds a device that never made a
+        // choice of its own (a fresh install, or a new phone).
+        if (userMap['language'] != null && !I18nService().hasStoredLanguage) {
           I18nService().changeLanguage(userMap['language']);
         }
         // Theme and fontSize are client-authoritative — applied immediately

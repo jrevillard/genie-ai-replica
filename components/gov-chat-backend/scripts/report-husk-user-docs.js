@@ -37,7 +37,6 @@
  *                     this script is the only place that variable is read)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
- *   ARANGO_COLLECTION (default users)
  */
 
 const { Database } = require('arangojs');
@@ -128,6 +127,10 @@ FOR u IN @@collection
   RETURN u
 `;
 
+// The full-collection read the divergence cross-check compares against the
+// matcher.
+const ALL_DOCS_AQL = 'FOR u IN @@collection RETURN u';
+
 // The removal: keys selected by the matcher, re-filtered through the full
 // signature at removal time so a concurrent disqualifying write (e.g. a GDPR
 // soft-delete landing between SELECT and REMOVE) is skipped, not destroyed.
@@ -161,27 +164,36 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 `;
 
 // ---------------------------------------------------------------------------
-// Main
+// Safety gates and run modes
 // ---------------------------------------------------------------------------
 
-async function main() {
-  // Resolved here, not at module scope: dotenv loads the repo-root .env when
-  // the script runs, so a module-scope read would miss ARANGO_COLLECTION.
-  const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
-  const ARANGO_URL = process.env.ARANGO_URL || 'http://localhost:8529';
-  const doDelete = process.argv.includes('--delete');
-  const doConfirm = process.argv.includes('--yes');
+/**
+ * Parses the CLI arguments and the operator gates. Side effects: on a failed
+ * gate it prints the reason to stderr and sets process.exitCode, then returns
+ * null; when every gate passes it returns the fully resolved run
+ * configuration { mode, database, collection, arangoUrl, username, password }
+ * — the single source main() reads after gating. It reads only its
+ * parameters (no module state, no process.argv/env), which is what makes it
+ * unit-testable. Exported for tests (issue #1494).
+ * @param {string[]} argv
+ * @param {Object} env
+ * @returns {Object|null}
+ */
+function parseAndGateArgs(argv, env) {
+  const fail = (message) => {
+    console.error(message);
+    process.exitCode = 1;
+    return null;
+  };
+  const doDelete = argv.includes('--delete');
+  const doConfirm = argv.includes('--yes');
 
   if (doDelete && !doConfirm) {
-    console.error('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
-    process.exitCode = 1;
-    return;
+    return fail('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
   }
 
-  if (!process.env.ARANGO_PASSWORD) {
-    console.error('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
-    process.exitCode = 1;
-    return;
+  if (!env.ARANGO_PASSWORD) {
+    return fail('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
   }
 
   // No default database name: the app's database differs per deployment
@@ -189,75 +201,42 @@ async function main() {
   // wrong-but-existing database reports "0 husks" with exit code 0 — the
   // operator cannot tell "this environment is clean" from "this is the wrong
   // database". So the operator must name it, and it must exist.
-  if (!process.env.ARANGO_DB) {
-    console.error(
+  if (!env.ARANGO_DB) {
+    return fail(
       'ARANGO_DB is required (the database the app uses — e.g. genie-ai in docker-compose ' +
         'deployments, node-services elsewhere). No default: a wrong database reports 0 husks.'
     );
-    process.exitCode = 1;
-    return;
   }
 
-  const db = new Database({
-    url: ARANGO_URL,
-    databaseName: process.env.ARANGO_DB || 'genie-ai',
-    auth: {
-      username: process.env.ARANGO_USER || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
-    }
-  });
-  if (!(await db.exists())) {
-    console.error(`Database '${db.name}' does not exist on ${ARANGO_URL} — check ARANGO_DB and ARANGO_URL.`);
-    process.exitCode = 1;
-    return;
-  }
-  const collection = db.collection(COLLECTION);
-  let total;
-  try {
-    total = (await collection.count()).count || 0;
-  } catch {
-    console.error(
-      `Collection '${COLLECTION}' not found in database '${db.name}' on ${ARANGO_URL} — check ARANGO_COLLECTION.`
-    );
-    process.exitCode = 1;
-    return;
-  }
+  return {
+    mode: doDelete ? 'delete' : 'report',
+    database: env.ARANGO_DB,
+    collection: env.ARANGO_COLLECTION || 'users',
+    arangoUrl: env.ARANGO_URL || 'http://localhost:8529',
+    username: env.ARANGO_USER || 'root',
+    password: env.ARANGO_PASSWORD
+  };
+}
 
-  const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
-  const husks = await huskCursor.all();
-
-  // Defense against AQL/predicate divergence — abort before any destructive
-  // step if the two disagree about what a husk is, in EITHER direction: an
-  // AQL hit the predicate rejects (AQL too permissive) or a document the
-  // predicate accepts that the AQL never returned (AQL too restrictive — the
-  // silent direction, which would otherwise report "0 husks" on a database
-  // full of them). Only _key and attribute NAMES are printed: the mismatch
-  // documents are by definition not husks and can carry real PII, which must
-  // not reach the log store via stderr.
-  const allDocsCursor = await db.query('FOR u IN @@collection RETURN u', { '@collection': COLLECTION });
-  const allDocs = await allDocsCursor.all();
-  const { extra, missed } = compareSignatureSets(husks, allDocs);
-  if (extra.length > 0 || missed.length > 0) {
-    console.error(
-      `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
-        `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
-        'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
-        'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
-    );
-    for (const doc of extra) {
-      console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-    }
-    for (const doc of missed) {
-      console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-    }
-    process.exitCode = 1;
-    return;
+/**
+ * The report body: the field census over the whole collection, the match
+ * listing and — in report mode only — the legacy-lookalike context query and
+ * the dry-run closing line. A --delete run has already been through a
+ * reviewed dry run and needs nothing from the lookalikes.
+ */
+async function runReport(db, gated, total, husks, allDocs) {
+  let lookalikeCount = 0;
+  let lookalikes = [];
+  if (gated.mode === 'report') {
+    const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
+      '@collection': gated.collection,
+      sampleLimit: SAMPLE_LIMIT
+    });
+    const lookalikeResult = (await lookalikeCursor.next()) || {};
+    lookalikeCount = lookalikeResult.count || 0;
+    lookalikes = lookalikeResult.sample || [];
   }
 
-  // Field census over the whole collection: any field outside the signature's
-  // allowlist, with its count. The operator sees shape surprises the signature
-  // cannot know about (a field every document carries, a new issuer's field),
-  // instead of a bare "N husks" that cannot explain itself.
   const fieldCounts = new Map();
   for (const doc of allDocs) {
     for (const key of Object.keys(doc)) {
@@ -271,24 +250,10 @@ async function main() {
     .filter(([key]) => !HUSK_SYSTEM_FIELDS.includes(key) && !HUSK_ALLOWED_FIELDS.includes(key))
     .sort((a, b) => b[1] - a[1]);
 
-  let lookalikeCount = 0;
-  let lookalikes = [];
-  if (!doDelete) {
-    // Context for the dry-run report only — a --delete run has already been
-    // through a reviewed dry run and needs nothing from these lookalikes.
-    const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
-      '@collection': COLLECTION,
-      sampleLimit: SAMPLE_LIMIT
-    });
-    const lookalikeResult = (await lookalikeCursor.next()) || {};
-    lookalikeCount = lookalikeResult.count || 0;
-    lookalikes = lookalikeResult.sample || [];
-  }
-
   console.log('--- Husk user-document report (READ ONLY unless --delete) ---');
-  console.log(`Arango URL:    ${ARANGO_URL}`);
+  console.log(`Arango URL:    ${gated.arangoUrl}`);
   console.log(`Database:      ${db.name}`);
-  console.log(`Collection:    ${COLLECTION}`);
+  console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
   for (const doc of husks.slice(0, SAMPLE_LIMIT)) {
@@ -306,7 +271,7 @@ async function main() {
       console.log(`  field ${key}: ${count} document(s)`);
     }
   }
-  if (doDelete) {
+  if (gated.mode === 'delete') {
     console.log('Legacy lookalikes: not measured in --delete mode.');
   } else {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
@@ -316,22 +281,24 @@ async function main() {
     if (lookalikeCount > lookalikes.length) {
       console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
     }
-  }
-
-  if (!doDelete) {
     console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
-    return;
   }
+}
 
-  // Destructive path — reached only with --delete --yes, after the predicate
-  // cross-check above has passed for every match. One bulk statement that
-  // RE-ASSERTS the husk signature, so a document concurrently disqualified
-  // between the SELECT and the REMOVE (e.g. a GDPR soft-delete writing
-  // deleted:true) is left alone; a mid-way failure cannot leave an ambiguous
-  // partial state.
+/**
+ * The destructive tail — reached only with --delete --yes, after the
+ * predicate cross-check in main() has passed for every match. One bulk
+ * statement that RE-ASSERTS the husk signature, so a document concurrently
+ * disqualified between the SELECT and the REMOVE (e.g. a GDPR soft-delete
+ * writing deleted:true) is left alone; a mid-way failure cannot leave an
+ * ambiguous partial state.
+ */
+// `collectionName` is the NAME (a string for the AQL bind) — main() passes
+// gated.collection, never the arangojs handle it also holds under `collection`.
+async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
   const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-    '@collection': COLLECTION,
+    '@collection': collectionName,
     keys: husks.map((doc) => doc._key)
   });
   // The removal re-asserts the signature, so docs disqualified since the
@@ -356,6 +323,91 @@ async function main() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+/**
+ * CLI entry point. Injectable for tests (issue #1494): argv, env and the
+ * Database factory can all be passed in, so the gate wiring and the
+ * divergence-before-remove ordering run against a fake db.
+ * @param {{argv?: string[], env?: Object, createDatabase?: Function}} deps
+ */
+async function main({
+  argv = process.argv,
+  env = process.env,
+  createDatabase = (config) => new Database(config)
+} = {}) {
+  const gated = parseAndGateArgs(argv, env);
+  if (!gated) {
+    return;
+  }
+
+  const db = createDatabase({
+    url: gated.arangoUrl,
+    databaseName: gated.database,
+    auth: {
+      username: gated.username,
+      password: gated.password
+    }
+  });
+  if (!(await db.exists())) {
+    console.error(`Database '${db.name}' does not exist on ${gated.arangoUrl} — check ARANGO_DB and ARANGO_URL.`);
+    process.exitCode = 1;
+    return;
+  }
+  const collection = db.collection(gated.collection);
+  let total;
+  try {
+    total = (await collection.count()).count || 0;
+  } catch {
+    console.error(
+      `Collection '${gated.collection}' not found in database '${db.name}' on ${gated.arangoUrl} — check ARANGO_COLLECTION.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': gated.collection });
+  const husks = await huskCursor.all();
+
+  // Defense against AQL/predicate divergence — abort before any destructive
+  // step if the two disagree about what a husk is, in EITHER direction: an
+  // AQL hit the predicate rejects (AQL too permissive) or a document the
+  // predicate accepts that the AQL never returned (AQL too restrictive — the
+  // silent direction, which would otherwise report "0 husks" on a database
+  // full of them). Only _key and attribute NAMES are printed: the mismatch
+  // documents are by definition not husks and can carry real PII, which must
+  // not reach the log store via stderr.
+  const allDocsCursor = await db.query(ALL_DOCS_AQL, { '@collection': gated.collection });
+  const allDocs = await allDocsCursor.all();
+  const { extra, missed } = compareSignatureSets(husks, allDocs);
+  if (extra.length > 0 || missed.length > 0) {
+    console.error(
+      `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
+        `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
+        'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
+        'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
+    );
+    for (const doc of extra) {
+      console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    }
+    for (const doc of missed) {
+      console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  // The report prints on EVERY mode — including --delete, whose stdout is the
+  // audit record of what the destructive run selected (old behavior).
+  await runReport(db, gated, total, husks, allDocs);
+  if (gated.mode !== 'delete') {
+    return;
+  }
+  await runDelete(db, gated.collection, husks);
+}
+
 if (require.main === module) {
   // Loaded only for CLI execution — requiring this module (e.g. from the
   // tests) must not pull the operator's .env into the test process.
@@ -374,9 +426,12 @@ if (require.main === module) {
 module.exports = {
   isHuskDoc,
   compareSignatureSets,
+  parseAndGateArgs,
+  main,
   HUSK_IDENTITY_FIELDS,
   HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
-  HUSK_REMOVAL_AQL
+  HUSK_REMOVAL_AQL,
+  ALL_DOCS_AQL
 };

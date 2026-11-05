@@ -199,3 +199,14 @@ describe('signature vocabulary vs the app field vocabulary', () => {
     expect(shared.sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
   });
 });
+
+describe('the script stays out of the auto-executed migrations directory', () => {
+  // scripts/migrations/run-migrations.js executes every NNN-description.js
+  // it finds, on EVERY deploy (docs/database-migrations.md). The husk
+  // report is an operator tool that a human runs on purpose — promoted
+  // into that directory, its removal query would run on every deployment
+  // (issue #1501).
+  it('is not under scripts/migrations/', () => {
+    expect(require.resolve('../scripts/report-husk-user-docs')).not.toMatch(/scripts[\\/]migrations[\\/]/);
+  });
+});

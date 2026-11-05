@@ -53,7 +53,7 @@
       {{
         translate(
           'okf.steps.publish.ritual',
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.'
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: Submit for review → Approve → Publish → Ingest. The wizard stops here by design.'
         )
       }}
     </p>

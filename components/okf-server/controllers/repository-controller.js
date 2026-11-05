@@ -1425,6 +1425,13 @@ async function autocorrectRepo(req, res, next) {
     );
     // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
     if (applied) {
+      // #1066: result.changes is per-CONCEPT ({concept_id, changes[]}), so a
+      // bare "N change(s)" mislabels the concept count as a change count and
+      // sent an operator re-running the (unrelated) tag suggestion. Name the
+      // scope and the fields actually touched — tags are never autocorrected.
+      const conceptChanges = Array.isArray(result.changes) ? result.changes : [];
+      const fieldCount = conceptChanges.reduce((n, c) => n + ((c.changes && c.changes.length) || 0), 0);
+      const fields = [...new Set(conceptChanges.flatMap((c) => (c.changes || []).map((ch) => ch.field)))].sort();
       auditService
         .writeAudit({
           action: 'repo.autocorrect',
@@ -1434,8 +1441,12 @@ async function autocorrectRepo(req, res, next) {
           source_ip: req.ip,
           description:
             'Applied frontmatter autocorrect — ' +
-            ((result.changes && result.changes.length) || 0) +
-            ' change(s) across the repository' +
+            conceptChanges.length +
+            ' concept(s), ' +
+            fieldCount +
+            ' frontmatter field change(s) (' +
+            fields.join(', ') +
+            ')' +
             (result.failed > 0 ? `, ${result.failed} concept(s) FAILED and reported to the client` : ''),
           details: { changes: result.changes, warnings: result.warnings }
         })

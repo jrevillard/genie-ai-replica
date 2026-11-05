@@ -2541,7 +2541,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Los borradores aún no pueden guardarse en el servidor; guardados localmente.'
+        notReady:
+          'Los borradores no pueden guardarse en el servidor en esta sesión — se conservan solo en este navegador. La página y el servidor pueden tener versiones distintas; recargue la página.'
       },
       mode: {
         basic: 'Básico',
@@ -2774,7 +2775,7 @@ export default {
         frozen:
           'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Siguiente: enviar para aprobación en el panel de Studio → un aprobador acepta → publicar desde el panel o el editor. El asistente se detiene aquí por diseño.',
+          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: Enviar para revisión → Aprobar → Publicar → Ingerir. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },

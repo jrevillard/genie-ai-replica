@@ -344,9 +344,9 @@ const actions = {
    *   { ok: true, draft: null }    the repo exists but has no draft yet, or
    *                                the repo is gone (REPO_NOT_FOUND resolves to
    *                                null in studioService) — NOT an error,
-   *   { ok: false, code: 'NOT_READY' } the endpoint is missing on this server
-   *                                (an older backend); flags the session so
-   *                                later saves do not hammer it.
+   *   { ok: false, code: 'NOT_READY' } the endpoint is not available on this
+   *                                server; flags the session so later saves
+   *                                do not hammer it.
    *
    * draftsUnavailable is set ONLY on a genuine NOT_READY — never on a
    * null draft, which is the normal first-open case.
@@ -365,9 +365,12 @@ const actions = {
       return { ok: true, draft };
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
-        // The endpoint does not exist on this server. Flag the session so
-        // saveDraft stops re-hammering it; the wizard keeps working off the
-        // in-memory draft exactly as it did before Story 10.5.
+        // The endpoint is not available on this server (the server may be
+        // older than this page, or the page older than the server — a 404
+        // alone cannot tell the two apart, so the message stays party-neutral).
+        // Flag the session so saveDraft stops re-hammering it; the wizard
+        // keeps working off the in-memory draft exactly as it did before
+        // Story 10.5.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
       }
@@ -418,7 +421,7 @@ const actions = {
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
         // Only reachable against a server WITHOUT the endpoint — flag it so
-        // the session stops re-hammering a route that does not exist.
+        // the session stops re-hammering a route it cannot reach.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
       }

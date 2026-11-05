@@ -46,6 +46,19 @@
     <main class="okf-wizard__center">
       <OkfNarrative :kind="'step' + activeStep" />
 
+      <!-- #1056: the NOT_READY fallback used to be silent — when the draft
+           endpoint is not available on this server, saves stay in-memory and
+           a refresh loses the curation state. Say so, party-neutrally: a 404
+           alone cannot tell an older server from a stale page. -->
+      <p v-if="draftsUnavailable" class="okf-wizard__draft-notice" role="status">
+        {{
+          translate(
+            'okf.studio.draft.notReady',
+            'Drafts cannot be stored on the server in this session — they are kept in this browser only. The page and the server may be different versions; reload the page.'
+          )
+        }}
+      </p>
+
       <section class="okf-wizard__step" :aria-label="stepLabel(activeStep)">
         <component
           :is="stepComponents[activeStep]"
@@ -187,6 +200,12 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['isExpert', 'repoById']),
+    // #1056: the session latch that says "the draft endpoint is not
+    // available here" — the wizard surfaces it so a curator is never left
+    // believing a local-only draft is persisted server-side.
+    draftsUnavailable() {
+      return this.$store.state.okf.draftsUnavailable === true;
+    },
     // Round 22: translated step names — this was data built from the
     // hardcoded English STEP_LABELS, so the stepper rendered English in
     // every locale (the live screenshot).
@@ -472,6 +491,16 @@ export default {
   min-height: 320px;
   max-height: 100%;
   overflow: auto;
+}
+.okf-wizard__draft-notice {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  flex: 0 0 auto;
 }
 .okf-wizard__footer {
   display: flex;

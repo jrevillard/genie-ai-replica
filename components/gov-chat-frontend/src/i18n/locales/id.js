@@ -2527,7 +2527,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
+        notReady:
+          'Draf tidak dapat disimpan di server dalam sesi ini — hanya disimpan di browser ini. Halaman dan server mungkin memiliki versi yang berbeda; muat ulang halaman.'
       },
       mode: {
         basic: 'Dasar',
@@ -2758,7 +2759,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: kirim untuk persetujuan di dasbor Studio → pemberi persetujuan menerima → publikasikan dari dasbor atau editor. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: Kirim untuk ditinjau → Setujui → Terbitkan → Serap. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },

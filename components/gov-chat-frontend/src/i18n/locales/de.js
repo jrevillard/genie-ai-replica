@@ -2550,7 +2550,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Entwürfe können serverseitig noch nicht gespeichert werden; lokal gespeichert.'
+        notReady:
+          'Entwürfe können in dieser Sitzung nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser. Seite und Server können unterschiedliche Versionen haben; laden Sie die Seite neu.'
       },
       mode: {
         basic: 'Standard',
@@ -2787,7 +2788,7 @@ export default {
         frozen:
           'Dieses Repository ist im Einsatz — hier eine schreibgeschützte Zusammenfassung. Öffnen Sie den Editor, um Versionen zu verwalten oder zurückzuziehen.',
         ritual:
-          'Weiter: auf dem Studio-Dashboard zur Freigabe einreichen → eine prüfende Person nimmt an → über das Dashboard oder den Editor veröffentlichen. Der Assistent endet hier bewusst.',
+          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — er beschriftet sich bei jedem Schritt neu: Zur Prüfung einreichen → Genehmigen → Veröffentlichen → Injizieren. Der Assistent endet hier bewusst.',
         openDashboard: 'Open the Dashboard'
       }
     },

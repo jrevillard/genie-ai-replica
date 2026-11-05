@@ -2521,7 +2521,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
+        notReady:
+          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zimehifadhiwa kwenye kivinjari hiki tu. Ukurasa na seva vinaweza kuwa na toleo tofauti; pakia upya ukurasa.'
       },
       mode: {
         basic: 'Msingi',
@@ -2753,7 +2754,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: wasilisha kwa idhini kwenye dashibodi ya Studio → muidhinishaji anakubali → chapisha kutoka kwenye dashibodi au mhariri. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: wasilisha kwa uhakiki → idhinisha → chapisha → injesti. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },

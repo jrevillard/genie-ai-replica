@@ -2548,7 +2548,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Les brouillons ne peuvent pas encore être enregistrés côté serveur ; enregistrés localement.'
+        notReady:
+          'Les brouillons ne peuvent pas être enregistrés sur le serveur dans cette session — ils sont conservés uniquement dans ce navigateur. La page et le serveur peuvent être de versions différentes ; rechargez la page.'
       },
       mode: {
         basic: 'Base',
@@ -2783,7 +2784,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : soumettre pour approbation sur le tableau de bord Studio → un approbateur accepte → publier depuis le tableau de bord ou l'éditeur. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : Soumettre pour validation → Approuver → Publier → Ingérer. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },

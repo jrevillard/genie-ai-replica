@@ -113,3 +113,12 @@ it('a non-frozen repo without approved frontmatter stays gated (Story 1.6)', asy
   expect(w.emitted('gate').pop()[0]).toBe(false);
   expect(w.text()).toContain('Frontmatter tags not approved');
 });
+
+it('#1068: the hand-off names the four-click lifecycle (one dashboard button)', () => {
+  // The lifecycle is ONE contextual button relabelling itself four times;
+  // the step must say so or the operator hunts for four buttons that do not
+  // exist. The mounted text carries the translate() fallback (no i18n tree
+  // in this suite), so this asserts the shipped default copy verbatim.
+  const w = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
+  expect(w.text()).toContain('Submit for review → Approve → Publish → Ingest');
+});

@@ -1210,6 +1210,46 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     expect(res.body.warnings).toHaveLength(1);
   });
 
+  test('the apply audit row names the concept scope and the fields (#1066)', async () => {
+    // result.changes is per-CONCEPT; the old description printed that count as
+    // "N change(s) across the repository" and an operator read 17 concepts as
+    // 17 tag edits and re-ran the LLM tag suggestion as a precaution.
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [
+        {
+          concept_id: 'conceptA',
+          changes: [
+            { field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' },
+            { field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }
+          ]
+        },
+        {
+          concept_id: 'conceptB',
+          changes: [{ field: 'title', before: null, after: 'Other', reason: 'MISSING_TITLE' }]
+        }
+      ],
+      warnings: [],
+      applied: 2,
+      failed: 1,
+      failures: [{ concept_id: 'conceptC', error: 'concept row not found' }],
+      total_concepts: 3
+    });
+    await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description:
+          'Applied frontmatter autocorrect — 2 concept(s), 3 frontmatter field change(s) (title, type)' +
+          ', 1 concept(s) FAILED and reported to the client'
+      })
+    );
+  });
+
   test('200 with no body — defaults to dry_run=true', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
@@ -1493,8 +1533,10 @@ describe('POST / born-right ACL slug — server authority (coordinator ruling, 2
 
 // ---------------------------------------------------------------------------
 // Story 10.5 — the wizard's resumable curation draft. All three verbs live
-// under /:repo_id/draft; the retired /:repo_id/studio_drafts shape must never
-// exist (the endpoint was never deployed, so an alias would be dead code).
+// under /:repo_id/draft. The retired client shapes must never exist: the
+// pre-3f1c733ba bundle PUT/DELETE'd the TOP-LEVEL /studio_drafts/:repo_id
+// (repo id LAST) — a shape no okf-server version ever served — and the
+// nested /:repo_id/studio_drafts shape was called by no client at all.
 // ---------------------------------------------------------------------------
 describe('studio draft routes (Story 10.5)', () => {
   const draftService = require('../services/studio-draft-service');
@@ -1655,7 +1697,21 @@ describe('studio draft routes (Story 10.5)', () => {
     });
   });
 
-  test('the retired /:repo_id/studio_drafts path is NOT registered', async () => {
+  test('the retired top-level /studio_drafts/:repo_id path is NOT registered', async () => {
+    // The REAL retired client shape (repo id LAST — the pre-3f1c733ba bundle
+    // PUT/DELETE'd exactly this path against a server that never served it).
+    authScoped(['okf:t1:r1:admin']);
+    await request(createApp()).get('/api/okf/studio_drafts/r1').set('Authorization', TOKEN);
+    await request(createApp()).put('/api/okf/studio_drafts/r1').set('Authorization', TOKEN).send(body);
+    await request(createApp()).delete('/api/okf/studio_drafts/r1').set('Authorization', TOKEN);
+    expect(draftService.getDraft).not.toHaveBeenCalled();
+    expect(draftService.saveDraft).not.toHaveBeenCalled();
+    expect(draftService.clearDraft).not.toHaveBeenCalled();
+  });
+
+  test('the nested /:repo_id/studio_drafts shape is NOT registered either', async () => {
+    // Called by no client ever (the historical guard's URL, kept for the
+    // record — a resurrection under /repos must stay impossible too).
     authScoped(['okf:t1:r1:admin']);
     await request(createApp()).get('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN);
     await request(createApp()).put('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN).send(body);

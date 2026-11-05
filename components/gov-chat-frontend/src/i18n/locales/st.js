@@ -2537,7 +2537,8 @@ export default {
         }
       },
       draft: {
-        notReady: "Li-draft ha li e-s'o khone ho bolokoa lehlakoreng la seva; li bolokiloe mona sebakeng."
+        notReady:
+          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li bolokiloe mona sebakeng feela. Leqephe le seva li ka be le mefuta e fapaneng; tsosolosa leqephe.'
       },
       mode: {
         basic: 'Pele',
@@ -2769,7 +2770,7 @@ export default {
         frozen:
           'Repo ena e sebeletsa — kakaretso ea ho bala feela mona. Bula Editor ho laola mefuta kapa ho etsa retract.',
         ritual:
-          'E latelang: submit bakeng sa tumello ho dashboard ea Studio → mohlahlobi a amohela → publish ho tloha dashboard kapa editor. Wizard e ema mona ka boithaopo.',
+          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — e fetola lebitso ea sona sehlateng se seng le se seng: submit bakeng sa tlhahlobo → amohela → publish → kenya. Wizard e ema mona ka boithaopo.',
         openDashboard: 'Open the Dashboard'
       }
     },

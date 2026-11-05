@@ -7,17 +7,23 @@
  * object; the nesting is a storage detail the client never sees.
  *
  * All three operations live under the repo resource at
- * `/okf/repos/:id/draft` (GET / PUT / DELETE). The retired
- * `/okf/studio_drafts/:id` path was never deployed, so no compat alias is
- * registered for it here either.
+ * `/okf/repos/:id/draft` (GET / PUT / DELETE). The retired client path was
+ * the TOP-LEVEL `/okf/studio_drafts/:id` (repo id LAST — the pre-3f1c733ba
+ * bundle PUT/DELETE'd there; its GET already used `/:repo_id/draft`). No
+ * okf-server version ever served it, so no compat alias exists.
  *
  * Error mapping (httpService rejects a PLAIN OBJECT `{ status, data, message }`,
  * never an Error — hence `err.data?.error` for the backend code):
  *   404 REPO_NOT_FOUND  the repo is gone / soft-deleted / foreign → getDraft
  *                       resolves to null (the dashboard drops the card);
  *                       NOT a NOT_READY signal,
- *   404 anything else   the endpoint genuinely does not exist (an older
- *                       server) → NOT_READY,
+ *   404 anything else   the endpoint is not reachable from this session.
+ *                       THIS PAGE always calls the current path, so for a
+ *                       bundle built after #1056 a 404 here means the SERVER
+ *                       does not serve it; only a bundle built BEFORE the
+ *                       contract change can be the stale party — and it runs
+ *                       the old mapping above, which this code cannot fix.
+ *                       Either way → NOT_READY,
  *   200 draft: null     the repo exists and has no draft yet (normal first
  *                       open) — never a 404.
  */
@@ -43,7 +49,7 @@ const studioService = {
    *
    * @returns {Promise<Object|null>} the FLAT wire draft, or null when the
    *   repo has no draft yet / no longer exists.
-   * @throws  NOT_READY (code) when the endpoint is missing on the server.
+   * @throws  NOT_READY (code) when the endpoint is not available on this server.
    */
   async getDraft(repoId) {
     try {

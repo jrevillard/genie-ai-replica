@@ -20,9 +20,13 @@ router.get('/', ctrl.listRepos);
 router.get('/:repo_id', ctrl.getRepo);
 
 // Story 10.5 — the wizard's resumable curation draft. ALL THREE verbs live
-// under `/:repo_id/draft`; the retired `/:repo_id/studio_drafts` path shape is
-// never registered (the endpoint was never deployed, so no client depends on
-// it — an alias would be dead code). Express `/:repo_id` matches exactly one
+// under `/:repo_id/draft`. The retired client path was the TOP-LEVEL
+// `/okf/studio_drafts/:repo_id` (repo id LAST — the pre-3f1c733ba
+// studioService PUT/DELETE'd there, while its GET already used
+// `/:repo_id/draft`). No okf-server version ever served that path, so no
+// client ever had a working server-side draft to preserve and no compat
+// alias is registered; the negative guard in repos-routes.test.js pins both
+// retired shapes as absent. Express `/:repo_id` matches exactly one
 // segment, so it can never swallow this two-segment path; the only other
 // parametrised two-segment routes (`/routing-testsuite/:suite_key`,
 // `/concepts/:concept_id`) have literal prefixes that cannot collide.

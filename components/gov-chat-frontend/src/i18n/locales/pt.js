@@ -2538,7 +2538,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Os rascunhos ainda não podem ser salvos no servidor; salvos localmente.'
+        notReady:
+          'Os rascunhos não podem ser salvos no servidor nesta sessão — ficam apenas neste navegador. A página e o servidor podem ter versões diferentes; recarregue a página.'
       },
       mode: {
         basic: 'Básico',
@@ -2771,7 +2772,7 @@ export default {
         frozen:
           'Este repositório está em serving — um resumo somente leitura aqui. Abra o Editor para gerenciar versões ou fazer retract.',
         ritual:
-          'A seguir: submit para aprovação no painel do Studio → um aprovador aceita → publish no painel ou no editor. O assistente para aqui por decisão de projeto.',
+          'A seguir: no painel do Studio este cartão tem UM único botão para todo o ciclo de vida — ele muda de rótulo a cada passo: submit para revisão → aprovar → publish → ingerir. O assistente para aqui por decisão de projeto.',
         openDashboard: 'Open the Dashboard'
       }
     },

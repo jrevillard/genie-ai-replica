@@ -2487,7 +2487,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
+        notReady:
+          'Draft ko rej kōjparok ilo server ilo session in — rem̦ōj pād ijin browser in. Page im server rej bar ālik; baak page in.'
       },
       mode: {
         basic: 'Sabu',
@@ -2717,7 +2718,7 @@ export default {
         frozen:
           'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Noo: Studio dashboard kono approval submit → approver dingo accept → dashboard wala editor kono publish. Wizardoo jang a ban o wajibya la.',
+          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — enaj relabel ilo every step: Submit for review → Approve → Publish → Ingest. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },

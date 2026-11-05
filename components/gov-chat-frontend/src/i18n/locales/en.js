@@ -3346,7 +3346,8 @@ export default {
         }
       },
       draft: {
-        notReady: 'Drafts cannot be saved server-side yet; saved locally.'
+        notReady:
+          'Drafts cannot be stored on the server in this session — they are kept in this browser only. The page and the server may be different versions; reload the page.'
       },
       mode: {
         basic: 'Basic',
@@ -3575,7 +3576,7 @@ export default {
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: Submit for review → Approve → Publish → Ingest. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },

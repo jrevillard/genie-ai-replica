@@ -52,7 +52,10 @@ jest.mock('@/config/oidcConfig', () => ({
   storeAuthStateInCookie: false
 }));
 
-const { default: keycloakAuthService, RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
+const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
+// A FRESH service module per test — the isolation hook below re-requires it.
+// `let`, not `const`: the hook reassigns it before every test.
+let keycloakAuthService = require('@/services/keycloakAuthService').default;
 
 function createMockUser(overrides = {}) {
   return {
@@ -76,26 +79,32 @@ function createMockUser(overrides = {}) {
   };
 }
 
-// Isolation for every test in this file: the MOCK IMPLEMENTATIONS and the
-// renew protocol's localStorage state. (The service MODULE's own state —
-// renewInFlight, currentUser, accessTokenCallbacks — is NOT reset here; see
-// #1530.) jest.clearAllMocks() clears call
-// history but NOT implementations, so a test omitting its own mock setup
-// silently inherits the previous test's mockResolvedValue/mockRejectedValue —
-// and the UserManager mocks swallow those inherited rejections (logout
-// catches them), so the test stays GREEN while exercising the error path.
-// The cross-tab renew protocol likewise leaves its state in localStorage: the
-// holder PUBLISHES the minted user under RENEW_USER_KEY and the NEXT renew
-// reads that publication FIRST (gate `entry.at >= startedAt`, millisecond
-// resolution), so a surviving publication makes the next test's renew adopt
-// the previous test's user instead of running its own grant (#1518 flake,
-// reproducible locally too).
+// Isolation for every test in this file:
+//  - a FRESH service module, so the module-scoped renewInFlight,
+//    currentUser and accessTokenCallbacks start empty (a test that leaves a
+//    renew pending would otherwise pin renewInFlight and hand the next test
+//    its stale promise);
+//  - the MOCK IMPLEMENTATIONS reset — jest.clearAllMocks() clears call
+//    history but NOT implementations, so a test omitting its own mock setup
+//    silently inherits the previous test's mockResolvedValue/mockRejectedValue
+//    — and the UserManager mocks swallow those inherited rejections (logout
+//    catches them), so the test stays GREEN while exercising the error path;
+//  - the localStorage state wiped, because the cross-tab renew protocol
+//    leaves its state there: the holder PUBLISHES the minted user under
+//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST (gate
+//    `entry.at >= startedAt`, millisecond resolution), so a surviving
+//    publication makes the next test's renew adopt the previous test's user
+//    instead of running its own grant (#1518 flake, reproducible locally
+//    too). The whole store is cleared, not just the two renew keys, so a
+//    coordination key added later cannot leak either.
 // jest.resetAllMocks() covers every mock, present and future — but it also
 // strips the factory implementations the unsubscribe assertions depend on, so
 // those are restored here. jest.restoreAllMocks() undoes a spy a failing test
 // leaked: without it the leaked spy's call-through is neutered and
 // localStorage stops persisting, silently disabling this very wipe.
 beforeEach(() => {
+  jest.resetModules();
+  keycloakAuthService = require('@/services/keycloakAuthService').default;
   jest.resetAllMocks();
   jest.restoreAllMocks();
   MockUserManager.mockImplementation(userManagerMock);
@@ -105,10 +114,9 @@ beforeEach(() => {
   // return undefined and break `await manager.getUser().catch(...)`. The
   // default is "no stored session" — a rejecting default would be
   // indistinguishable, because initialize() catches the rejection and
-  // returns null either way.
+  // returns null either way. A test that needs a session sets one.
   mockGetUser.mockResolvedValue(null);
-  window.localStorage.removeItem(RENEW_LEASE_KEY);
-  window.localStorage.removeItem(RENEW_USER_KEY);
+  window.localStorage.clear();
 });
 
 describe('keycloakAuthService', () => {

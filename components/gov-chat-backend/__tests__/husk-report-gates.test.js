@@ -29,8 +29,17 @@ const gateEnv = { ARANGO_PASSWORD: 'pw', ARANGO_DB: 'genie-ai' };
 
 // A database double that answers every query the script makes and records
 // which AQL statements ran. `husks`/`allDocs` drive the divergence cross-check;
-// `writesExecuted` is what the removal's stats report carries back.
-function fakeDb({ husks = [], allDocs = [], writesExecuted = 0, removalError = null } = {}) {
+// `writesExecuted` is what the removal's stats report carries back;
+// `lookalikes` is what the legacy-lookalike query returns (the count is the
+// number of ALL lookalikes, the sample the server-side-truncated subset).
+function fakeDb({
+  husks = [],
+  allDocs = [],
+  writesExecuted = 0,
+  removalError = null,
+  lookalikeCount = 0,
+  lookalikes = []
+} = {}) {
   const executed = [];
   const query = jest.fn(async (aql, bind) => {
     executed.push({ aql, bind });
@@ -48,7 +57,7 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0, removalError = n
         ? {} // a removal result with no stats — the honest-answer-unknown case
         : { extra: { stats: { writesExecuted } } };
     }
-    return { next: async () => ({ count: 0, sample: [] }) };
+    return { next: async () => ({ count: lookalikeCount, sample: lookalikes }) };
   });
   return {
     query,
@@ -56,7 +65,8 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0, removalError = n
     name: 'test-db',
     // Husks ⊆ allDocs by construction — the count() model must not double-count them.
     collection: () => ({ count: async () => ({ count: allDocs.length }) }),
-    removalCalls: () => executed.filter((c) => c.aql === HUSK_REMOVAL_AQL)
+    removalCalls: () => executed.filter((c) => c.aql === HUSK_REMOVAL_AQL),
+    lookalikeCalls: () => executed.filter((c) => c.bind && 'sampleLimit' in c.bind)
   };
 }
 
@@ -107,7 +117,8 @@ describe('parseAndGateArgs', () => {
       collection: 'users',
       arangoUrl: 'http://localhost:8529',
       username: 'root',
-      password: 'pw'
+      password: 'pw',
+      sampleLimit: 50
     });
   });
 
@@ -131,6 +142,20 @@ describe('parseAndGateArgs', () => {
     expect(parseAndGateArgs([], { ARANGO_PASSWORD: 'pw' })).toBeNull();
     expect(process.exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('ARANGO_DB'));
+  });
+
+  it('accepts a positive integer HUSK_SAMPLE_LIMIT and rejects anything else', () => {
+    // The diagnostic override for the listing cap (issue #1507): the operator
+    // raises it for one run to see the entries the default cap withholds.
+    expect(parseAndGateArgs([], { ...gateEnv, HUSK_SAMPLE_LIMIT: '500' }).sampleLimit).toBe(500);
+    // A malformed value is a GATE failure, never a silent fallback to 50: an
+    // operator who asked for 500 entries and silently gets 50 is back to the
+    // very confusion the override exists to remove.
+    for (const bad of ['abc', '0', '-3', '1.5', ' ']) {
+      expect(parseAndGateArgs([], { ...gateEnv, HUSK_SAMPLE_LIMIT: bad })).toBeNull();
+      expect(process.exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HUSK_SAMPLE_LIMIT'));
+    }
   });
 });
 
@@ -321,5 +346,74 @@ describe('main safety wiring', () => {
     await runMain(db);
     expect(process.exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('does not exist'));
+  });
+
+  it('lists the ELIDED divergence entries when the operator raises HUSK_SAMPLE_LIMIT (issue #1507)', async () => {
+    // The abort remedy is "re-run the report" — which, with the default cap,
+    // reproduces the IDENTICAL 50 keys and leaves the other 10 unreachable.
+    // Raising the cap for one diagnostic run must actually surface them.
+    const { extra, missed } = divergentDocs(60);
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db, ['--delete', '--yes'], { ...gateEnv, HUSK_SAMPLE_LIMIT: '200' });
+    expect(process.exitCode).toBe(1);
+    const stderr = stderrText(errorSpy);
+    expect(stderr.split('\n').filter((l) => l.includes('over-matched _key='))).toHaveLength(60);
+    expect(stderr.split('\n').filter((l) => l.includes('under-matched _key='))).toHaveLength(60);
+    // Nothing is elided any more, so no elision line remains.
+    expect(stderr).not.toContain('(not listed)');
+  });
+
+  it('prints the divergence keys as valid JSON strings, so a copy-paste from stderr works (issue #1507)', async () => {
+    // The listed keys are the operator's raw material for the follow-up
+    // query; unquoted, they are not paste-able into JSON. The quoted form
+    // must be a valid JSON string literal.
+    const { extra } = divergentDocs(1);
+    const db = fakeDb({ husks: extra, allDocs: extra });
+    await runMain(db, ['--delete', '--yes']);
+    const stderr = stderrText(errorSpy);
+    expect(stderr).toContain('over-matched _key="extra-0"');
+    const quoted = stderr.match(/over-matched _key=("[^"]*")/)[1];
+    expect(JSON.parse(quoted)).toBe('extra-0');
+  });
+
+  it('names the knob and the needed count in the elision line, so the remedy is discoverable (issue #1507)', async () => {
+    const { extra } = divergentDocs(60);
+    const db = fakeDb({ husks: extra, allDocs: extra });
+    await runMain(db, ['--delete', '--yes']);
+    const stderr = stderrText(errorSpy);
+    // The operator must be told HOW to see the withheld entries, and with
+    // WHICH value — a bare "not listed" leaves the remedy undiscoverable.
+    expect(stderr).toContain('(not listed)');
+    expect(stderr).toContain('HUSK_SAMPLE_LIMIT=60');
+  });
+
+  it('applies the same cap and elision wording to the husk and lookalike listings (issue #1508)', async () => {
+    // The three per-document listings share ONE cap and ONE elision wording:
+    // the husk listing (stdout), the lookalike listing (stdout, sample
+    // truncated SERVER-side) and the divergence listing (stderr). A cap or
+    // wording that drifts between them is the bug this pin guards.
+    const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
+    const lookalikes = Array.from({ length: 50 }, (_, i) => ({
+      _key: `l-${i}`,
+      createdAt: '2025-01-01T00:00:00.000Z'
+    }));
+    const db = fakeDb({
+      husks,
+      allDocs: husks,
+      lookalikeCount: 60,
+      lookalikes
+    });
+    await runMain(db);
+    const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    // The husk listing caps at 50 and elides the rest...
+    expect(stdout.split('\n').filter((l) => l.includes('husk _key='))).toHaveLength(50);
+    expect(stdout).toContain('... and 10 more (not listed)');
+    // ...and the lookalike listing does the same, even though its sample
+    // arrives already truncated (the count is the number of ALL lookalikes).
+    expect(stdout.split('\n').filter((l) => l.includes('lookalike _key='))).toHaveLength(50);
+    expect(stdout).toContain('... and 10 more (not listed)');
+    // The server-side slice honours the same cap, so raising it really does
+    // surface more lookalikes instead of silently eliding them.
+    expect(db.lookalikeCalls()[0].bind.sampleLimit).toBe(50);
   });
 });

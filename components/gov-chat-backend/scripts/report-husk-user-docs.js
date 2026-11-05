@@ -37,12 +37,20 @@
  *                     this script is the only place that variable is read)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
+ *   HUSK_SAMPLE_LIMIT (default 50 — how many entries each per-document
+ *                     listing prints before the rest are elided. Raise it for
+ *                     a one-off diagnostic run to dump the withheld keys;
+ *                     every listing honours it, including the divergence
+ *                     listing of the abort path)
  */
 
 const { Database } = require('arangojs');
 const path = require('path');
 
-const SAMPLE_LIMIT = 50;
+// The default cap on the per-document listings. Every listing in this script
+// goes through printSampledList below, so this constant and the
+// HUSK_SAMPLE_LIMIT override are the only two places the cap is stated.
+const DEFAULT_SAMPLE_LIMIT = 50;
 
 // --- The husk signature, defined once --------------------------------------
 // Deliberately NOT imported from constants/jit-fields.js: that module describes
@@ -163,6 +171,49 @@ LET lookalikeDocs = (
 RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
 `;
 
+/**
+ * Renders a document key as a JSON string literal, so a key copied out of a
+ * listing can be pasted straight into a query or a JSON payload without
+ * re-quoting it (issue #1507).
+ * @param {Object} doc
+ * @returns {string}
+ */
+function quotedKey(doc) {
+  return JSON.stringify(doc._key);
+}
+
+/**
+ * Prints a per-document listing capped at `limit` entries, followed by ONE
+ * elision line when entries were withheld. Every per-document listing in this
+ * script goes through this helper, so the cap, the `>` boundary and the
+ * elision wording live in ONE place and the three sites cannot drift apart
+ * (issue #1508).
+ *
+ * `total` may exceed `docs.length`: the lookalike sample is truncated
+ * SERVER-side, so the count of all lookalikes and the returned sample are
+ * different numbers.
+ * @param {Object} params
+ * @param {Function} params.write - the sink (console.log / console.error)
+ * @param {string} params.label - the noun in the elision line ('' for none)
+ * @param {Array<Object>} params.docs - the entries to list
+ * @param {number} params.total - how many entries exist in total
+ * @param {number} params.limit - the cap
+ * @param {Function} params.format - renders one entry line
+ */
+function printSampledList({ write, label, docs, total, limit, format }) {
+  const listed = docs.slice(0, limit);
+  for (const doc of listed) {
+    write(format(doc));
+  }
+  const withheld = total - listed.length;
+  if (withheld > 0) {
+    write(
+      `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ` +
+        `re-run with HUSK_SAMPLE_LIMIT=${total} to list them all`
+    );
+  }
+}
+
 // Renders a rejection value as a short cause string for an operator-facing
 // error line. Errors render as their message; anything else is stringified
 // (guarded, so a circular structure cannot crash the error path itself).
@@ -225,14 +276,41 @@ function parseAndGateArgs(argv, env) {
     );
   }
 
+  // The listing cap. An operator raises it for a one-off diagnostic run to
+  // see the entries the default cap withholds (issue #1507). A malformed
+  // override is a GATE failure, not a silent fallback: an operator who asked
+  // for 500 entries and silently gets 50 — with no notice — is back to the
+  // very confusion the override exists to remove.
+  const sampleLimit = parseSampleLimit(env.HUSK_SAMPLE_LIMIT);
+  if (sampleLimit === null) {
+    return fail(`HUSK_SAMPLE_LIMIT must be a positive integer (got ${JSON.stringify(env.HUSK_SAMPLE_LIMIT)}).`);
+  }
+
   return {
     mode: doDelete ? 'delete' : 'report',
     database: env.ARANGO_DB,
     collection: env.ARANGO_COLLECTION || 'users',
     arangoUrl: env.ARANGO_URL || 'http://localhost:8529',
     username: env.ARANGO_USER || 'root',
-    password: env.ARANGO_PASSWORD
+    password: env.ARANGO_PASSWORD,
+    sampleLimit
   };
+}
+
+/**
+ * Resolves the listing cap: the default, or the operator's override for a
+ * one-off diagnostic run. Returns null for a malformed override — the caller
+ * turns that into a gate failure, because a silent fallback would hand back
+ * the same capped listing the override exists to lift (issue #1507).
+ * @param {string|undefined} raw
+ * @returns {number|null}
+ */
+function parseSampleLimit(raw) {
+  if (raw === undefined || raw === '') {
+    return DEFAULT_SAMPLE_LIMIT;
+  }
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 /**
@@ -247,7 +325,10 @@ async function runReport(db, gated, total, husks, allDocs) {
   if (gated.mode === 'report') {
     const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
       '@collection': gated.collection,
-      sampleLimit: SAMPLE_LIMIT
+      // The server-side SLICE honours the same cap the client-side listing
+      // applies, so raising HUSK_SAMPLE_LIMIT really does surface more
+      // lookalikes instead of silently eliding them (issue #1507).
+      sampleLimit: gated.sampleLimit
     });
     const lookalikeResult = (await lookalikeCursor.next()) || {};
     lookalikeCount = lookalikeResult.count || 0;
@@ -273,15 +354,15 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
-  for (const doc of husks.slice(0, SAMPLE_LIMIT)) {
-    console.log(
-      `  husk _key=${doc._key} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
-        `attributes=${JSON.stringify(Object.keys(doc).sort())}`
-    );
-  }
-  if (husks.length > SAMPLE_LIMIT) {
-    console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
-  }
+  printSampledList({
+    write: console.log,
+    docs: husks,
+    total: husks.length,
+    limit: gated.sampleLimit,
+    format: (doc) =>
+      `  husk _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
+      `attributes=${JSON.stringify(Object.keys(doc).sort())}`
+  });
   if (unexpectedFields.length > 0) {
     console.log('Fields present outside the husk signature (not husks, never deleted):');
     for (const [key, count] of unexpectedFields) {
@@ -292,12 +373,14 @@ async function runReport(db, gated, total, husks, allDocs) {
     console.log('Legacy lookalikes: not measured in --delete mode.');
   } else {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
-    for (const doc of lookalikes) {
-      console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
-    }
-    if (lookalikeCount > lookalikes.length) {
-      console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
-    }
+    printSampledList({
+      write: console.log,
+      docs: lookalikes,
+      // The sample is truncated SERVER-side; the count is the full number.
+      total: lookalikeCount,
+      limit: gated.sampleLimit,
+      format: (doc) => `  lookalike _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'}`
+    });
     console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
   }
 }
@@ -444,23 +527,26 @@ async function main({
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
-    // Bounded like the other per-document listings in this script
-    // (SAMPLE_LIMIT): the abort fires on ANY divergence, and when it fires
-    // the divergence can be as large as the whole collection — an uncapped
-    // per-document listing would flood the log pipeline. The full counts
-    // stay in the ABORT header; the elision line says how many were not
-    // listed. (The fields census in runReport stays unbounded by design:
-    // one line per DISTINCT unexpected field name, not per document.)
+    // Bounded like the other per-document listings in this script: the abort
+    // fires on ANY divergence, and when it fires the divergence can be as
+    // large as the whole collection — an uncapped per-document listing would
+    // flood the log pipeline. The full counts stay in the ABORT header; the
+    // elision line says how many were not listed AND how to see them (the
+    // operator raises HUSK_SAMPLE_LIMIT for one diagnostic run — issue
+    // #1507). (The fields census in runReport stays unbounded by design: one
+    // line per DISTINCT unexpected field name, not per document.)
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]
     ]) {
-      for (const doc of docs.slice(0, SAMPLE_LIMIT)) {
-        console.error(`  ${label} _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-      }
-      if (docs.length > SAMPLE_LIMIT) {
-        console.error(`  ... and ${docs.length - SAMPLE_LIMIT} more ${label} (not listed)`);
-      }
+      printSampledList({
+        write: console.error,
+        label,
+        docs,
+        total: docs.length,
+        limit: gated.sampleLimit,
+        format: (doc) => `  ${label} _key=${quotedKey(doc)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
+      });
     }
     process.exitCode = 1;
     return;

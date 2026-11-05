@@ -346,6 +346,47 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
   });
 
+  it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log (#1228)', async () => {
+    // The gate is closed (no VLLM_ENDPOINT): the topics leg degrades. The
+    // import still lands, but the operator must SEE it — the conversion
+    // report carries the fact and the file's ingestion log carries the
+    // reason. Before #1228 the CSV leg degraded SILENTLY.
+    delete process.env.VLLM_ENDPOINT;
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        return Promise.resolve({ data: Readable.from([Buffer.from('Region,Amount\nNorth,100\nSouth,200\n')]) });
+      }
+      const fid = s.split('/api/files/')[1];
+      return Promise.resolve({
+        data: { file: { file_id: fid, file_name: 'market.csv', size: 100, dataprep: { status: 'Pending' } } }
+      });
+    });
+
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
+
+    const perFile = repoDoc.conversion.per_file;
+    expect(perFile).toHaveLength(1);
+    expect(perFile[0].status).toBe('imported'); // the import still lands
+    expect(perFile[0].topics_source).toBe('fallback-no-endpoint');
+    expect(perFile[0].warning).toMatch(/no LLM engine is configured/);
+
+    const mirror = authedAxios.post.mock.calls.find((c) => String(c[0]).endsWith('/api/files/f1/ingestion-log'));
+    expect(mirror).toBeTruthy();
+    expect(mirror[1].level).toBe('WARN');
+    expect(mirror[1].message).toMatch(/no LLM engine is configured/);
+  });
+
   it('B1/B5: terminal summary.created counts CONTENT topics only — the index concept is excluded', async () => {
     // The ingest mock returns the REAL summary shape here (the file-level
     // mock above returns {ok,count}, which silently kept the accumulator at

@@ -13,8 +13,15 @@
  *
  * CONTRACT — the import must NEVER block on the LLM (same bar as
  * llm-curation-service): an unreachable engine logs, falls back to the
- * filename slug, and the file still imports. The only way this call fails is
- * by degrading.
+ * filename slug, and the file still imports.
+ *
+ * ONE EXCEPTION — the opt-in gate. With no engine configured at all
+ * (VLLM_ENDPOINT unset) the deployment is MISCONFIGURED, not degraded, and
+ * the other legs say so loudly: curation and topic-link raise
+ * `llm-not-configured` for exactly this condition. The CSV leg used to
+ * answer with a silent filename slug, so one misconfiguration produced two
+ * different answers (#1228). The gate now raises the same error; the
+ * converter keeps the import landing and RECORDS the degradation.
  *
  * REMOTE-ONLY (David's absolute rule): every call goes through the shared
  * frontmatter-service primitive, which resolves process.env.VLLM_ENDPOINT —
@@ -55,8 +62,21 @@ If the columns are too generic to identify the subject, return generic-but-hones
 topics (e.g. "tabular-data", "unclassified-dataset") rather than inventing a
 specific subject. Never guess a domain the dictionary does not support.`;
 
+/** The filename-slug fallback — the shape every degradation path returns.
+ * One owner, so the converter can rebuild it when the gate raises without
+ * the two copies drifting apart. */
+function fallbackTopics(fileName) {
+  const fallbackSlug = slugify(String(fileName || '').replace(/\.[^.]+$/, '')) || 'tabular-dataset';
+  return {
+    topics: [fallbackSlug],
+    purpose: `Tabular dataset imported from ${fileName || 'a CSV file'}.`,
+    source: 'fallback-filename'
+  };
+}
+
 /** One LLM call summarising the dictionary into topics + purpose.
- * Never throws — every failure path degrades and is logged.
+ * Degrades and logs on every engine failure — the ONE exception is the
+ * opt-in gate, which raises `llm-not-configured` like the other legs.
  *
  * @param {object} args
  * @param {Array<{name,type,sample}>} args.columns the dictionary rows, exactly
@@ -69,12 +89,7 @@ specific subject. Never guess a domain the dictionary does not support.`;
  * @param {string} args.fileName used for the fallback slug
  */
 async function deriveTopics({ columns, fileName, opts = {} } = {}) {
-  const fallbackSlug = slugify(String(fileName || '').replace(/\.[^.]+$/, '')) || 'tabular-dataset';
-  const fallback = {
-    topics: [fallbackSlug],
-    purpose: `Tabular dataset imported from ${fileName || 'a CSV file'}.`,
-    source: 'fallback-filename'
-  };
+  const fallback = fallbackTopics(fileName);
 
   const cols = Array.isArray(columns) ? columns : [];
   if (cols.length === 0) {
@@ -91,8 +106,10 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
   // require for the same reason as the chat client below: the converter
   // stays pure for its unit tests.
   if (!require('../vllm-model-cache').optedInVllmBase()) {
-    logger.warn('CSV topics: VLLM_ENDPOINT not set — engine not configured, using filename slug', { fileName });
-    return { ...fallback, source: 'fallback-no-endpoint' };
+    // Loud, like curation and topic-link: a closed gate is a
+    // misconfiguration, and the legs must answer it the same way (#1228).
+    // The converter keeps the import landing and records the degradation.
+    throw require('../vllm-model-cache').llmNotConfiguredError();
   }
 
   // Lazy require: the converter is pure and unit-tested without the axios/OTel
@@ -204,4 +221,4 @@ function normalizeTopics(raw) {
   return out;
 }
 
-module.exports = { deriveTopics, parseTopics, normalizeTopics, MIN_TOPICS, MAX_TOPICS };
+module.exports = { deriveTopics, parseTopics, normalizeTopics, fallbackTopics, MIN_TOPICS, MAX_TOPICS };

@@ -580,6 +580,19 @@ function optedInVllmBase() {
   return process.env.VLLM_ENDPOINT || null;
 }
 
+/** The error the OKF LLM legs raise when the opt-in is CLOSED (no
+ * endpoint). ONE owner for the identity, so the legs cannot drift apart:
+ * curation, topic-link and the CSV topics leg raise the SAME error for the
+ * same misconfiguration, instead of one throwing and another degrading
+ * silently. The message is the code — the legs have always matched on it. */
+const LLM_NOT_CONFIGURED = 'llm-not-configured';
+
+function llmNotConfiguredError() {
+  const err = new Error(LLM_NOT_CONFIGURED);
+  err.code = LLM_NOT_CONFIGURED;
+  return err;
+}
+
 /** The deployment endpoint's served model, soft: base AND deployment
  * credential resolved in one place (they must never drift apart — an
  * unauthenticated probe 401s on secured endpoints and silently defeats
@@ -695,6 +708,8 @@ module.exports = {
   deploymentVllmBase,
   getServedModelId,
   optedInVllmBase,
+  llmNotConfiguredError,
+  LLM_NOT_CONFIGURED,
   requireServedModelId,
   resolveCallModel,
   resolveDeploymentModel,

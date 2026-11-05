@@ -155,7 +155,7 @@ async function convertCsv(buffer, meta, opts = {}) {
   }
 
   // TOPICS (David 2026-10-12: "tabular markdown data WITH topics"). One call
-  // per file against the REMOTE endpoint; it never throws — see
+  // per file against the REMOTE endpoint; it degrades rather than fails — see
   // csvTopicsService for the fail-soft contract.
   const dictionary = dictionaryForTopics(built.headers, grid);
   const derive = opts.deriveTopics || csvTopics.deriveTopics;
@@ -163,13 +163,27 @@ async function convertCsv(buffer, meta, opts = {}) {
   try {
     topics = await derive({ columns: dictionary, fileName });
   } catch (err) {
-    // Defensive: the service already swallows its own errors, so this only
-    // fires if an injected/test double throws. An import must still land.
-    logger.warn('CSV topics: summariser threw — continuing without topics', {
-      file_id: meta && meta.file_id,
-      error: err.message
-    });
-    topics = { topics: [], purpose: '', source: 'fallback-threw' };
+    if (err && err.code === 'llm-not-configured') {
+      // The deployment opted IN to nothing: there is no engine to call.
+      // That is a misconfiguration, not a degradation — but the import
+      // must still land, so the filename slug stays (a row-group with no
+      // topic is a retrieval orphan). The file is flagged as degraded so
+      // the operator sees it (#1228).
+      logger.error('CSV topics: no LLM engine configured (VLLM_ENDPOINT unset) — imported with filename-slug topics', {
+        file_id: meta && meta.file_id,
+        file_name: fileName,
+        code: err.code
+      });
+      topics = { ...csvTopics.fallbackTopics(fileName), source: 'fallback-no-endpoint' };
+    } else {
+      // Defensive: the service degrades on its own errors, so this only
+      // fires if an injected/test double throws. An import must still land.
+      logger.warn('CSV topics: summariser threw — continuing without topics', {
+        file_id: meta && meta.file_id,
+        error: err.message
+      });
+      topics = { topics: [], purpose: '', source: 'fallback-threw' };
+    }
   }
 
   // Stamp the topics on EVERY concept (dictionary AND each row-group): a

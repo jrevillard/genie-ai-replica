@@ -530,3 +530,22 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     delete process.env.VLLM_MODEL_ID;
   });
 });
+
+describe('listConfigs envelope — the deployment opt-in rides along (#1228)', () => {
+  const originalEndpoint = process.env.VLLM_ENDPOINT;
+
+  afterEach(() => {
+    if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
+    else process.env.VLLM_ENDPOINT = originalEndpoint;
+  });
+
+  test('llm_legs_enabled is false with no endpoint and true with one', async () => {
+    // The panel warns when a named configuration is active while the legs
+    // that follow the deployment opt-in are OFF — the server owns that
+    // state, so it states it (the browser never sees the env).
+    delete process.env.VLLM_ENDPOINT;
+    expect((await svc.listConfigs()).llm_legs_enabled).toBe(false);
+    process.env.VLLM_ENDPOINT = 'https://gpu.example:444/llm';
+    expect((await svc.listConfigs()).llm_legs_enabled).toBe(true);
+  });
+});

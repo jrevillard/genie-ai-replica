@@ -33,6 +33,15 @@
       }}
     </p>
 
+    <p v-if="gateWarning" class="okf-models__warning" data-test-id="okf-models-gate-warning" role="status">
+      {{
+        translate(
+          'okf.models.gateWarning',
+          'The OKF LLM legs that follow the deployment opt-in (topic links, CSV topics, manifest summaries) are OFF: this deployment has no VLLM_ENDPOINT. A named configuration does not enable them — set VLLM_ENDPOINT on the server to turn them on.'
+        )
+      }}
+    </p>
+
     <p v-if="error" class="okf-models__error">{{ error }}</p>
 
     <!-- editor (create / modify) -->
@@ -418,6 +427,9 @@ export default {
       SERVICE_DEFS, // module consts → template-visible via data
       MOCK_GROUPS,
       configs: [],
+      // The deployment opt-in for the OKF LLM legs: null = unknown (an
+      // older server omits it), true = open, false = closed.
+      llmLegsEnabled: null,
       error: '',
       busy: false,
       formOpen: false,
@@ -442,6 +454,15 @@ export default {
     canFetchModels() {
       if (!this.form.base_url) return false;
       return !!this.form.api_key || !!(this.editing && this.editing.has_api_key);
+    },
+    /** The opt-in warning (issue #1228): a named configuration is active
+     * while the deployment has NOT opted in to the OKF LLM legs. The
+     * configuration cannot serve those legs — only VLLM_ENDPOINT can — so
+     * the panel says so instead of letting the operator read the list as
+     * "the legs are configured". */
+    gateWarning() {
+      if (this.llmLegsEnabled !== false) return false;
+      return this.configs.some((c) => c && c.active);
     }
   },
   mounted() {
@@ -454,8 +475,12 @@ export default {
       // Guard the envelope field: a host dialog's test store (or a degraded
       // backend response) can return {ok:true} without configs — an undefined
       // list here kills the whole render tree, not just this tab.
-      if (res && res.ok) this.configs = Array.isArray(res.configs) ? res.configs : [];
-      else if (res && /403|forbidden|scope/i.test(res.message || '')) {
+      if (res && res.ok) {
+        this.configs = Array.isArray(res.configs) ? res.configs : [];
+        // null when the server did not say — an unknown state must not read
+        // as "the gate is closed".
+        this.llmLegsEnabled = typeof res.llm_legs_enabled === 'boolean' ? res.llm_legs_enabled : null;
+      } else if (res && /403|forbidden|scope/i.test(res.message || '')) {
         this.error = this.translate('okf.models.adminOnly', 'Model configurations require the platform admin role.');
       } else if (res) this.error = res.message;
     },
@@ -658,6 +683,15 @@ export default {
 }
 .okf-models__error {
   color: var(--danger);
+  font-size: 12px;
+  margin: 0;
+}
+.okf-models__warning {
+  color: var(--warning-ink);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  padding: 8px 10px;
   font-size: 12px;
   margin: 0;
 }

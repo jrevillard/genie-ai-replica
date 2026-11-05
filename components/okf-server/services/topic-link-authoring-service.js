@@ -227,7 +227,7 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   // stay off until a deployment names the endpoint).
   const rawBase = modelCache.optedInVllmBase();
   // No endpoint at all = the deliberate opt-out (compose ships it empty).
-  if (!rawBase) throw new Error('llm-not-configured');
+  if (!rawBase) throw modelCache.llmNotConfiguredError();
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
   // /v1/models discovery -> loud ModelDiscoveryError (#1181). The probe
   // shares the call budget; the chat call gets what is left of it.

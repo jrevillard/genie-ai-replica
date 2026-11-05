@@ -100,7 +100,7 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
     /* env fallback — see docblock */
   }
   // No endpoint at all = the deliberate opt-out (compose ships it empty).
-  if (!rawBase) throw new Error('llm-not-configured');
+  if (!rawBase) throw modelCache.llmNotConfiguredError();
   // Model-id + credential resolution, !631 policy (services/vllm-model-cache.js)
   // — one home for the credential rule, the deployment-vs-foreign
   // classification and the precedence: a named-config base resolves its OWN

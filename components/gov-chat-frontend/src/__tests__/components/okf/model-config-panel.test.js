@@ -81,6 +81,41 @@ beforeEach(() => {
   });
 });
 
+describe('ModelConfigPanel — the deployment opt-in warning (#1228)', () => {
+  const mountWith = async (envelope) => {
+    dispatch.mockImplementation(async (action) => {
+      if (action === 'okf/modelConfigList') return { ok: true, ...envelope };
+      return { ok: true, result: {} };
+    });
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    return w;
+  };
+
+  test('warns when a configuration is active while the OKF LLM legs are OFF', async () => {
+    const w = await mountWith({ configs: configs(), llm_legs_enabled: false });
+    const warning = w.find('[data-test-id="okf-models-gate-warning"]');
+    expect(warning.exists()).toBe(true);
+    expect(warning.text()).toContain('VLLM_ENDPOINT');
+  });
+
+  test('no warning when the deployment opted in', async () => {
+    const w = await mountWith({ configs: configs(), llm_legs_enabled: true });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
+  });
+
+  test('no warning when NO configuration is active (nothing could be mistaken for an engine)', async () => {
+    const inactive = configs().map((c) => ({ ...c, active: false }));
+    const w = await mountWith({ configs: inactive, llm_legs_enabled: false });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
+  });
+
+  test('no warning when the server did not say (an older backend omits the field)', async () => {
+    const w = await mountWith({ configs: configs() });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
+  });
+});
+
 describe('ModelConfigPanel', () => {
   test('renders the list with masked keys — the api_key hint shows, no key material', async () => {
     const w = mountPanel();

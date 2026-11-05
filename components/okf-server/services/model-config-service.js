@@ -176,7 +176,17 @@ async function listConfigs(opts = {}) {
     // The list is readable by every OKF user (the RAGAS judge picker needs
     // it); `opts.includeKeyHint` is false for a caller without tools-admin,
     // so a fragment of a provider credential never reaches a curator.
-    return { configs: rows.map((d) => mask(d, opts)), env_judge: envJudge, env_pick: ENV_PICK };
+    // The deployment opt-in rides along: a named configuration does NOT
+    // enable the legs that follow the opt-in (topic links, CSV topics,
+    // manifest summary) — those need VLLM_ENDPOINT. The panel warns when a
+    // configuration is active while the gate is closed (#1228).
+    const llmLegsEnabled = !!modelCache.optedInVllmBase();
+    return {
+      configs: rows.map((d) => mask(d, opts)),
+      env_judge: envJudge,
+      env_pick: ENV_PICK,
+      llm_legs_enabled: llmLegsEnabled
+    };
   });
 }
 

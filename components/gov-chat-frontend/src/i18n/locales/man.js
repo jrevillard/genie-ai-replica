@@ -1573,6 +1573,8 @@ export default {
       title: 'Model configurations',
       add: 'New configuration',
       hint: 'Endpoint konfigurasion toh-namalu judging ani generation la baara — OpenAI-compatible surface kili-kili sila (OpenAI, LiteLLM gateway, vLLM, Gemini-compat, Ollama) wala Anthropic direct. Konfigurasion kili dingo waa be run ka active ke; ni kelen ti active, deployment ka default modeloo na baara ke. Keyolu server kono marata ani a ti yitandi abada.',
+      gateWarning:
+        'Ta LLM pairt-churryd OKF aagh daal dy goll re daa-boot yn cheer daa yn laa as y goll dy chionn-laa (ceealinkey topiko, topico CSV, coimpipee manifesht) : cha nel VLLM_ENDPOINT ayns y deployment stiagh. Ta re ny hesh ayns ta yn laa as y loaigh y chur lesh daa. Co soor ey y h-yn deaey daa VLLM_ENDPOINT er y server as y h-yn goll dy baynt ne.',
       name: 'Name',
       provider: 'Provider',
       providerOpenai: 'OpenAI-compatible endpoint (OpenAI, LiteLLM, vLLM…)',

@@ -206,6 +206,23 @@ async function downloadToBuffer(fileId, cap) {
   });
 }
 
+/** Append a line to a source file's ingestion log — the operator-visible
+ * channel for a document import (the admin's file view shows it). The
+ * conversion report carries the same fact, but the report is a record; the
+ * ingestion log is where the operator looks. Non-fatal by design: a failed
+ * mirror never aborts an import. */
+async function mirrorIngestionLog(fileId, level, stage, message) {
+  try {
+    await authedAxios.post(
+      `${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}/ingestion-log`,
+      { level, stage, message },
+      { timeout: 10000 }
+    );
+  } catch (err) {
+    logger.warn(`Ingestion-log mirror failed (non-fatal): ${err.message}`, { file_id: fileId });
+  }
+}
+
 /** Extract text (or structured drafts) from a document buffer by extension. */
 async function convertDocument(buffer, ext, meta) {
   if (ext === '.pdf') {
@@ -521,7 +538,27 @@ async function runDocumentsConversion(job) {
         // reports "imported" with nothing in the repo.
         if (lower === '.xlsx' || lower === '.csv') {
           allDrafts.push(...converted.concepts);
-          perFile.push({ file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length });
+          const entry = { file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length };
+          const topicsSource = converted.topics && converted.topics.source;
+          if (topicsSource && topicsSource.startsWith('fallback-')) {
+            // The topics leg degraded. The import lands anyway, but the
+            // operator must SEE it: the conversion report carries the fact
+            // and the file's ingestion log carries the reason (#1228).
+            const reason =
+              topicsSource === 'fallback-no-endpoint'
+                ? 'no LLM engine is configured (VLLM_ENDPOINT is unset)'
+                : `the topic summariser degraded (${topicsSource})`;
+            entry.topics_source = topicsSource;
+            entry.warning = `LLM topics degraded — ${reason}. The file was imported without LLM-derived topics.`;
+            await mirrorIngestionLog(
+              file_id,
+              'WARN',
+              'OKF topics',
+              `[${repo_id}] LLM topics degraded — ${reason}. The file was imported without LLM-derived topics ` +
+                `(topics source: ${topicsSource}).`
+            );
+          }
+          perFile.push(entry);
         } else {
           const baseSlug = slugify(String(meta.file_name).replace(/\.[^.]+$/, '')) || `document-${perFile.length + 1}`;
           const title =

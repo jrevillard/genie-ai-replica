@@ -280,6 +280,22 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
     });
     expect(topics.source).toBe('fallback-empty-topics');
   });
+
+  it('a CLOSED gate still imports — with the filename slug, and flagged as degraded (#1228)', async () => {
+    // The leg raises `llm-not-configured`; the CONVERTER keeps the import
+    // landing (a row-group with no topic is a retrieval orphan) and RECORDS
+    // the degradation so the operator sees it.
+    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META, {
+      deriveTopics: async () => {
+        const err = new Error('llm-not-configured');
+        err.code = 'llm-not-configured';
+        throw err;
+      }
+    });
+    expect(topics.source).toBe('fallback-no-endpoint');
+    expect(topics.topics).toEqual(['market']); // filename slug — kept
+    for (const c of concepts) expect(c.frontmatter.topic).toEqual(['market']);
+  });
 });
 
 describe('csvTopicsService — response handling', () => {
@@ -312,15 +328,19 @@ describe('csvTopicsService — response handling', () => {
     ]);
   });
 
-  it('NEVER calls the LLM when VLLM_ENDPOINT is unset (no silent route to a local GPU)', async () => {
+  it('NEVER calls the LLM when VLLM_ENDPOINT is unset, and says so LOUDLY', async () => {
+    // #1228: a closed gate is a misconfiguration, and the other legs say so
+    // loudly (curation, topic-link raise `llm-not-configured`). The CSV leg
+    // used to answer with a silent filename slug — one misconfiguration, two
+    // different answers.
     delete process.env.VLLM_ENDPOINT;
     const called = jest.fn();
     jest.doMock('../services/frontmatter-service', () => ({ vllmChatCompletions: called }));
     const svc = require('../services/converters/csvTopicsService');
-    const out = await svc.deriveTopics({ columns: [{ name: 'a', type: 'text', sample: 'x' }], fileName: 'x.csv' });
+    await expect(
+      svc.deriveTopics({ columns: [{ name: 'a', type: 'text', sample: 'x' }], fileName: 'x.csv' })
+    ).rejects.toMatchObject({ code: 'llm-not-configured' });
     expect(called).not.toHaveBeenCalled();
-    expect(out.source).toBe('fallback-no-endpoint');
-    expect(out.topics).toEqual(['x']); // filename slug
   });
 
   it('degrades to the filename slug when the LLM call throws', async () => {

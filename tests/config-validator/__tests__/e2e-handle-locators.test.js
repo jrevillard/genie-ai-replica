@@ -193,7 +193,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
   });
 
   test('a mixed-quote attribute value inside a selector is not an offender', () => {
-    const sample = `page.locator('[data-x='a.b']')`;
+    const sample = "page.locator('[data-x='a.b']')";
     expect(classSelectorsIn(sample)).toEqual([]);
   });
 
@@ -212,7 +212,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
     // state, the following // comment is preserved, and a prose locator
     // citation inside it fails the gate on an unrelated MR.
     const sample = [
-      "const url = /^url([\"']?/) ;",
+      'const url = /^url(["\']?/) ;',
       "// a prose citation: page.locator('.old-class') is gone",
       "await page.click('.chat-composer');"
     ].join('\n');

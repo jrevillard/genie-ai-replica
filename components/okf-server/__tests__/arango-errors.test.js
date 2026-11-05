@@ -72,6 +72,16 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     // A present-but-statusless response must not short-circuit the chain
     // (round-5 review): the outer layers' status fields are still consulted.
     expect(isConnectionError(Object.assign(new Error('x'), { response: {}, statusCode: 503 }))).toBe(true);
+    // The ARANGOJS DRIVER shapes (final review — db.query never produces an
+    // axios-shaped error): ArangoError{errorNum, code:503, response:<body>}
+    // and HttpError{code:502, response:{statusCode:502}} carry the status on
+    // err.code / err.response.statusCode, not on err.status.
+    expect(isConnectionError(Object.assign(new Error('service unavailable'), { errorNum: 1495, code: 503 }))).toBe(
+      true
+    );
+    expect(
+      isConnectionError(Object.assign(new Error('bad gateway'), { code: 502, response: { statusCode: 502 } }))
+    ).toBe(true);
     // A permanent 4xx/5xx status is NOT connection-class.
     expect(isConnectionError(Object.assign(new Error('Forbidden'), { response: { status: 403 } }))).toBe(false);
     expect(isConnectionError(Object.assign(new Error('Server Error'), { response: { status: 500 } }))).toBe(false);

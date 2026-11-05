@@ -62,6 +62,9 @@ const { authedAxios } = require('../services/service-token');
 const edgeService = require('../services/edge-service');
 
 const REPO = '99999999-9999-4999-8999-999999999999';
+/** The claim value the mocked stamp returns (the server-stamped
+ * worker_claimed_at the job carries and the 429 unclaim CASes on). */
+const STAMPED_CLAIM = '2026-11-05T00:00:00.000Z';
 
 /** Program the mock db.query sequence (the worker queries by position:
  * 1st = claim read, then terminal polls; sweep = orphan query + per-orphan removes).
@@ -75,11 +78,6 @@ function queryText(q) {
   return q && q.query ? String(q.query) : '';
 }
 
-/** The 429 unclaim AQL queries recorded so far (shape: clears the claim). */
-function unclaimQueries() {
-  return mockDb.query.mock.calls.map((c) => queryText(c[0])).filter((s) => s.includes('worker_claimed_at: null'));
-}
-
 function programQueries(...results) {
   let i = 0;
   mockDb.query.mockImplementation(async (q) => {
@@ -88,7 +86,9 @@ function programQueries(...results) {
       return { all: async () => [{ key: 'unclaim' }] }; // 429 unclaim — unpositioned side-write (CAS lands)
     }
     if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
-      return { all: async () => [{ key: 'stamp' }] }; // claim stamp — landed (RETURN OLD._key)
+      // claim stamp — landed; the value is the SERVER-stamped claim the job
+      // carries and the 429 unclaim CASes on (RETURN NEW.worker_claimed_at).
+      return { all: async () => [STAMPED_CLAIM] };
     }
     if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
       return { all: async () => [{ _key: 'settle-lease' }] }; // settle CAS — lease acquired
@@ -348,11 +348,18 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
     expect(unclaimCount()).toBe(3); // retried past the conflicts — the claim IS released
-    // The write is a CAS on the claim value: it only clears the claim while
+    // The write is a CAS on the CLAIM VALUE: it only clears the claim while
     // the row still carries THIS lane's stamp — a reset that requeued the
     // row (claim nulled) or another lane that re-claimed it (a different
-    // claim value) makes the CAS match nothing.
-    expect(unclaimQueries().every((s) => /worker_claimed_at\s*==/.test(s))).toBe(true);
+    // claim value) makes the CAS match nothing. Assert the BOUND VALUE, not
+    // just the predicate: a `== null` bind would clear ANY claim (the exact
+    // defect #1391 removes) and still match the query text.
+    const unclaimBinds = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => q && q.query && q.query.includes('worker_claimed_at: null'))
+      .map((q) => Object.values(q.bindVars || {}));
+    expect(unclaimBinds.length).toBeGreaterThan(0);
+    expect(unclaimBinds.every((b) => b.includes(STAMPED_CLAIM))).toBe(true);
   });
 
   test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
@@ -695,6 +702,10 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
         return t.includes('UPDATE m WITH') && t.includes('worker_claimed_at');
       });
     expect(stampCalls).toHaveLength(0);
+    // The job carries the POST-stamp claim value (#1391): the 429 unclaim
+    // CASes on it, so a job carrying the PRE-stamp value (cand) would make
+    // every unclaim a silent no-op and bring the ghost claim back.
+    expect(fair.query).toContain('NEW.worker_claimed_at');
   });
 
   test('cap env flows into the query as a bind value', async () => {

@@ -124,10 +124,13 @@ function isConnectionError(err) {
   const message = String(err.message || '').toLowerCase();
   const code = String(err.code || '').toLowerCase();
   if (EXTRA_CODES_LOWER.some((c) => code === c || message.includes(c))) return true;
-  // A present-but-statusless response must not short-circuit the chain —
-  // an intermediate layer may carry the status on the error itself.
-  const status = err.response?.status ?? err.status ?? err.statusCode;
-  return status != null && RETRIABLE_STATUS.has(status);
+  // The status travels in different fields depending on the layer: axios
+  // puts it on err.response.status, the arangojs driver on err.code
+  // (ArangoError{errorNum, code:503}) or err.response.statusCode
+  // (HttpError{code:502, response:{statusCode:502}}). Scan every candidate —
+  // a present-but-statusless response must not short-circuit the chain.
+  const candidates = [err.response?.status, err.response?.statusCode, err.status, err.statusCode, err.code];
+  return candidates.some((s) => typeof s === 'number' && RETRIABLE_STATUS.has(s));
 }
 
 module.exports = {

@@ -186,7 +186,12 @@ async function convertCsv(buffer, meta, opts = {}) {
         file_id: meta && meta.file_id,
         error: err.message
       });
-      topics = { topics: [], purpose: '', source: 'fallback-threw', reason: 'the topic summariser failed' };
+      topics = {
+        topics: [],
+        purpose: '',
+        source: 'fallback-threw',
+        reason: csvTopics.fallbackReason('fallback-threw')
+      };
     }
   }
 

@@ -17,6 +17,7 @@ const { convertXlsx } = require('../services/converters/xlsxSheetConverter');
 const { inferType, cellText } = require('../services/converters/tableConcepts');
 const { parseTopics, normalizeTopics } = require('../services/converters/csvTopicsService');
 const { logger } = require('../shared-lib/logger');
+const { captureEnv } = require('./fixtures/env');
 const XLSX = require('xlsx');
 
 const META = {
@@ -302,11 +303,10 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
 });
 
 describe('csvTopicsService — response handling', () => {
-  const originalEndpoint = process.env.VLLM_ENDPOINT;
+  const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
 
   afterEach(() => {
-    if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
-    else process.env.VLLM_ENDPOINT = originalEndpoint;
+    restoreEndpoint();
     jest.resetModules();
   });
 

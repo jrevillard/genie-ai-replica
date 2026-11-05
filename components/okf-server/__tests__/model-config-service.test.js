@@ -20,6 +20,7 @@ jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn(async () => 
 // so tests never leave the process.
 jest.mock('axios', () => ({ post: jest.fn() }));
 
+const { captureEnv } = require('./fixtures/env');
 const svc = require('../services/model-config-service');
 const axios = require('axios');
 const { __mockDb } = require('../shared-lib/db-connection-service');
@@ -532,11 +533,10 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
 });
 
 describe('listConfigs envelope — the deployment opt-in rides along (#1228)', () => {
-  const originalEndpoint = process.env.VLLM_ENDPOINT;
+  const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
 
   afterEach(() => {
-    if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
-    else process.env.VLLM_ENDPOINT = originalEndpoint;
+    restoreEndpoint();
   });
 
   test('llm_legs_enabled is false with no endpoint and true with one', async () => {

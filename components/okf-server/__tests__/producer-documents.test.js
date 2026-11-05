@@ -32,6 +32,7 @@ jest.mock('../config', () => ({
 }));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
+const { captureEnv } = require('./fixtures/env');
 const { authedAxios } = require('../services/service-token');
 const { ingestRepoConcepts, runImportCuration } = require('../services/ingest-service');
 const { Readable } = require('stream');
@@ -90,10 +91,9 @@ beforeEach(() => {
 });
 
 // A test that closes the LLM opt-in must not close it for the next one.
-const originalEndpoint = process.env.VLLM_ENDPOINT;
+const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
 afterEach(() => {
-  if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
-  else process.env.VLLM_ENDPOINT = originalEndpoint;
+  restoreEndpoint();
 });
 
 // ── segmentation + cross-file linking (pure) ────────────────────────────────

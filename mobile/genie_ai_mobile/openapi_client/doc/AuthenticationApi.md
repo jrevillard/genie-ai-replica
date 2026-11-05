@@ -23,9 +23,9 @@ Logout endpoint (Keycloak handles session invalidation server-side)
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AuthenticationApi();
+final api_instance = AuthenticationApi(api_client);
 
 try {
     api_instance.apiAuthLogoutPost();

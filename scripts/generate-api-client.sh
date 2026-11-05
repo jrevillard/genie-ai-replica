@@ -147,11 +147,64 @@ for (const f of fs.readdirSync(dir)) {
   fi
 }
 
+# patch_markdown <output-dir> — the dart generator's README and per-API doc
+# templates (dart2/README.mustache, dart2/api_doc.mustache) emit an auth
+# snippet for an OAuth2 scheme:
+#   //defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = ...
+# The generated ApiClient has NO getAuthentication method (7.22.0 and 7.26.0
+# alike): its authentication is a final field, constructor-injected
+# (`ApiClient(authentication: OAuth(...))`), and the API classes take that
+# client (`AdminApi(api_client)`). A developer who follows the snippet gets a
+# compile error and no working alternative in the artifact. Rewrite the pair
+# into the form the generated API actually offers — the client the API class
+# takes, with the token on it.
+patch_markdown() {
+  node -e "
+const fs = require('fs');
+const path = require('path');
+const dir = process.argv[1];
+const md = [];
+const collect = (d) => {
+  for (const e of fs.readdirSync(d, {withFileTypes: true})) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) collect(p);
+    else if (e.name.endsWith('.md')) md.push(p);
+  }
+};
+collect(dir);
+for (const p of md) {
+  const src = fs.readFileSync(p, 'utf8');
+  const fixed = src.replace(
+    /\/\/ TODO Configure OAuth2 access token for authorization: (\w+)\n\/\/defaultApiClient\.getAuthentication<OAuth>\('\1'\)\.accessToken = 'YOUR_ACCESS_TOKEN';\n\nfinal api_instance = (\w+)\(\);/g,
+    (m, scheme, apiClass) =>
+      '// TODO Configure OAuth2 access token for authorization: ' + scheme + '\n' +
+      \"final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));\n\n\" +
+      'final api_instance = ' + apiClass + '(api_client);'
+  );
+  if (fixed !== src) {
+    fs.writeFileSync(p, fixed);
+    console.log('    patched ' + path.relative(dir, p));
+  }
+}
+" "$1"
+
+  # The patch above matches an exact emission shape; if a future generator
+  # version changes it, the broken snippet would ship again unnoticed. Fail
+  # loudly instead.
+  if grep -rn 'getAuthentication' "$1" > /dev/null 2>&1; then
+    echo "ERROR: the generated docs still contain a 'getAuthentication' snippet"
+    echo "       the patch block did not recognize — the generator's output"
+    echo "       shape changed; inspect the docs and update patch_markdown."
+    exit 1
+  fi
+}
+
 if [ "${1:-}" = "--check" ]; then
   CHECK_DIR="$(mktemp -d)"
   prepare_output_dir "$CHECK_DIR"
   generate_client "$CHECK_DIR"
   patch_client "$CHECK_DIR"
+  patch_markdown "$CHECK_DIR"
   if diff -r "${DIFF_EXCLUDES[@]}" "$CHECK_DIR" "$OUTPUT_DIR" > /dev/null; then
     echo "==> Client is up to date with the backend spec"
     exit 0
@@ -171,6 +224,9 @@ generate_client "$OUTPUT_DIR"
 
 echo "==> Patching the dart generator's array-file emission (upstream bug)..."
 patch_client "$OUTPUT_DIR"
+
+echo "==> Patching the dart generator's auth snippets (upstream bug)..."
+patch_markdown "$OUTPUT_DIR"
 
 echo "==> Done. Client generated in $OUTPUT_DIR"
 echo "    Endpoints: $(grep -c "^  Future<Response>" "$OUTPUT_DIR"/lib/api/*.dart 2>/dev/null || echo '?')"

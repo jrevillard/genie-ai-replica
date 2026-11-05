@@ -27,9 +27,9 @@ Returns a sanitized subset of user data for OPEA AI context enrichment. User is 
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     api_instance.apiMeContextGet();
@@ -67,9 +67,9 @@ Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete wit
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     final result = api_instance.apiMeDeletePost();
@@ -108,9 +108,9 @@ Returns the full profile of the authenticated user. User is resolved from the JW
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     api_instance.apiMeGet();
@@ -148,9 +148,9 @@ Self-service profile update. JIT fields (email, name) forwarded to Keycloak Acco
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 final data = data_example; // String | JSON string containing user profile data
 final files = [/path/to/file.txt]; // List<MultipartFile> | Files to upload (optional)
 
@@ -194,9 +194,9 @@ Resets the authenticated user's profile data while preserving the account identi
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     final result = api_instance.apiMeResetDataPost();

@@ -36,9 +36,9 @@ Backup database
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminDatabaseOperationsBackupPost();
@@ -74,9 +74,9 @@ Optimize database
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminDatabaseOperationsOptimizePost();
@@ -112,9 +112,9 @@ Get database statistics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminDatabaseStatsGet();
@@ -150,9 +150,9 @@ Run system diagnostics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminDiagnosticsPost();
@@ -188,9 +188,9 @@ Debug logs for yesterday to diagnose issues
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     final result = api_instance.apiAdminLogsDebugYesterdayGet();
@@ -227,9 +227,9 @@ Get system logs
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final limit = 56; // int | Maximum number of logs to return
 final level = level_example; // String | Filter logs by level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view.
 final service = service_example; // String | Filter logs by service name
@@ -274,9 +274,9 @@ Search logs with filtering
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final term = term_example; // String | Search term
 final level = level_example; // String | Filter by log level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view. The VL query uses the unquoted severity_text:<level> form. getLogsInRange is the only endpoint that uses the quoted form — these endpoints differ in shape.
 final service = service_example; // String | Filter by service name
@@ -327,9 +327,9 @@ Get logs summary by type and service
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final date = date_example; // String | Date for which to get logs (YYYY-MM-DD)
 final level = level_example; // String | Filter by log level. WARNING normalizes to WARN and is accepted; the canonical bucket keys are ERROR / WARN. WARN and WARNING are synonyms; ERROR and FATAL are siblings. The VL query OR-joins the synonyms internally. Any value outside the allowlist is rejected with 400 invalid_filter.
 
@@ -372,9 +372,9 @@ Get recent queries for admin inspection (Query Inspector)
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final limit = 56; // int | Maximum number of queries to return (default 50)
 final offset = 56; // int | Offset for pagination
 final userId = userId_example; // String | Filter by user ID
@@ -428,9 +428,9 @@ Get full query details for admin inspection
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final queryId = queryId_example; // String | The query ID to inspect
 
 try {
@@ -470,9 +470,9 @@ Retrieve the last security scan details
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     final result = api_instance.apiAdminSecurityLastScanGet();
@@ -509,9 +509,9 @@ Get security metrics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     final result = api_instance.apiAdminSecurityMetricsGet();
@@ -548,9 +548,9 @@ Run security scan
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     final result = api_instance.apiAdminSecurityScanPost();
@@ -587,9 +587,9 @@ Get system health metrics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     final result = api_instance.apiAdminSystemHealthGet();
@@ -626,9 +626,9 @@ Get user statistics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminUserStatsGet();
@@ -664,9 +664,9 @@ Search users with filtering
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 final term = term_example; // String | Search term
 final field = field_example; // String | Field to search (all, name, email, role, exactEmail — matches the full email literally)
 final limit = 56; // int | Maximum number of users to return

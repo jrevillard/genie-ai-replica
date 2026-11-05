@@ -48,9 +48,9 @@ Deletes a conversation and all associated messages
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation to delete
 
 try {
@@ -92,9 +92,9 @@ Finds which folder a conversation belongs to
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation
 
 try {
@@ -136,9 +136,9 @@ Retrieves a specific conversation including its messages
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation to retrieve
 
 try {
@@ -180,9 +180,9 @@ Retrieves messages for a specific conversation with pagination
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation
 final limit = 56; // int | Maximum number of messages to return
 final offset = 56; // int | Number of records to skip for pagination
@@ -230,9 +230,9 @@ Adds a new message to a conversation
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation
 final apiChatConversationsConversationIdMessagesPostRequest = ApiChatConversationsConversationIdMessagesPostRequest(); // ApiChatConversationsConversationIdMessagesPostRequest | 
 
@@ -276,9 +276,9 @@ Marks all or specific messages in a conversation as read
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation
 final apiChatConversationsConversationIdMessagesReadPostRequest = ApiChatConversationsConversationIdMessagesReadPostRequest(); // ApiChatConversationsConversationIdMessagesReadPostRequest | 
 
@@ -322,9 +322,9 @@ Moves a conversation from one folder to another
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation to move
 final apiChatConversationsConversationIdMovePostRequest = ApiChatConversationsConversationIdMovePostRequest(); // ApiChatConversationsConversationIdMovePostRequest | 
 
@@ -368,9 +368,9 @@ Updates conversation properties like title, starred status, etc.
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final conversationId = conversationId_example; // String | ID of the conversation to update
 final apiChatConversationsConversationIdPatchRequest = ApiChatConversationsConversationIdPatchRequest(); // ApiChatConversationsConversationIdPatchRequest | 
 
@@ -414,9 +414,9 @@ Retrieves all conversations for the authenticated user with pagination and filte
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final limit = 56; // int | Maximum number of conversations to return
 final offset = 56; // int | Number of records to skip for pagination
 final includeArchived = true; // bool | Whether to include archived conversations
@@ -466,9 +466,9 @@ Creates a new chat conversation
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final apiChatConversationsPostRequest = ApiChatConversationsPostRequest(); // ApiChatConversationsPostRequest | 
 
 try {
@@ -510,9 +510,9 @@ Removes a conversation from a folder
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder
 final conversationId = conversationId_example; // String | ID of the conversation to remove
 
@@ -556,9 +556,9 @@ Adds a conversation to a folder
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder
 final conversationId = conversationId_example; // String | ID of the conversation to add
 
@@ -602,9 +602,9 @@ Deletes a folder and optionally its contents
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder to delete
 final deleteContents = true; // bool | Whether to delete contained conversations and subfolders
 
@@ -648,9 +648,9 @@ Retrieves a specific folder including its conversations
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder to retrieve
 
 try {
@@ -692,9 +692,9 @@ Updates folder properties
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder to update
 final apiChatFoldersFolderIdPatchRequest = ApiChatFoldersFolderIdPatchRequest(); // ApiChatFoldersFolderIdPatchRequest | 
 
@@ -738,9 +738,9 @@ Retrieves the folder path (breadcrumbs)
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final folderId = folderId_example; // String | ID of the folder
 
 try {
@@ -782,9 +782,9 @@ Retrieves all folders for the authenticated user
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final includeArchived = true; // bool | Whether to include archived folders
 final parentFolderId = parentFolderId_example; // String | ID of parent folder to get subfolders (omit for root folders)
 
@@ -828,9 +828,9 @@ Creates a new folder for organizing conversations
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final apiChatFoldersPostRequest = ApiChatFoldersPostRequest(); // ApiChatFoldersPostRequest | 
 
 try {
@@ -872,9 +872,9 @@ Updates the order of folders at the same level
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final apiChatFoldersReorderPostRequest = ApiChatFoldersReorderPostRequest(); // ApiChatFoldersReorderPostRequest | 
 
 try {
@@ -916,9 +916,9 @@ Searches for folders by name or description
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final q = q_example; // String | Search term
 final includeArchived = true; // bool | Whether to include archived folders
 
@@ -962,9 +962,9 @@ Retrieves the query that led to a specific message
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final messageId = messageId_example; // String | ID of the message
 
 try {
@@ -1006,9 +1006,9 @@ Creates a new conversation based on an existing query
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final queryId = queryId_example; // String | ID of the query
 final apiChatQueryQueryIdConversationPostRequest = ApiChatQueryQueryIdConversationPostRequest(); // ApiChatQueryQueryIdConversationPostRequest | 
 
@@ -1052,9 +1052,9 @@ Retrieves all messages related to a specific query
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final queryId = queryId_example; // String | ID of the query
 
 try {
@@ -1096,9 +1096,9 @@ Retrieves recent conversations for the user
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final limit = 56; // int | Maximum number of conversations to return
 
 try {
@@ -1140,9 +1140,9 @@ Searches for conversations containing specific text
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 final q = q_example; // String | Search term
 final limit = 56; // int | Maximum number of results to return
 final offset = 56; // int | Number of results to skip for pagination
@@ -1190,9 +1190,9 @@ Retrieves statistics about the user's conversations
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ChatHistoryApi();
+final api_instance = ChatHistoryApi(api_client);
 
 try {
     api_instance.apiChatStatsGet();

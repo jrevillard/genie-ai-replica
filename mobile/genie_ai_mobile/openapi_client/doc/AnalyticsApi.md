@@ -30,9 +30,9 @@ Retrieves analytics data for the dashboard within a date range
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final startDate = 2013-10-20; // DateTime | Start date (YYYY-MM-DD)
 final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
 final locale = locale_example; // String | Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
@@ -79,9 +79,9 @@ Retrieves event records with pagination
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final limit = 56; // int | Maximum number of results to return
 final offset = 56; // int | Number of results to skip for pagination
 
@@ -126,9 +126,9 @@ Records a user event for analytics
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final eventRequest = EventRequest(); // EventRequest | 
 
 try {
@@ -171,9 +171,9 @@ Retrieves data for a specific analytics metric
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final metric = metric_example; // String | Metric name
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
 final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
@@ -220,9 +220,9 @@ Retrieves analytics records with pagination
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final limit = 56; // int | Maximum number of results to return
 final offset = 56; // int | Number of results to skip for pagination
 
@@ -267,9 +267,9 @@ Retrieves satisfaction percentage data for the gauge visualization
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
 final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
 final locale = locale_example; // String | Language locale (e.g. en, fr, sw, ar, id, es, etc.)
@@ -316,9 +316,9 @@ Retrieves satisfaction percentage data by knowledge area over time
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
 final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
 final locale = locale_example; // String | Language locale (e.g. en, fr, sw, ar, id, es, etc.)
@@ -365,9 +365,9 @@ Retrieves time series data for a specific metric, interval, and date range
 ```dart
 import 'package:openapi/api.dart';
 // TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AnalyticsApi();
+final api_instance = AnalyticsApi(api_client);
 final metricType = metricType_example; // String | Metric type name (e.g., queries, users)
 final interval = interval_example; // String | Time interval for grouping
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)

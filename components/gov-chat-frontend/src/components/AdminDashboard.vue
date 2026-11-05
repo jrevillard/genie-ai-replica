@@ -3167,13 +3167,12 @@ export default {
         // Filter out the English ('en') translation from the results
         const filteredTranslations = fetchedTranslations.filter((t) => t.lang !== 'en');
 
-        // Populate the form with the filtered data
-        if (filteredTranslations.length > 0) {
-          this.hierarchyForm.translations = filteredTranslations;
-        } else {
-          // If no non-English translations exist, provide one empty row for the user to start
-          this.hierarchyForm.translations.push({ lang: '', text: '' });
-        }
+        // Populate the form with the filtered data. Replace, never append:
+        // a Retry re-populates a form that already carries rows (the failed
+        // load pushed a placeholder), and an empty successful fetch must
+        // yield exactly one placeholder row to start from.
+        this.hierarchyForm.translations =
+          filteredTranslations.length > 0 ? filteredTranslations : [{ lang: '', text: '' }];
 
         // Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
@@ -3215,7 +3214,8 @@ export default {
       if (!this.hierarchyForm.visible || !this.hierarchyForm._key) {
         return;
       }
-      const isCategory = this.hierarchyForm.mode !== 'editService';
+      // Positive derivation, the same shape saveHierarchyItem dispatches by.
+      const isCategory = this.hierarchyForm.mode === 'editCategory';
       this.invalidateTranslationsFetch();
       this.loadHierarchyTranslations(isCategory, this.hierarchyForm._key);
     },

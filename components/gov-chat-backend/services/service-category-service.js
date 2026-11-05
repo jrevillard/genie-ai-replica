@@ -318,7 +318,14 @@ class ServiceCategoryService {
         return false;
       }
 
-      await this.serviceCategories.document(categoryKey);
+      const document = await this.serviceCategories.document(categoryKey);
+      // The ArcadeDB adapter resolves a missing row as undefined instead of
+      // raising — without this the absence would pass as an existing record
+      // (the same guard _documentOr404 applies).
+      if (!document) {
+        logger.info(`Category existence check: ${categoryKey} does not exist`);
+        return false;
+      }
       logger.info(`Category existence check successful: ${categoryKey} exists`);
       return true;
     } catch (error) {

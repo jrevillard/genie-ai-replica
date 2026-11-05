@@ -456,6 +456,15 @@ describe('ServiceCategoryService', () => {
       await expect(service.categoryExists('cat-1')).rejects.toThrow('ECONNREFUSED');
     });
 
+    it('should return false when the adapter resolves a missing row as undefined', async () => {
+      // The ArcadeDB adapter resolves absence instead of raising — the same
+      // shape _documentOr404 defends against in this file.
+      mockServiceCategories.document.mockResolvedValue(undefined);
+
+      const result = await service.categoryExists('phantom');
+      expect(result).toBe(false);
+    });
+
     it('should return false when categoryKey is missing', async () => {
       const result = await service.categoryExists(null);
       expect(result).toBe(false);

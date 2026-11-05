@@ -3355,6 +3355,22 @@ describe('translation load-failure gate', () => {
       wrapper.unmount();
     });
 
+    it('an empty successful retry resets the rows to exactly one placeholder', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      // The failed load already pushed one placeholder row; a successful
+      // fetch with no non-EN translations must not append a second one.
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockResolvedValueOnce([]);
+
+      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      await retryBtn.trigger('click');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(wrapper.vm.translationsLoadFailed).toBe(false);
+      expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
+      wrapper.unmount();
+    });
+
     it('a failed retry keeps the form disabled and the notice up', async () => {
       const { wrapper, treeMock } = await mountFailedEdit();
       treeMock.getServiceTranslations.mockClear();

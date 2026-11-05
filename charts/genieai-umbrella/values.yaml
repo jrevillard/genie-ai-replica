@@ -92,16 +92,19 @@ observability:
     # VLSingle retention period (30d default).
     retentionPeriod: "30d"
     storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
   metrics:
     enabled: false
     # VMSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
   traces:
     enabled: false
     # VTSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
   grafana:
     enabled: false
     # Pin the Grafana image version on the CR. Without it the operator
@@ -167,7 +170,17 @@ observability:
 imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
 
 pluggable:
-  storageClassName: ""                # "" = cluster default storage class
+  # The chart-wide storage class for EVERY persistent volume the chart
+  # creates: the data-tier PVCs (ArangoDB, CNPG, document-repository
+  # uploads, redis appendonly, clamav signatures, model cache, ragas
+  # judge cache) AND the observability CRs (VLSingle/VMSingle/VTSingle
+  # `storage.className`). "" (the default) = each volume lands on the
+  # cluster's default StorageClass; set it per venue — a dev cluster
+  # can point it at a tmpfs-backed StorageClass to pull the cache-class
+  # volumes into RAM (#1522), a prod venue at its SSD class. Applied at
+  # PVC creation: changing it later does NOT migrate existing volumes
+  # (storageClassName is immutable on a bound PVC).
+  storageClassName: ""
 
 # Envoy Gateway controller (chart dependency). On by default — the edge
 # tier couples 1:1 with the Gateway/HTTPRoute resources the chart renders.
@@ -288,6 +301,7 @@ data:
     # divergence, declared in scripts/ci/config-parity-allowlist.json.
     database: _system
     storageSize: 50Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:
     # Gates the Keycloak CR. The operator itself is a cluster
@@ -425,6 +439,7 @@ data:
     # wires it from their secret backend; the secret MUST carry both
     # `username` and `password` keys for CNPG to bootstrap).
     db:
+      storageClassName: ""        # "" = inherit pluggable.storageClassName ("" itself = cluster default)
       secretName: keycloak-db-credentials
       vendor: postgres
       port: 5432
@@ -849,6 +864,7 @@ services:
     pvc:
       enabled: true                     # rendered as PVC by the doc-repo template
       storageSize: 20Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     volumes:
       - name: uploads
         persistentVolumeClaim:
@@ -881,6 +897,7 @@ services:
     cache:
       enabled: true
       size: 2Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     enabled: true
     replicas: null
     # Tag: `stable-debian`. The chart
@@ -959,6 +976,7 @@ services:
     pvc:
       enabled: true                          # appendonly persistence
       storageSize: 5Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     podDisruptionBudget: null
 
 # OKF tier (the knowledge-frame server and its PII / RAGAS sidecars).
@@ -993,6 +1011,7 @@ okf:
   # The RAGAS judge cache PVC size — the KG builds that the cache spares
   # cost ~50 minutes on a cold cache.
   ragasCacheSize: "5Gi"
+  ragasCacheStorageClassName: ""  # "" = inherit pluggable.storageClassName ("" itself = cluster default)
 
 # OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,

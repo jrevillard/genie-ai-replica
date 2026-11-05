@@ -49,7 +49,7 @@ spec:
         # Render storageClass ONLY when set: empty-string pins
         # storageClassName: "" = "no default SC" and strands the PVC
         # (same trap the CNPG template guards against).
-        {{- with $pluggable.storageClassName }}
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:
@@ -105,7 +105,7 @@ spec:
     # reschedule loses the cluster configuration.
     volumeClaimTemplate:
       spec:
-        {{- with $pluggable.storageClassName }}
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:
@@ -123,7 +123,7 @@ spec:
       - --experimental-vector-index=true
     volumeClaimTemplate:
       spec:
-        {{- with $pluggable.storageClassName }}
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:

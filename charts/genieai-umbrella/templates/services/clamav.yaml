@@ -307,7 +307,7 @@ spec:
   # storageClassName means "NO default storage class" and strands the
   # PVC on most clusters. Same contract as the document-repository and
   # redis PVCs.
-  {{- with $pluggable.storageClassName }}
+  {{- with ($servicesClamavCache.storageClassName | default $pluggable.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}
   resources:

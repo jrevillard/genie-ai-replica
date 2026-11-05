@@ -47,6 +47,7 @@ jest.mock('@/config/oidcConfig', () => ({
 }));
 
 const keycloakAuthService = require('@/services/keycloakAuthService').default;
+const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
 
 function createMockUser(overrides = {}) {
   return {
@@ -73,17 +74,22 @@ function createMockUser(overrides = {}) {
 describe('keycloakAuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // The cross-tab renew protocol keeps its state in window.localStorage:
-    // the holder PUBLISHES the user it minted under RENEW_USER_KEY, and the
-    // NEXT renew in this tab reads that publication FIRST (the adoption gate
-    // is `entry.at >= startedAt`). The publish survives the test that wrote
-    // it, so without this wipe the next test's renew adopts the PREVIOUS
-    // test's published user instead of running its own grant — and a test
-    // that asserts "the grant yielded null" sees the previous test's token
-    // instead. Same-millisecond renews are the racing case: the gate's
-    // millisecond resolution lets a publication stamped in the same tick
-    // as the renew's start pass. #1518 (CI-only flake).
-    window.localStorage.clear();
+    // jest.clearAllMocks() clears call history but NOT implementations —
+    // the same trap the cross-tab describe below resets for. Without this,
+    // a test that omits its own mock setup silently inherits the previous
+    // test's mockResolvedValue/mockRejectedValue.
+    mockGetUser.mockReset();
+    mockSigninSilent.mockReset();
+    // The cross-tab renew protocol keeps its state in localStorage: the
+    // holder PUBLISHES the user it minted under RENEW_USER_KEY, and the
+    // NEXT renew in this tab reads that publication FIRST (adoption gate
+    // `entry.at >= startedAt`, millisecond resolution). The publish
+    // survives the test that wrote it, so without this wipe the next
+    // test's renew adopts the PREVIOUS test's published user instead of
+    // running its own grant — the #1518 flake (reproducible locally too:
+    // same-millisecond renews are the racing case).
+    window.localStorage.removeItem(RENEW_LEASE_KEY);
+    window.localStorage.removeItem(RENEW_USER_KEY);
   });
 
   describe('initialize', () => {

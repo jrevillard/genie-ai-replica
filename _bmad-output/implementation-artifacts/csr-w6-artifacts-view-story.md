@@ -352,6 +352,35 @@ the live run happens at the sync.
   to the merged head, `frontend` / `okf-server` / `chatqna` / `retriever`
   rebuilt and recreated, `verify-local-build.sh` 46 pass / 0 fail, and the
   wave's browser spec re-run against the merged stack.
+  - **The spec re-run found ONE defect and it was in the SPEC, not the view:**
+    the first assertion read the captured `is_bundle` filters right after the
+    artifacts view became *visible*, while the view fires its read from
+    `mounted()` — so the request can be dispatched a tick AFTER the element
+    is in the DOM. The read was never in doubt (the provenance test asserts a
+    row whose text can only come from the `is_bundle=true` payload, and it
+    passes); the ASSERTION raced the capture. Fixed with an explicit bounded
+    wait (`expect.poll`, 15 s) — an implicit race is what makes an E2E suite
+    flaky under load, and a retry would have hidden it.
+  - **The live data contract re-measured on the merged stack:** 24 artifacts
+    (16 with a version, 8 without), **24/24 carry a `repo_id`**, and **0
+    bundles leaked** into the 263-row document list. (The probe pages at
+    `limit=50` — the route's documented maximum; asking for more answers
+    `400`.)
+  - **The CHANGELOG entry was WRONG and is corrected:** it claimed the
+    Documents|Artifacts switch appears only with the OKF pillar enabled. The
+    shipped code always renders the switch and explains itself on a parked
+    deployment. A changelog entry that understates what a deployer will see
+    is a wrong entry, not a conservative one.
+  - **`npm audit` on the touched component:** 30 advisories (11 low, 13
+    moderate, 6 high) — **identical on `main`**; the wave added **no**
+    dependency. The 6 highs are `vue-i18n` 9.14.5 (`escapeParameter` XSS) and
+    the `webpack-dev-server` dev chain. Neither is reachable here: `srcdoc`
+    appears nowhere in the frontend source, `escapeParameter` is never
+    called, and the house `translateMixin` does a raw message lookup rather
+    than vue-i18n's compiled `$t()`. `9.14.5` is the last 9.x release, so the
+    fix exists only in the 11.x major — filed as **#1566** rather than bumped
+    here, because a vue-i18n 9 → 11 migration touches every locale file and
+    every call site and cannot ride along on a feature MR.
 
 ### The decisions the wave took beyond the story
 

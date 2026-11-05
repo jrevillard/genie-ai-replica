@@ -652,9 +652,6 @@ describe('cross-tab renew lease (#80800)', () => {
     await keycloakAuthService.logout().catch(() => {});
   });
 
-  const RENEW_LEASE_KEY = 'genie.renew.lease';
-  const RENEW_USER_KEY = 'genie.renew.user';
-
   // Seed a publication the way a real holder writes it (foreign tab id,
   // stamped at publish time) — the shared drive for every adoption test.
   function seedForeignPublication(token, { at = Date.now() - 10, expiresAt } = {}) {
@@ -662,7 +659,7 @@ describe('cross-tab renew lease (#80800)', () => {
       access_token: token,
       ...(expiresAt !== undefined ? { expires_at: expiresAt } : {})
     });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at, tab: 'holder-tab', user }));
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at, tab: 'holder-tab', user }));
     return user;
   }
 
@@ -941,7 +938,7 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(adopted.access_token).toBe('adopted-after-failures');
     // The next failure is the FIRST again (counter 1 < cap 3) — without the
     // reset it would be the third and would escalate to login().
-    window.localStorage.removeItem(USER_KEY);
+    window.localStorage.removeItem(RENEW_USER_KEY);
     await handler();
     expect(mockSigninRedirect).not.toHaveBeenCalled();
     // The counter is module state and persists across tests — leave it at
@@ -1011,7 +1008,10 @@ describe('cross-tab renew lease (#80800)', () => {
     mockGetUser.mockResolvedValue(null);
     const holderUser = createMockUser({ access_token: 'memo-token' });
     const seedHolder = () =>
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+      window.localStorage.setItem(
+        RENEW_USER_KEY,
+        JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser })
+      );
     seedHolder();
     const first = await keycloakAuthService.signinSilent();
     expect(first.access_token).toBe('memo-token');
@@ -1035,9 +1035,12 @@ describe('cross-tab renew lease (#80800)', () => {
     mockSigninSilent.mockRejectedValue(new Error('grant refused'));
     // Valid JSON, no usable `at` — the TTL can never judge it, so it would
     // keep its minted tokens at rest forever.
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) }));
+    window.localStorage.setItem(
+      RENEW_USER_KEY,
+      JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) })
+    );
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
-    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });
 
   it("an owner-less (old-build) publication is adoptable — it can never be this tab's own (#1521)", async () => {
@@ -1049,7 +1052,7 @@ describe('cross-tab renew lease (#80800)', () => {
     // an already-rotated token, worse than #1521 itself, for the whole
     // mixed-version window.
     const orphanUser = createMockUser({ access_token: 'orphan-published-token' });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, user: orphanUser }));
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() - 10, user: orphanUser }));
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
     const user = await keycloakAuthService.signinSilent();
@@ -1074,7 +1077,7 @@ describe('cross-tab renew lease (#80800)', () => {
     mockSigninSilent.mockResolvedValueOnce(null);
     const user = await keycloakAuthService.signinSilent();
     expect(user).toBeNull();
-    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
     expect(entry.user.access_token).toBe('grant-one');
   });
 
@@ -1084,12 +1087,12 @@ describe('cross-tab renew lease (#80800)', () => {
     // First renew: our own grant, published under OUR tab id.
     mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'grant-one' }));
     await keycloakAuthService.signinSilent();
-    expect(window.localStorage.getItem(USER_KEY)).not.toBeNull();
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).not.toBeNull();
     // Second renew fails on a network error: the grant was never consumed,
     // so the withdrawn publication goes back on disk for the other tabs.
     mockSigninSilent.mockRejectedValueOnce(new Error('network blip'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('network blip');
-    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
     expect(entry.user.access_token).toBe('grant-one');
   });
 
@@ -1106,7 +1109,7 @@ describe('cross-tab renew lease (#80800)', () => {
     mockSigninSilent.mockRejectedValueOnce(new Error('grant refused'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
     // The clear-before-grant is ownership-aware: the foreign entry is intact.
-    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
     expect(entry.tab).toBe('holder-tab');
     expect(entry.user.access_token).toBe('foreign-holder-token');
   });
@@ -1120,7 +1123,7 @@ describe('cross-tab renew lease (#80800)', () => {
     jest.useFakeTimers();
     try {
       // A foreign (still-fresh) lease forces the poll loop:
-      window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'dead-tab', at: Date.now() - 5000 }));
+      window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: 'dead-tab', at: Date.now() - 5000 }));
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-late-grant' }));
       const p = keycloakAuthService.signinSilent();
       const assertion = expect(p).resolves.toMatchObject({ access_token: 'own-late-grant' });
@@ -1328,7 +1331,10 @@ describe('cross-tab renew lease (#80800)', () => {
         // The holder publishes (and releases) inside the waiter's probe gap:
         // the waiter consulted an empty slot, and the lock is free again by
         // the time it asks.
-        window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+        window.localStorage.setItem(
+          RENEW_USER_KEY,
+          JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser })
+        );
         return Promise.resolve(cb({}));
       });
       mockGetUser.mockResolvedValue(null);

@@ -7,6 +7,20 @@ const config = require('../config');
 const { LogsService } = require('./logs-service');
 const DAYS_TO_PROCESS = 10;
 
+// VL scan pagination. VL's `limit` caps rows per query — a pattern
+// matching more than one page had its tail silently dropped and
+// `matchedCount` counted only the first page (a pattern with 4,000 hits
+// reported ~1,000, distorting the severity dashboards). Pages walk
+// backwards in time: each next query ends at the oldest `_time` already
+// fetched, and VL's `end` is exclusive ([start ... end)), so the
+// boundary row is neither re-fetched nor skipped. The page cap bounds
+// VL load — the literal fetch is deliberately over-broad (see
+// `extractLiterals` below) and can match hundreds of thousands of
+// unrelated lines; hitting the cap logs a warning naming the pattern
+// instead of undercounting in silence.
+const VL_SCAN_PAGE_SIZE = 1000;
+const VL_SCAN_MAX_PAGES = 20;
+
 // Bare-phrase patterns: reported as pattern matches, not as severities.
 // Their regex is a word or two that ordinary operational prose contains,
 // so a hit reports that the substring was present, not that anything was
@@ -333,6 +347,30 @@ const securityScanService = {
     // 1-3s scan over 14 patterns. Mirrors the file-mode batch yield.
     const yieldEventLoop = () => new Promise((resolve) => setImmediate(resolve));
 
+    // Fetch every row the literal clause matches in the scan window,
+    // paging backwards in time (see VL_SCAN_PAGE_SIZE above for why).
+    // `label` names the consumer in the cap warning.
+    const fetchAllRows = async (msgClause, label) => {
+      const rows = [];
+      let end = endIso;
+      for (let page = 0; page < VL_SCAN_MAX_PAGES; page += 1) {
+        const pageRows = await client.query({ q: msgClause, start: startIso, end, limit: VL_SCAN_PAGE_SIZE });
+        if (!Array.isArray(pageRows) || pageRows.length === 0) return rows;
+        rows.push(...pageRows);
+        if (pageRows.length < VL_SCAN_PAGE_SIZE) return rows;
+        // Pages come back newest-first; the cursor is the oldest `_time`
+        // on the page. VL accepts the `_time` format it emits, so the
+        // raw string is passed back verbatim (nanosecond precision kept).
+        const times = pageRows.map((r) => r._time).filter((t) => typeof t === 'string' && t !== '');
+        if (times.length === 0) return rows;
+        end = times.reduce((oldest, t) => (t < oldest ? t : oldest));
+      }
+      logger.warn(
+        `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`
+      );
+      return rows;
+    };
+
     for (const pattern of vulnerabilityPatterns) {
       await yieldEventLoop();
       const literals = extractLiterals(pattern.regex);
@@ -342,12 +380,7 @@ const securityScanService = {
       const msgClause = literals.map((t) => `_msg:~"${t.replace(/"/g, '\\"')}"`).join(' OR ');
       let rows;
       try {
-        rows = await client.query({
-          q: msgClause,
-          start: startIso,
-          end: endIso,
-          limit: 1000
-        });
+        rows = await fetchAllRows(msgClause, `pattern ${pattern.type}`);
       } catch (err) {
         // A VL outage must abort the scan, not shrink its coverage.
         // Swallowing it here meant all 14 patterns could fail, the
@@ -363,7 +396,7 @@ const securityScanService = {
         logger.warn(`VL scan query failed for pattern ${pattern.type}: ${err.message}`);
         continue;
       }
-      if (!Array.isArray(rows) || rows.length === 0) continue;
+      if (rows.length === 0) continue;
 
       let matchedCount = 0;
       let lastSeen = '';
@@ -462,12 +495,7 @@ const securityScanService = {
       const msgClause = literals.map((t) => `_msg:~"${t.replace(/"/g, '\\"')}"`).join(' OR ');
       let rows;
       try {
-        rows = await client.query({
-          q: msgClause,
-          start: startIso,
-          end: endIso,
-          limit: 1000
-        });
+        rows = await fetchAllRows(msgClause, 'suspicious term');
       } catch (err) {
         // Same rule as the vulnerability loop: a VL outage aborts the
         // scan rather than returning a partial result dressed up as a
@@ -479,7 +507,7 @@ const securityScanService = {
         logger.warn(`VL scan query failed for suspicious term: ${err.message}`);
         continue;
       }
-      if (!Array.isArray(rows)) continue;
+      if (rows.length === 0) continue;
       for (const row of rows) {
         const raw = row.message || row._msg || '';
         let text = raw;

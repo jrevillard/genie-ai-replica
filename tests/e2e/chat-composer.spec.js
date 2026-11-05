@@ -7,9 +7,11 @@
 //       screen has its composer inside the welcome panel (between
 //       the banner and the grid); the chat view has the same
 //       component at the chat-input slot. v-if/v-else keeps the
-//       second one out of the DOM entirely, so a single source-of-
-//       truth selector — `page.locator('[data-testid="welcome-composer"]').count()`
-//       — returns exactly 1 in both states.
+//       second one out of the DOM entirely, so each state names its
+//       one mounted composer by handle: `welcome-composer` counts 1 on
+//       the welcome screen (0 in the chat view), `chat-composer` counts
+//       1 in the chat view (0 on the welcome screen) — the two counts
+//       are the source of truth, never both 1.
 //
 //   (B) The composer IS the just-chat config entry. The runtime
 //       config carries a placement field whose only valid values
@@ -488,14 +490,14 @@ test.describe('composer field', () => {
       .poll(
         () =>
           page.evaluate(
-            () => getComputedStyle(document.querySelector('[data-testid="welcome-composer"].chat-composer')).boxShadow
+            () => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow
           ),
         { timeout: 5000 }
       )
       .not.toBe('none');
 
     const rings = await page.evaluate(() => {
-      const pill = document.querySelector('[data-testid="welcome-composer"].chat-composer');
+      const pill = document.querySelector('[data-testid="welcome-composer"]');
       const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
       const p = pill ? getComputedStyle(pill) : null;
       const t = ta ? getComputedStyle(ta) : null;

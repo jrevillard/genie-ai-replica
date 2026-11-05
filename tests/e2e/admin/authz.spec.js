@@ -112,8 +112,8 @@ test.describe('Admin route authorization', () => {
 
     // The navbar admin entry is disabled without the role — the visible
     // half of the refusal. The desktop button is the one asserted here;
-    // the mobile twin carries no handle (no spec drives a mobile
-    // viewport), so it is not an anchor the suite claims.
+    // the mobile twin carries its own handle (nav-icon-btn-administration-mobile),
+    // which no spec drives today — a mobile-viewport spec would anchor on it.
     await expect(page.locator('[data-test-id="nav-icon-btn-administration"]')).toBeDisabled();
   });
 });

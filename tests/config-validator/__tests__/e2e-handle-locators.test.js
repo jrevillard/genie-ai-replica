@@ -8,24 +8,65 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // that locates one of them by class again is the defect the migration
 // removed: a frontend restyle renaming the class breaks the wait with a
 // failure that says nothing about the behaviour the wait guards.
+// Every class whose locator the handle migration eliminated from the
+// suite — the full set, not a sample: a gate that covers a third of the
+// migration lets the other two thirds quietly re-couple to a class.
+// (Classes the migration never touched — the grandfathered documents
+// and admin locators — are deliberately absent; they are tracked for
+// migration-when-next-touched, and listing them here would red the gate
+// on files this migration never converted.)
 const MIGRATED_CLASSES = [
+  'answer-card',
+  'answer-sources__list',
+  'answer-warning',
+  'brand-name',
+  'brand-wordmark',
   'chat-composer',
+  'chat-input',
+  'chat-message',
+  'chat-window',
+  'chatbot-container',
+  'config-error',
+  'context-items',
+  'context-panel',
+  'conversation-header',
+  'conversation-header__actions',
+  'dashboard-content',
+  'ds-state__hint',
+  'ds-state__message',
+  'filter-select',
+  'genie-living-intelligence',
+  'icon-btn',
+  'just-chat',
+  'language-select-container',
+  'loading-spinner',
+  'main-container',
+  'message-avatar--assistant',
+  'message-avatar__initials',
+  'message-avatar--user',
+  'message-bubble',
+  'message-time',
+  'nav-bar',
+  'nav-right',
+  'prompt-textarea',
+  'quick-help-banner',
+  'quick-help-composer',
+  'quick-help-content',
   'quick-help-grid',
+  'quick-help-heading',
   'quick-help-item',
   'quick-help-overlay',
-  'quick-help-banner',
+  'quick-help-subtitle',
   'side-bar',
   'sidebar',
-  'chat-message',
-  'message-bubble',
+  'sidebar-handle',
+  'sidebar-handle__button',
+  'splash-screen',
+  'status-error-message',
+  'streaming-indicator',
   'table-message',
-  'tooltip',
-  'loading-spinner'
+  'tooltip'
 ];
-
-// The two attribute spellings the web app declares. Both are valid
-// handles; the app picks one per surface.
-const HANDLE_ATTRIBUTE = /data-testid|data-test-id/;
 
 // Every quoted string in the file that contains a class selector for one
 // of the migrated classes. The quote is required: a class name in prose
@@ -42,7 +83,11 @@ const classSelectorIn = (source) => {
       // property read — is not a selector) and not followed by a name
       // character (so `.sidebar` does not match `.sidebar-inner`).
       const pattern = new RegExp(`(^|[^A-Za-z0-9_$-])\\.${className}(?![a-z0-9_-])`);
-      if (pattern.test(body) && !HANDLE_ATTRIBUTE.test(body)) {
+      // No exemption for strings that also carry a handle: a mixed
+      // locator ('.chat-message.bot [data-testid="answer-error"]') is
+      // still a class coupling, and the handle in it must not buy the
+      // class a pass.
+      if (pattern.test(body)) {
         found.push({ className, quoted: body });
       }
     }

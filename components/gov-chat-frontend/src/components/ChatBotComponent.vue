@@ -304,7 +304,6 @@
               <template #brandwordmark>
                 <span
                   :class="brandWordmarkClass"
-                  data-testid="brand-wordmark"
                   :data-wordmark="brandWordmarkClass ? 'true' : 'false'"
                   >{{ brandName }}</span
                 >

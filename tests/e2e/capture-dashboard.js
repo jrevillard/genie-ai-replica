@@ -274,7 +274,7 @@ const audit = () => {
         // fade) and covers the page while it is up — a capture before it is
         // gone photographs the splash, not the banner. Detached is the hard
         // requirement: a splash still mounted at the timeout is a failure.
-        await page.waitForSelector('[data-testid="splash-screen"]', { state: 'detached', timeout: 15000 });
+        await page.waitForSelector('[data-test-id="splash-screen"]', { state: 'detached', timeout: 15000 });
         // The banner's entrance animation and the compositing of its masked
         // layer must both be finished before a pixel is sampled.
         await waitForBannerSettled(page);

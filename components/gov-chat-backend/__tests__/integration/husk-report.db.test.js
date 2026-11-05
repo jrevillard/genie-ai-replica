@@ -204,6 +204,8 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     const previousExitCode = process.exitCode;
     process.exitCode = undefined;
     let output;
+    let stderr;
+    let exitCode;
     try {
       await main({
         argv: [],
@@ -217,11 +219,17 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
       });
       // Read the calls BEFORE the restore: mockRestore() clears them.
       output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      stderr = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      exitCode = process.exitCode;
     } finally {
       logSpy.mockRestore();
       errorSpy.mockRestore();
       process.exitCode = previousExitCode;
     }
+    // The divergence cross-check did not fire: the script aborted with an
+    // exit code and a stderr line instead of printing a report.
+    expect(exitCode).toBeUndefined();
+    expect(stderr).not.toContain('ABORT');
     expect(output).toMatch(/Husk matches:\s+4/);
     // The legacy lookalikes (identity-less but WITH an email) are reported
     // for context and never deleted: exactly the one legacy account of the
@@ -238,6 +246,8 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     const previousExitCode = process.exitCode;
     process.exitCode = undefined;
     let output;
+    let stderr;
+    let exitCode;
     try {
       await main({
         argv: ['--delete', '--yes'],
@@ -251,11 +261,17 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
       });
       // Read the calls BEFORE the restore: mockRestore() clears them.
       output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      stderr = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      exitCode = process.exitCode;
     } finally {
       logSpy.mockRestore();
       errorSpy.mockRestore();
       process.exitCode = previousExitCode;
     }
+    // The divergence cross-check did not fire, and the removal reported its
+    // own outcome: an unknown number of removed documents is an exit code 1.
+    expect(exitCode).toBeUndefined();
+    expect(stderr).not.toContain('ABORT');
     expect(output).toContain('Done. 4 of 4 selected documents removed.');
     expect(await remainingKeys()).toEqual(
       CORPUS.map((doc) => doc._key)

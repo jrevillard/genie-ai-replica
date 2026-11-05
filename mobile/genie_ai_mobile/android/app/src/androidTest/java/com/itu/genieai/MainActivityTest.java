@@ -1,4 +1,4 @@
-package com.example.genie_ai_mobile;
+package com.itu.genieai;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;

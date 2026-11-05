@@ -9,5 +9,5 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'genie_ai_mobile';
+  String get appTitle => 'GENIE.AI';
 }

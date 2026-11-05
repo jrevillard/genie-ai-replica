@@ -47,4 +47,4 @@ function isRetriableUpstreamError(err) {
   return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
 }
 
-module.exports = { isRetriableUpstreamError };
+module.exports = { isRetriableUpstreamError, RETRIABLE_STATUS };

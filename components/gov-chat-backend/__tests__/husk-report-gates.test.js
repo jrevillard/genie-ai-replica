@@ -424,17 +424,23 @@ describe('main safety wiring', () => {
     expect(JSON.parse(literal)).toBe(key);
   });
 
-  it("names the knob, the dry run and THIS listing's own count in each elision line (issue #1507)", async () => {
+  it('names the knob, the dry run and ONE value that lists the WHOLE divergence listing (issue #1507)', async () => {
     // The operator must be told HOW to see the withheld entries, and with
     // WHICH value — a bare "not listed" leaves the remedy undiscoverable.
-    // Each listing's total is printed in its own header, so the elision
-    // line names the count that lists THAT listing in full. Naming a
-    // run-wide maximum instead would inflate one listing's remedy with an
-    // unrelated listing's count — the operator would dump thousands of
-    // lookalikes to reach a handful of withheld husks.
+    // The override knob is GLOBAL, so the value that lists this listing in
+    // full is the largest of its parts: naming each direction's own count
+    // would make the two lines contradict each other (the smaller value
+    // still caps the larger direction) and cost a second run to see
+    // everything. The divergence listing is also the ONLY listing printed
+    // on the abort path, so the largest part is the run-wide value.
+    //
+    // (Separate listings keep their OWN counts — the husk listing and the
+    // lookalike listing are different data sets, and a shared maximum would
+    // make the operator dump thousands of lookalikes to reach a handful of
+    // withheld husks. That rule is pinned on the stdout listings below.)
     //
     // 60 over-matched, 100 under-matched: the two directions have DIFFERENT
-    // totals, so a run-wide maximum would name 100 on BOTH lines.
+    // totals, so the shared value is 100 on BOTH lines.
     const { extra, missed } = divergentDocs(60, 100);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
     await runMain(db, ['--delete', '--yes']);
@@ -444,14 +450,34 @@ describe('main safety wiring', () => {
     const underElision = lines.find((l) => l.includes('more under-matched'));
     expect(overElision).toBeDefined();
     expect(underElision).toBeDefined();
-    // Each line names its OWN listing's count.
-    expect(overElision).toContain('HUSK_SAMPLE_LIMIT=60');
+    // BOTH lines name the one value that lists the whole listing in full.
+    expect(overElision).toContain('HUSK_SAMPLE_LIMIT=100');
     expect(underElision).toContain('HUSK_SAMPLE_LIMIT=100');
+    // Neither line names the smaller direction's count: following it would
+    // leave the other direction still capped.
+    expect(overElision).not.toContain('HUSK_SAMPLE_LIMIT=60');
     // The remedy names the DRY RUN: on a destructive script, an unqualified
     // "re-run" could be read as "re-run the same command", which deletes.
     // (The ABORT path carries this --delete-aware wording; the plain report's
     // elision lines say "re-run this report" — pinned below.)
     expect(overElision).toContain('re-run the dry run (without --delete)');
+  });
+
+  it('words the abort remedy for the run the operator is actually in', async () => {
+    // The abort fires in BOTH modes. On a plain report the operator is
+    // already in the dry run, so a "(without --delete)" parenthetical has
+    // no referent — it reads as if another mode were required. On the
+    // --delete path the dry run IS a different run, and the wording must
+    // point at it (a re-run of the destructive command deletes).
+    const { extra, missed } = divergentDocs(60);
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db);
+    const reportElision = stderrText(errorSpy)
+      .split('\n')
+      .find((l) => l.includes('more over-matched'));
+    expect(reportElision).toBeDefined();
+    expect(reportElision).toContain('re-run this report with HUSK_SAMPLE_LIMIT=60');
+    expect(reportElision).not.toContain('(without --delete)');
   });
 
   it('words the stdout elision remedy for the report the operator is reading', async () => {
@@ -618,24 +644,29 @@ describe('main safety wiring', () => {
     expect(stderrText(errorSpy)).toContain('capped at 200 per direction');
   });
 
-  it('tells the operator to inspect the withheld entries INSTEAD of this --delete run', async () => {
+  it('tells the operator that THIS run removes the withheld entries, and how to review them beforehand', async () => {
     // On the --delete path the withheld husks are removed by THIS run, right
     // after the report. An advice that says "re-run" is then useless: the
     // re-run finds nothing, because the entries are gone. The line must
-    // therefore point at a run that PRECEDES this one.
+    // therefore point at a run that PRECEDES this one — and it must not
+    // pretend this run waits for the operator (it does not: the removal
+    // follows immediately).
     const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
     const db = fakeDb({ husks, allDocs: husks, writesExecuted: 60 });
     await runMain(db, ['--delete', '--yes']);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     const elision = stdout.split('\n').find((l) => l.includes('more husks (not listed)'));
     expect(elision).toBeDefined();
-    // The withheld entries are named as part of the removal...
-    expect(elision).toContain('part of the removal below');
-    // ...and the inspection run is stated as ALTERNATIVE to this run, not as
-    // a later step of it. Both wordings are pinned: "afterwards" and a
+    // The withheld entries are named as removed by this run, and their keys
+    // are named as absent from the listing — the truth about what the
+    // operator is reading.
+    expect(elision).toContain('removed by this run too');
+    expect(elision).toContain('not listed above');
+    // The review run is stated as a run that PRECEDES the removal, not as a
+    // later step of it. Both wordings are pinned: "afterwards" and a
     // "(with --delete)" pointer would each send the operator at documents
     // that no longer exist, or at the destructive command.
-    expect(elision).toContain('INSTEAD of this run');
+    expect(elision).toContain('before removing anything');
     expect(elision).not.toContain('afterwards');
     expect(elision).not.toContain('(with --delete)');
     expect(elision).toContain('(without --delete)');

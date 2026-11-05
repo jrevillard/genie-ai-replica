@@ -41,10 +41,13 @@
  *                     listing prints before the rest are elided. Raise it for
  *                     a one-off diagnostic run to dump the withheld keys;
  *                     every listing honours it, including the divergence
- *                     listing of the abort path. The default cap is what
- *                     keeps the log pipeline from being flooded, so raise the
- *                     override only as far as the pipeline tolerates — for a
- *                     very large run, redirect the output to a file)
+ *                     listing of the abort path. An empty value means "not
+ *                     set" (the default); a malformed one is REFUSED — the
+ *                     run fails rather than falling back to the default. The
+ *                     default cap is what keeps the log pipeline from being
+ *                     flooded, so raise the override only as far as the
+ *                     pipeline tolerates — for a very large run, redirect the
+ *                     output to a file)
  */
 
 const { Database } = require('arangojs');
@@ -202,15 +205,21 @@ function quotedKey(key) {
  * `total` defaults to the length of `docs` and is stated separately only
  * where the two differ: the lookalike sample is truncated SERVER-side, so
  * the count of all lookalikes and the returned sample are different numbers.
- * The elision line names THIS listing's total, so the number the operator
- * copies is the one that lists this listing in full. The remedy is worded for
- * the REPORT the reader is holding; the abort path — where --delete is in
- * play — passes its own (see main).
+ * The elision line names the value that lists THIS listing in full. For a
+ * listing rendered in several parts (the abort path's two directions) that is
+ * the LARGEST part, because the override knob is global: one value has to
+ * serve every part of the listing. Separate listings keep their OWN count —
+ * the husk listing and the lookalike listing are different data sets, and a
+ * shared maximum would make the operator dump thousands of lookalikes to
+ * reach a handful of withheld husks. The remedy is worded for the REPORT the
+ * reader is holding; the abort path — where --delete is in play — passes its
+ * own (see main).
  * @param {Object} params
  * @param {Function} params.write - the sink (console.log / console.error)
- * @param {Object} params.gated - the resolved run configuration (the cap
- *   source); REQUIRED — a missing cap must fail loudly, never silently widen
- *   the listing
+ * @param {Object} params.gated - the resolved run configuration, and the ONLY
+ *   source of the cap. The gate (parseAndGateArgs) is the single place the
+ *   cap is decided and rejects anything that is not a positive integer, so
+ *   `gated.sampleLimit` is always a usable cap here.
  * @param {string} [params.label] - the noun in the elision line; omit it when
  *   the listing's own header already says what the listing is
  * @param {Array<Object>} params.docs - the entries to list
@@ -226,14 +235,6 @@ function quotedKey(key) {
  *   withheld entries are about to be REMOVED, or a --delete is in play.
  */
 function printSampledList({ write, gated, label, docs, total = docs.length, format, remedy }) {
-  // Enforce the promise the JSDoc makes: slice(0, undefined) returns the WHOLE
-  // array, so a gated object that somehow lacks the cap must fail here rather
-  // than silently widen the listing into the flood the cap exists to prevent.
-  if (!gated || !Number.isInteger(gated.sampleLimit) || gated.sampleLimit <= 0) {
-    throw new Error(
-      `printSampledList: the run cap is not a positive integer (got ${JSON.stringify(gated?.sampleLimit)})`
-    );
-  }
   const listed = docs.slice(0, gated.sampleLimit);
   for (const doc of listed) {
     write(format(doc));
@@ -320,7 +321,12 @@ function parseAndGateArgs(argv, env) {
   // for 500 entries and silently gets 50 — with no notice — is back to the
   // very confusion the override exists to remove.
   const sampleLimit = parseSampleLimit(env.HUSK_SAMPLE_LIMIT);
-  if (sampleLimit === null) {
+  // The gate is the ONE place the cap is decided, so it is also where the
+  // resolved value is validated — not merely that the override was
+  // well-formed. A cap that is not a positive integer would widen a listing
+  // silently (slice(0, undefined) returns the WHOLE array), and this is the
+  // only boundary that can catch it.
+  if (!Number.isSafeInteger(sampleLimit) || sampleLimit <= 0) {
     return fail(`HUSK_SAMPLE_LIMIT must be a positive integer (got ${JSON.stringify(env.HUSK_SAMPLE_LIMIT)}).`);
   }
 
@@ -337,25 +343,30 @@ function parseAndGateArgs(argv, env) {
 
 /**
  * Resolves the listing cap: the default, or the operator's override for a
- * one-off diagnostic run. Returns null for a malformed override — the caller
- * turns that into a gate failure, because a silent fallback would hand back
- * the same capped listing the override exists to lift (issue #1507).
+ * one-off diagnostic run. Returns undefined for a malformed override — the
+ * caller turns that into a gate failure, because a silent fallback would hand
+ * back the same capped listing the override exists to lift (issue #1507).
  *
  * The accepted form is DECIMAL digits only: `Number()` would also take
  * '0x1f', '1e3' and ' 500 ', so a typo would silently yield a different cap
  * than the literal the operator typed.
+ *
+ * An EMPTY value means "not set" — the default. That is the shell's own
+ * convention for an unset variable (`VAR= cmd`), and the effective cap is
+ * printed in the report header, so the operator always sees the cap they
+ * got.
  * @param {string|undefined} raw
- * @returns {number|null}
+ * @returns {number|undefined}
  */
 function parseSampleLimit(raw) {
   if (raw === undefined || raw === '') {
     return DEFAULT_SAMPLE_LIMIT;
   }
   if (!/^[0-9]+$/.test(raw)) {
-    return null;
+    return undefined;
   }
   const value = Number(raw);
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 /**
@@ -416,11 +427,14 @@ async function runReport(db, gated, total, husks, allDocs) {
     docs: husks,
     label: 'husks',
     // On the --delete path the withheld matches are removed by THIS run, so
-    // the dry-run advice would point at documents that are about to be gone.
+    // the advice must point at a run that PRECEDES it: a re-run of the same
+    // command finds nothing, because the entries are gone by then. The line
+    // says plainly that this run removes them too — the keys are not in the
+    // listing, and no advice can put them there after the fact.
     remedy:
       gated.mode === 'delete'
-        ? 'these withheld entries are part of the removal below — to inspect them, ' +
-          `run the report (without --delete) with HUSK_SAMPLE_LIMIT=${husks.length} INSTEAD of this run`
+        ? 'these withheld entries are removed by this run too, so their keys are not listed above — ' +
+          `to review them before removing anything, re-run the report (without --delete) with HUSK_SAMPLE_LIMIT=${husks.length}`
         : undefined,
     format: (doc) =>
       `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
@@ -598,6 +612,14 @@ async function main({
     // operator raises HUSK_SAMPLE_LIMIT for one diagnostic run — issue
     // #1507). (The fields census in runReport stays unbounded by design: one
     // line per DISTINCT unexpected field name, not per document.)
+    // ONE value for the whole divergence listing. The override knob is
+    // global, so the value that lists EVERY direction in full is the largest
+    // of them: naming each direction's own count would make the two lines
+    // contradict each other (the smaller value still caps the larger
+    // direction) and cost the operator a second run to see everything. This
+    // listing is the ONLY one printed on the abort path — the report below
+    // is never reached — so the largest part is also the run-wide value.
+    const divergenceLimit = Math.max(extra.length, missed.length);
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]
@@ -608,8 +630,13 @@ async function main({
         label,
         docs,
         // The abort fires on the --delete path too, so the advice must name
-        // the SAFE run; the helper's default is worded for the plain report.
-        remedy: `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${docs.length} to list them all`,
+        // the SAFE run; on a plain report the operator is already in that
+        // run, and a "(without --delete)" parenthetical would have no
+        // referent.
+        remedy:
+          gated.mode === 'delete'
+            ? `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${divergenceLimit} to list them all`
+            : `re-run this report with HUSK_SAMPLE_LIMIT=${divergenceLimit} to list them all`,
         format: (doc) => `  ${label} _key=${quotedKey(doc._key)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
       });
     }

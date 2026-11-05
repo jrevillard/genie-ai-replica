@@ -110,6 +110,8 @@ const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
 // waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
 const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
 let _dataprepBusyUntil = 0;
+/** File-local sleep (same idiom as rerank-client / ragas-suite-service). */
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Park delay for a failed kick: exponential in the CURRENT attempt number
  * (job.ingest_attempts — the claim already bumped it), capped, jittered.
  * Returns null when backoff is disabled (base 0). */
@@ -311,20 +313,24 @@ async function _stampClaim(db, repoId, conceptId) {
  * 429) — no ingest work happened. Un-count it while clearing the claim, so
  * the poison-pill reaper (>= OKF_INGEST_WORKER_MAX_CLAIMS REAL attempts)
  * cannot dead-letter healthy rows that merely bounced off a busy slot under
- * routine cross-repo contention (review !622 wave 2, #78658). Same
- * single-writer lane as the claim itself, so read-modify-write is safe.
- * Round 20, #80804: both claim strategies now guarantee a returned job's
- * attempt was STAMPED (fifo refuses the claim on a failed stamp; fair stamps
- * inside the fused statement), so this decrement always un-counts a real
- * increment — never a bare 0-row. */
+ * routine cross-repo contention (review !622 wave 2, #78658). The write
+ * races NON-worker meta writers (user-triggered repo/lifecycle ops on the
+ * same row) — it is NOT single-writer, which is why the 1200-conflict retry
+ * below exists. Round 20, #80804: both claim strategies now guarantee a
+ * returned job's attempt was STAMPED (fifo refuses the claim on a failed
+ * stamp; fair stamps inside the fused statement), so this decrement always
+ * un-counts a real increment — never a bare 0-row. */
 async function _unclaimAttempt(db, repoId, conceptId) {
   // Issue #1391: this write races concurrent meta writers (a user-triggered
   // repo/lifecycle op touching the same row) — on the RocksDB engine the
   // loser gets error 1200 and NOTHING is written. A single best-effort
   // attempt that loses leaves a GHOST claim: the row counts as in-flight in
-  // the fair pick for a full claim window and starves its repo. The conflict
-  // is transient (the winner completes in milliseconds), so retry the SAME
-  // single AQL — the attempt accounting stays in one statement (#78658).
+  // the fair pick for a full claim window and starves its repo. Retry the
+  // SAME single AQL — the attempt accounting stays in one statement
+  // (#78658) — ONLY on error 1200: the conflict abort guarantees our
+  // statement wrote nothing, so a retry can never double-decrement or clear
+  // a claim that is no longer ours (any other error's effect is unknown —
+  // never retried).
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -341,21 +347,35 @@ async function _unclaimAttempt(db, repoId, conceptId) {
       );
       return;
     } catch (err) {
+      if (err.errorNum !== 1200) {
+        // Not a write-write conflict (parse error, auth, connection…) — the
+        // write's effect is unknown, so retrying could double-decrement.
+        // Surface it: the claim stays stamped until staleness (the fair pick
+        // starves this repo meanwhile) and ingest_attempts stays +1, so
+        // repeated losses can dead-letter the row via the poison-pill reaper.
+        logger.error('Ingest worker: 429 unclaim failed — ghost claim until staleness', {
+          concept_id: conceptId,
+          error: err.message,
+          error_num: err.errorNum
+        });
+        return;
+      }
       if (attempt === maxAttempts) {
-        // Ghost claim persists until the claim window ages it out — surface
-        // it at ERROR level (the fair pick will starve this repo meanwhile).
-        logger.error('Ingest worker: 429 unclaim failed after retries — ghost claim until staleness', {
+        logger.error('Ingest worker: 429 unclaim lost every retry — ghost claim until staleness', {
           concept_id: conceptId,
           attempts: maxAttempts,
-          error: err.message
+          error: err.message,
+          error_num: err.errorNum
         });
       } else {
-        logger.warn('Ingest worker: 429 unclaim attempt failed — retrying', {
+        logger.warn('Ingest worker: 429 unclaim write conflict — retrying', {
           concept_id: conceptId,
           attempt,
           error: err.message
         });
-        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        // Jittered backoff: lanes losing conflicts against the same bulk
+        // writer must not retry in lockstep and collide again.
+        await sleepMs(100 * attempt + Math.floor(Math.random() * 100));
       }
     }
   }
@@ -979,12 +999,15 @@ async function _processOneJob() {
         // claim stamped ingest_attempts+1 but no kick happened, and the
         // poison-pill reaper would dead-letter the row after 8 mere slot-busy
         // bounces.
+        // Stamp the lane cool-down BEFORE the unclaim: the unclaim retries
+        // can take ~300 ms — other lanes must not keep kicking (each 429 of
+        // theirs would spawn its own retry loop) while this lane releases.
+        _dataprepBusyUntil = Date.now() + kick429CooldownMs();
         await _unclaimAttempt(db, job.repo_id, conceptId);
         logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
           concept_id: conceptId,
           cooldown_ms: kick429CooldownMs()
         });
-        _dataprepBusyUntil = Date.now() + kick429CooldownMs();
         recordJob('busy', job.repo_id);
         return { outcome: 'busy', concept_id: conceptId };
       }

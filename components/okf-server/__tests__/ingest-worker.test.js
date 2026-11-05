@@ -317,6 +317,34 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     );
   });
 
+  // A NON-conflict failure (parse/auth/connection — effect unknown) is never
+  // retried: retrying could double-decrement. It surfaces at ERROR on the
+  // FIRST attempt (#1391).
+  test('429 unclaim non-1200 failure → no retry, error on the first attempt (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    let unclaims = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      if (queryText(q).includes('worker_claimed_at: null')) {
+        unclaims += 1;
+        const err = new Error('auth failed');
+        err.errorNum = 11; // not a write-write conflict
+        throw err;
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaims).toBe(1); // NO retry on an unknown-effect failure
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim'),
+      expect.objectContaining({ concept_id: 'a', error_num: 11 })
+    );
+  });
+
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
     programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK

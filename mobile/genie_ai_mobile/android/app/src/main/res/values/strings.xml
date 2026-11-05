@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher label (issue #1009: the app shipped as "Genie AI Mobile" — the
+     template name, unbranded). Per-flavour overrides live in the flavour
+     source sets (android/app/src/<flavor>/res/values/strings.xml). -->
+<resources>
+    <string name="app_name">GENIE.AI</string>
+</resources>

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 
-const _packageId = 'com.example.genie_ai_mobile.e2e';
+const _packageId = 'com.itu.genieai.e2e';
 
 /// Force-stop the app via adb. Kills the app process entirely,
 /// simulating the OS reclaiming memory or the user swiping it away.

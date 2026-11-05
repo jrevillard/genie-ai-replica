@@ -12,3 +12,13 @@
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
 -dontwarn javax.annotation.concurrent.**
+
+# Flutter engine + plugin entry points (the Flutter template's rules). Required
+# once R8 minification is ENABLED (issue #1009): the engine calls into these
+# classes reflectively from native code, so R8 must not rename or strip them.
+-keep class io.flutter.app.** { *; }
+-keep class io.flutter.plugin.** { *; }
+-keep class io.flutter.util.** { *; }
+-keep class io.flutter.view.** { *; }
+-keep class io.flutter.** { *; }
+-keep class io.flutter.plugins.** { *; }

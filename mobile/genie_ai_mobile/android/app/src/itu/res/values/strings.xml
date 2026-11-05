@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The `itu` flavour is the ITU deployment: its launcher label is the
+     institutional brand (issue #1009). -->
+<resources>
+    <string name="app_name">AgroGenio</string>
+</resources>

@@ -297,26 +297,37 @@ async function runReport(db, gated, total, husks, allDocs) {
 // gated.collection, never the arangojs handle it also holds under `collection`.
 async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  // A rejection here is ambiguous in BOTH directions: the request may have
-  // reached ArangoDB and executed with only the response lost (ECONNRESET,
-  // timeout) — or it may never have reached the server at all (ECONNREFUSED,
-  // auth). The lead therefore states the one thing true in both cases — the
-  // outcome is unknown — and defers the removal possibility to a conditional
-  // clause; asserting "documents were removed" would be as dishonest as the
-  // ABORT wording this script used to print (issue #1505).
+  // A rejection from the removal query splits into two honesty classes:
+  // a numeric err.code below 500 is an HTTP status the SERVER returned —
+  // the statement was definitively rejected and nothing executed, so the
+  // outcome is known. Everything else (network failure, timeout, 5xx,
+  // a non-Error rejection value) is genuinely ambiguous: the request may
+  // have executed server-side with only the response lost, so the lead
+  // states the one thing true in all of those cases — the outcome is
+  // unknown — and defers the removal possibility to a conditional clause
+  // (issue #1505).
+  const bind = {
+    '@collection': collectionName,
+    keys: husks.map((doc) => doc._key)
+  };
+  const causeOf = (err) =>
+    err instanceof Error ? err.message || String(err) : typeof err === 'string' ? err : JSON.stringify(err);
   let removalCursor;
   try {
-    removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-      '@collection': collectionName,
-      keys: husks.map((doc) => doc._key)
-    });
+    removalCursor = await db.query(HUSK_REMOVAL_AQL, bind);
   } catch (err) {
-    console.error(
-      'REMOVAL OUTCOME UNKNOWN — the removal query failed before its outcome was known ' +
-        `(${err && err.message ? err.message : err}); if the request reached the server, an ` +
-        'unknown number of documents may have been removed. Verify with a dry run: ' +
-        're-run the report to see what remains.'
-    );
+    if (typeof err?.code === 'number' && err.code < 500) {
+      console.error(
+        `NOTHING was removed — the server rejected the removal statement (HTTP ${err.code}: ${causeOf(err)}). ` +
+          'No change was made; investigate the error before re-running.'
+      );
+    } else {
+      console.error(
+        'REMOVAL OUTCOME UNKNOWN — the removal query failed before its outcome was known ' +
+          `(${causeOf(err)}); if the request reached the server, an unknown number of ` +
+          'documents may have been removed. Verify with a dry run: re-run the report to see what remains.'
+      );
+    }
     if (err && err.stack) {
       console.error(err.stack);
     }
@@ -326,10 +337,9 @@ async function runDelete(db, collectionName, husks) {
   // The removal re-asserts the signature, so docs disqualified since the
   // SELECT are skipped server-side — report what actually executed, not the
   // selection size. If the stats are missing, say so and fail rather than
-  // claim success: on a destructive path the honest answer is "unknown".
-  // The wording must NOT say ABORT — the removal query has already executed
-  // by this point, so the honest lead is that an unknown number of documents
-  // may be gone (issue #1505).
+  // claim success: on a destructive path the honest answer is "unknown",
+  // and the removal has already executed at this point, so the lead must
+  // say an unknown number of documents may be gone (issue #1505).
   const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
   if (typeof writesExecuted !== 'number') {
     console.error(
@@ -416,9 +426,10 @@ async function main({
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
     // Bounded like the other per-document listings in this script
-    // (SAMPLE_LIMIT): the abort fires precisely when the divergence can
-    // cover the whole collection, and one stderr line per document would
-    // flood the log pipeline. The elision line says how many were not
+    // (SAMPLE_LIMIT): the abort fires on ANY divergence, and when it fires
+    // the divergence can be as large as the whole collection — an uncapped
+    // per-document listing would flood the log pipeline. The full counts
+    // stay in the ABORT header; the elision line says how many were not
     // listed. (The fields census in runReport stays unbounded by design:
     // one line per DISTINCT unexpected field name, not per document.)
     for (const [label, docs] of [

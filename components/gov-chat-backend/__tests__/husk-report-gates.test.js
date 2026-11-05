@@ -1,8 +1,10 @@
 /**
  * Tests for the operator-facing safety wiring of scripts/report-husk-user-docs.js
- * (issue #1494): the CLI/env gates and the ordering "divergence abort happens
- * BEFORE any remove". The signature itself (predicate + AQL templates) is
- * pinned in husk-user-docs.test.js; here the unit under test is main() —
+ * (issue #1494): the CLI/env gates, the ordering "divergence abort happens
+ * BEFORE any remove", and the removal-outcome output honesty (issue #1505:
+ * bounded abort listing, honest leads when the removal's outcome is unknown
+ * or definitively nothing). The signature itself (predicate + AQL templates)
+ * is pinned in husk-user-docs.test.js; here the unit under test is main() —
  * made testable by the parseAndGateArgs extraction and the injectable
  * database factory (createApp()-style).
  */
@@ -227,6 +229,10 @@ describe('main safety wiring', () => {
     const underMatched = stderr.split('\n').filter((l) => l.includes('under-matched _key='));
     expect(overMatched).toHaveLength(50);
     expect(underMatched).toHaveLength(50);
+    // The ABORT header carries the FULL counts — the only record of the
+    // totals once the listing is capped.
+    expect(stderr).toContain('60 AQL hit(s) rejected by the predicate');
+    expect(stderr).toContain('60 document(s) accepted by the predicate');
     expect(stderr).toContain('... and 10 more over-matched (not listed)');
     expect(stderr).toContain('... and 10 more under-matched (not listed)');
   });
@@ -238,7 +244,7 @@ describe('main safety wiring', () => {
     const db = fakeDb({
       husks: [huskDoc],
       allDocs: [huskDoc],
-      removalError: new Error('socket hang up')
+      removalError: Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })
     });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
@@ -249,6 +255,26 @@ describe('main safety wiring', () => {
     expect(message).toContain('dry run');
     expect(message).not.toContain('ABORT');
     expect(db.removalCalls()).toHaveLength(1);
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
+  });
+
+  it('says NOTHING was removed when the server definitively rejects the removal statement (4xx)', async () => {
+    // A numeric err.code below 500 is an HTTP status the server returned:
+    // the statement was rejected and nothing executed — the outcome is
+    // KNOWN, and claiming "may have been removed" would overstate (the
+    // same honesty class the ambiguous-branch lead handles correctly).
+    const db = fakeDb({
+      husks: [huskDoc],
+      allDocs: [huskDoc],
+      removalError: Object.assign(new Error('not authorized'), { code: 403 })
+    });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    const message = stderrText(errorSpy);
+    expect(message).toMatch(/^NOTHING was removed/);
+    expect(message).toContain('HTTP 403');
+    expect(message).toContain('not authorized');
+    expect(message).not.toContain('may have been removed');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
   });
 

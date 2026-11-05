@@ -1979,6 +1979,7 @@ export default {
         done_accept: 'Benta — entity flagta bee {n} concept kono reviewed-and-kept markta. PII flagu bee clear.',
         done_redact: 'Benta — kono flagta {n} concept kono redaction notice la replaced benta.',
         done_remove: 'Benta — kono flagta {n} concept kono fitita.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
           remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
@@ -2834,7 +2835,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Sources page dada ani page {n} link',
@@ -3010,7 +3010,9 @@ export default {
       title: 'Frontmatter tagu — nying repo ka kuma',
       help: 'Tagu kuma repo kono koo ani — maa o koto — a koo ti ke (forbidden listo). U decide querylu minnu route nying repo. Refresh klik ka corpus kono draft, wala chipu juu dada. Publish lafiya-le: topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
+      labelsStale: "Labels — Ingest nyiningo miroolu n'i la",
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLMoo tagu ti jaabi. Corpus damina koto a ñining tugung.',
       suggestCoverage: 'E qaqeeqeeq na {sampled} na {total} idee, ni {labels} wooqee hidin hibrid.',
       suggestFailed: 'Suggest failed.',
@@ -3039,7 +3041,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: "Labels — Ingest nyiningo miroolu n'i la"
       },
       tab: {
         head: 'Head',

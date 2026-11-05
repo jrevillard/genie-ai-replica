@@ -244,4 +244,81 @@ describe('pii repo bulk action', () => {
       status: 404
     });
   });
+
+  // ── DETACHED BULK JOB (UX-4, #1514) ──────────────────────────────────────
+  // The editor's progress bar needs processed-of-total; the synchronous
+  // action cannot provide it (one request, no interim reads). The job wraps
+  // the SAME action and updates the registry per concept.
+  describe('startRepoBulkPiiJob — the detached progress job', () => {
+    async function awaitJobSettled(jobId) {
+      // the worker is fire-and-forget; poll the registry until terminal
+      for (let i = 0; i < 100; i++) {
+        const job = piiService.getRepoBulkPiiJob(jobId);
+        if (job && job.status !== 'running') return job;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      return piiService.getRepoBulkPiiJob(jobId);
+    }
+
+    test('a bad action throws the VALIDATION_ERROR shape BEFORE any job exists (same 400 the sync route answers)', () => {
+      // startRepoBulkPiiJob is SYNCHRONOUS up to the arm: the validation
+      // throws before a job is registered, so the route answers 400 with no
+      // orphan job in the registry.
+      let thrown = null;
+      try {
+        piiService.startRepoBulkPiiJob('repoA', { action: 'nuke' }, ACTOR);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
+      expect(piiService.getRepoBulkPiiJob('repoA')).toBeNull();
+    });
+
+    test('the job runs the action and reports processed-of-total to the final tally', async () => {
+      await seedRepo();
+      await seedFlagged('c1');
+      await seedFlagged('c2', { EMAIL_ADDRESS: 1 });
+      mockDb.query.mockResolvedValueOnce({ all: async () => flaggedDocs() });
+
+      const armed = piiService.startRepoBulkPiiJob('repoA', { action: 'accept' }, ACTOR);
+      expect(armed).toMatchObject({ repo_id: 'repoA', action: 'accept', status: 'running', total: 0, processed: 0 });
+
+      const settled = await awaitJobSettled(armed.job_id);
+      expect(settled.status).toBe('done');
+      expect(settled.total).toBe(2);
+      expect(settled.processed).toBe(2);
+      expect(settled.result).toMatchObject({ ok: true, action: 'accept', concepts_affected: 2 });
+      // the concepts really were processed (not a phantom tally)
+      expect(mockDb._stores.okf_concepts_meta.c1.pii_state).toBe('clean');
+      expect(mockDb._stores.okf_concepts_meta.c2.pii_state).toBe('clean');
+    });
+
+    test('a failing job carries the error and the failed status', async () => {
+      await seedRepo();
+      await seedFlagged('c1');
+      mockDb.query.mockResolvedValueOnce({ all: async () => flaggedDocs() });
+      // force the write path to explode mid-run: upsertPiiState on a missing
+      // collection save would be swallowed by the mock, so break the LEDGER
+      // append instead — appendResolution saves into pii_resolutions via
+      // concept meta update; make the meta collection throw once.
+      const orig = mockDb.collection('okf_concepts_meta').update;
+      let broke = false;
+      mockDb.collection('okf_concepts_meta').update = async (...a) => {
+        if (!broke) {
+          broke = true;
+          throw new Error('disk full');
+        }
+        return orig(...a);
+      };
+      const armed = piiService.startRepoBulkPiiJob('repoA', { action: 'accept' }, ACTOR);
+      const settled = await awaitJobSettled(armed.job_id);
+      mockDb.collection('okf_concepts_meta').update = orig;
+      expect(settled.status).toBe('failed');
+      expect(settled.error).toBe('disk full');
+    });
+
+    test('an unknown job id reads as null (the route answers 404 from this)', () => {
+      expect(piiService.getRepoBulkPiiJob('bp-never')).toBeNull();
+    });
+  });
 });

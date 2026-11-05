@@ -60,6 +60,9 @@ jest.mock('@/services/okfRepoOps', () => {
       !!repo &&
       repo.lifecycle_state === 'publish' &&
       (repo.rag_drain_active === true || !!(repo.rag_ingestion && repo.rag_ingestion.status === 'draining')),
+    // The REAL pure predicate (no copy to drift) — FrontmatterPanel's #932
+    // marker computes from it.
+    isLabelsStale: jest.requireActual('@/services/okfRepoOps').isLabelsStale,
     // Subject Areas load from the Knowledge Hierarchy — canned for the
     // dashboard mount (no network in jsdom).
     loadSubjectAreaOptions: jest.fn().mockResolvedValue([{ value: 'Water Supply', label: 'Water Supply' }])

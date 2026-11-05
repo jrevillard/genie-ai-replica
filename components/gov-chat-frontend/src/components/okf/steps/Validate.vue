@@ -166,15 +166,16 @@
         </li>
       </ul>
 
-      <!-- REMEDY PANELS AT PANEL LEVEL (!1075 / Story 10.8).
-           These live OUTSIDE the issue v-for on purpose. Every remedy here
-           cures the issue it belongs to, and each one calls refresh() — so a
-           panel nested inside its issue row is destroyed by its own success,
-           one interaction before the curator can see the result. The accepted
+      <!-- REMEDY PANELS AT PANEL LEVEL (!1075 / Story 10.8). These live
+           OUTSIDE the issue v-for on purpose. Every remedy here cures the
+           issue it belongs to, and each one calls refresh() — so a panel
+           nested inside its issue row is destroyed by its own success, one
+           interaction before the curator can see the result. The accepted
            proposal's "Done" state (written at :106 in the old nesting) could
-           never be seen for exactly that reason. Their lifetime must depend on
-           the panel's own key (suggestFor / wireFor), never on the row's
-           existence. -->
+           never be seen for exactly that reason. Their lifetime must depend
+           on the panel's own key (suggestFor / wireFor), never on the row's
+           existence. (#1510: the rows' dead Dismiss button was removed —
+           see that issue for why removal beat wiring persistence.) -->
 
       <div v-if="suggestFor && suggestion" class="okf-step-validate__suggestions">
         <!-- Title reuses the existing action key (no new i18n key: the 14 locale
@@ -202,9 +203,6 @@
             <template v-else>
               <DsButton variant="primary" small :disabled="acceptBusy" @click="onAcceptLink(p)">
                 {{ translate('okf.validation.action.accept', 'Accept') }}
-              </DsButton>
-              <DsButton variant="ghost" small @click="p.dismissed = true">
-                {{ translate('okf.validation.action.dismiss', 'Dismiss') }}
               </DsButton>
             </template>
           </li>
@@ -234,6 +232,20 @@
         />
       </p>
       <p v-if="topicLinksNote" class="okf-step-validate__topic-links-note">{{ topicLinksNote }}</p>
+      <!-- UX-4 (#1514): the poll already reports batches_done/total as a text
+           note; the bar makes it a glanceable progress like every other
+           long-running curation operation. Indeterminate until the server
+           knows the batch total (the "reading the repository" leg). -->
+      <DsProgress
+        v-if="topicLinksBusy"
+        class="okf-step-validate__topic-links-progress"
+        :value="topicLinksDone"
+        :max="topicLinksTotal || 1"
+        :indeterminate="!topicLinksTotal"
+        variant="accent"
+        size="sm"
+        :aria-label="topicLinksNote"
+      />
       <DsButton variant="secondary" small :disabled="topicLinksBusy" @click="onStartTopicLinks">
         {{
           topicLinksBusy
@@ -373,6 +385,7 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import DsButton from '../../ds/Button.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
 import DsSpinner from '../../ds/Spinner.vue';
+import DsProgress from '../../ds/Progress.vue';
 import OkfPiiOccurrences from '../editor/PiiOccurrences.vue';
 // #80929: the rescan-follow horizon is SHARED with the editor's rescan
 // control (editor/PiiRepoRescan.vue) — one constant, one 15-minute answer.
@@ -404,7 +417,7 @@ const TYPE_TIPS = {
 
 export default {
   name: 'OkfStepValidate',
-  components: { DsHealthRing, DsInfoTip, DsButton, DsStatusTag, DsSpinner, OkfPiiOccurrences },
+  components: { DsHealthRing, DsInfoTip, DsButton, DsStatusTag, DsSpinner, DsProgress, OkfPiiOccurrences },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
@@ -449,6 +462,10 @@ export default {
       // the panel polls until the run reports a terminal state.
       topicLinksBusy: false,
       topicLinksNote: '',
+      // UX-4 (#1514): the DsProgress source — the run-record counts the poll
+      // already reads, now bound to the bar instead of only the note text.
+      topicLinksDone: 0,
+      topicLinksTotal: 0,
       // near-duplicate preview (#1039)
       previewFor: null,
       previewBusy: null,
@@ -953,6 +970,8 @@ export default {
       if (this.topicLinksBusy) return;
       this.topicLinksBusy = true;
       this.topicLinksNote = '';
+      this.topicLinksDone = 0;
+      this.topicLinksTotal = 0;
       const res = await this.$store.dispatch('okf/startTopicLinks', { repoId: this.repoId });
       if (!res || !res.ok) {
         this.topicLinksBusy = false;
@@ -977,6 +996,8 @@ export default {
       if (run.status === 'running') {
         const done = Number(run.batches_done || 0);
         const total = Number(run.batches_total || 0);
+        this.topicLinksDone = done;
+        this.topicLinksTotal = total;
         this.topicLinksNote = total
           ? this.translate('okf.validation.topicLinks.progress', 'Cross-linking… {done} of {total} batches')
               .replace('{done}', String(done))
@@ -986,6 +1007,8 @@ export default {
         return;
       }
       this.topicLinksBusy = false;
+      this.topicLinksDone = 0;
+      this.topicLinksTotal = 0;
       if (run.status === 'failed') {
         this.topicLinksNote = this.translate('okf.validation.topicLinks.failed', 'Cross-linking failed: {msg}').replace(
           '{msg}',

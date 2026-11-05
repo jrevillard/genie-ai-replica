@@ -21,7 +21,9 @@ jest.mock('@/services/repoOkfService', () => ({
     get: jest.fn(),
     getMetrics: jest.fn().mockResolvedValue(null),
     patchConcept: jest.fn().mockResolvedValue({ ok: true }),
-    bulkPiiAction: jest.fn().mockResolvedValue({ ok: true }),
+    // UX-4 (#1514): the editor drives the DETACHED bulk job; same
+    // resolution shape, no poll (the mock resolves immediately).
+    bulkPiiActionDetached: jest.fn().mockResolvedValue({ ok: true, action: 'accept', concepts_affected: 0 }),
     resplit: jest.fn(),
     autocorrect: jest.fn().mockResolvedValue({ ok: true, changes: [], warnings: [] }),
     importConcepts: jest.fn().mockResolvedValue({ ok: true }),
@@ -535,7 +537,7 @@ describe('OkfRepoEditor - bulk PII action failure surfacing (round 18, #80480)',
   // ZERO feedback while the flags stayed as if the action had run.
   it('a rejected bulk action surfaces a readable error and resets the dialog', async () => {
     const repoOkfService = require('@/services/repoOkfService').default;
-    repoOkfService.bulkPiiAction.mockRejectedValueOnce(
+    repoOkfService.bulkPiiActionDetached.mockRejectedValueOnce(
       Object.assign(new Error('drain freeze'), { code: 'PUBLISH_DRAIN_ACTIVE' })
     );
     const store = realStore();
@@ -554,7 +556,7 @@ describe('OkfRepoEditor - bulk PII action failure surfacing (round 18, #80480)',
 
   it('a successful bulk action refreshes the concept list and stays quiet', async () => {
     const repoOkfService = require('@/services/repoOkfService').default;
-    repoOkfService.bulkPiiAction.mockResolvedValueOnce({ ok: true, results: [] });
+    repoOkfService.bulkPiiActionDetached.mockResolvedValueOnce({ ok: true, results: [] });
     const store = realStore();
     const wrapper = mount(OkfRepoEditor, {
       global: { plugins: [store] },

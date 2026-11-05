@@ -2018,6 +2018,7 @@ export default {
         done_redact:
           'Phetile — litaba tse tšoailitsoeng ho dikgopolo {n} li nkelwe sebaka ke tsebiso ea ho pata boitsebiso.',
         done_remove: 'Phetile — litaba tse tšoailitsoeng ho dikgopolo {n} li tlositsoe.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Sireletsa boitsebiso ho litaba tsohle tse tšoailoeng',
           remove: 'Tlosa litaba tsohle tse tšoailoeng',
@@ -2888,7 +2889,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Theha leqephe la Mehlodi mme o hokahanye maqephe {n}',
@@ -3066,7 +3066,9 @@ export default {
       title: 'Ditag tsa frontmatter — repo ena e bua ka eng',
       help: 'Ditag di hlalosa seo repo ena e se nang sone le — ka bolekelo bo lekanang — seo e SE NANG sone (lenane la thibelo). Di khetla hore na dipotso dife di rutelang ho repo ena. Tlanya Refresh ho hlalosa ho tloha korpusing, kapa o fetole dikhipo ka tlase. Publish e hloka ≥3 topic + ≥1 forbidden.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Maea a haellang — kenya hape ho a sebetsa',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM e kgutlisitse ha ho na ditag. Leka hape ha korpusi e ntse e hola.',
       suggestCoverage:
         'E qobetiloe ho {sampled} ho {total} mohlopong, maphapalong {labels} le labelo tsa hierarchyla tsebohetsoeng.',
@@ -3096,7 +3098,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Maea a haellang — kenya hape ho a sebetsa'
       },
       tab: {
         head: 'Head',

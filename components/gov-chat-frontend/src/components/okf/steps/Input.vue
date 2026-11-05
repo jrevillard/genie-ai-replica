@@ -61,9 +61,12 @@
         @label="onTreeLabel"
         @pii-bulk="onPiiBulkAsk"
       />
-      <!-- POST-ACTION FEEDBACK (#1040): a success line in a live region —
-           what ran, on how many concepts, and what changed in the list. -->
-      <p v-if="piiBulkNote" class="okf-step__pii-note" role="status">{{ piiBulkNote }}</p>
+      <!-- LIVE BULK PROGRESS + POST-ACTION FEEDBACK (#1040, UX-4 #1514):
+           while the detached job runs the note IS the processed-of-total
+           readout (rendered from piiBulkProgress, never a copied state);
+           after it settles the terminal done/failed line takes over. -->
+      <p v-if="piiBulkProgress" class="okf-step__pii-note" role="status">{{ piiBulkProgressLabel }}</p>
+      <p v-else-if="piiBulkNote" class="okf-step__pii-note" role="status">{{ piiBulkNote }}</p>
     </div>
     <p v-else class="okf-step__note">
       {{ translate('okf.steps.input.noRepoYet', 'Create the repository first (go back to Entry).') }}
@@ -272,11 +275,21 @@ export default {
       // Explicit post-action feedback (David: "no visual feedback in step 3"):
       // the dialog closes and the flagged pill vanishes — without this line
       // nothing TELLS the user what just happened.
-      piiBulkNote: ''
+      piiBulkNote: '',
+      // UX-4 (#1514): live processed-of-total from the detached bulk job.
+      piiBulkProgress: null
     };
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
+    // UX-4 (#1514): the live note while the detached bulk job runs — the
+    // processed-of-total readout under the busy dialog.
+    piiBulkProgressLabel() {
+      const p = this.piiBulkProgress || { done: 0, total: 0 };
+      return this.translate('okf.editor.piiBulk.progress', 'Applying… {done}/{total}')
+        .replace('{done}', String(p.done))
+        .replace('{total}', String(p.total));
+    },
     variant() {
       return (this.draft && this.draft.source) || 'documents';
     },
@@ -421,6 +434,11 @@ export default {
     this.refreshConcepts();
     this.loadLabelOptions();
   },
+  beforeUnmount() {
+    // UX-4 (#1514): a detached bulk PII poll stops within one cadence when
+    // the wizard leaves this step (the server job itself continues).
+    if (this._bulkPiiSignal) this._bulkPiiSignal.aborted = true;
+  },
   methods: {
     emitGate() {
       this.$emit('gate', this.canAdvance);
@@ -443,7 +461,20 @@ export default {
       this.inputError = '';
       const action = this.piiBulkAsk;
       try {
-        const result = await repoOkfService.bulkPiiAction(this.repoId, action);
+        // UX-4 (#1514): the DETACHED job — the arm answers the same 409
+        // drain-freeze / 400 the synchronous call did, and onProgress turns
+        // the note into a live processed-of-total readout (a large flagged
+        // set is minutes of sequential writes; the busy dialog alone froze
+        // silently over them). The signal stops the client-side poll if the
+        // wizard step unmounts mid-run (the server job continues).
+        this._bulkPiiSignal = { aborted: false };
+        this.piiBulkProgress = { done: 0, total: 0 };
+        const result = await repoOkfService.bulkPiiActionDetached(this.repoId, action, {
+          onProgress: (p) => {
+            this.piiBulkProgress = { done: Number(p.processed || 0), total: Number(p.total || 0) };
+          },
+          signal: this._bulkPiiSignal
+        });
         if (!result || !result.ok) {
           this.inputError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
           return;
@@ -473,6 +504,7 @@ export default {
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;
+        this.piiBulkProgress = null;
       }
     },
     // T2: the tree is the live truth — refreshed after EVERY mutation.

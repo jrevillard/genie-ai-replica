@@ -79,8 +79,21 @@
            indeterminate bar with live elapsed seconds — the panes stay
            interactive instead of the page freezing on a wait dialog. -->
       <div v-if="longAction" class="okf-re__long" role="status">
-        <DsProgress indeterminate :value="1" size="xs" class="okf-re__long-bar" />
-        <span class="okf-re__long-label">{{ longAction.label }} · {{ longElapsed }}</span>
+        <!-- UX-4 (#1514): indeterminate by default; an action that knows its
+             size (the detached bulk PII job) binds done/total and the bar
+             becomes a real one. -->
+        <DsProgress
+          :value="longAction.done || 0"
+          :max="longAction.total || 1"
+          :indeterminate="!longAction.total"
+          size="xs"
+          class="okf-re__long-bar"
+        />
+        <span class="okf-re__long-label">
+          {{ longAction.label
+          }}<template v-if="longAction.total"> · {{ longAction.done }}/{{ longAction.total }}</template> ·
+          {{ longElapsed }}
+        </span>
       </div>
       <template v-if="centerView === 'files'">
         <!-- CROSS-REPO STALE-STATE GUARD (David, 2026-09-06): render the
@@ -687,6 +700,10 @@ export default {
     // timer on the dead instance — the flag gates startConversionWatch and
     // waitForConversionTerminal, and every timer dies here.
     this._torndown = true;
+    // UX-4 (#1514): a detached bulk PII job's poll loop stops within one
+    // cadence on unmount (the server job itself continues; re-entering the
+    // editor re-arms a fresh view of it).
+    if (this._bulkPiiSignal) this._bulkPiiSignal.aborted = true;
     this.endLongAction();
     this.stopConversionWatch();
     clearTimeout(this._sourceNoteTimer);
@@ -753,12 +770,20 @@ export default {
     // while the panes stay interactive.
     beginLongAction(label) {
       this.endLongAction();
-      this.longAction = { label, startedAt: Date.now() };
+      this.longAction = { label, startedAt: Date.now(), done: null, total: null };
       this.longElapsed = '0s';
       this._longTimer = setInterval(() => {
         if (!this.longAction) return;
         this.longElapsed = Math.round((Date.now() - this.longAction.startedAt) / 1000) + 's';
       }, 1000);
+    },
+    // UX-4 (#1514): a long action that KNOWS its size (the detached bulk PII
+    // job's processed-of-total) turns the strip's indeterminate bar into a
+    // real one. Null-safe for every caller that has no counts.
+    setLongProgress({ total, processed } = {}) {
+      if (!this.longAction) return;
+      this.longAction.total = Number(total || 0);
+      this.longAction.done = Number(processed || 0);
     },
     endLongAction() {
       if (this._longTimer) {
@@ -1122,7 +1147,16 @@ export default {
       this.piiBulkBusy = true;
       this.beginLongAction(this.translate('okf.editor.actions.bulkPii', 'Applying the bulk PII action'));
       try {
-        const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+        // UX-4 (#1514): the DETACHED job — the arm answers the same 409
+        // drain-freeze / 400 the synchronous call did (assertWritable on the
+        // arm route), and onProgress turns the long-action strip into a real
+        // processed-of-total bar over a large flagged set. The signal stops
+        // the client-side poll on unmount (the server job continues).
+        this._bulkPiiSignal = { aborted: false };
+        const result = await repoOkfService.bulkPiiActionDetached(this.repoId, this.piiBulkAsk, {
+          onProgress: (p) => this.setLongProgress(p),
+          signal: this._bulkPiiSignal
+        });
         if (!result || !result.ok) {
           this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
           return;
@@ -1132,12 +1166,12 @@ export default {
         // save-triggered rescans until an explicit re-scan.
         await this.$store.dispatch('okf/fetchConcepts', this.repoId);
       } catch (err) {
-        // A rejected bulkPiiAction (409 drain-freeze, 5xx, network) must
-        // surface — without this the dialog closed, the strip reset and the
-        // user got zero feedback while the flags stayed (round 18, #80480).
-        // The message composer is the SHARED one (#80930 — same as the
-        // wizard Input step's handler; the duplicated catch is how the
-        // round-19 fix missed one copy).
+        // A rejected bulk PII action (409 drain-freeze, 5xx, network, job
+        // failure) must surface — without this the dialog closed, the strip
+        // reset and the user got zero feedback while the flags stayed
+        // (round 18, #80480). The message composer is the SHARED one
+        // (#80930 — same as the wizard Input step's handler; the duplicated
+        // catch is how the round-19 fix missed one copy).
         console.debug('[RepoEditor] bulk PII action rejected', {
           code: (err && err.code) || '',
           message: err && err.message

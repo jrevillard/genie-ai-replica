@@ -2006,6 +2006,7 @@ export default {
           'Imekamilika — kila kitambulisho kilichowekewa alama kimeitiwa alama ya kukaguliwa na kuhifadhiwa kwenye dhana {n}. Alama za PII zimeondolewa.',
         done_redact: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yamebadilishwa na taarifa ya kuficha.',
         done_remove: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yameondolewa.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Kinga maelezo yote yaliyowekewa alama',
           remove: 'Ondoa maudhui yote yaliyowekewa alama',
@@ -2873,7 +2874,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Unda ukurasa wa Vyanzo na uunganishe kurasa {n}',
@@ -3051,7 +3051,9 @@ export default {
       title: 'Lebo za frontmatter — hazina hii inahusu nini',
       help: 'Lebo zinaeleza kile ambacho hazina hii ina na — kwa umuhimu sawa — kile ambacho haina (orodha ya zilizozuiwa). Zinaamua maswali gani yanaelekezwa kwenye hazina hii. Bofya Refresh kupanga rasimu kutoka kwenye korpus, au hariri lebo hapa chini. Kuchapisha kunahitaji topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Lebo zimepitwa na wakati — ingiza tena ili zitumike',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM haikurudisha lebo zozote. Jaribu tena baada ya korpus kukua.',
       suggestCoverage: 'Imetokana na {sampled} kati ya {total} dhana, katika {labels} lebo za mpangilio wa maarifa.',
       suggestFailed: 'Suggest failed.',
@@ -3080,7 +3082,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Lebo zimepitwa na wakati — ingiza tena ili zitumike'
       },
       tab: {
         head: 'Head',

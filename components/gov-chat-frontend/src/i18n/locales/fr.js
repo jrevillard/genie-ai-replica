@@ -2028,6 +2028,7 @@ export default {
           'Terminé — chaque entité signalée est marquée vérifiée-et-conservée sur {n} concept(s). Les drapeaux PII sont levés.',
         done_redact: 'Terminé — le contenu signalé sur {n} concept(s) est remplacé par la mention de caviardage.',
         done_remove: 'Terminé — le contenu signalé sur {n} concept(s) est supprimé.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
@@ -2902,7 +2903,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Créer la page Sources et lier {n} page(s)',
@@ -3082,7 +3082,9 @@ export default {
       title: 'Tags de frontmatter — le sujet de ce dépôt',
       help: "Les tags décrivent ce que contient ce dépôt et — tout aussi important — ce qu'il ne contient PAS (la liste des interdits). Ils déterminent quelles requêtes routent vers ce dépôt. Cliquez sur Actualiser pour proposer une rédaction depuis le corpus, ou modifiez les puces ci-dessous. La publication exige ≥3 sujets + ≥1 interdit.",
       refresh: 'Refresh suggestions',
+      labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: "Le LLM n'a renvoyé aucun tag. Réessayez une fois le corpus étoffé.",
       suggestCoverage:
         'Dérivé de {sampled} concepts sur {total}, répartis sur {labels} étiquettes de la hiérarchie de connaissances.',
@@ -3112,7 +3114,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer'
       },
       tab: {
         head: 'Head',

@@ -434,6 +434,25 @@ describe('Swagger Configuration', () => {
       });
     });
 
+    it('an API_URL that is not usable as a server BASE is ignored (a query, a fragment or a space breaks the joined path)', () => {
+      // The server base is JOINED with the annotated paths
+      // (servers[0].url + '/api/...'), so it must be usable as a base: a
+      // query or a fragment would swallow the joined path, and a literal
+      // space is not a valid URL (WHATWG parsing only tolerates it by
+      // percent-encoding it). WHATWG parsing accepts all three, so the
+      // base-usability check is what rejects them — and the served
+      // document stays truthful instead of advertising a broken base.
+      withApiUrl('https://gov.example.com/gov?tenant=1', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https://gov.example.com/gov#top', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https://gov.example.com/a b', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+    });
+
     it('every annotated path starts with /api (Try-it-out keeps the prefix for any server base)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const spec = buildSpecWithRealFs(swaggerOptions);

@@ -27,10 +27,11 @@ module.exports = {
       // under env -i to bake a deterministic base into the committed Dart
       // artifacts). A value that is not an absolute http(s) URL after
       // normalization (trim, control-character rejection, trailing-slash
-      // strip) is ignored — a scheme-only, scheme-less or broken value
-      // would serve a broken server entry. No shared helper with
-      // document-repository: the generator loads this module with bare
-      // node (no Jest mapper), where ./shared-lib does not resolve.
+      // strip, base-usability check below) is ignored — a scheme-only,
+      // scheme-less or broken value would serve a broken server entry.
+      // No shared helper with document-repository: the generator loads this
+      // module with bare node (no Jest mapper), where ./shared-lib does not
+      // resolve.
       url: (() => {
         const raw = (process.env.API_URL || '').trim();
         // WHATWG parsing strips tab/LF/CR before parsing, so a value with
@@ -38,6 +39,13 @@ module.exports = {
         // is built — otherwise it would be served silently rewritten.
         if (/[\t\n\r]/.test(raw)) return '/';
         const base = raw.replace(/\/+$/, '');
+        // The server base is JOINED with the annotated paths
+        // (servers[0].url + '/api/...'), so it must be usable as a base:
+        // a query or a fragment would swallow the joined path, and a
+        // whitespace is not a valid URL (WHATWG only tolerates it by
+        // percent-encoding it). Such a value would serve a broken server
+        // entry, so it is ignored like any other malformed value.
+        if (/[\s?#]/.test(base)) return '/';
         try {
           // WHATWG parsing is the exact validator: it rejects scheme-only
           // and scheme-less values; a valid URL is served verbatim

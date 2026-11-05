@@ -666,7 +666,10 @@ describe('cross-tab renew lease (#80800)', () => {
       // a done MARKER alone carries no token.
       const published = createMockUser({ access_token: 'holder-published-token' });
       setTimeout(() => {
-        window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
+        window.localStorage.setItem(
+          RENEW_USER_KEY,
+          JSON.stringify({ at: Date.now(), tab: 'other-tab', user: published })
+        );
         window.localStorage.removeItem(RENEW_LEASE_KEY);
       }, 300);
       const p = keycloakAuthService.signinSilent();
@@ -814,19 +817,58 @@ describe('cross-tab renew lease (#80800)', () => {
     }
   });
 
-  it('LEASE path: a FREE lease with a fresh publication ADOPTS — no fresh grant (round 25 twin-miss, 83380)', async () => {
+  // ── #1521: the adoption gate gains an owner identity. A publication from
+  // ANOTHER tab is adoptable regardless of startedAt (the waiter may start
+  // after the holder finished); THIS tab's own stale publication is not —
+  // a repeat renew in one tab must run its own grant, not adopt its own
+  // previous publication instead of actually refreshing.
+
+  it("does NOT adopt THIS tab's own stale publication — a repeat renew runs its own grant (#1521)", async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // First renew: our own grant, published under OUR tab id.
+    mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'grant-one' }));
+    await keycloakAuthService.signinSilent();
+    // Second renew: the fresh publication on disk is OURS and stamped before
+    // this renew started — adopting it would skip the actual refresh.
+    mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'grant-two' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('grant-two'); // its OWN grant, not grant-one
+    expect(mockSigninSilent).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats an owner-less (old-build) publication as its own: stale stamp → own grant (#1521)', async () => {
+    delete navigator.locks;
+    // A publication written by an older build carries no tab id — the
+    // conservative reading treats it as this tab's own, so a stale stamp is
+    // inadmissible and this tab renews itself.
+    const orphanUser = createMockUser({ access_token: 'orphan-published-token' });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, user: orphanUser }));
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('my-own-grant');
+    expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('LEASE path: a FREE lease with a publication from ANOTHER tab ADOPTS even when stamped BEFORE this renew started (#1521)', async () => {
     // The 81377 ordering fix landed on the Web-Locks path only; the lease
     // fallback acquired the FREE lease first, skipped the publication loop,
     // and burned a fresh grant on the rotated-away token. jsdom has no
     // navigator.locks, so signinSilent takes renewViaLease — exactly the
-    // engine class the fallback exists for. Pre-fix, this test goes red:
-    // the grant runs and mockSigninSilent IS called.
+    // engine class the fallback exists for. Pre-#1521 this test goes red:
+    // the startedAt gate rejects a publication stamped before this renew
+    // began, the grant runs, and mockSigninSilent IS called.
     delete navigator.locks;
     const holderUser = createMockUser({ access_token: 'lease-holder-token' });
-    // +5s stamp: admissible to the startedAt gate without racing it (the
-    // same CI-flake rationale as the free-lock test below — round 25 moved
-    // it INSIDE the web-locks describe, under this test).
-    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+    // The REAL #1521 scenario: the holder finished 10 ms BEFORE this renew
+    // started (a real publishRenewedUser stamps Date.now() — never the
+    // future stamp the old tests seeded), so the publication's tab id makes
+    // it adoptable regardless of startedAt.
+    window.localStorage.setItem(
+      RENEW_USER_KEY,
+      JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser })
+    );
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
     const user = await keycloakAuthService.signinSilent();
@@ -961,7 +1003,10 @@ describe('cross-tab renew lease (#80800)', () => {
         await initialized();
         const published = createMockUser({ access_token: 'locked-holder-token' });
         setTimeout(() => {
-          window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
+          window.localStorage.setItem(
+            RENEW_USER_KEY,
+            JSON.stringify({ at: Date.now(), tab: 'other-tab', user: published })
+          );
         }, 300);
         const p = keycloakAuthService.signinSilent();
         const assertion = expect(p).resolves.toMatchObject({ access_token: 'locked-holder-token' });
@@ -979,18 +1024,21 @@ describe('cross-tab renew lease (#80800)', () => {
     // 8-line try/finally descriptor save/restore whose restore branch could
     // never meaningfully fire (jsdom HAS no navigator.locks to restore).
     // Inside the describe, the cleanup convention is the describe's own.
-    it('a FREE lock with a fresh publication ADOPTS it — no fresh grant on a rotated-away token (round 23)', async () => {
+    it('a FREE lock with a publication from ANOTHER tab ADOPTS it even when stamped BEFORE this renew started (#1521)', async () => {
       Object.defineProperty(navigator, 'locks', {
         configurable: true,
         value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
       });
       const holderUser = createMockUser({ access_token: 'holder-finished-token' });
-      // Stamp the publication 5 s AHEAD of the wall clock: the adoption gate
-      // is `entry.at >= startedAt`, and seeding at exactly Date.now() races
-      // the call's own startedAt capture by a millisecond (CI-only flake —
-      // locally the same tick won). A future stamp is always admissible to
-      // the gate and to the TTL cleanup.
-      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+      // The REAL #1521 scenario: the holder finished 10 ms BEFORE this renew
+      // started (a real publishRenewedUser stamps Date.now() — the old +5s
+      // future stamp was unreachable in production and papered over the
+      // startedAt gate). The publication carries the holder's tab id, so the
+      // gate admits it regardless of startedAt.
+      window.localStorage.setItem(
+        RENEW_USER_KEY,
+        JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser })
+      );
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
       const user = await keycloakAuthService.signinSilent();

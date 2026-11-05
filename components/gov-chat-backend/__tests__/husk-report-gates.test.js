@@ -7,7 +7,13 @@
  * database factory (createApp()-style).
  */
 
-const { parseAndGateArgs, main, HUSK_MATCHER_AQL, HUSK_REMOVAL_AQL } = require('../scripts/report-husk-user-docs');
+const {
+  parseAndGateArgs,
+  main,
+  HUSK_MATCHER_AQL,
+  HUSK_REMOVAL_AQL,
+  ALL_DOCS_AQL
+} = require('../scripts/report-husk-user-docs');
 
 const huskDoc = {
   _key: '12345',
@@ -29,7 +35,7 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0 } = {}) {
     if (aql === HUSK_MATCHER_AQL) {
       return { all: async () => husks };
     }
-    if (aql.trim() === 'FOR u IN @@collection RETURN u') {
+    if (aql === ALL_DOCS_AQL) {
       return { all: async () => allDocs };
     }
     if (aql === HUSK_REMOVAL_AQL) {
@@ -67,11 +73,14 @@ describe('parseAndGateArgs', () => {
     errorSpy.mockRestore();
   });
 
-  it('defaults to dry-run report mode with the documented defaults', () => {
+  it('returns the fully resolved run config with the documented defaults', () => {
     expect(parseAndGateArgs([], gateEnv)).toEqual({
       mode: 'report',
+      database: 'genie-ai',
       collection: 'users',
-      arangoUrl: 'http://localhost:8529'
+      arangoUrl: 'http://localhost:8529',
+      username: 'root',
+      password: 'pw'
     });
   });
 

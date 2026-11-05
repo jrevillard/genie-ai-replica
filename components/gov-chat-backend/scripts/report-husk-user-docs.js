@@ -127,6 +127,10 @@ FOR u IN @@collection
   RETURN u
 `;
 
+// The full-collection read the divergence cross-check compares against the
+// matcher.
+const ALL_DOCS_AQL = 'FOR u IN @@collection RETURN u';
+
 // The removal: keys selected by the matcher, re-filtered through the full
 // signature at removal time so a concurrent disqualifying write (e.g. a GDPR
 // soft-delete landing between SELECT and REMOVE) is skipped, not destroyed.
@@ -166,8 +170,9 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 /**
  * Parses the CLI arguments and the operator gates. Side effects: on a failed
  * gate it prints the reason to stderr and sets process.exitCode, then returns
- * null; when every gate passes it returns the run configuration
- * { mode: 'report' | 'delete', collection, arangoUrl }. It reads only its
+ * null; when every gate passes it returns the fully resolved run
+ * configuration { mode, database, collection, arangoUrl, username, password }
+ * — the single source main() reads after gating. It reads only its
  * parameters (no module state, no process.argv/env), which is what makes it
  * unit-testable. Exported for tests (issue #1494).
  * @param {string[]} argv
@@ -175,19 +180,20 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
  * @returns {Object|null}
  */
 function parseAndGateArgs(argv, env) {
+  const fail = (message) => {
+    console.error(message);
+    process.exitCode = 1;
+    return null;
+  };
   const doDelete = argv.includes('--delete');
   const doConfirm = argv.includes('--yes');
 
   if (doDelete && !doConfirm) {
-    console.error('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
-    process.exitCode = 1;
-    return null;
+    return fail('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
   }
 
   if (!env.ARANGO_PASSWORD) {
-    console.error('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
-    process.exitCode = 1;
-    return null;
+    return fail('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
   }
 
   // No default database name: the app's database differs per deployment
@@ -196,18 +202,19 @@ function parseAndGateArgs(argv, env) {
   // operator cannot tell "this environment is clean" from "this is the wrong
   // database". So the operator must name it, and it must exist.
   if (!env.ARANGO_DB) {
-    console.error(
+    return fail(
       'ARANGO_DB is required (the database the app uses — e.g. genie-ai in docker-compose ' +
         'deployments, node-services elsewhere). No default: a wrong database reports 0 husks.'
     );
-    process.exitCode = 1;
-    return null;
   }
 
   return {
     mode: doDelete ? 'delete' : 'report',
+    database: env.ARANGO_DB,
     collection: env.ARANGO_COLLECTION || 'users',
-    arangoUrl: env.ARANGO_URL || 'http://localhost:8529'
+    arangoUrl: env.ARANGO_URL || 'http://localhost:8529',
+    username: env.ARANGO_USER || 'root',
+    password: env.ARANGO_PASSWORD || ''
   };
 }
 
@@ -286,10 +293,10 @@ async function runReport(db, gated, total, husks, allDocs) {
  * writing deleted:true) is left alone; a mid-way failure cannot leave an
  * ambiguous partial state.
  */
-async function runDelete(db, gated, husks) {
+async function runDelete(db, collection, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
   const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-    '@collection': gated.collection,
+    '@collection': collection,
     keys: husks.map((doc) => doc._key)
   });
   // The removal re-asserts the signature, so docs disqualified since the
@@ -333,34 +340,33 @@ async function main({
   if (!gated) {
     return;
   }
-  const { mode, collection: COLLECTION, arangoUrl: ARANGO_URL } = gated;
 
   const db = createDatabase({
-    url: ARANGO_URL,
-    databaseName: env.ARANGO_DB,
+    url: gated.arangoUrl,
+    databaseName: gated.database,
     auth: {
-      username: env.ARANGO_USER || 'root',
-      password: env.ARANGO_PASSWORD || ''
+      username: gated.username,
+      password: gated.password
     }
   });
   if (!(await db.exists())) {
-    console.error(`Database '${db.name}' does not exist on ${ARANGO_URL} — check ARANGO_DB and ARANGO_URL.`);
+    console.error(`Database '${db.name}' does not exist on ${gated.arangoUrl} — check ARANGO_DB and ARANGO_URL.`);
     process.exitCode = 1;
     return;
   }
-  const collection = db.collection(COLLECTION);
+  const collection = db.collection(gated.collection);
   let total;
   try {
     total = (await collection.count()).count || 0;
   } catch {
     console.error(
-      `Collection '${COLLECTION}' not found in database '${db.name}' on ${ARANGO_URL} — check ARANGO_COLLECTION.`
+      `Collection '${gated.collection}' not found in database '${db.name}' on ${gated.arangoUrl} — check ARANGO_COLLECTION.`
     );
     process.exitCode = 1;
     return;
   }
 
-  const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
+  const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': gated.collection });
   const husks = await huskCursor.all();
 
   // Defense against AQL/predicate divergence — abort before any destructive
@@ -371,7 +377,7 @@ async function main({
   // full of them). Only _key and attribute NAMES are printed: the mismatch
   // documents are by definition not husks and can carry real PII, which must
   // not reach the log store via stderr.
-  const allDocsCursor = await db.query('FOR u IN @@collection RETURN u', { '@collection': COLLECTION });
+  const allDocsCursor = await db.query(ALL_DOCS_AQL, { '@collection': gated.collection });
   const allDocs = await allDocsCursor.all();
   const { extra, missed } = compareSignatureSets(husks, allDocs);
   if (extra.length > 0 || missed.length > 0) {
@@ -394,10 +400,10 @@ async function main({
   // The report prints on EVERY mode — including --delete, whose stdout is the
   // audit record of what the destructive run selected (old behavior).
   await runReport(db, gated, total, husks, allDocs);
-  if (mode !== 'delete') {
+  if (gated.mode !== 'delete') {
     return;
   }
-  await runDelete(db, gated, husks);
+  await runDelete(db, gated.collection, husks);
 }
 
 if (require.main === module) {
@@ -424,5 +430,6 @@ module.exports = {
   HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
-  HUSK_REMOVAL_AQL
+  HUSK_REMOVAL_AQL,
+  ALL_DOCS_AQL
 };

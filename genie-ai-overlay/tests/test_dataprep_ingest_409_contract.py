@@ -10,6 +10,7 @@ response shape must fail THIS suite, not the consumer's behaviour in production
 marking live files ``Ingestion Error``).
 """
 
+import contextlib
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,23 +35,34 @@ def _payload(file_id="test-file-123"):
     )
 
 
-@pytest.fixture
-def live_task():
-    """A NOT-done ingestion task already registered for the payload's fileId."""
-    task = MagicMock()
-    task.done.return_value = False
-    return task
+@contextlib.contextmanager
+def _ingest_mocks(tasks):
+    """Patch everything between the request and the guard body.
+
+    Without the slot + filesystem patches, a run where any ingest slot is
+    occupied (a leaked FD, a parallel suite) answers 429 before reaching the
+    guard — the tests would fail for a reason that has nothing to do with the
+    contract they pin.
+    """
+    with (
+        patch.object(ms, "active_ingestion_tasks", tasks),
+        patch.object(ms, "tracer"),
+        patch.object(ms, "upload_folder", "/tmp/test-ingest-409-contract"),
+        patch.object(ms, "acquire_ingest_slot", return_value=MagicMock()),
+        patch("fcntl.flock"),
+        patch("builtins.open", MagicMock()),
+    ):
+        yield ms
 
 
 @pytest.mark.asyncio
 @requires_fcntl
-async def test_409_body_carries_the_machine_readable_code(live_task):
+async def test_409_body_carries_the_machine_readable_code():
     """The guard's 409 body MUST carry code='ingest_already_running' — consumers match on it."""
     payload = _payload()
-    with (
-        patch.object(ms, "active_ingestion_tasks", {payload.fileId: live_task}),
-        patch.object(ms, "tracer"),
-    ):
+    live_task = MagicMock()
+    live_task.done.return_value = False
+    with _ingest_mocks({payload.fileId: live_task}):
         response = await ms.ingest_file_from_repo(payload)
     assert response.status_code == 409
     body = json.loads(response.body)
@@ -59,13 +71,12 @@ async def test_409_body_carries_the_machine_readable_code(live_task):
 
 @pytest.mark.asyncio
 @requires_fcntl
-async def test_409_detail_names_the_file_and_stays_human_readable(live_task):
+async def test_409_detail_names_the_file_and_stays_human_readable():
     """The prose detail survives (operators read it in logs) and names the exact fileId."""
     payload = _payload("my-file")
-    with (
-        patch.object(ms, "active_ingestion_tasks", {payload.fileId: live_task}),
-        patch.object(ms, "tracer"),
-    ):
+    live_task = MagicMock()
+    live_task.done.return_value = False
+    with _ingest_mocks({payload.fileId: live_task}):
         response = await ms.ingest_file_from_repo(payload)
     body = json.loads(response.body)
     assert "my-file" in body["detail"]
@@ -75,18 +86,14 @@ async def test_409_detail_names_the_file_and_stays_human_readable(live_task):
 @pytest.mark.asyncio
 @requires_fcntl
 async def test_done_task_does_not_conflict():
-    """A finished task must NOT trigger the guard — the ingest proceeds."""
+    """A finished task must NOT trigger the guard — the ingest proceeds and reports success."""
     payload = _payload()
     done_task = MagicMock()
     done_task.done.return_value = True
-    with (
-        patch.object(ms, "active_ingestion_tasks", {payload.fileId: done_task}),
-        patch.object(ms, "tracer"),
-        patch.object(ms, "upload_folder", "/tmp/test-ingest"),
-        patch("builtins.open", MagicMock()),
-        patch("fcntl.flock"),
-        patch.object(ms, "loader") as mock_loader,
-    ):
+    with _ingest_mocks({payload.fileId: done_task}), patch.object(ms, "loader") as mock_loader:
         mock_loader.ingest_file_with_guardrail = AsyncMock()
         result = await ms.ingest_file_from_repo(payload)
-    assert getattr(result, "status_code", 200) != 409
+    # Assert the success CONTRACT, not merely "not a 409": an error-shaped
+    # dict (success=False) or an HTTPException on this path is a regression.
+    assert result["success"] is True
+    assert result["status"] == 200

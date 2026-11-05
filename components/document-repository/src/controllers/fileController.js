@@ -243,16 +243,20 @@ function errorDetail(err) {
 //
 // The 409 status alone is not the signal: only the guard's own conflict is.
 // The machine-readable half of the contract is the structured `code` field
-// in the 409 body (the guard emits `code: 'ingest_already_running'` and no
-// other 409 may carry it) — the classification rides the code, so a reword
-// of the human-readable `detail` cannot silently disable the carve-out. The
-// prose match below is the backward-compat path for producer images that
-// predate the field: the guard names the file it is about ("An ingest task
-// for fileId 'X' is already running"), so the check is on BOTH halves — the
-// id must be the one we submitted, compared EXACTLY (a substring match would
-// swallow a conflict about a different file whose id merely contains ours),
-// and the message must carry the guard's meaning. Any other 409 stays on
-// the error path.
+// in the 409 body: the guard emits `code: 'ingest_already_running'`, the
+// producer-side test pins it (test_dataprep_ingest_409_contract.py), and no
+// other dataprep 409 carries it. The classification rides the code alone —
+// deliberately WITHOUT the exact-fileId check the prose path applies: the
+// code names the condition, not a file, and requiring the prose to still
+// name our id would reintroduce the wording dependence the code exists to
+// remove. A reword of the human-readable `detail` therefore cannot silently
+// disable the carve-out. The prose match below is the backward-compat path
+// for producer images that predate the field: the guard names the file it
+// is about ("An ingest task for fileId 'X' is already running"), so the
+// check is on BOTH halves — the id must be the one we submitted, compared
+// EXACTLY (a substring match would swallow a conflict about a different
+// file whose id merely contains ours), and the message must carry the
+// guard's meaning. Any other 409 stays on the error path.
 //
 // If dataprep ever drops the `code` field AND rewords the message, this
 // stops matching and the file falls back to the failure path — the pre-fix

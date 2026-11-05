@@ -596,9 +596,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             if _existing is not None and not _existing.done():
                 logger.warning(f"Rejecting ingest for {payload.fileId}: a task is already in flight (409)")
                 # The `code` field is the machine-readable half of this contract:
-                # consumers (document repository, okf-server drain worker)
-                # classify the 409 by `code`, never by parsing the prose
-                # `detail`. Pin: tests/test_dataprep_ingest_409_contract.py.
+                # the document repository classifies the 409 by `code`, never
+                # by parsing the prose `detail`. The okf-server drain worker
+                # does not read the body yet (#1259). No other 409 in this
+                # service may carry this code. Pin:
+                # tests/test_dataprep_ingest_409_contract.py.
                 return JSONResponse(
                     status_code=409,
                     content={

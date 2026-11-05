@@ -94,14 +94,19 @@ async function acquireRenewLease() {
 /** Remove the storage entry at `key` only if THIS tab owns it — the guarded
  * wipe shared by the lease release and the publication withdrawal (round 25's
  * rule: kept-in-sync-by-discipline twins drift, so the idiom lives once).
- * Removing a missing key is a no-op. */
+ * Removing a missing key is a no-op. Returns the removed entry's raw JSON —
+ * the withdrawal's caller restores it on grant failure — or null. */
 function removeOwnTabEntry(key) {
   try {
     const raw = window.localStorage.getItem(key);
-    if (raw && (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(key);
+    if (raw && (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) {
+      window.localStorage.removeItem(key);
+      return raw;
+    }
   } catch {
     /* best-effort */
   }
+  return null;
 }
 
 function releaseRenewLease() {
@@ -144,27 +149,15 @@ function clearRenewPublication() {
   }
 }
 
-/** Clear THIS tab's publication only (#1521 review): a foreign tab's entry
- * may be the only valid handoff another waiter can adopt — never touch it.
- * Used by the grant tail, whose own publication is exactly what its grant
- * invalidates. */
-function clearOwnRenewPublication() {
-  removeOwnTabEntry(RENEW_USER_KEY);
-}
-
 function clearStaleRenewPublication() {
   try {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
-    if (
-      entry &&
-      typeof entry.at === 'number' &&
-      // Past the TTL in either direction: a backward clock jump after the
-      // publish would otherwise keep a full minted token set at rest (and
-      // "stale") forever (#1521 review, loop 5).
-      (Date.now() - entry.at > RENEW_LEASE_TTL_MS || entry.at > Date.now() + RENEW_LEASE_TTL_MS)
-    ) {
+    // Past the TTL in EITHER direction: a backward clock jump after the
+    // publish would otherwise keep a full minted token set at rest (and
+    // "stale") forever (#1521 review, loop 5).
+    if (entry && typeof entry.at === 'number' && Math.abs(Date.now() - entry.at) > RENEW_LEASE_TTL_MS) {
       clearRenewPublication();
     }
   } catch {
@@ -266,13 +259,9 @@ async function adoptPublishedUser(manager, user) {
  * while the slot is still empty: a newer publication (this tab's own fresh
  * one, or another tab's) outranks the saved entry. */
 async function runRawGrantAndPublish(manager) {
-  let saved = null;
-  try {
-    saved = window.localStorage.getItem(RENEW_USER_KEY);
-  } catch {
-    /* storage unavailable — the grant runs without the save/restore pair */
-  }
-  clearOwnRenewPublication();
+  // One read+parse serves both the save and the withdrawal: removeOwnTabEntry
+  // returns the entry it removed (own tab only — never a foreign handoff).
+  const saved = removeOwnTabEntry(RENEW_USER_KEY);
   try {
     const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
     if (user) currentUser = user;
@@ -308,16 +297,25 @@ async function tryTakeLock(fn) {
  * through to taking the lock. Past the TTL with no publication the holder
  * is wedged — bounded degradation: renew without the lock, the same trade
  * the stale-lease takeover always made (a renew wedged >20s went nowhere). */
+/** One gate-and-adopt step, shared by both renewal paths (#1521 review):
+ * the idiom lives once — the next arm added to readPublishedRenew must not
+ * have to be paired with an adopt call at four sites. Null when the gate
+ * admits nothing. */
+async function tryAdoptPublication(manager) {
+  const adopted = readPublishedRenew();
+  return adopted ? adoptPublishedUser(manager, adopted) : null;
+}
+
 async function renewViaWebLock(manager, startedAt) {
   const renewOnce = () => runRawGrantAndPublish(manager);
-  const adoptedFirst = readPublishedRenew();
-  if (adoptedFirst) return adoptPublishedUser(manager, adoptedFirst);
+  const adoptedFirst = await tryAdoptPublication(manager);
+  if (adoptedFirst) return adoptedFirst;
   const held = await tryTakeLock(renewOnce);
   if (held) return held;
   while (Date.now() - startedAt < RENEW_LEASE_TTL_MS) {
     await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
-    const adopted = readPublishedRenew();
-    if (adopted) return adoptPublishedUser(manager, adopted);
+    const adopted = await tryAdoptPublication(manager);
+    if (adopted) return adopted;
     const got = await tryTakeLock(renewOnce);
     if (got) return got;
   }
@@ -333,8 +331,8 @@ async function renewViaLease(manager, startedAt) {
   // and skips the publication-consulting loop entirely → a fresh grant runs
   // on this tab's rotated-away refresh token. Read the publication BEFORE
   // the first lease claim, exactly like renewViaWebLock.
-  const adoptedFirst = readPublishedRenew();
-  if (adoptedFirst) return adoptPublishedUser(manager, adoptedFirst);
+  const adoptedFirst = await tryAdoptPublication(manager);
+  if (adoptedFirst) return adoptedFirst;
   let held = await acquireRenewLease();
   while (!held) {
     if (Date.now() - startedAt > RENEW_LEASE_TTL_MS + RENEW_WAIT_POLL_MS) {
@@ -347,8 +345,8 @@ async function renewViaLease(manager, startedAt) {
     // tokens, not just a timestamp — #80876), and only then try to take the
     // lease — checking the lease first would grab it the moment the holder
     // releases, without ever reading what it published.
-    const adopted = readPublishedRenew();
-    if (adopted) return adoptPublishedUser(manager, adopted);
+    const adopted = await tryAdoptPublication(manager);
+    if (adopted) return adopted;
     held = await acquireRenewLease();
   }
   return runRawGrantAndPublish(manager);

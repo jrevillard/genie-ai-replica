@@ -643,6 +643,17 @@ describe('cross-tab renew lease (#80800)', () => {
   // Isolation (mock implementations + the renew keys) is the file-level
   // beforeEach above.
 
+  // Seed a publication the way a real holder writes it (foreign tab id,
+  // stamped at publish time) — the shared drive for every adoption test.
+  function seedForeignPublication(token, { at = Date.now() - 10, expiresAt } = {}) {
+    const user = createMockUser({
+      access_token: token,
+      ...(expiresAt !== undefined ? { expires_at: expiresAt } : {})
+    });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at, tab: 'holder-tab', user }));
+    return user;
+  }
+
   async function initialized() {
     mockGetUser.mockResolvedValue(createMockUser());
     await keycloakAuthService.initialize();
@@ -852,18 +863,13 @@ describe('cross-tab renew lease (#80800)', () => {
     delete navigator.locks;
     jest.useFakeTimers();
     try {
-      const holderUser = createMockUser({
-        access_token: 'soon-expiring-token',
-        expires_at: Math.floor(Date.now() / 1000) + 7
+      seedForeignPublication('soon-expiring-token', {
+        expiresAt: Math.floor(Date.now() / 1000) + 7
       });
-      window.localStorage.setItem(
-        USER_KEY,
-        JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser })
-      );
       mockGetUser.mockResolvedValue(null);
-      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'unused-grant' }));
       const user = await keycloakAuthService.signinSilent();
       expect(user.access_token).toBe('soon-expiring-token');
+      expect(mockSigninSilent).not.toHaveBeenCalled();
       expect(keycloakAuthService.isAuthenticated()).toBe(true);
       // oidc's expiring/expired timers are one-shot and re-armed only by the
       // grant's internal load — the adoption re-arms them from the USER IN
@@ -884,15 +890,14 @@ describe('cross-tab renew lease (#80800)', () => {
 
   it('an ADOPTED renewal fires the onAccessTokenUpdated callbacks like a granted one (#1521 review)', async () => {
     delete navigator.locks;
-    const holderUser = createMockUser({ access_token: 'adopted-callback-token' });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser }));
+    seedForeignPublication('adopted-callback-token');
     mockGetUser.mockResolvedValue(null);
-    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'unused-grant' }));
     const cb = jest.fn();
     keycloakAuthService.onAccessTokenUpdated(cb);
     try {
       const user = await keycloakAuthService.signinSilent();
       expect(user.access_token).toBe('adopted-callback-token');
+      expect(mockSigninSilent).not.toHaveBeenCalled();
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'adopted-callback-token' }));
     } finally {
       keycloakAuthService.removeAccessTokenUpdatedCallback(cb);
@@ -912,8 +917,7 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(mockSigninRedirect).not.toHaveBeenCalled();
     // An ADOPTION is a success: the counter resets (the granted path resets
     // it through oidc's addUserLoaded event; the adopted path must too).
-    const holderUser = createMockUser({ access_token: 'adopted-after-failures' });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser }));
+    seedForeignPublication('adopted-after-failures');
     const adopted = await keycloakAuthService.signinSilent();
     expect(adopted.access_token).toBe('adopted-after-failures');
     // The next failure is the FIRST again (counter 1 < cap 3) — without the
@@ -931,8 +935,7 @@ describe('cross-tab renew lease (#80800)', () => {
   it('does not RE-adopt the identical publication — a second renew grants (#1521 review loop 5)', async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
-    const holderUser = createMockUser({ access_token: 'holder-pub-token' });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+    seedForeignPublication('holder-pub-token', { at: Date.now() });
     // First renew adopts the holder's publication (no grant runs):
     const first = await keycloakAuthService.signinSilent();
     expect(first.access_token).toBe('holder-pub-token');
@@ -951,11 +954,7 @@ describe('cross-tab renew lease (#80800)', () => {
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant' }));
     // A backward clock jump after the publish leaves `at` in the future —
     // a full minted token set must not sit at rest past the TTL.
-    const futureUser = createMockUser({ access_token: 'future-stamped-pub' });
-    window.localStorage.setItem(
-      USER_KEY,
-      JSON.stringify({ at: Date.now() + 30000, tab: 'holder-tab', user: futureUser })
-    );
+    seedForeignPublication('future-stamped-pub', { at: Date.now() + 30000 });
     await keycloakAuthService.signinSilent();
     // The future entry is gone; this tab's own grant republished the slot.
     const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
@@ -1003,11 +1002,10 @@ describe('cross-tab renew lease (#80800)', () => {
     // Tab A publishes under ITS tab id. The user is expired so this tab
     // cannot adopt it (the expiry check is the gate's second arm) and falls
     // through to its own grant, which fails.
-    const holderUser = createMockUser({
-      access_token: 'foreign-holder-token',
-      expires_at: Math.floor(Date.now() / 1000) - 100
+    seedForeignPublication('foreign-holder-token', {
+      at: Date.now(),
+      expiresAt: Math.floor(Date.now() / 1000) - 100
     });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockRejectedValueOnce(new Error('grant refused'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
@@ -1049,10 +1047,7 @@ describe('cross-tab renew lease (#80800)', () => {
     // the startedAt gate rejects a publication stamped before this renew
     // began, the grant runs, and mockSigninSilent IS called.
     delete navigator.locks;
-    const holderUser = createMockUser({ access_token: 'lease-holder-token' });
-    // Stamped 10 ms BEFORE this renew started — the #1521 scenario (see the
-    // block comment above).
-    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser }));
+    seedForeignPublication('lease-holder-token');
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
     const user = await keycloakAuthService.signinSilent();
@@ -1213,13 +1208,7 @@ describe('cross-tab renew lease (#80800)', () => {
         configurable: true,
         value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
       });
-      const holderUser = createMockUser({ access_token: 'holder-finished-token' });
-      // Stamped 10 ms BEFORE this renew started — the #1521 scenario (see
-      // the #1521 block comment above).
-      window.localStorage.setItem(
-        RENEW_USER_KEY,
-        JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser })
-      );
+      seedForeignPublication('holder-finished-token');
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
       const user = await keycloakAuthService.signinSilent();

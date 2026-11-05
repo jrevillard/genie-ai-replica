@@ -10,7 +10,7 @@ const {
 } = require('../constants/satisfaction-periods');
 
 /**
- * Build the five weekly satisfaction periods, most recent last.
+ * Build the five weekly satisfaction periods, most recent first.
  * @param {Number} endTimestamp - End of the most recent period (ms)
  * @returns {Array<Object>} Periods with their key and time bounds
  */

@@ -3,7 +3,7 @@
  * that carries their display text.
  *
  * The backend owns the vocabulary (SATISFACTION_PERIOD_KEYS in
- * components/gov-chat-backend/services/analytics-service.js); the contract
+ * components/gov-chat-backend/constants/satisfaction-periods.js); the contract
  * test in src/__tests__/services/satisfactionPeriodContract.test.js keeps the
  * two sides in step.
  */

@@ -6,9 +6,8 @@
  * Localizing them here would duplicate every translation outside the only
  * place that owns them (#220).
  *
- * The frontend keeps its own copy of the key list (the two components do not
- * share a build); the contract test in the frontend suite keeps the two in
- * step.
+ * The frontend keeps its own copy of the key list (the two do not share a
+ * build); the contract test in the frontend suite keeps the two in step.
  */
 
 // The period keys, most recent first.

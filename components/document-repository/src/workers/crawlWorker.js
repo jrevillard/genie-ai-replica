@@ -85,10 +85,11 @@ const requeueZombieJobs = async () => {
     return;
   }
   try {
-    // This worker is single-flight, so any job still 'Crawling' at startup is
-    // a leftover from a dead predecessor (worker thread OOM, container restart).
-    // The poll loop only picks 'Pending' — without the requeue the job starves
-    // forever (issue #991, Sep 4 incident).
+    // Single-flight worker: a job still 'Crawling' when it starts has no live
+    // owner, and the poll loop only picks 'Pending' — so leftover jobs are
+    // requeued here or they starve. Runs BEFORE the first poll tick: a job
+    // picked and set to 'Crawling' by this very worker must not be seen as a
+    // zombie.
     const cursor = await db.query("FOR job IN crawl_job FILTER job.status == 'Crawling' RETURN job");
     const zombies = await cursor.all();
     for (const job of zombies) {
@@ -121,8 +122,10 @@ const requeueZombieJobs = async () => {
 const start = () => {
   initWorkers();
   logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
-  requeueZombieJobs();
-  poll();
+  // The requeue MUST complete before polling starts: run concurrently, the
+  // poll could pick a Pending job, set it 'Crawling', and this requeue would
+  // then flip it right back — two crawls of the same job. Never rejects.
+  requeueZombieJobs().then(poll);
 };
 
 const poll = async () => {

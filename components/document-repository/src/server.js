@@ -78,8 +78,8 @@ const server = app.listen(PORT, HOST, () => {
   try {
     // Spawn the Crawler in a separate thread to prevent Event Loop blocking.
     // The supervisor respawns the thread with a bounded backoff when it dies
-    // (OOM exits were previously permanent — issue #991) and exposes its
-    // state through crawlWorkerSupervisor.getStatus() on /health.
+    // and exposes its state through crawlWorkerSupervisor.getStatus() on
+    // /health.
     crawlWorkerSupervisor.start();
     logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
   } catch (error) {

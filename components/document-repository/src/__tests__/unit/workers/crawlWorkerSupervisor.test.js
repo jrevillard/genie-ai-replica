@@ -175,6 +175,26 @@ describe('crawlWorkerSupervisor', () => {
     expect(mod.getStatus().running).toBe(true);
   });
 
+  it('a healthy run followed by persistent spawn failures still reaches the give-up cap', () => {
+    mod.start();
+    // Healthy uptime, crash, then every construction attempt throws — each
+    // failed attempt had ZERO run time, so the healthy-reset must not keep
+    // resetting the counter (otherwise the cap never trips and the supervisor
+    // spawns in a 5s loop forever).
+    jest.advanceTimersByTime(10 * 60 * 1000);
+    FakeWorker.instances[0].emit('exit', 1);
+    WorkerMock.mockImplementation(() => {
+      throw new Error('thread creation failed');
+    });
+    // Bounded advances cover the whole failure ladder (each failed spawn
+    // schedules the next attempt; the last step lands at +80s, hence the
+    // second window. A bare runAllTimers would chase the self-rescheduling
+    // chain forever).
+    jest.advanceTimersByTime(120000);
+    jest.advanceTimersByTime(120000);
+    expect(mod.getStatus()).toMatchObject({ gaveUp: true, running: false });
+  });
+
   it('re-arms after the give-up cooldown instead of staying dead forever', () => {
     mod.start();
     // 5 failures with respawns between them, then the 6th exit trips the cap.

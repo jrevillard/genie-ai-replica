@@ -2,17 +2,13 @@
  * workers/crawlWorkerSupervisor.js
  *
  * Runs on the MAIN thread: spawns the crawl worker thread and respawns it
- * with a bounded exponential backoff when it dies (issue #991).
+ * with exponential backoff when it dies.
  *
- * Before this module the worker thread was spawned once in server.js and its
- * exit handler only logged — an OOM death left every crawl job silently
- * Pending forever while the container stayed healthy.
- *
- * Bounded by design: consecutive crashes back off 5s → 10s → ... capped at
- * 5 minutes, and after MAX_CONSECUTIVE_FAILURES the supervisor gives up
- * (reports `gaveUp` in getStatus(), surfaced by /health) and re-arms itself
- * only after a long cooldown — a persistent crash loop cannot spin forever,
- * but the queue also cannot stay dead until a manual restart. A run of
+ * Bounded by design: consecutive failures back off 5s → 10s → ... → 80s,
+ * and after MAX_CONSECUTIVE_FAILURES the supervisor gives up (reports
+ * `gaveUp` in getStatus(), surfaced by /health) and re-arms itself only
+ * after a long cooldown — a persistent crash loop cannot spin forever, but
+ * the queue also cannot stay dead until a manual restart. A run of
  * HEALTHY_UPTIME_MS resets the backoff, so one flaky crash never consumes
  * the budget of a persistent failure.
  */
@@ -23,8 +19,7 @@ const path = require('path');
 const { logger } = require('../shared-lib');
 
 const RESTART_BASE_DELAY_MS = 5000;
-const RESTART_MAX_DELAY_MS = 5 * 60 * 1000;
-const RESTART_MAX_ATTEMPTS = 5;
+const RESTART_MAX_ATTEMPTS = 5; // max delay = base * 2^(attempts-1) = 80s
 const HEALTHY_UPTIME_MS = 10 * 60 * 1000;
 const REARM_COOLDOWN_MS = 30 * 60 * 1000;
 
@@ -46,7 +41,7 @@ let stopping = false;
 
 const spawn = () => {
   try {
-    // Same eval-spawn as before: run crawlWorker.js's start() inside the thread.
+    // Eval-spawn: run crawlWorker.js's start() inside the thread.
     const w = new Worker(
       `
       const { start } = require('${workerPath.replace(/\\/g, '/')}');
@@ -64,14 +59,17 @@ const spawn = () => {
     // `new Worker` throws when the thread cannot be created (resource limits,
     // degraded process state) — handle it like a crash so the backoff and the
     // give-up cap apply instead of the exception reaching the timer callback
-    // and killing the API process as an uncaughtException.
+    // and killing the API process as an uncaughtException. A failed
+    // construction had no run time: anchor spawnedAt to now so the healthy-
+    // reset below cannot treat the attempt as a healthy long run.
     logger.error(`Crawl Worker spawn failed: ${error.message}`, error);
+    spawnedAt = Date.now();
     onExit(-1);
   }
 };
 
 const scheduleRestart = () => {
-  const delay = Math.min(RESTART_BASE_DELAY_MS * 2 ** (consecutiveFailures - 1), RESTART_MAX_DELAY_MS);
+  const delay = RESTART_BASE_DELAY_MS * 2 ** (consecutiveFailures - 1);
   logger.error(`Respawning Crawl Worker in ${delay}ms (attempt ${consecutiveFailures}/${RESTART_MAX_ATTEMPTS})`);
   // No `stopping` re-check here: onExit is the single respawn gate, and stop()
   // clears this timer before it can fire. A callback already dequeued in the
@@ -91,15 +89,15 @@ const onExit = (code) => {
 
   if (code === 0) return; // clean exit — do not respawn
 
-  logger.error(`Crawl Worker exited with code ${code}; ${state.restarts} restart(s) so far`, {
-    lastExitCode: code,
-    restarts: state.restarts
-  });
-
   const uptime = Date.now() - spawnedAt;
   if (uptime >= HEALTHY_UPTIME_MS) consecutiveFailures = 0;
   consecutiveFailures += 1;
   state.restarts += 1;
+
+  logger.error(`Crawl Worker exited with code ${code} (failure ${consecutiveFailures}/${RESTART_MAX_ATTEMPTS})`, {
+    lastExitCode: code,
+    restarts: state.restarts
+  });
 
   if (consecutiveFailures > RESTART_MAX_ATTEMPTS) {
     state.gaveUp = true;

@@ -136,7 +136,9 @@
           </div>
           <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
             <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
-            <span v-else-if="userInitials" class="message-avatar__initials" data-testid="message-avatar-initials">{{ userInitials }}</span>
+            <span v-else-if="userInitials" class="message-avatar__initials" data-testid="message-avatar-initials">{{
+              userInitials
+            }}</span>
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
@@ -153,7 +155,11 @@
                 </button>
               </div>
               <div v-else class="message-bubble" data-testid="message-bubble-bot">
-                <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator" data-testid="streaming-indicator">
+                <div
+                  v-if="msg.isStreaming && !msg.content"
+                  class="streaming-indicator"
+                  data-testid="streaming-indicator"
+                >
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
                 </div>
@@ -193,12 +199,7 @@
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-              <div
-                v-if="msg.isGrounded === false"
-                class="answer-warning"
-                data-testid="answer-warning"
-                role="note"
-              >
+              <div v-if="msg.isGrounded === false" class="answer-warning" data-testid="answer-warning" role="note">
                 <AlertTriangle :size="15" aria-hidden="true" />
                 <span>{{
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
@@ -301,9 +302,12 @@
           <div class="quick-help-content" data-testid="quick-help-content">
             <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading" data-testid="quick-help-heading">
               <template #brandwordmark>
-                <span :class="brandWordmarkClass" data-testid="brand-wordmark" :data-wordmark="brandWordmarkClass ? 'true' : 'false'">{{
-                  brandName
-                }}</span>
+                <span
+                  :class="brandWordmarkClass"
+                  data-testid="brand-wordmark"
+                  :data-wordmark="brandWordmarkClass ? 'true' : 'false'"
+                  >{{ brandName }}</span
+                >
               </template>
             </i18n-t>
             <p class="quick-help-subtitle" data-testid="quick-help-subtitle">

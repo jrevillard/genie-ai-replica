@@ -81,7 +81,7 @@ test.describe('Admin route authorization', () => {
     for (const tile of STAT_TILES) {
       await expect(page.locator(`[data-test-id="${tile}"]`)).toBeVisible();
     }
-    await expect(page.locator('[data-test-id="nav-admin-button-desktop"]')).toBeEnabled();
+    await expect(page.locator('[data-test-id="nav-icon-btn-administration"]')).toBeEnabled();
     expect(health.records.length).toBeGreaterThanOrEqual(1);
     // Every recorded call answered 200. The assertion carries the
     // observed statuses, so a non-200 answer names itself.
@@ -114,6 +114,6 @@ test.describe('Admin route authorization', () => {
     // half of the refusal. The desktop button is the one asserted here;
     // the mobile twin carries no handle (no spec drives a mobile
     // viewport), so it is not an anchor the suite claims.
-    await expect(page.locator('[data-test-id="nav-admin-button-desktop"]')).toBeDisabled();
+    await expect(page.locator('[data-test-id="nav-icon-btn-administration"]')).toBeDisabled();
   });
 });

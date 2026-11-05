@@ -15,6 +15,12 @@ const {
 // the environment configures BASE_URL with a trailing '/'.
 const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
 
+// The handles the chat surface declares. A row's handle carries its
+// sender (`chat-message-bot` / `chat-message-user`), so a spec never
+// reads the row's class to know who spoke.
+const MESSAGE_ROW = '[data-testid^="chat-message-"]';
+const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
+
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
 // whole handshake takes about a second (median 974 ms, max 1085 ms over 10
@@ -114,7 +120,7 @@ async function navigateToChatbot(page) {
  * Send a message via the chatbot input.
  */
 async function sendMessage(page, message) {
-  const textarea = page.locator('.prompt-textarea');
+  const textarea = page.locator('[data-testid="composer-field"]');
   await expect(textarea).toBeVisible({ timeout: 10000 });
   await textarea.fill(message);
   await textarea.press('Enter');
@@ -132,17 +138,14 @@ async function sendMessage(page, message) {
  * 2. The turn's own streaming flag is cleared. The app marks the bot
  *    message `isStreaming` while the SSE stream is open and clears it
  *    when the stream ends; the DOM has no marker for that (the
- *    `.streaming-indicator` element exists only while the answer is
- *    still EMPTY, and the `.loading-spinner` class the old helper
- *    waited for is not in the app at all), so the flag is read from the
- *    store the component renders from.
+ *    `streaming-indicator` element exists only while the answer is
+ *    still EMPTY), so the flag is read from the store the component
+ *    renders from.
  */
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
 
-  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(/\S/, {
-    timeout,
-  });
+  await expect(BOT_BUBBLE.last()).toContainText(/\S/, { timeout });
 
   await expect
     .poll(
@@ -168,12 +171,15 @@ async function waitForBotResponse(page, options = {}) {
  */
 async function getMessages(page) {
   const messages = [];
-  const elements = await page.locator('.chat-message').all();
+  const elements = await page.locator(MESSAGE_ROW).all();
 
   for (const el of elements) {
-    const classAttr = (await el.getAttribute('class')) || '';
-    const sender = classAttr.includes('user') ? 'user' : 'bot';
-    const bubble = el.locator('.message-bubble');
+    // The row's handle carries the sender: `chat-message-bot` or
+    // `chat-message-user`. Reading the class attribute instead would
+    // couple the helper to the markup's styling.
+    const handle = (await el.getAttribute('data-testid')) || '';
+    const sender = handle.endsWith('-user') ? 'user' : 'bot';
+    const bubble = el.locator(`[data-testid="message-bubble-${sender}"]`);
     const text = (await bubble.isVisible()) ? (await bubble.innerText()).trim() : '';
     messages.push({ sender, text });
   }
@@ -185,7 +191,7 @@ async function getMessages(page) {
  * Get the last bot message text.
  */
 async function getLastBotMessage(page) {
-  const botMessages = page.locator('.chat-message.bot .message-bubble');
+  const botMessages = BOT_BUBBLE;
   const count = await botMessages.count();
   if (count === 0) {
     return '';
@@ -224,9 +230,7 @@ async function saveChat(page, title) {
  * signal.
  */
 async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
-  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {
-    timeout
-  });
+  await expect(BOT_BUBBLE.last()).toContainText(text, { timeout });
 }
 
 /**

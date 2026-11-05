@@ -51,7 +51,7 @@ const CARD_MIN = 197;
 
 async function gotoChatbot(page) {
   await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
 }
 
 // The sidebar widths animate over a 0.3 s transition and the layout
@@ -89,7 +89,7 @@ async function measureLayout(page) {
       const m = /^([\d.]+)px$/.exec(raw.trim());
       return m ? parseFloat(m[1]) : NaN;
     };
-    const grid = document.querySelector('.quick-help-grid');
+    const grid = document.querySelector('[data-testid="quick-help-grid"]');
     const root = document.documentElement;
     const gridStyle = grid ? window.getComputedStyle(grid) : null;
     const rootStyle = window.getComputedStyle(root);
@@ -100,12 +100,12 @@ async function measureLayout(page) {
   });
 
   const layout = await page.evaluate(() => {
-    const wrap = document.querySelector('.main-container');
-    const centre = document.querySelector('.chatbot-container');
-    const left = document.querySelector('.side-bar');
-    const right = document.querySelector('.sidebar');
-    const grid = document.querySelector('.quick-help-grid');
-    const items = grid ? Array.from(grid.querySelectorAll('.quick-help-item')) : [];
+    const wrap = document.querySelector('[data-test-id="main-container"]');
+    const centre = document.querySelector('[data-test-id="chatbot-container"]');
+    const left = document.querySelector('[data-testid="side-bar"]');
+    const right = document.querySelector('[data-testid="sidebar"]');
+    const grid = document.querySelector('[data-testid="quick-help-grid"]');
+    const items = grid ? Array.from(grid.querySelectorAll('[data-testid="quick-help-item"]')) : [];
     const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
     const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
     const lr = left && left.getBoundingClientRect();
@@ -179,8 +179,8 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
       // The sidebar widths settle through the 0.3s transition and the
       // Vue-driven position reflow; the read below must see the final
       // geometry, so wait until both panels' widths hold steady.
-      await waitForWidthSettled(page, '.side-bar');
-      await waitForWidthSettled(page, '.sidebar');
+      await waitForWidthSettled(page, '[data-testid="side-bar"]');
+      await waitForWidthSettled(page, '[data-testid="sidebar"]');
 
       const m = await measureLayout(page);
 
@@ -247,13 +247,13 @@ const WELCOME_OVERFLOW_THEMES = ['light', 'dark'];
 // so this evaluate can compose it with the panel's own geometry.
 async function readWelcomePanel(page) {
   const tag = await page.addStyleTag({
-    content: '.quick-help-overlay .quick-help-banner { display: none !important; }'
+    content: '[data-testid="quick-help-overlay"] [data-testid="quick-help-banner"] { display: none !important; }'
   });
   try {
     return await page.evaluate(
       ({ layerSource }) => {
         const layer = new Function(layerSource)()(document);
-        const overlay = document.querySelector('.quick-help-overlay');
+        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
         if (!overlay) return { ...layer, overflowX: null, scrollWidth: null, clientWidth: null };
         return {
           ...layer,

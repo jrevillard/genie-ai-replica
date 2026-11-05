@@ -48,8 +48,10 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
 
-    // Verify the chat is in a stable state (no loading spinner) after done event
-    await expect(page.locator('.loading-spinner')).toBeHidden();
+    // Verify the chat is in a stable state after the done event: the app
+    // renders a spinner only while a bot answer is still empty, and the
+    // class the old assertion used is not in the app at all.
+    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0);
 
     // Verify chat window contains both user and bot messages in correct order
     const messages = await getMessages(page);
@@ -74,7 +76,7 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     // placeholder) — a number the growth matcher can compare against —
     // and the poll holds until the text has grown past it: a bubble that
     // only ever renders its full text in one frame fails the poll.
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    const botBubble = page.locator('[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]').last();
     await expect(botBubble).toContainText(/\S/, { timeout: 30000 });
     const firstLength = (await botBubble.innerText()).trim().length;
     await expect

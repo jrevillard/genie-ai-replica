@@ -48,17 +48,20 @@ test.describe('RAG error handling', () => {
     await sendMessage(page, 'First attempt will fail');
 
     // Wait for spinner to disappear (frontend handled the error)
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
+    // The app renders a spinner only while a bot answer is still empty
+    // (`.streaming-indicator`); the class the old wait used is not in
+    // the app at all, so the wait could never observe anything.
+    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
 
     // Verify error message is displayed to the user (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    const statusError = page.locator('[data-testid="answer-error"]');
+    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
     await expect(
       statusError.or(botBubble),
     ).toBeVisible({ timeout: 5000 });
 
     // Input should be usable again after error
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
 
     // Remove the intercept so subsequent requests go through normally
@@ -91,17 +94,20 @@ test.describe('RAG error handling', () => {
     await sendMessage(page, 'This should fail with network error');
 
     // Wait for spinner to disappear
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
+    // The app renders a spinner only while a bot answer is still empty
+    // (`.streaming-indicator`); the class the old wait used is not in
+    // the app at all, so the wait could never observe anything.
+    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
 
     // Verify error message is displayed (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    const statusError = page.locator('[data-testid="answer-error"]');
+    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
     await expect(
       statusError.or(botBubble),
     ).toBeVisible({ timeout: 5000 });
 
     // Verify the chat is not stuck
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 
@@ -121,17 +127,20 @@ test.describe('RAG error handling', () => {
     await sendMessage(page, 'Trigger internal error');
 
     // Wait for spinner to disappear
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
+    // The app renders a spinner only while a bot answer is still empty
+    // (`.streaming-indicator`); the class the old wait used is not in
+    // the app at all, so the wait could never observe anything.
+    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
 
     // Verify error message is displayed (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    const statusError = page.locator('[data-testid="answer-error"]');
+    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
     await expect(
       statusError.or(botBubble),
     ).toBeVisible({ timeout: 5000 });
 
     // Input should be usable again
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 });

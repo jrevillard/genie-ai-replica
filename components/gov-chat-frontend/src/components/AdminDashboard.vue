@@ -485,6 +485,7 @@
                     <DsSelect
                       v-model="documentFilters.status"
                       class="filter-select"
+                      data-test-id="admin-status-filter"
                       :placeholder="translate('admin.documents.allStatuses', 'All Statuses')"
                     >
                       <option value="all">

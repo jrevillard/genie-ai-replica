@@ -544,10 +544,10 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'true');
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.nav-right .icon-btn', { timeout: 15000 });
+    await page.waitForSelector('[data-test-id="nav-right"] [data-test-id^="nav-icon-btn-"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
-    const buttons = page.locator('.nav-right .icon-btn');
+    const buttons = page.locator('[data-test-id="nav-right"] [data-test-id^="nav-icon-btn-"]');
     const count = await buttons.count();
     expect(count, 'the navbar should have icon buttons to hover').toBeGreaterThan(0);
 
@@ -556,7 +556,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       // The tooltip fades in over a 0.2 s transition and only becomes
       // measurable once it leaves `visibility: hidden` — the state the
       // overflow read below is about.
-      await expect(buttons.nth(i).locator('.tooltip')).toBeVisible({ timeout: 15000 });
+      await expect(buttons.nth(i).locator('[data-test-id^="nav-tooltip-"]')).toBeVisible({ timeout: 15000 });
       const r = await page.evaluate(() => {
         const vp = window.innerWidth;
         const offenders = [];
@@ -634,7 +634,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // 320 × 1800/356 ≈ 1617.97 px clamp). The wide-viewport case
     // in (C) below is the one that exercises the clamp.
     const a = await page.evaluate(() => {
-      const overlay = document.querySelector('.quick-help-overlay');
+      const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
       if (!overlay) return { none: true };
       const after = getComputedStyle(overlay, '::after');
       return {
@@ -675,8 +675,8 @@ test.describe('Resizable sidebars behind one handle', () => {
     ) || 24;
 
     const b = await page.evaluate(() => {
-      const overlay = document.querySelector('.quick-help-overlay');
-      const banner = overlay ? overlay.querySelector('.quick-help-banner') : null;
+      const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
+      const banner = overlay ? overlay.querySelector('[data-testid="quick-help-banner"]') : null;
       if (!overlay || !banner) return { none: true };
       const oRect = overlay.getBoundingClientRect();
       const bRect = banner.getBoundingClientRect();
@@ -738,7 +738,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       await waitForWidthSettled(page, [LEFT, RIGHT]);
 
       const c = await page.evaluate(() => {
-        const overlay = document.querySelector('.quick-help-overlay');
+        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
         if (!overlay) return { none: true };
         const after = getComputedStyle(overlay, '::after');
         return {
@@ -773,7 +773,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       // a wide viewport — a state the wave-only read in
       // `responsive-layout.spec.js` deliberately does not cover.
       const sw = await page.evaluate(() => {
-        const overlay = document.querySelector('.quick-help-overlay');
+        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
         if (!overlay) return null;
         return { scrollWidth: overlay.scrollWidth, clientWidth: overlay.clientWidth };
       });

@@ -315,6 +315,13 @@ async function claimNextJob(db) {
  * so every RETURNED job carries its counted attempt and _unclaimAttempt can
  * only ever un-count a real stamp (round 20, #80804). */
 async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
+  // The arangojs aql tag DROPS an undefined bind (the query text loses the
+  // placeholder and the server sees a syntax error) — a never-claimed row
+  // has NO worker_claimed_at attribute, so KEEP omits it and the raw value
+  // here is undefined. Normalize to null: AQL `== null` matches both the
+  // stored null and the missing attribute (round-5 review, empirically
+  // reproduced against the installed arangojs).
+  const priorClaim = priorClaimedAt == null ? null : priorClaimedAt;
   const maxAttempts = claimRetryMaxAttempts();
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -322,7 +329,7 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
         aql`
         FOR m IN okf_concepts_meta
           FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
-          FILTER m.worker_claimed_at == ${priorClaimedAt}
+          FILTER m.worker_claimed_at == ${priorClaim}
           UPDATE m WITH {
             worker_claimed_at: DATE_ISO8601(DATE_NOW()),
             ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
@@ -333,14 +340,22 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
       );
       const rows = await result.all();
       if (rows.length > 0) return rows[0]; // the server-stamped claim value
-      // CAS matched nothing — the row moved under us. Deterministic refusal,
-      // no retry: the claim-read is stale and the row is someone else's.
+      // CAS matched nothing — the row moved under us. Deterministic refusal:
+      // the claim-read is stale and the row is someone else's. NO retry —
+      // the next claim cycle re-reads on a fresh snapshot, and sleeping here
+      // parks every other lane's serialized claim behind it (round-5 review).
       return null;
     } catch (err) {
-      if (!isArangoConflict(err) && !isConnectionError(err)) {
+      if (!isConnectionError(err)) {
+        // A conflict (the row moved) or a deterministic fault — no point
+        // retrying inside the serialized claim chain; the next cycle's
+        // claim-read sees the moved row.
         logger.warn('Ingest worker: claim stamp failed (claim refused)', { concept_id: conceptId, error: err.message });
         return null;
       }
+      // Connection-class failure: the statement never executed (or the ack
+      // was lost), so retrying against the SAME CAS is safe — a stamp that
+      // landed makes the CAS match nothing = refusal, never a double stamp.
       if (attempt === maxAttempts) {
         logger.warn('Ingest worker: claim stamp lost every retry (claim refused)', {
           concept_id: conceptId,
@@ -349,9 +364,6 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
         });
         return null;
       }
-      // Conflicts abort with nothing written and connection failures never
-      // executed — both are safe to retry against the SAME CAS (a stamp that
-      // landed makes the CAS match nothing = refusal, never a double stamp).
       const delay = claimRetryBackoffMs() * attempt;
       await sleepMs(delay + Math.floor(delay * 0.25 * Math.random()));
     }

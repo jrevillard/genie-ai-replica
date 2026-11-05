@@ -69,6 +69,9 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     );
     expect(isConnectionError(Object.assign(new Error('Bad Gateway'), { response: { status: 502 } }))).toBe(true);
     expect(isConnectionError(Object.assign(new Error('Too Many Requests'), { statusCode: 429 }))).toBe(true);
+    // A present-but-statusless response must not short-circuit the chain
+    // (round-5 review): the outer layers' status fields are still consulted.
+    expect(isConnectionError(Object.assign(new Error('x'), { response: {}, statusCode: 503 }))).toBe(true);
     // A permanent 4xx/5xx status is NOT connection-class.
     expect(isConnectionError(Object.assign(new Error('Forbidden'), { response: { status: 403 } }))).toBe(false);
     expect(isConnectionError(Object.assign(new Error('Server Error'), { response: { status: 500 } }))).toBe(false);

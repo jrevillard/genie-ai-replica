@@ -133,7 +133,12 @@ function isConnectionError(err) {
   const message = String(err.message || '').toLowerCase();
   const code = String(err.code || '').toLowerCase();
   if (CONNECTION_CODES.some((c) => message.includes(c.toLowerCase()) || code.includes(c.toLowerCase()))) return true;
-  const status = err.response ? err.response.status : err.status != null ? err.status : err.statusCode;
+  const status =
+    (err.response && err.response.status) != null
+      ? err.response.status
+      : err.status != null
+        ? err.status
+        : err.statusCode;
   return TRANSIENT_STATUSES.has(status);
 }
 

@@ -491,6 +491,26 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // failure that never executed is retried against the SAME CAS — a stamp
   // that already landed makes the CAS match nothing (refusal), never a
   // double stamp (round-4 review).
+  // Round-5 review, empirically reproduced: the arangojs aql tag DROPS an
+  // undefined bind — a never-claimed row has NO worker_claimed_at attribute,
+  // and the broken query text was an AQL syntax error that refused EVERY
+  // fresh claim. The stamp must bind null for a never-claimed row.
+  test('claim stamp of a NEVER-CLAIMED row binds null, not undefined (#1391)', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'fresh', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# f' }], // no worker_claimed_at — KEEP omits it
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    await worker._processOneJob();
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('UPDATE m WITH') && q.query.includes('worker_claimed_at'));
+    expect(stampCall).toBeDefined();
+    const binds = Object.values(stampCall.bindVars || {});
+    expect(binds.includes(null)).toBe(true); // null bind — AQL == null matches missing attribute too
+    expect(binds.includes(undefined)).toBe(false); // an undefined bind is DROPPED by the aql tag
+    expect(stampCall.query).toContain('worker_claimed_at ==');
+  });
+
   test('claim stamp connection failure → retried; the claim then proceeds normally', async () => {
     process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries(

@@ -17,6 +17,13 @@ the ORDER and the cross-stream slots.
 
 ## Phase U — Admin-Dashboard UX pass (FIRST)
 
+> **STATUS 2026-11-05 (end of day): UX-1..UX-4 DONE on `feat/admin-dashboard-ux`
+> (commits 2170bd1, 6ac3712, a904b68, 4f0e852); UX-5 instrumentation landed, the
+> leg optimization is gated on live `[okf-lab-timing]` numbers per the ruling.
+> Security review: no findings on every slice. Frontend 129 suites / 3739 tests
+> green at 88.84% coverage (baseline 88.78% held+raised); okf-server 82 suites /
+> 1990 tests green. MR + Phase C resume follow.**
+
 1. **UX-1 — Tab-rack consolidation.** Remove the left nav rail (`.sidebar`, whose
    sections mirror the tab rack 1:1); ship its icons into the main tab rack
    (`.tabs-card`). Every tab keeps its responsive layout (mostly present — verify

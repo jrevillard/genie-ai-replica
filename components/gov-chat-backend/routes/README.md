@@ -359,21 +359,19 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 ### Service Routes
 
-**Base Path**: `/api/services`
+**Base Path**: `/api/services` — DEPRECATED (#442)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/categories` | Get all categories with services |
-| GET | `/categories/:categoryId` | Get a specific category with services |
-| GET | `/search` | Search categories and services |
+The three GET routes are **301 redirects** to their canonical
+`/api/service-categories` counterparts (see Service Category Routes):
+the duplicate handlers were removed, existing clients and the Kong
+`/api/services` route keep working through the redirects, and the query
+string is preserved. New clients call the canonical prefix.
 
-#### Key Parameters
-- `locale`: Language code for localized content.
-- `categoryId`: Unique identifier for a category.
-- `query`: Search string for services.
-
-#### Services Called
-- **Service Category Service**: Shared with service category routes for managing category and service data.
+| Method | Endpoint | Redirects to |
+|--------|----------|--------------|
+| GET | `/categories` | `/api/service-categories/categories` |
+| GET | `/categories/:categoryId` | `/api/service-categories/categories/:categoryId` |
+| GET | `/search` | `/api/service-categories/search` |
 
 #### Security
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).

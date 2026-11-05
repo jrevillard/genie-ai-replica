@@ -191,7 +191,7 @@ async function stubConfiguration(page) {
  * then real and observable, instead of a race against a fast stub.
  */
 async function stubHierarchy(page, gate = null) {
-  await page.route('**/api/services/categories*', async (route) => {
+  await page.route('**/api/service-categories/categories*', async (route) => {
     try {
       if (gate) {
         await gate;

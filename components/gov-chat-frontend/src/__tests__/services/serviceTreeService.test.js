@@ -41,7 +41,11 @@ describe('serviceTreeService', () => {
       // there is dropped and axios waits forever. This assertion pins the
       // SHAPE of the call; whether the bound REACHES axios is proved by
       // serviceTreeServiceTimeout.test.js, which drives the real client.
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } }, { timeout: 15000 });
+      expect(mockGet).toHaveBeenCalledWith(
+        'service-categories/categories',
+        { params: { locale: 'en' } },
+        { timeout: 15000 }
+      );
       expect(result).toEqual([{ catKey: 'health', name: 'Health' }]);
     });
 
@@ -50,7 +54,11 @@ describe('serviceTreeService', () => {
 
       await serviceTreeService.getAllCategories();
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } }, { timeout: 15000 });
+      expect(mockGet).toHaveBeenCalledWith(
+        'service-categories/categories',
+        { params: { locale: 'en' } },
+        { timeout: 15000 }
+      );
     });
 
     it('rejects a body that is not a list of categories', async () => {
@@ -115,7 +123,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.getCategoryServices('citizenship');
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories/citizenship', { params: { locale: 'en' } });
+      expect(mockGet).toHaveBeenCalledWith('service-categories/categories/citizenship', { params: { locale: 'en' } });
       expect(result).toEqual([{ serviceKey: 'passport', serviceName: 'Passport' }]);
     });
   });
@@ -131,7 +139,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.searchServices('medi', 'en');
 
-      expect(mockGet).toHaveBeenCalledWith('services/search', { params: { query: 'medi', locale: 'en' } });
+      expect(mockGet).toHaveBeenCalledWith('service-categories/search', { params: { query: 'medi', locale: 'en' } });
       expect(result.categories).toHaveLength(1);
       expect(result.services).toHaveLength(1);
     });

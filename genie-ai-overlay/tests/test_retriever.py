@@ -16,6 +16,7 @@ from core import embedding_query_prefix as core_query_prefix
 from core.label_contract import encode_filter_labels
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
+    ARANGO_TRAVERSAL_QUERY,
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
     _build_aql_filter_clause,
@@ -414,6 +415,107 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True))
         invoke_env["retriever"].fetch_neighborhoods.assert_called_once()
+
+    # --- AQL injection surface (#501): request values that reach the
+    # --- traversal AQL as TEXT must be validated or ignored at this boundary.
+
+    @pytest.mark.asyncio
+    async def test_request_traversal_query_template_is_ignored(self, invoke_env):
+        """The traversal template is operator configuration (ARANGO_TRAVERSAL_QUERY).
+
+        The template is interpolated into AQL text, so a caller-supplied
+        `traversal_query` is an AQL injection surface. The request value must
+        be ignored and the operator template used instead.
+        """
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        injected = "FOR x IN @@collection FILTER x.pwned == true RETURN x"
+        await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True, traversal_query=injected))
+        kwargs = invoke_env["retriever"].fetch_neighborhoods.call_args.kwargs
+        assert kwargs["traversal_query"] == ARANGO_TRAVERSAL_QUERY
+        assert kwargs["traversal_query"] != injected
+
+    @pytest.mark.asyncio
+    async def test_graph_name_injection_payload_rejected_400(self, invoke_env):
+        """graph_name is interpolated into collection names in AQL text; an
+        AQL metacharacter payload must be rejected with 400 before any query
+        is built. Every graph-name source (legacy constant, fan-out legs)
+        funnels through _extract_for_graph — that is the boundary."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        payload = 'GRAPH` RETURN 1 ) }} FOR leet IN @@c FILTER leet.x == "y'
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"]._extract_for_graph(
+                graph_name=payload,
+                input_dict={},
+                input=create_mock_input(),
+                query="test query",
+                start_time=0.0,
+                span=MagicMock(),
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"traversal_max_returned": "3 LIMIT 1"},
+            {"traversal_max_depth": "1 FOR x IN @@c"},
+            {"traversal_max_returned": True},
+            {"traversal_score_threshold": "0.5 RETURN 1 //"},
+            {"traversal_score_threshold": float("inf")},
+            {"traversal_score_threshold": True},
+        ],
+    )
+    async def test_invalid_traversal_parameter_rejected_400(self, invoke_env, overrides):
+        """The traversal parameters are interpolated into AQL text (LIMIT /
+        FILTER clauses) — a value that is not a plain number is refused with
+        400, never interpolated."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True, **overrides))
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fanout_carrier_injection_payload_rejected_400(self, invoke_env):
+        """Carrier graph names reach AQL text in the routing probes BEFORE any
+        leg runs — a crafted carrier name must be refused at the fan-out
+        entry, with no probe query executed."""
+        invoke_env["db"].aql.execute = MagicMock()
+        payload = 'OKF_evil` FOR leet IN @@c FILTER leet.x == "y'
+        import retriever.genieai_retriever_arangodb as retriever_module
+
+        with pytest.raises(HTTPException) as exc_info:
+            await retriever_module.invoke_fanout(
+                invoke_env["retriever"],
+                create_mock_input(),
+                {"search_start": "chunk"},
+                ["OKF_good_v1", payload],
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["db"].aql.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"traversal_max_returned": "3 LIMIT 1"},
+            {"traversal_score_threshold": "0.5 RETURN 1 //"},
+            {"search_start": "chunk::graphs:OKF_A_v1,OKF_evil` FOR leet IN @@c FILTER leet.x == 1"},
+        ],
+    )
+    async def test_fanout_path_bad_request_value_rejected_400(self, invoke_env, overrides):
+        """The fan-out legs wrap every extraction in except-Exception →
+        zero-hit-leg, so a bad traversal value or a crafted carrier name must
+        be refused at the REQUEST ingress — before any leg runs — or the 400
+        would surface as a 200 with empty results on the multi-graph path."""
+        invoke_env["db"].aql.execute = MagicMock()
+        kwargs = {"enable_traversal": True, "search_start": "chunk::graphs:OKF_A_v1"}
+        kwargs.update(overrides)
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(create_mock_input(**kwargs))
+        assert exc_info.value.status_code == 400
+        invoke_env["db"].aql.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):

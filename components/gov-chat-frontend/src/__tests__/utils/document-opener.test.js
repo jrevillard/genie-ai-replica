@@ -10,6 +10,7 @@ const {
   fileTypeBadge,
   openRepositoryDocument,
   openOkfConcept,
+  openOkfSource,
   downloadOkfConcept,
   fetchOkfConceptTitle
 } = require('@/utils/document-opener');
@@ -83,6 +84,73 @@ describe('openRepositoryDocument', () => {
   it('surfaces a failed fetch', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, statusText: 'Not Found' });
     await expect(openRepositoryDocument('doc-9', 'token-1')).rejects.toThrow('Not Found');
+  });
+
+  it('carries the HTTP status on the failure (W5: the caller distinguishes refusal from outage)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, statusText: 'Forbidden' });
+    await expect(openRepositoryDocument('doc-9', 'token-1')).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CAP-4 (W5): the ORIGINAL SOURCE flow. A concept's narrowed sources[] name
+// doc-repository documents; those open through the legacy fetch-blob flow,
+// with the D4 refusal (403) and a gone file (404) resolving to the honest
+// OKF_SOURCE_UNAVAILABLE code — a 500 stays a generic failure.
+// ---------------------------------------------------------------------------
+describe('openOkfSource (original source flow)', () => {
+  const originalFetch = global.fetch;
+  const originalOpen = window.open;
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    window.open = originalOpen;
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  });
+
+  function mockFetch(status, ok) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: ok === undefined ? status < 400 : ok,
+      status,
+      statusText: status === 403 ? 'Forbidden' : status === 404 ? 'Not Found' : 'Internal Server Error',
+      blob: () => Promise.resolve({})
+    });
+    URL.createObjectURL = jest.fn(() => 'blob:mock');
+    URL.revokeObjectURL = jest.fn();
+    window.open = jest.fn();
+  }
+
+  it('opens the source document through the legacy blob flow', async () => {
+    mockFetch(200);
+    await openOkfSource('doc-9', 'token-1');
+    expect(global.fetch).toHaveBeenCalledWith(`${window.location.origin}/api/files/doc-9/viewbrowser`, {
+      headers: { Authorization: 'Bearer token-1' }
+    });
+    expect(window.open).toHaveBeenCalledWith('blob:mock', '_blank');
+  });
+
+  it('maps the D4 refusal (403) to OKF_SOURCE_UNAVAILABLE', async () => {
+    mockFetch(403);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+  });
+
+  it('maps a gone file (404) to OKF_SOURCE_UNAVAILABLE', async () => {
+    mockFetch(404);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+  });
+
+  it('a 500 stays a generic failure (transient outage, not unavailability)', async () => {
+    mockFetch(500);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('a missing file id is unavailable before any fetch', async () => {
+    global.fetch = jest.fn();
+    await expect(openOkfSource(null, 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });
 

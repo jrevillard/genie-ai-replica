@@ -16,13 +16,14 @@ const statusModule = require('../../store/modules/status.js').default;
 // assertions pin floor == locale.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
-// CAP-3: the store's title resolver goes through document-opener; mock the
-// fetch so title-resolution tests stay hermetic.
+// CAP-3/CAP-4: the store's title resolver goes through document-opener; mock
+// the fetch so title/source-resolution tests stay hermetic.
 jest.mock('../../utils/document-opener', () => ({
   __esModule: true,
-  fetchOkfConceptTitle: jest.fn()
+  fetchOkfConcept: jest.fn(),
+  okfConceptTitle: jest.requireActual('../../utils/document-opener').okfConceptTitle
 }));
-const { fetchOkfConceptTitle } = require('../../utils/document-opener');
+const { fetchOkfConcept } = require('../../utils/document-opener');
 
 function freshStore() {
   return createStore({
@@ -525,7 +526,7 @@ describe('CAP-3 okf concept sources', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
-    fetchOkfConceptTitle.mockReset();
+    fetchOkfConcept.mockReset();
   });
 
   it('translateSources: an enriched okf row never takes the doc-repo URL and carries its identity', () => {
@@ -656,33 +657,44 @@ describe('CAP-3 okf concept sources', () => {
     expect(row.url).toBe('');
   });
 
-  it('resolveOkfSourceTitles swaps the id title for the frontmatter title', async () => {
+  it('resolveOkfSourceTitles swaps the id title for the frontmatter title and stashes the origins (CAP-4)', async () => {
     const store = freshStore();
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
     store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
     store.commit('conversation/setRelatedDocuments', [
       { id: 'alpha_concept', title: 'alpha concept', source: 'okf-concept', repoId: 'repo-1' }
     ]);
-    fetchOkfConceptTitle.mockResolvedValueOnce('Alpha Concept');
+    fetchOkfConcept.mockResolvedValueOnce({
+      frontmatter: { title: 'Alpha Concept' },
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf', locator: 'whole document' }]
+    });
     await store.dispatch('conversation/resolveOkfSourceTitles');
     const row = store.getters['conversation/openConversation'].relatedDocuments[0];
     expect(row.title).toBe('Alpha Concept');
     expect(row.titleResolved).toBe(true);
-    expect(fetchOkfConceptTitle).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    expect(fetchOkfConcept).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    // CAP-4: the narrowed sources land on the row for the origin rows —
+    // whatever the route shipped (already projected server-side, locator
+    // stripped there); absent field degrades to [] (no affordance).
+    expect(row.okfSources).toEqual([
+      { kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf', locator: 'whole document' }
+    ]);
   });
 
-  it('resolveOkfSourceTitles keeps the id title when the concept cannot be fetched', async () => {
+  it('resolveOkfSourceTitles stashes an empty okfSources when the concept cannot be fetched', async () => {
     const store = freshStore();
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
     store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
     store.commit('conversation/setRelatedDocuments', [
       { id: 'ghost_concept', title: 'ghost concept', source: 'okf-concept', repoId: 'repo-1' }
     ]);
-    fetchOkfConceptTitle.mockResolvedValueOnce(null);
+    fetchOkfConcept.mockRejectedValueOnce(new Error('unavailable'));
     await store.dispatch('conversation/resolveOkfSourceTitles');
     const row = store.getters['conversation/openConversation'].relatedDocuments[0];
     expect(row.title).toBe('ghost concept');
     expect(row.titleResolved).toBe(false);
+    expect(row.okfSources).toEqual([]);
   });
 
   it('resolveOkfSourceTitles skips legacy rows and rows without repo identity', async () => {
@@ -694,6 +706,6 @@ describe('CAP-3 okf concept sources', () => {
       { id: 'no_repo', title: 'no repo', source: 'okf-concept', repoId: null }
     ]);
     await store.dispatch('conversation/resolveOkfSourceTitles');
-    expect(fetchOkfConceptTitle).not.toHaveBeenCalled();
+    expect(fetchOkfConcept).not.toHaveBeenCalled();
   });
 });

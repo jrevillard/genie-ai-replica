@@ -1352,6 +1352,7 @@ export default {
 
     documentOpenError: 'Не удалось открыть документ',
     okfSourceUnavailable: 'Этот источник недоступен для просмотра.',
+    okfOriginalSource: 'Первоисточник',
     feedbackSubmitted: 'Отзыв сохранён',
     feedbackError: 'Не удалось сохранить отзыв',
     feedbackMissingQueryId: 'Этот ответ пока нельзя оценить',

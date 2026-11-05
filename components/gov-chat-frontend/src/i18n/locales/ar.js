@@ -1342,6 +1342,7 @@ export default {
 
     documentOpenError: 'تعذر فتح المستند',
     okfSourceUnavailable: 'هذا المصدر غير متاح للعرض.',
+    okfOriginalSource: 'المصدر الأصلي',
     feedbackSubmitted: 'تم حفظ الملاحظات',
     feedbackError: 'تعذر حفظ الملاحظات',
     feedbackMissingQueryId: 'لا يمكن تقييم هذه الإجابة بعد',

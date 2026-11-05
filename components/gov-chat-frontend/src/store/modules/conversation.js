@@ -181,7 +181,7 @@ const mutations = {
 
 import chatbotService from '../../services/chatbotService';
 import documentFileService from '../../services/documentFileService';
-import { fetchOkfConceptTitle } from '../../utils/document-opener';
+import { fetchOkfConcept, okfConceptTitle } from '../../utils/document-opener';
 import i18n from '../../i18n';
 
 function t(key, fallback) {
@@ -404,15 +404,23 @@ const actions = {
     for (const doc of okfRows) {
       if (typeof doc.titleResolved !== 'undefined') continue;
       const cacheKey = `${doc.repoId}::${doc.id}`;
-      let title = okfTitleCache.get(cacheKey);
-      if (title === undefined) {
+      let meta = okfTitleCache.get(cacheKey);
+      if (meta === undefined) {
         // Fetches serialize per card (the loop awaits); distinct cards still
-        // resolve across turns without refetch through the cache.
-        title = await fetchOkfConceptTitle(doc.repoId, doc.id);
-        okfTitleCache.set(cacheKey, title);
+        // resolve across turns without refetch through the cache. The FULL
+        // meta is cached: W5 (CAP-4) rides the same fetch — the narrowed
+        // originating documents become the card's original-source row.
+        try {
+          meta = await fetchOkfConcept(doc.repoId, doc.id);
+        } catch {
+          meta = null; // unavailable (restricted/retracted/deleted) — honest fallback
+        }
+        okfTitleCache.set(cacheKey, meta);
       }
-      if (title) commit('patchSource', [doc.id, { title, titleResolved: true }]);
-      else commit('patchSource', [doc.id, { titleResolved: false }]);
+      const title = meta ? okfConceptTitle(meta, doc.id) : null;
+      const okfSources = meta && Array.isArray(meta.sources) ? meta.sources : [];
+      if (title) commit('patchSource', [doc.id, { title, titleResolved: true, okfSources }]);
+      else commit('patchSource', [doc.id, { titleResolved: false, okfSources }]);
     }
   }
 };

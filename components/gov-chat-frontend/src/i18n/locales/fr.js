@@ -1364,6 +1364,7 @@ export default {
 
     documentOpenError: 'Impossible de consulter le document',
     okfSourceUnavailable: 'Cette source n’est pas disponible pour consultation.',
+    okfOriginalSource: 'Source originale',
     feedbackSubmitted: 'Feedback enregistré',
     feedbackError: 'Feedback non enregistré',
     feedbackMissingQueryId: 'Cette réponse ne peut pas encore être notée',

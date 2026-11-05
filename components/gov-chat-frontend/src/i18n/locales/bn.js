@@ -1349,6 +1349,7 @@ export default {
 
     documentOpenError: 'ডকুমেন্ট খোলা যায়নি',
     okfSourceUnavailable: 'এই উৎসটি দেখার জন্য উপলব্ধ নয়।',
+    okfOriginalSource: 'মূল উৎস',
     feedbackSubmitted: 'ফিডব্যাক সংরক্ষিত হয়েছে',
     feedbackError: 'ফিডব্যাক সংরক্ষণ করা যায়নি',
     feedbackMissingQueryId: 'এই উত্তরটি এখনও রেট করা যাবে না',

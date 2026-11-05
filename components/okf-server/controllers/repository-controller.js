@@ -986,10 +986,12 @@ async function listConcepts(req, res, next) {
  *   wildcard scope, or a scope naming THIS repo) keep the editor contract —
  *   the draft/retracted row IS the editor's working set.
  * - Field projection — non-steward callers get the CAP-3 card contract
- *   (identity + title/labels/summary/body/links), never worker internals
- *   (last_error / pii_* / ingest bookkeeping), curation provenance, or the
- *   Arango system fields. sources[] stays steward-only until W5 delivers it
- *   deliberately behind the W4 serve-refusal gate (D4).
+ *   (identity + title/labels/summary/body/links) plus the CAP-4 ORIGINATING
+ *   documents (W5, 2026-11-05: narrowed to {kind, file_id, file_name,
+ *   resource} — locator is chunk-internal). Naming restricted-repo sources is
+ *   safe now: the W4 D4 serve gate refuses the bytes themselves. Never the
+ *   worker internals (last_error / pii_* / ingest bookkeeping), curation
+ *   provenance, or the Arango system fields.
  */
 const CONCEPT_CARD_FIELDS = [
   'repo_id',
@@ -1015,6 +1017,21 @@ function projectConceptCard(concept) {
   const card = {};
   for (const field of CONCEPT_CARD_FIELDS) {
     if (concept[field] !== undefined) card[field] = concept[field];
+  }
+  // CAP-4 (W5): narrowed originating-document identity for the source row.
+  // An entry with NEITHER file_id nor resource is unusable for a link and is
+  // dropped — the UI renders "source unavailable" from the field's absence.
+  if (Array.isArray(concept.sources)) {
+    card.sources = concept.sources
+      .map((s) => {
+        if (!s || typeof s !== 'object') return null;
+        const entry = {};
+        for (const f of ['kind', 'file_id', 'file_name', 'resource']) {
+          if (s[f] !== undefined) entry[f] = s[f];
+        }
+        return entry.file_id || entry.resource ? entry : null;
+      })
+      .filter(Boolean);
   }
   return card;
 }

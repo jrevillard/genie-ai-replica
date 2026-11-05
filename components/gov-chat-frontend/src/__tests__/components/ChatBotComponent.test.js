@@ -85,6 +85,7 @@ jest.mock('../../services/notificationService', () => ({
 jest.mock('../../utils/document-opener', () => ({
   ...jest.requireActual('../../utils/document-opener'),
   openOkfConcept: jest.fn(),
+  openOkfSource: jest.fn(),
   openRepositoryDocument: jest.fn()
 }));
 
@@ -5795,5 +5796,106 @@ describe('CAP-3 okf-concept open branch', () => {
     await wrapper.vm.openSourceDocument({ id: 'doc-9', url: '/api/files/doc-9/download' });
     expect(documentOpener.openRepositoryDocument).toHaveBeenCalledWith('doc-9', null);
     expect(documentOpener.openOkfConcept).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// CAP-4 (W5): the original-source rows under a concept card. The origins ride
+// the concept fetch (narrowed sources[]); opening goes through openOkfSource,
+// where the D4 refusal (403) and a gone file (404) are honest unavailability,
+// and a crawl-resource entry with no file_id is a notice, never a fetch.
+// ===========================================================================
+describe('CAP-4 original-source origin rows', () => {
+  const documentOpener = require('../../utils/document-opener');
+
+  afterEach(() => {
+    documentOpener.openOkfSource.mockReset();
+    mockNotificationInfo.mockClear();
+    mockNotificationError.mockClear();
+  });
+
+  it('opens an origin with a file id through openOkfSource', async () => {
+    const wrapper = createChatBotWrapper();
+    documentOpener.openOkfSource.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openOriginDocument({ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf' });
+    expect(documentOpener.openOkfSource).toHaveBeenCalledWith('doc-9', null);
+    expect(mockNotificationInfo).not.toHaveBeenCalled();
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
+  it('a D4-refused or gone source shows the honest info notice, not an error', async () => {
+    const wrapper = createChatBotWrapper();
+    const unavailable = new Error('not available');
+    unavailable.code = 'OKF_SOURCE_UNAVAILABLE';
+    documentOpener.openOkfSource.mockRejectedValueOnce(unavailable);
+    await wrapper.vm.openOriginDocument({ kind: 'document', file_id: 'doc-9' });
+    expect(mockNotificationInfo).toHaveBeenCalledWith(enChatbot.okfSourceUnavailable);
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
+  it('a transport failure on an origin keeps the generic open-error wording', async () => {
+    const wrapper = createChatBotWrapper();
+    const boom = new Error('network down');
+    boom.status = 500;
+    documentOpener.openOkfSource.mockRejectedValueOnce(boom);
+    await wrapper.vm.openOriginDocument({ kind: 'document', file_id: 'doc-9' });
+    expect(mockNotificationError).toHaveBeenCalled();
+    expect(mockNotificationInfo).not.toHaveBeenCalled();
+  });
+
+  it('a crawl-resource origin without a file id notifies without fetching', async () => {
+    const wrapper = createChatBotWrapper();
+    await wrapper.vm.openOriginDocument({ kind: 'crawl', resource: 'https://example.gov/page' });
+    expect(documentOpener.openOkfSource).not.toHaveBeenCalled();
+    expect(mockNotificationInfo).toHaveBeenCalledWith(enChatbot.okfSourceUnavailable);
+  });
+
+  it('originLabel prefers the file name, then the stripped URL, then the generic wording', () => {
+    const wrapper = createChatBotWrapper();
+    expect(wrapper.vm.originLabel({ file_name: 'Report.pdf' })).toBe('Report.pdf');
+    expect(wrapper.vm.originLabel({ resource: 'https://example.gov/page' })).toBe('example.gov/page');
+    expect(wrapper.vm.originLabel({})).toBe(enChatbot.okfOriginalSource);
+  });
+});
+
+// ===========================================================================
+// CAP-4 (W5): the origin rows RENDER only for okf-concept rows with resolved
+// origins, one row per entry, under the card — template-level contract.
+// ===========================================================================
+describe('CAP-4 origin rows rendering', () => {
+  it('renders origin rows under a concept card and none for rows without origins', async () => {
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q', isSaved: false });
+    vm.$store.commit('conversation/appendBotMessage', {
+      sender: 'bot',
+      content: 'a',
+      queryId: 'q1',
+      isSaved: false,
+      isGrounded: true,
+      sourcesOpen: true,
+      sources: [
+        {
+          id: 'alpha_concept',
+          title: 'Alpha Concept',
+          source: 'okf-concept',
+          repoId: 'repo-1',
+          okfSources: [{ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf' }]
+        },
+        { id: 'doc-7', title: 'Plain.pdf', url: '/api/files/doc-7/download' },
+        { id: 'bare_concept', title: 'Bare', source: 'okf-concept', repoId: 'repo-1', okfSources: [] }
+      ]
+    });
+    await wrapper.vm.$nextTick();
+    // the card list renders all three; the origin rows render exactly one,
+    // under the concept card that RESOLVED its origins
+    expect(wrapper.findAll('[data-testid="answer-source-card-0"]').length).toBe(1);
+    const origins = wrapper.findAll('.answer-source-origin');
+    expect(origins.length).toBe(1);
+    expect(origins[0].attributes('data-testid')).toBe('answer-source-origin-0-0');
+    expect(origins[0].text()).toContain('Report.pdf');
+    // the bare concept row renders no origins (no affordance without a target)
+    expect(wrapper.findAll('[data-testid="answer-source-origin-2-0"]').length).toBe(0);
+    wrapper.unmount();
   });
 });

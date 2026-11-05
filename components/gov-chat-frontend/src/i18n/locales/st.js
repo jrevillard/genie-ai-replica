@@ -1360,6 +1360,7 @@ export default {
 
     documentOpenError: 'Ho hlolehile ho bula tokomane',
     okfSourceUnavailable: 'Mohloli ona ha o fumanehe ho shebella.',
+    okfOriginalSource: 'Mohloli wa peleha',
     feedbackSubmitted: 'Karabo e bolokiloe',
     feedbackError: 'Ho hlolehile ho boloka karabo',
     feedbackMissingQueryId: 'Karabo ena e ke ke ea fumanwa maemo a teng',

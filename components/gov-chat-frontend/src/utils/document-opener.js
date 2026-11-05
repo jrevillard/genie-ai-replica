@@ -128,12 +128,49 @@ export async function openRepositoryDocument(docId, accessToken) {
     }
   });
   if (!response.ok) {
-    throw new Error(`Network response was not ok: ${response.statusText}`);
+    // W5 (CAP-4): the status rides the error so callers can distinguish an
+    // honest refusal (D4's 403 OKF_RESTRICTED, a 404) from a transient
+    // failure — additive; existing callers only read the message.
+    const err = new Error(`Network response was not ok: ${response.statusText}`);
+    err.status = response.status;
+    throw err;
   }
   const fileBlob = await response.blob();
   const blobUrl = URL.createObjectURL(fileBlob);
   window.open(blobUrl, '_blank');
   setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+}
+
+// ---------------------------------------------------------------------------
+// OKF ORIGINAL SOURCE documents (CAP-4/W5, chat-source resolution). A concept
+// card can name the doc-repository documents the concept ORIGINATED from
+// (narrowed sources[] from the CAP-2 route). Those open through the legacy
+// fetch-blob flow; the D4 serve-refusal (403 OKF_RESTRICTED) and a gone file
+// (404) resolve to the honest unavailable code — never a generic open error.
+// ---------------------------------------------------------------------------
+
+/** Error shape for an original-source document that cannot be served. */
+export function okfSourceDocUnavailable(message) {
+  const err = new Error(message || 'OKF original source is not available');
+  err.code = 'OKF_SOURCE_UNAVAILABLE';
+  return err;
+}
+
+/**
+ * Open a concept's original source document in a new tab.
+ * @param {String} fileId - the doc-repository file id from the concept's sources
+ * @param {String} accessToken - OIDC access token
+ */
+export async function openOkfSource(fileId, accessToken) {
+  if (!fileId) throw okfSourceDocUnavailable();
+  try {
+    await openRepositoryDocument(fileId, accessToken);
+  } catch (err) {
+    // 403 = the D4 serve refusal (restricted repo, caller without the scope
+    // or role); 404 = the file is gone. Both are honest unavailability.
+    if (err && (err.status === 403 || err.status === 404)) throw okfSourceDocUnavailable();
+    throw err;
+  }
 }
 
 /**

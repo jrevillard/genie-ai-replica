@@ -1360,6 +1360,7 @@ export default {
 
     documentOpenError: 'Não foi possível abrir o documento',
     okfSourceUnavailable: 'Esta fonte não está disponível para visualização.',
+    okfOriginalSource: 'Fonte original',
     feedbackSubmitted: 'Feedback salvo',
     feedbackError: 'Não foi possível salvar o feedback',
     feedbackMissingQueryId: 'Esta resposta ainda não pode ser avaliada',

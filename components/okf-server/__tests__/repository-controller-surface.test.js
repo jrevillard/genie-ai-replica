@@ -973,11 +973,13 @@ describe('repository-controller — CAP-2 publication gate + card projection (W2
     auditService.writeAudit.mockClear();
   });
 
-  it('citizen + serving repo → 200 card contract only (no worker/PII/curation/system fields, no sources)', async () => {
+  it('citizen + serving repo → 200 card contract: card fields + narrowed sources, no worker/PII/system fields', async () => {
     repoService.getById.mockResolvedValueOnce(servingRepo());
     const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
+    // CAP-4 (W5): sources ride narrowed to {kind, file_id, file_name, resource}
+    // — the D4 serve gate refuses restricted bytes, so naming them is safe.
     expect(res.body).toEqual({
       repo_id: 'r1',
       concept_id: 'c1',
@@ -987,8 +989,31 @@ describe('repository-controller — CAP-2 publication gate + card projection (W2
       labels: ['tax.a'],
       summary: 's',
       body: '# body',
-      links: [{ target: 'c2' }]
+      links: [{ target: 'c2' }],
+      sources: [{ kind: 'crawl', file_id: 'f9', resource: 'x' }]
     });
+  });
+
+  it('sources entries with NEITHER file_id nor resource are dropped, not leaked', async () => {
+    conceptMetaService.getConceptMeta.mockResolvedValue({
+      ...FULL_ROW,
+      sources: [
+        { kind: 'document', file_id: 'keep-1', file_name: 'a.pdf' },
+        { kind: 'mystery' },
+        'garbage-string',
+        null
+      ]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.body.sources).toEqual([{ kind: 'document', file_id: 'keep-1', file_name: 'a.pdf' }]);
+  });
+
+  it('an absent sources field stays absent (bundle-import/scratch rows render no affordance)', async () => {
+    conceptMetaService.getConceptMeta.mockResolvedValue({ ...FULL_ROW, sources: undefined });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.body.sources).toBeUndefined();
   });
 
   it.each([

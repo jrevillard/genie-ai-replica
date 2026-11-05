@@ -40,6 +40,11 @@ const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 const gracefulShutdown = (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
 
+  // Stop the crawl worker first: it keeps crawling (and committing job/file
+  // state) through the drain window otherwise, and a mid-shutdown death would
+  // otherwise schedule a fresh respawn while the container is terminating.
+  crawlWorkerSupervisor.stop();
+
   server.close(() => {
     logger.info('HTTP server closed.');
 

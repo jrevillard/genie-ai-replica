@@ -87,21 +87,21 @@ describe('crawlWorkerSupervisor', () => {
     expect(WorkerMock).toHaveBeenCalledTimes(4);
   });
 
-  it('gives up after the cap of consecutive failures and stops respawning', () => {
+  it('gives up after the cap of consecutive failures and holds through the cooldown window', () => {
     mod.start();
-    // Fail the initial spawn + 5 capped respawns.
-    for (let i = 0; i < 6; i++) {
-      const instance = FakeWorker.instances[i];
-      instance.emit('exit', 1);
+    // 5 failures with respawns between them, then the 6th exit trips the cap.
+    for (let i = 0; i < 5; i++) {
+      FakeWorker.instances[i].emit('exit', 1);
       jest.runAllTimers();
     }
+    FakeWorker.instances[5].emit('exit', 1);
     const spawnsAfterCap = WorkerMock.mock.calls.length;
     expect(mod.getStatus()).toMatchObject({ gaveUp: true, running: false });
-
-    // No further respawn attempt, however long we wait.
-    jest.advanceTimersByTime(3600000);
-    expect(WorkerMock.mock.calls.length).toBe(spawnsAfterCap);
     expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining('giving up'), expect.anything());
+
+    // No respawn while the re-arm cooldown is still running.
+    jest.advanceTimersByTime(25 * 60 * 1000);
+    expect(WorkerMock.mock.calls.length).toBe(spawnsAfterCap);
   });
 
   it('resets the backoff after a healthy run', () => {
@@ -145,5 +145,53 @@ describe('crawlWorkerSupervisor', () => {
     mod.stop();
     jest.runAllTimers();
     expect(WorkerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('never respawns after stop, even when the terminate-triggered exit fires late', () => {
+    mod.start();
+    mod.stop(); // terminate() → the real worker fires 'exit' AFTER stop returns
+    FakeWorker.instances[0].emit('exit', 1);
+    jest.runAllTimers();
+    jest.advanceTimersByTime(3600000);
+    expect(WorkerMock).toHaveBeenCalledTimes(1);
+    // The late exit must not churn supervisor state either — onExit is the
+    // single respawn gate and it is closed once stopped.
+    expect(mod.getStatus()).toMatchObject({ running: false, gaveUp: false, restarts: 0, lastExitCode: null });
+  });
+
+  it('handles a spawn failure like a crash instead of throwing out of the timer', () => {
+    mod.start();
+    FakeWorker.instances[0].emit('exit', 1);
+    // Next construction attempt throws (degraded process, resource limits).
+    WorkerMock.mockImplementationOnce(() => {
+      throw new Error('thread creation failed');
+    });
+    expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
+    // running must be false (no worker exists) and the failure must count.
+    expect(mod.getStatus()).toMatchObject({ running: false, restarts: 2 }); // exit + failed spawn
+    // And the backoff continues: 10s later a fresh spawn is attempted.
+    jest.advanceTimersByTime(10000);
+    expect(WorkerMock).toHaveBeenCalledTimes(3);
+    expect(mod.getStatus().running).toBe(true);
+  });
+
+  it('re-arms after the give-up cooldown instead of staying dead forever', () => {
+    mod.start();
+    // 5 failures with respawns between them, then the 6th exit trips the cap.
+    // (runAllTimers inside the loop must NOT fire here — it would consume the
+    // rearm cooldown too.)
+    for (let i = 0; i < 5; i++) {
+      FakeWorker.instances[i].emit('exit', 1);
+      jest.runAllTimers();
+    }
+    FakeWorker.instances[5].emit('exit', 1);
+    expect(mod.getStatus().gaveUp).toBe(true);
+
+    // Still dead right after the cap, alive again after the 30 min cooldown.
+    jest.advanceTimersByTime(29 * 60 * 1000);
+    expect(mod.getStatus().gaveUp).toBe(true);
+    jest.advanceTimersByTime(60 * 1000);
+    expect(mod.getStatus()).toMatchObject({ gaveUp: false, running: true });
+    expect(WorkerMock).toHaveBeenCalledTimes(7);
   });
 });

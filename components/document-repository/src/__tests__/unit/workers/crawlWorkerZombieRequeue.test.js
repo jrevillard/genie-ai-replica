@@ -71,4 +71,37 @@ describe('crawlWorker requeueZombieJobs', () => {
     await expect(requeueZombieJobs()).resolves.toBeUndefined();
     expect(jobCollection.update).not.toHaveBeenCalled();
   });
+
+  it('finalizes a kill_requested zombie as Killed instead of requeueing it', async () => {
+    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
+    zombieRows.push({ _key: 'job-1', file_id: 'file-1', status: 'Crawling', kill_requested: true });
+
+    await requeueZombieJobs();
+
+    expect(jobCollection.update).toHaveBeenCalledWith('job-1', expect.objectContaining({ status: 'Killed' }));
+    expect(jobCollection.update).not.toHaveBeenCalledWith('job-1', { status: 'Pending' });
+    expect(fileService.addCrawlLog).toHaveBeenCalledWith('file-1', 'WARN', 'System', expect.stringContaining('killed'));
+  });
+
+  it('a failing job does not strand the remaining zombies', async () => {
+    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
+    zombieRows.push(
+      { _key: 'job-bad', file_id: 'file-bad', status: 'Crawling' },
+      { _key: 'job-good', file_id: 'file-good', status: 'Crawling' }
+    );
+    jobCollection.update.mockImplementation(async (key) => {
+      if (key === 'job-bad') throw new Error('write failed');
+      return {};
+    });
+
+    await requeueZombieJobs();
+
+    expect(jobCollection.update).toHaveBeenCalledWith('job-good', { status: 'Pending' });
+    expect(fileService.addCrawlLog).toHaveBeenCalledWith(
+      'file-good',
+      'WARN',
+      'System',
+      expect.stringContaining('requeued')
+    );
+  });
 });

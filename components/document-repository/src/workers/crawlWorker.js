@@ -92,9 +92,26 @@ const requeueZombieJobs = async () => {
     const cursor = await db.query("FOR job IN crawl_job FILTER job.status == 'Crawling' RETURN job");
     const zombies = await cursor.all();
     for (const job of zombies) {
-      await db.collection('crawl_job').update(job._key, { status: 'Pending' });
-      await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
-      logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
+      // Per-job guard: one bad job must not strand the rest in 'Crawling'.
+      try {
+        if (job.kill_requested) {
+          // The operator already asked for this crawl to die — do not restart
+          // it; finalize it as Killed.
+          await db.collection('crawl_job').update(job._key, {
+            status: 'Killed',
+            error_message: 'Crawl worker restarted mid-crawl after kill request',
+            finished_at: new Date().toISOString()
+          });
+          await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted; killed job finalized.');
+          logger.warn(`[CRAWL-WORKER] Finalized killed zombie job ${job._key}`);
+          continue;
+        }
+        await db.collection('crawl_job').update(job._key, { status: 'Pending' });
+        await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
+        logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
+      } catch (jobError) {
+        logger.error(`[CRAWL-WORKER] Failed to requeue zombie job ${job._key}: ${jobError.message}`);
+      }
     }
   } catch (error) {
     logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);

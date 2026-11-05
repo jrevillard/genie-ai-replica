@@ -16,25 +16,6 @@ ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
-def quote_collection(name: str) -> str:
-    """Backtick-quote an AQL collection identifier (#1079).
-
-    AQL parses an unquoted hyphen as subtraction, so ``FOR doc IN
-    OKF_solar-system_v1_SOURCE`` fails with errorNum 1203 while the same
-    name backtick-quoted reads the collection. Every OKF graph collection
-    (``OKF_<slug>_v<n>_SOURCE``) and every stack-derived ``GRAPH_SOURCE``
-    (``GRAPH_<stack-prefix>_SOURCE``) carries hyphens. Embedded backticks
-    never occur in a server-side collection name — a backtick reaching this
-    helper means the caller assembled the name wrong, and silently stripping
-    it would point the query at a different (plausibly existing) corpus.
-    Raise instead so the defect names itself at the call site.
-    """
-    name = str(name)
-    if "`" in name:
-        raise ValueError(f"collection name contains a backtick: {name!r}")
-    return f"`{name}`"
-
-
 def cursor(
     aql: str,
     bind_vars: dict | None = None,
@@ -138,7 +119,13 @@ def source_chunks(
     of dump-tuples / anchor maps in ``run_eval`` are derived from this single
     AQL — text is fetched ONCE and projected per-mode.
     """
+    # The collection name is bound (@@src), not interpolated: OKF graph
+    # collections and stack-derived GRAPH_SOURCE names carry hyphens, which
+    # unquoted AQL parses as subtraction (errorNum 1203, #1079). A bind
+    # parameter carries any collection name safely — no quoting rule for
+    # future call sites to remember.
     return cursor(
-        f"FOR doc IN {quote_collection(graph_source)} RETURN {{key: doc._key, text: doc.{text_field}}}",
+        f"FOR doc IN @@src RETURN {{key: doc._key, text: doc.{text_field}}}",
+        {"@src": graph_source},
         **(conn or {}),
     )

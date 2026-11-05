@@ -180,6 +180,12 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   async query({ q, start, end, limit, offset, fields }) {
     await this._ensureHealth();
 
+    // limit=0 is a page-size clamp, never "unbounded" — VL reads limit=0 as
+    // NO limit and would stream the entire matching window. A caller asking
+    // for a zero-row page gets one without a round-trip; a caller that
+    // wants everything must say so explicitly (omit limit), not pass 0.
+    if (limit === 0) return [];
+
     // VL's `/select/logsql/query` endpoint expects the LogsQL expression
     // in the `query` URL parameter — NOT `q`. Earlier revisions of this
     // adapter sent `q`; VL rejected with `query arg cannot be empty`

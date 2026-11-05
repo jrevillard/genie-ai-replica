@@ -82,10 +82,11 @@ def test_cursor_error_payload_raises(monkeypatch):
         assert "OKF_solar" in str(e)
 
 
-def test_source_chunks_quotes_hyphenated_collection(monkeypatch):
+def test_source_chunks_binds_the_hyphenated_collection(monkeypatch):
     # GRAPH_SOURCE is stack-derived (GRAPH_<stack-prefix>_SOURCE) and OKF
     # graph names carry the bundle slug — both routinely contain hyphens,
-    # which AQL parses as subtraction unless the identifier is backticked.
+    # which unquoted AQL parses as subtraction. The name is bound (@@src),
+    # not interpolated, so any collection name reaches the query safely.
     captured = {}
 
     def fake_urlopen(req, timeout=None):
@@ -94,13 +95,8 @@ def test_source_chunks_quotes_hyphenated_collection(monkeypatch):
 
     monkeypatch.setattr(arango.urllib.request, "urlopen", fake_urlopen)
     arango.source_chunks("GRAPH_genieai-el-salvador_SOURCE", "chunk_text")
-    assert "FOR doc IN `GRAPH_genieai-el-salvador_SOURCE`" in captured["body"]["query"]
+    assert "FOR doc IN @@src" in captured["body"]["query"]
+    assert captured["body"]["bindVars"] == {"@src": "GRAPH_genieai-el-salvador_SOURCE"}
 
 
-def test_quote_collection_raises_on_embedded_backtick():
-    assert arango.quote_collection("OKF_solar-system_v1_SOURCE") == "`OKF_solar-system_v1_SOURCE`"
-    try:
-        arango.quote_collection("OKF_x`y_SOURCE")
-        assert False
-    except ValueError as e:
-        assert "backtick" in str(e)
+

@@ -699,10 +699,10 @@ describe('LogsService VictoriaLogs rewrite', () => {
           limit: -5,
           offset: -10
         });
-        // limit=0 clamps to an empty page — and VL reads limit=0 as NO
-        // limit, so the row query is skipped entirely rather than fetching
-        // unbounded rows for a page that is empty by definition.
-        expect(mockVlClient.query).not.toHaveBeenCalled();
+        // limit=0 clamps to an empty page. VL reads limit=0 as NO limit —
+        // the adapter (not this service) guards that: see the
+        // victoria-logs-client "limit=0 returns an empty page" test.
+        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
         expect(result.logs).toHaveLength(0);
         expect(result.limit).toBe(0);
         expect(result.offset).toBe(0);

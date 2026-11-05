@@ -459,6 +459,36 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
   });
 
+  // The soft contract covers "the endpoint did not answer" — ModelDiscoveryError,
+  // the only class a probe failure takes. A NON-discovery class reaching
+  // servedModelId is a bug on the soft path: it still resolves null (the label
+  // must not fail) but is warned, never silently swallowed. The throw is
+  // produced at the only synchronous seam getServedModelId has before the
+  // probe (the URL builder), isolated so the real module keeps serving the
+  // other tests.
+  test('a non-discovery error on the soft path warns and still resolves null', async () => {
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('../services/llm-url', () => ({
+        ...jest.requireActual('../services/llm-url'),
+        openAiModelsUrl: () => {
+          throw new TypeError('cache-key construction bug');
+        }
+      }));
+      const isolatedLogger = require('../shared-lib/logger').logger;
+      const isolatedCache = require('../services/vllm-model-cache');
+      isolatedCache.clearModelCache();
+      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+      const warns = isolatedLogger.warn.mock.calls.filter(
+        (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
+      );
+      expect(warns).toHaveLength(1);
+      expect(warns[0][1]).toMatchObject({ baseUrl: 'http://vllm:8000', error: 'cache-key construction bug' });
+      // A discovery-shaped failure keeps its silence — the quiet contract is
+      // unchanged by the classification.
+      expect(isolatedLogger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+    });
+  });
+
   test('a refresh mid-failure serves the caller the fresh id and keeps the warn silent', async () => {
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000');

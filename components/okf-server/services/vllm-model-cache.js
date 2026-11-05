@@ -584,7 +584,18 @@ async function deploymentServedModelId({ timeoutMs } = {}) {
 async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
     return await getServedModelId(baseUrl, { timeoutMs, apiKey, quiet: true });
-  } catch {
+  } catch (err) {
+    // null means "the endpoint did not answer" (ModelDiscoveryError — the
+    // only class getServedModelId throws for a probe failure) — never
+    // "anything". Any OTHER class is a bug on this soft path: it stays
+    // null (the provenance label must not fail) but cannot stay silent,
+    // or every label would read as a healthy miss.
+    if (!(err instanceof ModelDiscoveryError)) {
+      logger.warn('vllm_model_cache.soft_path_unexpected_error', {
+        baseUrl: String(baseUrl || ''),
+        error: err && err.message
+      });
+    }
     return null;
   }
 }

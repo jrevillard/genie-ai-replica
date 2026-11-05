@@ -4,13 +4,7 @@
 // level, same posture as repo creation). Thin: policy lives in the service.
 
 const svc = require('../services/model-config-service');
-
-function actorFrom(req) {
-  return {
-    user_id: req.user ? req.user.sub : 'system',
-    name: req.user && (req.user.preferred_username || req.user.name)
-  };
-}
+const { actorFrom } = require('./actor-from');
 
 async function list(req, res, next) {
   try {
@@ -33,7 +27,7 @@ async function list(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    res.status(201).json(await svc.createConfig(req.body || {}, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(201).json(await svc.createConfig(req.body || {}, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }
@@ -41,9 +35,7 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    res
-      .status(200)
-      .json(await svc.updateConfig(req.params.key, req.body || {}, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(200).json(await svc.updateConfig(req.params.key, req.body || {}, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }
@@ -51,7 +43,7 @@ async function update(req, res, next) {
 
 async function copy(req, res, next) {
   try {
-    res.status(201).json(await svc.copyConfig(req.params.key, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(201).json(await svc.copyConfig(req.params.key, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }
@@ -59,7 +51,7 @@ async function copy(req, res, next) {
 
 async function activate(req, res, next) {
   try {
-    res.status(200).json(await svc.activateConfig(req.params.key, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(200).json(await svc.activateConfig(req.params.key, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }
@@ -67,7 +59,7 @@ async function activate(req, res, next) {
 
 async function deactivate(req, res, next) {
   try {
-    res.status(200).json(await svc.deactivateConfig(req.params.key, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(200).json(await svc.deactivateConfig(req.params.key, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }
@@ -75,7 +67,7 @@ async function deactivate(req, res, next) {
 
 async function remove(req, res, next) {
   try {
-    res.status(200).json(await svc.deleteConfig(req.params.key, { actor: actorFrom(req), source_ip: req.ip }));
+    res.status(200).json(await svc.deleteConfig(req.params.key, { actor: actorFrom(req) }));
   } catch (err) {
     next(err);
   }

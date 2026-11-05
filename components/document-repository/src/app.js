@@ -18,6 +18,7 @@ const labelRoutes = require('./routes/labelRoutes');
 
 // Import config
 const appConfig = require('./config/appConfig');
+const crawlWorkerSupervisor = require('./workers/crawlWorkerSupervisor');
 
 const app = express();
 
@@ -122,7 +123,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    version: process.env.npm_package_version || '1.0.0'
+    version: process.env.npm_package_version || '1.0.0',
+    crawlWorker: crawlWorkerSupervisor.getStatus()
   });
 });
 

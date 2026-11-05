@@ -2,11 +2,10 @@ require('dotenv').config();
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
 
 const http = require('http'); // [ADDED] For agent tuning
-const path = require('path'); // [ADDED] For worker path resolution
-const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execution
 
 const app = require('./app');
 const appConfig = require('./config/appConfig');
+const crawlWorkerSupervisor = require('./workers/crawlWorkerSupervisor');
 const { logger } = require('../shared-lib');
 
 // Validate required environment variables
@@ -29,8 +28,6 @@ if (isProduction) {
     throw new Error(`Production requires secure values for: ${missingSecrets.join(', ')}`);
   }
 }
-// const crawlWorker = require('./workers/crawlWorker'); // [MODIFIED] Handled via Worker Thread now
-
 // [ADDED] High Concurrency Global Tuning
 // Allow more concurrent outgoing connections (e.g., to DB, Dataprep, or external sites)
 http.globalAgent.maxSockets = 1000;
@@ -42,6 +39,11 @@ const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 // Graceful shutdown function
 const gracefulShutdown = (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
+
+  // Stop the crawl worker first: it keeps crawling (and committing job/file
+  // state) through the drain window otherwise, and a mid-shutdown death would
+  // otherwise schedule a fresh respawn while the container is terminating.
+  crawlWorkerSupervisor.stop();
 
   server.close(() => {
     logger.info('HTTP server closed.');
@@ -73,27 +75,14 @@ const server = app.listen(PORT, HOST, () => {
   server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
 
   // Start background workers
-  try {
-    // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
-    const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
-
-    // We use eval to require the file and call start(), isolating the CPU load
-    const worker = new Worker(
-      `
-      const { start } = require('${workerPath.replace(/\\/g, '/')}');
-      start();
-    `,
-      { eval: true }
-    );
-
-    worker.on('error', (err) => logger.error('Crawl Worker Error:', err));
-    worker.on('exit', (code) => {
-      if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
-    });
-
+  // Spawn the Crawler in a separate thread to prevent Event Loop blocking.
+  // The supervisor respawns the thread with a bounded backoff when it dies
+  // and exposes its state through crawlWorkerSupervisor.getStatus() on
+  // /health. A spawn failure is handled inside the supervisor (it retries
+  // with the backoff), so start() does not throw.
+  crawlWorkerSupervisor.start();
+  if (crawlWorkerSupervisor.getStatus().running) {
     logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
-  } catch (error) {
-    logger.error('Failed to start Crawl Worker:', error);
   }
 });
 

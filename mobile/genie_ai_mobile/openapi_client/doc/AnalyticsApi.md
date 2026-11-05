@@ -29,7 +29,6 @@ Retrieves analytics data for the dashboard within a date range
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -78,7 +77,6 @@ Retrieves event records with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -125,7 +123,6 @@ Records a user event for analytics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -170,7 +167,6 @@ Retrieves data for a specific analytics metric
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -219,7 +215,6 @@ Retrieves analytics records with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -266,7 +261,6 @@ Retrieves satisfaction percentage data for the gauge visualization
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -315,7 +309,6 @@ Retrieves satisfaction percentage data by knowledge area over time
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);
@@ -364,7 +357,6 @@ Retrieves time series data for a specific metric, interval, and date range
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AnalyticsApi(api_client);

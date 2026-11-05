@@ -63,6 +63,18 @@ void main() {
       );
     });
 
+    test('a nested list joins recursively like the web', () {
+      // The web's array toString joins recursively ('1,2,a'); Dart's
+      // own toString of the inner list would write '[1, 2],a'.
+      expect(
+        resolveConfigText([
+          [1.0, 2],
+          'a',
+        ], 'en'),
+        '1,2,a',
+      );
+    });
+
     test(
       '0 and false resolve to no text; a truthy number renders in the web form',
       () {

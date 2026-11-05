@@ -175,7 +175,7 @@ const md = fs.readdirSync(dir, {recursive: true})
 for (const p of md) {
   const src = fs.readFileSync(p, 'utf8');
   const fixed = src.replace(
-    /\/\/defaultApiClient\.getAuthentication<OAuth>\('\w+'\)\.accessToken = 'YOUR_ACCESS_TOKEN';\n\nfinal api_instance = (\w+)\(\);/g,
+    /\/\/ TODO Configure OAuth2 access token for authorization: \w+\n\/\/defaultApiClient\.getAuthentication<OAuth>\('\w+'\)\.accessToken = 'YOUR_ACCESS_TOKEN';\n\nfinal api_instance = (\w+)\(\);/g,
     (m, apiClass) =>
       \"final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));\n\n\" +
       'final api_instance = ' + apiClass + '(api_client);'
@@ -185,18 +185,22 @@ for (const p of md) {
     console.log('    patched ' + path.relative(dir, p));
   }
 }
-" "$1"
+" "$1" || {
+    echo "ERROR: the markdown patch block failed (see the node error above;)"
+    echo "       for module-not-found errors, check the node installation."
+    exit 1
+  }
 
   # The patch above matches an exact emission shape; if a future generator
   # version changes it, the broken snippet would ship again unnoticed. Fail
-  # loudly instead. Only the markdown the patch rewrites is grepped — a
-  # generated Dart method legitimately named getAuthentication in lib/
-  # must not trip the guard.
-  if grep -rn 'getAuthentication' "$1/README.md" "$1/doc" > /dev/null 2>&1; then
-    echo "ERROR: the generated docs (README.md, doc/) still contain a"
-    echo "       'getAuthentication' snippet the patch block did not"
-    echo "       recognize — the generator's output shape changed; inspect"
-    echo "       the docs and update patch_markdown."
+  # loudly instead. The grep covers the SAME set the patch walks (every
+  # *.md under the output dir — --include='*.md' keeps a generated Dart
+  # method legitimately named getAuthentication from tripping it).
+  if grep -rn --include='*.md' 'getAuthentication' "$1" > /dev/null 2>&1; then
+    echo "ERROR: the generated docs still contain a 'getAuthentication'"
+    echo "       snippet the patch block did not recognize — the generator's"
+    echo "       output shape changed; inspect the docs and update"
+    echo "       patch_markdown."
     exit 1
   fi
 }

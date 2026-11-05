@@ -35,7 +35,6 @@ Backup database
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -73,7 +72,6 @@ Optimize database
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -111,7 +109,6 @@ Get database statistics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -149,7 +146,6 @@ Run system diagnostics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -187,7 +183,6 @@ Debug logs for yesterday to diagnose issues
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -226,7 +221,6 @@ Get system logs
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -273,7 +267,6 @@ Search logs with filtering
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -326,7 +319,6 @@ Get logs summary by type and service
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -371,7 +363,6 @@ Get recent queries for admin inspection (Query Inspector)
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -427,7 +418,6 @@ Get full query details for admin inspection
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -469,7 +459,6 @@ Retrieve the last security scan details
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -508,7 +497,6 @@ Get security metrics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -547,7 +535,6 @@ Run security scan
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -586,7 +573,6 @@ Get system health metrics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -625,7 +611,6 @@ Get user statistics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);
@@ -663,7 +648,6 @@ Search users with filtering
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);

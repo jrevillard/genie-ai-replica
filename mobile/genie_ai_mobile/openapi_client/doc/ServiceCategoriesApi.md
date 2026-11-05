@@ -33,7 +33,6 @@ Retrieves a specific service category with its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -80,7 +79,6 @@ Retrieves all categories with their associated services as objects (including ke
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -125,7 +123,6 @@ Retrieves all service categories with their associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -170,7 +167,6 @@ Deletes a service category and its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -214,7 +210,6 @@ Updates a category's name and translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -260,7 +255,6 @@ Creates a new service with translations under a specific category
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -306,7 +300,6 @@ Retrieves all available translations for a specific service category
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -351,7 +344,6 @@ Creates a new service category with translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -395,7 +387,6 @@ Searches for categories and services based on a query string
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -442,7 +433,6 @@ Deletes a service and its associated translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -486,7 +476,6 @@ Updates a service's name and its associated translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);
@@ -532,7 +521,6 @@ Retrieves all available translations for a specific service
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = ServiceCategoriesApi(api_client);

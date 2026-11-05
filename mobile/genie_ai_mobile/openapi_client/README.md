@@ -40,7 +40,6 @@ Please follow the [installation procedure](#installation--usage) and then run th
 ```dart
 import 'package:openapi/api.dart';
 
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
 final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
 final api_instance = AdminApi(api_client);

@@ -50,13 +50,9 @@ String resolveConfigText(dynamic value, String locale) {
       // skips it and falls through to the next candidate.
       if (candidate is String) {
         if (candidate.isNotEmpty) return candidate;
-      } else if (candidate is List) {
-        // A list nested in the map renders as a bare list does - the
-        // web's chain returns the array (truthy) and its template
-        // joins it; one rule for one shape, wherever it nests.
-        return _listAsConfigText(candidate);
       } else if (configTruthy(candidate)) {
-        // configTruthy(null) is false, so jsFormOf cannot return null here.
+        // configTruthy(null) is false, so jsFormOf cannot return null
+        // here. A list renders through jsFormOf's own recursive join.
         return jsFormOf(candidate)!;
       }
     }
@@ -68,22 +64,9 @@ String resolveConfigText(dynamic value, String locale) {
   // which drops the '.0' Dart keeps ('5' there, '5.0' here) - a
   // divergence only a malformed configuration produces.
   if (value is String) return value;
-  if (value is List) return _listAsConfigText(value);
   // configTruthy(null) is false, so jsFormOf cannot return null here.
   return configTruthy(value) ? jsFormOf(value)! : '';
 }
-
-/// A list is not a text value: it renders as its elements joined with
-/// commas — the web's template calls the array's `toString`, which
-/// joins exactly this way. ONE rule for the shape, wherever it nests
-/// (a bare title or an entry inside a locale map), and only a
-/// malformed configuration produces it; a card label stays one line.
-String _listAsConfigText(List value) =>
-    // Each element in the WEB's form (jsFormOf): JS's array join
-    // stringifies every element, so a numeric element renders '5' where
-    // a raw Dart toString would render '5.0'. A null element renders
-    // empty — JS's own join rule for null.
-    value.map((element) => jsFormOf(element) ?? '').join(',');
 
 /// The config value as a map — the ONE container guard every config
 /// descent uses. A value that is not a map (a string, a list, null: the
@@ -147,6 +130,12 @@ String? jsFormOf(dynamic raw) {
   // default renders any object — '[object Object]' — where Dart's own
   // toString would write a Dart map literal.
   if (raw is Map) return '[object Object]';
+  // A List renders as the web's array join: every element in the SAME
+  // form, recursively, joined with ',' — ONE rule for the shape
+  // wherever it nests (a bare title, a locale-map value or an element
+  // inside another list). A null element renders empty, JS's own join
+  // rule; Dart's own toString would write '[1, 2]'.
+  if (raw is List) return raw.map((e) => jsFormOf(e) ?? '').join(',');
   if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
     // JS String(-0) is '0' — Dart prints '-0'.
     if (raw == 0) return '0';

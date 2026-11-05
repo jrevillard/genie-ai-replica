@@ -42,6 +42,14 @@ describe('Document Repository swagger config', () => {
     expect(loadConfig('').definition.servers[0].url).toBe('/');
   });
 
+  it('ignores an API_URL that is not an absolute http(s) URL (falls back to the relative default)', () => {
+    // A scheme-only value would survive slash-stripping as 'https:' and be
+    // served as a broken server entry; a scheme-less host resolves as a
+    // relative reference against the docs page. Both fall back to '/'.
+    expect(loadConfig('https://').definition.servers[0].url).toBe('/');
+    expect(loadConfig('gov.example.com').definition.servers[0].url).toBe('/');
+  });
+
   it('every annotated path starts with /api (Try-it-out keeps the prefix for any server base)', () => {
     // swagger-ui executes servers[0].url + path, so every annotated path
     // must carry the /api prefix itself — an annotation copied

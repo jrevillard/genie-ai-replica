@@ -22,12 +22,21 @@ module.exports = {
       // Default: RELATIVE ('/') — swagger-ui resolves it against the
       // origin the docs page is served from, same-origin in dev and behind
       // the gateway, so Try-it-out works in every topology without config.
-      // API_URL pins an absolute base instead: trimmed, no /api suffix
-      // (the paths carry it), no trailing slash (a raw join would build
-      // //api/... URLs). Keep this normalization in sync with
+      // Deployments do not receive API_URL; its one consumer is the
+      // client-generation pin (scripts/generate-api-client.sh sets it
+      // under env -i to bake a deterministic base into the committed Dart
+      // artifacts). A value that is not an absolute http(s) URL after
+      // normalization (trim, trailing-slash strip) is ignored — a
+      // scheme-only or scheme-less value would serve a broken server
+      // entry. Keep this normalization in sync with
       // components/document-repository/src/config/swaggerConfig.js —
-      // the two components pin the same contract with their own suites.
-      url: (process.env.API_URL || '').trim().replace(/\/+$/, '') || '/',
+      // a shared helper is not possible here: the generator loads this
+      // module with bare node (no Jest mapper), where ./shared-lib does
+      // not resolve.
+      url: (() => {
+        const base = (process.env.API_URL || '').trim().replace(/\/+$/, '');
+        return /^https?:\/\/.+/.test(base) ? base : '/';
+      })(),
       description: 'API server base'
     }
   ],

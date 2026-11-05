@@ -215,7 +215,6 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `api_url` | `""` | Absolute base URL of the public API (e.g. `https://your-domain.com`), published as the OpenAPI spec's server entry; typically mirrors `nginx_public_domain`. Empty = the spec carries a relative server URL, which Swagger UI resolves against the page origin. No `/api` suffix — the annotated paths carry it |
 | `context_option` | `conversation-with-context-labels` | Conversation mode: `conversation-with-context-labels` (full context) or `single-message` (legacy) |
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `csp_connect_src` | `""` | Nginx CSP connect sources |

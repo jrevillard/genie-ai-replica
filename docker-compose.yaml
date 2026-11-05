@@ -790,9 +790,6 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_USER=${ARANGO_USER:-root}
-      # Absolute base for the OpenAPI spec's server entry (external
-      # tooling); unset = relative, resolved against the page origin.
-      - API_URL=${API_URL:-}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
@@ -1479,9 +1476,6 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
-      # Absolute base for the OpenAPI spec's server entry (external
-      # tooling); unset = relative, resolved against the page origin.
-      - API_URL=${API_URL:-}
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
       # JWKS is fetched via a different (internal) URL; KEYCLOAK_JWKS_URL pins

@@ -74,21 +74,13 @@ time guessing what is wrong.
 
 - The OpenAPI JSON (`GET /api-docs.json`) — a programmatic copy of all the
   schemas below, refreshed on every BFF restart. Useful for client code
-  generation and contract tests. Its `servers[0].url` is **relative** (`/`)
-  by default: the base comes from wherever you fetch the spec, and Swagger
-  UI's Try-it-out therefore targets the origin the docs page is served from
-  (same-origin, in dev and behind the gateway). To publish an absolute base
-  instead, set `API_URL` — no `/api` suffix, the paths already carry it —
-  in the deployment's own configuration: the root `env` template (section 6)
-  for a Compose deployment, the `api_url` Ansible group variable (see
-  `deploy/ansible/README.md`) for a Swarm deployment. The value must be the
-  origin the docs page itself is served from: any other host re-introduces
-  the cross-origin failure (CORS plus nginx's `connect-src 'self'` on
-  `/api-docs`) that the relative default removes. The document-repository
-  spec (the `/api/files` endpoints are served by that service, not by the
-  BFF) follows the same relative default; its Swagger UI is not routed
-  through the gateway, so leave `API_URL` unset for it unless you expose
-  that UI from the same origin as its spec.
+  generation and contract tests. Its `servers[0].url` is **relative** (`/`):
+  the base comes from wherever you fetch the spec, and Swagger UI's
+  Try-it-out therefore targets the origin the docs page is served from
+  (same-origin, in dev and behind the gateway) — no per-deployment
+  configuration. A client generator must be given a host of its own. The
+  document-repository spec (the `/api/files` endpoints are served by that
+  service, not by the BFF) follows the same relative default.
 
 ## Verify your setup
 

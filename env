@@ -650,15 +650,6 @@ HUGGING_FACE_HUB_TOKEN=
 # =============================================================================
 # Override for production deployment.
 
-# Absolute base URL of the public API, used by the OpenAPI spec's server entry
-# (backend, document-repository). Unset (default) = a RELATIVE server URL,
-# which swagger-ui resolves against the origin the docs page is served from.
-# Set only when external tooling needs an absolute base; NO /api suffix.
-# Note: Ansible/Swarm renders its .env from env.j2 — there the equivalent
-# knob is the `api_url` group variable (deploy/ansible/README.md).
-# Used by: backend, document-repository
-# API_URL=https://your-domain.com
-
 # CORS allowed origins (which domains can access the API)
 # Used by: backend (response headers)
 # Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost

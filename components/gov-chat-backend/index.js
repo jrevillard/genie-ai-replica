@@ -960,25 +960,11 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      // Warn on the API_URL shapes that silently re-create the failures
-      // this spec default exists to avoid (the knob's name invites the
-      // /api suffix — its frontend sibling VUE_APP_API_URL documents one).
-      const apiUrl = (process.env.API_URL || '').trim();
-      if (apiUrl && !/^https?:\/\//.test(apiUrl)) {
-        logger.warn(
-          'API_URL is not an absolute http(s) URL — external tooling resolves it as a relative reference against its own base'
-        );
-      }
-      if (/\/api(\/|$)/.test(apiUrl)) {
-        logger.warn(
-          'API_URL carries an /api suffix — the annotated paths already include /api, so Try-it-out builds doubled /api/api/... URLs'
-        );
-      }
       // Log the docs URL the served spec itself advertises. The docs page
       // mounts at the BFF root, so only the server URL's ORIGIN is a valid
-      // docs base; the relative default (and any unparseable value) logs
-      // the bare path — a localhost URL would be unreachable in every
-      // deployed topology (only nginx 80/443 is exposed).
+      // docs base; the relative default (the deployment shape) logs the
+      // bare path — a localhost URL would be unreachable in every deployed
+      // topology (only nginx 80/443 is exposed).
       const specServerUrl = swaggerSpec?.servers?.[0]?.url;
       let docsBase = '';
       if (specServerUrl && specServerUrl !== '/') {

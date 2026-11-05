@@ -465,8 +465,9 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
   // must not fail) but is warned, never silently swallowed. The throw is
   // produced at the only synchronous seam getServedModelId has before the
   // probe (the URL builder), isolated so the real module keeps serving the
-  // other tests (the doMock is disarmed right after — it survives the
-  // isolation's registry reset and would poison a later fresh require).
+  // other tests (the doMock is disarmed in a finally — it survives the
+  // isolation's registry reset and would poison a later fresh require, and
+  // a failing expect above must not skip the disarm).
   test('a non-discovery error on the soft path warns once and still resolves null', async () => {
     await jest.isolateModulesAsync(async () => {
       jest.doMock('../services/llm-url', () => ({
@@ -478,20 +479,25 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
       const isolatedLogger = require('../shared-lib/logger').logger;
       const isolatedCache = require('../services/vllm-model-cache');
       isolatedCache.clearModelCache();
-      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
-      // One line per failure signature: a PRE-probe seam has no negative
-      // stub to window it — the repeat stays silent.
-      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
-      const warns = isolatedLogger.warn.mock.calls.filter(
-        (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
-      );
-      expect(warns).toHaveLength(1);
-      expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'cache-key construction bug' });
-      // A discovery-shaped failure keeps its silence — the quiet contract is
-      // unchanged by the classification.
-      expect(isolatedLogger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+      try {
+        await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+        // One line per failure signature: a PRE-probe seam has no negative
+        // stub to window it, and the base is normalized before the
+        // signature — the same bug under a trailing-slash spelling of the
+        // same base stays silent too.
+        await expect(isolatedCache.servedModelId('http://vllm:8000/')).resolves.toBeNull();
+        const warns = isolatedLogger.warn.mock.calls.filter(
+          (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
+        );
+        expect(warns).toHaveLength(1);
+        expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'cache-key construction bug' });
+        // A discovery-shaped failure keeps its silence — the quiet contract is
+        // unchanged by the classification.
+        expect(isolatedLogger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+      } finally {
+        jest.dontMock('../services/llm-url');
+      }
     });
-    jest.dontMock('../services/llm-url');
   });
 
   // A thrown non-Error (a bare string, say) must keep its detail: the warn
@@ -508,14 +514,87 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
       const isolatedLogger = require('../shared-lib/logger').logger;
       const isolatedCache = require('../services/vllm-model-cache');
       isolatedCache.clearModelCache();
-      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
-      const warns = isolatedLogger.warn.mock.calls.filter(
-        (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
-      );
-      expect(warns).toHaveLength(1);
-      expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'bare string throw' });
+      try {
+        await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+        const warns = isolatedLogger.warn.mock.calls.filter(
+          (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
+        );
+        expect(warns).toHaveLength(1);
+        expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'bare string throw' });
+      } finally {
+        jest.dontMock('../services/llm-url');
+      }
     });
-    jest.dontMock('../services/llm-url');
+  });
+
+  // The warn must never defeat the soft contract itself, and a failed warn
+  // must not burn the signature: the line is recorded only after it
+  // emitted, so the next call retries it.
+  test('a throwing logger keeps the null contract and its warn is retried', async () => {
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('../services/llm-url', () => ({
+        ...jest.requireActual('../services/llm-url'),
+        openAiModelsUrl: () => {
+          throw new TypeError('cache-key construction bug');
+        }
+      }));
+      const isolatedLogger = require('../shared-lib/logger').logger;
+      const isolatedCache = require('../services/vllm-model-cache');
+      isolatedCache.clearModelCache();
+      try {
+        isolatedLogger.warn.mockImplementationOnce(() => {
+          throw new Error('transport down');
+        });
+        // The soft path survives the logger crash — the label answer is
+        // still null, never a rejection.
+        await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+        // The failed warn left no signature: the retry emits the line.
+        await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+        // From there the warn-once window holds.
+        await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+        const warns = isolatedLogger.warn.mock.calls.filter(
+          (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
+        );
+        expect(warns).toHaveLength(2);
+      } finally {
+        jest.dontMock('../services/llm-url');
+      }
+    });
+  });
+
+  // The signature set bounds itself at the warn site (a PRE-probe throw
+  // never reaches the probe chain's settle sweep): past the cache bound
+  // the oldest signature is evicted and re-warns at most once more.
+  test('the signature set stays bounded — an evicted signature re-warns', async () => {
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('../services/llm-url', () => ({
+        ...jest.requireActual('../services/llm-url'),
+        openAiModelsUrl: () => {
+          throw new TypeError('cache-key construction bug');
+        }
+      }));
+      const isolatedLogger = require('../shared-lib/logger').logger;
+      const isolatedCache = require('../services/vllm-model-cache');
+      isolatedCache.clearModelCache();
+      try {
+        for (let i = 0; i < 64; i += 1) {
+          await isolatedCache.servedModelId(`http://vllm:8000/base-${i}`);
+        }
+        const softWarns = () =>
+          isolatedLogger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error');
+        expect(softWarns()).toHaveLength(64);
+        // One more distinct base pushes base-0 out of the bound; calling it
+        // again emits the line once more, at most.
+        await isolatedCache.servedModelId('http://vllm:8000/base-64');
+        expect(softWarns()).toHaveLength(65);
+        await expect(isolatedCache.servedModelId('http://vllm:8000/base-0')).resolves.toBeNull();
+        expect(softWarns()).toHaveLength(66);
+        await expect(isolatedCache.servedModelId('http://vllm:8000/base-0')).resolves.toBeNull();
+        expect(softWarns()).toHaveLength(66);
+      } finally {
+        jest.dontMock('../services/llm-url');
+      }
+    });
   });
 
   test('a refresh mid-failure serves the caller the fresh id and keeps the warn silent', async () => {

@@ -409,9 +409,12 @@ function pruneCache() {
   // the container's lifetime (each stub carries the full failure, axios
   // cause included). Same count bound as the id cache, same eviction: the
   // oldest stub goes, that key re-probes.
-  // The warned-set maps too (malformed pairs, soft-path signatures): a
-  // long-lived server under config churn would otherwise grow them for the
-  // container's lifetime. The oldest signature re-warns, at most once more.
+  // The malformed-pair set too — a long-lived server under config churn
+  // would otherwise grow it for the container's lifetime (a redeploy that
+  // changes the deployment base doubles the pair space). The oldest pair
+  // re-warns, at most once more. (The soft-path signature set is NOT
+  // bounded here: its pre-probe seam never reaches this settle sweep, so
+  // it bounds itself at the warn site.)
   const pruneOldest = (set) => {
     while (set.size > MAX_CACHE_ENTRIES) {
       set.delete(set.keys().next().value);
@@ -419,7 +422,6 @@ function pruneCache() {
   };
   pruneOldest(_negative);
   pruneOldest(_malformedWarned);
-  pruneOldest(_softWarned);
 }
 
 /** The loud no-answer error shared by both resolving variants. */
@@ -596,15 +598,26 @@ async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
     // "anything". Any OTHER class is a bug on this soft path: it stays
     // null (the provenance label must not fail) but cannot stay silent,
     // or every label would read as a healthy miss. One line per failure
-    // signature (the probe-chain failures are windowed by the negative
-    // stub; the pre-probe seams are not — the bound lives in pruneCache).
+    // signature: the probe-chain failures are windowed by the negative
+    // stub, but a PRE-probe throw never reaches that machinery (nor the
+    // pruneCache settle sweep) — so the signature set is bounded HERE.
     if (!(err instanceof ModelDiscoveryError)) {
       const message = err instanceof Error ? err.message : String(err);
-      const url = String(baseUrl || '');
+      // The base is normalized the way getServedModelId normalizes it, so
+      // one pre-probe bug warns once per BASE, not once per spelling.
+      const url = String(baseUrl || '').replace(/\/+$/, '');
       const signature = `${url}|${message}`;
       if (!_softWarned.has(signature)) {
-        _softWarned.add(signature);
-        logger.warn('vllm_model_cache.soft_path_unexpected_error', { url, error: message });
+        try {
+          logger.warn('vllm_model_cache.soft_path_unexpected_error', { url, error: message });
+          _softWarned.add(signature);
+          while (_softWarned.size > MAX_CACHE_ENTRIES) {
+            _softWarned.delete(_softWarned.keys().next().value);
+          }
+        } catch {
+          // A throwing logger leaves the signature unrecorded — the next
+          // call retries the line. The label answer is null either way.
+        }
       }
     }
     return null;

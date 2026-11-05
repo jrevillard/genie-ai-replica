@@ -2382,8 +2382,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // and script text that merely MENTIONS the invocation (an echo, say) is
   // captured too — loud, conservative over-capture. The canonical list is
   // coverage-shaped, not the runner's matcher: how an entry selects a test
-  // file lives in isExecuted below, which mirrors Playwright's unanchored
-  // regex arg matching exactly.
+  // file lives in scanTargets below, which mirrors Playwright's unanchored
+  // regex arg matching.
   const executedPaths = () => {
     const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
     expect(invocations.length).toBeGreaterThan(0);

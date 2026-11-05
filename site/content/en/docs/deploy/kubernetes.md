@@ -251,8 +251,26 @@ while the chart derives the rule's port from the URL — it cannot read an
 operator-named Service's `targetPort`. A destination outside the cluster
 (an IP literal, a node reached directly) has no such gap.
 
-**`pluggable.storageClassName`** — overrides the cluster default StorageClass
-for chart-managed PVCs. Empty string = use the cluster default.
+**`pluggable.storageClassName`** — the chart-wide default StorageClass for
+every persistent volume the chart creates (the data-tier PVCs — ArangoDB,
+the Keycloak Postgres, document-repository uploads, redis appendonly, clamav
+signatures, model cache, ragas judge cache — and the observability
+VLSingle/VMSingle/VTSingle storage). Empty string (the default) = each volume
+lands on the cluster's default StorageClass.
+
+Every surface also carries its own `storageClassName` key beside its
+`storageSize` (`data.arangodb.storageClassName`,
+`data.postgres.storageClassName`, `services.documentRepository.pvc.*`,
+`services.redisCache.pvc.*`, `services.clamav.cache.*`,
+`opea.models.cache.storageClassName`, `okf.ragasCacheStorageClassName`,
+`observability.{logs,metrics,traces}.storageClassName`). The precedence is:
+the surface's own key wins, `pluggable.storageClassName` is the fallback,
+and the cluster default is the last resort. A dev venue can point the
+chart-wide value at a tmpfs-backed StorageClass to pull the cache-class
+volumes into RAM, then exempt individual surfaces with their own key.
+
+Applied at PVC creation only: `storageClassName` is immutable on a bound
+PVC, so changing these values later does not migrate existing volumes.
 
 ## Exposure topologies
 

@@ -341,24 +341,34 @@ def _coerce_traversal_params(input_dict: dict) -> tuple[int, int, float]:
     They are interpolated into AQL text (LIMIT / FILTER clauses), so a
     request must not be able to smuggle AQL through them (#501):
     ``traversal_max_depth`` and ``traversal_max_returned`` go through the
-    shared ``coerce_int`` (digit strings accepted, booleans refused) and
-    ``traversal_score_threshold`` must be a finite number. Anything else is
-    a 400, never an interpolated clause.
+    shared ``coerce_int`` (digit strings and whole numbers accepted,
+    booleans refused) and ``traversal_score_threshold`` must be a finite
+    number (booleans refused too). Anything else is a 400, never an
+    interpolated clause.
     """
     depth = coerce_int(input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH))
     returned = coerce_int(input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED))
     if depth is None or returned is None:
         raise HTTPException(
             status_code=400,
-            detail="Invalid traversal parameters: traversal_max_depth and traversal_max_returned must be integers.",
+            detail=(
+                "Invalid traversal parameters: traversal_max_depth and traversal_max_returned must be "
+                "integers (digit strings and whole numbers accepted)."
+            ),
         )
-    try:
-        threshold = float(input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD))
-    except (TypeError, ValueError) as exc:
+    threshold_value = input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
+    if isinstance(threshold_value, bool):
+        threshold = None
+    else:
+        try:
+            threshold = float(threshold_value)
+        except (TypeError, ValueError):
+            threshold = None
+    if threshold is None:
         raise HTTPException(
             status_code=400,
             detail="Invalid traversal parameters: traversal_score_threshold must be a finite number.",
-        ) from exc
+        )
     # float() accepts NaN and ±Inf (JSON 1e999 → inf); either would be
     # interpolated into a FILTER comparison and error every traversal query
     # at runtime.

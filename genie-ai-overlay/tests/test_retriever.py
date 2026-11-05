@@ -463,6 +463,7 @@ class TestInvoke:
             {"traversal_max_returned": True},
             {"traversal_score_threshold": "0.5 RETURN 1 //"},
             {"traversal_score_threshold": float("inf")},
+            {"traversal_score_threshold": True},
         ],
     )
     async def test_invalid_traversal_parameter_rejected_400(self, invoke_env, overrides):

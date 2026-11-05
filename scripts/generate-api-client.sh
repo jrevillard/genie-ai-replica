@@ -108,6 +108,16 @@ prepare_output_dir() {
 # Patch the pair to what the generator itself emitted for years
 # (mp.files.addAll(files)). No-op once upstream emits the correct form again.
 patch_client() {
+  # The layout guard comes FIRST: the node block below reads this very
+  # directory, so a changed output layout would abort the script with a
+  # raw node stack trace before the explanatory message could print.
+  if [ ! -d "$1/lib/api" ]; then
+    echo "ERROR: the generator produced no $1/lib/api directory — the dart"
+    echo "       output layout changed; inspect the output and update"
+    echo "       patch_client."
+    exit 1
+  fi
+
   node -e "
 const fs = require('fs');
 const path = require('path');
@@ -129,12 +139,6 @@ for (const f of fs.readdirSync(dir)) {
   # The patch above matches an exact emission shape; if a future generator
   # version changes it, regeneration would silently produce a client that
   # does not compile again. Fail loudly instead.
-  if [ ! -d "$1/lib/api" ]; then
-    echo "ERROR: the generator produced no $1/lib/api directory — the dart"
-    echo "       output layout changed; inspect the output and update"
-    echo "       patch_client."
-    exit 1
-  fi
   if grep -rn '\.field;' "$1/lib/api" > /dev/null 2>&1; then
     echo "ERROR: the generated client still contains a '.field' emission the"
     echo "       patch block did not recognize — the generator's output shape"

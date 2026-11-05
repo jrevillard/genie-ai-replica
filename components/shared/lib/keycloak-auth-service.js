@@ -451,15 +451,13 @@ const keycloakAuthService = {
     return issuer;
   },
 
-  // No checkUserStatusInKeycloak here. A former copy of this function lived
-  // in this shared fork and mapped every 401 to null ("401 is always
-  // ambiguous") — a contract the live-realm probe of issue #1476 disproved:
-  // a disabled user's userinfo answers 401 with WWW-Authenticate
-  // error="invalid_token", error_description="User disabled", not 403.
+  // No checkUserStatusInKeycloak here — do not re-add it to this fork.
   // The live implementation is the backend copy
-  // (components/gov-chat-backend/services/keycloak-auth-service.js), whose
-  // 401 contract is: a 401 carrying that WWW-Authenticate marker means the
-  // user is disabled; any other 401 stays ambiguous.
+  // (components/gov-chat-backend/services/keycloak-auth-service.js): a 401
+  // carrying WWW-Authenticate error="invalid_token",
+  // error_description="User disabled" means the user is disabled; any other
+  // 401 stays ambiguous (the old every-401-null contract was disproven by
+  // #1476).
 
   TokenVerificationError,
 

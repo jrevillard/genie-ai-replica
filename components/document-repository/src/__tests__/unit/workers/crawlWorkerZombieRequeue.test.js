@@ -80,7 +80,8 @@ describe('crawl worker startup zombie requeue', () => {
     expect(jobCollection.update).toHaveBeenCalledWith('job-1', {
       status: 'Pending',
       error_message: null,
-      finished_at: null
+      finished_at: null,
+      pages_crawled: 0
     });
     expect(fileService.addCrawlLog).toHaveBeenCalledWith(
       'file-1',

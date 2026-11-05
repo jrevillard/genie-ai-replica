@@ -81,7 +81,9 @@ const server = app.listen(PORT, HOST, () => {
   // /health. A spawn failure is handled inside the supervisor (it retries
   // with the backoff), so start() does not throw.
   crawlWorkerSupervisor.start();
-  logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
+  if (crawlWorkerSupervisor.getStatus().running) {
+    logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
+  }
 });
 
 // Handle unhandled promise rejections — log but don't crash

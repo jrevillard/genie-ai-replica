@@ -78,10 +78,7 @@ const processPageOnThread = (html, url, config) => {
 
 // A job is claimed with a timestamp; only jobs claimed BEFORE this worker
 // started are orphans (the previous process died holding them). A job this
-// worker claimed after the start is never re-queued by a later pass. This is
-// a single-instance rule, not ownership: a PEER instance's in-flight crawl
-// taken before this boot is not distinguished from a dead process's orphan
-// — document-repository runs one replica.
+// worker — or another live instance — claimed after the boot is untouched.
 const BOOT_TIME = new Date().toISOString();
 
 // Boot-time recovery retries in the background while it keeps failing: a
@@ -97,51 +94,65 @@ const requeueZombieJobs = async () => {
     logger.error(`[CRAWL-WORKER] Zombie requeue skipped, DB unavailable: ${error.message}`);
     return { ok: false, hadFailures: false };
   }
-  const jobCol = db.collection('crawl_job');
-  try {
-    // Single-flight worker: a job still 'Crawling' when it starts has no live
-    // owner, and the poll loop only picks 'Pending' — so leftover jobs are
-    // requeued here or they starve. Runs BEFORE the first poll tick: a job
-    // picked and set to 'Crawling' by this very worker must not be seen as a
-    // zombie.
+  // Bounded page size; the pass paginates until the tail is exhausted so a
+  // large crash backlog cannot strand zombies behind the first page.
+  const PAGE_SIZE = 50;
+  let hadFailures = false;
+  let batch;
+  do {
     const cursor = await db.query(
-      "FOR job IN crawl_job FILTER job.status == 'Crawling' AND (job.claimed_at == null || job.claimed_at < @bootTime) LIMIT 50 RETURN job",
-      { bootTime: BOOT_TIME }
+      "FOR job IN crawl_job FILTER job.status == 'Crawling' AND (job.claimed_at == null || job.claimed_at < @bootTime) LIMIT @limit RETURN job",
+      { bootTime: BOOT_TIME, limit: PAGE_SIZE }
     );
-    const zombies = await cursor.all();
-    let hadFailures = false;
-    for (const job of zombies) {
-      // Per-job guard: one bad job must not strand the rest in 'Crawling'.
-      try {
-        if (job.kill_requested) {
-          // The operator already asked for this crawl to die — do not restart
-          // it; finalize it as Killed.
-          await jobCol.update(job._key, {
-            status: 'Killed',
-            error_message: 'Crawl worker restarted mid-crawl after kill request',
-            finished_at: new Date().toISOString()
-          });
-          await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted; killed job finalized.');
-          logger.warn(`[CRAWL-WORKER] Finalized killed zombie job ${job._key}`);
-          continue;
-        }
-        // Clear the dead run's terminal fields — an error_message/finished_at
-        // from the abandoned attempt must not survive into the retry.
-        await jobCol.update(job._key, { status: 'Pending', error_message: null, finished_at: null });
-        await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
-        logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
-      } catch (jobError) {
-        hadFailures = true;
-        logger.error(`[CRAWL-WORKER] Failed to requeue zombie job ${job._key}: ${jobError.message}`);
-      }
-    }
-    return { ok: true, hadFailures };
-  } catch (error) {
-    logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);
-    return { ok: false, hadFailures: true };
-  }
+    batch = await cursor.all();
+    hadFailures = (await requeueBatch(db, batch)) || hadFailures;
+  } while (batch.length === PAGE_SIZE);
+  return { ok: true, hadFailures };
 };
 
+// Requeues one page of zombies; the DB failure of the whole pass surfaces at
+// the caller. Returns true when any job of the page failed.
+const requeueBatch = async (db, batch) => {
+  const jobCol = db.collection('crawl_job');
+  let hadFailures = false;
+  for (const job of batch) {
+    // Per-job guard: one bad job must not strand the rest in 'Crawling'.
+    try {
+      if (job.kill_requested) {
+        // The operator already asked for this crawl to die — do not restart
+        // it; finalize it as Killed.
+        await jobCol.update(job._key, {
+          status: 'Killed',
+          error_message: 'Crawl worker restarted mid-crawl after kill request',
+          finished_at: new Date().toISOString()
+        });
+        await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted; killed job finalized.');
+        logger.warn(`[CRAWL-WORKER] Finalized killed zombie job ${job._key}`);
+        continue;
+      }
+      // Clear the dead run's terminal fields — an error_message, a
+      // finished_at or a stale page count from the abandoned attempt must
+      // not survive into the retry (the retry re-crawls from page 0).
+      await jobCol.update(job._key, {
+        status: 'Pending',
+        error_message: null,
+        finished_at: null,
+        pages_crawled: 0
+      });
+      await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
+      logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
+    } catch (jobError) {
+      hadFailures = true;
+      logger.error(`[CRAWL-WORKER] Failed to requeue zombie job ${job._key}: ${jobError.message}`);
+    }
+  }
+  return hadFailures;
+};
+// Single-flight worker: a job still 'Crawling' when it starts has no live
+// owner, and the poll loop only picks 'Pending' — so leftover jobs are
+// requeued here or they starve. Runs BEFORE the first poll tick: a job
+// picked and set to 'Crawling' by this very worker must not be seen as a
+// zombie.
 let started = false;
 
 const start = () => {

@@ -174,7 +174,7 @@ function causeOf(err) {
     return err;
   }
   try {
-    return JSON.stringify(err);
+    return JSON.stringify(err) ?? String(err);
   } catch {
     return String(err);
   }

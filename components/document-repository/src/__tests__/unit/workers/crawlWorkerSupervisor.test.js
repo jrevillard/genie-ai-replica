@@ -129,13 +129,15 @@ describe('crawlWorkerSupervisor', () => {
     expect(WorkerMock).toHaveBeenCalledTimes(4);
   });
 
-  it('does not respawn after a clean exit (code 0)', () => {
+  it('respawns even after a clean exit (the thread never exits on its own)', () => {
+    // The worker thread never terminates by design — an exit 0 means it died
+    // quietly, which is exactly the silent death this supervisor exists for.
+    // (The deliberate stop() path is gated separately by `stopping`.)
     mod.start();
     FakeWorker.instances[0].emit('exit', 0);
-    jest.runAllTimers();
-    jest.advanceTimersByTime(3600000);
-    expect(WorkerMock).toHaveBeenCalledTimes(1);
-    expect(mod.getStatus()).toMatchObject({ running: false, lastExitCode: 0, gaveUp: false });
+    jest.advanceTimersByTime(5000);
+    expect(WorkerMock).toHaveBeenCalledTimes(2);
+    expect(mod.getStatus()).toMatchObject({ running: true, lastExitCode: 0, gaveUp: false });
   });
 
   it('logs the exit at error level so the death is observable', () => {

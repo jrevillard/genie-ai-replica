@@ -78,22 +78,24 @@ const processPageOnThread = (html, url, config) => {
 
 // A job is claimed with a timestamp; only jobs claimed BEFORE this worker
 // started are orphans (the previous process died holding them). A job this
-// worker — or another live instance — claimed after the boot is untouched.
+// worker claimed after the start is never re-queued by a later pass. This is
+// a single-instance rule, not ownership: a PEER instance's in-flight crawl
+// taken before this boot is not distinguished from a dead process's orphan
+// — document-repository runs one replica.
 const BOOT_TIME = new Date().toISOString();
 
-// Boot-time recovery is retried on the poll cadence for a bounded window: a
+// Boot-time recovery retries in the background while it keeps failing: a
 // container booting while the DB is still coming up must not strand the
-// previous container's jobs. If the DB stays unreachable, a low-frequency
-// requeue keeps trying in the background instead of abandoning the orphans.
-const REQUEUE_MAX_ATTEMPTS = 12;
-const REQUEUE_PERIODIC_MS = 60 * 1000;
+// previous container's jobs. The retry stops as soon as a pass succeeds, so
+// the steady state costs no query at all.
+const REQUEUE_RETRY_MS = 5000;
 const requeueZombieJobs = async () => {
   let db;
   try {
     db = await dbService.getConnection('crawl_job');
   } catch (error) {
     logger.error(`[CRAWL-WORKER] Zombie requeue skipped, DB unavailable: ${error.message}`);
-    return false;
+    return { ok: false, hadFailures: false };
   }
   const jobCol = db.collection('crawl_job');
   try {
@@ -107,6 +109,7 @@ const requeueZombieJobs = async () => {
       { bootTime: BOOT_TIME }
     );
     const zombies = await cursor.all();
+    let hadFailures = false;
     for (const job of zombies) {
       // Per-job guard: one bad job must not strand the rest in 'Crawling'.
       try {
@@ -128,49 +131,38 @@ const requeueZombieJobs = async () => {
         await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
         logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
       } catch (jobError) {
+        hadFailures = true;
         logger.error(`[CRAWL-WORKER] Failed to requeue zombie job ${job._key}: ${jobError.message}`);
       }
     }
-    return true;
+    return { ok: true, hadFailures };
   } catch (error) {
     logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);
-    return false;
+    return { ok: false, hadFailures: true };
   }
 };
 
-// Requeues orphans in the background for as long as the worker lives. Safe to
-// run WHILE polling: the boot-time cutoff excludes every job claimed after
-// this worker started.
-const schedulePeriodicRequeue = () => {
-  setTimeout(async () => {
-    await requeueZombieJobs();
-    schedulePeriodicRequeue();
-  }, REQUEUE_PERIODIC_MS);
-};
+let started = false;
 
 const start = () => {
+  // Idempotent: a second call would arm a second poll loop and a second
+  // requeue loop — two single-flight crawlers over the same queue.
+  if (started) return;
+  started = true;
   initWorkers();
   logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
-  // The requeue MUST complete before polling starts: run concurrently, the
-  // poll could pick a Pending job, set it 'Crawling', and this requeue would
-  // then flip it right back — two crawls of the same job.
-  const attemptRequeue = async (attempt) => {
-    if (await requeueZombieJobs()) {
-      poll();
-      schedulePeriodicRequeue();
-      return;
+
+  // The requeue runs BEFORE the poll starts (a job the poll had already
+  // claimed must not be flipped back) and keeps retrying in the background
+  // while it fails. A later pass cannot flip a job claimed after this worker
+  // started — the claim timestamp excludes it.
+  const requeueLoop = async () => {
+    const { ok, hadFailures } = await requeueZombieJobs();
+    if (!ok || hadFailures) {
+      setTimeout(requeueLoop, REQUEUE_RETRY_MS);
     }
-    if (attempt < REQUEUE_MAX_ATTEMPTS) {
-      setTimeout(() => attemptRequeue(attempt + 1), POLL_INTERVAL_MS);
-      return;
-    }
-    logger.error(
-      `[CRAWL-WORKER] Zombie requeue did not succeed after ${REQUEUE_MAX_ATTEMPTS} attempts; starting the poll loop anyway and retrying in the background.`
-    );
-    poll();
-    schedulePeriodicRequeue();
   };
-  attemptRequeue(0);
+  requeueLoop().then(poll);
 };
 
 const poll = async () => {

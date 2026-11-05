@@ -95,8 +95,8 @@ const onExit = (exited, code, { spawnFailed = false } = {}) => {
   state.lastExitAt = new Date().toISOString();
   worker = null;
 
-  if (code === 0) return; // clean exit — do not respawn
-
+  // A clean exit is not a shutdown here: the worker thread never exits on
+  // its own, so exit 0 means it died quietly — respawn it like any death.
   const uptime = Date.now() - spawnedAt;
   if (uptime >= HEALTHY_UPTIME_MS) consecutiveFailures = 0;
   consecutiveFailures += 1;

@@ -75,16 +75,13 @@ const server = app.listen(PORT, HOST, () => {
   server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
 
   // Start background workers
-  try {
-    // Spawn the Crawler in a separate thread to prevent Event Loop blocking.
-    // The supervisor respawns the thread with a bounded backoff when it dies
-    // and exposes its state through crawlWorkerSupervisor.getStatus() on
-    // /health.
-    crawlWorkerSupervisor.start();
-    logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
-  } catch (error) {
-    logger.error('Failed to start Crawl Worker:', error);
-  }
+  // Spawn the Crawler in a separate thread to prevent Event Loop blocking.
+  // The supervisor respawns the thread with a bounded backoff when it dies
+  // and exposes its state through crawlWorkerSupervisor.getStatus() on
+  // /health. A spawn failure is handled inside the supervisor (it retries
+  // with the backoff), so start() does not throw.
+  crawlWorkerSupervisor.start();
+  logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
 });
 
 // Handle unhandled promise rejections — log but don't crash

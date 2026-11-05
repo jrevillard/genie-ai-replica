@@ -189,8 +189,12 @@ describe('parseAndGateArgs', () => {
     // operator who asked for 500 entries and silently gets 50 is back to the
     // very confusion the override exists to remove.
     for (const bad of ['abc', '0', '-3', '1.5', ' ', '0x1f', '1e3', ' 500 ', '99999999999999999999']) {
+      errorSpy.mockClear();
       expect(parseAndGateArgs([], { ...gateEnv, HUSK_SAMPLE_LIMIT: bad })).toBeNull();
       expect(process.exitCode).toBe(1);
+      // The spy is cleared per iteration: an assertion that could feed on a
+      // PREVIOUS iteration's call would stay green if one rejected form lost
+      // the knob name from its gate message.
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HUSK_SAMPLE_LIMIT'));
     }
   });
@@ -611,7 +615,7 @@ describe('main safety wiring', () => {
     const { extra, missed } = divergentDocs(60);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
     await runMain(db, ['--delete', '--yes'], { ...gateEnv, HUSK_SAMPLE_LIMIT: '200' });
-    expect(stderrText(errorSpy)).toContain('capped at 200 entries per direction');
+    expect(stderrText(errorSpy)).toContain('capped at 200 per direction');
   });
 
   it('tells the operator to inspect the withheld entries INSTEAD of this --delete run', async () => {

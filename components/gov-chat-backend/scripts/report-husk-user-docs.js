@@ -229,7 +229,7 @@ function printSampledList({ write, gated, label, docs, total = docs.length, form
   // Enforce the promise the JSDoc makes: slice(0, undefined) returns the WHOLE
   // array, so a gated object that somehow lacks the cap must fail here rather
   // than silently widen the listing into the flood the cap exists to prevent.
-  if (!Number.isInteger(gated.sampleLimit) || gated.sampleLimit <= 0) {
+  if (!gated || !Number.isInteger(gated.sampleLimit) || gated.sampleLimit <= 0) {
     throw new Error(
       `printSampledList: the run cap is not a positive integer (got ${JSON.stringify(gated.sampleLimit)})`
     );
@@ -402,7 +402,7 @@ async function runReport(db, gated, total, husks, allDocs) {
   // The EFFECTIVE cap, not the default: an operator whose override variable is
   // misspelled sees the cap they actually got, instead of a listing that
   // silently stops at the default.
-  console.log(`Listing cap:   ${gated.sampleLimit} entries per listing (override: HUSK_SAMPLE_LIMIT)`);
+  console.log(`Listing cap:   ${gated.sampleLimit} per listing (override: HUSK_SAMPLE_LIMIT)`);
   // One closure per scope: the sink and the cap are stated ONCE per run
   // path, so the two stdout listings cannot drift apart on either.
   //
@@ -586,7 +586,7 @@ async function main({
     console.error(
       `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
         `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
-        `The listing below is capped at ${gated.sampleLimit} entries per direction. ` +
+        `The listing below is capped at ${gated.sampleLimit} per direction. ` +
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );

@@ -64,7 +64,7 @@ flowchart TB
 
         subgraph Data["Data Layer"]
             Arango["ArangoDB<br/>Vector + Graph"]
-            Redis["Redis<br/>(translation-service only)"]
+            Redis["Redis<br/>(translation cache + provisioning invalidation)"]
             Postgres["PostgreSQL<br/>Kong + KC"]
             Files["File Storage"]
         end
@@ -864,7 +864,7 @@ await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
 ### Direct Database Connections
 
 - Backend → ArangoDB: `arangojs` driver (HTTP-based).
-- Backend → Redis: `ioredis` driver (TCP-based) — translation cache only.
+- Backend → Redis: `ioredis` driver (TCP-based) — translation cache and provisioning invalidation pub/sub.
 - Document-repository → ArangoDB: `arangojs` (file metadata, ingestion_log).
 
 **No other service** connects directly to databases — all access goes

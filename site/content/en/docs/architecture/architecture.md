@@ -77,7 +77,7 @@ graph TB
 
     subgraph Data Layer
         ADB[(ArangoDB<br/>Documents / Graph / Vector)]
-        REDIS[(Redis<br/>(translation-service only))]
+        REDIS[(Redis<br/>(translation cache + provisioning invalidation))]
         PG[(PostgreSQL<br/>Kong + Keycloak)]
     end
 

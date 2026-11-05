@@ -56,12 +56,14 @@ class TranslationService {
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
 
     if (cacheEnabled) {
-      const { host: redisHost, port: redisPort } = resolveRedisCacheSettings();
-      logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${redisHost}:${redisPort}`);
+      // Resolve the endpoint once and hand it to the factory: the logged
+      // endpoint and the dialled one are then the same snapshot
+      const endpoint = resolveRedisCacheSettings();
+      logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${endpoint.host}:${endpoint.port}`);
 
       // Initialize Redis Client — shared contract with the provisioning
       // invalidation clients (same Redis instance, same resilience options)
-      this.cacheClient = createRedisCacheClient();
+      this.cacheClient = createRedisCacheClient({ endpoint });
 
       this.cacheClient.on('error', (err) => {
         logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);

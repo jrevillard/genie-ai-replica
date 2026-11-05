@@ -79,10 +79,24 @@ describe('redis-cache-client factory', () => {
   });
 
   test('the connection contract cannot be overridden', () => {
-    createRedisCacheClient({ host: 'elsewhere', retryStrategy: () => 50 });
+    // A caller that tries to change the contract fails loudly instead of
+    // silently diverging from the other clients
+    expect(() => createRedisCacheClient({ host: 'elsewhere', retryStrategy: () => 50 })).toThrow(/unknown option/);
+    expect(Redis).not.toHaveBeenCalled();
+  });
+
+  test('an unknown option fails loudly', () => {
+    // A typo in an option name would otherwise be ignored — and the
+    // subscriber would silently get the publisher's contract
+    expect(() => createRedisCacheClient({ offline_queue: true })).toThrow(/unknown option/);
+  });
+
+  test('a pre-resolved endpoint is used as given', () => {
+    createRedisCacheClient({ endpoint: { host: 'redis.internal', port: 6380, password: 'secret' } });
 
     const options = Redis.mock.calls[0][0];
-    expect(options.host).toBe('localhost');
-    expect(options.retryStrategy(1)).toBe(500);
+    expect(options.host).toBe('redis.internal');
+    expect(options.port).toBe(6380);
+    expect(options.password).toBe('secret');
   });
 });

@@ -619,7 +619,7 @@ flowchart TB
     subgraph Data["Data layer"]
         Arango["ArangoDB<br/>users, conversations,<br/>messages, serviceCategories,<br/>vector search"]
         Postgres["PostgreSQL<br/>(Kong + Keycloak DBs)"]
-        Redis["Redis<br/>(translation-service only)"]
+        Redis["Redis<br/>(translation cache + provisioning invalidation)"]
     end
 
     subgraph AI["AI layer (genie-ai-overlay/)"]

@@ -80,7 +80,7 @@ the chatqna backend:
 
 ```bash
 C=$(docker ps --format '{{.Names}}' | grep -E 'genieai.*_backend\.' | head -1)
-docker exec "$C" node -e "const Redis=require('ioredis');const r=new Redis({host:process.env.TRANSLATION_CACHE_HOST,port:process.env.TRANSLATION_CACHE_PORT,password:process.env.TRANSLATION_CACHE_PASSWORD});(async()=>{const k=await r.keys('translation:*');console.log('deleting',k.length);if(k.length)await r.del(k);r.disconnect();})().catch(e=>{console.error(e.message);process.exit(1);});"
+docker exec "$C" node -e "const {createRedisCacheClient}=require('/app/services/redis-cache-client');const r=createRedisCacheClient();(async()=>{const k=await r.keys('translation:*');console.log('deleting',k.length);if(k.length)await r.del(k);r.disconnect();})().catch(e=>{console.error(e.message);process.exit(1);});"
 ```
 
 This deletes only `translation:*` keys (not other Redis data). `TRANSLATION_CACHE=on`

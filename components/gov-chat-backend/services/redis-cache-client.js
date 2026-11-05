@@ -9,6 +9,9 @@ const Redis = require('ioredis');
 // barrel mock.
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
+/** The options a caller may pass. Anything else is a typo and fails loudly. */
+const ALLOWED_OPTIONS = ['enableOfflineQueue', 'maxRetriesPerRequest', 'endpoint'];
+
 /**
  * Resolves the endpoint of the translation cache Redis instance from the
  * TRANSLATION_CACHE_* env vars. Shared by every client on that instance so
@@ -35,12 +38,19 @@ function resolveRedisCacheSettings() {
  *
  * @param {object} [options]
  * @param {boolean} [options.enableOfflineQueue] buffer commands while disconnected
- * @param {number|null} [options.maxRetriesPerRequest] per-command retry cap (null = unlimited)
+ * @param {number|null} [options.maxRetriesPerRequest] per-command retry cap (null = no cap — ioredis applies the cap to numeric values only)
+ * @param {object} [options.endpoint] pre-resolved host/port/password (see resolveRedisCacheSettings)
  * @returns {import('ioredis').Redis} the client
  */
-function createRedisCacheClient({ enableOfflineQueue = false, maxRetriesPerRequest = 3 } = {}) {
+function createRedisCacheClient(options = {}) {
+  const unknown = Object.keys(options).filter((key) => !ALLOWED_OPTIONS.includes(key));
+  if (unknown.length > 0) {
+    throw new Error(`createRedisCacheClient: unknown option(s): ${unknown.join(', ')}`);
+  }
+  const { enableOfflineQueue = false, maxRetriesPerRequest = 3, endpoint } = options;
+
   return new Redis({
-    ...resolveRedisCacheSettings(),
+    ...(endpoint || resolveRedisCacheSettings()),
     retryStrategy(times) {
       return Math.min(times * 500, 2000);
     },

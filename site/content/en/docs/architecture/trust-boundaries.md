@@ -212,7 +212,7 @@ graph LR
         OPEA[OPEA services]
         ADB[(ArangoDB)]
         PG[(PostgreSQL)]
-        REDIS[(Redis<br/>(translation-service only))]
+        REDIS[(Redis<br/>(translation cache + provisioning invalidation))]
     end
 
     U -->|TLS 443| NGINX

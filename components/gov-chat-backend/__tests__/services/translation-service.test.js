@@ -11,7 +11,14 @@ const mockRedis = {
   on: jest.fn()
 };
 
-jest.mock('ioredis', () => jest.fn().mockImplementation(() => mockRedis));
+// The constructor options are kept so a test can pin the connection
+// contract the client was created with (host, port, resilience options)
+jest.mock('ioredis', () =>
+  jest.fn().mockImplementation((options) => {
+    mockRedis.options = options;
+    return mockRedis;
+  })
+);
 
 jest.mock('crypto', () => ({
   createHash: jest.fn().mockReturnValue({
@@ -442,6 +449,26 @@ describe('TranslationService', () => {
 
       // Same request to the model, same translation, one entry.
       expect(keyForMnk).toBe(keyForMan);
+    });
+  });
+  describe('the cache client', () => {
+    it('is created with the shared Redis contract', () => {
+      // #1477 — the translation cache and the provisioning invalidation
+      // clients share one factory; this pins the translation call site to
+      // it (the provisioning suite pins its own two call sites).
+      setEnv('TRANSLATION_CACHE', 'on');
+      jest.isolateModules(() => {
+        require('../../services/translation-service');
+      });
+
+      const options = mockRedis.options;
+      expect(options).toBeDefined();
+      expect(options.host).toBe('localhost');
+      expect(options.port).toBe(6379);
+      expect(options.maxRetriesPerRequest).toBe(3);
+      expect(options.enableOfflineQueue).toBe(false);
+      expect(options.retryStrategy(1)).toBe(500);
+      expect(options.retryStrategy(10)).toBe(2000);
     });
   });
 });

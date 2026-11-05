@@ -426,6 +426,19 @@ describe('VictoriaLogsAdapter — _normalizeRows edge cases', () => {
     const queryCall = mockGet.mock.calls.find((c) => c[0] === '/select/logsql/query');
     expect(queryCall[1].params.offset).toBeUndefined();
   });
+
+  it('query() returns an empty page for limit=0 without calling VL', async () => {
+    // VL reads limit=0 as NO limit — forwarding it would stream the entire
+    // matching window for a page that is empty by definition. The adapter
+    // owns that contract so no caller can trigger the unbounded fetch.
+    const { adapter, mockGet } = makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true });
+    mockGet.mockResolvedValue({ data: [] });
+
+    const rows = await adapter.query({ ...baseQuery, limit: 0, offset: 100 });
+
+    expect(rows).toEqual([]);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
 });
 
 // ----- hits() — prototype pollution guard ------------------------------------

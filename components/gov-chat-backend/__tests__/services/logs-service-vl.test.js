@@ -103,28 +103,62 @@ describe('LogsService VictoriaLogs rewrite', () => {
     });
 
     it('applies offset + limit pagination on the envelope', async () => {
-      const rows = Array.from({ length: 5 }, (_, i) => ({
-        timestamp: `2026-09-01T00:00:0${i}.000Z`,
-        message: `m${i}`,
+      // VL-native paging: the adapter receives offset + limit and returns
+      // exactly the requested page — no limit+offset window is fetched and
+      // re-sliced client-side.
+      const page = Array.from({ length: 2 }, (_, i) => ({
+        timestamp: `2026-09-01T00:00:0${i + 1}.000Z`,
+        message: `m${i + 1}`,
         date: '2026-09-01',
-        time: `00:00:0${i}`,
+        time: `00:00:0${i + 1}`,
         level: 'INFO',
         service: 'backend',
         stream: { service: 'backend', environment: 'test' },
         fields: {}
       }));
-      mockVlClient.query.mockResolvedValueOnce(rows);
+      mockVlClient.query.mockResolvedValueOnce(page);
+      mockVlClient.count = jest.fn().mockResolvedValue(5);
       const result = await logsService.getLogsInRange({
         start: '2026-09-01T00:00:00.000Z',
         end: '2026-09-01T23:59:59.999Z',
         limit: 2,
         offset: 1
       });
+      expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 2, offset: 1 }));
       expect(result.limit).toBe(2);
       expect(result.offset).toBe(1);
       expect(result.total).toBe(5);
       expect(result.logs).toHaveLength(2);
       expect(result.logs[0].message).toBe('m1');
+    });
+
+    it('total falls back to a lower bound (never a false "one page") when count fails', async () => {
+      // #1152: with count unavailable and the page exactly full, the old
+      // fallback reported total = pageLen — the UI rendered a green "no
+      // more pages" indicator on a partial result. A full page now reports
+      // offset + pageLen + 1 (a lower bound); a short page is provably the
+      // last page, so its total stays exact.
+      const fullPage = Array.from({ length: 2 }, (_, i) => ({ _msg: `row-${i}` }));
+      mockVlClient.query.mockResolvedValueOnce(fullPage);
+      // no count stub → the count call throws → fallback path
+      const full = await logsService.getLogsInRange({ start: '2026-09-01T00:00:00.000Z', limit: 2 });
+      expect(full.total).toBe(3); // offset 0 + 2 rows + 1 lower-bound marker
+
+      const shortPage = [{ _msg: 'row-0' }];
+      mockVlClient.query.mockResolvedValueOnce(shortPage);
+      const short = await logsService.getLogsInRange({ start: '2026-09-01T00:00:00.000Z', limit: 2 });
+      expect(short.total).toBe(1); // offset 0 + 1 row — exact (last page)
+
+      const emptyPage = [];
+      mockVlClient.query.mockResolvedValueOnce(emptyPage);
+      const empty = await logsService.getLogsInRange({
+        start: '2026-09-01T00:00:00.000Z',
+        limit: 2,
+        offset: 100
+      });
+      // offset past the end: at most `offset` rows exist — an upper bound,
+      // and the pager's end-of-list state is correct.
+      expect(empty.total).toBe(100);
     });
 
     it('throws VlUnavailableError on ECONNREFUSED (no graceful-degradation envelope)', async () => {
@@ -642,16 +676,17 @@ describe('LogsService VictoriaLogs rewrite', () => {
         expect(actual).toBe(expected);
       });
 
-      it('searchLogs — VL path honours caller offset (paginates the result window)', async () => {
-        const rows = Array.from({ length: 25 }, (_, i) => ({ _msg: `row-${i}` }));
-        mockVlClient.query.mockResolvedValueOnce(rows);
+      it('searchLogs — VL path honours caller offset (paginates at the source)', async () => {
+        const page = Array.from({ length: 10 }, (_, i) => ({ _msg: `row-${i + 5}` }));
+        mockVlClient.query.mockResolvedValueOnce(page);
         const result = await logsService.searchLogs({
           dateRange: 'today',
           limit: 10,
           offset: 5
         });
-        // Adapter asked for limit + offset = 15 rows, then we slice [5, 15).
-        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+        // VL-native paging: the adapter receives offset + limit and returns
+        // exactly the requested page.
+        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 10, offset: 5 }));
         expect(result.logs).toHaveLength(10);
         expect(result.logs[0]).toEqual({ _msg: 'row-5' });
         expect(result.limit).toBe(10);
@@ -659,14 +694,14 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
 
       it('searchLogs — VL path clamps negative limit/offset to safe values', async () => {
-        const rows = Array.from({ length: 3 }, (_, i) => ({ _msg: `r${i}` }));
-        mockVlClient.query.mockResolvedValueOnce(rows);
         const result = await logsService.searchLogs({
           dateRange: 'today',
           limit: -5,
           offset: -10
         });
-        // limit=0 → no rows in slice; offset=0 → start from 0
+        // limit=0 clamps to an empty page. VL reads limit=0 as NO limit —
+        // the adapter (not this service) guards that: see the
+        // victoria-logs-client "limit=0 returns an empty page" test.
         expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
         expect(result.logs).toHaveLength(0);
         expect(result.limit).toBe(0);

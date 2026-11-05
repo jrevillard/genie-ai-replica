@@ -257,7 +257,9 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `KEYCLOAK_CLIENT_SECRET` - OIDC client secret for genie-app
 - `KEYCLOAK_PROXY_CLIENT_SECRET` - Service account secret for admin API proxy
 - `KC_DATAPREP_CLIENT_SECRET` - Dataprep service account secret (client_credentials grant)
-- `EMAIL_*` - SMTP configuration (required for user verification)
+
+**Optional (safely defaulted, unset = feature off):**
+- `EMAIL_*` - SMTP configuration for user-verification mail, sent by Keycloak (`KC_SMTP_*` / realm `smtpServer`). Unset or empty = SMTP disabled (Keycloak logs warnings but functions without email). Compose defaults apply consistently in every consuming service (`EMAIL_PORT` 587, `EMAIL_SECURE` false, the rest empty).
 
 **Deployment-Specific:**
 - `VLLM_TRANSLATION_MODEL_ID` - GPU translation model ID

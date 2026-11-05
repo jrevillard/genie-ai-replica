@@ -14,6 +14,17 @@ The canonical list of every ArangoDB collection used by GENIE.AI, with
 field names and types. Useful when writing an AQL query, debugging a
 missing field, or wiring a new microservice.
 
+> **AQL naming rule:** OKF graph collection names carry hyphens
+> (`OKF_<slug>_v<n>_SOURCE`, `GRAPH_<stack>_SOURCE`). An unquoted
+> hyphenated name in AQL is parsed as subtraction and fails with
+> `errorNum 1203` (`collection or view not found: OKF_solar`) — so
+> hand-written AQL must backtick-quote the identifier:
+> ``FOR doc IN `OKF_solar-system_v1_SOURCE` ``. Product code either
+> backtick-quotes the name or binds it as a `@@collection` parameter;
+> if a raw-cursor query returns an error payload
+> (`{"error": true, "errorNum": ...}`) with no `result` field, it is a
+> failed query, not an empty collection.
+
 > Note: this page covers the most-frequently-used collections. The
 > complete list (defined in `001-create-collections.js`) also includes
 > `sessions`, `sessionQueries`, `userSessions`, `userConversations`,

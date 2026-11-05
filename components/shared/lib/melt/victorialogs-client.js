@@ -196,10 +196,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     if (limit !== undefined && limit !== null) params.limit = limit;
     // `offset` is VL's own pagination arg: it skips the <offset> matching
     // rows with the biggest `_time` values on the selected range, so
-    // `offset=0,1000,2000…` walks the whole result set. Callers that
-    // need every matching row (not just the first page) page with it —
-    // the security scan counts occurrences and a truncated page
-    // undercounts them.
+    // `offset=0,1000,2000…` walks the whole result set.
     if (offset !== undefined && offset !== null) params.offset = offset;
 
     // VL serves `/select/logsql/query` as `application/stream+json`

@@ -115,15 +115,35 @@ const isOkfServiceCaller = (req) => {
 // 404: the file exists in doc-repo's own inventory — this is an authorization
 // refusal the UI can render as an honest "source unavailable", distinct from
 // WS2's delete-protection 403 and from the okf-server fence's anti-enum 404.
-const mayServeOkfRestricted = (req) => {
+const mayServeOkfRestricted = (req, file) => {
   const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
   // Case-insensitive like isOkfServiceCaller — the token's role spelling has
   // drifted across realms ('Admin' policy vs lowercase claims) and the refusal
-  // must key on the ROLE, not its casing.
-  return callerRoles.some((r) => String(r).toLowerCase() === 'admin') || isOkfServiceCaller(req);
+  // must key on the ROLE, not its casing. tools-admin is the okf super-role
+  // (scope-authz treats it as unrestricted).
+  if (callerRoles.some((r) => ['admin', 'tools-admin'].includes(String(r).toLowerCase())) || isOkfServiceCaller(req)) {
+    return true;
+  }
+  // D4's own letter: refused WITHOUT the okf scope — a caller holding the
+  // repo's scope (exact repo, read or admin level) or a wildcard is INSIDE
+  // the fence's exception. Same grammar as okf-server's deriveScopeAuthz,
+  // parsed locally (doc-repo has no scope-authz dependency).
+  const repoId = file && file.okf_repo_id;
+  if (!repoId) return false; // fail-closed: no repo id, no scope to match
+  const scopes = req.user && Array.isArray(req.user.okfScopes) ? req.user.okfScopes : [];
+  return scopes.some((s) => {
+    if (typeof s !== 'string') return false;
+    const parts = s.split(':');
+    return (
+      parts.length === 4 &&
+      parts[0] === 'okf' &&
+      (parts[3] === 'read' || parts[3] === 'admin') &&
+      (parts[2] === '*' || parts[2] === repoId)
+    );
+  });
 };
 const assertServeAllowed = (file, req) => {
-  if (file && file.okf_restricted === true && !mayServeOkfRestricted(req)) {
+  if (file && file.okf_restricted === true && !mayServeOkfRestricted(req, file)) {
     throw {
       status: 403,
       error: 'OKF_RESTRICTED',

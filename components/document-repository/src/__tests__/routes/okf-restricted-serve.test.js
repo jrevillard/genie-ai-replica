@@ -134,10 +134,11 @@ const fileService = require('../../services/fileService');
 const metadataService = require('../../services/metadataService');
 const { createMockFileRecord } = require('../mocks/files');
 
-// Inject the caller's role set — the subject of the refusal matrix.
-function asCaller(roles) {
+// Inject the caller's role set — the subject of the refusal matrix. okfScopes
+// mirrors the middleware's D4 addition (the token's okf_scopes claim).
+function asCaller(roles, okfScopes) {
   keycloakAuth.authenticateToken.mockImplementation((req, res, next) => {
-    req.user = { sub: 'caller-1', preferred_username: 'caller', roles };
+    req.user = { sub: 'caller-1', preferred_username: 'caller', roles, okfScopes: okfScopes || [] };
     next();
   });
 }
@@ -189,6 +190,51 @@ describe('D4 serve-path refusal for okf_restricted files', () => {
 
     it('never refuses an UNRESTRICTED file to a plain user', async () => {
       metadataService.getMetadataById.mockResolvedValue(restrictedRecord({ okf_restricted: false }));
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).not.toBe(403);
+    });
+
+    // D4's letter: refused WITHOUT the okf scope — a scope holder is inside
+    // the fence's exception. The scope rides the token (req.user.okfScopes).
+    it('admits a caller holding THIS repo okf scope (read level)', async () => {
+      asCaller(['user'], ['okf:t:repo-1:read']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).not.toBe(403);
+    });
+
+    it('admits a caller holding the repo okf scope at ADMIN level', async () => {
+      asCaller(['user'], ['okf:t:repo-1:admin']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).not.toBe(403);
+    });
+
+    it('admits a WILDCARD okf scope holder', async () => {
+      asCaller(['user'], ['okf:t:*:admin']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).not.toBe(403);
+    });
+
+    it('refuses a caller scoped to a DIFFERENT repo', async () => {
+      asCaller(['user'], ['okf:t:other-repo:read']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('OKF_RESTRICTED');
+    });
+
+    it('refuses a grammar-invalid scope level (typo grants nothing)', async () => {
+      asCaller(['user'], ['okf:t:repo-1:write']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/download');
+      expect(res.status).toBe(403);
+    });
+
+    it('admits the tools-admin super-role without any scope', async () => {
+      asCaller(['tools-admin']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
       const res = await request(app).get('/api/files/f-1/download');
       expect(res.status).not.toBe(403);
     });

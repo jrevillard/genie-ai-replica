@@ -232,7 +232,14 @@ const authenticateToken = async (req, res, next) => {
       role: role,
       iss: decoded.iss,
       sub: decoded.sub,
-      roles: roles
+      roles: roles,
+      // D4 (chat-source resolution, W4): the okf scope list rides the token
+      // (user-attribute protocol mapper on the genie-app + okf-server
+      // clients). The serve-refusal gate keys on it — a caller holding the
+      // repo's okf scope is INSIDE the restriction fence's exception, not
+      // outside it (D4: refused WITHOUT the okf scope). Absent claim = no
+      // scopes, never an error.
+      okfScopes: Array.isArray(decoded.okf_scopes) ? decoded.okf_scopes : []
     };
 
     next();

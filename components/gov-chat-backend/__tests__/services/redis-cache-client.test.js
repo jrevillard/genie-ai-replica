@@ -8,28 +8,20 @@ const Redis = require('ioredis');
 const { createRedisCacheClient } = require('../../services/redis-cache-client');
 
 describe('redis-cache-client factory', () => {
-  const originalEnv = {
-    TRANSLATION_CACHE_HOST: process.env.TRANSLATION_CACHE_HOST,
-    TRANSLATION_CACHE_PORT: process.env.TRANSLATION_CACHE_PORT,
-    TRANSLATION_CACHE_PASSWORD: process.env.TRANSLATION_CACHE_PASSWORD
-  };
+  const ENV_KEYS = ['TRANSLATION_CACHE_HOST', 'TRANSLATION_CACHE_PORT', 'TRANSLATION_CACHE_PASSWORD'];
+  const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
   beforeEach(() => {
     Redis.mockClear();
     Redis.instances.length = 0;
-    delete process.env.TRANSLATION_CACHE_HOST;
-    delete process.env.TRANSLATION_CACHE_PORT;
-    delete process.env.TRANSLATION_CACHE_PASSWORD;
+    ENV_KEYS.forEach((key) => delete process.env[key]);
   });
 
   afterEach(() => {
-    for (const [name, value] of Object.entries(originalEnv)) {
-      if (value === undefined) {
-        delete process.env[name];
-      } else {
-        process.env[name] = value;
-      }
-    }
+    ENV_KEYS.forEach((key) => {
+      if (originalEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = originalEnv[key];
+    });
   });
 
   test('applies the shared resilience contract defaults', () => {

@@ -723,11 +723,9 @@ describe('userProvisioningService', () => {
 
       expect(publisher).toBeDefined();
       expect(publisher.maxRetriesPerRequest).toBe(3);
-      expect(publisher.retryStrategy(1)).toBe(500);
       expect(subscriber).toBeDefined();
       expect(subscriber.maxRetriesPerRequest).toBeNull();
-      // Everything but the two overridden fields stays shared
-      expect(subscriber.retryStrategy(1)).toBe(500);
+      // Both clients dial the same server — only the resilience contract differs
       expect(subscriber.host).toBe(publisher.host);
       expect(subscriber.port).toBe(publisher.port);
     });

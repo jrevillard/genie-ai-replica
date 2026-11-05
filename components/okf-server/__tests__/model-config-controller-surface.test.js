@@ -1,8 +1,9 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // Controller-surface coverage for model-config-controller (Story 8-7): every
-// handler's status code, service passthrough (actor + source_ip) and the
-// next(err) contract. Policy lives in the service — these tests pin the THIN
+// handler's status code, service passthrough (the SHARED actor shape —
+// {sub, name, source_ip} from controllers/actor-from.js, issue #1188) and
+// the next(err) contract. Policy lives in the service — these tests pin the THIN
 // layer only, including the admin-only key hint on list.
 
 jest.mock('../services/model-config-service', () => ({
@@ -71,7 +72,7 @@ describe('model-config-controller surface', () => {
     expect(res.statusCode).toBe(201);
     expect(svc.createConfig).toHaveBeenCalledWith(
       { provider: 'z' },
-      { actor: { user_id: 'user-1', name: 'alice' }, source_ip: '9.9.9.9' }
+      { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
     );
 
     svc.updateConfig.mockResolvedValueOnce({ key: 'k' });
@@ -81,12 +82,28 @@ describe('model-config-controller surface', () => {
     expect(svc.updateConfig).toHaveBeenCalledWith(
       'k',
       { label: 'L' },
-      { actor: { user_id: 'user-1', name: 'alice' }, source_ip: '9.9.9.9' }
+      { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
+    );
+  });
+
+  it('pins the shared actor display-name precedence (name before preferred_username)', async () => {
+    // A Keycloak token carries both: `name` is the display name, the login is
+    // `preferred_username`. The shared helper takes `name` first — model-config
+    // audit rows follow the shared contract, not a private one.
+    svc.createConfig.mockResolvedValueOnce({ key: 'k' });
+    await ctrl.create(
+      fakeReq({ body: { provider: 'z' }, user: { sub: 'user-1', name: 'Alice Smith', preferred_username: 'alice' } }),
+      fakeRes(),
+      jest.fn()
+    );
+    expect(svc.createConfig).toHaveBeenCalledWith(
+      { provider: 'z' },
+      { actor: { sub: 'user-1', name: 'Alice Smith', source_ip: '9.9.9.9' } }
     );
   });
 
   it('copy → 201; activate/deactivate/remove → 200, all keyed on req.params.key', async () => {
-    const actor = { actor: { user_id: 'user-1', name: 'alice' }, source_ip: '9.9.9.9' };
+    const actor = { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } };
     svc.copyConfig.mockResolvedValueOnce({ key: 'k2' });
     const r1 = fakeRes();
     await ctrl.copy(fakeReq({ params: { key: 'k' } }), r1, jest.fn());

@@ -59,6 +59,21 @@ the ORDER and the cross-stream slots.
      the BAR, not new machinery. Add the `DsProgress` bound to those counts.
    - **Apply Fixes** — `AutocorrectPanel.vue` is the pattern source, not a
      patient; verify its wizard embedding matches the editor's.
+5. **UX-5 — Testing Lab ±tag apply is too slow (David, 2026-11-05)** — in the
+   Suites & Analytics tab, applying the head-tag changes "Explain failures" /
+   the advisor recommends (+tag / −tag chips, then Apply) takes far too long.
+   **The current UI stays — David likes it; it is just slow.** The cause shape:
+   `onAdvisorApply` (`TestingLabDialog.vue:2493+`) holds ONE busy token over a
+   serialized save → `headRebuild` (one embed call per tag field) → suite
+   re-run leg — the click blocks on minutes of embed + re-run before anything
+   settles; the same pattern backs `onTeachTag`/`onTeachAllTags` (:2368-2405).
+   Remediation direction: optimistic chip state at click, the fast two-write
+   save confirmed immediately, rebuild + re-run demoted to a detached
+   background activity with per-step progress (save ✓ → rebuilding head… →
+   re-running suite…; the suite run already has a poll), re-using the
+   suiteEpoch/stale-answer guards. At story time: instrument first (which leg
+   eats the wall clock — no guessing), then optimize that leg; the UI mods are
+   the fallback, not the default.
 
 ## Phase C — CSR waves resume (after Phase U)
 

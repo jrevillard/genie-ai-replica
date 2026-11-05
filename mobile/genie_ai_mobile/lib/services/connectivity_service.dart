@@ -52,9 +52,12 @@ class ConnectivityService with WidgetsBindingObserver {
     Future<List<InternetAddress>> Function(String)? dnsLookup,
   }) => ConnectivityService._internal(provider: provider, dnsLookup: dnsLookup);
 
-  /// Reset the singleton for test isolation.
+  /// Reset the singleton for test isolation. The previous instance is
+  /// disposed, so its timer and its subscriptions do not leak into the
+  /// tests that follow.
   @visibleForTesting
   static void resetForTesting() {
+    _instance?.dispose();
     _instance = null;
   }
 
@@ -92,9 +95,20 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Whether the service registered itself as a lifecycle observer.
   bool _observesLifecycle = false;
 
+  /// Whether the app is currently in the background. The watchdog has no
+  /// work to do there, and nothing it does may re-arm the timer.
+  bool _appBackgrounded = false;
+
   /// Whether the service was disposed. A poll that was in flight when the
   /// service was disposed must not schedule the next one.
   bool _disposed = false;
+
+  /// Whether init() already ran. A second call must not add a second
+  /// lifecycle observer or a second stream subscription.
+  bool _initialized = false;
+
+  /// The connectivity stream subscription, cancelled on dispose.
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   /// Exposes the monitor timer for test assertions.
   @visibleForTesting
@@ -112,6 +126,9 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Initialize listeners. Should be called at app startup.
   Future<void> init() async {
     debugPrint('[Connectivity] Init called. Starting service...');
+    if (_initialized) return;
+    _initialized = true;
+
     // 0. Watch the app lifecycle: the watchdog has no work to do while the
     // app sits in the background.
     WidgetsBinding.instance.addObserver(this);
@@ -121,16 +138,21 @@ class ConnectivityService with WidgetsBindingObserver {
     await recheckConnectivity();
 
     // 2. Listen for Stream changes (Immediate reaction)
-    _provider.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+    _connectivitySubscription = _provider.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
       debugPrint('[Connectivity] Stream Event: $results');
       // Use first result or default to none
       final result = results.isNotEmpty
           ? results.first
           : ConnectivityResult.none;
       _updateHardwareStatus(result);
-      // The stream is the authoritative signal that connectivity changed:
-      // drop the backoff so the watchdog is quick again.
-      _pollRung = 0;
+      // The stream is the authoritative signal that the device is reachable
+      // again: drop the backoff so the watchdog is quick again. A "none"
+      // event means it just became unreachable — keep climbing.
+      if (result != ConnectivityResult.none) {
+        _pollRung = 0;
+      }
       _scheduleWatchdog();
     });
 
@@ -145,8 +167,12 @@ class ConnectivityService with WidgetsBindingObserver {
   }
 
   /// Schedules the next watchdog check on the current rung of the ladder.
+  ///
+  /// Never arms a timer once the app is in the background or the service is
+  /// disposed — a poll or a stream event that was in flight when either
+  /// happened must not restart the watchdog.
   void _scheduleWatchdog() {
-    if (_disposed) return;
+    if (_disposed || _appBackgrounded) return;
     _monitorTimer?.cancel();
     final Duration interval = _pollLadder[_pollRung];
     debugPrint(
@@ -156,8 +182,10 @@ class ConnectivityService with WidgetsBindingObserver {
       // Use recheckConnectivity() because it includes the DNS fallback.
       // The previous simple check was forcing the app offline when the plugin
       // falsely reported "none" (common on Android).
-      await recheckConnectivity();
-      _advancePollRung();
+      final bool ran = await recheckConnectivity();
+      if (ran) {
+        _advancePollRung();
+      }
       _scheduleWatchdog();
     });
   }
@@ -176,6 +204,7 @@ class ConnectivityService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       debugPrint('[Connectivity] App resumed. Restarting the watchdog.');
+      _appBackgrounded = false;
       _pollRung = 0;
       _scheduleWatchdog();
       unawaited(recheckConnectivity());
@@ -183,6 +212,7 @@ class ConnectivityService with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       debugPrint('[Connectivity] App backgrounded. Pausing the watchdog.');
+      _appBackgrounded = true;
       _monitorTimer?.cancel();
       _monitorTimer = null;
     }
@@ -190,11 +220,15 @@ class ConnectivityService with WidgetsBindingObserver {
 
   /// Forces a fresh check of the hardware status.
   /// Uses DNS fallback if hardware reports offline but internet might be available.
-  Future<void> recheckConnectivity() async {
+  ///
+  /// Returns whether a check actually ran — false when another check was
+  /// already in flight and this one was skipped. A caller that reacts to the
+  /// result (like the watchdog's backoff) must only do so for a fresh sample.
+  Future<bool> recheckConnectivity() async {
     // Prevent overlapping checks (e.g. Watchdog + Manual Toggle firing at once)
     if (_isChecking) {
       // debugPrint('[Connectivity] Check already in progress. Skipping.');
-      return;
+      return false;
     }
     _isChecking = true;
 
@@ -220,6 +254,7 @@ class ConnectivityService with WidgetsBindingObserver {
     } finally {
       _isChecking = false;
     }
+    return true;
   }
 
   /// Attempts DNS lookup as a fallback when hardware reports offline.
@@ -310,6 +345,8 @@ class ConnectivityService with WidgetsBindingObserver {
     _disposed = true;
     _monitorTimer?.cancel();
     _monitorTimer = null;
+    unawaited(_connectivitySubscription?.cancel());
+    _connectivitySubscription = null;
     if (_observesLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observesLifecycle = false;

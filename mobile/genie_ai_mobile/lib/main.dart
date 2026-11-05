@@ -352,7 +352,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen> {
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
 
@@ -365,13 +365,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    // 1. Observe lifecycle for App Resume -> Recheck Connectivity
-    WidgetsBinding.instance.addObserver(this);
-
-    // 2. Initialize current state
+    // Initialize current state. Connectivity is rechecked on app resume by
+    // ConnectivityService itself — the UI only follows its stream.
     _isOnline = ConnectivityService().isOnline;
 
-    // 3. Listen to Connectivity Stream for Sync Trigger
+    // Listen to Connectivity Stream for Sync Trigger
     _connectivitySubscription = ConnectivityService().isOnlineStream.listen((
       isOnline,
     ) {
@@ -393,17 +391,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _connectivitySubscription?.cancel();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      debugPrint("[MAIN] App resumed. Rechecking connectivity...");
-      ConnectivityService().recheckConnectivity();
-    }
   }
 
   void _updateRelatedDocuments(List<dynamic> docs) {

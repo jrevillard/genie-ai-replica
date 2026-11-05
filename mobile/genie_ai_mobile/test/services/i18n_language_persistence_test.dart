@@ -85,6 +85,28 @@ void main() {
 
     expect(service.hasStoredLanguage, isFalse);
   });
+
+  test('the account copy applies without claiming the device', () async {
+    service.applyAccountLanguage('fr');
+
+    expect(service.currentLocale.languageCode, 'fr');
+    expect(service.hasStoredLanguage, isFalse);
+
+    await _settle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(I18nService.languagePreferenceKey), isNull);
+  });
+
+  test('the account copy keeps applying until the device makes a choice', () {
+    service.applyAccountLanguage('fr');
+    service.applyAccountLanguage('de');
+    expect(service.currentLocale.languageCode, 'de');
+
+    // A choice made on the device locks it against further account updates.
+    service.changeLanguage('es');
+    service.applyAccountLanguage('de');
+    expect(service.currentLocale.languageCode, 'es');
+  });
 }
 
 /// Lets the asynchronous preference write land.

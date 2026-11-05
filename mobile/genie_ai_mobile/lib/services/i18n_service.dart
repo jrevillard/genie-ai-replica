@@ -98,20 +98,47 @@ class I18nService extends ChangeNotifier {
       return;
     }
 
+    if (_applyLocale(languageCode)) {
+      _hasStoredLanguage = true;
+      unawaited(_persistLanguage(languageCode));
+    }
+  }
+
+  /// Applies the language recorded on the account, when the device has not
+  /// made a choice of its own yet.
+  ///
+  /// Unlike [changeLanguage], the applied language is not stored on the
+  /// device and does not claim one: the account copy keeps updating the
+  /// device until the user picks a language here.
+  void applyAccountLanguage(String languageCode) {
+    if (_hasStoredLanguage) return;
+
+    debugPrint(
+      "[I18N SERVICE] applyAccountLanguage called with: $languageCode",
+    );
+    if (!supportedLanguages.containsKey(languageCode)) {
+      debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
+      return;
+    }
+
+    _applyLocale(languageCode);
+  }
+
+  /// Applies the locale and notifies listeners. Returns false when the
+  /// language is already active (no notification is sent then).
+  bool _applyLocale(String languageCode) {
     if (_currentLocale.languageCode == languageCode) {
       debugPrint(
         "[I18N SERVICE] Language is already $languageCode. No change.",
       );
-    } else {
-      _currentLocale = Locale(languageCode);
-      debugPrint(
-        "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...",
-      );
-      notifyListeners();
+      return false;
     }
-
-    _hasStoredLanguage = true;
-    unawaited(_persistLanguage(languageCode));
+    _currentLocale = Locale(languageCode);
+    debugPrint(
+      "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...",
+    );
+    notifyListeners();
+    return true;
   }
 
   /// Whether this device holds a language choice of its own.
@@ -139,8 +166,12 @@ class I18nService extends ChangeNotifier {
         );
         return false;
       }
+      final bool changed = _currentLocale.languageCode != stored;
       _currentLocale = Locale(stored);
       _hasStoredLanguage = true;
+      if (changed) {
+        notifyListeners();
+      }
       debugPrint("[I18N SERVICE] Restored stored language: $stored");
       return true;
     } catch (error) {

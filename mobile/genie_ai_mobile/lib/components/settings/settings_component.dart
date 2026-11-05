@@ -157,7 +157,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
         // scale: the account copy only seeds a device that never made a
         // choice of its own (a fresh install, or a new phone).
         if (userMap['language'] != null && !I18nService().hasStoredLanguage) {
-          I18nService().changeLanguage(userMap['language']);
+          I18nService().applyAccountLanguage(userMap['language']);
         }
         // Theme and fontSize are client-authoritative — applied immediately
         // on user change, not overwritten from server on subsequent fetches.

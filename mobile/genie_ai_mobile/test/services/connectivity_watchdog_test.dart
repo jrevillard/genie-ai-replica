@@ -207,4 +207,85 @@ void main() {
       expect(service.monitorTimer, isNull);
     },
   );
+
+  testWidgets('a connectivity event while backgrounded restarts nothing', (
+    tester,
+  ) async {
+    final provider = WatchdogProvider(ConnectivityResult.wifi);
+    final service = ConnectivityService.test(
+      provider: provider,
+      dnsLookup: _dnsFailure,
+    );
+    addTearDown(provider.controller.close);
+
+    await service.init();
+    expect(provider.callCount, 1);
+
+    service.didChangeAppLifecycleState(AppLifecycleState.paused);
+
+    // The OS still delivers connectivity events in the background.
+    provider.controller.add([ConnectivityResult.none]);
+    await tester.pump();
+    expect(service.isOnline, isFalse);
+
+    await tester.pump(const Duration(seconds: 60));
+    await tester.pump();
+    expect(provider.callCount, 1);
+
+    service.dispose();
+  });
+
+  testWidgets('a connectivity event after disposal reaches nothing', (
+    tester,
+  ) async {
+    final provider = WatchdogProvider(ConnectivityResult.wifi);
+    final service = ConnectivityService.test(
+      provider: provider,
+      dnsLookup: _dnsFailure,
+    );
+    addTearDown(provider.controller.close);
+
+    await service.init();
+
+    service.dispose();
+    // A status change after the disposal would hit the closed status
+    // controller if the connectivity subscription were still live.
+    provider.controller.add([ConnectivityResult.none]);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pump();
+
+    expect(service.monitorTimer, isNull);
+  });
+
+  testWidgets('a "none" event does not restore the fast cadence', (
+    tester,
+  ) async {
+    final provider = WatchdogProvider(ConnectivityResult.none);
+    final service = ConnectivityService.test(
+      provider: provider,
+      dnsLookup: _dnsFailure,
+    );
+    addTearDown(provider.controller.close);
+
+    await service.init();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    expect(provider.callCount, 2);
+
+    // The OS reports the network going away while already unreachable: no
+    // recovery happened, so the ladder keeps climbing instead of restarting.
+    provider.controller.add([ConnectivityResult.none]);
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    expect(provider.callCount, 2);
+
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pump();
+    expect(provider.callCount, 3);
+
+    service.dispose();
+  });
 }

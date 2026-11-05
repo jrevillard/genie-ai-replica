@@ -49,14 +49,16 @@ const CENTRE_MIN_WIDTH = 480;
 // SIDEBAR_INFLOW_MIN_WIDTH in the layout module.
 const IN_FLOW_MIN_WIDTH = 1400;
 
-const LEFT = '.side-bar';
-const RIGHT = '.sidebar';
-const LEFT_HANDLE = '.side-bar .sidebar-handle';
-const RIGHT_HANDLE = '.sidebar .sidebar-handle';
+const LEFT = '[data-testid="side-bar"]';
+const RIGHT = '[data-testid="sidebar"]';
+const LEFT_HANDLE = '[data-testid="sidebar-handle-left"]';
+const RIGHT_HANDLE = '[data-testid="sidebar-handle-right"]';
+const LEFT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-left"]';
+const RIGHT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-right"]';
 
 async function gotoChatbot(page) {
   await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
 }
 
 // The same invariant responsive-layout.spec.js derives: column count
@@ -78,8 +80,8 @@ async function measure(page) {
         const b = el.getBoundingClientRect();
         return { left: Math.round(b.left), right: Math.round(b.right), width: Math.round(b.width) };
       };
-      const grid = q('.quick-help-grid');
-      const items = grid ? Array.from(grid.querySelectorAll('.quick-help-item')) : [];
+      const grid = q('[data-testid="quick-help-grid"]');
+      const items = grid ? Array.from(grid.querySelectorAll('[data-testid="quick-help-item"]')) : [];
       const gridStyle = grid ? getComputedStyle(grid) : null;
       const rootStyle = getComputedStyle(document.documentElement);
       const parsePx = (raw) => {
@@ -90,7 +92,7 @@ async function measure(page) {
         viewport: window.innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
         left: rect(q(leftSel)),
-        centre: rect(q('.chatbot-container')),
+        centre: rect(q('[data-test-id="chatbot-container"]')),
         right: rect(q(rightSel)),
         leftHandle: rect(q(leftHandleSel)),
         rightHandle: rect(q(rightHandleSel)),
@@ -155,7 +157,7 @@ async function seedAndReload(page, widths) {
     localStorage.removeItem('sidebarOpenRight');
   }, widths);
   await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
   // The restore path renders the seeded widths through the 0.3 s
   // transition; the caller measures the layout, so it must wait out.
   await waitForWidthSettled(page, [LEFT, RIGHT]);
@@ -218,12 +220,15 @@ test.describe('Resizable sidebars behind one handle', () => {
     // Focusable, and the chevron inside it is a real button — two
     // focusable things, so a keyboard user reaches both gestures
     // without hunting.
-    for (const sel of [LEFT_HANDLE, RIGHT_HANDLE]) {
-      const strip = page.locator(sel);
+    for (const [stripSel, buttonSel] of [
+      [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
+      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
+    ]) {
+      const strip = page.locator(stripSel);
       await expect(strip).toHaveAttribute('role', 'separator');
       await expect(strip).toHaveAttribute('tabindex', '0');
       await expect(strip).toHaveAttribute('aria-valuenow', /\d+/);
-      await expect(page.locator(`${sel} .sidebar-handle__button`)).toHaveJSProperty('tagName', 'BUTTON');
+      await expect(page.locator(buttonSel)).toHaveJSProperty('tagName', 'BUTTON');
     }
 
     // And it is actually hittable — an occluded control passes every
@@ -257,17 +262,21 @@ test.describe('Resizable sidebars behind one handle', () => {
     // chevron say so with the cursor: `pointer` on the chevron would
     // promise a click and deny the drag, on the one element the user
     // can actually see.
-    for (const sel of [LEFT_HANDLE, RIGHT_HANDLE]) {
-      const cursors = await page.evaluate((s) => {
+    for (const [stripSel, buttonSel] of [
+      [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
+      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
+    ]) {
+      const sel = stripSel;
+      const cursors = await page.evaluate(({ stripSel: s, buttonSel: bs }) => {
         const strip = document.querySelector(s);
-        const button = strip.querySelector('.sidebar-handle__button');
+        const button = document.querySelector(bs);
         return {
           strip: getComputedStyle(strip).cursor,
           button: getComputedStyle(button).cursor,
           stripTouch: getComputedStyle(strip).touchAction,
           buttonTouch: getComputedStyle(button).touchAction
         };
-      }, sel);
+      }, { stripSel, buttonSel });
       expect(cursors.strip, `${sel}: the strip must advertise the drag`).toBe('col-resize');
       expect(cursors.button, `${sel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
       // Without `touch-action: none` the browser claims a touch drag
@@ -284,20 +293,25 @@ test.describe('Resizable sidebars behind one handle', () => {
     // of them acts on. Read from the live DOM in the page's own
     // locale — this is what a screen reader announces.
     const names = await page.evaluate(
-      ({ leftSel, rightSel }) => {
-        const read = (sel, sel2) => {
-          const el = document.querySelector(`${sel} ${sel2}`);
+      ({ leftStripSel, leftButtonSel, rightStripSel, rightButtonSel }) => {
+        const read = (sel) => {
+          const el = document.querySelector(sel);
           return el ? el.getAttribute('aria-label') : null;
         };
         return {
-          leftStrip: read(leftSel, '.sidebar-handle'),
-          leftButton: read(leftSel, '.sidebar-handle__button'),
-          rightStrip: read(rightSel, '.sidebar-handle'),
-          rightButton: read(rightSel, '.sidebar-handle__button'),
+          leftStrip: read(leftStripSel),
+          leftButton: read(leftButtonSel),
+          rightStrip: read(rightStripSel),
+          rightButton: read(rightButtonSel),
           lang: document.documentElement.lang || null
         };
       },
-      { leftSel: LEFT, rightSel: RIGHT }
+      {
+        leftStripSel: LEFT_HANDLE,
+        leftButtonSel: LEFT_HANDLE_BUTTON,
+        rightStripSel: RIGHT_HANDLE,
+        rightButtonSel: RIGHT_HANDLE_BUTTON
+      }
     );
 
     for (const [key, value] of Object.entries(names)) {
@@ -360,7 +374,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'false');
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const m = await measure(page);
@@ -410,7 +424,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'true');
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const openLeft = await measure(page);
@@ -426,7 +440,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     ).toBeLessThanOrEqual(1);
 
     // Collapse the left and re-measure.
-    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(LEFT_HANDLE_BUTTON).click();
     // The collapse animates; the measurement below asserts the final
     // collapsed geometry.
     await waitForWidthSettled(page, LEFT);
@@ -443,7 +457,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       'collapsed: the left handle must reach the panel inner edge'
     ).toBeLessThanOrEqual(1);
 
-    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(RIGHT_HANDLE_BUTTON).click();
     await waitForWidthSettled(page, RIGHT);
     const collapsedBoth = await measure(page);
     expect(
@@ -465,7 +479,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'true');
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const openState = async () => {
@@ -479,28 +493,28 @@ test.describe('Resizable sidebars behind one handle', () => {
 
     // Collapse each side with the chevron, then reload. Both must come
     // back collapsed.
-    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(LEFT_HANDLE_BUTTON).click();
     // The collapse persists its state; the assertion waits for the
     // write rather than assuming it has landed.
     await expect.poll(async () => (await storedOpen(page)).left, {
       timeout: 15000,
     }).toBe('false');
 
-    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(RIGHT_HANDLE_BUTTON).click();
     await expect.poll(async () => (await storedOpen(page)).right, {
       timeout: 15000,
     }).toBe('false');
 
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
     const collapsed = await measure(page);
     expect(collapsed.left.width, 'the left stays collapsed across a reload').toBe(collapsed.leftHandle.width);
     expect(collapsed.right.width, 'the right stays collapsed across a reload').toBe(collapsed.rightHandle.width);
 
     // And expanding round-trips the other way.
-    await page.locator(`${LEFT_HANDLE} .sidebar-handle__button`).click();
-    await page.locator(`${RIGHT_HANDLE} .sidebar-handle__button`).click();
+    await page.locator(LEFT_HANDLE_BUTTON).click();
+    await page.locator(RIGHT_HANDLE_BUTTON).click();
     // The expansions persist their state; wait for both writes.
     // Expanding stores "true" on both keys.
     await expect.poll(() => storedOpen(page), { timeout: 15000 }).toEqual({
@@ -509,7 +523,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     });
 
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.sidebar-handle', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
     s = await openState();
     expect(s.left, 'the left comes back open').toBeGreaterThan(300);
@@ -781,12 +795,12 @@ test.describe('Resizable sidebars behind one handle', () => {
     // for anyone aiming at it. The suite stayed green throughout
     // because its helper grabbed the strip above the chevron and
     // never exercised this path.
-    for (const [handleSel, panelKey, dx] of [
-      [LEFT_HANDLE, 'left', 120],
-      [RIGHT_HANDLE, 'right', -120]
+    for (const [handleSel, buttonSel, panelKey, dx] of [
+      [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left', 120],
+      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right', -120]
     ]) {
       const before = (await measure(page))[panelKey].width;
-      const btn = await page.locator(`${handleSel} .sidebar-handle__button`).boundingBox();
+      const btn = await page.locator(buttonSel).boundingBox();
       const startX = btn.x + btn.width / 2;
       const startY = btn.y + btn.height / 2;
 
@@ -810,12 +824,12 @@ test.describe('Resizable sidebars behind one handle', () => {
   });
 
   test('a press on the chevron that never travels collapses instead of resizing', async ({ page }) => {
-    for (const [handleSel, panelKey] of [
-      [LEFT_HANDLE, 'left'],
-      [RIGHT_HANDLE, 'right']
+    for (const [handleSel, buttonSel, panelKey] of [
+      [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left'],
+      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right']
     ]) {
       const before = (await measure(page))[panelKey].width;
-      const btn = await page.locator(`${handleSel} .sidebar-handle__button`).boundingBox();
+      const btn = await page.locator(buttonSel).boundingBox();
       const x = btn.x + btn.width / 2;
       const y = btn.y + btn.height / 2;
 
@@ -837,7 +851,7 @@ test.describe('Resizable sidebars behind one handle', () => {
 
       // Reopen, and confirm the panel returns to the width it had — a
       // wobble that leaked a resize would have moved it.
-      await page.locator(`${handleSel} .sidebar-handle__button`).click();
+      await page.locator(buttonSel).click();
       await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       expect((await measure(page))[panelKey].width, `${panelKey}: the wobble must not have resized the panel`).toBe(
         before
@@ -891,20 +905,20 @@ test.describe('Resizable sidebars behind one handle', () => {
   });
 
   test('the chevron collapses, and expanding returns the panel to its previous width', async ({ page }) => {
-    for (const [handleSel, panelKey] of [
-      [LEFT_HANDLE, 'left'],
-      [RIGHT_HANDLE, 'right']
+    for (const [handleSel, buttonSel, panelKey] of [
+      [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left'],
+      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right']
     ]) {
       const before = (await measure(page))[panelKey].width;
 
-      await page.locator(`${handleSel} .sidebar-handle__button`).click();
+      await page.locator(buttonSel).click();
       // The collapse animates; the width comparisons assert the final
       // geometry on both sides of it.
       await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const collapsed = await measure(page);
       expect(collapsed[panelKey].width, `${panelKey} should be collapsed`).toBeLessThan(before);
 
-      await page.locator(`${handleSel} .sidebar-handle__button`).click();
+      await page.locator(buttonSel).click();
       await waitForWidthSettled(page, panelKey === 'left' ? LEFT : RIGHT);
       const expanded = await measure(page);
       expect(
@@ -970,7 +984,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // from storage does not.
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
     // The restore path renders through the 0.3 s transition; the
     // clamp assertions below read the settled geometry.
     await waitForWidthSettled(page, [LEFT, RIGHT]);
@@ -1004,7 +1018,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // the user chose.
     await page.setViewportSize({ width: 2400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
     expect(
       (await measure(page)).left.width,

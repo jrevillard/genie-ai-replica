@@ -9,7 +9,7 @@ const { mockChatStream, sseBody, ackFeedback } = require('./helpers/chatbot');
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-  await page.waitForSelector('.chat-message.bot', { timeout: 45000 });
+  await page.waitForSelector('[data-testid="chat-message-bot"]', { timeout: 45000 });
 }
 
 test.describe('Conversation V1', () => {
@@ -26,7 +26,7 @@ test.describe('Conversation V1', () => {
     // different action, not a fourth member of the row.
     const closeOutside = await page.evaluate(
       () =>
-        !document.querySelector('[data-testid="conversation-header-close"]').closest('.conversation-header__actions')
+        !document.querySelector('[data-testid="conversation-header-close"]').closest('[data-testid="conversation-header-actions"]')
     );
     expect(closeOutside, 'the close cross sits outside the save/export cluster').toBe(true);
     await page.locator('[data-testid="conversation-header-close"]').click();
@@ -35,7 +35,7 @@ test.describe('Conversation V1', () => {
     // dialog's default action (save and start new).
     await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 });
     await page.keyboard.press('Enter');
-    await expect(page.locator('.quick-help-overlay')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toBeVisible({ timeout: 15000 });
     await ctx.close();
   });
 
@@ -48,26 +48,26 @@ test.describe('Conversation V1', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(() => getComputedStyle(document.querySelector('.chatbot-container'), '::after').content),
+          page.evaluate(() => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').content),
         { timeout: 5000 }
       )
       .not.toBe('none');
     const before = await page.evaluate(() => {
-      const cs = getComputedStyle(document.querySelector('.chatbot-container'), '::after');
+      const cs = getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after');
       return { content: cs.content, position: cs.position, bottom: cs.bottom, image: cs.backgroundImage };
     });
     expect(before.content, 'the wave pseudo must paint').not.toBe('none');
     expect(['fixed', 'absolute'], 'the wave must hold its place in the container').toContain(before.position);
     expect(before.image, 'the wave carries the asset').toContain('url');
     await page.evaluate(() => {
-      document.querySelector('.chat-window').scrollTop = 400;
+      document.querySelector('[data-testid="chat-window"]').scrollTop = 400;
     });
     // The wave is fixed: its bottom must not move with the scroll — the
     // poll holds the assertion open through the scroll settling.
     await expect
       .poll(
         () =>
-          page.evaluate(() => getComputedStyle(document.querySelector('.chatbot-container'), '::after').bottom),
+          page.evaluate(() => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').bottom),
         { timeout: 5000 }
       )
       .toBe(before.bottom);
@@ -75,7 +75,7 @@ test.describe('Conversation V1', () => {
     // from the artwork's own aspect ratio, so nothing squashes or shears
     // at any viewport width.
     const band = await page.evaluate(() => {
-      const cs = getComputedStyle(document.querySelector('.chatbot-container'), '::after');
+      const cs = getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after');
       return { ratio: cs.aspectRatio, size: cs.backgroundSize };
     });
     expect(band.ratio, 'the band tracks the artwork ratio, like the banner').toBe('1800 / 356');
@@ -89,7 +89,11 @@ test.describe('Conversation V1', () => {
           const b = el.getBoundingClientRect();
           return [b.x, b.y, b.width, b.height].map((v) => Math.round(v));
         };
-        return { header: r('.conversation-header'), input: r('.chat-input'), window: r('.chat-window') };
+        return {
+          header: r('[data-testid="conversation-header"]'),
+          input: r('[data-testid="chat-input"]'),
+          window: r('[data-testid="chat-window"]')
+        };
       });
     const on = await boxes();
     await page.evaluate(() => document.documentElement.setAttribute('data-visual', 'off'));
@@ -142,7 +146,7 @@ test.describe('Conversation V1', () => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await askAndAnswer(page, 'What is GENIE.AI?');
     const a = await page.evaluate(() => {
-      const el = document.querySelector('.message-avatar--assistant');
+      const el = document.querySelector('[data-testid="assistant-avatar"]');
       const cs = el ? getComputedStyle(el) : null;
       return el
         ? { w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, radius: cs.borderRadius }
@@ -153,8 +157,8 @@ test.describe('Conversation V1', () => {
     expect(a.h, 'the assistant tile is 36px tall').toBe(36);
     expect(a.radius, 'the assistant tile is a circle, like the mockup').toBe('999px');
     const u = await page.evaluate(() => {
-      const el = document.querySelector('.message-avatar--user');
-      const initials = el ? el.querySelector('.message-avatar__initials') : null;
+      const el = document.querySelector('[data-testid="user-avatar"]');
+      const initials = el ? el.querySelector('[data-testid="message-avatar-initials"]') : null;
       return el
         ? {
             text: el.textContent.trim(),
@@ -202,7 +206,7 @@ test.describe('Conversation — sources', () => {
       page.evaluate(() => {
         const s = document.querySelector('[data-testid="answer-sources"]');
         const cards = s.querySelectorAll('[data-testid^="answer-source-card-"]');
-        return { n: cards.length, open: getComputedStyle(s.querySelector('.answer-sources__list')).display !== 'none' };
+        return { n: cards.length, open: getComputedStyle(s.querySelector('[data-testid="answer-sources-list"]')).display !== 'none' };
       });
     const open = await state();
     expect(open.n, 'sources render as cards').toBeGreaterThan(0);
@@ -247,7 +251,7 @@ test.describe('Conversation — actions', () => {
       () => getComputedStyle(document.querySelector('[data-testid="answer-thumb-up"]')).backgroundColor
     );
     expect(rated, 'the selected state paints, it does not only tint the icon').not.toBe('rgba(0, 0, 0, 0)');
-    await expect(page.locator('.notification.success'), 'the rating confirms itself').toBeVisible();
+    await expect(page.locator('[data-test-id="notification-success"]'), 'the rating confirms itself').toBeVisible();
     await page.locator('[data-testid="answer-copy"]').click();
     // The clipboard write trails the click — wait for the text to land.
     await expect
@@ -284,11 +288,11 @@ test.describe('Conversation — warning and error', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // The warning is itself the signal that the metadata frame has landed.
-    await page.waitForSelector('.chat-message.bot .answer-warning', { timeout: 45000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', { timeout: 45000 });
     const s = await page.evaluate(() => {
-      const cards = document.querySelectorAll('.chat-message.bot .answer-card');
+      const cards = document.querySelectorAll('[data-testid="chat-message-bot"] [data-testid="answer-card"]');
       const card = cards[cards.length - 1];
-      const warn = card.querySelector('.answer-warning');
+      const warn = card.querySelector('[data-testid="answer-warning"]');
       const probe = document.createElement('div');
       probe.style.background = 'var(--warning-bg)';
       document.body.appendChild(probe);
@@ -321,8 +325,8 @@ test.describe('Conversation — warning and error', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
     await page.locator('[data-testid="answer-retry"]').click();
-    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
-    const n = await page.locator('.chat-message.user').count();
+    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 45000 });
+    const n = await page.locator('[data-testid="chat-message-user"]').count();
     expect(n, 'the retry does not duplicate the user turn').toBe(1);
     await ctx.close();
   });
@@ -363,15 +367,15 @@ test.describe('Conversation — documents panel', () => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForSelector('.chat-message.bot', { timeout: 45000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"]', { timeout: 45000 });
     await page.waitForSelector('[data-testid="documents-empty"]', { timeout: 15000 });
     const s = await page.evaluate(() => {
       const empty = document.querySelector('[data-testid="documents-empty"]');
       const faq = document.querySelector('[data-testid="faq-section"]');
       return {
         emptyText: empty ? empty.textContent : '',
-        hasTitle: !!empty?.querySelector('.ds-state__message'),
-        hasHint: !!empty?.querySelector('.ds-state__hint'),
+        hasTitle: !!empty?.querySelector('[data-testid="ds-state-message"]'),
+        hasHint: !!empty?.querySelector('[data-testid="ds-state-hint"]'),
         faqVisible: !!faq
       };
     });
@@ -393,7 +397,7 @@ test.describe('Conversation — contrast', () => {
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForSelector('.chat-message.bot .answer-warning', { timeout: 45000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', { timeout: 45000 });
     // The styles come back as sRGB triples: the tokens are OKLch, and the
     // page-side canvas resolves any colour format into its painted pixels.
     const styles = await page.evaluate(() => {
@@ -412,16 +416,16 @@ test.describe('Conversation — contrast', () => {
         return el ? getComputedStyle(el)[prop] : null;
       };
       // The warning sits on the card's surface, not on the page background.
-      const warn = document.querySelector('.chat-message.bot .answer-warning');
-      const card = warn ? warn.closest('.answer-card') : null;
-      const initials = document.querySelector('.message-avatar__initials');
+      const warn = document.querySelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]');
+      const card = warn ? warn.closest('[data-testid="answer-card"]') : null;
+      const initials = document.querySelector('[data-testid="message-avatar-initials"]');
       return {
-        warnColor: rgb(pick('.chat-message.bot .answer-warning', 'color')),
-        warnBg: rgb(pick('.chat-message.bot .answer-warning', 'backgroundColor')),
-        initColor: rgb(pick('.message-avatar__initials', 'color')),
-        initBg: rgb(pick('.message-avatar__initials', 'backgroundColor')),
-        timeColor: rgb(pick('.message-time', 'color')),
-        timeBg: rgb(pick('.message-time', 'backgroundColor'))
+        warnColor: rgb(pick('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', 'color')),
+        warnBg: rgb(pick('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', 'backgroundColor')),
+        initColor: rgb(pick('[data-testid="message-avatar-initials"]', 'color')),
+        initBg: rgb(pick('[data-testid="message-avatar-initials"]', 'backgroundColor')),
+        timeColor: rgb(pick('[data-testid="message-time"]', 'color')),
+        timeBg: rgb(pick('[data-testid="message-time"]', 'backgroundColor'))
       };
     });
     expect(
@@ -464,25 +468,25 @@ test.describe('Conversation — answer card', () => {
     // The card exists immediately (the thinking frame), before the answer
     // text — the indicator itself is the arrival signal (the greeting card
     // would otherwise win the race).
-    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
     const early = await page.evaluate(() => {
       const cards = document.querySelectorAll('[data-testid="answer-card"]');
       const card = cards[cards.length - 1];
       const cs = getComputedStyle(card);
-      const ground = getComputedStyle(card.closest('.chatbot-container')).backgroundColor;
+      const ground = getComputedStyle(card.closest('[data-test-id="chatbot-container"]')).backgroundColor;
       return {
         shadow: cs.boxShadow !== 'none',
-        hasThinking: !!card.querySelector('.streaming-indicator'),
+        hasThinking: !!card.querySelector('[data-testid="streaming-indicator"]'),
         distinctFromGround: cs.backgroundColor !== ground
       };
     });
     expect(early.shadow, 'the card is elevated').toBe(true);
     expect(early.distinctFromGround, 'the card fills one step above the unified ground, not the same paint').toBe(true);
     expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
-    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
+    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 30000 });
     const late = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="answer-card"]');
-      const bubble = card.querySelector('.message-bubble');
+      const bubble = card.querySelector('[data-testid="message-bubble-bot"]');
       return { bubbleInside: !!bubble, text: (bubble.textContent || '').length };
     });
     expect(late.bubbleInside, 'the bubble lives inside the card').toBe(true);
@@ -498,8 +502,8 @@ test.describe('Conversation — surface invariants', () => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
     await askAndAnswer(page, 'What is GENIE.AI?');
-    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 45000 });
-    expect(await page.locator('.context-panel').count(), 'no chip is fabricated for Just Chat').toBe(0);
+    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 45000 });
+    expect(await page.locator('[data-testid="context-panel"]').count(), 'no chip is fabricated for Just Chat').toBe(0);
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
     await ctx.close();
   });
@@ -507,10 +511,10 @@ test.describe('Conversation — surface invariants', () => {
   // The header names the QuickHelp option that opened the chat.
   test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await page.locator('.quick-help-item').filter({ hasText: 'Apply for ID' }).click();
+    await page.locator('[data-testid="quick-help-item"]').filter({ hasText: 'Apply for ID' }).click();
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Apply for ID/i);
     // The option is a knowledge domain — its chip is shown as context.
-    expect(await page.locator('.context-panel').count(), 'the domain chip is shown').toBe(1);
+    expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
     await ctx.close();
   });
 
@@ -547,7 +551,7 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.
-    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
     await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
     // Release the stream while the chat view is unmounted: the store
@@ -559,15 +563,15 @@ test.describe('Conversation — surface invariants', () => {
     // the background — the wait below holds until the released stream's
     // frame has been consumed and rendered.
     await page.goBack();
-    await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
-    await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
-    await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(
+    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 30000 });
+    await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
+    await expect(page.locator('[data-testid="message-bubble-bot"]').last()).toContainText(
       'The answer completes in the background.'
     );
     // The transcript must be the VIEW, not merely present in the DOM
     // behind the welcome overlay: the overlay covers the conversation.
-    await expect(page.locator('.quick-help-overlay')).toHaveCount(0);
-    await expect(page.locator('.chat-input')).toBeVisible();
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="chat-input"]')).toBeVisible();
     await ctx.close();
   });
 
@@ -585,7 +589,7 @@ test.describe('Conversation — surface invariants', () => {
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForSelector('.chat-message.bot .streaming-indicator', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
     // The turn survives only through the persisted payload — wait for the
     // write, not for the render (the debounce trails the first frame).
     await page.waitForFunction(
@@ -603,10 +607,10 @@ test.describe('Conversation — surface invariants', () => {
       { timeout: 30000 }
     );
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.chat-message.user', { timeout: 30000 });
-    await expect(page.locator('.chat-message.user').last()).toContainText('What is GENIE.AI?');
+    await page.waitForSelector('[data-testid="chat-message-user"]', { timeout: 30000 });
+    await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
     await expect(page.locator('[data-testid="answer-retry"]'), 'the interrupted turn offers a retry').toBeVisible();
-    await expect(page.locator('.chat-message.bot .streaming-indicator')).toHaveCount(0);
+    await expect(page.locator('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]')).toHaveCount(0);
     await ctx.close();
   });
 });

@@ -5,10 +5,10 @@
         <component :is="icon" v-if="icon" :size="iconSize" />
       </slot>
     </div>
-    <p v-if="$slots.default || message" class="ds-state__message">
+    <p v-if="$slots.default || message" class="ds-state__message" data-testid="ds-state-message">
       <slot>{{ message }}</slot>
     </p>
-    <p v-if="$slots.hint" class="ds-state__hint">
+    <p v-if="$slots.hint" class="ds-state__hint" data-testid="ds-state-hint">
       <slot name="hint" />
     </p>
     <div v-if="$slots.action" class="ds-state__action">

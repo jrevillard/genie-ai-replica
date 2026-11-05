@@ -1,6 +1,6 @@
 <!-- src/views/DashboardView.vue -->
 <template>
-  <div class="dashboard-content genie-living-intelligence">
+  <div class="dashboard-content genie-living-intelligence" data-test-id="dashboard-content">
     <chat-bot-component />
   </div>
 </template>

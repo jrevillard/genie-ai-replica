@@ -619,7 +619,7 @@
                         </tr>
 
                         <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
-                          <td colspan="6" class="table-message">
+                          <td colspan="6" class="table-message" data-test-id="table-message">
                             {{ translate('admin.documents.empty', 'No documents found.') }}
                           </td>
                         </tr>

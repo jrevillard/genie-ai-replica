@@ -23,8 +23,16 @@ let pendingRows = [];
 // 'Crawling', the poll loop reads 'Pending'. Dispatch on the AQL so both
 // share the mock.
 const wireQueries = () => {
-  db.query.mockImplementation(async (aql) => {
-    if (aql.includes("'Crawling'")) return { all: async () => zombieRows };
+  db.query.mockImplementation(async (aql, bind) => {
+    if (aql.includes("'Crawling'")) {
+      // Honor the boot cutoff the production query applies: a job claimed
+      // after this worker started is NOT an orphan.
+      const rows =
+        bind && bind.bootTime
+          ? zombieRows.filter((j) => j.claimed_at == null || j.claimed_at < bind.bootTime)
+          : zombieRows;
+      return { all: async () => rows };
+    }
     return { next: async () => pendingRows.shift() };
   });
 };
@@ -125,6 +133,40 @@ describe('crawl worker startup zombie requeue', () => {
       'System',
       expect.stringContaining('requeued')
     );
+  });
+
+  it('leaves a job claimed after the boot untouched (not an orphan)', async () => {
+    // A job claimed by a live worker after this one started must not be
+    // flipped back to Pending.
+    const claimedLater = new Date(Date.now() + 60000).toISOString();
+    zombieRows.push({ _key: 'job-live', file_id: 'file-live', status: 'Crawling', claimed_at: claimedLater });
+
+    crawlWorker.start();
+    await flush();
+
+    expect(jobCollection.update).not.toHaveBeenCalled();
+  });
+
+  it('recovers an orphan in the background requeue when the boot DB never came up', async () => {
+    // The boot window exhausts (DB down), the poll loop starts anyway, and the
+    // periodic requeue later recovers the orphan instead of stranding it.
+    dbService.getConnection.mockRejectedValue(new Error('db down'));
+    crawlWorker.start();
+    await flush();
+
+    // DB comes back; the orphan (claimed before boot) is there.
+    dbService.getConnection.mockResolvedValue(db);
+    zombieRows.push({
+      _key: 'job-orphan',
+      file_id: 'file-orphan',
+      status: 'Crawling',
+      claimed_at: new Date(Date.now() - 60000).toISOString()
+    });
+
+    jest.advanceTimersByTime(60 * 1000); // periodic requeue tick
+    await flush();
+
+    expect(jobCollection.update).toHaveBeenCalledWith('job-orphan', expect.objectContaining({ status: 'Pending' }));
   });
 
   it('retries the requeue on the poll cadence while the DB is down at boot', async () => {

@@ -22,7 +22,13 @@ let loggerMock;
 class FakeWorker extends EventEmitter {
   constructor() {
     super();
-    this.terminate = jest.fn().mockResolvedValue(0);
+    // The real Worker delivers 'exit' ASYNCHRONOUSLY after terminate() — the
+    // fake must too, otherwise the stale-exit path (a terminated worker's exit
+    // arriving after a fresh worker was spawned) is never exercised.
+    this.terminate = jest.fn().mockImplementation(() => {
+      Promise.resolve().then(() => this.emit('exit', 1));
+      return Promise.resolve(0);
+    });
     FakeWorker.instances.push(this);
   }
 }
@@ -139,7 +145,7 @@ describe('crawlWorkerSupervisor', () => {
     expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining('exit'), expect.anything());
   });
 
-  it('cancelles a pending respawn on stop', () => {
+  it('cancels a pending respawn on stop', () => {
     mod.start();
     FakeWorker.instances[0].emit('exit', 1);
     mod.stop();
@@ -147,11 +153,18 @@ describe('crawlWorkerSupervisor', () => {
     expect(WorkerMock).toHaveBeenCalledTimes(1);
   });
 
-  it('a second start() does not leak a second worker or a pending timer', () => {
+  it('a second start() does not leak a second worker or a pending timer', async () => {
     mod.start();
     mod.start(); // re-entry while the first worker is LIVE: stop it, spawn fresh
     expect(FakeWorker.instances[0].terminate).toHaveBeenCalled();
     expect(WorkerMock).toHaveBeenCalledTimes(2);
+
+    // The terminated worker's exit arrives late — it must NOT clear the live
+    // worker's state nor arm a respawn (the stale-exit guard).
+    await Promise.resolve();
+    jest.runAllTimers();
+    expect(WorkerMock).toHaveBeenCalledTimes(2);
+    expect(mod.getStatus()).toMatchObject({ running: true });
 
     FakeWorker.instances[1].emit('exit', 1); // the live worker dies
     jest.runAllTimers();
@@ -167,10 +180,10 @@ describe('crawlWorkerSupervisor', () => {
     expect(mod.getStatus()).toMatchObject({ running: true });
   });
 
-  it('never respawns after stop, even when the terminate-triggered exit fires late', () => {
+  it('never respawns after stop, even when the terminate-triggered exit fires late', async () => {
     mod.start();
-    mod.stop(); // terminate() → the real worker fires 'exit' AFTER stop returns
-    FakeWorker.instances[0].emit('exit', 1);
+    mod.stop(); // terminate() → the fake fires 'exit' on the next microtask
+    await Promise.resolve();
     jest.runAllTimers();
     jest.advanceTimersByTime(3600000);
     expect(WorkerMock).toHaveBeenCalledTimes(1);

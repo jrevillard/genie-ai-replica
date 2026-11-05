@@ -51,7 +51,10 @@ const spawn = () => {
     spawnedAt = Date.now();
     state.running = true;
     w.on('error', (err) => logger.error(`Crawl Worker Error: ${err.message}`, err));
-    w.on('exit', (code) => onExit(code));
+    // The worker identity travels with the event: a terminated worker's exit
+    // arrives ASYNCHRONOUSLY, possibly after a fresh worker was spawned — it
+    // must not clear the live worker's state nor trigger a respawn.
+    w.on('exit', (code) => onExit(w, code));
   } catch (error) {
     // `new Worker` throws when the thread cannot be created (resource limits,
     // degraded process state) — handle it like a crash so the backoff and the
@@ -61,7 +64,7 @@ const spawn = () => {
     // reset below cannot treat the attempt as a healthy long run.
     logger.error(`Crawl Worker spawn failed: ${error.message}`, error);
     spawnedAt = Date.now();
-    onExit(-1, { spawnFailed: true });
+    onExit(null, -1, { spawnFailed: true });
   }
 };
 
@@ -81,8 +84,12 @@ const scheduleRestart = () => {
   scheduleTimer(delay, spawn);
 };
 
-const onExit = (code, { spawnFailed = false } = {}) => {
+const onExit = (exited, code, { spawnFailed = false } = {}) => {
   if (stopping) return; // deliberate stop (graceful shutdown) — never respawn
+  // Stale exit: this worker was already replaced (terminate() resolves the
+  // exit event later). Ignore it — the live worker's state must not be
+  // cleared and no respawn may be armed for it.
+  if (exited && exited !== worker) return;
   state.running = false;
   state.lastExitCode = code;
   state.lastExitAt = new Date().toISOString();

@@ -149,8 +149,8 @@ async function nameTaken(db, name, exceptKey) {
 }
 
 // The actor is the SHARED controller shape {sub, name, source_ip} from
-// controllers/actor-from.js (issue #1188) — same contract as
-// repository-service, not the retired local user_id variant.
+// controllers/actor-from.js — the shape the actorFrom helper produces for
+// every OKF controller. The stored field names are unchanged.
 function audit(action, doc, opts, description) {
   return auditService.writeAudit({
     actor: (opts.actor && opts.actor.sub) || 'system',

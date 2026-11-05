@@ -86,6 +86,22 @@ describe('model-config-controller surface', () => {
     );
   });
 
+  it('pins the shared actor display-name precedence (name before preferred_username)', async () => {
+    // A Keycloak token carries both: `name` is the display name, the login is
+    // `preferred_username`. The shared helper takes `name` first — model-config
+    // audit rows follow the shared contract, not a private one.
+    svc.createConfig.mockResolvedValueOnce({ key: 'k' });
+    await ctrl.create(
+      fakeReq({ body: { provider: 'z' }, user: { sub: 'user-1', name: 'Alice Smith', preferred_username: 'alice' } }),
+      fakeRes(),
+      jest.fn()
+    );
+    expect(svc.createConfig).toHaveBeenCalledWith(
+      { provider: 'z' },
+      { actor: { sub: 'user-1', name: 'Alice Smith', source_ip: '9.9.9.9' } }
+    );
+  });
+
   it('copy → 201; activate/deactivate/remove → 200, all keyed on req.params.key', async () => {
     const actor = { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } };
     svc.copyConfig.mockResolvedValueOnce({ key: 'k2' });

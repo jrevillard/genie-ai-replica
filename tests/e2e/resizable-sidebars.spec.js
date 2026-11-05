@@ -799,7 +799,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // for anyone aiming at it. The suite stayed green throughout
     // because its helper grabbed the strip above the chevron and
     // never exercised this path.
-    for (const [handleSel, buttonSel, panelKey, dx] of [
+    for (const [, buttonSel, panelKey, dx] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left', 120],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right', -120]
     ]) {
@@ -828,7 +828,7 @@ test.describe('Resizable sidebars behind one handle', () => {
   });
 
   test('a press on the chevron that never travels collapses instead of resizing', async ({ page }) => {
-    for (const [handleSel, buttonSel, panelKey] of [
+    for (const [, buttonSel, panelKey] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left'],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right']
     ]) {
@@ -909,7 +909,7 @@ test.describe('Resizable sidebars behind one handle', () => {
   });
 
   test('the chevron collapses, and expanding returns the panel to its previous width', async ({ page }) => {
-    for (const [handleSel, buttonSel, panelKey] of [
+    for (const [, buttonSel, panelKey] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON, 'left'],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON, 'right']
     ]) {

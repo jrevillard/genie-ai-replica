@@ -2,21 +2,17 @@ const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '../../..');
+const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 
-// The spec and helper files the handle migration converted. In a listed
-// file, ANY class selector handed to a locator API is an offender: the
-// file's elements are all addressable by declared handles, so a class
-// there is a coupling the migration removed and a restyle can silently
-// break. The check is per FILE, not per class name — a denylist of
-// migrated classes lags the migration by construction (a name someone
-// forgot to add passes silently), while a file that has joined the set
-// is covered completely, named or not.
-//
-// Files NOT listed still carry grandfathered class locators (documents/,
-// admin/, okf/, epic*/, helpers/documents.js, helpers/keycloak-admin.js,
-// ...). They are migrated when next touched (the standing rule); a file
-// joins this set in the MR that converts it.
-const MIGRATED_FILES = [
+// The gate is DEFAULT-ON: every .js file under tests/e2e/ is scanned,
+// and a file is exempt only while it still carries grandfathered class
+// locators. A NEW spec therefore lands inside the gate automatically —
+// writing class locators into it fails the same pipeline that runs the
+// spec. A file leaves the exemption list in the MR that converts it
+// (the standing "migrated when next touched" rule); from then on any
+// class locator in it, named or not, is an offender. Coverage cannot
+// lag by forgetting a name OR a file.
+const CONVERTED_FILES = [
   'tests/e2e/chat-composer.spec.js',
   'tests/e2e/chat-conversation.spec.js',
   'tests/e2e/resizable-sidebars.spec.js',
@@ -28,20 +24,22 @@ const MIGRATED_FILES = [
   'tests/e2e/chatbot/quick-help-scope.spec.js',
   'tests/e2e/chatbot/send-message-and-stream.spec.js',
   'tests/e2e/helpers/chatbot.js',
+  'tests/e2e/helpers/layout.js',
   'tests/e2e/helpers/welcome.js',
   'tests/e2e/capture-dashboard.js'
 ];
 
 // Locator-style APIs a class selector can travel through: the locator
-// object, the DOM queries, the wait, the page-level $ shorthands, and
-// the action APIs whose FIRST argument is always a selector (click,
-// hover, check, ...). `fill`/`press`/`type` are deliberately absent —
-// on a locator their argument is input text, not a selector, and a
-// '.md' filename would false-positive. A selector built in a variable
-// and passed indirectly escapes this net — in the converted files every
+// object, the DOM queries (including the $eval variants, which take a
+// selector first), the wait, the page-level $ shorthands, and the
+// action APIs whose FIRST argument is always a selector (click, hover,
+// check, ...). `fill`/`press`/`type` are deliberately absent — on a
+// locator their argument is input text, not a selector, and a '.md'
+// filename would false-positive. A selector built in a variable and
+// passed indirectly escapes this net — in the converted files every
 // locator call takes its selector literally.
 const LOCATOR_CALL =
-  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?)\(\s*/;
+  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?)\(\s*/;
 
 // Inside a locator argument the string IS a CSS selector, so every
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —
@@ -73,13 +71,19 @@ const classSelectorsIn = (source) => {
 // the whole source — string state (including multi-line template
 // literals) must survive across lines, or a `//` inside a backtick
 // template would cut real locator code as a comment. A `//` inside a
-// string (a URL) is not a comment, so the scanner skips those.
+// string (a URL) is not a comment, so the scanner skips those. A `/`
+// that OPENS a regex literal is not a comment either: the classic
+// heuristic (JSLint's) says a slash after `(,=:[!&|?{};` or line start
+// or an operator is a regex, one after an identifier/`)`/`]` is
+// division — a quote inside the regex therefore cannot flip the
+// scanner into string state.
 const stripComments = (source) => {
   let out = '';
-  let state = null; // null | "'" | '"' | '`'
+  let state = null; // null | "'" | '"' | '`' | '/'
+  let prevSignificant = ''; // last non-whitespace character kept
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
-    if (state) {
+    if (state && state !== '/') {
       out += ch;
       if (ch === '\\') {
         out += source[i + 1] || '';
@@ -89,31 +93,62 @@ const stripComments = (source) => {
       }
       continue;
     }
+    if (state === '/') {
+      // Inside a regex literal: a `\` escapes the next character.
+      out += ch;
+      if (ch === '\\') {
+        out += source[i + 1] || '';
+        i++;
+      } else if (ch === '/') {
+        state = null;
+        prevSignificant = ch;
+      }
+      continue;
+    }
     if (ch === "'" || ch === '"' || ch === '`') {
       state = ch;
       out += ch;
+      prevSignificant = ch;
       continue;
     }
-    if (ch === '/' && source[i + 1] === '/') {
-      while (i < source.length && source[i] !== '\n') i++;
-      out += '\n';
-      continue;
-    }
-    if (ch === '/' && source[i + 1] === '*') {
-      const end = source.indexOf('*/', i + 2);
-      i = end === -1 ? source.length : end + 1;
+    if (ch === '/') {
+      if (source[i + 1] === '/') {
+        while (i < source.length && source[i] !== '\n') i++;
+        out += '\n';
+        continue;
+      }
+      if (source[i + 1] === '*') {
+        const end = source.indexOf('*/', i + 2);
+        i = end === -1 ? source.length : end + 1;
+        continue;
+      }
+      const regexStart = '(,=:[!&|?{};+-*%~^<>'.includes(prevSignificant) || prevSignificant === '';
+      if (regexStart && source[i + 1] !== '=') {
+        state = '/';
+        out += ch;
+        continue;
+      }
+      out += ch;
+      prevSignificant = ch;
       continue;
     }
     out += ch;
+    if (!/\s/.test(ch)) prevSignificant = ch;
   }
   return out;
 };
 
 describe('the e2e suite locates application elements by declared handle', () => {
-  test('a converted file locates no element by class', () => {
+  test('a file outside the grandfathered list locates no element by class', () => {
     const offenders = [];
-    for (const rel of MIGRATED_FILES) {
-      const file = path.join(ROOT, rel);
+    const files = fs
+      .readdirSync(E2E_ROOT, { recursive: true })
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => path.join(E2E_ROOT, f))
+      .sort();
+    for (const file of files) {
+      const rel = path.relative(ROOT, file);
+      if (!CONVERTED_FILES.includes(rel)) continue; // grandfathered
       const source = stripComments(fs.readFileSync(file, 'utf8'));
       for (const { className, quoted } of classSelectorsIn(source)) {
         offenders.push(
@@ -125,11 +160,12 @@ describe('the e2e suite locates application elements by declared handle', () => 
     expect(offenders).toEqual([]);
   });
 
-  test('every listed file exists', () => {
-    // The file set is the guard's coverage: a listed path that has
-    // drifted away (renamed, deleted) would silently shrink the gate —
+  test('every converted file exists and is a real path under tests/e2e', () => {
+    // The converted set is what KEEPS a file inside the default-on gate;
+    // a listed path that has drifted away (renamed, deleted) would
+    // silently drop that file back under the grandfathered umbrella —
     // reading every one of them is what keeps the set honest.
-    for (const rel of MIGRATED_FILES) {
+    for (const rel of CONVERTED_FILES) {
       expect(fs.existsSync(path.join(ROOT, rel))).toBe(true);
     }
   });
@@ -157,7 +193,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
   });
 
   test('a mixed-quote attribute value inside a selector is not an offender', () => {
-    const sample = "page.locator('[data-x='a.b']')";
+    const sample = `page.locator('[data-x='a.b']')`;
     expect(classSelectorsIn(sample)).toEqual([]);
   });
 
@@ -169,6 +205,23 @@ describe('the e2e suite locates application elements by declared handle', () => 
   test('a class locator after a // inside a template literal is an offender', () => {
     const sample = "const s = `x // `;\nawait page.click('.chat-composer');";
     expect(classSelectorsIn(stripComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
+  });
+
+  test('a quote inside a regex literal does not corrupt the stripper', () => {
+    // The failure this pins: the quote flips the scanner into string
+    // state, the following // comment is preserved, and a prose locator
+    // citation inside it fails the gate on an unrelated MR.
+    const sample = [
+      "const url = /^url([\"']?/) ;",
+      "// a prose citation: page.locator('.old-class') is gone",
+      "await page.click('.chat-composer');"
+    ].join('\n');
+    expect(classSelectorsIn(stripComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
+  });
+
+  test('a $eval selector is an offender', () => {
+    const sample = "await page.$eval('.chat-composer', (el) => el.value);";
+    expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['chat-composer']);
   });
 
   test('an extension or method call in a template string is not an offender', () => {

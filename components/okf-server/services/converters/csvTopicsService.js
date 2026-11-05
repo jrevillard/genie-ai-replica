@@ -75,15 +75,15 @@ const FALLBACK_REASONS = {
   'fallback-threw': 'the topic summariser failed'
 };
 
-/** The filename-slug fallback — the shape every degradation path returns.
- * One owner, so the converter can rebuild it when the gate raises without
- * the two copies drifting apart. `source` names which degradation it is. */
 /** The operator-facing reason for a fallback — the one owner of the
  * vocabulary, so the converter and the importer never re-type it. */
 function fallbackReason(source) {
   return FALLBACK_REASONS[source] || 'the topic summariser degraded';
 }
 
+/** The filename-slug fallback — the shape every degradation path returns.
+ * One owner, so the converter can rebuild it when the gate raises without
+ * the two copies drifting apart. `source` names which degradation it is. */
 function fallbackTopics(fileName, source = 'fallback-filename') {
   const fallbackSlug = slugify(String(fileName || '').replace(/\.[^.]+$/, '')) || 'tabular-dataset';
   return {

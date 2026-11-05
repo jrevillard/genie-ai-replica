@@ -404,8 +404,15 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // VISIBLE, or a stale job value turns every unclaim into a silent no-op.
   test('429 unclaim whose CAS matches nothing warns and skips the write (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
-    await worker._unclaimAttempt(mockDb, REPO, 'a', '2026-11-05T00:00:00.000Z');
+    const base = setupBusyLane();
+    mockDb.query.mockImplementation(async (q) => {
+      if (queryText(q).includes('worker_claimed_at: null')) {
+        return { all: async () => [] }; // the CAS matched nothing — the row moved
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('matched nothing'),
       expect.objectContaining({ concept_id: 'a' })

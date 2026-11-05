@@ -1058,13 +1058,35 @@ describe('cross-tab renew lease (#80800)', () => {
     // The grant fails so nothing republishes the slot — only the entry
     // cleanup can empty it.
     mockSigninSilent.mockRejectedValue(new Error('grant refused'));
-    // Valid JSON, no usable `at` — the TTL can never judge it, so it would
-    // keep its minted tokens at rest forever.
+    // Valid JSON, no usable `at` — not a publication this build wrote (the
+    // publisher always stamps `at`), so the corruption arm drops it.
     window.localStorage.setItem(
       RENEW_USER_KEY,
       JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) })
     );
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
+  });
+
+  it('a publication whose expiry reads as milliseconds stored as seconds is corruption — dropped, never adopted (#1535 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // expires_at is a seconds-since-epoch stamp; a value that only makes
+    // sense in milliseconds (>= 1e11) would read as a token living for
+    // millennia — kept at every renew entry and adoptable by every waiter
+    // if the usability check took it at face value.
+    const msAsSeconds = createMockUser({
+      access_token: 'ms-as-seconds-pub',
+      expires_at: Date.now() + 3600000 // ms-instead-of-s: ~1.7e12
+    });
+    window.localStorage.setItem(
+      RENEW_USER_KEY,
+      JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: msAsSeconds })
+    );
+    mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
+    // The cleanup emptied the slot (and the reader refused it before the
+    // grant could adopt it) — the grant failure is the only writer left.
     expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });
 

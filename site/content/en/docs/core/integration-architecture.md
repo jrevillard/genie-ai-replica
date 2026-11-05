@@ -64,7 +64,7 @@ flowchart TB
 
         subgraph Data["Data Layer"]
             Arango["ArangoDB<br/>Vector + Graph"]
-            Redis["Redis<br/>(translation-service only)"]
+            Redis["Redis<br/>(translation cache + provisioning invalidation)"]
             Postgres["PostgreSQL<br/>Kong + KC"]
             Files["File Storage"]
         end
@@ -277,18 +277,16 @@ Raw `arangojs` is reserved for migrations (`scripts/migrations/*.js`).
 
 **Protocol:** TCP (Redis protocol).
 
-**Driver:** `ioredis` v5 (used only by the translation service for caching).
+**Driver:** `ioredis` v5 (the translation cache and the user-provisioning invalidation pub/sub).
 
 **Connection details**
 
 ```javascript
-// services/translation-service.js
-const Redis = require('ioredis');
-const redis = new Redis({
-  host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
-  port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
-  password: process.env.TRANSLATION_CACHE_PASSWORD || null
-});
+// services/redis-cache-client.js — the shared factory every client on this
+// instance uses, so they cannot drift apart
+// (path relative to components/gov-chat-backend/)
+const { createRedisCacheClient } = require('./services/redis-cache-client');
+const redis = createRedisCacheClient();
 ```
 
 **Use cases**
@@ -296,12 +294,14 @@ const redis = new Redis({
 | Purpose | Configured by |
 |---|---|
 | Translation cache (Google Cloud / vLLM translations) | `TRANSLATION_CACHE=on`, `TRANSLATION_CACHE_HOST`, `TRANSLATION_CACHE_PORT`, `TRANSLATION_CACHE_PASSWORD` |
+| User-provisioning cache invalidation pub/sub | same `TRANSLATION_CACHE_*` variables |
 
 > **Sessions are NOT in Redis.** `services/session-service.js` stores user
-> sessions in ArangoDB (`sessions` collection). The Redis cache exists only
-> for translation, keyed on
-> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`.
-> The entries are stored permanently — there is no TTL — so a change to the
+> sessions in ArangoDB (`sessions` collection). Redis holds only the
+> translation cache — keyed on
+> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>` —
+> and the provisioning invalidation pub/sub.
+> The translation entries are stored permanently — there is no TTL — so a change to the
 > translation logic needs a `TRANSLATION_LOGIC_VERSION` bump to invalidate
 > them.
 
@@ -866,7 +866,7 @@ await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
 ### Direct Database Connections
 
 - Backend → ArangoDB: `arangojs` driver (HTTP-based).
-- Backend → Redis: `ioredis` driver (TCP-based) — translation cache only.
+- Backend → Redis: `ioredis` driver (TCP-based) — translation cache and provisioning invalidation pub/sub.
 - Document-repository → ArangoDB: `arangojs` (file metadata, ingestion_log).
 
 **No other service** connects directly to databases — all access goes

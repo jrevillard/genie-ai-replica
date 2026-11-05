@@ -812,24 +812,30 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
   });
 
-  it('publication retention: the TTL cleanup drops a stale publication at renew entry, keeps a fresh one (round 23)', async () => {
+  it('publication retention: the cleanup drops a publication whose token is spent, keeps one whose token is live (#1535)', async () => {
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-ok' }));
     const removeItem = jest.spyOn(Storage.prototype, 'removeItem');
     try {
-      // Stale (past the 20s TTL): inadmissible to every reader — dropped at
-      // the renew entry, before the renew itself can overwrite it.
-      const stale = createMockUser({ access_token: 'stale-pub' });
-      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() - 30000, user: stale }));
+      // Token spent (the access token expired, however young the stamp):
+      // inadmissible to every reader — dropped at the renew entry, before
+      // the renew itself can overwrite it.
+      const spent = createMockUser({
+        access_token: 'spent-pub',
+        expires_at: Math.floor(Date.now() / 1000) - 10
+      });
+      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: spent }));
       await keycloakAuthService.signinSilent();
       expect(removeItem).toHaveBeenCalledWith(RENEW_USER_KEY);
-      // Fresh: the entry-level cleanup must NOT touch it (concurrent waiters
-      // may still adopt it). This tab's own renew may overwrite the entry as
-      // the holder — the contract under test is only that the CLEANUP did
-      // not remove a fresh publication.
+      // Token still live, however old the stamp: the cleanup must NOT touch
+      // it — a throttled/backgrounded tab waking past the lease TTL may
+      // still adopt it (the handoff lives as long as the token does).
+      // This tab's own renew may overwrite the entry as the holder — the
+      // contract under test is only that the CLEANUP did not remove a
+      // still-usable publication.
       removeItem.mockClear();
-      const fresh = createMockUser({ access_token: 'fresh-pub' });
-      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
+      const live = createMockUser({ access_token: 'live-pub' });
+      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() - 30000, user: live }));
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-again' }));
       await keycloakAuthService.signinSilent();
       expect(removeItem).not.toHaveBeenCalledWith(RENEW_USER_KEY);
@@ -837,6 +843,25 @@ describe('cross-tab renew lease (#80800)', () => {
     } finally {
       removeItem.mockRestore();
     }
+  });
+
+  // #1535 — the throttled-tab window the TTL bound used to open: a tab
+  // waking more than RENEW_LEASE_TTL_MS after the holder's publish (Chrome
+  // intensive throttling fires expiring timers 30–60 s late; a post-suspend
+  // wake lands even further out) found the handoff already wiped, granted
+  // on its own ALREADY-ROTATED refresh token, was rejected ("Session not
+  // active"), and ticked the escalation counter toward the forced logout.
+  it('a tab waking past the lease TTL still adopts the published handoff instead of burning its own grant (#1535)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // The holder published 30 s ago — past the lease TTL, but its access
+    // token is good for another hour. The waking tab must find the handoff,
+    // not an empty slot.
+    seedForeignPublication('holder-late-token', { at: Date.now() - 30000 });
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-burned-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('holder-late-token'); // adopted…
+    expect(mockSigninSilent).not.toHaveBeenCalled(); // …its own grant never spent
   });
 
   // ── #1521: the adoption gate gains an owner identity. A publication from
@@ -1098,14 +1123,14 @@ describe('cross-tab renew lease (#80800)', () => {
 
   it("another tab's publication SURVIVES this tab's failed grant — it may be another waiter's handoff (#1521 review)", async () => {
     delete navigator.locks;
-    // Tab A publishes under ITS tab id. The user is expired so this tab
-    // cannot adopt it (the expiry check is the gate's second arm) and falls
-    // through to its own grant, which fails.
-    seedForeignPublication('foreign-holder-token', {
-      at: Date.now(),
-      expiresAt: Math.floor(Date.now() / 1000) - 100
-    });
+    // Tab A publishes under ITS tab id with a live token. This tab ADOPTS
+    // it first — the adoption memo then makes those exact tokens
+    // inadmissible to THIS tab — so the NEXT renew falls through to its own
+    // grant, which fails.
+    seedForeignPublication('foreign-holder-token', { at: Date.now() });
     mockGetUser.mockResolvedValue(null);
+    const adopted = await keycloakAuthService.signinSilent();
+    expect(adopted.access_token).toBe('foreign-holder-token');
     mockSigninSilent.mockRejectedValueOnce(new Error('grant refused'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
     // The clear-before-grant is ownership-aware: the foreign entry is intact.

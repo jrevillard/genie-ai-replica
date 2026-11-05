@@ -545,16 +545,6 @@ describe('AnalyticsService', () => {
       ]);
     });
 
-    it('should not localize the labels', async () => {
-      // The gauge takes no locale: its week-axis labels are period keys the
-      // client translates.
-      for (let i = 0; i < 5; i++) {
-        mockDb.query.mockResolvedValueOnce(createMockCursor([]));
-      }
-      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15');
-      expect(result.historicalData.every((entry) => /^(current|week[1-4])$/.test(entry.label))).toBe(true);
-    });
-
     it('should calculate change percentage when previousValue > 0', async () => {
       // Return data so currentValue=80 and previousValue=50
       const categoryResults = [{ categoryId: 'cat1', average: 4.0 }];

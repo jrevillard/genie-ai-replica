@@ -89,6 +89,13 @@ beforeEach(() => {
   programQuery();
 });
 
+// A test that closes the LLM opt-in must not close it for the next one.
+const originalEndpoint = process.env.VLLM_ENDPOINT;
+afterEach(() => {
+  if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
+  else process.env.VLLM_ENDPOINT = originalEndpoint;
+});
+
 // ── segmentation + cross-file linking (pure) ────────────────────────────────
 
 describe('producer-service — segmentation + whole-corpus linking', () => {

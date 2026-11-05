@@ -163,7 +163,11 @@ async function convertCsv(buffer, meta, opts = {}) {
   try {
     topics = await derive({ columns: dictionary, fileName });
   } catch (err) {
-    if (err && err.code === 'llm-not-configured') {
+    // The gate identity comes from its one owner, so the converter and the
+    // leg cannot drift apart. Lazy require: vllm-model-cache pulls axios,
+    // and the converter stays light for its unit tests.
+    const { LLM_NOT_CONFIGURED } = require('../vllm-model-cache');
+    if (err && err.code === LLM_NOT_CONFIGURED) {
       // The deployment opted IN to nothing: there is no engine to call.
       // That is a misconfiguration, not a degradation — but the import
       // must still land, so the filename slug stays (a row-group with no

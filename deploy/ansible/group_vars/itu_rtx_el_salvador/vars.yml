@@ -107,10 +107,11 @@ retriever_arango_traversal_concurrent_batches: "10"
 retriever_arango_k: "32"
 retriever_arango_fetch_k: "40"
 retriever_arango_score_threshold: "0.2"
-# RERANKER_TOP_N inherits the docker-compose default (3) — inert in adaptive
-# mode (selection is value-driven, not top-N). RERANKING_STRATEGY does NOT
-# inherit: it is overridden to "adaptive" below (see the tuning note).
-# The legacy threshold override was removed — slice ignores thresholds.
+# RERANKING_STRATEGY does NOT inherit the docker-compose default (slice): it is
+# overridden to "adaptive" below (see the tuning note). RERANKER_TOP_N does
+# inherit the docker-compose default (3).
+# The legacy threshold override was removed — no strategy in use here consults
+# RERANKING_THRESHOLD (adaptive cuts on min_value_threshold, set below).
 
 # Chunking configuration. Values are character counts — dataprep uses LangChain's
 # RecursiveCharacterTextSplitter, which measures chunk length in characters.

@@ -33,7 +33,9 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0 } = {}) {
       return { all: async () => allDocs };
     }
     if (aql === HUSK_REMOVAL_AQL) {
-      return { extra: { stats: { writesExecuted } } };
+      return writesExecuted === null
+        ? {} // a removal result with no stats — the honest-answer-unknown case
+        : { extra: { stats: { writesExecuted } } };
     }
     return { next: async () => ({ count: 0, sample: [] }) };
   });
@@ -127,6 +129,18 @@ describe('main safety wiring', () => {
     expect(db.removalCalls()).toEqual([]);
   });
 
+  it('aborts BEFORE any remove on the missed direction too (predicate accepts what AQL never returned)', async () => {
+    // The silent direction: the AQL matcher returns nothing while the
+    // collection holds husks. The cross-check must still abort before any
+    // remove — a weakened cross-check that only compares the extra direction
+    // would let --delete --yes report success on a database full of husks.
+    const db = fakeDb({ husks: [], allDocs: [huskDoc] });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('ABORT'));
+    expect(db.removalCalls()).toEqual([]);
+  });
+
   it('removes the matched keys only after the cross-check passes', async () => {
     const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], writesExecuted: 1 });
     await runMain(db, ['--delete', '--yes']);
@@ -143,6 +157,14 @@ describe('main safety wiring', () => {
     expect(process.exitCode).toBeUndefined();
     expect(db.removalCalls()).toEqual([]);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Dry run'));
+  });
+
+  it('fails when the removal result carries no writesExecuted stats (outcome unknown ≠ success)', async () => {
+    const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], writesExecuted: null });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('writesExecuted stats'));
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
   });
 
   it('fails when the database does not exist (a wrong db reads as clean)', async () => {

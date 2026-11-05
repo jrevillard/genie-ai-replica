@@ -37,7 +37,6 @@
  *                     this script is the only place that variable is read)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
- *   ARANGO_COLLECTION (default users)
  */
 
 const { Database } = require('arangojs');
@@ -165,11 +164,12 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 // ---------------------------------------------------------------------------
 
 /**
- * Parses the CLI arguments and the operator gates. Pure: reads only its
- * parameters. On a failed gate it prints the reason to stderr, sets
- * process.exitCode and returns null; when every gate passes it returns the
- * run configuration { mode: 'report' | 'delete', collection, arangoUrl }.
- * Exported for tests (issue #1494).
+ * Parses the CLI arguments and the operator gates. Side effects: on a failed
+ * gate it prints the reason to stderr and sets process.exitCode, then returns
+ * null; when every gate passes it returns the run configuration
+ * { mode: 'report' | 'delete', collection, arangoUrl }. It reads only its
+ * parameters (no module state, no process.argv/env), which is what makes it
+ * unit-testable. Exported for tests (issue #1494).
  * @param {string[]} argv
  * @param {Object} env
  * @returns {Object|null}
@@ -391,8 +391,10 @@ async function main({
     return;
   }
 
-  if (mode === 'report') {
-    await runReport(db, gated, total, husks, allDocs);
+  // The report prints on EVERY mode — including --delete, whose stdout is the
+  // audit record of what the destructive run selected (old behavior).
+  await runReport(db, gated, total, husks, allDocs);
+  if (mode !== 'delete') {
     return;
   }
   await runDelete(db, gated, husks);

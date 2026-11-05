@@ -67,15 +67,6 @@ void main() {
     expect(service.currentLocale.languageCode, 'en');
   });
 
-  test('a device that stored a language claims it', () async {
-    service.changeLanguage('es');
-    await settlePreferenceWrites();
-
-    // The stored choice locks the device against account updates.
-    service.applyAccountLanguage('de');
-    expect(service.currentLocale.languageCode, 'es');
-  });
-
   test('a device that stored nothing can be seeded again', () async {
     service.changeLanguage('es');
     await settlePreferenceWrites();

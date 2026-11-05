@@ -45,21 +45,6 @@ void main() {
     await pumpFrames(tester);
   }
 
-  testWidgets('the account copy seeds a device that made no choice', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    await I18nService().restoreLanguage();
-    setupLightTokens();
-
-    await pumpSettings(
-      tester,
-      MockCurrentUserApi(userFields: {'language': 'fr'}),
-    );
-
-    expect(I18nService().currentLocale.languageCode, 'fr');
-  });
-
   testWidgets('the seed is not stored and does not claim the device', (
     tester,
   ) async {

@@ -26,18 +26,6 @@ class FakeConnectivityProvider extends ConnectivityProvider {
       controller.stream;
 }
 
-/// Fake provider that never completes (for testing the concurrency guard).
-class HangingConnectivityProvider extends ConnectivityProvider {
-  final Completer<List<ConnectivityResult>> completer = Completer();
-
-  @override
-  Future<List<ConnectivityResult>> checkConnectivity() => completer.future;
-
-  @override
-  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
-      const Stream.empty();
-}
-
 Future<List<InternetAddress>> dnsSuccess(String host) async => [
   InternetAddress('8.8.8.8'),
 ];

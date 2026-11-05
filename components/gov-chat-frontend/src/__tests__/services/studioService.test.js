@@ -22,13 +22,11 @@
  */
 
 const mockGet = jest.fn();
-const mockPost = jest.fn();
 const mockPut = jest.fn();
 const mockDelete = jest.fn();
 
 jest.mock('@/services/httpService', () => ({
   get: (...args) => mockGet(...args),
-  post: (...args) => mockPost(...args),
   put: (...args) => mockPut(...args),
   delete: (...args) => mockDelete(...args)
 }));

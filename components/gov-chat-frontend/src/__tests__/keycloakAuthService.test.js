@@ -9,9 +9,20 @@ const mockRemoveUser = jest.fn();
 const mockClearStaleState = jest.fn();
 const mockSigninSilent = jest.fn();
 const mockStoreUser = jest.fn();
-const mockAddUserLoaded = jest.fn(() => jest.fn());
-const mockAddSilentRenewError = jest.fn(() => jest.fn());
-const MockUserManager = jest.fn().mockImplementation(() => ({
+// The event handlers return an unsubscribe function; one factory, used both
+// at declaration and when the isolation hook restores it.
+const unsubscribeMock = () => jest.fn();
+const mockAddUserLoaded = jest.fn(unsubscribeMock);
+const mockAddSilentRenewError = jest.fn(unsubscribeMock);
+// The REAL User class, evaluated ONCE: the isolation hook's
+// jest.resetModules() re-runs the jest.mock factory before every test, and
+// a requireActual inside the factory would re-evaluate the whole
+// oidc-client-ts library each time. (The `mock` prefix is what lets a
+// jest.mock factory reference a file-scope variable.)
+const mockOidcUser = jest.requireActual('oidc-client-ts').User;
+// A named factory, so the isolation hook can restore it after
+// jest.resetAllMocks() strips every implementation.
+const userManagerMock = () => ({
   getUser: mockGetUser,
   signinRedirect: mockSigninRedirect,
   signinRedirectCallback: mockSigninRedirectCallback,
@@ -24,14 +35,15 @@ const MockUserManager = jest.fn().mockImplementation(() => ({
     addUserLoaded: mockAddUserLoaded,
     addSilentRenewError: mockAddSilentRenewError
   }
-}));
+});
+const MockUserManager = jest.fn(userManagerMock);
 
 jest.mock('oidc-client-ts', () => ({
   UserManager: MockUserManager,
   // The REAL User class: the adoption path rehydrates the published plain
   // object into a User so storeUser's toStorageString() works (round 23) —
   // mocking it away would hide exactly the bug the fix exists for.
-  User: jest.requireActual('oidc-client-ts').User
+  User: mockOidcUser
 }));
 
 // Mock oidcConfig to avoid window.APP_CONFIG dependency
@@ -46,7 +58,11 @@ jest.mock('@/config/oidcConfig', () => ({
   storeAuthStateInCookie: false
 }));
 
-const keycloakAuthService = require('@/services/keycloakAuthService').default;
+const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
+// A FRESH service module per test — the isolation hook below re-requires it
+// and assigns it before every test. `let`, and null until then: a module-
+// scope initializer would be a discarded instance.
+let keycloakAuthService = null;
 
 function createMockUser(overrides = {}) {
   return {
@@ -70,11 +86,50 @@ function createMockUser(overrides = {}) {
   };
 }
 
-describe('keycloakAuthService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+// Isolation for every test in this file:
+//  - a FRESH service module, so the module-scoped renewInFlight,
+//    currentUser and accessTokenCallbacks start empty (a test that leaves a
+//    renew pending would otherwise pin renewInFlight and hand the next test
+//    its stale promise);
+//  - the MOCK IMPLEMENTATIONS reset — jest.clearAllMocks() clears call
+//    history but NOT implementations, so a test omitting its own mock setup
+//    silently inherits the previous test's mockResolvedValue/mockRejectedValue
+//    — and the UserManager mocks swallow those inherited rejections (logout
+//    catches them), so the test stays GREEN while exercising the error path;
+//  - the localStorage state wiped, because the cross-tab renew protocol
+//    leaves its state there: the holder PUBLISHES the minted user under
+//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST (gate
+//    `entry.at >= startedAt`, millisecond resolution), so a surviving
+//    publication makes the next test's renew adopt the previous test's user
+//    instead of running its own grant (#1518 flake, reproducible locally
+//    too). The whole store is cleared, not just the two renew keys, so a
+//    coordination key added later cannot leak either.
+// jest.resetAllMocks() covers every mock, present and future — but it also
+// strips the factory implementations the unsubscribe assertions depend on, so
+// those are restored here. jest.restoreAllMocks() undoes a spy a failing test
+// leaked: resetAllMocks neuters a leaked spy's call-through, so without it a
+// leaked Storage.prototype.setItem spy silently stops PERSISTING the next
+// test's writes — the lease a test believes it holds would not exist.
+beforeEach(() => {
+  jest.resetModules();
+  keycloakAuthService = require('@/services/keycloakAuthService').default;
+  jest.resetAllMocks();
+  jest.restoreAllMocks();
+  MockUserManager.mockImplementation(userManagerMock);
+  mockAddUserLoaded.mockImplementation(unsubscribeMock);
+  mockAddSilentRenewError.mockImplementation(unsubscribeMock);
+  // getUser() returns a PROMISE in the real UserManager; a reset mock would
+  // return undefined and break `await manager.getUser().catch(...)`. The
+  // default is "no stored session" — a test that needs a session sets one.
+  // It stays a RESOLVED null rather than a rejection: initialize() catches
+  // a rejection and returns null either way, but the exported getUser() has
+  // no try/catch, so a rejecting default would make that API reject while
+  // production resolves.
+  mockGetUser.mockResolvedValue(null);
+  window.localStorage.clear();
+});
 
+describe('keycloakAuthService', () => {
   describe('initialize', () => {
     it('should create UserManager and return existing user', async () => {
       const mockUser = createMockUser();
@@ -133,7 +188,6 @@ describe('keycloakAuthService', () => {
     it('silent renew errors are bounded: escalating only after the failure cap, and a success resets it', async () => {
       mockGetUser.mockResolvedValue(null); // no stored user → escalation calls login()
       mockSigninSilent.mockRejectedValue(new Error('grant refused'));
-      mockSigninRedirect.mockClear();
 
       await keycloakAuthService.initialize();
       const handler = mockAddSilentRenewError.mock.calls[0][0];
@@ -467,6 +521,34 @@ describe('keycloakAuthService', () => {
   });
 
   describe('onAccessTokenUpdated', () => {
+    // The isolation hook hands each test a FRESH service module, so the
+    // module-scoped accessTokenCallbacks set starts empty. Without that, a
+    // callback registered by an EARLIER test still fires in this one — the
+    // cross-test leak the hook exists to close, and one no other assertion
+    // in this file would catch. Self-contained on purpose: it re-requires a
+    // second instance inside the test, so it does not depend on the order
+    // jest runs the tests in.
+    it('does not invoke a callback registered by another module instance', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      let callsFromTheOtherInstance = 0;
+      keycloakAuthService.onAccessTokenUpdated(() => {
+        callsFromTheOtherInstance += 1;
+      });
+
+      // Simulate the NEXT test: a fresh module, its own manager, its own
+      // (empty) callback registry.
+      jest.resetModules();
+      const nextTestService = require('@/services/keycloakAuthService').default;
+      mockGetUser.mockResolvedValue(createMockUser());
+      await nextTestService.initialize();
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[mockAddUserLoaded.mock.calls.length - 1][0];
+      addUserLoadedCb(createMockUser({ access_token: 'next-test-token' }));
+
+      expect(callsFromTheOtherInstance).toBe(0);
+    });
+
     it('should invoke registered callback when addUserLoaded fires', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
       await keycloakAuthService.initialize();
@@ -556,17 +638,8 @@ describe('keycloakAuthService', () => {
 // logout). These tests drive the lease protocol through window.localStorage
 // the way a second tab would.
 describe('cross-tab renew lease (#80800)', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // implementations persist across clearAllMocks — reset the two this
-    // suite drives, then let each test set what it needs
-    mockGetUser.mockReset();
-    mockSigninSilent.mockReset();
-    window.localStorage.clear();
-  });
-
-  const LEASE_KEY = 'genie.renew.lease';
-  const USER_KEY = 'genie.renew.user';
+  // Isolation (mock implementations + the renew keys) is the file-level
+  // beforeEach above.
 
   async function initialized() {
     mockGetUser.mockResolvedValue(createMockUser());
@@ -588,13 +661,13 @@ describe('cross-tab renew lease (#80800)', () => {
       // refresh token was already rotated away by the holder).
       mockGetUser.mockResolvedValue(createMockUser({ access_token: 'this-tab-stale-token' }));
       // Another tab's FRESH lease:
-      window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'other-tab', at: Date.now() }));
+      window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: 'other-tab', at: Date.now() }));
       // The holder renews during our wait and PUBLISHES its minted user —
       // a done MARKER alone carries no token.
       const published = createMockUser({ access_token: 'holder-published-token' });
       setTimeout(() => {
-        window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
-        window.localStorage.removeItem(LEASE_KEY);
+        window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
+        window.localStorage.removeItem(RENEW_LEASE_KEY);
       }, 300);
       const p = keycloakAuthService.signinSilent();
       const assertion = expect(p).resolves.toMatchObject({ access_token: 'holder-published-token' });
@@ -616,7 +689,7 @@ describe('cross-tab renew lease (#80800)', () => {
     try {
       await initialized();
       // A lease from a tab that died 30s ago (older than the 20s TTL):
-      window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'dead-tab', at: Date.now() - 30000 }));
+      window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: 'dead-tab', at: Date.now() - 30000 }));
       const refreshed = createMockUser({ access_token: 'own-renew-token' });
       mockSigninSilent.mockResolvedValue(refreshed);
       const p = keycloakAuthService.signinSilent();
@@ -625,7 +698,7 @@ describe('cross-tab renew lease (#80800)', () => {
       await assertion;
       expect(mockSigninSilent).toHaveBeenCalledTimes(1); // took over, ran once
       // and the lease is released afterwards
-      expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+      expect(window.localStorage.getItem(RENEW_LEASE_KEY)).toBeNull();
     } finally {
       jest.useRealTimers();
     }
@@ -635,7 +708,7 @@ describe('cross-tab renew lease (#80800)', () => {
     await initialized();
     mockSigninSilent.mockRejectedValue(new Error('renew blew up'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('renew blew up');
-    expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(RENEW_LEASE_KEY)).toBeNull();
   });
 
   // ── Round 21 (#80914): the three protocol guards (settle fence, identity
@@ -656,9 +729,9 @@ describe('cross-tab renew lease (#80800)', () => {
     const user = await instance.signinSilent(); // exactly what SilentRenewService calls
     expect(user.access_token).toBe('timer-driven-token');
     // Publication + clean release prove it went through the leased wrapper.
-    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
     expect(entry.user.access_token).toBe('timer-driven-token');
-    expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(RENEW_LEASE_KEY)).toBeNull();
   });
 
   it('a re-initialize wraps the NEW manager and releases the old subscriptions (#80941, round 23)', async () => {
@@ -722,20 +795,20 @@ describe('cross-tab renew lease (#80800)', () => {
       // Stale (past the 20s TTL): inadmissible to every reader — dropped at
       // the renew entry, before the renew itself can overwrite it.
       const stale = createMockUser({ access_token: 'stale-pub' });
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 30000, user: stale }));
+      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() - 30000, user: stale }));
       await keycloakAuthService.signinSilent();
-      expect(removeItem).toHaveBeenCalledWith(USER_KEY);
+      expect(removeItem).toHaveBeenCalledWith(RENEW_USER_KEY);
       // Fresh: the entry-level cleanup must NOT touch it (concurrent waiters
       // may still adopt it). This tab's own renew may overwrite the entry as
       // the holder — the contract under test is only that the CLEANUP did
       // not remove a fresh publication.
       removeItem.mockClear();
       const fresh = createMockUser({ access_token: 'fresh-pub' });
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
+      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-again' }));
       await keycloakAuthService.signinSilent();
-      expect(removeItem).not.toHaveBeenCalledWith(USER_KEY);
-      expect(window.localStorage.getItem(USER_KEY)).not.toBeNull();
+      expect(removeItem).not.toHaveBeenCalledWith(RENEW_USER_KEY);
+      expect(window.localStorage.getItem(RENEW_USER_KEY)).not.toBeNull();
     } finally {
       removeItem.mockRestore();
     }
@@ -753,7 +826,7 @@ describe('cross-tab renew lease (#80800)', () => {
     // +5s stamp: admissible to the startedAt gate without racing it (the
     // same CI-flake rationale as the free-lock test below — round 25 moved
     // it INSIDE the web-locks describe, under this test).
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
     const user = await keycloakAuthService.signinSilent();
@@ -765,9 +838,9 @@ describe('cross-tab renew lease (#80800)', () => {
   it('logout removes any publication from disk (round 23 retention)', async () => {
     await initialized();
     const fresh = createMockUser({ access_token: 'pub-at-logout' });
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: fresh }));
     await keycloakAuthService.logout();
-    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });
 
   it('getUserManager LAZILY wraps when no initialize ran (round 23, 81347: reachable post-logout)', async () => {
@@ -817,7 +890,6 @@ describe('cross-tab renew lease (#80800)', () => {
       expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'holder-token-2tab' }));
     } finally {
       jest.useRealTimers();
-      window.localStorage.clear();
     }
   });
 
@@ -833,7 +905,7 @@ describe('cross-tab renew lease (#80800)', () => {
       // A rival tab overwrites our claim 10ms into our 80ms settle window —
       // by the time our window closes we see ITS tab id and back off.
       setTimeout(() => {
-        window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'rival-tab', at: Date.now() }));
+        window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: 'rival-tab', at: Date.now() }));
       }, 10);
       await jest.advanceTimersByTimeAsync(50); // inside the settle window
       expect(mockSigninSilent).not.toHaveBeenCalled();
@@ -874,7 +946,7 @@ describe('cross-tab renew lease (#80800)', () => {
       expect(mockSigninSilent).toHaveBeenCalledTimes(1);
       // The publication is what waiters adopt — and nothing else is written:
       // the done marker is gone (round 23: it was write-only).
-      const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+      const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
       expect(entry.user.access_token).toBe('lock-holder-token');
     });
 
@@ -889,7 +961,7 @@ describe('cross-tab renew lease (#80800)', () => {
         await initialized();
         const published = createMockUser({ access_token: 'locked-holder-token' });
         setTimeout(() => {
-          window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
+          window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
         }, 300);
         const p = keycloakAuthService.signinSilent();
         const assertion = expect(p).resolves.toMatchObject({ access_token: 'locked-holder-token' });
@@ -918,7 +990,7 @@ describe('cross-tab renew lease (#80800)', () => {
       // the call's own startedAt capture by a millisecond (CI-only flake —
       // locally the same tick won). A future stamp is always admissible to
       // the gate and to the TTL cleanup.
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
       const user = await keycloakAuthService.signinSilent();

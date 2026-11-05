@@ -2022,6 +2022,7 @@ export default {
           'Concluído — toda entidade sinalizada em {n} conceito(s) foi marcada como revisada e mantida. Os sinais de PII são removidos.',
         done_redact: 'Concluído — o conteúdo sinalizado em {n} conceito(s) foi substituído pelo aviso de ocultação.',
         done_remove: 'Concluído — o conteúdo sinalizado em {n} conceito(s) foi removido.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Ocultar todo o conteúdo sinalizado',
           remove: 'Remover todo o conteúdo sinalizado',
@@ -2891,7 +2892,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Criar a página de Fontes e vincular {n} página(s)',
@@ -3069,7 +3069,9 @@ export default {
       title: 'Tags de frontmatter — sobre o que é este repositório',
       help: 'As tags descrevem o que este repositório contém e — igualmente importante — o que ele NÃO contém (a lista de proibidas). Elas decidem quais consultas roteiam para este repositório. Clique em Atualizar para rascunhar a partir do corpus, ou edite as etiquetas abaixo. Publicar exige ≥3 temas + ≥1 proibida.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Etiquetas desatualizadas — reingira para aplicar',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'O LLM não retornou tags. Tente novamente depois que o corpus crescer.',
       suggestCoverage: 'Derivado de {sampled} de {total} conceitos, em {labels} rótulos da hierarquia do conhecimento.',
       suggestFailed: 'Suggest failed.',
@@ -3098,7 +3100,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Etiquetas desatualizadas — reingira para aplicar'
       },
       tab: {
         head: 'Head',

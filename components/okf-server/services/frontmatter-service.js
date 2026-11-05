@@ -36,6 +36,7 @@ const { withSpan } = require('../shared-lib/tracing');
 // path validates against. See the block at the `cap()` definition for why the
 // suggester cannot be allowed to exceed them.
 const { TAG_LIMITS } = require('../validators/repository-validator');
+const { createJobRegistry } = require('./job-registry');
 
 // ---------- Config (env-driven; env vars match the docker-compose template) ----------
 //
@@ -865,23 +866,13 @@ function screenForbiddenAgainstCorpus(forbidden, histogram) {
 // timeout: gateway, proxy and browser each impose their own shorter
 // clock. Suggest therefore runs as the Lab's standard 202+poll job: the
 // route starts the job, the UI polls, and the model gets minutes, not
-// seconds. Jobs are in-memory (single-replica service, same class of
-// registry as genInFlight/runInFlight).
-const suggestJobs = new Map();
-const SUGGEST_JOB_CAP = 100;
+// seconds. Jobs live in the SHARED in-memory registry (job-registry.js —
+// single-replica service; the bulk-PII job uses the same one).
+const suggestJobs = createJobRegistry({ prefix: 'sg' });
 const SUGGEST_LLM_TIMEOUT_MS = 300000; // 5 min — thinking models get room
 
 function startSuggestTags(repoId, opts = {}) {
-  const id = `sg${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
-  const job = { job_id: id, repo_id: repoId, status: 'running', started_at: new Date().toISOString() };
-  suggestJobs.set(id, job);
-  // prune oldest finished jobs when the registry grows past the cap
-  if (suggestJobs.size > SUGGEST_JOB_CAP) {
-    for (const [k, v] of suggestJobs) {
-      if (suggestJobs.size <= SUGGEST_JOB_CAP) break;
-      if (v.status !== 'running') suggestJobs.delete(k);
-    }
-  }
+  const job = suggestJobs.create({ repo_id: repoId });
   // fire-and-forget worker; every outcome lands ON the job
   (async () => {
     try {
@@ -902,12 +893,11 @@ function startSuggestTags(repoId, opts = {}) {
       job.finished_at = new Date().toISOString();
     }
   })();
-  return job;
+  return { ...job };
 }
 
 function getSuggestJob(id) {
-  const job = suggestJobs.get(id);
-  return job ? { ...job } : null;
+  return suggestJobs.get(id);
 }
 
 async function suggestTags(repoId, _opts = {}) {

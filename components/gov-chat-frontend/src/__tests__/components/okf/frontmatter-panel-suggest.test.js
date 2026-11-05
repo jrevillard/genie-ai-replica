@@ -28,14 +28,14 @@ const OkfFrontmatterPanel = require('@/components/okf/FrontmatterPanel.vue').def
 
 const REPO = { repo_id: 'r-1', name: 'Indonesia History - LLM' };
 
-function fakeStore() {
-  return { getters: {}, commit() {}, dispatch: jest.fn() };
+function fakeStore(getters = {}) {
+  return { getters, commit() {}, dispatch: jest.fn() };
 }
 
-function mountPanel(props = {}) {
+function mountPanel(props = {}, store) {
   return mount(OkfFrontmatterPanel, {
     global: {
-      mocks: { $store: fakeStore() },
+      mocks: { $store: store || fakeStore() },
       stubs: {
         DsButton: { template: '<button><slot /></button>' },
         DsInput: true,
@@ -77,6 +77,34 @@ const SUGGESTION = {
 
 describe('FrontmatterPanel — Suggest tags (1-8g-m)', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  test('#932: the labels-stale pill renders only in the edit-to-drain window', () => {
+    const stale = {
+      repo_id: 'r-1',
+      lifecycle_state: 'publish',
+      version: 2,
+      ingested_at: null,
+      ingested_version: null,
+      rag_ingestion: { status: 'completed', requested_at: '2026-11-05T00:00:00Z' }
+    };
+    const fresh = {
+      repo_id: 'r-1',
+      lifecycle_state: 'publish',
+      version: 1,
+      ingested_at: '2026-11-05T01:00:00Z',
+      ingested_version: 1,
+      rag_ingestion: { status: 'completed', requested_at: '2026-11-05T00:00:00Z' }
+    };
+    let w = mountPanel({}, fakeStore({ 'okf/repoById': () => stale }));
+    expect(w.text()).toContain('Labels stale — re-ingest to apply');
+    w.unmount();
+    w = mountPanel({}, fakeStore({ 'okf/repoById': () => fresh }));
+    expect(w.text()).not.toContain('Labels stale — re-ingest to apply');
+    w.unmount();
+    // a store without the okf module (bare harness) keeps the marker off
+    w = mountPanel();
+    expect(w.text()).not.toContain('Labels stale — re-ingest to apply');
+  });
 
   test('the suggestion REPLACES the local shape (curator then edits)', async () => {
     frontmatterService.suggestFrontmatter.mockResolvedValue({ suggested: SUGGESTION });

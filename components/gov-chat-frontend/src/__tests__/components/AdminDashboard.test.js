@@ -281,7 +281,16 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extra
           props: ['disabled', 'variant', 'small', 'tag']
         },
         DsTabs: {
-          template: '<div><slot /></div>',
+          // UX-1: the stub mirrors the REAL primitive's nav markup (button per
+          // tab, scoped #tab slot, update:modelValue) so the rack-navigation
+          // tests exercise the same surface the browser renders. Pane content
+          // rides the default slot as before.
+          template:
+            '<div><div class="ds-tabs__nav"><button v-for="(t, i) in tabs" :key="t.value ?? i" ' +
+            ":class=\"['ds-tabs__btn', { 'ds-tabs__btn--active': modelValue === (t.value ?? i) }]\" " +
+            '@click="$emit(\'update:modelValue\', t.value ?? i)">' +
+            '<slot name="tab" :tab="t" :index="i" :active="modelValue === (t.value ?? i)">{{ t.label }}</slot>' +
+            '</button></div><div class="ds-tabs__content"><slot /></div></div>',
           props: ['tabs', 'modelValue']
         },
         DsSpinner: true,
@@ -357,15 +366,15 @@ describe('AdminDashboard', () => {
       ]);
     });
 
-    // David 2026-10-21: "the left sidebar menus need to be aligned with the
-    // tabs in the tab rack" — the Studio tab had NO sidebar entry (clicking it
-    // left the menu with no active item), and Settings listed users before
-    // security against the rack's order. The sidebar must navigate to every
-    // tab, in rack order.
+    // UX-1 (#1512, David 2026-11-05): the sidebar nav rail is GONE — its
+    // icons moved onto the rack buttons, which are now the ONLY nav surface.
+    // The old sidebar-mirror tests (David 2026-10-21 alignment + flag hiding)
+    // become rack assertions: the rack navigates to every tab in order and
+    // carries each tab's icon.
     // OKF feature flag (2026-10-21): OKF_ENABLED=0 parks the OKF surfaces —
-    // the Studio and Models tabs (rack + sidebar) disappear; Query Inspector
+    // the Studio and Models tabs disappear from the rack; Query Inspector
     // is platform tooling and STAYS (David's call).
-    it('OKF flag off hides Studio and Models from rack and sidebar, keeps Query Inspector', async () => {
+    it('OKF flag off hides Studio and Models from the rack, keeps Query Inspector', async () => {
       window.APP_CONFIG = { okfEnabled: '0' };
       try {
         const wrapper = createAdminDashboardWrapper(
@@ -382,16 +391,16 @@ describe('AdminDashboard', () => {
         expect(tabIds).not.toContain('models');
         expect(tabIds).toContain('queryInspector'); // platform tooling stays
         expect(tabIds).toHaveLength(8);
-        const linkText = wrapper.findAll('.sidebar .nav-link').map((l) => l.text());
-        expect(linkText.join(' | ')).not.toContain('OKF Studio');
-        expect(linkText.join(' | ')).not.toContain('admin.tabs.models');
-        expect(wrapper.findAll('.sidebar .nav-link')).toHaveLength(8);
+        const btnText = wrapper.findAll('.ds-tabs__btn').map((l) => l.text());
+        expect(btnText.join(' | ')).not.toContain('OKF Studio');
+        expect(btnText.join(' | ')).not.toContain('admin.tabs.models');
+        expect(wrapper.findAll('.ds-tabs__btn')).toHaveLength(8);
       } finally {
         delete window.APP_CONFIG;
       }
     });
 
-    it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
+    it('the rack is the only nav surface: every tab reachable in order, each carries its icon', async () => {
       // The heavy tab panels (Studio fetches repos on mount, Models fetches
       // configs, Inspector mounts its own store calls) are stubbed — this
       // test is about the NAVIGATION surface, not the panels' payloads.
@@ -404,12 +413,19 @@ describe('AdminDashboard', () => {
           QueryInspector: true
         }
       );
-      const links = wrapper.findAll('.sidebar .nav-link');
-      expect(links.length).toBe(wrapper.vm.tabs.length);
+      // the rail is really gone
+      expect(wrapper.find('.sidebar').exists()).toBe(false);
+      expect(wrapper.findAll('.nav-link').length).toBe(0);
+      const btns = wrapper.findAll('.ds-tabs__btn');
+      expect(btns.length).toBe(wrapper.vm.tabs.length);
+      // every rack button carries its icon (the sidebar's icons, relocated)
       for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {
-        await links[i].trigger('click');
+        expect(btns[i].text()).toContain(wrapper.vm.tabs[i].icon);
+        await btns[i].trigger('click');
         expect(wrapper.vm.activeTab).toBe(wrapper.vm.tabs[i].id);
       }
+      // the preserved spec handle rides the rack's logs tab now
+      expect(wrapper.find('[data-test-id="admin-logs-link"]').exists()).toBe(true);
     });
   });
 

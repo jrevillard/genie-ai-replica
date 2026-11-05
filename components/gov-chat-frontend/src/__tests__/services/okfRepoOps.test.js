@@ -59,6 +59,61 @@ describe('okfRepoOps default-export completeness (the f771e169d class)', () => {
   });
 });
 
+describe('okfRepoOps.isLabelsStale (#932 step-1: the edit-to-drain window)', () => {
+  // The lifecycle writes this state machine: publish mints version N+1 and
+  // resets ingested_at/ingested_version to null; the drain settle sets
+  // ingested_version = version; rag_ingestion persists after every drain.
+  const drainedRepo = (version) => ({
+    lifecycle_state: 'publish',
+    version,
+    ingested_at: '2026-11-05T00:00:00Z',
+    ingested_version: version,
+    rag_ingestion: { status: 'completed', requested_at: '2026-11-05T00:00:00Z' }
+  });
+
+  it('is TRUE in the edit-to-drain window: republished after a prior drain, drain not yet run', () => {
+    const edited = { ...drainedRepo(1), version: 2, ingested_at: null, ingested_version: null };
+    expect(ops.isLabelsStale(edited)).toBe(true);
+  });
+
+  it('is FALSE while the current version is drained and serving (fresh labels)', () => {
+    expect(ops.isLabelsStale(drainedRepo(3))).toBe(false);
+  });
+
+  it('is FALSE while a drain is RUNNING — the Ingesting… chip owns that window', () => {
+    const draining = {
+      ...drainedRepo(1),
+      version: 2,
+      ingested_at: null,
+      ingested_version: null,
+      rag_ingestion: { status: 'draining', requested_at: '2026-11-05T01:00:00Z' }
+    };
+    expect(ops.isLabelsStale(draining)).toBe(false);
+    expect(ops.isLabelsStale({ ...draining, rag_ingestion: { status: 'failed' }, rag_drain_active: true })).toBe(false);
+  });
+
+  it('is FALSE for a repo never ingested — nothing stale, first ingest will apply everything', () => {
+    expect(ops.isLabelsStale({ lifecycle_state: 'publish', version: 1 })).toBe(false);
+    // a settled record (requested_at present) IS prior-drain evidence: this
+    // shape is a drained v1 whose ingested_at/ingested_version were reset by
+    // a republish — the same window case above.
+    expect(
+      ops.isLabelsStale({
+        lifecycle_state: 'publish',
+        version: 1,
+        rag_ingestion: { status: 'completed', requested_at: '2026-11-05T00:00:00Z' }
+      })
+    ).toBe(true);
+  });
+
+  it('is FALSE outside the publish lane and for missing repos', () => {
+    expect(ops.isLabelsStale({ ...drainedRepo(1), lifecycle_state: 'review', version: 2, ingested_at: null })).toBe(
+      false
+    );
+    expect(ops.isLabelsStale(null)).toBe(false);
+  });
+});
+
 describe('okfRepoOps.createRepo', () => {
   beforeEach(() => jest.clearAllMocks());
 

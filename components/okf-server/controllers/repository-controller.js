@@ -954,6 +954,49 @@ async function repoBulkPii(req, res, next) {
 }
 
 /**
+ * UX-4 (#1514): the DETACHED bulk PII action — same decision, same
+ * assertWritable drain-freeze gate, but the write loop runs as a 202+poll
+ * job reporting processed-of-total so the editor can show a real progress
+ * bar over a large flagged set. The synchronous POST /pii-bulk stays for
+ * API compat (operator scripts); the editor UI uses this pair.
+ */
+async function startRepoBulkPii(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const job = piiService.startRepoBulkPiiJob(repo_id, req.body || {}, actorFrom(req));
+    res.status(202).json({ repo_id, job_id: job.job_id, status: job.status, total: job.total });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getRepoBulkPiiJob(req, res, next) {
+  try {
+    const { repo_id, job_id: jobId } = req.params;
+    const job = piiService.getRepoBulkPiiJob(jobId);
+    if (!job || job.repo_id !== repo_id) {
+      return res.status(404).json({ error: 'BULK_PII_JOB_NOT_FOUND', message: `no bulk PII job ${jobId}` });
+    }
+    // The done payload matches the synchronous response shape ({ok, action,
+    // concepts_affected}) so callers read one contract.
+    res.status(200).json({
+      repo_id: job.repo_id,
+      job_id: job.job_id,
+      action: job.action,
+      status: job.status,
+      total: job.total,
+      processed: job.processed,
+      ...(job.status === 'done' ? { result: job.result } : {}),
+      ...(job.status === 'failed' ? { error: job.error } : {})
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/okf/repos/:repo_id/concepts/:concept_id/pii-inspect — PII REVIEW
  * (David, 2026-09-09: every issue flagged, categorized and described in clear
  * language). A LIVE Presidio scan of the concept's CURRENT content returning
@@ -1955,6 +1998,8 @@ module.exports = {
   acceptPii,
   fileActionPii,
   repoBulkPii,
+  startRepoBulkPii,
+  getRepoBulkPiiJob,
   redactWholeFilePii,
   deleteConcept,
   mintRepoVersion,

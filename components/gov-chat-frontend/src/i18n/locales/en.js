@@ -1669,7 +1669,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Labels stale — re-ingest to apply'
       },
       tab: {
         head: 'Head',
@@ -2817,6 +2818,7 @@ export default {
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -3690,7 +3692,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Create the Sources page and link {n} page(s)',
@@ -3798,7 +3799,9 @@ export default {
       title: 'Frontmatter tags — what this repo is about',
       help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Labels stale — re-ingest to apply',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestCoverage: 'Derived from {sampled} of {total} concepts across {labels} knowledge-hierarchy labels.',
       suggestFailed: 'Suggest failed.',

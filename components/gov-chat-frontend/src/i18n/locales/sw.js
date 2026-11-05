@@ -1568,7 +1568,7 @@ export default {
       updatedBy: 'Na',
       modeLabel: 'Hali',
       mode: {
-        legacy: 'Legacy',
+        legacy: 'Zamani',
         okf_only: 'OKF pekee',
         hybrid: 'Changanyiko'
       },

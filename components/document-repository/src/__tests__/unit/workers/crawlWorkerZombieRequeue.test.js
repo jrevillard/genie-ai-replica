@@ -201,6 +201,19 @@ describe('crawl worker startup zombie requeue', () => {
     expect(requeueQueries()).toBe(callsAfterBoot);
   });
 
+  it('starts the poll loop even when the requeue query fails', async () => {
+    // A failing requeue query must not leave the crawl queue without a
+    // poller — the poll is what picks the queued jobs up.
+    db.query.mockRejectedValue(new Error('query failed'));
+
+    crawlWorker.start();
+    await flush();
+
+    // The poll ran (it queries for Pending jobs too).
+    const pendingQueries = db.query.mock.calls.filter((c) => String(c[0]).includes("'Pending'"));
+    expect(pendingQueries.length).toBeGreaterThan(0);
+  });
+
   it('boots cleanly with no zombies and no DB', async () => {
     // No zombies → no writes, and a dead DB must not stop the poll loop from
     // starting (the requeue arms the first tick either way).

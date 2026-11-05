@@ -86,6 +86,11 @@ const BOOT_TIME = new Date().toISOString();
 // previous container's jobs. The retry stops as soon as a pass succeeds, so
 // the steady state costs no query at all.
 const REQUEUE_RETRY_MS = 5000;
+// Single-flight worker: a job still 'Crawling' when it starts has no live
+// owner, and the poll loop only picks 'Pending' — so leftover jobs are
+// requeued here or they starve. Runs BEFORE the first poll tick: a job
+// picked and set to 'Crawling' by this very worker must not be seen as a
+// zombie.
 const requeueZombieJobs = async () => {
   let db;
   try {
@@ -99,15 +104,20 @@ const requeueZombieJobs = async () => {
   const PAGE_SIZE = 50;
   let hadFailures = false;
   let batch;
-  do {
-    const cursor = await db.query(
-      "FOR job IN crawl_job FILTER job.status == 'Crawling' AND (job.claimed_at == null || job.claimed_at < @bootTime) LIMIT @limit RETURN job",
-      { bootTime: BOOT_TIME, limit: PAGE_SIZE }
-    );
-    batch = await cursor.all();
-    hadFailures = (await requeueBatch(db, batch)) || hadFailures;
-  } while (batch.length === PAGE_SIZE);
-  return { ok: true, hadFailures };
+  try {
+    do {
+      const cursor = await db.query(
+        "FOR job IN crawl_job FILTER job.status == 'Crawling' AND (job.claimed_at == null || job.claimed_at < @bootTime) LIMIT @limit RETURN job",
+        { bootTime: BOOT_TIME, limit: PAGE_SIZE }
+      );
+      batch = await cursor.all();
+      hadFailures = (await requeueBatch(db, batch)) || hadFailures;
+    } while (batch.length === PAGE_SIZE);
+    return { ok: true, hadFailures };
+  } catch (error) {
+    logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);
+    return { ok: false, hadFailures: true };
+  }
 };
 
 // Requeues one page of zombies; the DB failure of the whole pass surfaces at
@@ -148,11 +158,6 @@ const requeueBatch = async (db, batch) => {
   }
   return hadFailures;
 };
-// Single-flight worker: a job still 'Crawling' when it starts has no live
-// owner, and the poll loop only picks 'Pending' — so leftover jobs are
-// requeued here or they starve. Runs BEFORE the first poll tick: a job
-// picked and set to 'Crawling' by this very worker must not be seen as a
-// zombie.
 let started = false;
 
 const start = () => {
@@ -173,7 +178,11 @@ const start = () => {
       setTimeout(requeueLoop, REQUEUE_RETRY_MS);
     }
   };
-  requeueLoop().then(poll);
+  // The poll loop starts whatever the requeue does — a requeue failure must
+  // never leave the crawl queue without a poller.
+  requeueLoop()
+    .catch((error) => logger.error(`[CRAWL-WORKER] Zombie requeue loop error: ${error.message}`))
+    .then(poll);
 };
 
 const poll = async () => {

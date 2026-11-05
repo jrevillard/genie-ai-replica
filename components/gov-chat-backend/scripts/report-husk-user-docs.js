@@ -221,9 +221,9 @@ function quotedKey(key) {
  *   docs.length there would understate how many entries were withheld.
  * @param {Function} params.format - renders one entry line
  * @param {string} [params.remedy] - what to tell the operator about the
- *   withheld entries. Defaults to the dry-run re-run advice; the --delete path
- *   passes its own, because there the withheld entries are about to be
- *   REMOVED, not left for a later look.
+ *   withheld entries. Defaults to the report-context advice ("re-run this
+ *   report"); the --delete and abort paths pass their own, because there the
+ *   withheld entries are about to be REMOVED, or a --delete is in play.
  */
 function printSampledList({ write, gated, label, docs, total = docs.length, format, remedy }) {
   // Enforce the promise the JSDoc makes: slice(0, undefined) returns the WHOLE
@@ -231,7 +231,7 @@ function printSampledList({ write, gated, label, docs, total = docs.length, form
   // than silently widen the listing into the flood the cap exists to prevent.
   if (!gated || !Number.isInteger(gated.sampleLimit) || gated.sampleLimit <= 0) {
     throw new Error(
-      `printSampledList: the run cap is not a positive integer (got ${JSON.stringify(gated.sampleLimit)})`
+      `printSampledList: the run cap is not a positive integer (got ${JSON.stringify(gated?.sampleLimit)})`
     );
   }
   const listed = docs.slice(0, gated.sampleLimit);

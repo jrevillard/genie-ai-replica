@@ -371,44 +371,49 @@ describe('main safety wiring', () => {
   it('prints the divergence keys as valid JSON strings, so a copy-paste from stderr works (issue #1507)', async () => {
     // The listed keys are the operator's raw material for the follow-up
     // query; unquoted, they are not paste-able into JSON. The quoted form
-    // must be a valid JSON string literal.
-    const { extra } = divergentDocs(1);
-    const db = fakeDb({ husks: extra, allDocs: extra });
+    // must be a valid JSON string literal that round-trips back to the key.
+    // The key carries an apostrophe — a character ArangoDB allows in a _key
+    // and one a hand-written quoting would get wrong.
+    const key = "it's-a-key";
+    const stray = { ...huskDoc, _key: key, _id: `users/${key}`, customSettings: { theme: 'dark' } };
+    const db = fakeDb({ husks: [stray], allDocs: [stray] });
     await runMain(db, ['--delete', '--yes']);
     const stderr = stderrText(errorSpy);
-    expect(stderr).toContain('over-matched _key="extra-0"');
-    const quoted = stderr.match(/over-matched _key=("[^"]*")/)[1];
-    expect(JSON.parse(quoted)).toBe('extra-0');
+    const line = stderr.split('\n').find((l) => l.includes('over-matched _key='));
+    expect(line).toBeDefined();
+    // The token after _key= is a JSON string literal...
+    const literal = line.slice(line.indexOf('_key=') + '_key='.length).split(' ')[0];
+    expect(() => JSON.parse(literal)).not.toThrow();
+    // ...and it decodes back to the exact key.
+    expect(JSON.parse(literal)).toBe(key);
   });
 
-  it('names the knob and the needed count in the elision line, so the remedy is discoverable (issue #1507)', async () => {
-    const { extra } = divergentDocs(60);
-    const db = fakeDb({ husks: extra, allDocs: extra });
-    await runMain(db, ['--delete', '--yes']);
-    const stderr = stderrText(errorSpy);
+  it("names the knob, the dry run and THIS listing's own count in each elision line (issue #1507)", async () => {
     // The operator must be told HOW to see the withheld entries, and with
     // WHICH value — a bare "not listed" leaves the remedy undiscoverable.
-    expect(stderr).toContain('(not listed)');
-    expect(stderr).toContain('HUSK_SAMPLE_LIMIT=60');
-    // The remedy names the DRY RUN: on a destructive script, an unqualified
-    // "re-run" could be read as "re-run the same command", which deletes.
-    expect(stderr).toContain('re-run the dry run (without --delete)');
-  });
-
-  it("names THIS listing's own count in each elision line (issue #1507)", async () => {
-    // Each listing's total is printed in its own header, so the elision line
-    // names the count that lists THAT listing in full. Naming a run-wide
-    // maximum instead would inflate one listing's remedy with an unrelated
-    // listing's count — the operator would dump thousands of lookalikes to
-    // reach a handful of withheld husks.
+    // Each listing's total is printed in its own header, so the elision
+    // line names the count that lists THAT listing in full. Naming a
+    // run-wide maximum instead would inflate one listing's remedy with an
+    // unrelated listing's count — the operator would dump thousands of
+    // lookalikes to reach a handful of withheld husks.
+    //
     // 60 over-matched, 100 under-matched: the two directions have DIFFERENT
-    // totals, so a per-listing number is visibly the right one for each.
+    // totals, so a run-wide maximum would name 100 on BOTH lines.
     const { extra, missed } = divergentDocs(60, 100);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
     await runMain(db, ['--delete', '--yes']);
     const stderr = stderrText(errorSpy);
-    expect(stderr).toContain('HUSK_SAMPLE_LIMIT=60');
-    expect(stderr).toContain('HUSK_SAMPLE_LIMIT=100');
+    const lines = stderr.split('\n');
+    const overElision = lines.find((l) => l.includes('more over-matched'));
+    const underElision = lines.find((l) => l.includes('more under-matched'));
+    expect(overElision).toBeDefined();
+    expect(underElision).toBeDefined();
+    // Each line names its OWN listing's count.
+    expect(overElision).toContain('HUSK_SAMPLE_LIMIT=60');
+    expect(underElision).toContain('HUSK_SAMPLE_LIMIT=100');
+    // The remedy names the DRY RUN: on a destructive script, an unqualified
+    // "re-run" could be read as "re-run the same command", which deletes.
+    expect(overElision).toContain('re-run the dry run (without --delete)');
   });
 
   it('applies the same cap and elision wording to the husk and lookalike listings (issue #1508)', async () => {

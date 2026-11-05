@@ -753,7 +753,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal eCitizen',
-    taxFiling: 'Sistema de Presentación de Impuestos',
     idApplication: 'Solicitud de ID',
     businessReg: 'Registro de Negocios',
     drivingLicense: 'Licencia de Conducir'

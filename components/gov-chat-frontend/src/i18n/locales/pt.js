@@ -756,7 +756,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal eCitizen',
-    taxFiling: 'Sistema de Declaração de Impostos',
     idApplication: 'Aplicação de ID',
     businessReg: 'Registro de Negócios',
     drivingLicense: 'Carteira de Motorista'

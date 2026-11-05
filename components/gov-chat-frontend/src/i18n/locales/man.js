@@ -746,7 +746,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal an eCitizen',
-    taxFiling: 'Jooyaa Lataramoo',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
     drivingLicense: 'Moto Bula-Laisins'

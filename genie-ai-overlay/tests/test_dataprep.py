@@ -3124,17 +3124,18 @@ class TestDocRepoIngestPayload:
         assert payload.chunkOverlap == 150
 
     @contextlib.contextmanager
-    def _ingest_mocks(self):
+    def _ingest_mocks(self, tasks=None):
         """Shared patch set for exercising the real ingest_file_from_repo.
 
         Yields (ms, mock_loader, flock_mock): the microservice module (so
         tests can patch against it), the loader mock, and the module-wide
-        fcntl.flock mock.
+        fcntl.flock mock. ``tasks`` pre-seeds the idempotency-guard registry
+        (default: empty) — the 409-contract tests plant a live task in it.
         """
         with (
             patch.object(ms, "loader") as mock_loader,
             patch.object(ms, "tracer"),
-            patch.object(ms, "active_ingestion_tasks", {}),
+            patch.object(ms, "active_ingestion_tasks", {} if tasks is None else tasks),
             patch.object(ms, "upload_folder", "/tmp/test-ingest"),
             patch("builtins.open", MagicMock()),
             patch("fcntl.flock") as flock_mock,
@@ -3249,6 +3250,53 @@ class TestDocRepoIngestPayload:
         ):
             await ms.ingest_file_from_repo(payload)
         remove_mock.assert_called_once()
+
+    # --- 409 CONTRACT (the machine-readable half of the idempotency guard) ---
+    # The document repository classifies the guard's 409 by the structured
+    # `code` field, not by parsing the prose `detail`; the okf-server drain
+    # worker may adopt the same code (#1259). These tests pin the PRODUCER
+    # side: a change to the response shape must fail HERE, not the consumer's
+    # behaviour in production (the #1251 failure mode — a reword silently
+    # turning the carve-out off and marking live files 'Ingestion Error').
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_409_guard_body_carries_code_and_names_the_file(self):
+        """The guard's 409 body: code='ingest_already_running' + a human-readable detail naming the exact fileId."""
+        payload = ms.DocRepoIngestPayload(**self._payload(fileId="my-file"))
+        live_task = MagicMock()
+        live_task.done.return_value = False
+        with (
+            patch.object(ms, "acquire_ingest_slot", return_value=MagicMock()),
+            self._ingest_mocks({payload.fileId: live_task}),
+        ):
+            response = await ms.ingest_file_from_repo(payload)
+        assert response.status_code == 409
+        body = json.loads(response.body)
+        assert body["code"] == "ingest_already_running"
+        assert "my-file" in body["detail"]
+        assert "already" in body["detail"]
+
+    @pytest.mark.asyncio
+    @requires_fcntl
+    async def test_done_task_does_not_conflict(self):
+        """A FINISHED task must not trigger the guard — the ingest proceeds and reports success."""
+        payload = ms.DocRepoIngestPayload(**self._payload())
+        done_task = MagicMock()
+        done_task.done.return_value = True
+        fake_task = MagicMock()
+        fake_task.done.return_value = False
+        with (
+            patch.object(ms, "acquire_ingest_slot", return_value=MagicMock()),
+            patch.object(ms.asyncio, "create_task", return_value=fake_task),
+            self._ingest_mocks({payload.fileId: done_task}) as (_ms, mock_loader, _flock),
+        ):
+            result = await ms.ingest_file_from_repo(payload)
+        # The success CONTRACT, not merely "not a 409": an error-shaped dict
+        # (success=False) or an HTTPException on this path is a regression.
+        assert result["success"] is True
+        assert result["status"] == 200
+        mock_loader.ingest_file_with_guardrail.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

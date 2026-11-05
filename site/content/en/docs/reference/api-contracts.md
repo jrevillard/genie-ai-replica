@@ -81,7 +81,10 @@ time guessing what is wrong.
   instead, set `API_URL` — no `/api` suffix, the paths already carry it —
   in the deployment's own configuration: the root `env` template (section 6)
   for a Compose deployment, the `api_url` Ansible group variable (see
-  `deploy/ansible/README.md`) for a Swarm deployment. The document-repository
+  `deploy/ansible/README.md`) for a Swarm deployment. The value must be the
+  origin the docs page itself is served from: any other host re-introduces
+  the cross-origin failure (CORS plus nginx's `connect-src 'self'` on
+  `/api-docs`) that the relative default removes. The document-repository
   spec (the `/api/files` endpoints are served by that service, not by the
   BFF) follows the same rule with the same variable.
 

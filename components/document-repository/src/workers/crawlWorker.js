@@ -7,7 +7,7 @@
 const fs = require('fs').promises;
 const fsStandard = require('fs'); // Required for createWriteStream
 const path = require('path');
-const { Worker } = require('worker_threads');
+const { Worker, isMainThread } = require('worker_threads');
 const os = require('os');
 
 // Shared libraries
@@ -76,10 +76,113 @@ const processPageOnThread = (html, url, config) => {
   });
 };
 
+// A job is claimed with a timestamp; only jobs claimed BEFORE this worker
+// started are orphans (the previous process died holding them). A job this
+// worker — or another live instance — claimed after the boot is untouched.
+const BOOT_TIME = new Date().toISOString();
+
+// Boot-time recovery retries in the background while it keeps failing: a
+// container booting while the DB is still coming up must not strand the
+// previous container's jobs. The retry stops as soon as a pass succeeds, so
+// the steady state costs no query at all.
+const REQUEUE_RETRY_MS = 5000;
+// Single-flight worker: a job still 'Crawling' when it starts has no live
+// owner, and the poll loop only picks 'Pending' — so leftover jobs are
+// requeued here or they starve. Runs BEFORE the first poll tick: a job
+// picked and set to 'Crawling' by this very worker must not be seen as a
+// zombie.
+const requeueZombieJobs = async () => {
+  let db;
+  try {
+    db = await dbService.getConnection('crawl_job');
+  } catch (error) {
+    logger.error(`[CRAWL-WORKER] Zombie requeue skipped, DB unavailable: ${error.message}`);
+    return { ok: false, hadFailures: false };
+  }
+  // Bounded page size; the pass paginates until the tail is exhausted so a
+  // large crash backlog cannot strand zombies behind the first page.
+  const PAGE_SIZE = 50;
+  let hadFailures = false;
+  let batch;
+  try {
+    do {
+      const cursor = await db.query(
+        "FOR job IN crawl_job FILTER job.status == 'Crawling' AND (job.claimed_at == null || job.claimed_at < @bootTime) LIMIT @limit RETURN job",
+        { bootTime: BOOT_TIME, limit: PAGE_SIZE }
+      );
+      batch = await cursor.all();
+      hadFailures = (await requeueBatch(db, batch)) || hadFailures;
+    } while (batch.length === PAGE_SIZE);
+    return { ok: true, hadFailures };
+  } catch (error) {
+    logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);
+    return { ok: false, hadFailures: true };
+  }
+};
+
+// Requeues one page of zombies; the DB failure of the whole pass surfaces at
+// the caller. Returns true when any job of the page failed.
+const requeueBatch = async (db, batch) => {
+  const jobCol = db.collection('crawl_job');
+  let hadFailures = false;
+  for (const job of batch) {
+    // Per-job guard: one bad job must not strand the rest in 'Crawling'.
+    try {
+      if (job.kill_requested) {
+        // The operator already asked for this crawl to die — do not restart
+        // it; finalize it as Killed.
+        await jobCol.update(job._key, {
+          status: 'Killed',
+          error_message: 'Crawl worker restarted mid-crawl after kill request',
+          finished_at: new Date().toISOString()
+        });
+        await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted; killed job finalized.');
+        logger.warn(`[CRAWL-WORKER] Finalized killed zombie job ${job._key}`);
+        continue;
+      }
+      // Clear the dead run's terminal fields — an error_message, a
+      // finished_at or a stale page count from the abandoned attempt must
+      // not survive into the retry (the retry re-crawls from page 0).
+      await jobCol.update(job._key, {
+        status: 'Pending',
+        error_message: null,
+        finished_at: null,
+        pages_crawled: 0
+      });
+      await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
+      logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
+    } catch (jobError) {
+      hadFailures = true;
+      logger.error(`[CRAWL-WORKER] Failed to requeue zombie job ${job._key}: ${jobError.message}`);
+    }
+  }
+  return hadFailures;
+};
+let started = false;
+
 const start = () => {
+  // Idempotent: a second call would arm a second poll loop and a second
+  // requeue loop — two single-flight crawlers over the same queue.
+  if (started) return;
+  started = true;
   initWorkers();
   logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
-  poll();
+
+  // The requeue runs BEFORE the poll starts (a job the poll had already
+  // claimed must not be flipped back) and keeps retrying in the background
+  // while it fails. A later pass cannot flip a job claimed after this worker
+  // started — the claim timestamp excludes it.
+  const requeueLoop = async () => {
+    const { ok, hadFailures } = await requeueZombieJobs();
+    if (!ok || hadFailures) {
+      setTimeout(requeueLoop, REQUEUE_RETRY_MS);
+    }
+  };
+  // The poll loop starts whatever the requeue does — a requeue failure must
+  // never leave the crawl queue without a poller.
+  requeueLoop()
+    .catch((error) => logger.error(`[CRAWL-WORKER] Zombie requeue loop error: ${error.message}`))
+    .then(poll);
 };
 
 const poll = async () => {
@@ -209,7 +312,10 @@ const processJob = async (job, db) => {
   }, KILL_WATCH_INTERVAL_MS);
 
   try {
-    await updateJobStatus(db, job._key, 'Crawling');
+    await db.collection('crawl_job').update(job._key, {
+      status: 'Crawling',
+      claimed_at: new Date().toISOString()
+    });
     await fileService.addCrawlLog(fileId, 'INFO', 'System', `Crawl started for ${job.url}. Streaming to disk.`);
 
     // --- WORK CALLBACK (Executed for every successfully fetched page) ---
@@ -387,10 +493,6 @@ const processJob = async (job, db) => {
   }
 };
 
-const updateJobStatus = async (db, key, status) => {
-  await db.collection('crawl_job').update(key, { status: status });
-};
-
 const updateJobProgress = async (db, key, count) => {
   try {
     await db.collection('crawl_job').update(key, { pages_crawled: count });
@@ -398,5 +500,11 @@ const updateJobProgress = async (db, key, count) => {
     // Ignore update errors
   }
 };
+
+// When loaded AS a worker thread, run. A plain require (tests, the main
+// thread) does nothing.
+if (!isMainThread) {
+  start();
+}
 
 module.exports = { start };

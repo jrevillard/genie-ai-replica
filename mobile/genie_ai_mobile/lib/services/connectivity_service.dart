@@ -92,6 +92,10 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Whether the service registered itself as a lifecycle observer.
   bool _observesLifecycle = false;
 
+  /// Whether the service was disposed. A poll that was in flight when the
+  /// service was disposed must not schedule the next one.
+  bool _disposed = false;
+
   /// Exposes the monitor timer for test assertions.
   @visibleForTesting
   Timer? get monitorTimer => _monitorTimer;
@@ -142,6 +146,7 @@ class ConnectivityService with WidgetsBindingObserver {
 
   /// Schedules the next watchdog check on the current rung of the ladder.
   void _scheduleWatchdog() {
+    if (_disposed) return;
     _monitorTimer?.cancel();
     final Duration interval = _pollLadder[_pollRung];
     debugPrint(
@@ -302,6 +307,7 @@ class ConnectivityService with WidgetsBindingObserver {
 
   void dispose() {
     debugPrint('[Connectivity] Disposing service.');
+    _disposed = true;
     _monitorTimer?.cancel();
     _monitorTimer = null;
     if (_observesLifecycle) {

@@ -30,6 +30,25 @@ class WatchdogProvider extends ConnectivityProvider {
 Future<List<InternetAddress>> _dnsFailure(String host) async =>
     throw const SocketException('DNS failed');
 
+/// Fake provider whose checks after the first one never complete, so a poll
+/// can be held in flight while the service is disposed.
+class GatedProvider extends ConnectivityProvider {
+  final Completer<List<ConnectivityResult>> gate =
+      Completer<List<ConnectivityResult>>();
+  int callCount = 0;
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() {
+    callCount++;
+    if (callCount == 1) return Future.value([ConnectivityResult.wifi]);
+    return gate.future;
+  }
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      const Stream.empty();
+}
+
 /// The watchdog is the reliability backup of the connectivity stream: it
 /// polls the device so a missed event cannot leave the app stuck. These
 /// tests pin the two properties that keep it cheap: it slows down while the
@@ -161,4 +180,31 @@ void main() {
 
     service.dispose();
   });
+
+  testWidgets(
+    'a poll in flight when the service is disposed schedules nothing',
+    (tester) async {
+      final provider = GatedProvider();
+      final service = ConnectivityService.test(
+        provider: provider,
+        dnsLookup: _dnsFailure,
+      );
+
+      await service.init();
+
+      // The second poll never completes: it is held in flight.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump();
+      expect(provider.callCount, 2);
+
+      service.dispose();
+      provider.gate.complete([ConnectivityResult.wifi]);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pump();
+
+      // The poll that completed after the disposal must not arm a new timer.
+      expect(service.monitorTimer, isNull);
+    },
+  );
 }

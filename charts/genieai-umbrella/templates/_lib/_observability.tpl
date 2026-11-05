@@ -96,9 +96,9 @@ transform/stamp_log_metadata_from_msg:
   log_statements:
     - context: log
       statements:
-        - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
-        - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
-        - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+        - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where (severity_text == "" or severity_text == nil) and IsString(body) and Substring(body, 0, 1) == "{"'
+        - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where (severity_text == "" or severity_text == nil) and IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
+        - 'set(severity_text, ToUpperCase(body["level"])) where (severity_text == "" or severity_text == nil) and IsMap(body) and IsString(body["level"])'
         - 'set(body, ParseJSON(body)["message"]) where IsString(body) and Substring(body, 0, 1) == "{" and IsString(ParseJSON(body)["message"])'
         - 'set(body, body["message"]) where IsMap(body) and IsString(body["message"])'
         - 'set(severity_number, 9) where severity_text == "INFO"'
@@ -106,6 +106,8 @@ transform/stamp_log_metadata_from_msg:
         - 'set(severity_number, 13) where severity_text == "WARNING"'
         - 'set(severity_number, 17) where severity_text == "ERROR"'
         - 'set(severity_number, 5) where severity_text == "DEBUG"'
+        - 'set(severity_number, 21) where severity_text == "FATAL"'
+        - 'set(severity_number, 1) where severity_text == "TRACE"'
         - 'set(severity_number, 21) where severity_text == "FATAL"'
         - 'set(severity_number, 1) where severity_text == "TRACE"'
 transform/normalize_log_body:

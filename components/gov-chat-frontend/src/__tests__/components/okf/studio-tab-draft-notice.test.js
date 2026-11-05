@@ -43,13 +43,16 @@ it('#1056: the NOT_READY latch surfaces the degraded-draft notice on the tab', a
   wrapper.unmount();
 });
 
-it('#1056: a repo gone under the curator renders the SAME notice', async () => {
-  // The per-repo dead set must not be a second silent state: the banner
-  // covers it too (the copy is written to be true for both causes).
+it('#1056: the tab notice is SESSION-scoped — a gone repo gets its own surface', async () => {
+  // One cause, one copy: the tab notice reports the session-wide latch
+  // (the endpoint is missing for EVERY repo). A repo that is gone is a
+  // repo-scoped outcome and the WIZARD names it — reporting it here would
+  // blame a version mismatch for one repo.
   const { store } = buildStore();
   const wrapper = mountTab(store, { i18n: realI18nMessagesMock() });
   await wrapper.vm.$nextTick();
-  store.commit('okf/setDraftDead', 'r1');
+  expect(wrapper.find('.okf-studio-tab__draft-notice').exists()).toBe(false);
+  store.commit('okf/setDraftsUnavailable');
   await wrapper.vm.$nextTick();
   const notice = wrapper.find('.okf-studio-tab__draft-notice');
   expect(notice.exists()).toBe(true);
@@ -61,10 +64,13 @@ it('#1056: the shipped notice states the consequence, not a reload, and names bo
   // Drafts live in the Vuex store only — a reload clears them, so the copy
   // must state the consequence instead of advising the curator to reload. A
   // 404 alone cannot tell an older server from a stale page — the copy must
-  // not assert the backend is the stale one.
+  // not assert the backend is the stale one. It must NOT blame the
+  // repository either: the tab notice is the session-wide latch, and a gone
+  // repo has its own repo-scoped message.
   expect(en.okf.studio.draft.notReady).not.toMatch(/reload the page/i);
   expect(en.okf.studio.draft.notReady).toMatch(/lost/i);
   expect(en.okf.studio.draft.notReady).toMatch(/may be out of sync/i);
+  expect(en.okf.studio.draft.notReady).not.toMatch(/repository/i);
 });
 
 it('#1056: the inline fallback and the shipped copy say the same thing', async () => {

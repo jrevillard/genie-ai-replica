@@ -44,6 +44,21 @@
     </aside>
 
     <main class="okf-wizard__center">
+      <!-- The repo-scoped degraded-draft notice (#1056): THIS repository
+           answered 404 REPO_NOT_FOUND — it is gone (deleted, soft-deleted,
+           or out of the caller's scope), so its draft cannot be stored
+           server-side. The session-wide latch (the endpoint missing
+           altogether) has its own tab-level notice; this one names the
+           repo the curator is actually editing. -->
+      <p v-if="repoGone" class="okf-wizard__draft-gone" role="status" data-test-id="wizard-draft-gone">
+        {{
+          translate(
+            'okf.studio.draft.repoGone',
+            'This repository is no longer available on the server — your changes stay in this browser tab only and are lost if the tab is closed or reloaded.'
+          )
+        }}
+      </p>
+
       <OkfNarrative :kind="'step' + activeStep" />
 
       <section class="okf-wizard__step" :aria-label="stepLabel(activeStep)">
@@ -182,7 +197,14 @@ export default {
       // A2 gate contract: the ACTIVE step owns the Continue. A step that
       // emits no gate event (the not-yet-wired panels) defaults to open.
       gateOpen: true,
-      advancing: false
+      advancing: false,
+      // #1056: this repository answered 404 REPO_NOT_FOUND on a draft
+      // save — it is gone (deleted / soft-deleted / out of scope), so its
+      // draft cannot be stored server-side. Component-scoped on purpose:
+      // it belongs to the repo this wizard edits, and it must not leak to
+      // the session (one gone repo must never silence another repo's
+      // saves behind a version-mismatch notice).
+      repoGone: false
     };
   },
   computed: {
@@ -279,6 +301,12 @@ export default {
       if (typeof v === 'number' && v !== this.activeStep) {
         this.activeStep = Math.min(v, 9);
       }
+    },
+    // The wizard instance outlives a repo switch (the tab renders it
+    // without a key), so a repo-scoped verdict must not survive into the
+    // next repo: "this repo is gone" says nothing about the next one.
+    'draft.repo_id'() {
+      this.repoGone = false;
     }
   },
   mounted() {
@@ -385,14 +413,35 @@ export default {
       // (same alias saveDraft uses), so resume works; only the server write
       // waits for a real repo_id.
       if (merged.repo_id) {
-        this.$store.dispatch('okf/saveDraft', {
-          repoId: merged.repo_id,
-          draft: {
-            ...merged,
-            studio_step: step,
-            updated_at: Date.now()
-          }
-        });
+        if (this.repoGone) {
+          // The repo is gone — a further PUT would 404 again. Keep the
+          // draft in the browser (the same local write owner the pre-create
+          // wizard uses) and stop the doomed writes.
+          this.$store.dispatch('okf/setDraftLocal', {
+            repoId: merged.repo_id,
+            draft: {
+              ...merged,
+              studio_step: step,
+              updated_at: Date.now()
+            }
+          });
+          return;
+        }
+        // The outcome decides what the curator is told: a gone repo gets a
+        // repo-scoped notice (#1056), a missing endpoint arms the
+        // session-wide latch whose notice the Studio tab renders.
+        this.$store
+          .dispatch('okf/saveDraft', {
+            repoId: merged.repo_id,
+            draft: {
+              ...merged,
+              studio_step: step,
+              updated_at: Date.now()
+            }
+          })
+          .then((res) => {
+            if (res && res.code === 'REPO_NOT_FOUND') this.repoGone = true;
+          });
       } else {
         this.$store.dispatch('okf/setDraftLocal', {
           repoId: 'pending',
@@ -467,6 +516,16 @@ export default {
   min-height: 0;
   overflow: hidden;
 }
+.okf-wizard__draft-gone {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg, var(--surface));
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
 .okf-wizard__step {
   flex: 1 1 auto;
   min-height: 320px;

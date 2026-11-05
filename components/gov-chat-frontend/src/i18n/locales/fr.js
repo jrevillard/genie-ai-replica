@@ -2549,7 +2549,9 @@ export default {
       },
       draft: {
         notReady:
-          "Les brouillons ne peuvent pas être enregistrés sur le serveur pour le moment — ils restent uniquement dans cet onglet du navigateur et sont perdus si l'onglet est fermé ou rechargé. La page, le serveur ou le référentiel peuvent être désynchronisés."
+          "Les brouillons ne peuvent pas être enregistrés sur le serveur pour le moment — ils restent uniquement dans cet onglet du navigateur et sont perdus si l'onglet est fermé ou rechargé. La page ou le serveur peuvent être désynchronisés.",
+        repoGone:
+          "Ce référentiel n'est plus disponible sur le serveur — vos modifications restent uniquement dans cet onglet du navigateur et sont perdues si l'onglet est fermé ou rechargé."
       },
       mode: {
         basic: 'Base',

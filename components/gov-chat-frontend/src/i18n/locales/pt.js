@@ -2539,7 +2539,9 @@ export default {
       },
       draft: {
         notReady:
-          'Os rascunhos não podem ser salvos no servidor neste momento — ficam apenas nesta aba do navegador e são perdidos se a aba for fechada ou recarregada. A página, o servidor ou o repositório podem estar fora de sincronia.'
+          'Os rascunhos não podem ser salvos no servidor neste momento — ficam apenas nesta aba do navegador e são perdidos se a aba for fechada ou recarregada. A página ou o servidor podem estar fora de sincronia.',
+        repoGone:
+          'Este repositório já não está disponível no servidor — as suas alterações ficam apenas nesta aba do navegador e são perdidas se a aba for fechada ou recarregada.'
       },
       mode: {
         basic: 'Básico',

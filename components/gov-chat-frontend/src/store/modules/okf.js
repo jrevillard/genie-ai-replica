@@ -35,13 +35,6 @@ const initialState = () => ({
   // writing it (no spam). Story 10.5 shipped the route, so this only arms
   // against an older backend, never against an empty draft.
   draftsUnavailable: false,
-  // PER-REPO dead set: a repo that answers 404 REPO_NOT_FOUND on a draft
-  // save is gone (deleted / soft-deleted / outside the caller's scope) — a
-  // definitive answer, NOT a missing endpoint. Only THAT repo stops getting
-  // server writes; the session-wide latch must not arm, or one deleted repo
-  // would push every other repo's saves to local-only while a notice blames
-  // a version mismatch nobody can act on.
-  draftsDeadByRepo: {},
   reposById: {},
   // Lifecycle lanes (David, 2026-08-28): five columns — In progress /
   // In review / Published / Ingested / Retracted. Published ≠ Ingested:
@@ -223,11 +216,12 @@ const getters = {
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
-  // The session latch ("the draft endpoint is not available here") and the
-  // per-repo dead set ("this repo is gone") — the two degraded-draft states
-  // the Studio tab surfaces to the curator.
+  // The session latch: the draft endpoint is not available on this server.
+  // ONE degraded state, ONE notice. A repo that is gone (REPO_NOT_FOUND) is
+  // NOT a session state — it is that repo's own outcome, reported to the
+  // caller (the wizard surfaces it); arming the latch for it would push
+  // every OTHER repo's saves to local-only behind a notice nobody can act on.
   draftsUnavailable: (state) => state.draftsUnavailable === true,
-  draftsDead: (state) => Object.keys(state.draftsDeadByRepo).length > 0,
   selection: (state) => state.selection,
   error: (state) => state.error
 };
@@ -249,18 +243,6 @@ const mutations = {
   },
   clearDraftsUnavailable(state) {
     state.draftsUnavailable = false;
-  },
-  setDraftDead(state, repoId) {
-    if (!repoId) return;
-    state.draftsDeadByRepo = { ...state.draftsDeadByRepo, [repoId]: true };
-  },
-  reviveVisibleDraftRepos(state, repoIds) {
-    const visible = new Set(repoIds || []);
-    const next = {};
-    for (const [repoId] of Object.entries(state.draftsDeadByRepo)) {
-      if (!visible.has(repoId)) next[repoId] = true;
-    }
-    state.draftsDeadByRepo = next;
   },
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
@@ -380,19 +362,33 @@ const actions = {
    */
   async fetchDraft({ commit, state }, { repoId, force = false } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId required' };
-    if (!force && state.drafts[repoId]) {
+    // While the session latch is armed, the CACHED draft proves nothing about
+    // the endpoint: the server may have been upgraded (or the routing gap
+    // that answered 404 closed) since it was fetched. Probe the server
+    // instead — that probe is what recovers the latch, so the cache must not
+    // short-circuit it.
+    const latched = state.draftsUnavailable === true;
+    if (!force && !latched && state.drafts[repoId]) {
       return { ok: true, draft: state.drafts[repoId], cached: true };
     }
     try {
       const draft = await studioService.getDraft(repoId);
+      if (latched) {
+        // The endpoint ANSWERED: the 404 that armed the latch was a routing
+        // gap, not a missing route — recover. A null draft is an answer too
+        // (the repo has no draft yet, or is gone — a REPO_NOT_FOUND 404 still
+        // means the route exists), so the recovery must not sit behind the
+        // null-draft early return.
+        commit('clearDraftsUnavailable');
+        // Keep the LOCAL draft: while the latch was armed, saves went
+        // local-only, so the local copy is the fresher one. The server's
+        // copy predates it and must not overwrite the curator's work.
+        return { ok: true, draft: state.drafts[repoId] || draft || null };
+      }
       if (!draft) return { ok: true, draft: null };
       // The wire draft is FLAT — commit it verbatim. A server that echoes a
       // stale/other repo_id would corrupt the map key, so trust the id we asked for.
       commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
-      // A successful round-trip proves the endpoint exists: a latch armed by
-      // a transient failure (a save fired during a server restart) recovers
-      // here instead of silencing saves until a full reload.
-      if (state.draftsUnavailable) commit('clearDraftsUnavailable');
       return { ok: true, draft };
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
@@ -432,12 +428,6 @@ const actions = {
       await dispatch('setDraftLocal', { repoId, draft });
       return { ok: true, skipped: 'unavailable' };
     }
-    if (state.draftsDeadByRepo[repoId]) {
-      // The repo is gone (deleted under the curator) — server writes are
-      // pointless; keep the local draft and stop the doomed PUTs.
-      await dispatch('setDraftLocal', { repoId, draft });
-      return { ok: true, skipped: 'repo-gone' };
-    }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
     // has nothing to draft — the server write is SKIPPED entirely (it would
     // 409-spam); the in-memory draft still updates so the wizard keeps
@@ -464,10 +454,11 @@ const actions = {
       }
       if (err && err.code === 'REPO_NOT_FOUND') {
         // Definitive answer (typed by studioService's classifier — the ONE
-        // owner of what a 404 means): the repo is gone. Mark ONLY this repo
-        // dead — arming the session latch here would blame a version
-        // mismatch for every other repo's saves.
-        commit('setDraftDead', repoId);
+        // owner of what a 404 means): THIS repo is gone. It must NOT arm
+        // the session latch — that would push every OTHER repo's saves to
+        // local-only behind a notice that blames a version mismatch. The
+        // local draft stays (committed above); the caller surfaces the
+        // repo-scoped outcome.
         return { ok: false, code: 'REPO_NOT_FOUND', message: err.message };
       }
       return {
@@ -488,13 +479,6 @@ const actions = {
       const repos = await repoOkfService.list({ stage });
       repos.forEach((r) => commit('upsertRepo', r));
       commit('setReposByStage', laneFor(repos));
-      // A repo the curator can still see is NOT gone: a dead mark left by a
-      // transient 404 (a scope hiccup mid-edit) recovers here instead of
-      // silencing that repo's saves until reload.
-      commit(
-        'reviveVisibleDraftRepos',
-        repos.map((r) => r.repo_id)
-      );
       return { ok: true, repos };
     } catch (err) {
       commit('setError', err.message || 'fetchRepos failed');

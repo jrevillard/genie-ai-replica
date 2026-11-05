@@ -47,13 +47,18 @@
          path lands on the dashboard without ever entering the wizard, so a
          wizard-only surface would stay quiet for it. The live region exists
          before the notice appears — a v-if-inserted status element is
-         commonly not announced. -->
+         commonly not announced.
+         ONE cause, ONE copy: the SESSION-WIDE latch — the draft endpoint
+         is not served by this server at all, so no draft of any repo can
+         be stored. A repo that is gone has its own repo-scoped notice in
+         the wizard (StudioWizard.vue) — naming it here would report one
+         repo's failure as a session-wide version mismatch. -->
     <div class="okf-studio-tab__draft-live" aria-live="polite">
-      <p v-if="draftsUnavailable || draftsDead" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
+      <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
         {{
           translate(
             'okf.studio.draft.notReady',
-            'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
+            'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.'
           )
         }}
       </p>
@@ -279,7 +284,7 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['isExpert', 'draftsUnavailable', 'draftsDead']),
+    ...mapGetters('okf', ['isExpert', 'draftsUnavailable']),
     // D-B honesty: the selected classification mode's real meaning.
     classHint() {
       const key =

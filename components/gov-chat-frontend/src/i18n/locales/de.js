@@ -2551,7 +2551,9 @@ export default {
       },
       draft: {
         notReady:
-          'Entwürfe können derzeit nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite, Server oder Repository können nicht synchron sein.'
+          'Entwürfe können derzeit nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite oder Server können nicht synchron sein.',
+        repoGone:
+          'Dieses Repository ist auf dem Server nicht mehr verfügbar — Ihre Änderungen bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird.'
       },
       mode: {
         basic: 'Standard',

@@ -1440,26 +1440,32 @@ async function autocorrectRepo(req, res, next) {
           }
         }
         const fieldList = [...fields].sort();
-        auditService
-          .writeAudit({
-            action: 'repo.autocorrect',
-            actor: actorFrom(req).sub,
-            actor_name: actorFrom(req).name,
-            repo_id,
-            source_ip: req.ip,
-            description:
-              'Applied curated frontmatter proposals (' +
-              mode +
-              ') — ' +
-              appliedCount +
-              ' concept(s)' +
-              (fieldList.length ? ' (' + fieldList.join(', ') + ')' : '') +
-              (failures.length > 0 ? `, ${failures.length} concept(s) FAILED and reported to the client` : ''),
-            details: { mode, applied: appliedCount, changes: appliedProposals, failures }
-          })
-          .catch(() => {
-            /* best-effort */
-          });
+        // NO audit row when nothing was applied and nothing failed: an
+        // "Applied ... 0 concept(s)" row claims an apply that changed
+        // nothing — the very misdescription #1066 is about. A run that
+        // applied something (or failed on something) still records.
+        if (appliedCount > 0 || failures.length > 0) {
+          auditService
+            .writeAudit({
+              action: 'repo.autocorrect',
+              actor: actorFrom(req).sub,
+              actor_name: actorFrom(req).name,
+              repo_id,
+              source_ip: req.ip,
+              description:
+                'Applied curated frontmatter proposals (' +
+                mode +
+                ') — ' +
+                appliedCount +
+                ' concept(s)' +
+                (fieldList.length ? ' (' + fieldList.join(', ') + ')' : '') +
+                (failures.length > 0 ? `, ${failures.length} concept(s) FAILED and reported to the client` : ''),
+              details: { mode, applied: appliedCount, changes: appliedProposals, failures }
+            })
+            .catch(() => {
+              /* best-effort */
+            });
+        }
       }
       return res
         .status(200)
@@ -1467,7 +1473,12 @@ async function autocorrectRepo(req, res, next) {
     }
     const result = await conceptMetaService.autocorrectRepo(repo_id, effectiveDryRun, actorFrom(req));
     // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
-    if (!effectiveDryRun) {
+    // The row is written only when the run actually MODIFIED something (or
+    // failed on something, which the client must be able to see in the log):
+    // an "Applied ... 0 concept(s)" row describes an apply that changed
+    // nothing, and the audit log records modifications. Same rule as the
+    // curated branch above.
+    if (!effectiveDryRun && ((result.applied || 0) > 0 || (result.failed || 0) > 0)) {
       // result.changes is per-CONCEPT ({concept_id, changes[]}): a bare
       // "N change(s)" mislabels the concept count as a change count, and an
       // operator read it as tag edits and re-ran the unrelated tag
@@ -1515,7 +1526,11 @@ async function autocorrectRepo(req, res, next) {
           /* best-effort */
         });
     }
-    res.status(200).json({ ok: true, ...result });
+    // The response echoes dry_run on BOTH branches: a client that asked for
+    // a scan must be able to tell a scan from an apply on the response
+    // alone (the curated branch returns it; the heuristics branch used to
+    // stay silent, so only one of the two paths was legible).
+    res.status(200).json({ ok: true, dry_run: effectiveDryRun, ...result });
   } catch (err) {
     next(err);
   }

@@ -3347,7 +3347,9 @@ export default {
       },
       draft: {
         notReady:
-          'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
+          'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.',
+        repoGone:
+          'This repository is no longer available on the server — your changes stay in this browser tab only and are lost if the tab is closed or reloaded.'
       },
       mode: {
         basic: 'Basic',

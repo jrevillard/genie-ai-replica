@@ -2528,7 +2528,9 @@ export default {
       },
       draft: {
         notReady:
-          'Draf tidak dapat disimpan di server saat ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman, server, atau repositori mungkin tidak sinkron.'
+          'Draf tidak dapat disimpan di server saat ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman atau server mungkin tidak sinkron.',
+        repoGone:
+          'Repositori ini tidak lagi tersedia di server — perubahan Anda hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang.'
       },
       mode: {
         basic: 'Dasar',

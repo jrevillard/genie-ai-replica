@@ -2488,7 +2488,9 @@ export default {
       },
       draft: {
         notReady:
-          'Draft ko rej kōjparok ilo server pād io — rem̦ōj pād ijin browser tab in in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart. Page im server im repository rej bar ālik.'
+          'Draft ko rej kōjparok ilo server pād io — rem̦ōj pād ijin browser tab in in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart. Page kapa server rej bar ālik.',
+        repoGone:
+          'Ta-e polokelo cha tsa Mov tsa seva — ny goll dy goll dy hene dy tia tabeng browser tab in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart.'
       },
       mode: {
         basic: 'Sabu',

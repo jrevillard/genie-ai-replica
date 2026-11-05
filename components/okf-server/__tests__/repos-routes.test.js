@@ -1256,7 +1256,11 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     );
   });
 
-  test('the apply audit row carries no empty field list when nothing changed (#1066)', async () => {
+  test('an apply that changed NOTHING writes no audit row (#1066)', async () => {
+    // "Applied frontmatter autocorrect — 0 concept(s) applied" describes an
+    // apply that did not happen: the audit log records MODIFICATIONS. A run
+    // that patched nothing and failed nothing leaves no trace (same rule as
+    // the curated branch).
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({
       changes: [],
@@ -1271,12 +1275,45 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
       .set('Authorization', TOKEN)
       .send({ dry_run: false });
     const { writeAudit } = require('../services/audit-service');
-    expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'repo.autocorrect',
-        description: 'Applied frontmatter autocorrect — 0 concept(s) applied, 0 frontmatter field change(s)'
-      })
-    );
+    expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.autocorrect' }));
+  });
+
+  test('the curated apply writes no audit row when no proposal carried a change (#1066)', async () => {
+    // The curated branch had the same hole: a run whose proposals carried
+    // no change wrote "Applied curated frontmatter proposals (llm) — 0
+    // concept(s)" — an apply that changed nothing.
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [], after: { type: 'topic' } }
+    ]);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(0);
+    expect(conceptMetaService.patchConceptFields).not.toHaveBeenCalled();
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.autocorrect' }));
+  });
+
+  test('both branches echo dry_run so a client can tell a scan from an apply (#1066)', async () => {
+    // The curated branch returned it; the heuristics branch stayed silent,
+    // so only one of the two paths was legible from the response alone.
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
+    const scan = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: true });
+    expect(scan.body.dry_run).toBe(true);
+    const apply = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(apply.body.dry_run).toBe(false);
   });
 
   test('a body-less request is a scan (dry_run defaults true) and writes NO "Applied" audit row (#1066)', async () => {

@@ -105,6 +105,12 @@ test.describe('the OKF artifacts view', () => {
     await expect(page.locator('[data-test-id="admin-documents-view-toggle"]')).toBeVisible({ timeout: 10000 });
     await page.locator('[data-test-id="admin-documents-view-artifacts"]').click();
     await expect(page.locator('[data-test-id="okf-artifacts-view"]')).toBeVisible({ timeout: 15000 });
+    // The artifacts read is fired by the view's `mounted()`, so the request
+    // can be dispatched a tick AFTER the element is in the DOM — the view
+    // being visible does NOT mean its read has been captured yet. Wait for
+    // the capture explicitly (bounded) instead of racing it: an implicit
+    // race is what makes an E2E suite flaky under load.
+    await expect.poll(() => filters.includes('true'), { timeout: 15000 }).toBe(true);
     return filters;
   }
 

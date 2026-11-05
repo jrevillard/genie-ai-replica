@@ -292,11 +292,21 @@ the live run happens at the sync.
 
 ### The verification (measured, not asserted)
 
-- **Frontend suite:** 135 suites / 3912 tests green.
+- **Frontend suite:** 137 suites / 3946 tests green.
 - **Coverage (this machine, the wave vs the main baseline measured by
   stashing the wave and re-running):** lines **89.05 %** vs **88.97 %**,
   statements 89.01 vs 88.92, branches 76.16 vs 76.00, functions 67.40 vs
   67.14 — the must-not-decrease bar is met on every metric.
+- **Coverage RE-measured against the CURRENT main (the branch merged
+  `origin/main` after the wave, which moved the baseline):** the wave
+  **89.09 %** lines / **89.04 %** statements / **76.28 %** branches /
+  **67.49 %** functions vs the current main's **89.02 %** / **88.98 %** /
+  **76.12 %** / **67.23 %** — above on all four metrics. The baseline was
+  measured in a throwaway worktree at `origin/main` (junctions for
+  `node_modules`), NOT from a remembered number. The one baseline suite that
+  failed there is the known `validate-pii-rescan` flake: main's copy still
+  has jest's 5 s default, and the wave raises that one test's ceiling to
+  30 s.
 - **Security review:** no HIGH/MEDIUM finding introduced. The change set adds
   no endpoint, no server-side rule and no sink; the one genuinely new
   primitive (the `?tab=studio&repo=` deep link) is guarded server-side by two
@@ -337,6 +347,11 @@ the live run happens at the sync.
     `tests/e2e/documents/search.spec.js` hardcodes nine documents it expects
     to be `Pending`; in this deployment all nine are `Retracted`. The UI is
     correct (the Pending filter shows exactly the pending ones).
+- **Live, re-verified after the merge (2026-11-06): GREEN.** The branch was
+  merged with `origin/main` (three new main commits), the tree was re-synced
+  to the merged head, `frontend` / `okf-server` / `chatqna` / `retriever`
+  rebuilt and recreated, `verify-local-build.sh` 46 pass / 0 fail, and the
+  wave's browser spec re-run against the merged stack.
 
 ### The decisions the wave took beyond the story
 

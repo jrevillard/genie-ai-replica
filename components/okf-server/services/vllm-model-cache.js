@@ -580,11 +580,12 @@ function optedInVllmBase() {
   return process.env.VLLM_ENDPOINT || null;
 }
 
-/** The identity every leg matches on when the deployment opt-in is CLOSED
- * (no endpoint). ONE owner, so the legs cannot drift apart: curation,
- * topic-link and the CSV topics leg raise the SAME error for the same
- * misconfiguration, and each caller decides what to record about it.
- * The message is the code — the legs have always matched on it. */
+/** The identity every leg raises when the deployment opt-in is CLOSED (no
+ * endpoint). ONE owner, so the legs cannot drift apart: curation,
+ * topic-link and the CSV topics leg all throw this error for the same
+ * misconfiguration. The code travels on `err.code`, so a caller that needs
+ * to tell a closed gate from any other failure matches on it — the CSV
+ * leg's converter does exactly that to pick up the degraded shape. */
 const LLM_NOT_CONFIGURED = 'llm-not-configured';
 
 /** The closed-gate error itself. */

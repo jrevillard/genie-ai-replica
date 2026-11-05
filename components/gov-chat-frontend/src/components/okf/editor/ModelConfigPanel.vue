@@ -455,7 +455,7 @@ export default {
       if (!this.form.base_url) return false;
       return !!this.form.api_key || !!(this.editing && this.editing.has_api_key);
     },
-    /** The opt-in warning (issue #1228): a named configuration is active
+    /** The opt-in warning: a named configuration is active
      * while the deployment has NOT opted in to the OKF LLM legs. The
      * configuration cannot serve those legs — only VLLM_ENDPOINT can — so
      * the panel says so instead of letting the operator read the list as

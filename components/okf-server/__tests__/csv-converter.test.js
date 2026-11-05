@@ -290,7 +290,7 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
     expect(topics.source).toBe('fallback-empty-topics');
   });
 
-  it('a CLOSED gate still imports — with the filename slug, and flagged as degraded (#1228)', async () => {
+  it('a CLOSED gate still imports — with the filename slug, and flagged as degraded', async () => {
     // The REAL leg (no injected summariser): with the gate closed it raises
     // the closed-gate error CARRYING the degraded shape, and the converter
     // uses that shape — the import lands with the filename slug (a row-group
@@ -333,7 +333,7 @@ describe('csvTopicsService — response handling', () => {
   });
 
   it('NEVER calls the LLM when VLLM_ENDPOINT is unset, and says so LOUDLY', async () => {
-    // #1228: a closed gate is a misconfiguration, and the sibling legs raise
+    // A closed gate is a misconfiguration, and the sibling legs raise
     // the same `llm-not-configured` error for it (curation, topic-link — each
     // catches its own raise and records a count). The CSV leg used to answer
     // with a silent filename slug and left no trace — one misconfiguration,

@@ -206,11 +206,15 @@ async function downloadToBuffer(fileId, cap) {
   });
 }
 
-/** Append a line to a source file's ingestion log — the operator-visible
+/** Append a line to a SOURCE file's ingestion log — the operator-visible
  * channel for a document import (the admin's file view shows it). The
  * conversion report carries the same fact, but the report is a record; the
  * ingestion log is where the operator looks. Non-fatal by design: a failed
- * mirror never aborts an import. */
+ * mirror never aborts an import.
+ *
+ * Distinct from the worker's bundle mirror (workers/ingestWorker.js), which
+ * resolves the repo's BUNDLE zip and keys per-concept progress on it — that
+ * one cannot carry a per-source-file entry. */
 async function mirrorIngestionLog(fileId, message) {
   try {
     await authedAxios.post(
@@ -219,13 +223,15 @@ async function mirrorIngestionLog(fileId, message) {
       { timeout: 10000 }
     );
   } catch (err) {
-    // The status and the body travel with the message: a mirror that fails
-    // is exactly the case where the operator must be able to tell WHY.
-    logger.warn(`Ingestion-log mirror failed (non-fatal): ${err.message}`, {
-      file_id: fileId,
-      status: err.response && err.response.status,
-      body: err.response && err.response.data
-    });
+    // The diagnosis travels IN the message string: the winston console
+    // formatter strips metadata fields, so a mirror failure logged as
+    // metadata would be invisible in the log stream.
+    const status = err && err.response && err.response.status;
+    const body = err && err.response && err.response.data ? JSON.stringify(err.response.data).substring(0, 200) : '';
+    logger.warn(
+      `Ingestion-log mirror failed (non-fatal): [${fileId}] status=${status || 'n/a'} err=${err.message}` +
+        `${body ? ' body=' + body : ''}`
+    );
   }
 }
 
@@ -548,11 +554,14 @@ async function runDocumentsConversion(job) {
           // The topics leg states WHY it degraded (the fallback owner owns
           // the vocabulary); the importer copies that reason into the import
           // report and into the file's ingestion log. The import lands
-          // anyway, but the operator must SEE it (#1228).
+          // anyway, but the operator must see the degradation.
           const topics = converted.topics;
           if (topics && topics.reason) {
             entry.topics_source = topics.source;
-            const warning = `Topics degraded — ${topics.reason}. The file was imported without LLM-derived topics.`;
+            // Phrased as the decision taken, not as an import outcome: the
+            // ingestion log is append-only, so a warning that asserts
+            // completion would survive a later failed flush as a lie.
+            const warning = `Topics degraded — ${topics.reason}. The import proceeds with the filename slug instead of LLM-derived topics.`;
             entry.warning = warning;
             // NOT awaited: the mirror is best-effort (the same channel and the
             // same call the ingest worker fires without await — workers/ingestWorker.js),

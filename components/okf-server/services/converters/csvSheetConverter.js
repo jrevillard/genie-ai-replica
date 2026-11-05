@@ -157,19 +157,21 @@ async function convertCsv(buffer, meta, opts = {}) {
 
   // TOPICS (David 2026-10-12: "tabular markdown data WITH topics"). One call
   // per file against the REMOTE endpoint. Engine failures degrade; a CLOSED
-  // opt-in RAISES (the closed-gate error), and the catch below keeps the
-  // import landing while recording the degradation (#1228).
+  // opt-in raises the closed-gate error with the degraded shape attached,
+  // and the catch below keeps the import landing while the degradation is
+  // recorded.
   const dictionary = dictionaryForTopics(built.headers, grid);
   const derive = opts.deriveTopics || csvTopics.deriveTopics;
   let topics;
   try {
     topics = await derive({ columns: dictionary, fileName });
   } catch (err) {
-    if (err && err.topics) {
-      // The leg already built the degraded shape and said why (it owns the
-      // vocabulary). The import must still land: the filename slug stays
-      // (a row-group with no topic is a retrieval orphan) and the file is
-      // flagged as degraded so the operator sees it (#1228).
+    if (err && err.code === 'llm-not-configured' && err.topics) {
+      // The closed-gate error, recognised by its code — any other thrown
+      // error takes the generic path below. The degraded shape rides on the
+      // error (the leg owns the vocabulary). The import still lands: the
+      // filename slug stays (a row-group with no topic is a retrieval
+      // orphan) and the degradation is recorded so the operator sees it.
       logger.error(`CSV topics: ${err.topics.reason} — imported with filename-slug topics`, {
         file_id: meta && meta.file_id,
         file_name: fileName,

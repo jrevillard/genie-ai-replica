@@ -20,11 +20,12 @@
  * the sibling legs raise `llm-not-configured` for exactly this condition.
  * Each of them catches its own raise, though: curation records a fallback
  * per concept (`resolved_by: 'llm-error'`) and topic-link counts its failed
- * batches, so neither of them names the cause. The CSV leg used to answer
- * with a silent filename slug and left NO trace of the degradation, so one
- * misconfiguration produced two different answers and the import looked
- * clean (#1228). The gate now raises the same error; the converter keeps the
- * import landing and RECORDS the degradation AND its reason.
+ * batches, so neither of them names the cause. This leg raises the same
+ * error WITH the degraded shape attached; the converter matches on the
+ * error's code, keeps the import landing with the filename slug, and
+ * records the degradation AND its reason in the import report and the
+ * file's ingestion log — the only leg whose closed-gate degradation names
+ * the cause.
  *
  * REMOTE-ONLY (David's absolute rule): every call goes through the shared
  * frontmatter-service primitive, which resolves process.env.VLLM_ENDPOINT —
@@ -131,11 +132,10 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
     modelCache.requireOptedInBase();
   } catch (err) {
     // A closed gate is a misconfiguration, and the legs must answer it the
-    // same way (#1228): the same closed-gate error the sibling legs raise.
-    // They catch their own raise and record only a count; this leg's
-    // caller records the CAUSE, so the error carries the degraded shape
-    // too — the converter stays generic and the import still lands with the
-    // filename slug.
+    // same way: the same closed-gate error the sibling legs raise. The
+    // degraded shape rides on the error, so the converter stays generic,
+    // the import still lands with the filename slug, and the reason is
+    // recorded.
     err.topics = fallbackTopics(fileName, 'fallback-no-endpoint');
     throw err;
   }

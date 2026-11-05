@@ -179,7 +179,7 @@ async function listConfigs(opts = {}) {
     // The deployment opt-in rides along: a named configuration does NOT
     // enable the legs that follow the opt-in (topic links, CSV topics,
     // manifest summary) — those need VLLM_ENDPOINT. The panel warns when a
-    // configuration is active while the gate is closed (#1228).
+    // configuration is active while the gate is closed.
     const deploymentOptIn = !!modelCache.optedInVllmBase();
     return {
       configs: rows.map((d) => mask(d, opts)),

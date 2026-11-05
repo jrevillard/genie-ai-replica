@@ -532,7 +532,7 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
   });
 });
 
-describe('listConfigs envelope — the deployment opt-in rides along (#1228)', () => {
+describe('listConfigs envelope — the deployment opt-in rides along', () => {
   const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
 
   afterEach(() => {

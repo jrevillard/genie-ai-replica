@@ -53,7 +53,7 @@ describe('modelConfigService.list', () => {
     expect(out.env_judge.model).toBe('ibm-granite/granite-4.1-8b');
   });
 
-  it('carries the deployment opt-in through — the panel warns on it (#1228)', async () => {
+  it('carries the deployment opt-in through — the panel warns on it', async () => {
     httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: false } });
     expect((await modelConfigService.list()).deployment_opt_in).toBe(false);
     httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: true } });

@@ -309,7 +309,7 @@ what turns those legs on.
 
 An import whose CSV topics leg degraded is recorded rather than silent: the
 conversion report's per-file entry carries the topic source and a warning,
-and the source document's ingestion log carries the reason (see
+and the source document's ingestion log mirrors the reason (see
 [Ingestion log](/docs/operate/ingestion-log/)). The file still imports — the
 concepts carry the filename slug as their topic.
 

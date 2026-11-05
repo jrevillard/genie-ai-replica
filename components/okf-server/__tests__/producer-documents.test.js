@@ -353,11 +353,11 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
   });
 
-  it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log (#1228)', async () => {
+  it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
     // The gate is closed (no VLLM_ENDPOINT): the topics leg degrades. The
     // import still lands, but the operator must SEE it — the conversion
     // report carries the fact and the file's ingestion log carries the
-    // reason. Before #1228 the CSV leg degraded SILENTLY.
+    // reason.
     delete process.env.VLLM_ENDPOINT;
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     authedAxios.get.mockImplementation((url) => {

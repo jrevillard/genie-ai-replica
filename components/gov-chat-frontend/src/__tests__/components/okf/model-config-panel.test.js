@@ -85,7 +85,7 @@ beforeEach(() => {
   });
 });
 
-describe('ModelConfigPanel — the deployment opt-in warning (#1228)', () => {
+describe('ModelConfigPanel — the deployment opt-in warning', () => {
   const mountWith = async (envelope) => {
     listEnvelope = envelope;
     const w = mountPanel();

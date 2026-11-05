@@ -101,10 +101,7 @@ describe('crawlWorkerSupervisor', () => {
     // No further respawn attempt, however long we wait.
     jest.advanceTimersByTime(3600000);
     expect(WorkerMock.mock.calls.length).toBe(spawnsAfterCap);
-    expect(loggerMock.error).toHaveBeenCalledWith(
-      expect.stringContaining('giving up'),
-      expect.anything()
-    );
+    expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining('giving up'), expect.anything());
   });
 
   it('resets the backoff after a healthy run', () => {

@@ -93,12 +93,7 @@ const requeueZombieJobs = async () => {
     const zombies = await cursor.all();
     for (const job of zombies) {
       await db.collection('crawl_job').update(job._key, { status: 'Pending' });
-      await fileService.addCrawlLog(
-        job.file_id,
-        'WARN',
-        'System',
-        'Crawl worker restarted mid-crawl; job requeued.'
-      );
+      await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
       logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
     }
   } catch (error) {

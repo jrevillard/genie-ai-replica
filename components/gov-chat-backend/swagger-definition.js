@@ -34,17 +34,15 @@ module.exports = {
       // resolve.
       url: (() => {
         const raw = (process.env.API_URL || '').trim();
-        // WHATWG parsing strips tab/LF/CR before parsing, so a value with
-        // an embedded control character must be rejected before the URL
-        // is built — otherwise it would be served silently rewritten.
-        if (/[\t\n\r]/.test(raw)) return '/';
         const base = raw.replace(/\/+$/, '');
         // The server base is JOINED with the annotated paths
         // (servers[0].url + '/api/...'), so it must be usable as a base:
         // a query or a fragment would swallow the joined path, and a
-        // whitespace is not a valid URL (WHATWG only tolerates it by
-        // percent-encoding it). Such a value would serve a broken server
-        // entry, so it is ignored like any other malformed value.
+        // whitespace is not a valid URL — WHATWG parsing only tolerates
+        // it by percent-encoding it (and strips tab/LF/CR before parsing,
+        // which would serve the value silently rewritten). Such a value
+        // would serve a broken server entry, so it is ignored like any
+        // other malformed value.
         if (/[\s?#]/.test(base)) return '/';
         try {
           // WHATWG parsing is the exact validator: it rejects scheme-only

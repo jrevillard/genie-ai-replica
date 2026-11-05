@@ -198,14 +198,34 @@ describe('signature vocabulary vs the app field vocabulary', () => {
     const shared = JIT_PROTECTED_FIELDS.filter((field) => HUSK_ALLOWED_FIELDS.includes(field));
     expect(shared.sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
   });
+
+  it('allows EXACTLY the three preserved fields — not one more', () => {
+    // The intersection check above only sees the fields the app lists as
+    // PROTECTED; a field added to the allowlist from another vocabulary (a
+    // client preference, a profile section, any new field) would widen the
+    // selection on BOTH sides of the contract — the predicate and the AQL
+    // move together, the divergence guard sees agreement, and the deletion
+    // wave starts removing accounts that carry that field. No corpus can
+    // pin a field it does not contain: the list itself is pinned here.
+    expect([...HUSK_ALLOWED_FIELDS].sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
+  });
+
+  it('treats EXACTLY the three ArangoDB system fields as internal', () => {
+    // Same reasoning for the internal-field list: a field added to it
+    // (or a system field removed from it) moves both sides together, and
+    // only the exact list pins it.
+    expect([...HUSK_SYSTEM_FIELDS].sort()).toEqual(['_id', '_key', '_rev']);
+  });
 });
 
 describe('the script stays out of the auto-executed migrations directory', () => {
-  // scripts/migrations/run-migrations.js executes every NNN-description.js
-  // it finds, on EVERY deploy (docs/database-migrations.md). The husk
-  // report is an operator tool that a human runs on purpose — promoted
-  // into that directory, its removal query would run on every deployment
-  // (issue #1501).
+  // scripts/migrations/run-migrations.js is executed by the db-migrations
+  // init container on every deploy (docs/database-migrations.md). It picks
+  // up the files matching /^\d{3}-.*\.js$/ and runs their exported up(db).
+  // The husk report is an operator tool a human runs on purpose: promoted
+  // into that directory under a matching name it would abort the migration
+  // init (it exports no up(db)), and a renamed copy would run its removal
+  // query on every deployment (issue #1501).
   it('is not under scripts/migrations/', () => {
     expect(require.resolve('../scripts/report-husk-user-docs')).not.toMatch(/scripts[\\/]migrations[\\/]/);
   });

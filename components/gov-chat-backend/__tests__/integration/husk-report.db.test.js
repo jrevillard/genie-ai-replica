@@ -15,6 +15,12 @@
  * to the signature — on either side — moves the match set away from the
  * expectation below and fails.
  *
+ * The corpus pins the SEMANTICS of the signature; the vocabulary itself
+ * (the exact field lists) is pinned in __tests__/husk-user-docs.test.js —
+ * a corpus can only pin the fields it happens to contain, so a drift that
+ * adds a field nobody seeded (a user preference, a profile section) is
+ * caught there, not here.
+ *
  * SKIPPED unless ARANGO_TEST_URL points at a database:
  *
  *   ARANGO_TEST_URL=http://127.0.0.1:8529 ARANGO_TEST_USER=root \
@@ -36,6 +42,12 @@ const {
   HUSK_REMOVAL_AQL,
   ALL_DOCS_AQL
 } = require('../../scripts/report-husk-user-docs');
+
+// The suite waits for the database to answer (the CI service container is
+// RUNNING long before ArangoDB serves): the wait's own budget must fit
+// inside Jest's hook timeout, or the hook dies with a generic timeout and
+// the wait's diagnostic never prints.
+jest.setTimeout(180000);
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || 'root';
@@ -75,7 +87,19 @@ const CORPUS = [
   { _key: 'extra-field', createdAt: '2025-01-01T00:00:00.000Z', customSettings: { theme: 'dark' } },
   // An underscore-prefixed APPLICATION field is not an ArangoDB system
   // field: it must disqualify the document exactly like any other.
-  { _key: 'underscore-field', createdAt: '2025-01-01T00:00:00.000Z', _internalFlag: true }
+  { _key: 'underscore-field', createdAt: '2025-01-01T00:00:00.000Z', _internalFlag: true },
+  // A legacy account carrying a CLIENT PREFERENCE field (the app's own
+  // vocabulary: USER_PREFERENCE_FIELDS in constants/jit-fields.js). Such a
+  // document is a real account, not a husk — the deletion wave must never
+  // take a user's display preferences with it.
+  { _key: 'legacy-with-preference', theme: 'dark', createdAt: '2025-01-01T00:00:00.000Z' },
+  // A document carrying a GOV-PROFILE SECTION (the other app vocabulary:
+  // GOV_PROFILE_SECTIONS) — profile data, so never a husk either.
+  {
+    _key: 'legacy-with-profile-section',
+    civilRegistration: { id: 'CR-1' },
+    createdAt: '2025-01-01T00:00:00.000Z'
+  }
 ];
 
 // The oracle: the exact set of documents the matcher must return. Fixed
@@ -198,81 +222,73 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     ).toEqual(EXPECTED_HUSK_KEYS);
   });
 
-  it('reports the exact match count and deletes nothing in dry-run mode', async () => {
+  // Runs the operator script itself against the real database and returns
+  // what it printed. The database handle is created through the script's
+  // own injection seam and closed here: the script never closes it (it is
+  // a one-shot CLI), so without this the suite would leave a keep-alive
+  // socket open for the rest of the job.
+  const runScript = async (argv) => {
+    const { Database } = require('arangojs');
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const previousExitCode = process.exitCode;
     process.exitCode = undefined;
-    let output;
-    let stderr;
-    let exitCode;
+    let handle;
     try {
       await main({
-        argv: [],
+        argv,
         env: {
           ARANGO_URL: TEST_URL,
           ARANGO_DB: DB_NAME,
           ARANGO_COLLECTION: COLLECTION,
           ARANGO_USER: TEST_USER,
           ARANGO_PASSWORD: TEST_PASSWORD
+        },
+        createDatabase: (config) => {
+          handle = new Database(config);
+          return handle;
         }
       });
       // Read the calls BEFORE the restore: mockRestore() clears them.
-      output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-      stderr = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-      exitCode = process.exitCode;
+      return {
+        output: logSpy.mock.calls.map((call) => call.join(' ')).join('\n'),
+        stderr: errorSpy.mock.calls.map((call) => call.join(' ')).join('\n'),
+        exitCode: process.exitCode
+      };
     } finally {
       logSpy.mockRestore();
       errorSpy.mockRestore();
       process.exitCode = previousExitCode;
+      if (handle) {
+        handle.close();
+      }
     }
+  };
+
+  it('reports the exact match count and deletes nothing in dry-run mode', async () => {
+    const { output, stderr, exitCode } = await runScript([]);
     // The divergence cross-check did not fire: the script aborted with an
     // exit code and a stderr line instead of printing a report.
     expect(exitCode).toBeUndefined();
     expect(stderr).not.toContain('ABORT');
+    // The reported counts are the subject, not the wording around them:
+    // the label and the number, not the sentence.
     expect(output).toMatch(/Husk matches:\s+4/);
     // The legacy lookalikes (identity-less but WITH an email) are reported
     // for context and never deleted: exactly the one legacy account of the
     // corpus.
-    expect(output).toMatch(/Legacy lookalikes \(identity-less but WITH email — NOT husks, never deleted\): 1/);
-    expect(output).toContain('Dry run — nothing was deleted.');
+    expect(output).toMatch(/Legacy lookalikes[^\n]*:\s+1/);
     // Nothing was removed.
     expect(await remainingKeys()).toEqual(CORPUS.map((doc) => doc._key).sort());
   });
 
   it('removes the husks and nothing else', async () => {
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const previousExitCode = process.exitCode;
-    process.exitCode = undefined;
-    let output;
-    let stderr;
-    let exitCode;
-    try {
-      await main({
-        argv: ['--delete', '--yes'],
-        env: {
-          ARANGO_URL: TEST_URL,
-          ARANGO_DB: DB_NAME,
-          ARANGO_COLLECTION: COLLECTION,
-          ARANGO_USER: TEST_USER,
-          ARANGO_PASSWORD: TEST_PASSWORD
-        }
-      });
-      // Read the calls BEFORE the restore: mockRestore() clears them.
-      output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-      stderr = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-      exitCode = process.exitCode;
-    } finally {
-      logSpy.mockRestore();
-      errorSpy.mockRestore();
-      process.exitCode = previousExitCode;
-    }
+    const { output, stderr, exitCode } = await runScript(['--delete', '--yes']);
     // The divergence cross-check did not fire, and the removal reported its
     // own outcome: an unknown number of removed documents is an exit code 1.
     expect(exitCode).toBeUndefined();
     expect(stderr).not.toContain('ABORT');
-    expect(output).toContain('Done. 4 of 4 selected documents removed.');
+    expect(output).toMatch(/Done\.\s+4 of 4\b/);
     expect(await remainingKeys()).toEqual(
       CORPUS.map((doc) => doc._key)
         .filter((key) => !EXPECTED_HUSK_KEYS.includes(key))

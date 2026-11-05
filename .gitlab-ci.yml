@@ -3193,6 +3193,19 @@ test:backend-arango:
     # Only the backend: this suite loads the script and the driver, nothing
     # from shared/lib.
     - cd "$CI_PROJECT_DIR/components/gov-chat-backend" && npm ci
+  cache:
+    # The SAME entry as the sibling test:backend job — same package-lock,
+    # same node_modules (716 MB). A separate prefix would store a second
+    # copy of it on every runner.
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: test-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "test-backend-$CI_DEFAULT_BRANCH"
+        - "test-backend-"
   script:
     # before_script and script share one shell: the cd is repeated with an
     # absolute path so the script's working directory never depends on it.

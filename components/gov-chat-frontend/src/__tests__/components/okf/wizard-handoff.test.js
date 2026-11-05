@@ -16,7 +16,20 @@ jest.mock('@/services/repoOkfService', () => ({
   default: {
     listConcepts: (...a) => mockListConcepts(...a),
     get: jest.fn().mockResolvedValue(null),
-    list: jest.fn().mockResolvedValue([])
+    list: jest.fn().mockResolvedValue([]),
+    // The retrieval posture card (Story 10.7) is a real child of StudioTab
+    // now — it reads this on mount.
+    getRetrievalConfig: jest.fn().mockResolvedValue({
+      config: { mode: 'legacy', revision: 0 },
+      source: 'env-defaults',
+      limits: {},
+      modes: ['legacy', 'okf_only', 'hybrid'],
+      serving_graph_count: 0,
+      serving_graphs: [],
+      engaged: false,
+      warnings: []
+    }),
+    getRetrievalConfigAudit: jest.fn().mockResolvedValue([])
   }
 }));
 

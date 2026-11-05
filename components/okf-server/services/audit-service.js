@@ -116,7 +116,11 @@ async function listRepoLogs(repo_id, { limit = 200 } = {}) {
 async function listAuditLogsByAction(action, { limit = 50 } = {}) {
   return withSpan('okf.audit.listByAction', async (span) => {
     span.setAttribute('okf.audit.action', action);
-    const capped = Math.max(1, Math.min(200, Number(limit) || 50));
+    // The limit arrives as a QUERY STRING (req.query.limit), so it is
+    // floored to an integer before it becomes an AQL LIMIT — a float
+    // ("2.5") is rejected by the database, and a non-numeric string must
+    // fall back to the default rather than reach the query as NaN.
+    const capped = Math.max(1, Math.min(200, Math.floor(Number(limit)) || 50));
     const db = await getDb();
     return (
       await db.query(

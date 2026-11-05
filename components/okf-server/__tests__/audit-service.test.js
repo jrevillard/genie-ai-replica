@@ -124,4 +124,18 @@ describe('audit-service (okf_audit_logs)', () => {
     await listAuditLogsByAction('a', {});
     expect(mockDb.query.mock.calls[2][1].limit).toBe(50);
   });
+
+  test('listAuditLogsByAction floors a STRING limit to an integer (the query param arrives as text)', async () => {
+    // req.query.limit is a string: "25" must become 25, and "2.5" must not
+    // reach the AQL LIMIT as a float (the database rejects a non-integer).
+    mockDb.query.mockResolvedValue({ all: async () => [] });
+    await listAuditLogsByAction('a', { limit: '25' });
+    expect(mockDb.query.mock.calls[0][1].limit).toBe(25);
+    await listAuditLogsByAction('a', { limit: '2.5' });
+    expect(mockDb.query.mock.calls[1][1].limit).toBe(2);
+    await listAuditLogsByAction('a', { limit: 'abc' });
+    expect(mockDb.query.mock.calls[2][1].limit).toBe(50); // non-numeric → the default
+    await listAuditLogsByAction('a', { limit: '-5' });
+    expect(mockDb.query.mock.calls[3][1].limit).toBe(1); // the floor
+  });
 });

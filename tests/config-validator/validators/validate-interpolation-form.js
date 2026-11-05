@@ -20,8 +20,15 @@
 /**
  * Classify one `${VAR...}` interpolation occurrence.
  *
+ * `${VAR-default}` (unset-only) and `${VAR:-default}` (unset-or-empty) are
+ * DISTINCT forms: they disagree when the variable is set to the empty
+ * string, which is exactly the set-empty divergence this gate exists for
+ * (#1074) — e.g. `OKF_SCOPE_MODE-open` vs `OKF_SCOPE_MODE:-open` deliver
+ * different values to different services when a deployer sets `VAR=`
+ * explicitly.
+ *
  * @param {string} raw - the matched `${...}` text
- * @returns {'bare'|'default'|'error'|'presence'} the form
+ * @returns {'bare'|'default'|'default-unset'|'error'|'presence'} the form
  */
 function classifyForm(raw) {
   // Classify by the TOP-LEVEL separator — the character right after the
@@ -35,11 +42,11 @@ function classifyForm(raw) {
     const next = raw[m[0].length];
     if (next === '+') return 'presence';
     if (next === '?') return 'error';
-    return 'default'; // :- (unset-or-empty) and :- (unset-only)
+    return 'default'; // :- (unset-or-empty)
   }
   if (sep === '+') return 'presence';
   if (sep === '?') return 'error';
-  return 'default'; // - (unset-only)
+  return 'default-unset'; // - (unset-only)
 }
 
 /**
@@ -62,7 +69,13 @@ function collectInterpolations(content) {
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
     if (lines[i].trim().startsWith('#')) continue;
-    const line = lines[i];
+    // Strip trailing inline comments too — an explanatory `# was bare
+    // ${FOO} before` on a value line names a form the value does not use,
+    // and would fire the gate on prose. Conservative: only a `#` preceded
+    // by whitespace starts a comment (a `#` inside a value like a password
+    // is kept — losing that occurrence would only weaken the gate, never
+    // falsify it).
+    const line = lines[i].replace(/\s+#.*$/, '');
     let pos = 0;
     for (;;) {
       const start = line.indexOf('${', pos);

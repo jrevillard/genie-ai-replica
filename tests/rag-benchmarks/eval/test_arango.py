@@ -97,6 +97,10 @@ def test_source_chunks_quotes_hyphenated_collection(monkeypatch):
     assert "FOR doc IN `GRAPH_genieai-el-salvador_SOURCE`" in captured["body"]["query"]
 
 
-def test_quote_collection_strips_embedded_backticks():
+def test_quote_collection_raises_on_embedded_backtick():
     assert arango.quote_collection("OKF_solar-system_v1_SOURCE") == "`OKF_solar-system_v1_SOURCE`"
-    assert arango.quote_collection("a`b") == "`ab`"
+    try:
+        arango.quote_collection("OKF_x`y_SOURCE")
+        assert False
+    except ValueError as e:
+        assert "backtick" in str(e)

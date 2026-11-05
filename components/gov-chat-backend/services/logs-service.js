@@ -343,8 +343,8 @@ class LogsService {
    * Fetch logs for a time window, returning the canonical envelope.
    *
    * VL path is the only path: issues a LogSQL query via
-   * `VictoriaLogsClient.query` and slices the result for the
-   * requested offset/limit window. Outages from VL are surfaced
+   * `VictoriaLogsClient.query`, paginated at the source (VL-native
+   * `offset`/`limit`) for the requested window. Outages from VL are surfaced
    * as a typed `VlUnavailableError` (503 `vl_unreachable`) so
    * the route layer renders the standard `{error, message}` envelope.
    *
@@ -471,24 +471,34 @@ class LogsService {
         }
       })();
       const [rows, totalRaw] = await Promise.all([
-        client.query({ q: safeQ, start: startIso, end: endIso, limit: limitN, offset: offsetN }),
+        // limit=0 is a page-size clamp, not "unbounded" — VL reads limit=0
+        // as NO limit, so never forward it: the requested page is empty by
+        // definition and no row fetch is needed at all.
+        limitN > 0
+          ? client.query({ q: safeQ, start: startIso, end: endIso, limit: limitN, offset: offsetN })
+          : Promise.resolve([]),
         countPromise
       ]);
       const pageRows = Array.isArray(rows) ? rows.slice(0, limitN) : [];
       // total fallback when the count query is unavailable. With native
-      // paging a SHORT page (< limit rows) is provably the last page, so
-      // `offset + pageLen` is the exact total. A FULL page proves nothing
-      // about what follows it — reporting exactly `limit` there is what
-      // made a full first page render a green "no more pages" indicator
-      // during a partial VL outage (#1152), so report a LOWER BOUND one
-      // past the fetched window instead: the pager keeps a next page
-      // enabled, and the next fetch resolves the truth.
+      // paging a SHORT non-empty page (< limit rows) is provably the last
+      // page, so `offset + pageLen` is the exact total. A FULL page proves
+      // nothing about what follows it — reporting exactly `limit` there is
+      // what made a full first page render a green "no more pages"
+      // indicator during a partial VL outage (#1152), so report a LOWER
+      // BOUND one past the fetched window instead: the pager keeps a next
+      // page enabled, and the next fetch resolves the truth. An EMPTY page
+      // at offset proves only that at most `offset` rows exist — an upper
+      // bound, reported as `offset` (the pager's end-of-list state, which
+      // is correct: there is nothing past this offset).
       const total =
         typeof totalRaw === 'number'
           ? totalRaw
-          : pageRows.length < limitN
+          : pageRows.length > 0 && pageRows.length < limitN
             ? offsetN + pageRows.length
-            : offsetN + pageRows.length + 1;
+            : pageRows.length === 0
+              ? offsetN
+              : offsetN + pageRows.length + 1;
       return {
         logs: pageRows,
         total,
@@ -1117,29 +1127,38 @@ class LogsService {
         }
       })();
       const [rows, countResult] = await Promise.all([
-        client.query({
-          q,
-          start: startIso,
-          end: endIso,
-          // Honour the caller's page exactly — VL filters AND paginates at
-          // the source, so the round-trip is the post-filter page.
-          limit: limitN,
-          offset: offsetN
-        }),
+        // limit=0 is a page-size clamp, not "unbounded" — VL reads limit=0
+        // as NO limit, so never forward it: the requested page is empty by
+        // definition and no row fetch is needed at all.
+        limitN > 0
+          ? client.query({
+              q,
+              start: startIso,
+              end: endIso,
+              // Honour the caller's page exactly — VL filters AND paginates
+              // at the source, so the round-trip is the post-filter page.
+              limit: limitN,
+              offset: offsetN
+            })
+          : Promise.resolve([]),
         countPromise
       ]);
       const pageRows = Array.isArray(rows) ? rows.slice(0, limitN) : [];
       // total fallback when the count query is unavailable — same shape as
-      // `getLogsInRange`: a short page is provably the last page (exact
-      // total), a full page proves nothing about what follows, so report a
-      // lower bound one past the fetched window rather than a number that
-      // renders a false "no more pages" indicator (#1152).
+      // `getLogsInRange`: a short non-empty page is provably the last page
+      // (exact total), a full page proves nothing about what follows, so
+      // report a lower bound one past the fetched window rather than a
+      // number that renders a false "no more pages" indicator (#1152); an
+      // empty page at offset proves only that at most `offset` rows exist
+      // (upper bound — the pager's end-of-list state, which is correct).
       const total =
         typeof countResult === 'number'
           ? countResult
-          : pageRows.length < limitN
+          : pageRows.length > 0 && pageRows.length < limitN
             ? offsetN + pageRows.length
-            : offsetN + pageRows.length + 1;
+            : pageRows.length === 0
+              ? offsetN
+              : offsetN + pageRows.length + 1;
       return {
         logs: pageRows,
         total,

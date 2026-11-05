@@ -4,8 +4,8 @@
 //
 // The gate lives in validate-interpolation-form.js; this suite pins the
 // classifier and asserts the LIVE docker-compose.yaml carries no variable
-// that mixes a bare `${VAR}` with a defaulted `${VAR:-x}` — the asymmetry
-// that made an unset variable reach two services with different values.
+// that mixes interpolation forms — the asymmetry that made an unset (or
+// empty-set) variable reach two services with different values.
 
 const fs = require('fs');
 const path = require('path');
@@ -23,7 +23,8 @@ describe('classifyForm', () => {
     ['${EMAIL_HOST}', 'bare'],
     ['${EMAIL_PORT:-587}', 'default'],
     ['${EMAIL_SECURE:-}', 'default'],
-    ['${VAR-default}', 'default'],
+    ['${VAR-default}', 'default-unset'],
+    ['${VAR?required}', 'error'],
     ['${VAR:?required}', 'error'],
     ['${KC_SMTP_AUTH:+true}', 'presence']
   ])('%s → %s', (raw, expected) => {
@@ -37,6 +38,11 @@ describe('collectInterpolations', () => {
     expect(collectInterpolations(content)).toEqual([{ name: 'FOO', form: 'default', line: 2, raw: '${FOO:-x}' }]);
   });
 
+  it('strips trailing inline comments before classifying', () => {
+    const content = ['  FOO: ${FOO:-x} # was bare ${FOO} before #1074'].join('\n');
+    expect(collectInterpolations(content)).toEqual([{ name: 'FOO', form: 'default', line: 1, raw: '${FOO:-x}' }]);
+  });
+
   it('reports every occurrence with its line number', () => {
     const content = ['a: ${X}', 'b: ${X:-y}'].join('\n');
     const occ = collectInterpolations(content);
@@ -48,7 +54,7 @@ describe('collectInterpolations', () => {
 });
 
 describe('findMixedInterpolationForms — the live compose file', () => {
-  it('docker-compose.yaml has no variable mixing bare and defaulted forms', () => {
+  it('docker-compose.yaml has no variable mixing interpolation forms', () => {
     const content = fs.readFileSync(COMPOSE_FILE, 'utf8');
     const mixed = findMixedInterpolationForms(content);
     expect(mixed).toEqual([]);
@@ -71,6 +77,13 @@ describe('findMixedInterpolationForms — detection', () => {
     expect(mixed[0].message).toContain('EMAIL_HOST');
     expect(mixed[0].message).toContain('line 3');
     expect(mixed[0].message).toContain('line 6');
+  });
+
+  it('flags a `-` vs `:-` mix — the two defaults disagree on empty-set', () => {
+    const content = ['a: ${OKF_SCOPE_MODE-open}', 'b: ${OKF_SCOPE_MODE:-open}'].join('\n');
+    const mixed = findMixedInterpolationForms(content);
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].name).toBe('OKF_SCOPE_MODE');
   });
 
   it('does not flag a uniform variable', () => {

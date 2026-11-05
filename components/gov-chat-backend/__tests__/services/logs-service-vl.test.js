@@ -148,6 +148,17 @@ describe('LogsService VictoriaLogs rewrite', () => {
       mockVlClient.query.mockResolvedValueOnce(shortPage);
       const short = await logsService.getLogsInRange({ start: '2026-09-01T00:00:00.000Z', limit: 2 });
       expect(short.total).toBe(1); // offset 0 + 1 row — exact (last page)
+
+      const emptyPage = [];
+      mockVlClient.query.mockResolvedValueOnce(emptyPage);
+      const empty = await logsService.getLogsInRange({
+        start: '2026-09-01T00:00:00.000Z',
+        limit: 2,
+        offset: 100
+      });
+      // offset past the end: at most `offset` rows exist — an upper bound,
+      // and the pager's end-of-list state is correct.
+      expect(empty.total).toBe(100);
     });
 
     it('throws VlUnavailableError on ECONNREFUSED (no graceful-degradation envelope)', async () => {
@@ -683,15 +694,15 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
 
       it('searchLogs — VL path clamps negative limit/offset to safe values', async () => {
-        const rows = Array.from({ length: 3 }, (_, i) => ({ _msg: `r${i}` }));
-        mockVlClient.query.mockResolvedValueOnce(rows);
         const result = await logsService.searchLogs({
           dateRange: 'today',
           limit: -5,
           offset: -10
         });
-        // limit=0 → no rows in slice; offset=0 → start from 0
-        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
+        // limit=0 clamps to an empty page — and VL reads limit=0 as NO
+        // limit, so the row query is skipped entirely rather than fetching
+        // unbounded rows for a page that is empty by definition.
+        expect(mockVlClient.query).not.toHaveBeenCalled();
         expect(result.logs).toHaveLength(0);
         expect(result.limit).toBe(0);
         expect(result.offset).toBe(0);

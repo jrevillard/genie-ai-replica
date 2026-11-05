@@ -43,23 +43,6 @@ it('#1056: the NOT_READY latch surfaces the degraded-draft notice on the tab', a
   wrapper.unmount();
 });
 
-it('#1056: the tab notice is SESSION-scoped — a gone repo gets its own surface', async () => {
-  // One cause, one copy: the tab notice reports the session-wide latch
-  // (the endpoint is missing for EVERY repo). A repo that is gone is a
-  // repo-scoped outcome and the WIZARD names it — reporting it here would
-  // blame a version mismatch for one repo.
-  const { store } = buildStore();
-  const wrapper = mountTab(store, { i18n: realI18nMessagesMock() });
-  await wrapper.vm.$nextTick();
-  expect(wrapper.find('.okf-studio-tab__draft-notice').exists()).toBe(false);
-  store.commit('okf/setDraftsUnavailable');
-  await wrapper.vm.$nextTick();
-  const notice = wrapper.find('.okf-studio-tab__draft-notice');
-  expect(notice.exists()).toBe(true);
-  expect(notice.text()).toBe(en.okf.studio.draft.notReady);
-  wrapper.unmount();
-});
-
 it('#1056: the shipped notice states the consequence, not a reload, and names both stale parties', () => {
   // Drafts live in the Vuex store only — a reload clears them, so the copy
   // must state the consequence instead of advising the curator to reload. A

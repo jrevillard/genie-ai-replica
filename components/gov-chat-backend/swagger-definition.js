@@ -26,19 +26,22 @@ module.exports = {
       // client-generation pin (scripts/generate-api-client.sh sets it
       // under env -i to bake a deterministic base into the committed Dart
       // artifacts). A value that is not an absolute http(s) URL after
-      // normalization (trim, trailing-slash strip) is ignored — a
-      // scheme-only or scheme-less value would serve a broken server
-      // entry. Keep this normalization in sync with
-      // components/document-repository/src/config/swaggerConfig.js —
-      // a shared helper is not possible here: the generator loads this
-      // module with bare node (no Jest mapper), where ./shared-lib does
-      // not resolve.
+      // normalization (trim, control-character rejection, trailing-slash
+      // strip) is ignored — a scheme-only, scheme-less or broken value
+      // would serve a broken server entry. No shared helper with
+      // document-repository: the generator loads this module with bare
+      // node (no Jest mapper), where ./shared-lib does not resolve.
       url: (() => {
-        const base = (process.env.API_URL || '').trim().replace(/\/+$/, '');
+        const raw = (process.env.API_URL || '').trim();
+        // WHATWG parsing strips tab/LF/CR before parsing, so a value with
+        // an embedded control character must be rejected before the URL
+        // is built — otherwise it would be served silently rewritten.
+        if (/[\t\n\r]/.test(raw)) return '/';
+        const base = raw.replace(/\/+$/, '');
         try {
-          // WHATWG parsing is the exact validator: it rejects scheme-only,
-          // scheme-less and whitespace-embedded values, and normalizes the
-          // scheme to lowercase (RFC 3986 case-insensitivity).
+          // WHATWG parsing is the exact validator: it rejects scheme-only
+          // and scheme-less values; a valid URL is served verbatim
+          // (including its original scheme casing).
           return /^https?:$/.test(new URL(base).protocol) ? base : '/';
         } catch {
           return '/';

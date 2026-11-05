@@ -12,9 +12,7 @@ const swaggerOptions = {
       {
         // RELATIVE base: swagger-ui resolves it against the origin the
         // docs are served from, so Try-it-out is same-origin in every
-        // topology and needs no per-deployment configuration. (The
-        // backend's spec has an API_URL override for its client-generation
-        // pin; this service has no external consumer that needs one.)
+        // topology and needs no per-deployment configuration.
         url: '/',
         description: 'API server base'
       }

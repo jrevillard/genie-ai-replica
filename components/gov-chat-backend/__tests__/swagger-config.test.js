@@ -423,6 +423,11 @@ describe('Swagger Configuration', () => {
       withApiUrl('https:// gov.example.com', ({ swaggerOptions }) => {
         expect(swaggerOptions.definition.servers[0].url).toBe('/');
       });
+      withApiUrl('https://go\tv.example.com', ({ swaggerOptions }) => {
+        // WHATWG parsing strips tab/LF/CR before parsing, so the raw
+        // control character must be rejected before the URL is built.
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
       withApiUrl('HTTP://gov.example.com', ({ swaggerOptions }) => {
         // Uppercase scheme is a legal absolute URL — accepted verbatim.
         expect(swaggerOptions.definition.servers[0].url).toBe('HTTP://gov.example.com');

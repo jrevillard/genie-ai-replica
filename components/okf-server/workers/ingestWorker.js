@@ -110,7 +110,7 @@ const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
 // still never parks (a freed slot must be claimable instantly); the LANE
 // waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
 const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
-// Claim/unclaim transient-write retry policy (issue #1391). NOT env-tunable:
+// Claim/unclaim transient-write retry policy. NOT env-tunable:
 // an env knob that is wired into no compose/env/ansible surface is dead
 // configuration, and no operator asked for this policy to be tunable.
 // Linear + jittered backoff (the db-connection-service idiom: base × attempt,
@@ -223,10 +223,10 @@ const CLAIM_KEEP_FIELDS = [
   'repo_id',
   'concept_id',
   'graph_name',
-  // The claim value the claim-READ saw (#1391): the stamp's CAS is written
+  // The claim value the claim-READ saw: the stamp's CAS is written
   // against it (a stale-claim row must be stamped against its OWN prior
   // claim, never against null), and a non-null value here is what marks a
-  // stale reclaim — the dataprep-liveness probe the FIFO lane now honours,
+  // stale reclaim — the dataprep-liveness probe the FIFO lane honours,
   // exactly like the fair lane (which reads the full row).
   'worker_claimed_at',
   'frontmatter',
@@ -272,10 +272,10 @@ async function claimNextJob(db) {
       // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
       // in-flight on another lane — never double-claim it. A STALE claim
       // (past the drain window) belongs to a dead lane and is reclaimable.
-      // An EMPTY-STRING claim is no claim at all (the reaper guards the same
-      // shape) — DATE_TIMESTAMP('') is null, which would match NEITHER branch
-      // and block the queue head forever.
-      FILTER m.worker_claimed_at == null OR m.worker_claimed_at == '' OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
+      // An EMPTY-STRING claim also falls through here: DATE_TIMESTAMP('')
+      // returns null and AQL orders null before numbers, so the staleness
+      // comparison is true — the same reason the reaper guards != ''.
+      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
       // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
       // not claimable until its next_attempt_after. Inert until the first
       // backoff write (all rows have the field null/absent).
@@ -297,11 +297,11 @@ async function claimNextJob(db) {
   // we do not own AND let the 429 un-claim below decrement an attempt that was
   // never counted (the counter drifts below the truth and the poison-pill
   // reaper fires late). Fail the claim instead: the row is never claimed.
-  // The stamp value comes from the DB CLOCK (round-4 review: staleness is
-  // judged against DATE_NOW() server-side, so an app-host clock must never
-  // become load-bearing) — _stampClaim returns the SERVER-stamped
+  // The stamp value comes from the DB CLOCK (staleness is judged against
+  // DATE_NOW() server-side, so an app-host clock must never become
+  // load-bearing) — _stampClaim returns the SERVER-stamped
   // worker_claimed_at, and the job must carry exactly that value: the 429
-  // unclaim CASes on it (#1391).
+  // unclaim CASes on it.
   const stampedClaim = await _stampClaim(db, rows[0].repo_id, rows[0].concept_id, rows[0].worker_claimed_at);
   if (!stampedClaim) {
     logger.warn('Ingest worker: claim stamp failed — row NOT claimed this cycle', {
@@ -314,29 +314,29 @@ async function claimNextJob(db) {
   // copy of the read row carrying the post-stamp values. The attempt count
   // comes from the stamp's own RETURN (not from the read + 1): another
   // writer can reset the counter between the read and the stamp, and a
-  // mirrored guess would put the §5.5 backoff exponent out of step.
+  // mirrored guess would put the backoff exponent out of step.
   return Object.assign({}, rows[0], {
     worker_claimed_at: stampedClaim.claim,
     ingest_attempts: stampedClaim.attempts
   });
 }
 
-/** Stamp the claim on a claimed row. CAS (round-3 review, #1391): the stamp
+/** Stamp the claim on a claimed row. The stamp is a CAS:
  * only lands while the row still carries the claim value the claim-read saw
  * — two lanes that read the same head row cannot both stamp, the loser's
- * UPDATE matches nothing. Returns the SERVER-stamped worker_claimed_at when
- * the stamp landed (round-4 review: DB clock, not the app-host clock),
- * null when it failed (lost the CAS, or a write error that survived the
- * transient-class retries) — the caller then treats the row as NOT claimed,
- * so every RETURNED job carries its counted attempt and _unclaimAttempt can
- * only ever un-count a real stamp (round 20, #80804). */
+ * UPDATE matches nothing. Returns the SERVER-stamped claim value and attempt
+ * count when the stamp landed (the DB clock, never the app-host clock —
+ * staleness is judged against DATE_NOW()), null when it failed (lost the
+ * CAS, or a write error that survived the connection retry) — the caller
+ * then treats the row as NOT claimed, so every RETURNED job carries its
+ * counted attempt and _unclaimAttempt can only ever un-count a real stamp.
+ */
 async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
   // The arangojs aql tag DROPS an undefined bind (the query text loses the
   // placeholder and the server sees a syntax error) — a never-claimed row
   // has NO worker_claimed_at attribute, so KEEP omits it and the raw value
   // here is undefined. Normalize to null: AQL `== null` matches both the
-  // stored null and the missing attribute (round-5 review, empirically
-  // reproduced against the installed arangojs).
+  // stored null and the missing attribute.
   const priorClaim = priorClaimedAt == null ? null : priorClaimedAt;
   // One immediate retry on a connection-class failure, never a sleep: the
   // stamp runs inside the serialized claim chain, where a sleep parks every
@@ -364,8 +364,7 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
         // A CAS miss on the RETRY, after attempt 1 failed with a connection
         // error, is the signature of a LOST ACK: attempt 1 probably committed
         // and the row now carries THIS lane's stamp that nobody will work.
-        // The claim ages out at the staleness window — surface it (#1551
-        // tracks the lane-owned-token fix that would let the lane adopt it).
+        // The claim ages out at the staleness window — surface it.
         logger.warn(
           'Ingest worker: claim stamp CAS missed after a connection failure — possible ghost claim until staleness',
           {
@@ -377,14 +376,16 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
       // CAS matched nothing — the row moved under us. Deterministic refusal:
       // the claim-read is stale and the row is someone else's. NO retry —
       // the next claim cycle re-reads on a fresh snapshot, and sleeping here
-      // parks every other lane's serialized claim behind it (round-5 review).
+      // parks every other lane's serialized claim behind it.
       return null;
     } catch (err) {
       if (!isConnectionError(err)) {
         // A conflict (the row moved) or a deterministic fault — no point
         // retrying inside the serialized claim chain; the next cycle's
         // claim-read sees the moved row.
-        logger.warn('Ingest worker: claim stamp failed (claim refused)', {
+        // A persistent fault here (parse error, auth…) stalls EVERY FIFO
+        // claim with only this line — it must not be a warn nobody greps for.
+        logger.error('Ingest worker: claim stamp failed (claim refused)', {
           repo_id: repoId,
           concept_id: conceptId,
           error: err.message
@@ -421,17 +422,17 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
  * 429) — no ingest work happened. Un-count it while clearing the claim, so
  * the poison-pill reaper (>= OKF_INGEST_WORKER_MAX_CLAIMS REAL attempts)
  * cannot dead-letter healthy rows that merely bounced off a busy slot under
- * routine cross-repo contention (review !622 wave 2, #78658). The write
- * races NON-worker meta writers (user-triggered repo/lifecycle ops on the
- * same row) — it is NOT single-writer, which is why the CAS + retry below
- * exist (#1391). Round 20, #80804: both claim strategies now guarantee a
+ * routine cross-repo contention. The write races NON-worker meta writers
+ * (user-triggered repo/lifecycle ops on the same row) — it is NOT
+ * single-writer, which is why the CAS + retry below exist. Both claim
+ * strategies now guarantee a
  * returned job's attempt was STAMPED (fifo refuses the claim on a failed
  * stamp; fair stamps inside the fused statement), so this decrement always
  * un-counts a real increment — never a bare 0-row. The decrement happens
  * ONLY when the CAS matches (the row still carries this lane's claim). On a
  * CAS miss the claim is already gone and the counter may keep the +1 (a
  * writer that releases a claim without resetting the counter does not
- * reconcile it) — tracked in #1552.
+ * reconcile it).
  */
 async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
   // The one invariant the JSDoc above does not carry: a CAS match on NOTHING
@@ -458,8 +459,8 @@ async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
           FILTER m.worker_claimed_at == ${claimedAt}
           UPDATE m WITH {
             worker_claimed_at: null,
-            // AQL's MAX takes ONE array argument (MAX(a, b) is a parse error
-            // on ArangoDB 3.12 — error 1541, so this write never executed).
+            // AQL's MAX takes ONE array argument — MAX(a, b) is a parse
+            // error, not a two-argument maximum.
             ingest_attempts: MAX([(m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0])
           } IN okf_concepts_meta
           RETURN OLD._key
@@ -580,13 +581,13 @@ async function claimNextJobFair(db) {
       )
       FILTER cand != null
       // The stamp carries the DB clock; KEEP(NEW, …) puts the exact stamped
-      // value on the job — the 429 unclaim CASes on it (#1391).
+      // value on the job — the 429 unclaim CASes on it.
       UPDATE cand WITH {
         worker_claimed_at: DATE_ISO8601(DATE_NOW()),
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
-        // The job carries the POST-stamp claim value (#1391 — the 429 unclaim
+        // The job carries the POST-stamp claim value (the 429 unclaim
         // CASes on it): KEEP(NEW, CLAIM_KEEP_FIELDS) projects it from the
         // stamped row. The FIFO lane mirrors the stamp's RETURN instead (see
         // claimNextJob).

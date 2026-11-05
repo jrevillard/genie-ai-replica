@@ -117,9 +117,8 @@ function isArangoConflict(err) {
  * own additions match strictly on err.code / numeric status (a message that
  * merely contains a code word is not evidence of a transport failure); the
  * ONE message-regex exception is the shared classifier's own, learned from
- * the 2026-10-12 stream-abort incident and owned by
- * llm-transient-errors.js. The cross-component lift
- * (db-connection-service._isConnectionError) is tracked in #1550. */
+ * the live stream-abort incident and owned by llm-transient-errors.js. The
+ * cross-component consolidation into shared/lib is a separate step. */
 const EXTRA_CONNECTION_CODES = new Set(['ENOTFOUND', 'EHOSTUNREACH', 'EAI_AGAIN']);
 function isConnectionError(err) {
   if (!err) return false;

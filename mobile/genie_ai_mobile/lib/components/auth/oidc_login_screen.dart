@@ -69,8 +69,7 @@ class OidcLoginScreen extends ConsumerWidget {
                   height: 80,
                   fit: BoxFit.contain,
                   // Same graceful degradation as the raster branch: a broken
-                  // icon must not throw during widget build on the login
-                  // screen.
+                  // icon must not throw during widget build.
                   errorBuilder: (context, error, stackTrace) {
                     return Icon(Icons.error, size: 40, color: tokens.danger);
                   },

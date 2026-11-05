@@ -70,7 +70,12 @@ class NavBarComponent extends StatelessWidget {
                         errorBuilder: (context, error, stackTrace) =>
                             const Icon(Icons.error),
                       )
-                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
+                    : Image.asset(
+                        GenieAiConfig.iconPath,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.error),
+                      ),
               ),
               const SizedBox(width: DsSpacing.md),
 

@@ -83,7 +83,7 @@ android {
 
     buildTypes {
         release {
-            // Issue #1009: a release build must NEVER be silently debug-signed.
+            // A release build must NEVER be silently debug-signed.
             // The fallback stays (local test releases have no keystore), but it
             // is loud: the keystore is supplied locally through
             // android/key.properties (gitignored) — never committed.
@@ -101,9 +101,9 @@ android {
             // which are compile-time-only. Without these rules R8 errors
             // on the missing classes during `flutter build apk --release`.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Issue #1009: R8 was OFF (the rules file above was inert) — the
-            // release APK shipped unminified. The Flutter engine/plugin keep
-            // rules live in proguard-rules.pro.
+            // R8 was OFF (the rules file above was inert) — the release APK
+            // shipped unminified. The Flutter engine/plugin keep rules live in
+            // proguard-rules.pro.
             minifyEnabled true
             shrinkResources true
         }

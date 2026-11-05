@@ -491,6 +491,39 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(projected).toContain('worker_claimed_at');
   });
 
+  // The lost-ack signature: attempt 1 fails with a connection error, the
+  // retry's CAS then misses — attempt 1 probably COMMITTED and the row now
+  // carries this lane's stamp that nobody will work. That must be VISIBLE.
+  test('a stamp whose retry CAS misses after a connection failure warns about the ghost claim (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // (unreached — the claim is refused)
+    );
+    const base = mockDb.query.getMockImplementation();
+    let stampAttempts = 0;
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        stampAttempts += 1;
+        if (stampAttempts === 1) {
+          const err = new Error('connect ECONNRESET');
+          err.code = 'ECONNRESET';
+          throw err; // attempt 1: connection failure (effect unknown)
+        }
+        return { all: async () => [] }; // attempt 2: CAS matched nothing
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    expect(stampAttempts).toBe(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('possible ghost claim'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+  });
+
   // Review round 2: the stamp must return null (never undefined) when every
   // attempt fails — the caller treats undefined as "not a claim" but the
   // function contract (and the retry budget) says null.

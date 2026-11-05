@@ -25,8 +25,12 @@ unreachable from the new id — every user signs in again.
 **Migration:**
 
 ```bash
-# Uninstall the old-id app (its local state goes with it).
+# Uninstall the old-id app (its local state goes with it) — including the
+# flavour-suffixed ids the previous builds shipped:
 adb uninstall com.example.genie_ai_mobile
+adb uninstall com.example.genie_ai_mobile.dev
+adb uninstall com.example.genie_ai_mobile.staging
+adb uninstall com.example.genie_ai_mobile.e2e
 
 # Install the new-id build.
 adb install -r build/app/outputs/flutter-apk/app-itu-release.apk

@@ -91,13 +91,21 @@ async function acquireRenewLease() {
   }
 }
 
-function releaseRenewLease() {
+/** Remove the storage entry at `key` only if THIS tab owns it — the guarded
+ * wipe shared by the lease release and the publication withdrawal (round 25's
+ * rule: kept-in-sync-by-discipline twins drift, so the idiom lives once).
+ * Removing a missing key is a no-op. */
+function removeOwnTabEntry(key) {
   try {
-    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
-    if (!raw || (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(RENEW_LEASE_KEY);
+    const raw = window.localStorage.getItem(key);
+    if (raw && (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(key);
   } catch {
     /* best-effort */
   }
+}
+
+function releaseRenewLease() {
+  removeOwnTabEntry(RENEW_LEASE_KEY);
 }
 
 /** The holder publishes the minted user (#80876): a timestamp alone carries
@@ -141,12 +149,7 @@ function clearRenewPublication() {
  * Used by the grant tail, whose own publication is exactly what its grant
  * invalidates. */
 function clearOwnRenewPublication() {
-  try {
-    const raw = window.localStorage.getItem(RENEW_USER_KEY);
-    if (raw && (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(RENEW_USER_KEY);
-  } catch {
-    /* best-effort */
-  }
+  removeOwnTabEntry(RENEW_USER_KEY);
 }
 
 function clearStaleRenewPublication() {

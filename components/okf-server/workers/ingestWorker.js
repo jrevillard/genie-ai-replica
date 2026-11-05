@@ -115,6 +115,12 @@ const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
  * knob in this file. Shared by the claim stamp and the 429 unclaim. */
 const claimRetryMaxAttempts = () => safeInt('OKF_INGEST_CLAIM_RETRY_MAX_ATTEMPTS', 3);
 const claimRetryBackoffMs = () => safeIntOrZero('OKF_INGEST_CLAIM_RETRY_BACKOFF_MS', 500);
+/** Linear + jittered backoff (the db-connection-service idiom: base × attempt,
+ * jitter ≤25%) — one expression shared by the stamp and unclaim retry loops. */
+const claimRetryDelayMs = (attempt) => {
+  const delay = claimRetryBackoffMs() * attempt;
+  return delay + Math.floor(delay * 0.25 * Math.random());
+};
 let _dataprepBusyUntil = 0;
 /** File-local sleep (same idiom as rerank-client / ragas-suite-service). */
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -364,11 +370,9 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
         });
         return null;
       }
-      const delay = claimRetryBackoffMs() * attempt;
-      await sleepMs(delay + Math.floor(delay * 0.25 * Math.random()));
+      await sleepMs(claimRetryDelayMs(attempt));
     }
   }
-  return null;
 }
 
 /** The claim stamp counted the attempt, but the kick was REFUSED (dataprep
@@ -383,12 +387,10 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
  * stamp; fair stamps inside the fused statement), so this decrement always
  * un-counts a real increment — never a bare 0-row. */
 async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
-  // The non-obvious invariant the JSDoc above does not carry: the CAS can
-  // match NOTHING (reset nulled the claim, another lane re-claimed with a
-  // different value) and that is a designed outcome — which is also why
-  // conflicts AND connection-class failures are both safely retryable (a
-  // retry that matches nothing just warns; it can never clear a foreign
-  // claim or double-decrement).
+  // The one invariant the JSDoc above does not carry: a CAS match on NOTHING
+  // is a designed outcome (the claim was reset/reclaimed), which is why both
+  // retryable classes are safe — a losing write can never clear a foreign
+  // claim or double-decrement.
   if (claimedAt == null) {
     // Fail CLOSED: without the stamped claim value the CAS cannot be
     // expressed, and an unguarded write could clear a foreign claim (the
@@ -415,9 +417,8 @@ async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
         {}
       );
       if ((await result.all()).length === 0) {
-        // The CAS matched nothing — the claim was already released, reset or
-        // re-stamped by someone else. Nothing to clear; surface it so a
-        // strategy that ever returns a stale claim value is visible at once.
+        // Designed outcome (see above) — surfaced so a strategy that ever
+        // returns a stale claim value is visible at once.
         logger.warn('Ingest worker: 429 unclaim matched nothing — claim already released/reclaimed', {
           concept_id: conceptId
         });
@@ -453,8 +454,7 @@ async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
         // Linear + jittered backoff (the db-connection-service idiom:
         // 500 × attempt), jitter ≤25% so lanes losing against the same bulk
         // writer do not retry in lockstep.
-        const delay = claimRetryBackoffMs() * attempt;
-        await sleepMs(delay + Math.floor(delay * 0.25 * Math.random()));
+        await sleepMs(claimRetryDelayMs(attempt));
       }
     }
   }
@@ -1085,11 +1085,12 @@ async function _processOneJob() {
         // keep kicking (each 429 of theirs would spawn its own retry loop)
         // while this lane releases. Lanes already mid-cycle still complete
         // their kick — this reduces, not prevents, concurrent retries.
-        _dataprepBusyUntil = Date.now() + kick429CooldownMs();
+        const cooldownMs = kick429CooldownMs();
+        _dataprepBusyUntil = Date.now() + cooldownMs;
         await _unclaimAttempt(db, job.repo_id, conceptId, job.worker_claimed_at);
         logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
           concept_id: conceptId,
-          cooldown_ms: kick429CooldownMs()
+          cooldown_ms: cooldownMs
         });
         recordJob('busy', job.repo_id);
         return { outcome: 'busy', concept_id: conceptId };

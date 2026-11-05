@@ -53,6 +53,8 @@
 // paths, but its laxity is exactly what the strict rule refuses. An ArangoDB
 // message change needs ALL THREE lockstep edits — unification tracked on
 // #1350.
+const { isRetriableUpstreamError, RETRIABLE_STATUS } = require('./llm-transient-errors');
+
 const ABSENT_ERROR_NUMS = new Set([1202, 1204]);
 const ABSENT_404_MESSAGE = 'no match';
 
@@ -108,38 +110,24 @@ function isArangoConflict(err) {
 /** Connection-class failure: the request (very likely) never reached the
  * server, the response never came back, or the server answered with a
  * transient gateway status — the operation's effect is UNKNOWN, and for
- * idempotent statements safe to retry. IN-COMPONENT union of the two
- * existing classifiers (db-connection-service._isConnectionError socket
- * codes + llm-transient-errors RETRIABLE_CODES and its 429/502/503/504
- * status set) plus the axios abort names — the cross-component
- * consolidation into shared/lib is tracked separately (#1550). */
-const CONNECTION_CODES = [
-  'ECONNRESET',
-  'ENOTFOUND',
-  'ECONNREFUSED',
-  'ETIMEDOUT',
-  'ECONNABORTED',
-  'EPIPE',
-  'EHOSTUNREACH',
-  'EAI_AGAIN',
-  'ERR_STREAM_PREMATURE_CLOSE',
-  'socket hang up',
-  'fetch failed'
-];
-const TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
+ * idempotent statements safe to retry. DELEGATES the shared transient
+ * classes (socket codes, 429/502/503/504 response statuses, the abort
+ * message regexes) to the in-component home llm-transient-errors.js — one
+ * home per transient class — and adds only the DB-side extras. The
+ * cross-component lift (db-connection-service._isConnectionError) is
+ * tracked in #1550. */
+const EXTRA_CODES_LOWER = ['enotfound', 'ehostunreach', 'eai_again', 'fetch failed'];
 function isConnectionError(err) {
   if (!err) return false;
   if (err.name === 'AbortError') return true;
+  if (isRetriableUpstreamError(err)) return true;
   const message = String(err.message || '').toLowerCase();
   const code = String(err.code || '').toLowerCase();
-  if (CONNECTION_CODES.some((c) => message.includes(c.toLowerCase()) || code.includes(c.toLowerCase()))) return true;
-  const status =
-    (err.response && err.response.status) != null
-      ? err.response.status
-      : err.status != null
-        ? err.status
-        : err.statusCode;
-  return TRANSIENT_STATUSES.has(status);
+  if (EXTRA_CODES_LOWER.some((c) => code === c || message.includes(c))) return true;
+  // A present-but-statusless response must not short-circuit the chain —
+  // an intermediate layer may carry the status on the error itself.
+  const status = err.response?.status ?? err.status ?? err.statusCode;
+  return status != null && RETRIABLE_STATUS.has(status);
 }
 
 module.exports = {

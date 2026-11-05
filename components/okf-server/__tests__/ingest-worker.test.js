@@ -300,10 +300,14 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // race leaves a GHOST claim — the row counts as in-flight in the fair pick
   // for a full claim window and starves its repo. The unclaim is a CAS on
   // the STAMPED CLAIM VALUE (job.worker_claimed_at) and RETRIES conflicts +
-  // connection-class failures until the write lands. Fixtures carry
-  // ingest_attempts: 1 / worker_claimed_at: the PRE-stamp row state — the
-  // worker mirrors the post-stamp values onto the job it returns.
-  test('429 unclaim write conflict → CAS on the stamped claim, retried until the write lands (#1391)', async () => {
+  // connection-class failures until the write lands.
+
+  /** Program a busy lane for the 1391 unclaim tests: the claimed fixture row
+   * (ingest_attempts/worker_claimed_at are the PRE-stamp values — the worker
+   * mirrors the post-stamp ones onto the job), retract OK, kick 429, 1 ms
+   * retry backoff. Returns the base query impl for tests that override the
+   * unclaim write. */
+  function setupBusyLane() {
     process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries([
       {
@@ -318,57 +322,43 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     ]);
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    return mockDb.query.getMockImplementation();
+  }
+
+  /** Make the unclaim write fail `failures` times with makeErr(), then land.
+   * Returns a reader for the attempt count. */
+  function failUnclaimThenLand(base, failures, makeErr) {
     let unclaims = 0;
-    const base = mockDb.query.getMockImplementation();
     mockDb.query.mockImplementation(async (q) => {
-      const s = queryText(q);
-      if (s.includes('worker_claimed_at: null')) {
+      if (queryText(q).includes('worker_claimed_at: null')) {
         unclaims += 1;
-        if (unclaims <= 2) {
-          const err = new Error('conflict: write-write');
-          err.errorNum = 1200;
-          throw err;
-        }
-        return { all: async () => [{ key: 'u' }] }; // third attempt lands
+        if (unclaims <= failures) throw makeErr();
+        return { all: async () => [{ key: 'u' }] }; // this attempt lands
       }
       return base(q);
     });
+    return () => unclaims;
+  }
+
+  test('429 unclaim write conflict → CAS on the stamped claim, retried until the write lands (#1391)', async () => {
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 2, () =>
+      Object.assign(new Error('conflict: write-write'), { errorNum: 1200 })
+    );
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(unclaims).toBe(3); // retried past the conflicts — the claim IS released
+    expect(unclaimCount()).toBe(3); // retried past the conflicts — the claim IS released
     // The write is a CAS on the claim value: it only clears the claim while
     // the row still carries THIS lane's stamp — a reset that requeued the
     // row (claim nulled) or another lane that re-claimed it (a different
     // claim value) makes the CAS match nothing.
     expect(unclaimQueries().every((s) => /worker_claimed_at\s*==/.test(s))).toBe(true);
-    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
   });
 
   test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
-    programQueries([
-      {
-        repo_id: REPO,
-        concept_id: 'a',
-        graph_name: `OKF_${REPO}`,
-        frontmatter: {},
-        body: '# a',
-        ingest_attempts: 1,
-        worker_claimed_at: null
-      }
-    ]);
-    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
-    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
-    const base = mockDb.query.getMockImplementation();
-    mockDb.query.mockImplementation(async (q) => {
-      if (queryText(q).includes('worker_claimed_at: null')) {
-        const err = new Error('conflict: write-write');
-        err.errorNum = 1200;
-        throw err;
-      }
-      return base(q);
-    });
+    const base = setupBusyLane();
+    failUnclaimThenLand(base, Infinity, () => Object.assign(new Error('conflict: write-write'), { errorNum: 1200 }));
     const res = await worker._processOneJob();
     // The kick refusal itself was handled (lane cools down, outcome busy) —
     // but the failed release must surface at ERROR level so a persisting
@@ -378,45 +368,18 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
       expect.stringContaining('unclaim'),
       expect.objectContaining({ concept_id: 'a' })
     );
-    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
   });
 
   // Connection-class failures (statement never executed / ack lost) ARE
   // retried — the CAS makes even a lost-ack retry safe from double-decrement.
   test('429 unclaim connection failure → retried like a conflict (#1391)', async () => {
-    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
-    programQueries([
-      {
-        repo_id: REPO,
-        concept_id: 'a',
-        graph_name: `OKF_${REPO}`,
-        frontmatter: {},
-        body: '# a',
-        ingest_attempts: 1,
-        worker_claimed_at: null
-      }
-    ]);
-    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
-    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
-    let unclaims = 0;
-    const base = mockDb.query.getMockImplementation();
-    mockDb.query.mockImplementation(async (q) => {
-      const s = queryText(q);
-      if (s.includes('worker_claimed_at: null')) {
-        unclaims += 1;
-        if (unclaims === 1) {
-          const err = new Error('connect ECONNREFUSED 127.0.0.1:8529');
-          err.code = 'ECONNREFUSED';
-          throw err;
-        }
-        return { all: async () => [{ key: 'u' }] }; // second attempt lands
-      }
-      return base(q);
-    });
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 1, () =>
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8529'), { code: 'ECONNREFUSED' })
+    );
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(unclaims).toBe(2);
-    delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS;
+    expect(unclaimCount()).toBe(2);
   });
 
   // Fail CLOSED: without the stamped claim value the CAS cannot be
@@ -453,38 +416,13 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // storms happen) is connection-class too: retried, not misread as a
   // deterministic fault (round-4 review).
   test('429 unclaim HTTP 503 → retried like a conflict (#1391)', async () => {
-    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
-    programQueries([
-      {
-        repo_id: REPO,
-        concept_id: 'a',
-        graph_name: `OKF_${REPO}`,
-        frontmatter: {},
-        body: '# a',
-        ingest_attempts: 1,
-        worker_claimed_at: null
-      }
-    ]);
-    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
-    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
-    let unclaims = 0;
-    const base = mockDb.query.getMockImplementation();
-    mockDb.query.mockImplementation(async (q) => {
-      const s = queryText(q);
-      if (s.includes('worker_claimed_at: null')) {
-        unclaims += 1;
-        if (unclaims === 1) {
-          const err = new Error('Service Unavailable');
-          err.response = { status: 503 };
-          throw err;
-        }
-        return { all: async () => [{ key: 'u' }] };
-      }
-      return base(q);
-    });
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 1, () =>
+      Object.assign(new Error('Service Unavailable'), { response: { status: 503 } })
+    );
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(unclaims).toBe(2);
+    expect(unclaimCount()).toBe(2);
   });
 
   // The claim stamp gets the same transient-class retry: a connection
@@ -542,33 +480,15 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // retried: it surfaces at ERROR on the FIRST attempt (#1391).
   test('429 unclaim non-retryable failure → no retry, error on the first attempt (#1391)', async () => {
     const { logger } = require('../shared-lib/logger');
-    programQueries([
-      {
-        repo_id: REPO,
-        concept_id: 'a',
-        graph_name: `OKF_${REPO}`,
-        frontmatter: {},
-        body: '# a',
-        ingest_attempts: 1,
-        worker_claimed_at: null
-      }
-    ]);
-    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
-    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
-    let unclaims = 0;
-    const base = mockDb.query.getMockImplementation();
-    mockDb.query.mockImplementation(async (q) => {
-      if (queryText(q).includes('worker_claimed_at: null')) {
-        unclaims += 1;
-        const err = new Error('auth failed');
-        err.errorNum = 11; // not a conflict, not a connection failure
-        throw err;
-      }
-      return base(q);
-    });
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(
+      base,
+      Infinity,
+      () => Object.assign(new Error('auth failed'), { errorNum: 11 }) // not a conflict, not a connection failure
+    );
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(unclaims).toBe(1); // NO retry on a deterministic fault
+    expect(unclaimCount()).toBe(1); // NO retry on a deterministic fault
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('unclaim'),
       expect.objectContaining({ concept_id: 'a', error_num: 11 })

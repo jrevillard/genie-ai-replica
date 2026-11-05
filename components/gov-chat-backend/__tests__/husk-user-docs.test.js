@@ -3,10 +3,12 @@
  * issue #1430). The AQL matcher is generated from the same constants the JS
  * predicate reads, so these tests pin the predicate semantics (the signature's
  * meaning) and guard the AQL template against corruption (each FILTER clause,
- * the deleted carve-out, the allowed-field subset, a final RETURN). The AQL's
- * runtime semantics against a real ArangoDB cannot run in CI — it is
- * re-validated against a throwaway ArangoDB with a synthetic corpus whenever
- * the matcher template changes (see MR !752 for the latest validation).
+ * the deleted carve-out, the allowed-field subset, a final RETURN). The
+ * template pins cannot see the AQL's RUNTIME semantics — a template edit that
+ * keeps its substrings, or a constant edit both sides share, passes them
+ * green. Those are covered against a real ArangoDB by
+ * __tests__/integration/husk-report.db.test.js (the test:backend-arango CI
+ * job, issue #1501).
  */
 
 const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');

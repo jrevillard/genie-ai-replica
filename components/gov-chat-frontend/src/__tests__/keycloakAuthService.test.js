@@ -645,11 +645,7 @@ describe('cross-tab renew lease (#80800)', () => {
 
   // Seed a publication the way a real holder writes it (foreign tab id,
   // stamped at publish time) — the shared drive for every adoption test.
-  // Each seed gets its OWN stamp: the module memoizes what it adopted, and
-  // two tests seeding the same millisecond would make the second adoption
-  // fail for the wrong reason.
-  let seedCounter = 0;
-  function seedForeignPublication(token, { at = Date.now() - 10 - seedCounter++, expiresAt } = {}) {
+  function seedForeignPublication(token, { at = Date.now() - 10, expiresAt } = {}) {
     const user = createMockUser({
       access_token: token,
       ...(expiresAt !== undefined ? { expires_at: expiresAt } : {})
@@ -1213,6 +1209,16 @@ describe('cross-tab renew lease (#80800)', () => {
   // ifAvailable:true + a busy lock resolves null WITHOUT invoking the
   // callback (never queues).
   describe('web locks (primary mechanism, #80864)', () => {
+    // Install a minimal navigator.locks fake with the semantics the code
+    // relies on: ifAvailable:true + a busy lock resolves null WITHOUT
+    // invoking the callback (never queues).
+    function fakeLocks(request) {
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: { request }
+      });
+    }
+
     afterEach(() => {
       try {
         delete navigator.locks;
@@ -1222,10 +1228,7 @@ describe('cross-tab renew lease (#80800)', () => {
     });
 
     it('granted lock: renews once and PUBLISHES the minted user', async () => {
-      Object.defineProperty(navigator, 'locks', {
-        configurable: true,
-        value: { request: (name, opts, cb) => cb({ name, mode: 'exclusive' }) }
-      });
+      fakeLocks((name, opts, cb) => cb({ name, mode: 'exclusive' }));
       await initialized();
       const refreshed = createMockUser({ access_token: 'lock-holder-token' });
       mockSigninSilent.mockResolvedValue(refreshed);
@@ -1240,10 +1243,7 @@ describe('cross-tab renew lease (#80800)', () => {
 
     it('busy lock: waits for the holder PUBLICATION — never its own signinSilent', async () => {
       // Busy on every request: resolves null, callback never invoked.
-      Object.defineProperty(navigator, 'locks', {
-        configurable: true,
-        value: { request: () => Promise.resolve(null) }
-      });
+      fakeLocks(() => Promise.resolve(null));
       jest.useFakeTimers();
       try {
         await initialized();
@@ -1272,20 +1272,12 @@ describe('cross-tab renew lease (#80800)', () => {
     // Inside the describe, the cleanup convention is the describe's own.
     it('a holder that publishes BETWEEN the consult and the lock probe is adopted, not granted over (#1521 review)', async () => {
       const holderUser = createMockUser({ access_token: 'gap-holder-token' });
-      Object.defineProperty(navigator, 'locks', {
-        configurable: true,
-        value: {
-          request: (_name, _opts, cb) => {
-            // The holder publishes (and releases) inside the waiter's
-            // probe gap: the waiter consulted an empty slot, and the lock
-            // is free again by the time it asks.
-            window.localStorage.setItem(
-              USER_KEY,
-              JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser })
-            );
-            return Promise.resolve(cb({}));
-          }
-        }
+      fakeLocks((_name, _opts, cb) => {
+        // The holder publishes (and releases) inside the waiter's probe gap:
+        // the waiter consulted an empty slot, and the lock is free again by
+        // the time it asks.
+        window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+        return Promise.resolve(cb({}));
       });
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
@@ -1295,10 +1287,7 @@ describe('cross-tab renew lease (#80800)', () => {
     });
 
     it('a FREE lock with a publication from ANOTHER tab ADOPTS it even when stamped BEFORE this renew started (#1521)', async () => {
-      Object.defineProperty(navigator, 'locks', {
-        configurable: true,
-        value: { request: (_name, _opts, cb) => Promise.resolve(cb({})) }
-      });
+      fakeLocks((_name, _opts, cb) => Promise.resolve(cb({})));
       seedForeignPublication('holder-finished-token');
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));

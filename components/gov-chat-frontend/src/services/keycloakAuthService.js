@@ -2,11 +2,13 @@
  * Keycloak OIDC Authentication Service
  *
  * Wraps oidc-client-ts UserManager to provide OIDC authentication.
- * Tokens are kept in JavaScript memory only — never in sessionStorage or cookies.
- * EXCEPTION: the cross-tab renewal handoff publishes the renewed user in
- * same-origin localStorage (RENEW_USER_KEY) so a second tab can adopt it
- * instead of spending a second grant on an already-rotated refresh token;
- * the entry is wiped at logout and by the TTL cleanup at each renew entry.
+ * Tokens are kept in JavaScript memory; a token set rests on disk in two
+ * places only: oidc-client-ts's own per-tab user store (sessionStorage by
+ * default) and the cross-tab renewal handoff below (same-origin
+ * localStorage, RENEW_USER_KEY) — the handoff publishes the renewed user
+ * so a second tab can adopt it instead of spending a second grant on an
+ * already-rotated refresh token. The handoff entry is wiped at logout and
+ * by the TTL cleanup at each renew entry.
  */
 
 import { UserManager, User } from 'oidc-client-ts';
@@ -190,9 +192,11 @@ function clearStaleRenewPublication() {
  * bounded to one renew inside the TTL) — so it is an older build's handoff
  * (rolling-deploy mixed-version window) and is adopted exactly like a
  * tab-stamped one.
- * CONSUMES the offer (#1521 review): a successful read records the stamp
- * in lastAdoptedAt, so this is a one-shot per publication — tryAdoptPublication
- * is its only caller; a second reader would silently burn the adoption. */
+ * CONSUMES the offer (#1521 review): a successful read records the adopted
+ * TOKEN in lastAdoptedToken, so this is a one-shot per token — a holder's
+ * next renew publishes new tokens, which are adoptable again.
+ * tryAdoptPublication is its only caller; a second reader would silently
+ * burn the adoption. */
 // The token this tab last adopted (#1521 review, loop 5): re-adopting the
 // IDENTICAL tokens is never legitimate — it would serve them twice, and
 // with a short-lived adopted token the re-armed expiring timer re-enters
@@ -324,6 +328,15 @@ async function tryAdoptPublication(manager) {
   return adopted ? adoptPublishedUser(manager, adopted) : null;
 }
 
+/** Adopt-or-grant, in ONE place (#1521 review): a holder can publish and
+ * release between a waiter's consult and its lock/lease claim, so the
+ * publication is re-read once the claim is held — a grant then would burn
+ * a grant on the token that holder just rotated away. Both renewal paths
+ * use this helper, so the policy cannot drift between them. */
+async function adoptOrGrant(manager) {
+  return (await tryAdoptPublication(manager)) ?? runRawGrantAndPublish(manager);
+}
+
 /** PRIMARY cross-tab mechanism (#80864): the Web Locks API — the only
  * genuinely atomic cross-tab claim. ORDERING (round 23, review of the
  * free-lock arm): a waiter can arrive AFTER the holder finished — the lock
@@ -337,11 +350,10 @@ async function tryAdoptPublication(manager) {
  * the lock, the same trade the stale-lease takeover always made (a renew
  * wedged >20s went nowhere). */
 async function renewViaWebLock(manager, startedAt) {
-  // RE-CONSULT INSIDE THE LOCK (#1521 review): the holder can publish and
-  // release BETWEEN this tab's consult and its lock probe — granting then
-  // would burn a grant on the refresh token that holder just rotated away.
-  // Under the lock the publication is read once more before any grant.
-  const renewOnce = async () => (await tryAdoptPublication(manager)) ?? runRawGrantAndPublish(manager);
+  // Under the lock the publication is read once more before any grant
+  // (adoptOrGrant) — the holder can publish and release between this tab's
+  // consult and its lock probe.
+  const renewOnce = () => adoptOrGrant(manager);
   const adoptedFirst = await tryAdoptPublication(manager);
   if (adoptedFirst) return adoptedFirst;
   const held = await tryTakeLock(renewOnce);
@@ -383,12 +395,10 @@ async function renewViaLease(manager, startedAt) {
     if (adopted) return adopted;
     held = await acquireRenewLease();
   }
-  // RE-CONSULT BEFORE THE GRANT (#1521 review): the holder can publish and
-  // release the lease BETWEEN this tab's consult and its claim — granting
-  // then would burn a grant on the token that holder just rotated away.
-  const adoptedLast = await tryAdoptPublication(manager);
-  if (adoptedLast) return adoptedLast;
-  return runRawGrantAndPublish(manager);
+  // The lease is held now: re-read the publication before granting
+  // (adoptOrGrant) — the holder can publish and release between this tab's
+  // consult and its claim.
+  return adoptOrGrant(manager);
 }
 
 /** Round 21c (#80941): oidcConfig sets automaticSilentRenew: true, so
@@ -493,7 +503,10 @@ async function initialize() {
     try {
       const user = await signinSilent();
       if (user && !user.expired) {
-        consecutiveRenewFailures = 0; // recovered — the grant works again
+        // Recovered — the grant works again. (onUserLoaded also resets the
+        // counter on every success path; this line keeps the reset visible
+        // on the path that observes the recovery directly.)
+        consecutiveRenewFailures = 0;
         return;
       }
     } catch (retryError) {
@@ -570,6 +583,9 @@ async function logout() {
   // one on disk (round 23 retention fix; the TTL cleanup misses a fresh
   // publication, which a logout is exactly the wrong place to keep).
   clearRenewPublication();
+  // The adoption memo holds an access-token string — a logout ends the
+  // session, so the memo goes with it.
+  lastAdoptedToken = null;
   releaseManagerEvents();
 
   const manager = getUserManager();

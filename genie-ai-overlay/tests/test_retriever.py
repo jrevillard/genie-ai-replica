@@ -455,39 +455,23 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_non_integer_traversal_max_returned_rejected_400(self, invoke_env):
-        """traversal_max_returned is interpolated into a LIMIT clause; a
-        non-numeric value must be rejected with 400, not interpolated."""
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"traversal_max_returned": "3 LIMIT 1"},
+            {"traversal_max_depth": "1 FOR x IN @@c"},
+            {"traversal_max_returned": True},
+            {"traversal_score_threshold": "0.5 RETURN 1 //"},
+            {"traversal_score_threshold": float("inf")},
+        ],
+    )
+    async def test_invalid_traversal_parameter_rejected_400(self, invoke_env, overrides):
+        """The traversal parameters are interpolated into AQL text (LIMIT /
+        FILTER clauses) — a value that is not a plain number is refused with
+        400, never interpolated."""
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         with pytest.raises(HTTPException) as exc_info:
-            await invoke_env["retriever"].invoke(
-                create_mock_input(enable_traversal=True, traversal_max_returned="3 LIMIT 1")
-            )
-        assert exc_info.value.status_code == 400
-        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_non_numeric_score_threshold_rejected_400(self, invoke_env):
-        """traversal_score_threshold is interpolated into a FILTER clause; a
-        non-numeric value must be rejected with 400, not interpolated."""
-        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
-        with pytest.raises(HTTPException) as exc_info:
-            await invoke_env["retriever"].invoke(
-                create_mock_input(enable_traversal=True, traversal_score_threshold="0.5 RETURN 1 //")
-            )
-        assert exc_info.value.status_code == 400
-        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_non_finite_score_threshold_rejected_400(self, invoke_env):
-        """float() accepts NaN and ±Inf (JSON 1e999 parses to inf); either
-        interpolated into a FILTER comparison breaks the traversal query at
-        runtime — refused with 400."""
-        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
-        with pytest.raises(HTTPException) as exc_info:
-            await invoke_env["retriever"].invoke(
-                create_mock_input(enable_traversal=True, traversal_score_threshold=float("inf"))
-            )
+            await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True, **overrides))
         assert exc_info.value.status_code == 400
         invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
 

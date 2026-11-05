@@ -161,12 +161,13 @@ module.exports = () => {
   // own handlers; the canonical implementations live under
   // /api/service-categories (service-category-routes.js) and are what the
   // frontend calls. The routes stay as 301 redirects so existing clients —
-  // and the Kong /api/services route — keep working. The query string is
-  // preserved because req.originalUrl carries it. The @swagger annotations
-  // above stay so the OpenAPI spec (and the generated mobile client) keep
-  // declaring these paths.
+  // and the Kong /api/services route — keep working. req.url is the
+  // mount-relative path (query string included), so the target is the
+  // canonical path with the same query. The @swagger annotations above stay
+  // so the OpenAPI spec (and the generated mobile client) keep declaring
+  // these paths.
   router.get(['/categories', '/categories/:categoryId', '/search'], (req, res) => {
-    res.redirect(301, CANONICAL_PREFIX + req.originalUrl.slice(req.baseUrl.length));
+    res.redirect(301, CANONICAL_PREFIX + req.url);
   });
 
   return router;

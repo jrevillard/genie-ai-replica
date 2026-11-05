@@ -28,7 +28,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels
-from core.model_cache import ModelDiscoveryError, resolve_model_id
+from core.model_cache import ModelDiscoveryError, coerce_int, resolve_model_id
 from core.model_http_policy import (
     HUB_EMBED_TIMEOUT_SECONDS,
     LLM_MAX_RETRIES,
@@ -311,8 +311,63 @@ def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
 # only the character set ArangoDB itself accepts may reach that text (#501).
 _GRAPH_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
 
-# One WARN per process when a request tries to supply a traversal template.
-_TRAVERSAL_QUERY_WARNED = False
+
+def _validate_graph_name(graph_name, source: str) -> None:
+    """Refuse a graph name that would carry AQL metacharacters into the text.
+
+    Every graph-name source — the single-graph constant, a fan-out leg, a
+    carrier name the routing probes read — funnels through here before any
+    AQL is built (#501).
+    """
+    if not isinstance(graph_name, str) or not _GRAPH_NAME_PATTERN.fullmatch(graph_name):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid graph name ({source}): {graph_name!r}. Graph names may only "
+            "contain letters, digits, underscores and hyphens.",
+        )
+
+
+@functools.lru_cache(maxsize=1)
+def _warn_traversal_query_ignored() -> None:
+    """One WARN per process when a request tries to supply a traversal template."""
+    logger.warning(
+        "Request supplied 'traversal_query' — ignored. The traversal template is operator configuration only."
+    )
+
+
+def _coerce_traversal_params(input_dict: dict) -> tuple[int, int, float]:
+    """Coerce the traversal parameters of a request to their AQL-safe types.
+
+    They are interpolated into AQL text (LIMIT / FILTER clauses), so a
+    request must not be able to smuggle AQL through them (#501):
+    ``traversal_max_depth`` and ``traversal_max_returned`` go through the
+    shared ``coerce_int`` (digit strings accepted, booleans refused) and
+    ``traversal_score_threshold`` must be a finite number. Anything else is
+    a 400, never an interpolated clause.
+    """
+    depth = coerce_int(input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH))
+    returned = coerce_int(input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED))
+    if depth is None or returned is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid traversal parameters: traversal_max_depth and traversal_max_returned must be integers.",
+        )
+    try:
+        threshold = float(input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid traversal parameters: traversal_score_threshold must be a finite number.",
+        ) from exc
+    # float() accepts NaN and ±Inf (JSON 1e999 → inf); either would be
+    # interpolated into a FILTER comparison and error every traversal query
+    # at runtime.
+    if not math.isfinite(threshold):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid traversal parameters: traversal_score_threshold must be a finite number.",
+        )
+    return depth, returned, threshold
 
 
 def _escape_aql_string(value) -> str:
@@ -1420,32 +1475,9 @@ class GenieaiArangoRetriever(OpeaComponent):
             distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
             use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
             num_centroids = input_dict.get("num_centroids", ARANGO_NUM_CENTROIDS)
-            # The numeric traversal parameters are interpolated into AQL text
-            # (LIMIT / FILTER clauses) — coerce them here so a request cannot
-            # smuggle AQL through them (#501).
-            try:
-                traversal_max_depth = int(input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH))
-                traversal_max_returned = int(input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED))
-                traversal_score_threshold = float(
-                    input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
-                )
-            except (TypeError, ValueError) as exc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Invalid traversal parameters: traversal_max_depth and "
-                        "traversal_max_returned must be integers and "
-                        "traversal_score_threshold a number."
-                    ),
-                ) from exc
-            # float() accepts NaN and ±Inf (JSON 1e999 → inf); either would be
-            # interpolated into a FILTER comparison and error every traversal
-            # query at runtime (#501).
-            if not math.isfinite(traversal_score_threshold):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid traversal parameters: traversal_score_threshold must be a finite number.",
-                )
+            traversal_max_depth, traversal_max_returned, traversal_score_threshold = _coerce_traversal_params(
+                input_dict
+            )
             # The traversal TEMPLATE is operator configuration
             # (ARANGO_TRAVERSAL_QUERY). Never accept one from the request: the
             # template is interpolated into AQL text, so a caller-supplied
@@ -1454,13 +1486,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             if input_dict.get("traversal_query"):
                 # Log ONCE per process: a client that always sends the field
                 # would otherwise emit one WARN per retrieval request.
-                global _TRAVERSAL_QUERY_WARNED
-                if not _TRAVERSAL_QUERY_WARNED:
-                    _TRAVERSAL_QUERY_WARNED = True
-                    logger.warning(
-                        "Request supplied 'traversal_query' — ignored. "
-                        "The traversal template is operator configuration only."
-                    )
+                _warn_traversal_query_ignored()
 
             filter_data = input_dict.get("context", {})
             # Same normalization as the deployment value, so both paths accept
@@ -1497,12 +1523,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             # AQL text — accept only the character set ArangoDB itself allows
             # for graph/collection names, so no AQL metacharacter can ride in
             # on it (#501).
-            if not _GRAPH_NAME_PATTERN.fullmatch(graph_name):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid graph name: {graph_name!r}. Graph names may only "
-                    "contain letters, digits, underscores and hyphens.",
-                )
+            _validate_graph_name(graph_name, "extraction")
 
             if search_start == "node":
                 collection_name = f"{graph_name}_ENTITY"
@@ -2648,12 +2669,7 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     # through the probe queries (#501). Same character set as
     # _extract_for_graph enforces.
     for _graph in encoded_graph_names:
-        if not isinstance(_graph, str) or not _GRAPH_NAME_PATTERN.fullmatch(_graph):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid graph name on the request carrier: {_graph!r}. Graph names may only "
-                "contain letters, digits, underscores and hyphens.",
-            )
+        _validate_graph_name(_graph, "request carrier")
 
     tracer = get_tracer("retriever.fanout")
     span = tracer.start_span("retriever.fanout")

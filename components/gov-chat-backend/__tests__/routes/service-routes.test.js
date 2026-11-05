@@ -154,39 +154,26 @@ describe('Auth guard', () => {
 // canonical /api/service-categories paths (service-category-routes.js).
 // The query string must survive the redirect.
 // ============================================================
-describe('GET /api/services/categories redirects to the canonical route', () => {
-  it('should 301 to /api/service-categories/categories', async () => {
-    const response = await authGet('/api/services/categories');
+describe('deprecated /api/services GET routes redirect to the canonical ones', () => {
+  it.each([
+    ['/api/services/categories', '/api/service-categories/categories'],
+    ['/api/services/categories?locale=fr', '/api/service-categories/categories?locale=fr'],
+    ['/api/services/categories/cat1', '/api/service-categories/categories/cat1'],
+    ['/api/services/search?query=health', '/api/service-categories/search?query=health']
+  ])('should 301 %s to %s', async (requestPath, location) => {
+    const response = await authGet(requestPath);
 
     expect(response.status).toBe(301);
-    expect(response.headers.location).toBe('/api/service-categories/categories');
+    expect(response.headers.location).toBe(location);
+  });
+
+  it('should not call the duplicate handlers', async () => {
+    await authGet('/api/services/categories');
+    await authGet('/api/services/categories/cat1');
+    await authGet('/api/services/search?query=health');
+
     expect(serviceCategoryService.getAllCategoriesWithServices).not.toHaveBeenCalled();
-  });
-
-  it('should preserve the query string in the redirect target', async () => {
-    const response = await authGet('/api/services/categories?locale=fr');
-
-    expect(response.status).toBe(301);
-    expect(response.headers.location).toBe('/api/service-categories/categories?locale=fr');
-  });
-});
-
-describe('GET /api/services/categories/:categoryId redirects to the canonical route', () => {
-  it('should 301 to /api/service-categories/categories/:categoryId', async () => {
-    const response = await authGet('/api/services/categories/cat1');
-
-    expect(response.status).toBe(301);
-    expect(response.headers.location).toBe('/api/service-categories/categories/cat1');
     expect(serviceCategoryService.getCategoryWithServices).not.toHaveBeenCalled();
-  });
-});
-
-describe('GET /api/services/search redirects to the canonical route', () => {
-  it('should 301 to /api/service-categories/search with the query string', async () => {
-    const response = await authGet('/api/services/search?query=health');
-
-    expect(response.status).toBe(301);
-    expect(response.headers.location).toBe('/api/service-categories/search?query=health');
     expect(serviceCategoryService.searchCategoriesAndServices).not.toHaveBeenCalled();
   });
 });

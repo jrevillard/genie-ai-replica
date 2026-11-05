@@ -2538,7 +2538,7 @@ export default {
       },
       draft: {
         notReady:
-          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe le seva li ka be le mefuta e fapaneng.'
+          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe, seva kapa polokelo e ka se lumellane.'
       },
       mode: {
         basic: 'Pele',
@@ -2747,7 +2747,7 @@ export default {
           'Pono ea ho qetela pele u fana ka repo: faele nngwe le nngwe e ka tlase, markdown ea eona le ditag ea eona — ka mokhoa oo mothusi a tlang ho li qotsa ka oona.',
         noRepo: 'Ha ho repo ho fihlela jwale — hlahlobo ea difaele e tla hlaha mona ha repo e le teng.',
         ritualOutside:
-          'Mokete oa tlhahlobo o etsahala editor le dashboard ea Studio, konopo e le e ntle e mong le e mong — eseng mona. Bula editor ho phethela.',
+          'Mokete oa tlhahlobo o etsahala editor le dashboard ea Studio, konopo e le nngwe ka nako — eseng mona. Bula editor ho phethela.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2760,7 +2760,7 @@ export default {
         frontmatterOk: 'Malafrontmatter a amohelehile',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Phekola e feditse',
-        hint: 'Kono polokelo e loketse ho tlhahlobo. Ho publish hang ha etsahetseng moo — lifecycle e matha dashboard le editor, konopo e le e ntle e mong le e mong.',
+        hint: 'Kono polokelo e loketse ho tlhahlobo. Ho publish hang ha etsahetseng moo — lifecycle e matha dashboard le editor, konopo e le nngwe ka nako.',
         nameOk: 'Lebitso la polokelo le behiloe',
         labelsOk: 'Lileibole li khethiloe',
         topicsOk: 'Lihlooho li hlahlobiloe',

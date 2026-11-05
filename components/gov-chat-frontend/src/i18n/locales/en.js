@@ -3347,7 +3347,7 @@ export default {
       },
       draft: {
         notReady:
-          'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
+          'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
       },
       mode: {
         basic: 'Basic',

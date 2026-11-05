@@ -3341,10 +3341,10 @@ test:okf-server:
       changes:
         - "components/okf-server/**/*"
         - "components/shared/**/*"
-        # #1056: the cross-boundary route contract test reads the frontend
-        # studioService source — without this path a frontend-only repoint of
-        # the draft URL never runs the guard, which is exactly the drift that
-        # shipped #1056 (the frontend was repointed alone).
+        # The cross-boundary route contract test reads the frontend service
+        # sources — without these paths a frontend-only repoint of a URL
+        # never runs the guard, which is exactly the drift it exists to
+        # catch (the frontend repointed alone).
         - "components/gov-chat-frontend/src/services/**"
         - ".gitlab-ci.yml"
       when: on_success

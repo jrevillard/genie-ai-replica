@@ -2551,7 +2551,7 @@ export default {
       },
       draft: {
         notReady:
-          'Entwürfe können in dieser Sitzung nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite und Server können unterschiedliche Versionen haben.'
+          'Entwürfe können in dieser Sitzung nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite, Server oder Repository können nicht synchron sein.'
       },
       mode: {
         basic: 'Standard',

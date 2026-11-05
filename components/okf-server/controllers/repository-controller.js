@@ -1361,8 +1361,9 @@ async function reingestFailed(req, res, next) {
  * Story #978 — POST /api/okf/repos/:repo_id/autocorrect.
  * Body: { dry_run?: boolean }.
  * Scans all concepts and applies frontmatter-only autocorrect rules. With
- * dry_run=true, returns the planned changes without applying. With dry_run=false
- * (default), applies atomically.
+ * dry_run=true, returns the planned changes without applying. dry_run
+ * DEFAULTS TO TRUE: a request that omits the flag is a scan, never an apply
+ * (both branches).
  *
  * Returns { ok, changes, warnings }.
  */
@@ -1393,10 +1394,8 @@ async function autocorrectRepo(req, res, next) {
         : 'heuristics';
     // ONE effective dry-run flag for BOTH branches (declared before the
     // curated branch so it gates the apply there too): a missing body flag is
-    // a scan, not an apply — otherwise a body-less request against an
-    // llm-classified repo silently WROTE frontmatter on every concept and
-    // audited it as an apply (#1066: the row must not lie; the route contract
-    // states the default).
+    // a scan, not an apply — the route contract states the default, and the
+    // audit row must never describe an apply that did not happen.
     const effectiveDryRun = typeof dry_run === 'boolean' ? dry_run : true;
     if (mode !== 'heuristics') {
       const proposals = await llmCuration.proposeFrontmatter(repoDoc, bodyConceptId || null, { classification: mode });
@@ -1404,22 +1403,34 @@ async function autocorrectRepo(req, res, next) {
       const failures = [];
       if (!effectiveDryRun) {
         const list = Array.isArray(proposals) ? proposals : [proposals];
+        const fields = new Set();
         for (const p of list) {
           if (!p || !p.changes || p.changes.length === 0) continue;
           // One concept failing must not abort the run (the heuristics branch
-          // has the same rule): a mid-loop throw used to leave earlier
-          // concepts written with NO audit row for the partial apply, and a
-          // missing row was counted as applied.
-          try {
-            const updated = await conceptMetaService.patchConceptMeta(repo_id, p.concept_id, {
-              frontmatter: p.after
-            });
-            if (updated) appliedCount += 1;
-            else failures.push({ concept_id: p.concept_id, error: 'concept row not found' });
-          } catch (err) {
-            failures.push({ concept_id: p.concept_id, error: (err && err.message) || String(err) });
+          // has the same rule): a mid-loop throw would leave earlier concepts
+          // written with NO audit row for the partial apply, and a missing
+          // row must not count as applied. One immediate retry, mirroring the
+          // heuristics branch — a transient miss is absorbed, not reported.
+          let updated = null;
+          let lastError = null;
+          for (let attempt = 0; attempt < 2 && !updated; attempt += 1) {
+            try {
+              updated = await conceptMetaService.patchConceptMeta(repo_id, p.concept_id, {
+                frontmatter: p.after
+              });
+              if (!updated) lastError = 'concept row not found';
+            } catch (err) {
+              lastError = (err && err.message) || String(err);
+            }
+          }
+          if (updated) {
+            appliedCount += 1;
+            for (const c of p.changes) fields.add(c.field);
+          } else {
+            failures.push({ concept_id: p.concept_id, error: lastError || 'unknown error' });
           }
         }
+        const fieldList = [...fields].sort();
         auditService
           .writeAudit({
             action: 'repo.autocorrect',
@@ -1433,6 +1444,7 @@ async function autocorrectRepo(req, res, next) {
               ') — ' +
               appliedCount +
               ' concept(s)' +
+              (fieldList.length ? ' (' + fieldList.join(', ') + ')' : '') +
               (failures.length > 0 ? `, ${failures.length} concept(s) FAILED and reported to the client` : ''),
             details: { mode, applied: appliedCount, failures }
           })
@@ -1447,18 +1459,19 @@ async function autocorrectRepo(req, res, next) {
     const result = await conceptMetaService.autocorrectRepo(repo_id, effectiveDryRun, actorFrom(req));
     // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
     if (!effectiveDryRun) {
-      // #1066: result.changes is per-CONCEPT ({concept_id, changes[]}), so a
-      // bare "N change(s)" mislabels the concept count as a change count and
-      // sent an operator re-running the (unrelated) tag suggestion. Name the
+      // result.changes is per-CONCEPT ({concept_id, changes[]}): a bare
+      // "N change(s)" mislabels the concept count as a change count, and an
+      // operator read it as tag edits and re-ran the unrelated tag
+      // suggestion. Name the
       // scope and the fields actually touched — tags are never autocorrected.
       // The FAILED concepts are excluded from both counts AND from the
       // details payload: they were planned, not applied, and counting them
       // made the row contradict itself ("2 concept(s) … 1 concept(s) FAILED"
       // read as three touched concepts).
       const failedIds = new Set((result.failures || []).map((f) => f.concept_id));
-      const conceptChanges = (Array.isArray(result.changes) ? result.changes : []).filter(
-        (c) => !failedIds.has(c.concept_id)
-      );
+      const allChanges = Array.isArray(result.changes) ? result.changes : [];
+      const conceptChanges = allChanges.filter((c) => !failedIds.has(c.concept_id));
+      const failedChanges = allChanges.filter((c) => failedIds.has(c.concept_id));
       const fieldCount = conceptChanges.reduce((n, c) => n + ((c.changes && c.changes.length) || 0), 0);
       const fields = [...new Set(conceptChanges.flatMap((c) => (c.changes || []).map((ch) => ch.field)))].sort();
       auditService
@@ -1479,9 +1492,12 @@ async function autocorrectRepo(req, res, next) {
             (fields.length ? ' (' + fields.join(', ') + ')' : '') +
             (result.failed > 0 ? `, ${result.failed} concept(s) FAILED and reported to the client` : ''),
           // The APPLIED set, so the payload matches the sentence above it;
-          // the failed concepts keep their own entry (concept_id + error).
+          // the failed concepts keep their own entry (concept_id + error)
+          // AND their planned changes, so the log still records what the run
+          // intended to write to them.
           details: {
             changes: conceptChanges,
+            failed_changes: failedChanges,
             failures: result.failures || [],
             warnings: result.warnings
           }

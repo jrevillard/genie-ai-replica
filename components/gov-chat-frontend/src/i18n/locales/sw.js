@@ -2522,7 +2522,7 @@ export default {
       },
       draft: {
         notReady:
-          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa na seva vinaweza kuwa na toleo tofauti.'
+          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa, seva au ghala linaweza kuwa nje ya ulandanishi.'
       },
       mode: {
         basic: 'Msingi',
@@ -2744,7 +2744,7 @@ export default {
         frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
         frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
-        hint: 'Kihisi hiki kime ready kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na mhariri, kitufe kimoja kwa hatua moja.',
+        hint: 'Ghala hili la OKF limekuwa tayari kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na kwenye mhariri, kitufe kimoja kwa wakati mmoja.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',

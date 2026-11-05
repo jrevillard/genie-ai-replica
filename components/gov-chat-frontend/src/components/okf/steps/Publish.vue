@@ -132,12 +132,11 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
-    // #1068: the ritual line names the four lifecycle steps through the SAME
-    // translated labels the dashboard button renders (okf.lifecycle.*), so
-    // the copy can never name a button the operator cannot find — the drift
-    // that made a hand-translated ritual useless in 12 of 14 locales. The
-    // chain is built ONCE (one order, one separator) and interpolated into
-    // both sentences as a single {chain} token.
+    // The ritual line names the lifecycle steps through the SAME translated
+    // labels the dashboard button renders (okf.lifecycle.*), so the copy
+    // cannot name a button the operator cannot find. The chain is built ONCE
+    // (one order, one separator) and interpolated into both sentences as a
+    // single {chain} token.
     lifecycleChain() {
       // The separator is a locale string: RTL locales mirror the arrow (an
       // arrow glyph is not bidi-mirrored, so a hardcoded '→' would invert

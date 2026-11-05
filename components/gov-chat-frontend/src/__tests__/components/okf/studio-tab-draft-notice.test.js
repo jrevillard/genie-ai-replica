@@ -43,6 +43,20 @@ it('#1056: the NOT_READY latch surfaces the degraded-draft notice on the tab', a
   wrapper.unmount();
 });
 
+it('#1056: a repo gone under the curator renders the SAME notice', async () => {
+  // The per-repo dead set must not be a second silent state: the banner
+  // covers it too (the copy is written to be true for both causes).
+  const { store } = buildStore();
+  const wrapper = mountTab(store, { i18n: realI18nMessagesMock() });
+  await wrapper.vm.$nextTick();
+  store.commit('okf/setDraftDead', 'r1');
+  await wrapper.vm.$nextTick();
+  const notice = wrapper.find('.okf-studio-tab__draft-notice');
+  expect(notice.exists()).toBe(true);
+  expect(notice.text()).toBe(en.okf.studio.draft.notReady);
+  wrapper.unmount();
+});
+
 it('#1056: the shipped notice states the consequence, not a reload, and names both stale parties', () => {
   // Drafts live in the Vuex store only — a reload clears them, so the copy
   // must state the consequence instead of advising the curator to reload. A
@@ -50,7 +64,7 @@ it('#1056: the shipped notice states the consequence, not a reload, and names bo
   // not assert the backend is the stale one.
   expect(en.okf.studio.draft.notReady).not.toMatch(/reload the page/i);
   expect(en.okf.studio.draft.notReady).toMatch(/lost/i);
-  expect(en.okf.studio.draft.notReady).toMatch(/page and the server may be different versions/i);
+  expect(en.okf.studio.draft.notReady).toMatch(/may be out of sync/i);
 });
 
 it('#1056: the inline fallback and the shipped copy say the same thing', async () => {

@@ -35,12 +35,12 @@ const initialState = () => ({
   // writing it (no spam). Story 10.5 shipped the route, so this only arms
   // against an older backend, never against an empty draft.
   draftsUnavailable: false,
-  // PER-REPO dead set (#1056): a repo that answers 404 REPO_NOT_FOUND on a
-  // draft save is gone (deleted / soft-deleted / outside the caller's scope)
-  // — a definitive answer, NOT a missing endpoint. Only THAT repo stops
-  // getting server writes; the session-wide latch must not arm, or one
-  // deleted repo would push every other repo's saves to local-only while a
-  // notice blames a version mismatch nobody can act on.
+  // PER-REPO dead set: a repo that answers 404 REPO_NOT_FOUND on a draft
+  // save is gone (deleted / soft-deleted / outside the caller's scope) — a
+  // definitive answer, NOT a missing endpoint. Only THAT repo stops getting
+  // server writes; the session-wide latch must not arm, or one deleted repo
+  // would push every other repo's saves to local-only while a notice blames
+  // a version mismatch nobody can act on.
   draftsDeadByRepo: {},
   reposById: {},
   // Lifecycle lanes (David, 2026-08-28): five columns — In progress /
@@ -223,9 +223,11 @@ const getters = {
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
-  // #1056 — the session latch that says "the draft endpoint is not
-  // available here"; surfaces the degraded-draft state to the curator.
+  // The session latch ("the draft endpoint is not available here") and the
+  // per-repo dead set ("this repo is gone") — the two degraded-draft states
+  // the Studio tab surfaces to the curator.
   draftsUnavailable: (state) => state.draftsUnavailable === true,
+  draftsDead: (state) => Object.keys(state.draftsDeadByRepo).length > 0,
   selection: (state) => state.selection,
   error: (state) => state.error
 };
@@ -248,6 +250,14 @@ const mutations = {
   setDraftDead(state, repoId) {
     if (!repoId) return;
     state.draftsDeadByRepo = { ...state.draftsDeadByRepo, [repoId]: true };
+  },
+  reviveVisibleDraftRepos(state, repoIds) {
+    const visible = new Set(repoIds || []);
+    const next = {};
+    for (const [repoId] of Object.entries(state.draftsDeadByRepo)) {
+      if (!visible.has(repoId)) next[repoId] = true;
+    }
+    state.draftsDeadByRepo = next;
   },
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
@@ -445,10 +455,11 @@ const actions = {
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
       }
-      if (err && err.data && err.data.error === 'REPO_NOT_FOUND') {
-        // Definitive answer: the repo is gone. Mark ONLY this repo dead —
-        // arming the session latch here would blame a version mismatch for
-        // every other repo's saves.
+      if (err && err.code === 'REPO_NOT_FOUND') {
+        // Definitive answer (typed by studioService's classifier — the ONE
+        // owner of what a 404 means): the repo is gone. Mark ONLY this repo
+        // dead — arming the session latch here would blame a version
+        // mismatch for every other repo's saves.
         commit('setDraftDead', repoId);
         return { ok: false, code: 'REPO_NOT_FOUND', message: err.message };
       }
@@ -470,6 +481,13 @@ const actions = {
       const repos = await repoOkfService.list({ stage });
       repos.forEach((r) => commit('upsertRepo', r));
       commit('setReposByStage', laneFor(repos));
+      // A repo the curator can still see is NOT gone: a dead mark left by a
+      // transient 404 (a scope hiccup mid-edit) recovers here instead of
+      // silencing that repo's saves until reload.
+      commit(
+        'reviveVisibleDraftRepos',
+        repos.map((r) => r.repo_id)
+      );
       return { ok: true, repos };
     } catch (err) {
       commit('setError', err.message || 'fetchRepos failed');

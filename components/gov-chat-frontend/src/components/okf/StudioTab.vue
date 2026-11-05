@@ -43,12 +43,17 @@
          refresh loses the curation state. Say so, party-neutrally, at the TAB
          level: the zip-import path lands on the dashboard without ever
          entering the wizard, so a wizard-only surface would stay quiet for it. -->
+    <!-- The degraded-draft notice lives at the TAB level: the zip-import
+         path lands on the dashboard without ever entering the wizard, so a
+         wizard-only surface would stay quiet for it. The live region exists
+         before the notice appears — a v-if-inserted status element is
+         commonly not announced. -->
     <div class="okf-studio-tab__draft-live" aria-live="polite">
-      <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
+      <p v-if="draftsUnavailable || draftsDead" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
         {{
           translate(
             'okf.studio.draft.notReady',
-            'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
+            'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
           )
         }}
       </p>
@@ -274,7 +279,7 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['isExpert', 'draftsUnavailable']),
+    ...mapGetters('okf', ['isExpert', 'draftsUnavailable', 'draftsDead']),
     // D-B honesty: the selected classification mode's real meaning.
     classHint() {
       const key =

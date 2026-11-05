@@ -123,7 +123,10 @@ describe('okf/saveDraft — wizard idempotency', () => {
   });
 
   it('#1056: a repo deleted under the curator is dead ONLY for itself — no doomed PUTs, no session latch', async () => {
-    studioService.saveDraft.mockRejectedValue({ status: 404, data: { error: 'REPO_NOT_FOUND' } });
+    // The typed shape studioService's classifier throws (the store switches on code).
+    studioService.saveDraft.mockRejectedValue(
+      Object.assign(new Error('REPO_NOT_FOUND'), { code: 'REPO_NOT_FOUND', status: 404 })
+    );
     const store = buildStore();
     store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
     store.commit('okf/upsertRepo', { repo_id: 'r2', lifecycle_state: 'draft' });

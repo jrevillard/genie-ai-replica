@@ -2539,7 +2539,7 @@ export default {
       },
       draft: {
         notReady:
-          'Os rascunhos não podem ser salvos no servidor nesta sessão — ficam apenas nesta aba do navegador e são perdidos se a aba for fechada ou recarregada. A página e o servidor podem ter versões diferentes.'
+          'Os rascunhos não podem ser salvos no servidor nesta sessão — ficam apenas nesta aba do navegador e são perdidos se a aba for fechada ou recarregada. A página, o servidor ou o repositório podem estar fora de sincronia.'
       },
       mode: {
         basic: 'Básico',

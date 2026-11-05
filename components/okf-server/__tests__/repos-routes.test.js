@@ -1346,25 +1346,24 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
       { concept_id: 'conceptC', changes: [{ field: 'type' }], after: { type: 'topic' } }
     ]);
     conceptMetaService.patchConceptMeta
-      .mockResolvedValueOnce({ concept_id: 'conceptA' })
-      .mockRejectedValueOnce(Object.assign(new Error('transient db'), {}))
-      .mockResolvedValueOnce(null); // row vanished mid-run
+      .mockResolvedValueOnce({ concept_id: 'conceptA' }) // A: ok
+      .mockRejectedValueOnce(new Error('transient db')) // B attempt 1: transient
+      .mockResolvedValueOnce({ concept_id: 'conceptB' }) // B attempt 2: the retry absorbs it
+      .mockRejectedValueOnce(new Error('row vanished')) // C attempt 1
+      .mockRejectedValueOnce(new Error('row vanished')); // C attempt 2: dead
     const res = await request(createApp())
       .post('/api/okf/repos/repoA/autocorrect')
       .set('Authorization', TOKEN)
       .send({ dry_run: false });
     expect(res.status).toBe(200);
-    expect(res.body.applied).toBe(1);
-    expect(res.body.failures).toEqual([
-      { concept_id: 'conceptB', error: 'transient db' },
-      { concept_id: 'conceptC', error: 'concept row not found' }
-    ]);
+    expect(res.body.applied).toBe(2);
+    expect(res.body.failures).toEqual([{ concept_id: 'conceptC', error: 'row vanished' }]);
     const { writeAudit } = require('../services/audit-service');
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'repo.autocorrect',
         description:
-          'Applied curated frontmatter proposals (llm) — 1 concept(s), 2 concept(s) FAILED and reported to the client'
+          'Applied curated frontmatter proposals (llm) — 2 concept(s) (type), 1 concept(s) FAILED and reported to the client'
       })
     );
   });

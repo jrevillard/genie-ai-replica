@@ -199,7 +199,7 @@ class AnalyticsController {
   async getSatisfactionGauge(req, res) {
     try {
       logger.info('Fetching satisfaction gauge data');
-      const { startDate, endDate, locale } = req.query;
+      const { startDate, endDate } = req.query;
 
       // Validate required parameters
       if (!startDate || !endDate) {
@@ -210,7 +210,7 @@ class AnalyticsController {
       }
 
       // Get satisfaction gauge data from service
-      const gaugeData = await this.analyticsService.getSatisfactionGaugeData(startDate, endDate, locale);
+      const gaugeData = await this.analyticsService.getSatisfactionGaugeData(startDate, endDate);
 
       logger.info('Satisfaction gauge data retrieved successfully');
       res.json(gaugeData);

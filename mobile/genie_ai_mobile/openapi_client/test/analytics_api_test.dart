@@ -66,7 +66,7 @@ void main() {
     //
     // Retrieves satisfaction percentage data for the gauge visualization
     //
-    //Future<ApiAnalyticsSatisfactionGaugeGet200Response> apiAnalyticsSatisfactionGaugeGet({ DateTime startDate, DateTime endDate, String locale }) async
+    //Future<ApiAnalyticsSatisfactionGaugeGet200Response> apiAnalyticsSatisfactionGaugeGet({ DateTime startDate, DateTime endDate }) async
     test('test apiAnalyticsSatisfactionGaugeGet', () async {
       // TODO
     });

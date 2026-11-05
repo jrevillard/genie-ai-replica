@@ -476,23 +476,18 @@ class AnalyticsService {
    * Get satisfaction gauge data
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
    * @param {string} date - Selected date (YYYY-MM-DD)
-   * @param {string} locale - Locale override (optional)
    * @returns {Promise<Object>} Satisfaction gauge data
    */
-  async getSatisfactionGauge(period, date, locale = null) {
+  async getSatisfactionGauge(period, date) {
     try {
       // Calculate start and end dates based on period and date
       const { startDate, endDate } = this.calculateDateRange(period, date);
-
-      // Get current locale from parameter, instance, or fallback
-      const currentLocale = this.getCurrentLocale(locale);
 
       // Make API call to get the satisfaction gauge data
       const response = await httpService.get('analytics/satisfaction/gauge', {
         params: {
           startDate,
-          endDate,
-          locale: currentLocale
+          endDate
         }
       });
 

@@ -2,6 +2,25 @@ require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
+const {
+  SATISFACTION_PERIOD_KEYS,
+  CURRENT_PERIOD_KEY,
+  PREVIOUS_PERIOD_KEY,
+  SATISFACTION_WEEK_DURATION_MS
+} = require('../constants/satisfaction-periods');
+
+/**
+ * Build the five weekly satisfaction periods, most recent first.
+ * @param {Number} endTimestamp - End of the most recent period (ms)
+ * @returns {Array<Object>} Periods with their key and time bounds
+ */
+function buildSatisfactionPeriods(endTimestamp) {
+  return SATISFACTION_PERIOD_KEYS.map((key, index) => ({
+    key,
+    start: endTimestamp - (index + 1) * SATISFACTION_WEEK_DURATION_MS,
+    end: endTimestamp - index * SATISFACTION_WEEK_DURATION_MS
+  }));
+}
 
 class AnalyticsService {
   constructor() {
@@ -592,16 +611,16 @@ class AnalyticsService {
    * Get satisfaction gauge data
    * @param {String} period - Period type (daily, weekly, monthly, all-time)
    * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Object>} Satisfaction gauge data
+   * @returns {Promise<Object>} Satisfaction gauge data; each historical entry
+   *   carries a period key (see SATISFACTION_PERIOD_KEYS) as its label, not
+   *   display text — the frontend translates it.
    */
-  async getSatisfactionGaugeData(period, selectedDate, locale = 'en') {
+  async getSatisfactionGaugeData(period, selectedDate) {
     try {
       await this.init();
       logger.debug('getSatisfactionGaugeData: Starting execution', {
         period,
         selectedDate,
-        locale,
         method: 'getSatisfactionGaugeData'
       });
 
@@ -627,37 +646,10 @@ class AnalyticsService {
           endDate = endDateISO;
       }
 
-      const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
 
       // Define time periods
-      const timePeriods = [
-        {
-          label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
-          start: endTimestamp - weekDuration,
-          end: endTimestamp
-        },
-        {
-          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
-          start: endTimestamp - 2 * weekDuration,
-          end: endTimestamp - weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
-          start: endTimestamp - 3 * weekDuration,
-          end: endTimestamp - 2 * weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
-          start: endTimestamp - 4 * weekDuration,
-          end: endTimestamp - 3 * weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
-          start: endTimestamp - 5 * weekDuration,
-          end: endTimestamp - 4 * weekDuration
-        }
-      ];
+      const timePeriods = buildSatisfactionPeriods(endTimestamp);
 
       const result = {
         currentValue: 0,
@@ -694,17 +686,15 @@ class AnalyticsService {
             : 0;
 
         result.historicalData.push({
-          label: period.label,
+          label: period.key,
           value: periodValue,
           periodStart: new Date(period.start).toISOString(),
           periodEnd: new Date(period.end).toISOString()
         });
 
-        if (period.label === (locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current')) {
+        if (period.key === CURRENT_PERIOD_KEY) {
           result.currentValue = periodValue;
-        } else if (
-          period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week')
-        ) {
+        } else if (period.key === PREVIOUS_PERIOD_KEY) {
           result.previousValue = periodValue;
         }
       }
@@ -714,26 +704,6 @@ class AnalyticsService {
         result.previousValue > 0
           ? Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100)
           : 0;
-
-      // Ensure historicalData is always 5 entries
-      if (result.historicalData.length < 5) {
-        const defaultLabels = [
-          locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
-          locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
-          locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
-          locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
-          locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'
-        ];
-        const defaultHistoricalData = defaultLabels.map((label, i) => ({
-          label,
-          value: 0,
-          periodStart: new Date(endTimestamp - (i + 1) * weekDuration).toISOString(),
-          periodEnd: new Date(endTimestamp - i * weekDuration).toISOString()
-        }));
-        result.historicalData = defaultHistoricalData
-          .slice(0, 5 - result.historicalData.length)
-          .concat(result.historicalData);
-      }
 
       logger.info('getSatisfactionGaugeData: Successful data retrieval', {
         currentValue: result.currentValue,
@@ -764,7 +734,9 @@ class AnalyticsService {
    * @param {String} period - Period type (daily, weekly, monthly, all-time)
    * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Array>} Heatmap data for all categories
+   * @returns {Promise<Array>} Heatmap data for all categories; each point
+   *   carries a period key (see SATISFACTION_PERIOD_KEYS) as its x value, not
+   *   display text — the frontend translates it.
    */
   async getSatisfactionHeatmapData(period, selectedDate, locale = 'en') {
     try {
@@ -798,37 +770,10 @@ class AnalyticsService {
           endDate = endDateISO;
       }
 
-      const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
 
       // Define time periods
-      const timePeriods = [
-        {
-          label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
-          start: endTimestamp - weekDuration,
-          end: endTimestamp
-        },
-        {
-          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
-          start: endTimestamp - 2 * weekDuration,
-          end: endTimestamp - weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
-          start: endTimestamp - 3 * weekDuration,
-          end: endTimestamp - 2 * weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
-          start: endTimestamp - 4 * weekDuration,
-          end: endTimestamp - 3 * weekDuration
-        },
-        {
-          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
-          start: endTimestamp - 5 * weekDuration,
-          end: endTimestamp - 4 * weekDuration
-        }
-      ];
+      const timePeriods = buildSatisfactionPeriods(endTimestamp);
 
       // Use ServiceCategoryService to get all categories with translations
       logger.info('Getting categories with translations using ServiceCategoryService for heatmap...');
@@ -866,11 +811,14 @@ class AnalyticsService {
       // Initialize heatmap data with zeros for all categories
       const heatmapData = categories.map((category) => ({
         name: category.name,
-        data: timePeriods.map((period) => ({ x: period.label, y: 0 }))
+        data: timePeriods.map((period) => ({ x: period.key, y: 0 }))
       }));
 
+      // Category id -> index in the heatmap rows, resolved once per request
+      const categoryIndexById = new Map(categories.map((category, index) => [category.id, index]));
+
       // Batch query for all feedback per period
-      for (const period of timePeriods) {
+      for (const [periodIndex, period] of timePeriods.entries()) {
         const feedbackQuery = aql`
           FOR q IN queries
             FILTER q.userFeedback != null
@@ -889,24 +837,21 @@ class AnalyticsService {
           const feedbackCursor = await this.db.query(feedbackQuery);
           const feedbackResults = await feedbackCursor.all();
 
-          logger.debug(`DEBUG: Feedback results for period ${period.label}:`, feedbackResults.length);
+          logger.debug(`DEBUG: Feedback results for period ${period.key}:`, feedbackResults.length);
 
           // Update heatmap data for this period
           feedbackResults.forEach((result) => {
-            const categoryIndex = categories.findIndex((c) => c.id === result.categoryId);
-            if (categoryIndex !== -1) {
-              const periodIndex = timePeriods.findIndex((p) => p.label === period.label);
-              if (periodIndex !== -1) {
-                const satisfactionPercentage = Math.floor((result.average / 5) * 100);
-                heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
-                logger.debug(
-                  `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`
-                );
-              }
+            const categoryIndex = categoryIndexById.get(result.categoryId);
+            if (categoryIndex !== undefined) {
+              const satisfactionPercentage = Math.floor((result.average / 5) * 100);
+              heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
+              logger.debug(
+                `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.key}: ${satisfactionPercentage}%`
+              );
             }
           });
         } catch (queryError) {
-          logger.error(`Error querying feedback for period ${period.label}: ${queryError.message}`, {
+          logger.error(`Error querying feedback for period ${period.key}: ${queryError.message}`, {
             stack: queryError.stack
           });
         }

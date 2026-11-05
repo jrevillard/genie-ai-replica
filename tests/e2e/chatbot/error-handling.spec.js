@@ -6,6 +6,13 @@ const {
   BASE_URL,
 } = require('../helpers/chatbot');
 
+// A failed turn ends with the answer card's error block, and that card
+// is the turn's completion signal: the app renders it only once the
+// stream has closed. It is also the surface the old assertions missed —
+// `.loading-spinner` (the spinner wait) and `.status-error-message`
+// (the error fallback) are rendered by no component, so neither half of
+// the old assertion could ever pass on its own and the error was never
+// really observed. Every test below waits on the card instead.
 test.describe('RAG error handling', () => {
   let page;
   let context;
@@ -47,12 +54,8 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'First attempt will fail');
 
-    // The failed turn ends with the error card, and that card IS the
-    // wait: the app renders it only once the stream has closed. The
-    // class the old wait used (`.loading-spinner`) is rendered by no
-    // component, and its old fallback (`.status-error-message`) by
-    // none either — so neither half of that assertion could ever pass
-    // on its own, and the error was never really observed.
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
     await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again after error
@@ -88,12 +91,8 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'This should fail with network error');
 
-    // The failed turn ends with the error card, and that card IS the
-    // wait: the app renders it only once the stream has closed. The
-    // class the old wait used (`.loading-spinner`) is rendered by no
-    // component, and its old fallback (`.status-error-message`) by
-    // none either — so neither half of that assertion could ever pass
-    // on its own, and the error was never really observed.
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
     await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Verify the chat is not stuck
@@ -116,12 +115,8 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Trigger internal error');
 
-    // The failed turn ends with the error card, and that card IS the
-    // wait: the app renders it only once the stream has closed. The
-    // class the old wait used (`.loading-spinner`) is rendered by no
-    // component, and its old fallback (`.status-error-message`) by
-    // none either — so neither half of that assertion could ever pass
-    // on its own, and the error was never really observed.
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
     await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again

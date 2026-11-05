@@ -4,92 +4,58 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '../../..');
 const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 
-// The classes issue #1406 migrated to declared test handles. A spec
-// that locates one of them by class again is the defect the migration
-// removed: a frontend restyle renaming the class breaks the wait with a
-// failure that says nothing about the behaviour the wait guards.
-// Every class whose locator the handle migration eliminated from the
-// suite — the full set, not a sample: a gate that covers a third of the
-// migration lets the other two thirds quietly re-couple to a class.
-// (Classes the migration never touched — the grandfathered documents
-// and admin locators — are deliberately absent; they are tracked for
-// migration-when-next-touched, and listing them here would red the gate
-// on files this migration never converted.)
-const MIGRATED_CLASSES = [
-  'answer-card',
-  'answer-sources__list',
-  'answer-warning',
-  'brand-name',
-  'brand-wordmark',
-  'chat-composer',
-  'chat-input',
-  'chat-message',
-  'chat-window',
-  'chatbot-container',
-  'config-error',
-  'context-items',
-  'context-panel',
-  'conversation-header',
-  'conversation-header__actions',
-  'dashboard-content',
-  'ds-state__hint',
-  'ds-state__message',
-  'filter-select',
-  'genie-living-intelligence',
-  'icon-btn',
-  'just-chat',
-  'language-select-container',
-  'loading-spinner',
-  'main-container',
-  'message-avatar--assistant',
-  'message-avatar__initials',
-  'message-avatar--user',
-  'message-bubble',
-  'message-time',
-  'nav-bar',
-  'nav-right',
-  'prompt-textarea',
-  'quick-help-banner',
-  'quick-help-composer',
-  'quick-help-content',
-  'quick-help-grid',
-  'quick-help-heading',
-  'quick-help-item',
-  'quick-help-overlay',
-  'quick-help-subtitle',
-  'side-bar',
-  'sidebar',
-  'sidebar-handle',
-  'sidebar-handle__button',
-  'splash-screen',
-  'status-error-message',
-  'streaming-indicator',
-  'table-message',
-  'tooltip'
+// The spec and helper files the handle migration converted. In a listed
+// file, ANY class selector handed to a locator API is an offender: the
+// file's elements are all addressable by declared handles, so a class
+// there is a coupling the migration removed and a restyle can silently
+// break. The check is per FILE, not per class name — a denylist of
+// migrated classes lags the migration by construction (a name someone
+// forgot to add passes silently), while a file that has joined the set
+// is covered completely, named or not.
+//
+// Files NOT listed still carry grandfathered class locators (documents/,
+// admin/, okf/, epic*/, helpers/documents.js, helpers/keycloak-admin.js,
+// ...). They are migrated when next touched (the standing rule); a file
+// joins this set in the MR that converts it.
+const MIGRATED_FILES = [
+  'tests/e2e/chat-composer.spec.js',
+  'tests/e2e/chat-conversation.spec.js',
+  'tests/e2e/resizable-sidebars.spec.js',
+  'tests/e2e/responsive-layout.spec.js',
+  'tests/e2e/welcome-banner.spec.js',
+  'tests/e2e/documents/search.spec.js',
+  'tests/e2e/admin/authz.spec.js',
+  'tests/e2e/chatbot/error-handling.spec.js',
+  'tests/e2e/chatbot/quick-help-scope.spec.js',
+  'tests/e2e/chatbot/send-message-and-stream.spec.js',
+  'tests/e2e/helpers/chatbot.js',
+  'tests/e2e/helpers/welcome.js',
+  'tests/e2e/capture-dashboard.js'
 ];
 
-// Every quoted string in the file that contains a class selector for one
-// of the migrated classes. The quote is required: a class name in prose
-// (a test title, a comment) is not a locator.
-const classSelectorIn = (source) => {
+// Locator-style APIs a class selector can travel through. A selector
+// built in a variable and passed indirectly escapes this net — in the
+// converted files every locator call takes its selector literally.
+const LOCATOR_CALL = /(?:locator|querySelector|querySelectorAll|waitForSelector|\$\$?)\(\s*/;
+
+// Inside a locator argument the string IS a CSS selector, so every
+// dot-name in it is a class segment (`'.chat-message.bot'` is two) —
+// unlike in ordinary code, where `.padEnd` is a method call. Attribute
+// values are stripped first: a dot inside `[data-x="a.b"]` is data, not
+// a class. The trailing guard keeps `.sidebar` from matching inside the
+// single name `.sidebar-inner`.
+const CLASS_SELECTOR = /\.([a-z][a-z0-9_-]*)(?![a-z0-9_-])/g;
+
+const classSelectorsIn = (source) => {
   const found = [];
-  // Quoted strings, in all three spellings, with their contents.
-  const quoted = source.matchAll(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g);
-  for (const match of quoted) {
-    const body = match[0];
-    for (const className of MIGRATED_CLASSES) {
-      // A class selector is the class name preceded by a dot that is
-      // itself not part of an identifier (so `data.sidebar` — a
-      // property read — is not a selector) and not followed by a name
-      // character (so `.sidebar` does not match `.sidebar-inner`).
-      const pattern = new RegExp(`(^|[^A-Za-z0-9_$-])\\.${className}(?![a-z0-9_-])`);
-      // No exemption for strings that also carry a handle: a mixed
-      // locator ('.chat-message.bot [data-testid="answer-error"]') is
-      // still a class coupling, and the handle in it must not buy the
-      // class a pass.
-      if (pattern.test(body)) {
-        found.push({ className, quoted: body });
-      }
+  // Quoted strings, in all three spellings, with their contents. The
+  // argument scan is anchored on the call opening before the quote, so a
+  // `.js` extension or a `.padEnd(4)` inside an unrelated template
+  // string is not a locator and does not trip the gate.
+  for (const call of source.matchAll(new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g'))) {
+    const selector = call[0].replace(/="[^"]*"/g, '=""');
+    for (const m of selector.matchAll(CLASS_SELECTOR)) {
+      found.push({ className: m[1], quoted: call[0] });
     }
   }
   return found;
@@ -124,24 +90,15 @@ const stripComments = (source) =>
     })
     .join('\n');
 
-function collectJsFiles(dir) {
-  const files = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) files.push(...collectJsFiles(full));
-    else if (entry.name.endsWith('.js')) files.push(full);
-  }
-  return files;
-}
-
 describe('the e2e suite locates application elements by declared handle', () => {
-  test('no migrated class is used as a locator again', () => {
+  test('a converted file locates no element by class', () => {
     const offenders = [];
-    for (const file of collectJsFiles(E2E_ROOT)) {
+    for (const rel of MIGRATED_FILES) {
+      const file = path.join(ROOT, rel);
       const source = stripComments(fs.readFileSync(file, 'utf8'));
-      for (const { className, quoted } of classSelectorIn(source)) {
+      for (const { className, quoted } of classSelectorsIn(source)) {
         offenders.push(
-          `${path.relative(ROOT, file)}: "${className}" in ${quoted} — ` +
+          `${rel}: ".${className}" in ${quoted} — the file is converted: ` +
             'use the declared data-testid / data-test-id handle instead'
         );
       }
@@ -149,22 +106,39 @@ describe('the e2e suite locates application elements by declared handle', () => 
     expect(offenders).toEqual([]);
   });
 
+  test('every listed file exists', () => {
+    // The file set is the guard's coverage: a listed path that has
+    // drifted away (renamed, deleted) would silently shrink the gate —
+    // reading every one of them is what keeps the set honest.
+    for (const rel of MIGRATED_FILES) {
+      expect(fs.existsSync(path.join(ROOT, rel))).toBe(true);
+    }
+  });
+
   test('the gate would catch a class locator it is meant to catch', () => {
-    // The list itself is the guard's coverage: if a class is added to
-    // MIGRATED_CLASSES the gate must be able to see it. A gate that
-    // silently matches nothing is worse than no gate.
-    const sample = "await page.locator('.quick-help-grid .quick-help-item').count();";
-    const found = classSelectorIn(sample).map((o) => o.className);
-    expect(found).toEqual(expect.arrayContaining(['quick-help-grid', 'quick-help-item']));
+    // A gate that silently matches nothing is worse than no gate.
+    const sample = "await page.locator('.some-class').count();";
+    const found = classSelectorsIn(sample).map((o) => o.className);
+    expect(found).toEqual(['some-class']);
   });
 
   test('a declared handle is not an offender', () => {
     const sample = 'await page.locator(\'[data-testid="quick-help-grid"]\').count();';
-    expect(classSelectorIn(sample)).toEqual([]);
+    expect(classSelectorsIn(sample)).toEqual([]);
   });
 
   test('a class named in prose is not an offender', () => {
     const sample = "test('renders the quick-help-grid', () => {});";
-    expect(classSelectorIn(sample)).toEqual([]);
+    expect(classSelectorsIn(sample)).toEqual([]);
+  });
+
+  test('a mixed locator is still an offender', () => {
+    const sample = 'page.locator(\'.chat-message.bot [data-testid="answer-error"]\')';
+    expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['chat-message', 'bot']);
+  });
+
+  test('an extension or method call in a template string is not an offender', () => {
+    const sample = 'const f = `${locale}.js`; x.padEnd(4);';
+    expect(classSelectorsIn(sample)).toEqual([]);
   });
 });

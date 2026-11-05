@@ -26,7 +26,7 @@
 // change cannot leave this spec asserting stale numbers.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('./helpers/chatbot');
+const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
 const { readVisualLayerState } = require('./helpers/welcome');
 const { waitForWidthSettled } = require('./helpers/layout');
 
@@ -57,7 +57,7 @@ const LEFT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-left"]';
 const RIGHT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-right"]';
 
 async function gotoChatbot(page) {
-  await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
+  await navigateToChatbot(page);
   await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
 }
 
@@ -262,11 +262,10 @@ test.describe('Resizable sidebars behind one handle', () => {
     // chevron say so with the cursor: `pointer` on the chevron would
     // promise a click and deny the drag, on the one element the user
     // can actually see.
-    for (const [stripSel, buttonSel] of [
+    for (const [sel, buttonSel] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
     ]) {
-      const sel = stripSel;
       const cursors = await page.evaluate(({ stripSel: s, buttonSel: bs }) => {
         const strip = document.querySelector(s);
         const button = document.querySelector(bs);

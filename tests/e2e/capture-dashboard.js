@@ -347,9 +347,6 @@ const audit = () => {
             () => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width
           );
           if (collapsedOverlayWidth <= openOverlayWidth + 1) {
-            const leftState = await page.evaluate(
-              () => document.querySelector('[data-testid="sidebar"][data-collapsed="false"]') !== null
-            );
             throw new Error(
               `Capture ${theme}-${viewport.label}-${sidebar.label}: ` +
                 `overlay did not widen (open=${openOverlayWidth}px, ` +

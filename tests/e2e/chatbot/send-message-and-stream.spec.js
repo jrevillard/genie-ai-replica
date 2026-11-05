@@ -6,6 +6,7 @@ const {
   waitForBotResponse,
   getMessages,
   getLastBotMessage,
+  BOT_BUBBLE,
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
@@ -76,7 +77,7 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     // placeholder) — a number the growth matcher can compare against —
     // and the poll holds until the text has grown past it: a bubble that
     // only ever renders its full text in one frame fails the poll.
-    const botBubble = page.locator('[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]').last();
+    const botBubble = page.locator(BOT_BUBBLE).last();
     await expect(botBubble).toContainText(/\S/, { timeout: 30000 });
     const firstLength = (await botBubble.innerText()).trim().length;
     await expect

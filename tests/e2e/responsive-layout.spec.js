@@ -41,7 +41,7 @@
 // evaluate rather than in two.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('./helpers/chatbot');
+const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('./helpers/welcome');
 const { waitForWidthSettled } = require('./helpers/layout');
 
@@ -50,7 +50,7 @@ const { waitForWidthSettled } = require('./helpers/layout');
 const CARD_MIN = 197;
 
 async function gotoChatbot(page) {
-  await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
+  await navigateToChatbot(page);
   await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
 }
 

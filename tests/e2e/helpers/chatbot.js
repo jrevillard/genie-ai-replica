@@ -17,7 +17,9 @@ const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '
 
 // The handles the chat surface declares. A row's handle carries its
 // sender (`chat-message-bot` / `chat-message-user`), so a spec never
-// reads the row's class to know who spoke.
+// reads the row's class to know who spoke. Exported: a spec that
+// addresses the same elements reuses these strings instead of
+// re-typing them.
 const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
 
@@ -310,5 +312,7 @@ module.exports = {
   TEST_USER,
   TEST_ADMIN_USER,
   TEST_PLAIN_USER,
-  BASE_URL
+  BASE_URL,
+  MESSAGE_ROW,
+  BOT_BUBBLE
 };

@@ -76,9 +76,40 @@ const processPageOnThread = (html, url, config) => {
   });
 };
 
+const requeueZombieJobs = async () => {
+  let db;
+  try {
+    db = await dbService.getConnection('crawl_job');
+  } catch (error) {
+    logger.error(`[CRAWL-WORKER] Zombie requeue skipped, DB unavailable: ${error.message}`);
+    return;
+  }
+  try {
+    // This worker is single-flight, so any job still 'Crawling' at startup is
+    // a leftover from a dead predecessor (worker thread OOM, container restart).
+    // The poll loop only picks 'Pending' — without the requeue the job starves
+    // forever (issue #991, Sep 4 incident).
+    const cursor = await db.query("FOR job IN crawl_job FILTER job.status == 'Crawling' RETURN job");
+    const zombies = await cursor.all();
+    for (const job of zombies) {
+      await db.collection('crawl_job').update(job._key, { status: 'Pending' });
+      await fileService.addCrawlLog(
+        job.file_id,
+        'WARN',
+        'System',
+        'Crawl worker restarted mid-crawl; job requeued.'
+      );
+      logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
+    }
+  } catch (error) {
+    logger.error(`[CRAWL-WORKER] Zombie requeue failed: ${error.message}`);
+  }
+};
+
 const start = () => {
   initWorkers();
   logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
+  requeueZombieJobs();
   poll();
 };
 
@@ -399,4 +430,4 @@ const updateJobProgress = async (db, key, count) => {
   }
 };
 
-module.exports = { start };
+module.exports = { start, requeueZombieJobs };

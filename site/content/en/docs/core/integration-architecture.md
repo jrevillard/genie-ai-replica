@@ -284,7 +284,8 @@ Raw `arangojs` is reserved for migrations (`scripts/migrations/*.js`).
 ```javascript
 // services/redis-cache-client.js — the shared factory every client on this
 // instance uses, so they cannot drift apart
-const { createRedisCacheClient } = require('./redis-cache-client');
+// (path relative to components/gov-chat-backend/)
+const { createRedisCacheClient } = require('./services/redis-cache-client');
 const redis = createRedisCacheClient();
 ```
 
@@ -296,10 +297,11 @@ const redis = createRedisCacheClient();
 | User-provisioning cache invalidation pub/sub | same `TRANSLATION_CACHE_*` variables |
 
 > **Sessions are NOT in Redis.** `services/session-service.js` stores user
-> sessions in ArangoDB (`sessions` collection). The Redis cache exists only
-> for translation, keyed on
-> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>`.
-> The entries are stored permanently — there is no TTL — so a change to the
+> sessions in ArangoDB (`sessions` collection). Redis holds only the
+> translation cache — keyed on
+> `translation:<md5(content)>:<sourceLang>:<targetLang>:<modelId>:<logicVersion>` —
+> and the provisioning invalidation pub/sub.
+> The translation entries are stored permanently — there is no TTL — so a change to the
 > translation logic needs a `TRANSLATION_LOGIC_VERSION` bump to invalidate
 > them.
 

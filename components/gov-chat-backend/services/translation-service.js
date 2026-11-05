@@ -1,6 +1,6 @@
 const { logger } = require('../shared-lib');
 const nodeCrypto = require('crypto'); // For generating cache key
-const { createRedisCacheClient, resolveRedisCacheSettings } = require('./redis-cache-client');
+const { createRedisCacheClient } = require('./redis-cache-client');
 
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
@@ -56,14 +56,14 @@ class TranslationService {
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
 
     if (cacheEnabled) {
-      // Resolve the endpoint once and hand it to the factory: the logged
-      // endpoint and the dialled one are then the same snapshot
-      const endpoint = resolveRedisCacheSettings();
-      logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${endpoint.host}:${endpoint.port}`);
-
       // Initialize Redis Client — shared contract with the provisioning
-      // invalidation clients (same Redis instance, same resilience options)
-      this.cacheClient = createRedisCacheClient({ endpoint });
+      // invalidation clients (same Redis instance, same resilience options).
+      // The factory resolves the endpoint, so the logged endpoint below is
+      // read back from the client that actually dialled it.
+      this.cacheClient = createRedisCacheClient();
+      logger.info(
+        `[TRANSLATION-CONFIG] Cache connecting to Redis at ${this.cacheClient.options.host}:${this.cacheClient.options.port}`
+      );
 
       this.cacheClient.on('error', (err) => {
         logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);

@@ -457,6 +457,12 @@ describe('TranslationService', () => {
       // clients share one factory; this pins the translation call site to
       // it (the provisioning suite pins its own two call sites).
       setEnv('TRANSLATION_CACHE', 'on');
+      // The endpoint comes from the env vars — a developer with them
+      // exported (or a compose stack running) would otherwise make this
+      // suite assert on their host/port instead of the defaults
+      setEnv('TRANSLATION_CACHE_HOST', undefined);
+      setEnv('TRANSLATION_CACHE_PORT', undefined);
+      setEnv('TRANSLATION_CACHE_PASSWORD', undefined);
       // Clear what an earlier test captured: the assertion below must read
       // the options THIS service created, not a leftover
       mockRedis.options = undefined;

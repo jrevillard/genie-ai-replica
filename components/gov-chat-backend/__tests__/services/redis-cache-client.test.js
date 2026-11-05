@@ -80,27 +80,33 @@ describe('redis-cache-client factory', () => {
 
   test('the connection contract cannot be overridden', () => {
     // A caller that tries to change the contract fails loudly instead of
-    // silently diverging from the other clients
-    expect(() => createRedisCacheClient({ host: 'elsewhere', retryStrategy: () => 50 })).toThrow(/unknown option/);
+    // silently diverging from the other clients — and it fails BEFORE a
+    // client is created, so no half-configured client is left behind.
+    // The endpoint is resolved by the factory alone, so two clients on the
+    // same instance cannot dial different servers.
+    const forbidden = [
+      { host: 'elsewhere' },
+      { port: 6380 },
+      { password: 'other' },
+      { retryStrategy: () => 50 },
+      { endpoint: { host: 'redis.internal', port: 6380 } },
+      // A typo in an option name would otherwise be ignored — and the
+      // subscriber would silently get the publisher's contract
+      { offline_queue: true }
+    ];
+    forbidden.forEach((options) => {
+      expect(() => createRedisCacheClient(options)).toThrow(/unknown option/);
+    });
     expect(Redis).not.toHaveBeenCalled();
   });
 
-  test('an unknown option fails loudly', () => {
-    // A typo in an option name would otherwise be ignored — and the
-    // subscriber would silently get the publisher's contract
-    expect(() => createRedisCacheClient({ offline_queue: true })).toThrow(/unknown option/);
-  });
-
-  test('a pre-resolved endpoint is used as given', () => {
-    createRedisCacheClient({
-      endpoint: { host: 'redis.internal', port: 6380, password: 'secret', db: 3 }
-    });
+  test('a null options argument means "no options", not a TypeError', () => {
+    // A caller forwarding a nullable config object must not crash with an
+    // unrelated "Cannot convert undefined or null to object"
+    expect(() => createRedisCacheClient(null)).not.toThrow();
 
     const options = Redis.mock.calls[0][0];
-    expect(options.host).toBe('redis.internal');
-    expect(options.port).toBe(6380);
-    expect(options.password).toBe('secret');
-    // Only the endpoint fields the resolver produces reach the client
-    expect(options.db).toBeUndefined();
+    expect(options.enableOfflineQueue).toBe(false);
+    expect(options.maxRetriesPerRequest).toBe(3);
   });
 });

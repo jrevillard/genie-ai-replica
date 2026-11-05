@@ -214,7 +214,7 @@ function parseAndGateArgs(argv, env) {
     collection: env.ARANGO_COLLECTION || 'users',
     arangoUrl: env.ARANGO_URL || 'http://localhost:8529',
     username: env.ARANGO_USER || 'root',
-    password: env.ARANGO_PASSWORD || ''
+    password: env.ARANGO_PASSWORD
   };
 }
 
@@ -293,10 +293,12 @@ async function runReport(db, gated, total, husks, allDocs) {
  * writing deleted:true) is left alone; a mid-way failure cannot leave an
  * ambiguous partial state.
  */
-async function runDelete(db, collection, husks) {
+// `collectionName` is the NAME (a string for the AQL bind) — main() passes
+// gated.collection, never the arangojs handle it also holds under `collection`.
+async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
   const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-    '@collection': collection,
+    '@collection': collectionName,
     keys: husks.map((doc) => doc._key)
   });
   // The removal re-asserts the signature, so docs disqualified since the

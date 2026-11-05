@@ -49,7 +49,8 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0 } = {}) {
     query,
     exists: async () => true,
     name: 'test-db',
-    collection: () => ({ count: async () => ({ count: husks.length + allDocs.length }) }),
+    // Husks ⊆ allDocs by construction — the count() model must not double-count them.
+    collection: () => ({ count: async () => ({ count: allDocs.length }) }),
     removalCalls: () => executed.filter((c) => c.aql === HUSK_REMOVAL_AQL)
   };
 }

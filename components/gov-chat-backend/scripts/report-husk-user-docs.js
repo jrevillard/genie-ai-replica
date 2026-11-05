@@ -41,7 +41,10 @@
  *                     listing prints before the rest are elided. Raise it for
  *                     a one-off diagnostic run to dump the withheld keys;
  *                     every listing honours it, including the divergence
- *                     listing of the abort path)
+ *                     listing of the abort path. The default cap is what
+ *                     keeps the log pipeline from being flooded, so raise the
+ *                     override only as far as the pipeline tolerates — for a
+ *                     very large run, redirect the output to a file)
  */
 
 const { Database } = require('arangojs');
@@ -174,12 +177,14 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 /**
  * Renders a document key as a JSON string literal, so a key copied out of a
  * listing can be pasted straight into a query or a JSON payload without
- * re-quoting it (issue #1507).
- * @param {Object} doc
+ * re-quoting it (issue #1507). Takes the KEY, not the document: the
+ * divergence path prints attribute NAMES only, and a helper that took a
+ * whole document would invite a caller to render more of it than that.
+ * @param {string} key
  * @returns {string}
  */
-function quotedKey(doc) {
-  return JSON.stringify(doc._key);
+function quotedKey(key) {
+  return JSON.stringify(key);
 }
 
 /**
@@ -189,21 +194,20 @@ function quotedKey(doc) {
  * elision wording live in ONE place and the three sites cannot drift apart
  * (issue #1508).
  *
- * `total` may exceed `docs.length`: the lookalike sample is truncated
- * SERVER-side, so the count of all lookalikes and the returned sample are
- * different numbers.
+ * `total` defaults to the length of `docs` and is stated separately only
+ * where the two differ: the lookalike sample is truncated SERVER-side, so
+ * the count of all lookalikes and the returned sample are different numbers.
+ * The elision line names THIS listing's total, so the number the operator
+ * copies is the one that lists this listing in full.
  * @param {Object} params
  * @param {Function} params.write - the sink (console.log / console.error)
  * @param {string} params.label - the noun in the elision line ('' for none)
  * @param {Array<Object>} params.docs - the entries to list
  * @param {number} params.total - how many entries exist in this listing
  * @param {number} params.limit - the cap
- * @param {number} params.suggestedLimit - the HUSK_SAMPLE_LIMIT value that
- *   lists EVERYTHING this run withholds (the knob is global, so it must cover
- *   every listing of the run, not just this one)
  * @param {Function} params.format - renders one entry line
  */
-function printSampledList({ write, label, docs, total, limit, suggestedLimit, format }) {
+function printSampledList({ write, label, docs, total = docs.length, limit, format }) {
   const listed = docs.slice(0, limit);
   for (const doc of listed) {
     write(format(doc));
@@ -212,7 +216,7 @@ function printSampledList({ write, label, docs, total, limit, suggestedLimit, fo
   if (withheld > 0) {
     write(
       `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ` +
-        `re-run with HUSK_SAMPLE_LIMIT=${suggestedLimit} to list them all`
+        `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all`
     );
   }
 }
@@ -305,6 +309,10 @@ function parseAndGateArgs(argv, env) {
  * one-off diagnostic run. Returns null for a malformed override — the caller
  * turns that into a gate failure, because a silent fallback would hand back
  * the same capped listing the override exists to lift (issue #1507).
+ *
+ * The accepted form is DECIMAL digits only: `Number()` would also take
+ * '0x1f', '1e3' and ' 500 ', so a typo would silently yield a different cap
+ * than the literal the operator typed.
  * @param {string|undefined} raw
  * @returns {number|null}
  */
@@ -312,8 +320,11 @@ function parseSampleLimit(raw) {
   if (raw === undefined || raw === '') {
     return DEFAULT_SAMPLE_LIMIT;
   }
+  if (!/^[0-9]+$/.test(raw)) {
+    return null;
+  }
   const value = Number(raw);
-  return Number.isInteger(value) && value > 0 ? value : null;
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 /**
@@ -357,19 +368,13 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
-  // The knob is global, so the value the elision line names must cover
-  // EVERY listing of this run — the husk listing and the lookalike listing
-  // are capped by the same limit, and naming only one of the two totals
-  // would leave the other still elided.
-  const suggestedLimit = Math.max(husks.length, lookalikeCount);
-  printSampledList({
-    write: console.log,
+  // One closure per scope: the sink and the cap are stated ONCE per run
+  // path, so the two stdout listings cannot drift apart on either.
+  const printStdoutList = (options) => printSampledList({ write: console.log, limit: gated.sampleLimit, ...options });
+  printStdoutList({
     docs: husks,
-    total: husks.length,
-    limit: gated.sampleLimit,
-    suggestedLimit,
     format: (doc) =>
-      `  husk _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
+      `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
       `attributes=${JSON.stringify(Object.keys(doc).sort())}`
   });
   if (unexpectedFields.length > 0) {
@@ -382,14 +387,11 @@ async function runReport(db, gated, total, husks, allDocs) {
     console.log('Legacy lookalikes: not measured in --delete mode.');
   } else {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
-    printSampledList({
-      write: console.log,
+    printStdoutList({
       docs: lookalikes,
       // The sample is truncated SERVER-side; the count is the full number.
       total: lookalikeCount,
-      limit: gated.sampleLimit,
-      suggestedLimit,
-      format: (doc) => `  lookalike _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'}`
+      format: (doc) => `  lookalike _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'}`
     });
     console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
   }
@@ -545,10 +547,6 @@ async function main({
     // operator raises HUSK_SAMPLE_LIMIT for one diagnostic run — issue
     // #1507). (The fields census in runReport stays unbounded by design: one
     // line per DISTINCT unexpected field name, not per document.)
-    // The knob is global and BOTH directions are capped by it, so the value
-    // the elision line names must cover the larger of the two — naming one
-    // direction's total would leave the other still elided.
-    const suggestedLimit = Math.max(extra.length, missed.length);
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]
@@ -557,10 +555,8 @@ async function main({
         write: console.error,
         label,
         docs,
-        total: docs.length,
         limit: gated.sampleLimit,
-        suggestedLimit,
-        format: (doc) => `  ${label} _key=${quotedKey(doc)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
+        format: (doc) => `  ${label} _key=${quotedKey(doc._key)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
       });
     }
     process.exitCode = 1;
@@ -601,5 +597,6 @@ module.exports = {
   HUSK_ALLOWED_FIELDS,
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL,
+  LEGACY_LOOKALIKE_AQL,
   ALL_DOCS_AQL
 };

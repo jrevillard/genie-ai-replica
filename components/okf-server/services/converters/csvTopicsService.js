@@ -13,8 +13,19 @@
  *
  * CONTRACT — the import must NEVER block on the LLM (same bar as
  * llm-curation-service): an unreachable engine logs, falls back to the
- * filename slug, and the file still imports. The only way this call fails is
- * by degrading.
+ * filename slug, and the file still imports.
+ *
+ * ONE EXCEPTION — the opt-in gate. With no engine configured at all
+ * (VLLM_ENDPOINT unset) the deployment is MISCONFIGURED, not degraded, and
+ * the sibling legs raise `llm-not-configured` for exactly this condition.
+ * Each of them catches its own raise, though: curation records a fallback
+ * per concept (`resolved_by: 'llm-error'`) and topic-link counts its failed
+ * batches, so neither of them names the cause. This leg raises the same
+ * error WITH the degraded shape attached; the converter matches on the
+ * error's code, keeps the import landing with the filename slug, and
+ * records the degradation AND its reason in the import report and the
+ * file's ingestion log — the only leg whose closed-gate degradation names
+ * the cause.
  *
  * REMOTE-ONLY (David's absolute rule): every call goes through the shared
  * frontmatter-service primitive, which resolves process.env.VLLM_ENDPOINT —
@@ -55,8 +66,41 @@ If the columns are too generic to identify the subject, return generic-but-hones
 topics (e.g. "tabular-data", "unclassified-dataset") rather than inventing a
 specific subject. Never guess a domain the dictionary does not support.`;
 
+/** Why a fallback happened, in the operator's words. One owner: the importer
+ * copies this reason into the import report and into the file's ingestion
+ * log, so the fallback vocabulary never has to be re-derived downstream. */
+const FALLBACK_REASONS = {
+  'fallback-filename': 'the CSV has no dictionary columns, so no topics could be derived',
+  'fallback-no-endpoint': 'no LLM engine is configured (VLLM_ENDPOINT is unset)',
+  'fallback-client-unavailable': 'the LLM client is unavailable',
+  'fallback-llm-error': 'the LLM call failed',
+  'fallback-unparseable': "the LLM's answer could not be parsed",
+  'fallback-empty-topics': 'the LLM returned no usable topic',
+  'fallback-threw': 'the topic summariser failed'
+};
+
+/** The operator-facing reason for a fallback — the one owner of the
+ * vocabulary, so the converter and the importer never re-type it. */
+function fallbackReason(source) {
+  return FALLBACK_REASONS[source] || 'the topic summariser degraded';
+}
+
+/** The filename-slug fallback — the shape every degradation path returns.
+ * One owner, so the converter can rebuild it when the gate raises without
+ * the two copies drifting apart. `source` names which degradation it is. */
+function fallbackTopics(fileName, source = 'fallback-filename') {
+  const fallbackSlug = slugify(String(fileName || '').replace(/\.[^.]+$/, '')) || 'tabular-dataset';
+  return {
+    topics: [fallbackSlug],
+    purpose: `Tabular dataset imported from ${fileName || 'a CSV file'}.`,
+    source,
+    reason: fallbackReason(source)
+  };
+}
+
 /** One LLM call summarising the dictionary into topics + purpose.
- * Never throws — every failure path degrades and is logged.
+ * Degrades and logs on every engine failure — the ONE exception is the
+ * opt-in gate, which raises `llm-not-configured` like the other legs.
  *
  * @param {object} args
  * @param {Array<{name,type,sample}>} args.columns the dictionary rows, exactly
@@ -69,17 +113,10 @@ specific subject. Never guess a domain the dictionary does not support.`;
  * @param {string} args.fileName used for the fallback slug
  */
 async function deriveTopics({ columns, fileName, opts = {} } = {}) {
-  const fallbackSlug = slugify(String(fileName || '').replace(/\.[^.]+$/, '')) || 'tabular-dataset';
-  const fallback = {
-    topics: [fallbackSlug],
-    purpose: `Tabular dataset imported from ${fileName || 'a CSV file'}.`,
-    source: 'fallback-filename'
-  };
-
   const cols = Array.isArray(columns) ? columns : [];
   if (cols.length === 0) {
     logger.warn('CSV topics: no dictionary columns — skipping LLM, using filename slug', { fileName });
-    return fallback;
+    return fallbackTopics(fileName, 'fallback-filename');
   }
 
   // REMOTE-ONLY GUARD: frontmatter-service defaults to the compose service
@@ -90,9 +127,17 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
   // opt-in semantics cannot drift this leg from the other three. Lazy
   // require for the same reason as the chat client below: the converter
   // stays pure for its unit tests.
-  if (!require('../vllm-model-cache').optedInVllmBase()) {
-    logger.warn('CSV topics: VLLM_ENDPOINT not set — engine not configured, using filename slug', { fileName });
-    return { ...fallback, source: 'fallback-no-endpoint' };
+  const modelCache = require('../vllm-model-cache');
+  try {
+    modelCache.requireOptedInBase();
+  } catch (err) {
+    // A closed gate is a misconfiguration, and the legs must answer it the
+    // same way: the same closed-gate error the sibling legs raise. The
+    // degraded shape rides on the error, so the converter stays generic,
+    // the import still lands with the filename slug, and the reason is
+    // recorded.
+    err.topics = fallbackTopics(fileName, 'fallback-no-endpoint');
+    throw err;
   }
 
   // Lazy require: the converter is pure and unit-tested without the axios/OTel
@@ -103,7 +148,7 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
     chat = require('../frontmatter-service').vllmChatCompletions;
   } catch (err) {
     logger.warn('CSV topics: LLM client unavailable — using filename slug', { fileName, error: err.message });
-    return { ...fallback, source: 'fallback-client-unavailable' };
+    return fallbackTopics(fileName, 'fallback-client-unavailable');
   }
 
   const dictLines = cols
@@ -137,7 +182,7 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
       error: err.message,
       code: err.code || null
     });
-    return { ...fallback, source: 'fallback-llm-error' };
+    return fallbackTopics(fileName, 'fallback-llm-error');
   }
 
   const parsed = parseTopics(raw);
@@ -146,13 +191,13 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
       fileName,
       response: String(raw || '').slice(0, 200)
     });
-    return { ...fallback, source: 'fallback-unparseable' };
+    return fallbackTopics(fileName, 'fallback-unparseable');
   }
 
   const topics = normalizeTopics(parsed.topics);
   if (topics.length === 0) {
     logger.warn('CSV topics: LLM returned no usable topic — falling back to filename slug', { fileName });
-    return { ...fallback, source: 'fallback-empty-topics' };
+    return fallbackTopics(fileName, 'fallback-empty-topics');
   }
   const purpose = String(parsed.purpose || '')
     .replace(/\s+/g, ' ')
@@ -204,4 +249,4 @@ function normalizeTopics(raw) {
   return out;
 }
 
-module.exports = { deriveTopics, parseTopics, normalizeTopics, MIN_TOPICS, MAX_TOPICS };
+module.exports = { deriveTopics, parseTopics, normalizeTopics, fallbackTopics, fallbackReason, MIN_TOPICS, MAX_TOPICS };

@@ -1589,6 +1589,8 @@ export default {
       title: 'Model configurations',
       add: 'New configuration',
       hint: 'Named remote-model endpoints for judging and generation — any OpenAI-compatible surface (OpenAI, a LiteLLM gateway, vLLM, Gemini-compat, Ollama) or Anthropic direct. Exactly one configuration can be active; when none is, the deployment’s configured default model is used. Keys are stored server-side and never displayed.',
+      gateWarning:
+        'The OKF LLM legs that follow the deployment opt-in (topic links, CSV topics, manifest summaries) are OFF: this deployment has no VLLM_ENDPOINT. A named configuration does not enable them — set VLLM_ENDPOINT on the server to turn them on.',
       name: 'Name',
       provider: 'Provider',
       providerOpenai: 'OpenAI-compatible (OpenAI, LiteLLM, vLLM…)',

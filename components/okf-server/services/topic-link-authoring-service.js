@@ -225,9 +225,9 @@ function buildNeighborIndex(concepts, k = DEFAULT_NEIGHBORS) {
 async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
   // stay off until a deployment names the endpoint).
-  const rawBase = modelCache.optedInVllmBase();
-  // No endpoint at all = the deliberate opt-out (compose ships it empty).
-  if (!rawBase) throw new Error('llm-not-configured');
+  // No endpoint at all = the deliberate opt-out (compose ships it empty):
+  // the shared gate owner raises the closed-gate error.
+  const rawBase = modelCache.requireOptedInBase();
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
   // /v1/models discovery -> loud ModelDiscoveryError (#1181). The probe
   // shares the call budget; the chat call gets what is left of it.

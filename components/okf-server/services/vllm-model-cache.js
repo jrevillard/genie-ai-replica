@@ -580,6 +580,30 @@ function optedInVllmBase() {
   return process.env.VLLM_ENDPOINT || null;
 }
 
+/** The identity every leg raises when the deployment opt-in is CLOSED (no
+ * endpoint). ONE owner, so the legs cannot drift apart: curation,
+ * topic-link and the CSV topics leg all throw this error for the same
+ * misconfiguration. The code travels on `err.code`, so a caller that needs
+ * to tell a closed gate from any other failure matches on it — the CSV
+ * leg's converter does exactly that to pick up the degraded shape. */
+const LLM_NOT_CONFIGURED = 'llm-not-configured';
+
+/** The closed-gate error itself. */
+function llmNotConfiguredError() {
+  const err = new Error(LLM_NOT_CONFIGURED);
+  err.code = LLM_NOT_CONFIGURED;
+  return err;
+}
+
+/** The base for a leg that follows the deployment opt-in — or the
+ * closed-gate error. One owner for the decision, so a leg cannot resolve
+ * the endpoint its own way and degrade quietly. */
+function requireOptedInBase() {
+  const base = optedInVllmBase();
+  if (!base) throw llmNotConfiguredError();
+  return base;
+}
+
 /** The deployment endpoint's served model, soft: base AND deployment
  * credential resolved in one place (they must never drift apart — an
  * unauthenticated probe 401s on secured endpoints and silently defeats
@@ -695,6 +719,8 @@ module.exports = {
   deploymentVllmBase,
   getServedModelId,
   optedInVllmBase,
+  llmNotConfiguredError,
+  requireOptedInBase,
   requireServedModelId,
   resolveCallModel,
   resolveDeploymentModel,

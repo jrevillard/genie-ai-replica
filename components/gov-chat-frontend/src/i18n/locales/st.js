@@ -1602,6 +1602,8 @@ export default {
       title: 'Dipehelo tsa dimela',
       add: 'Pehelo e ncha',
       hint: 'Dipehelo tsa dimela tse holeseng tse nang le mabitso bakeng sa tolo le tlhahiso — lefapha lefe kapa lefe le tsamaisanang le OpenAI (OpenAI, gethele ya LiteLLM, vLLM, Gemini-compat, Ollama) kapa Anthropic ka otlolohile. Pehelo e le nngwe feela e ka sebelisoa nako e nngwe; ha ho ea sebelisoa, modeli ya kamehla ea hatiso e sebelisoa. Dikii di bolokwa server le ha di bontshwe kapele.',
+      gateWarning:
+        'Mafase a LLM a OKF a latelang pele ho latsoha boemo ba deployment (dihokomanyana tsa sehloholo, sehloholo tsa CSV, kakanyetso ea manifest) a FIHLILOE: deployment ena ha na le VLLM_ENDPOINT. Ho lokisa ha ho behang se boholo ha se tla etsa hore tseo li qasohe — beha VLLM_ENDPOINT ho server ho qalisa tsona.',
       name: 'Lebitso',
       provider: 'Mofani',
       providerOpenai: 'E tsamaosana le OpenAI (OpenAI, LiteLLM, vLLM…)',

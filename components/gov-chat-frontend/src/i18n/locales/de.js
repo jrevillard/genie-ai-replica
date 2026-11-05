@@ -1609,6 +1609,8 @@ export default {
       title: 'Modellkonfigurationen',
       add: 'Neue Konfiguration',
       hint: 'Benannte Remote-Modell-Endpunkte für Bewertung und Generierung — jede OpenAI-kompatible Oberfläche (OpenAI, ein LiteLLM-Gateway, vLLM, Gemini-kompatibel, Ollama) oder Anthropic direkt. Genau EINE Konfiguration kann aktiv sein; ohne aktive gilt das konfigurierte Standardmodell der Deployment-Umgebung. Schlüssel werden serverseitig gespeichert und nie angezeigt.',
+      gateWarning:
+        'Die OKF-LLM-Beine, die der Opt-in der Bereitstellung folgen (Themenverknüpfungen, CSV-Themen, Manifest-Zusammenfassungen), sind AUS: In dieser Bereitstellung ist kein VLLM_ENDPOINT gesetzt. Eine benannte Konfiguration aktiviert sie nicht — setzen Sie VLLM_ENDPOINT auf dem Server, um sie einzuschalten.',
       name: 'Name',
       provider: 'Anbieter',
       providerOpenai: 'OpenAI-kompatibel (OpenAI, LiteLLM, vLLM…)',

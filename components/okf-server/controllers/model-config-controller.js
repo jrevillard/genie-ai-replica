@@ -14,7 +14,10 @@ function actorFrom(req) {
 
 async function list(req, res, next) {
   try {
-    // listConfigs returns the full envelope {configs, env_judge, env_pick}.
+    // listConfigs returns the full envelope {configs, env_judge, env_pick,
+    // deployment_opt_in} — the last one states whether the deployment opted
+    // in to the OKF LLM legs, so the panel can warn that a configuration
+    // cannot enable them.
     // The LIST is readable by any OKF user (David 2026-10-25) — the RAGAS
     // judge picker needs the env judge, and gating the read made the whole
     // model selection disappear for anyone without tools-admin. The key

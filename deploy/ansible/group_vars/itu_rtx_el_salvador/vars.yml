@@ -107,8 +107,11 @@ retriever_arango_traversal_concurrent_batches: "10"
 retriever_arango_k: "32"
 retriever_arango_fetch_k: "40"
 retriever_arango_score_threshold: "0.2"
-# RERANKING_STRATEGY/TOP_N inherit the docker-compose defaults (slice / 3).
-# The legacy threshold override was removed — slice ignores thresholds.
+# RERANKING_STRATEGY does NOT inherit the docker-compose default (slice): it is
+# overridden to "adaptive" below (see the tuning note). RERANKER_TOP_N does
+# inherit the docker-compose default (3).
+# The legacy threshold override was removed — no strategy in use here consults
+# RERANKING_THRESHOLD (adaptive cuts on min_value_threshold, set below).
 
 # Chunking configuration. Values are character counts — dataprep uses LangChain's
 # RecursiveCharacterTextSplitter, which measures chunk length in characters.
@@ -139,9 +142,13 @@ min_value_threshold: "-1.0"
 # Opt-in LLM self-grade: the model appends [[CONF:<0-100>]] rating how well the
 # retrieved docs support its answer; chatqna strips it before the user/translation
 # and exposes it as `self_confidence` in the metadata. Enabled on el-salvador to
-# collect real self_confidence values for the calibration eval — NOT yet surfaced
-# to end users (frontend does not render the field). Expect some null values: the
-# 2B model may not always emit the sentinel in the exact format.
+# collect real self_confidence values for the calibration eval. The self-grade IS
+# user-visible: it REPLACES the retrieval confidence in the citizen-facing badge
+# (chatqna `_display_confidence` prefers it, and the frontend renders
+# `metadata.confidence_score` as the confidence badge). The raw values travel
+# separately (`retrieval_confidence_score` / `self_confidence`) for admin/eval.
+# Expect some null values: the served model (ibm-granite/granite-4.1-8b) does not
+# always emit the sentinel in the exact format.
 llm_self_confidence_enabled: "1"
 chatqna_system_prompt: |-
   <agent id="AgroGenio" domain="agriculture-extension" region="El Salvador">

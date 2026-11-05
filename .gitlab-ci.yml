@@ -772,11 +772,19 @@ workflow:
     # credentials from the same module.
     - >
       ADMIN_TOKEN="$ADMIN_TOKEN" BASE_URL="${E2E_BASE_URL}" node tests/e2e/provision-e2e-fixtures.js
-    # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
-    # drive ships in MR 2 (this train is MR1, dark), they hardcode
-    # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
-    # need an OKF-enabled deployment (OKF_ENABLED=1). Including them here
-    # guaranteed three red specs on every merge train.
+    # tests/e2e/okf/ stays OUT: every spec in it drives an OKF SURFACE, and
+    # the CI deployment runs the core profile with the OKF pillar PARKED
+    # (OKF_ENABLED=0) — the Studio tab and the artifacts view do not render
+    # there, so the specs would find nothing to drive. (The RAGAS guide specs
+    # additionally hardcode https://localhost while CI serves
+    # E2E_BASE_URL=https://nginx.) The wave specs that need an OKF-enabled
+    # deployment run against the LOCAL build instead — see
+    # tests/e2e/okf/artifacts-view.spec.js for the run command.
+    #
+    # When the CI deployment turns the pillar on, add the directory here AND
+    # to the executed-spec set pinned in tests/config-validator (the pin
+    # lists the specs the invocation executes; a spec that drifts out of the
+    # invocation is not covered by it).
     - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/admin/ tests/e2e/theme-runtime-config.spec.js tests/e2e/helpers/ --project=chromium
   after_script:
     - mkdir -p e2e-logs

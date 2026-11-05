@@ -14,10 +14,11 @@ async function navigateToDocumentManagement(page) {
     timeout: 30000,
   });
 
-  // The admin shell renders "Document Management" twice by design: the
-  // sidebar nav link and the DsTabs tab button. Only the sidebar entry is
-  // a link, so scope by role — a bare getByText resolves to both.
-  const docTab = page.getByRole('link', { name: /Document Management/ });
+  // UX-1 (#1512) replaced the sidebar nav rail with the tab rack: the
+  // documents section is a rack BUTTON now, addressed by the handle the
+  // component declares. The old sidebar LINK this helper waited for is
+  // gone from the shell — the wait never resolved after UX-1.
+  const docTab = page.locator('[data-test-id="admin-documents-link"]');
   await expect(docTab).toBeVisible({ timeout: 10000 });
   await docTab.click();
 

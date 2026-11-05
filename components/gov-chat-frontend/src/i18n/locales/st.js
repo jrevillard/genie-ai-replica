@@ -484,6 +484,13 @@ export default {
       duplicateLangError: 'Dipuo tse peli tse tshwanang di fumanwe diphetolelong. Ka kopo, di tlose.'
     },
     documents: {
+      viewDocuments: 'Litokomane',
+      viewArtifacts: 'Lihlahloa',
+      deleteRefuseBundle:
+        '{count} lihlahloa tsa OKF li lauloa ke bophelo ba polokelo, mme li ke la deletable kapa ho fihlela mona.',
+      deleteRefuseMixed:
+        '{blocked} lifaele tse ntse li ingeste — tsena ua pele. {bundles} lihlahloa tsa OKF li lauloa ke bophelo ba polokelo, mme li ke la deletable kapa ho fihlela mona.',
+      artifactsParked: 'Lihlahloa tsa OKF li hla ha ho bonwa ha ho lumelloa tsena e sebetsang le OKF.',
       title: 'Tsamaiso ya Ditokomane',
       addLink: 'Eketsa ho tswa ho Link',
       uploadFiles: 'Kenya Difaele',
@@ -1444,6 +1451,7 @@ export default {
     alt: 'Kenya'
   },
   details: {
+    bundleBadge: 'Lauloa ke bophelo ba OKF',
     crawl: {
       seconds: 'metsotso',
       autoRefreshEvery: 'Nchafatso ea othomatiki e ngoe le e ngoe',
@@ -1560,6 +1568,21 @@ export default {
       'Sebaka sa ho etsa upload bakeng sa RAG: tokomane e nngwe le e nngwe eo u e uploadang e ka fetoha tsebo e hlophisitsoeng, e nang le ditag — ditokomane tse tsamaitseng hantle le tse hlophisitsoeng di fumanwa ka nepo e kgolo ho feta faele e le nngwe e telele.'
   },
   okf: {
+    artifacts: {
+      title: 'Lihlahloa tsa OKF',
+      lead: 'Ho le leng le ho phatlalatsa ha mofuta.',
+      empty: 'Ha ho na le lihlahloa tsa OKF haesale.',
+      loadFailed: 'Ha ho kgone ha ho bala lihlahloa tsa OKF.',
+      downloadFailed: 'Ha ho kgone ho jarolla lihlahloa tsa OKF.',
+      column: {
+        artifact: 'Sehlahloa',
+        repository: 'Polokelo',
+        actions: 'Diketo',
+        state: 'Boemo'
+      },
+      openRepo: 'Bula polokelo',
+      unknownVersion: 'Mofuta e sa tsebiseho'
+    },
     retrieval: {
       title: 'Boemo bo ea bo phatlela',
       refresh: 'Ntjhafatsa',
@@ -1736,6 +1759,7 @@ export default {
       ingestCompleted: 'ingested',
       bundleMissing: 'zip missing',
       bundleDownload: 'Download zip',
+      viewArtifact: 'Bona sehlahloa',
       bundle: 'Bundle',
       col: {
         ingest: 'Ingest',

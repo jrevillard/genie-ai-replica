@@ -486,6 +486,13 @@ export default {
       duplicateLangError: 'Langues en double trouvées dans les traductions. Veuillez les supprimer.'
     },
     documents: {
+      viewDocuments: 'Documents',
+      viewArtifacts: 'Artefacts',
+      deleteRefuseBundle:
+        '{count} artefact(s) OKF sont gérés par le cycle de vie du référentiel et ne peuvent pas être supprimés ici.',
+      deleteRefuseMixed:
+        '{blocked} fichier(s) sont encore ingérés — retirez-les d’abord. {bundles} artefact(s) OKF sont gérés par le cycle de vie du référentiel et ne peuvent pas être supprimés ici.',
+      artifactsParked: 'Les artefacts OKF apparaissent lorsque la fonctionnalité OKF est activée pour ce déploiement.',
       title: 'Gestion de documents',
       addLink: 'Ajouter depuis un lien',
       uploadFiles: 'Télécharger des fichiers',
@@ -1448,6 +1455,7 @@ export default {
     alt: 'Télécharger'
   },
   details: {
+    bundleBadge: 'Géré par le cycle de vie OKF',
     crawl: {
       seconds: 'secondes',
       autoRefreshEvery: 'Actualisation auto toutes',
@@ -1565,6 +1573,21 @@ export default {
       "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier."
   },
   okf: {
+    artifacts: {
+      title: 'Artefacts OKF',
+      lead: 'Un artefact par version publiée.',
+      empty: 'Aucun artefact OKF pour le moment.',
+      loadFailed: 'Impossible de lire les artefacts OKF.',
+      downloadFailed: 'Impossible de télécharger les artefacts OKF.',
+      column: {
+        artifact: 'Artefact',
+        repository: 'Référentiel',
+        actions: 'Actions',
+        state: 'Statut'
+      },
+      openRepo: 'Ouvrir le référentiel',
+      unknownVersion: 'version inconnue'
+    },
     retrieval: {
       title: 'Posture de récupération',
       refresh: 'Actualiser',
@@ -1743,6 +1766,7 @@ export default {
       ingestCompleted: 'ingéré',
       bundleMissing: 'zip manquant',
       bundleDownload: 'Télécharger le zip',
+      viewArtifact: "Voir l'artefact",
       bundle: 'Ensemble',
       col: {
         ingest: 'Ingestion',

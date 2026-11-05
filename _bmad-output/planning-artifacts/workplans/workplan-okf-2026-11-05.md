@@ -129,6 +129,39 @@ the ORDER and the cross-stream slots.
 > fields only, then a re-read from the GET — the card never renders its own
 > optimistic guess as truth.
 
+> **W6 STATUS 2026-11-06: CODE COMPLETE, awaiting review + MR.**
+> The artifacts view (`components/gov-chat-frontend/src/components/okf/ArtifactsView.vue`)
+> is the second view of the admin dashboard's Document Management tab
+> (Documents | Artifacts). The default list now fetches `is_bundle: false`, so
+> the OKF bundle zips LEAVE it; the artifacts view fetches `is_bundle: true`
+> and lists them with their provenance (`repo@version`), their state, a
+> download and — when the repository resolves — a link into the OKF Studio.
+>
+> The lie it removes: the bundles sat in the document list unlabeled, and the
+> batch Delete counted a Pending bundle as deletable (only ingested/ingesting
+> are status-blocked) — so the UI offered a delete the server refuses with
+> `403 BUNDLE_PROTECTED`. The affordance is DROPPED, not made to work: a
+> privileged write path would build on the rule W7 is about to reverse.
+>
+> The state vocabulary is SHARED (`src/utils/documentStatus.js`) between the
+> document list and the artifacts view, so the two surfaces cannot disagree
+> about what "Ingested" means — pinned by a cross-surface invariant test
+> (en + fr). `FileDetailsDialog.vue` is deliberately NOT wired to it: its
+> mapper takes a DISPLAY string (crawl arms included) and answers with a
+> different default — sharing the module with it would change existing
+> renderings, which is out of scope for this wave.
+>
+> Verified: frontend suite 134 suites / 3901 tests green; coverage lines
+> **89.02 %** vs the measured main baseline **88.97 %** (statements 88.99 vs
+> 88.92, branches 76.13 vs 76.00, functions 67.32 vs 67.14) — the
+> must-not-decrease bar is met on every metric, measured on this machine by
+> stashing the wave and re-running. The smoke harness gained the W6 phase
+> (the artifacts view's data source: the bundle is listed by `is_bundle=true`
+> and does NOT appear in the document list) and the Playwright spec
+> (`tests/e2e/okf/artifacts-view.spec.js`, injected payloads) drives the view
+> in a browser. LIVE verification rides the tree sync (David's one-time-reset
+> call).
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

@@ -483,6 +483,7 @@ module.exports = (analyticsService) => {
      *                     properties:
      *                       label:
      *                         type: string
+     *                         description: Period key (current, week1, week2, week3, week4) to translate client-side
      *                       value:
      *                         type: number
      *       401:
@@ -544,6 +545,7 @@ module.exports = (analyticsService) => {
      *                       properties:
      *                         x:
      *                           type: string
+     *                           description: Period key (current, week1, week2, week3, week4) to translate client-side
      *                         y:
      *                           type: number
      *       401:

@@ -616,7 +616,9 @@ class AnalyticsService {
    * Get satisfaction gauge data
    * @param {String} period - Period type (daily, weekly, monthly, all-time)
    * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw'). Accepted
+   *   for call compatibility; the week-axis labels are period keys and do not
+   *   depend on it.
    * @returns {Promise<Object>} Satisfaction gauge data; each historical entry
    *   carries a period key (see SATISFACTION_PERIOD_KEYS) as its label, not
    *   display text — the frontend translates it.

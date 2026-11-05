@@ -517,8 +517,11 @@ export default {
             currentValue: 87.5,
             changePercentage: 1.2,
             historicalData: [
-              { label: 'Previous Month', value: 86.3 },
-              { label: 'Two Months Ago', value: 85.0 }
+              { label: 'current', value: 87.5 },
+              { label: 'week1', value: 86.3 },
+              { label: 'week2', value: 85.0 },
+              { label: 'week3', value: 84.1 },
+              { label: 'week4', value: 83.0 }
             ],
             target: 85
           },

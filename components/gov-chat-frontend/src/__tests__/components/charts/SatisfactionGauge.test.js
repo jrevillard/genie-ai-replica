@@ -1,27 +1,23 @@
 // Tests for the satisfaction gauge period labels.
 //
 // The backend emits stable period keys ('current', 'week1'...'week4') instead
-// of localized text; the component translates them through the i18n bundle.
+// of localized text; the component translates them through the shipped i18n
+// catalogue (realI18n), so a key missing from the catalogue fails here.
 import { shallowMount } from '@vue/test-utils';
 import SatisfactionGauge from '@/components/charts/SatisfactionGauge.vue';
 
-const translations = {
-  'analytics.timePeriods.current': 'Current',
-  'analytics.timePeriods.week1': 'Last Week',
-  'analytics.timePeriods.week2': '2 Weeks Ago',
-  'analytics.timePeriods.week3': '3 Weeks Ago',
-  'analytics.timePeriods.week4': '4 Weeks Ago'
-};
+const { createRealEnI18n, realI18nMock } = require('../../helpers/realI18n');
 
-const translate = (key) => (key in translations ? translations[key] : key);
+const i18n = createRealEnI18n();
+const $t = (...args) => i18n.global.t(...args);
 
 const mountGauge = (historicalData) =>
   shallowMount(SatisfactionGauge, {
     propsData: { externalData: true, historicalData },
     global: {
       mocks: {
-        $t: translate,
-        $i18n: { locale: 'en', t: translate }
+        $t,
+        $i18n: realI18nMock(i18n)
       },
       stubs: { apexchart: true }
     }

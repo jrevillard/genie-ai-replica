@@ -1,19 +1,14 @@
 // Tests for the satisfaction heatmap period labels.
 //
 // The backend emits stable period keys ('current', 'week1'...'week4') instead
-// of localized text; the component translates them through the i18n bundle.
+// of localized text; the component translates them through the shipped i18n
+// catalogue (realI18n), so a key missing from the catalogue fails here.
 import { shallowMount } from '@vue/test-utils';
 import SatisfactionHeatmap from '@/components/charts/SatisfactionHeatmap.vue';
 
-const translations = {
-  'analytics.timePeriods.current': 'Current',
-  'analytics.timePeriods.week1': 'Last Week',
-  'analytics.timePeriods.week2': '2 Weeks Ago',
-  'analytics.timePeriods.week3': '3 Weeks Ago',
-  'analytics.timePeriods.week4': '4 Weeks Ago'
-};
+const { createRealEnI18n, realI18nMock } = require('../../helpers/realI18n');
 
-const translate = (key) => (key in translations ? translations[key] : key);
+const i18n = createRealEnI18n();
 
 // The theme composable listens to the system color scheme; jsdom has no matchMedia.
 beforeAll(() => {
@@ -36,8 +31,8 @@ const mountHeatmap = (data) =>
     propsData: { externalData: true, data },
     global: {
       mocks: {
-        $t: translate,
-        $i18n: { locale: 'en', t: translate }
+        $t: (...args) => i18n.global.t(...args),
+        $i18n: realI18nMock(i18n)
       },
       stubs: { apexchart: true }
     }
@@ -76,5 +71,14 @@ describe('SatisfactionHeatmap period labels', () => {
 
     const xs = wrapper.vm.chartSeries[0].data.map((point) => point.x);
     expect(xs).toEqual(['Last Week']);
+  });
+
+  it('keeps the series identity stable when the chart is rebuilt', () => {
+    const wrapper = mountHeatmap([{ name: 'Category One', data: [{ x: 'current', y: 80 }] }]);
+
+    const seriesBefore = wrapper.vm.chartSeries;
+    wrapper.vm.updateChart();
+
+    expect(wrapper.vm.chartSeries).toBe(seriesBefore);
   });
 });

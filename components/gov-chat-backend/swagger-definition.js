@@ -35,7 +35,14 @@ module.exports = {
       // not resolve.
       url: (() => {
         const base = (process.env.API_URL || '').trim().replace(/\/+$/, '');
-        return /^https?:\/\/.+/.test(base) ? base : '/';
+        try {
+          // WHATWG parsing is the exact validator: it rejects scheme-only,
+          // scheme-less and whitespace-embedded values, and normalizes the
+          // scheme to lowercase (RFC 3986 case-insensitivity).
+          return /^https?:$/.test(new URL(base).protocol) ? base : '/';
+        } catch {
+          return '/';
+        }
       })(),
       description: 'API server base'
     }

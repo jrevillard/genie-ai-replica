@@ -960,20 +960,14 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      // Log the docs URL the served spec itself advertises. The docs page
-      // mounts at the BFF root, so only the server URL's ORIGIN is a valid
-      // docs base; the relative default (the deployment shape) logs the
-      // bare path — a localhost URL would be unreachable in every deployed
-      // topology (only nginx 80/443 is exposed).
+      // Log the docs URL the served spec itself advertises (the spec's
+      // server base is where this process is reachable, so its full value
+      // — not just the origin — prefixes the docs path). The relative
+      // default, the only shape a deployment serves, logs the bare path:
+      // a localhost URL would be unreachable in every deployed topology
+      // (only nginx 80/443 is exposed).
       const specServerUrl = swaggerSpec?.servers?.[0]?.url;
-      let docsBase = '';
-      if (specServerUrl && specServerUrl !== '/') {
-        try {
-          docsBase = new URL(specServerUrl).origin;
-        } catch {
-          docsBase = '';
-        }
-      }
+      const docsBase = specServerUrl && specServerUrl !== '/' ? specServerUrl.replace(/\/+$/, '') : '';
       logger.info(`API Documentation available at: ${docsBase}/api-docs`);
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)

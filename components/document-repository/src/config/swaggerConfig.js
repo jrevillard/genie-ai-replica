@@ -10,18 +10,12 @@ const swaggerOptions = {
     },
     servers: [
       {
-        // Default: RELATIVE ('/') — swagger-ui resolves it against the
-        // origin the docs are served from, so Try-it-out is same-origin in
-        // every topology. API_URL's one consumer is the backend's
-        // client-generation pin; a value that is not an absolute http(s)
-        // URL after normalization (trim, trailing-slash strip) is ignored
-        // rather than served as a broken server entry. Keep this
-        // normalization in sync with
-        // components/gov-chat-backend/swagger-definition.js.
-        url: (() => {
-          const base = (process.env.API_URL || '').trim().replace(/\/+$/, '');
-          return /^https?:\/\/.+/.test(base) ? base : '/';
-        })(),
+        // RELATIVE base: swagger-ui resolves it against the origin the
+        // docs are served from, so Try-it-out is same-origin in every
+        // topology and needs no per-deployment configuration. (The
+        // backend's spec has an API_URL override for its client-generation
+        // pin; this service has no external consumer that needs one.)
+        url: '/',
         description: 'API server base'
       }
     ],

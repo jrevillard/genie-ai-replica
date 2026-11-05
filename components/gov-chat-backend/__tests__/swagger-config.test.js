@@ -382,7 +382,7 @@ describe('Swagger Configuration', () => {
       });
     });
 
-    it('a custom API_URL is used verbatim as the suffix-free server base', () => {
+    it('a custom absolute API_URL is kept as the suffix-free server base (modulo trim and trailing-slash normalization)', () => {
       withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
         const url = swaggerOptions.definition.servers[0].url;
         expect(url).toBe('https://gov.example.com/gov');
@@ -411,13 +411,21 @@ describe('Swagger Configuration', () => {
 
     it('an API_URL that is not an absolute http(s) URL is ignored (falls back to the relative default)', () => {
       // A scheme-only value would survive slash-stripping as 'https:' and
-      // be served as a broken server entry; a scheme-less host resolves as
-      // a relative reference against the docs page. Both fall back to '/'.
+      // be served as a broken server entry; a scheme-less host or a URL
+      // with embedded whitespace resolves as / serves garbage. All fall
+      // back to '/'. Schemes are case-insensitive (RFC 3986).
       withApiUrl('https://', ({ swaggerOptions }) => {
         expect(swaggerOptions.definition.servers[0].url).toBe('/');
       });
       withApiUrl('gov.example.com', ({ swaggerOptions }) => {
         expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https:// gov.example.com', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('HTTP://gov.example.com', ({ swaggerOptions }) => {
+        // Uppercase scheme is a legal absolute URL — accepted verbatim.
+        expect(swaggerOptions.definition.servers[0].url).toBe('HTTP://gov.example.com');
       });
     });
 

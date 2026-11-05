@@ -198,16 +198,24 @@ Playwright handles on the admin spelling.
 
 ## Acceptance criteria (FR-005 + the wave's NFRs)
 
-- [ ] Zero unlabeled bundle rows in the default document list
-- [ ] Artifact ↔ repo navigation works both directions
-- [ ] Pending bundles get a truthful action (no affordance that 403s)
-- [ ] DS primitives only (`DsTable`/`DsDialog`/`DsPill`); `?tab=…&file=` deep-link pattern reused
-- [ ] No-regression inventory (remediation plan) re-checked per wave
-- [ ] Playwright suite green; renamed locators swept
-- [ ] Legacy document handling: zero behavior change outside `is_bundle` rows and RESTRICTED-source refusals
-- [ ] Per-component `jest --coverage`: every touched component ≥ its existing floor (backend 35 / frontend 65 / doc-repo 55); CI Statements% does not regress (frontend baseline **88.97**, 3764/3764)
-- [ ] Smoke harness extension per story, live-verified
-- [ ] config-validator untouched or green (NFR-006 — no new env var is planned)
+- [x] Zero unlabeled bundle rows in the default document list — **live**: `is_bundle=false`
+      → 263 rows, 0 bundles; `is_bundle=true` → 24 artifacts, all 24 carrying a `repo_id`.
+- [x] Artifact ↔ repo navigation works both directions — **live**: the artifact row's
+      repository link opens the Studio (`?tab=studio&repo=`); the Versions dialog's
+      "View artifact" opens the artifacts view (`?tab=documents&view=artifacts&file=`).
+      Both asserted by the Playwright spec against the running stack.
+- [x] Pending bundles get a truthful action (no affordance that 403s) — the view offers
+      NO delete, for any state. The affordance is dropped, not made to work.
+- [x] DS primitives only (`DsTable`/`DsDialog`/`DsPill`); `?tab=…&file=` deep-link pattern reused
+- [x] No-regression inventory (remediation plan) re-checked per wave
+- [x] Playwright suite green; renamed locators swept — the wave's own spec 5/5 live;
+      the frontend suite 137 suites / 3946 tests green.
+- [x] Legacy document handling: zero behavior change outside `is_bundle` rows and RESTRICTED-source refusals
+- [x] Per-component `jest --coverage`: every touched component ≥ its existing floor (backend 35 / frontend 65 / doc-repo 55); CI Statements% does not regress — **the wave's coverage vs the CURRENT main**: lines 89.09 % vs 89.02 %, statements 89.04 vs 88.98, branches 76.28 vs 76.12, functions 67.49 vs 67.23 (above on all four; the baseline measured, not remembered).
+- [x] Smoke harness extension per story, live-verified — the W6 phase's three assertions
+      PASS against the running stack.
+- [x] config-validator untouched or green (NFR-006 — no new env var is planned) — the wave
+      adds no env var; `config:validate` is green on the pipeline.
 
 ---
 

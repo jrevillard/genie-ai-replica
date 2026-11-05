@@ -71,21 +71,34 @@ function createMockUser(overrides = {}) {
   };
 }
 
-// Isolation for EVERY test in this file: jest.clearAllMocks() clears call
+// Isolation for every test in this file — the MOCK IMPLEMENTATIONS and the
+// renew protocol's localStorage state. jest.clearAllMocks() clears call
 // history but NOT implementations, so a test omitting its own mock setup
-// silently inherits the previous test's mockResolvedValue/mockRejectedValue;
-// and the cross-tab renew protocol leaves its state in localStorage — the
+// silently inherits the previous test's mockResolvedValue/mockRejectedValue —
+// and the UserManager mocks swallow those inherited rejections (logout
+// catches them), so the test stays GREEN while exercising the error path.
+// The cross-tab renew protocol likewise leaves its state in localStorage: the
 // holder PUBLISHES the minted user under RENEW_USER_KEY and the NEXT renew
 // reads that publication FIRST (gate `entry.at >= startedAt`, millisecond
 // resolution), so a surviving publication makes the next test's renew adopt
 // the previous test's user instead of running its own grant (#1518 flake,
-// reproducible locally too). Deliberately NOT jest.resetAllMocks(): that
-// would strip mockAddUserLoaded/mockAddSilentRenewError's factory
-// implementations, which the unsubscribe assertions depend on.
+// reproducible locally too).
+// Deliberately NOT jest.resetAllMocks(): that would strip the factory
+// implementations of MockUserManager, mockAddUserLoaded and
+// mockAddSilentRenewError, which the unsubscribe assertions depend on — so
+// the mocks whose implementations this suite sets are reset one by one.
+// The service module's own state (renewInFlight, currentUser) is NOT reset
+// here; see the filed follow-up.
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetUser.mockReset();
+  mockSigninRedirect.mockReset();
+  mockSigninRedirectCallback.mockReset();
+  mockSignoutRedirect.mockReset();
+  mockRemoveUser.mockReset();
+  mockClearStaleState.mockReset();
   mockSigninSilent.mockReset();
+  mockStoreUser.mockReset();
   window.localStorage.removeItem(RENEW_LEASE_KEY);
   window.localStorage.removeItem(RENEW_USER_KEY);
 });

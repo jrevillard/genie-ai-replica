@@ -80,15 +80,21 @@ function queryText(q) {
 
 function programQueries(...results) {
   let i = 0;
+  let claimRow = null; // the row the claim-read returned (the stamp mirrors its attempts)
   mockDb.query.mockImplementation(async (q) => {
     const text = queryText(q);
-    if (text.includes('worker_claimed_at: null')) {
-      return { all: async () => [{ key: 'unclaim' }] }; // 429 unclaim — unpositioned side-write (CAS lands)
+    if (text.includes('ingest_attempts: MAX([')) {
+      // 429 unclaim — unpositioned side-write (CAS lands). Keyed on the
+      // decrement expression, NOT on 'worker_claimed_at: null': the
+      // graph-missing reset writes the same literal.
+      return { all: async () => [{ key: 'unclaim' }] };
     }
     if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
-      // claim stamp — landed; the value is the SERVER-stamped claim the job
-      // carries and the 429 unclaim CASes on (RETURN NEW.worker_claimed_at).
-      return { all: async () => [STAMPED_CLAIM] };
+      // claim stamp — landed; the values are the SERVER-stamped claim the job
+      // carries and the 429 unclaim CASes on, plus the server-side attempt
+      // count (RETURN {claim, attempts}).
+      const attempts = ((claimRow && claimRow.ingest_attempts) || 0) + 1;
+      return { all: async () => [{ claim: STAMPED_CLAIM, attempts }] };
     }
     if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
       return { all: async () => [{ _key: 'settle-lease' }] }; // settle CAS — lease acquired
@@ -98,6 +104,7 @@ function programQueries(...results) {
     }
     const r = results[Math.min(i, results.length - 1)];
     i += 1;
+    if (i === 1) claimRow = Array.isArray(r) ? r[0] : r;
     return { all: async () => (Array.isArray(r) ? r : [r]) };
   });
 }
@@ -280,7 +287,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
         return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
       });
     expect(unclaimCall).toBeDefined();
-    expect(unclaimCall.query).toContain('- 1, 0)');
+    // AQL's MAX takes ONE array argument — MAX(a, b) is a parse error on
+    // ArangoDB 3.12 (error 1541), so the two-argument form never executed.
+    expect(unclaimCall.query).toContain('MAX([');
+    expect(unclaimCall.query).toContain('- 1, 0]');
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
     // 429 LANE COOL-DOWN (incident 2026-09-28): the NEXT cycle must not claim
     // while the cool-down is armed — the old 1/sec hot loop across a saturated
@@ -330,7 +340,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   function failUnclaimThenLand(base, failures, makeErr) {
     let unclaims = 0;
     mockDb.query.mockImplementation(async (q) => {
-      if (queryText(q).includes('worker_claimed_at: null')) {
+      if (queryText(q).includes('ingest_attempts: MAX([')) {
         unclaims += 1;
         if (unclaims <= failures) throw makeErr();
         return { all: async () => [{ key: 'u' }] }; // this attempt lands
@@ -356,7 +366,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // defect #1391 removes) and still match the query text.
     const unclaimBinds = mockDb.query.mock.calls
       .map((c) => c[0])
-      .filter((q) => q && q.query && q.query.includes('worker_claimed_at: null'))
+      .filter((q) => q && q.query && q.query.includes('ingest_attempts: MAX(['))
       .map((q) => Object.values(q.bindVars || {}));
     expect(unclaimBinds.length).toBeGreaterThan(0);
     expect(unclaimBinds.every((b) => b.includes(STAMPED_CLAIM))).toBe(true);
@@ -413,7 +423,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const { logger } = require('../shared-lib/logger');
     const base = setupBusyLane();
     mockDb.query.mockImplementation(async (q) => {
-      if (queryText(q).includes('worker_claimed_at: null')) {
+      if (queryText(q).includes('ingest_attempts: MAX([')) {
         return { all: async () => [] }; // the CAS matched nothing — the row moved
       }
       return base(q);
@@ -443,6 +453,66 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // failure that never executed is retried against the SAME CAS — a stamp
   // that already landed makes the CAS match nothing (refusal), never a
   // double stamp (round-4 review).
+  // Review round 2 (critical): the stamp's CAS is written against the claim
+  // value the claim-READ saw. A row admitted through the stale-claim branch
+  // carries an OLD claim value — if the projection lost it, the CAS would
+  // bind null, match nothing, and the FIFO lane would never claim that row
+  // again (the queue blocks behind one stale head row).
+  test('a STALE-claimed row is stamped against its OWN prior claim value (#1391)', async () => {
+    const staleClaim = '2026-01-01T00:00:00.000Z';
+    programQueries(
+      [
+        {
+          repo_id: REPO,
+          concept_id: 'stale',
+          graph_name: `OKF_${REPO}`,
+          frontmatter: {},
+          body: '# stale',
+          ingest_attempts: 3,
+          worker_claimed_at: staleClaim
+        }
+      ],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done
+    );
+    await worker._processOneJob();
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('UPDATE m WITH') && q.query.includes('worker_claimed_at'));
+    expect(stampCall).toBeDefined();
+    // The CAS binds the PRIOR claim value, not null.
+    expect(Object.values(stampCall.bindVars || {})).toContain(staleClaim);
+    // The claim-READ must PROJECT the claim value: KEEP drops an attribute the
+    // list does not name, and the stamp CAS is written against it.
+    const claimRead = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('RETURN KEEP(m,'));
+    expect(claimRead).toBeDefined();
+    // The projection LIST is a bind value: it must name the claim field.
+    const projected = Object.values(claimRead.bindVars || {}).find((v) => Array.isArray(v));
+    expect(projected).toBeDefined();
+    expect(projected).toContain('worker_claimed_at');
+  });
+
+  // Review round 2: the stamp must return null (never undefined) when every
+  // attempt fails — the caller treats undefined as "not a claim" but the
+  // function contract (and the retry budget) says null.
+  test('a claim stamp that fails every attempt refuses the claim (no undefined) (#1391)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        const err = new Error('connect ECONNREFUSED');
+        err.code = 'ECONNREFUSED';
+        throw err; // every attempt fails
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' }); // refused, not crashed, no kick
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
   // Round-5 review, empirically reproduced: the arangojs aql tag DROPS an
   // undefined bind — a never-claimed row has NO worker_claimed_at attribute,
   // and the broken query text was an AQL syntax error that refused EVERY

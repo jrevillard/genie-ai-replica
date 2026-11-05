@@ -110,15 +110,16 @@ const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
 // still never parks (a freed slot must be claimable instantly); the LANE
 // waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
 const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
-/** Claim/unclaim transient-write retry policy (issue #1391): attempts +
- * linear backoff base, same env-per-policy convention as every other timing
- * knob in this file. Shared by the claim stamp and the 429 unclaim. */
-const claimRetryMaxAttempts = () => safeInt('OKF_INGEST_CLAIM_RETRY_MAX_ATTEMPTS', 3);
-const claimRetryBackoffMs = () => safeIntOrZero('OKF_INGEST_CLAIM_RETRY_BACKOFF_MS', 500);
-/** Linear + jittered backoff (the db-connection-service idiom: base × attempt,
- * jitter ≤25%) — one expression shared by the stamp and unclaim retry loops. */
+// Claim/unclaim transient-write retry policy (issue #1391). NOT env-tunable:
+// an env knob that is wired into no compose/env/ansible surface is dead
+// configuration, and no operator asked for this policy to be tunable.
+// Linear + jittered backoff (the db-connection-service idiom: base × attempt,
+// jitter ≤25%) so lanes losing against the same bulk writer do not retry in
+// lockstep.
+const CLAIM_RETRY_ATTEMPTS = 3;
+const CLAIM_RETRY_BACKOFF_MS = 500;
 const claimRetryDelayMs = (attempt) => {
-  const delay = claimRetryBackoffMs() * attempt;
+  const delay = CLAIM_RETRY_BACKOFF_MS * attempt;
   return delay + Math.floor(delay * 0.25 * Math.random());
 };
 let _dataprepBusyUntil = 0;
@@ -222,6 +223,12 @@ const CLAIM_KEEP_FIELDS = [
   'repo_id',
   'concept_id',
   'graph_name',
+  // The claim value the claim-READ saw (#1391): the stamp's CAS is written
+  // against it (a stale-claim row must be stamped against its OWN prior
+  // claim, never against null), and a non-null value here is what marks a
+  // stale reclaim — the dataprep-liveness probe the FIFO lane now honours,
+  // exactly like the fair lane (which reads the full row).
+  'worker_claimed_at',
   'frontmatter',
   'body',
   'ingest_labels',
@@ -300,11 +307,14 @@ async function claimNextJob(db) {
     });
     return null;
   }
-  // Mirror the server-stamped claim + attempt count onto a CLONE — a clean
-  // copy of the read row carrying the post-stamp values.
+  // Mirror the SERVER-stamped claim + attempt count onto a CLONE — a clean
+  // copy of the read row carrying the post-stamp values. The attempt count
+  // comes from the stamp's own RETURN (not from the read + 1): another
+  // writer can reset the counter between the read and the stamp, and a
+  // mirrored guess would put the §5.5 backoff exponent out of step.
   return Object.assign({}, rows[0], {
-    worker_claimed_at: stampedClaim,
-    ingest_attempts: (rows[0].ingest_attempts == null ? 0 : rows[0].ingest_attempts) + 1
+    worker_claimed_at: stampedClaim.claim,
+    ingest_attempts: stampedClaim.attempts
   });
 }
 
@@ -341,12 +351,12 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
             worker_claimed_at: DATE_ISO8601(DATE_NOW()),
             ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
           } IN okf_concepts_meta
-          RETURN NEW.worker_claimed_at
+          RETURN { claim: NEW.worker_claimed_at, attempts: NEW.ingest_attempts }
       `,
         {}
       );
       const rows = await result.all();
-      if (rows.length > 0) return rows[0]; // the server-stamped claim value
+      if (rows.length > 0) return rows[0]; // the server-stamped claim + attempt count
       // CAS matched nothing — the row moved under us. Deterministic refusal:
       // the claim-read is stale and the row is someone else's. NO retry —
       // the next claim cycle re-reads on a fresh snapshot, and sleeping here
@@ -391,9 +401,10 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
  * returned job's attempt was STAMPED (fifo refuses the claim on a failed
  * stamp; fair stamps inside the fused statement), so this decrement always
  * un-counts a real increment — never a bare 0-row. The decrement happens
- * ONLY when the CAS matches (the row still carries this lane's claim); on a
- * CAS miss the claim is already gone and the counter is reconciled by the
- * writer that released it (final review).
+ * ONLY when the CAS matches (the row still carries this lane's claim). On a
+ * CAS miss the claim is already gone and the counter may keep the +1 (a
+ * writer that releases a claim without resetting the counter does not
+ * reconcile it) — tracked in #1552.
  */
 async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
   // The one invariant the JSDoc above does not carry: a CAS match on NOTHING
@@ -410,7 +421,7 @@ async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
     });
     return;
   }
-  const maxAttempts = claimRetryMaxAttempts();
+  const maxAttempts = CLAIM_RETRY_ATTEMPTS;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const result = await db.query(
@@ -420,7 +431,9 @@ async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
           FILTER m.worker_claimed_at == ${claimedAt}
           UPDATE m WITH {
             worker_claimed_at: null,
-            ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
+            // AQL's MAX takes ONE array argument (MAX(a, b) is a parse error
+            // on ArangoDB 3.12 — error 1541, so this write never executed).
+            ingest_attempts: MAX([(m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0])
           } IN okf_concepts_meta
           RETURN OLD._key
       `,
@@ -547,10 +560,9 @@ async function claimNextJobFair(db) {
       } IN okf_concepts_meta
       RETURN {
         // The job carries the POST-stamp claim value (#1391 — the 429 unclaim
-        // CASes on it). It is added here, NOT to CLAIM_KEEP_FIELDS: that list
-        // also projects the FIFO claim-READ, and a pre-stamp claim value there
-        // would silently activate the FIFO stale-reclaim liveness probe —
-        // a behaviour change outside this fix's scope.
+        // CASes on it). The fair statement returns NEW, so the value comes
+        // from the stamped row; the FIFO lane mirrors the stamp's RETURN
+        // (see claimNextJob).
         job: MERGE(KEEP(NEW, ${CLAIM_KEEP_FIELDS}), {
           worker_claimed_at: NEW.worker_claimed_at,
           was_stale_reclaim: cand.worker_claimed_at != null

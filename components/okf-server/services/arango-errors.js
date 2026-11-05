@@ -113,17 +113,18 @@ function isArangoConflict(err) {
  * idempotent statements safe to retry. DELEGATES the shared transient
  * classes (socket codes, 429/502/503/504 response statuses, the abort
  * message regexes) to the in-component home llm-transient-errors.js — one
- * home per transient class — and adds only the DB-side extras. The
+ * home per transient class — and adds only the DB-side extras. Strict
+ * matching, like the rest of this file: the socket codes are matched on
+ * err.code, NEVER on a message substring (a message that merely CONTAINS
+ * a code word is not evidence of a transport failure). The
  * cross-component lift (db-connection-service._isConnectionError) is
  * tracked in #1550. */
-const EXTRA_CODES_LOWER = ['enotfound', 'ehostunreach', 'eai_again', 'fetch failed'];
+const EXTRA_CONNECTION_CODES = new Set(['ENOTFOUND', 'EHOSTUNREACH', 'EAI_AGAIN']);
 function isConnectionError(err) {
   if (!err) return false;
   if (err.name === 'AbortError') return true;
   if (isRetriableUpstreamError(err)) return true;
-  const message = String(err.message || '').toLowerCase();
-  const code = String(err.code || '').toLowerCase();
-  if (EXTRA_CODES_LOWER.some((c) => code === c || message.includes(c))) return true;
+  if (err.code && EXTRA_CONNECTION_CODES.has(String(err.code).toUpperCase())) return true;
   // The status travels in different fields depending on the layer: axios
   // puts it on err.response.status, the arangojs driver on err.code
   // (ArangoError{errorNum, code:503}) or err.response.statusCode

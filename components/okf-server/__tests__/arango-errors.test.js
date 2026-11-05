@@ -61,7 +61,12 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
       true
     );
     expect(isConnectionError(new Error('socket hang up'))).toBe(true);
-    expect(isConnectionError(new Error('fetch failed'))).toBe(true);
+    // STRICT matching (this file's contract): a message that merely contains
+    // a transport word, with no code, is NOT evidence of a transport failure
+    // — matching it would retry a deterministic fault.
+    expect(isConnectionError(new Error('fetch failed'))).toBe(false);
+    expect(isConnectionError(Object.assign(new Error('x'), { code: 'EAI_AGAIN' }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('x'), { code: 'ENOTFOUND' }))).toBe(true);
     // Transient gateway statuses (the llm-transient-errors status set) — the
     // shape an arangojs error carries through a proxy under load.
     expect(isConnectionError(Object.assign(new Error('Service Unavailable'), { response: { status: 503 } }))).toBe(

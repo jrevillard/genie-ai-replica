@@ -265,6 +265,35 @@ ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 
 Replace `PRODUCT_BUNDLE_IDENTIFIER` with the unique bundle ID for this deployment. Each deployment needs a unique bundle ID for App Store distribution.
 
+## Step 4b: Android application id (migration note)
+
+The Android `applicationId`/`namespace` used to be the template identity
+`com.example.genie_ai_mobile[.<flavor>]`; it is now the repo convention
+`com.itu.genieai[.<flavor>]` — the same value as the per-flavour OIDC
+redirect scheme (`com.itu.genieai.dev`, …, `com.itu.genieai`).
+
+**Android treats a different application id as a different app.** A device
+that installed a build with the old id cannot be updated in place: the
+install fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the old app stays
+on the device. Locally stored state (the encrypted preferences of
+`flutter_secure_storage`, keyed by application id) is unreachable from the new
+id, so every user re-authenticates.
+
+**Migration for an already-distributed build:**
+
+```bash
+# 1. Uninstall the old-id app (its local state goes with it).
+adb uninstall com.example.genie_ai_mobile
+
+# 2. Install the new-id build.
+adb install -r build/app/outputs/flutter-apk/app-itu-release.apk
+```
+
+The Keycloak client is unaffected: the redirect scheme was already
+`com.itu.genieai*` before the rename, so `redirectUris` stay as they are.
+Only `webOrigins` that named the old package id need the new value
+(`android-app://com.itu.genieai[.<flavor>]`).
+
 ## Step 5: Android signing
 
 Release builds require a `key.properties` file in `mobile/genie_ai_mobile/android/` (gitignored). The template lives at `mobile/genie_ai_mobile/android/key.properties.example`.

@@ -9,15 +9,18 @@
 //   2. The ENGAGEMENT GATE travels with the mode: okf_only over zero serving
 //      graphs contributes nothing while LOOKING switched on — the card names
 //      that foot-gun instead of showing a green "on" pill.
-//   3. The CONTROLS are admin-only. A curator sees the posture (they must be
-//      able to SEE that grounding is on and what it covers) and no dead
-//      affordance; a tools-admin gets the selector, the before→after
-//      confirmation, and a save that PUTs ONLY the changed fields and then
-//      re-reads the server's truth.
+//   3. The CONTROLS need the tools-admin role. The card lives in the OKF
+//      Studio tab inside the ADMIN DASHBOARD (every /api/admin route is
+//      gated on the `admin` realm role), so the readers are admins: an
+//      admin WITHOUT tools-admin sees the posture — they must be able to SEE
+//      that grounding is on and what it covers — and no dead affordance; a
+//      tools-admin gets the selector, the before→after confirmation, and a
+//      save that PUTs ONLY the changed fields and then re-reads the server's
+//      truth.
 //
 // The role gate is asserted against the CLIENT's view of the realm role
 // (currentUser.roles). The SERVER enforces the same role on the write — the
-// client-side check exists so a curator is not offered a button that would
+// client-side check exists so a reader is not offered a button that would
 // 403 (the security boundary itself is the server's, pinned by the okf-server
 // route tests).
 
@@ -74,11 +77,22 @@ function posture(overrides = {}) {
   return merged;
 }
 
+/**
+ * The store, built the way the REAL one is built.
+ *
+ * The auth module (src/store/modules/auth.js) declares NO `namespaced: true`,
+ * so its getters are registered at the STORE ROOT — `store.getters.currentUser`
+ * — which is how NavBarComponent and ChatBotComponent read the user. A mock
+ * that namespaces the module (as this suite's first version did) invents a
+ * `store.getters['auth/currentUser']` that production does not have: the card
+ * read THAT, it resolved to undefined, and the role was never seen — the
+ * controls never rendered, while every test here was green. The mock must
+ * mirror the producer's shape, not the shape a spec wishes for.
+ */
 function buildStore(roles) {
   return createStore({
     modules: {
       auth: {
-        namespaced: true,
         state: () => ({ user: roles ? { sub: 'u-1', roles } : null }),
         getters: { currentUser: (state) => state.user }
       }
@@ -86,9 +100,38 @@ function buildStore(roles) {
   });
 }
 
-/** Mount the card. The DS primitives are stubbed to the smallest shapes that
- *  keep the assertions about BEHAVIOUR (which control exists, what the card
- *  renders) rather than about DS internals (which have their own suites). */
+/** The DS primitives are stubbed to the smallest shapes that keep the
+ *  assertions about BEHAVIOUR (which control exists, what the card renders)
+ *  rather than about DS internals (which have their own suites). ONE
+ *  definition — a test that stubs a primitive as `true` renders a
+ *  `<ds-select-stub>` element, and `find('select')` then finds NOTHING: the
+ *  assertion passes vacuously against a control that is not there. */
+const DS_STUBS = {
+  DsButton: {
+    props: ['variant', 'small', 'disabled'],
+    template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>'
+  },
+  DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' },
+  DsSelect: {
+    props: ['modelValue', 'disabled'],
+    template:
+      '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>'
+  },
+  DsInput: {
+    props: ['modelValue', 'type', 'min', 'max', 'disabled'],
+    template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
+  },
+  DsFormGroup: {
+    props: ['label', 'inputId'],
+    template: '<div class="fg"><label>{{ label }}</label><slot /></div>'
+  },
+  DsDialog: {
+    props: ['visible', 'title', 'actions'],
+    template:
+      '<div v-if="visible" class="dialog"><h4>{{ title }}</h4><slot /><button v-for="a in actions" :key="a.key" class="dlg-btn" :data-key="a.key" @click="$emit(\'action\', a.key)">{{ a.label }}</button></div>'
+  }
+};
+
 function mountCard({ roles = [], response = posture(), audit = [] } = {}) {
   repoOkfService.getRetrievalConfig.mockResolvedValue(response);
   repoOkfService.getRetrievalConfigAudit.mockResolvedValue(audit);
@@ -98,31 +141,7 @@ function mountCard({ roles = [], response = posture(), audit = [] } = {}) {
     global: {
       plugins: [store],
       mocks: { $i18n: { t: (k) => k, locale: 'en' } },
-      stubs: {
-        DsButton: {
-          props: ['variant', 'small', 'disabled'],
-          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>'
-        },
-        DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' },
-        DsSelect: {
-          props: ['modelValue', 'disabled'],
-          template:
-            '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>'
-        },
-        DsInput: {
-          props: ['modelValue', 'type', 'min', 'max', 'disabled'],
-          template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
-        },
-        DsFormGroup: {
-          props: ['label', 'inputId'],
-          template: '<div class="fg"><label>{{ label }}</label><slot /></div>'
-        },
-        DsDialog: {
-          props: ['visible', 'title', 'actions'],
-          template:
-            '<div v-if="visible" class="dialog"><h4>{{ title }}</h4><slot /><button v-for="a in actions" :key="a.key" class="dlg-btn" :data-key="a.key" @click="$emit(\'action\', a.key)">{{ a.label }}</button></div>'
-        }
-      }
+      stubs: DS_STUBS
     }
   });
   return wrapper;
@@ -229,16 +248,19 @@ describe('RetrievalCard — the posture it names', () => {
   });
 });
 
-describe('RetrievalCard — the controls are admin-only', () => {
-  test('a curator sees the posture and NO save control (no dead affordance)', async () => {
-    const w = mountCard({ roles: ['user'] });
+describe('RetrievalCard — the controls need tools-admin', () => {
+  test('an admin WITHOUT tools-admin sees the posture and NO save control (no dead affordance)', async () => {
+    // The card lives in the Admin Dashboard, so its readers are admins; the
+    // split that matters is admin vs tools-admin.
+    const w = mountCard({ roles: ['admin'] });
     await flush();
     expect(w.text()).toContain('legacy'); // the posture IS visible
     expect(w.find('[data-test-id="okf-retrieval-card"]').exists()).toBe(true);
     // No mode selector, no save button, no audit trail.
     expect(w.find('select').exists()).toBe(false);
     expect(w.find('button').exists()).toBe(false);
-    // The audit read is admin-gated server-side — a curator must not call it.
+    // The audit read is tools-admin-gated server-side — a reader without the
+    // role must not call it.
     expect(repoOkfService.getRetrievalConfigAudit).not.toHaveBeenCalled();
     w.unmount();
   });
@@ -253,6 +275,34 @@ describe('RetrievalCard — the controls are admin-only', () => {
     expect(w.findAll('input').length).toBeGreaterThan(0);
     expect(repoOkfService.getRetrievalConfigAudit).toHaveBeenCalledWith(25);
     expect(w.text()).toContain('Steward');
+    w.unmount();
+  });
+
+  test('the role is read from the STORE ROOT getter (the auth module is not namespaced)', async () => {
+    // THE REGRESSION GUARD. The card once read `mapGetters('auth',
+    // ['currentUser'])` — a namespaced lookup the real store does not have
+    // (the auth module declares no `namespaced: true`, so its getter lives
+    // at `store.getters.currentUser`). It resolved to undefined, the role
+    // was never seen, and the controls NEVER rendered — in production, while
+    // this suite was green. The store mock is not namespaced, so a card
+    // that goes back to the namespaced lookup FAILS here.
+    const store = buildStore(['tools-admin']);
+    expect(store.getters.currentUser).toEqual({ sub: 'u-1', roles: ['tools-admin'] });
+    expect(store.getters['auth/currentUser']).toBeUndefined();
+
+    repoOkfService.getRetrievalConfig.mockResolvedValue(posture());
+    repoOkfService.getRetrievalConfigAudit.mockResolvedValue([]);
+    const w = mount(RetrievalCard, {
+      global: {
+        plugins: [store],
+        mocks: { $i18n: { t: (k) => k, locale: 'en' } },
+        stubs: DS_STUBS
+      }
+    });
+    await flush();
+    expect(w.vm.currentUser).toEqual({ sub: 'u-1', roles: ['tools-admin'] });
+    expect(w.vm.canEdit).toBe(true);
+    expect(w.find('select').exists()).toBe(true);
     w.unmount();
   });
 

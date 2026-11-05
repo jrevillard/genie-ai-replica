@@ -15,10 +15,14 @@
     3. the SERVING COUNT + repo list — the same view the chat path resolves
        (per-caller scopes), so the operator sees what they actually have.
 
-  WHO SEES WHAT: the posture is read-only for everyone (a curator must SEE
-  that OKF grounding is on and what it covers) and editable only for the
-  tools-admin realm role — the same role the PUT route enforces server-side.
-  A non-admin sees no selector and no save button, so the card never
+  WHO SEES WHAT: this card lives in the OKF Studio tab, which lives in the
+  ADMIN DASHBOARD — every backend route under /api/admin is gated on the
+  `admin` realm role (gov-chat-backend/routes/admin-routes.js:59), so a
+  normal user never reaches it. The split that matters HERE is admin vs
+  tools-admin: the posture is readable by any admin (they must SEE that OKF
+  grounding is on and what it covers) and editable only by the tools-admin
+  realm role — the same role the PUT route enforces server-side. An admin
+  without it sees no selector and no save button, so the card never
   promises an action the server would refuse.
 
   THE WRITE: a save opens a before→after confirmation (the change is
@@ -289,13 +293,20 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('auth', ['currentUser']),
+    // The auth module is NOT namespaced (store/modules/auth.js declares no
+    // `namespaced: true`), so its getters live at the STORE ROOT —
+    // `store.getters.currentUser`, exactly as NavBarComponent and
+    // ChatBotComponent read them. `mapGetters('auth', [...])` would look up
+    // `store.getters['auth/currentUser']`, which does NOT exist: it resolved
+    // to undefined, the role was never seen, and the controls never rendered.
+    // Pinned by the card's suite (the store mock is NOT namespaced either).
+    ...mapGetters(['currentUser']),
     dataTestId() {
       return this.testId;
     },
     /** The tools-admin realm role — the SAME role the PUT route enforces
-     *  server-side (okf-server/middleware/require-role.js). A non-admin
-     *  gets the posture, never the controls. */
+     *  server-side (okf-server/middleware/require-role.js). An admin without
+     *  it gets the posture, never the controls. */
     canEdit() {
       const roles = (this.currentUser && this.currentUser.roles) || [];
       return roles.includes('tools-admin');

@@ -28,12 +28,13 @@
  *
  * Environment variables (from the shell, or a .env at the repo root):
  *   ARANGO_URL        (default http://localhost:8529)
- *   ARANGO_DB         (default genie-ai — the docker-compose default, also
- *                     used by run-migrations.js and seed-synthetic-data.js;
- *                     other siblings differ — the app code's own fallback is
- *                     'node-services', create-ingestion-log.js uses
- *                     ARANGO_DATABASE — so verify the printed 'Database:'
- *                     line before trusting the report)
+ *   ARANGO_DB         (REQUIRED — the database the app uses: 'genie-ai' in
+ *                     docker-compose deployments, 'node-services' in the app
+ *                     code's fallback. No default on purpose: a wrong-but-
+ *                     existing database reports "0 husks" with exit code 0,
+ *                     which reads exactly like "this environment is clean")
+ *   ARANGO_COLLECTION (default users — the users collection of the app;
+ *                     this script is the only place that variable is read)
  *   ARANGO_USER       (default root)
  *   ARANGO_PASSWORD   (no default — required by your Arango setup)
  *   ARANGO_COLLECTION (default users)
@@ -183,6 +184,20 @@ async function main() {
     return;
   }
 
+  // No default database name: the app's database differs per deployment
+  // ('genie-ai' in compose, 'node-services' in the app code's fallback), and a
+  // wrong-but-existing database reports "0 husks" with exit code 0 — the
+  // operator cannot tell "this environment is clean" from "this is the wrong
+  // database". So the operator must name it, and it must exist.
+  if (!process.env.ARANGO_DB) {
+    console.error(
+      'ARANGO_DB is required (the database the app uses — e.g. genie-ai in docker-compose ' +
+        'deployments, node-services elsewhere). No default: a wrong database reports 0 husks.'
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const db = new Database({
     url: ARANGO_URL,
     databaseName: process.env.ARANGO_DB || 'genie-ai',
@@ -191,8 +206,22 @@ async function main() {
       password: process.env.ARANGO_PASSWORD || ''
     }
   });
+  if (!(await db.exists())) {
+    console.error(`Database '${db.name}' does not exist on ${ARANGO_URL} — check ARANGO_DB and ARANGO_URL.`);
+    process.exitCode = 1;
+    return;
+  }
   const collection = db.collection(COLLECTION);
-  const total = (await collection.count()).count || 0;
+  let total;
+  try {
+    total = (await collection.count()).count || 0;
+  } catch {
+    console.error(
+      `Collection '${COLLECTION}' not found in database '${db.name}' on ${ARANGO_URL} — check ARANGO_COLLECTION.`
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   const huskCursor = await db.query(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
   const husks = await huskCursor.all();
@@ -211,7 +240,9 @@ async function main() {
   if (extra.length > 0 || missed.length > 0) {
     console.error(
       `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
-        `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted.`
+        `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted. ` +
+        'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
+        'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
     for (const doc of extra) {
       console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);

@@ -77,9 +77,13 @@ time guessing what is wrong.
   generation and contract tests. Its `servers[0].url` is **relative** (`/`)
   by default: the base comes from wherever you fetch the spec, and Swagger
   UI's Try-it-out therefore targets the origin the docs page is served from
-  (same-origin, in dev and behind the gateway). Set the backend's `API_URL`
-  (root `env` template, section 6) to publish an absolute base instead — no
-  `/api` suffix, the paths already carry it.
+  (same-origin, in dev and behind the gateway). To publish an absolute base
+  instead, set `API_URL` — no `/api` suffix, the paths already carry it —
+  in the deployment's own configuration: the root `env` template (section 6)
+  for a Compose deployment, the `api_url` Ansible group variable (see
+  `deploy/ansible/README.md`) for a Swarm deployment. The document-repository
+  spec (`/api-files` is served by that service, not by the BFF) follows the
+  same rule with the same variable.
 
 ## Verify your setup
 

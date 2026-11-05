@@ -12,9 +12,11 @@ const swaggerOptions = {
       {
         // Relative base: swagger-ui resolves it against the origin the docs
         // are served from, so Try-it-out never targets the browsing user's
-        // own machine (the hardcoded localhost default did).
-        url: '/',
-        description: 'Same-origin server'
+        // own machine (the hardcoded localhost default did). API_URL pins an
+        // absolute base for external tooling (no /api suffix — the annotated
+        // paths already carry it).
+        url: process.env.API_URL || '/',
+        description: process.env.API_URL ? 'Configured API base' : 'Same-origin server'
       }
     ],
     components: {

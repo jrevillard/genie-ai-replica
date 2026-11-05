@@ -48,7 +48,7 @@ spec:
     # Render storageClass ONLY when set: an empty-string value would pin
     # storageClassName: "" which means "NO default storage class" and
     # strands the PVC on most clusters.
-    {{- with ($kcDb.storageClassName | default $pluggable.storageClassName) }}
+    {{- with ($postgres.storageClassName | default $pluggable.storageClassName) }}
     storageClass: {{ . }}
     {{- end }}
     # Access modes live under pvcTemplate, NOT directly on storage:

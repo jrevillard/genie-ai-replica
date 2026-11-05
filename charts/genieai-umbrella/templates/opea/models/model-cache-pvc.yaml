@@ -27,14 +27,13 @@ spec:
   resources:
     requests:
       storage: {{ $opeaModelsCache.size | default "100Gi" }}
-  # The chart-wide knob wins (pluggable.storageClassName — the one every
-  # other PVC reads); the OPEA-local knob stays as a fallback for a
-  # deployment that names a class for the model cache only. An
-  # empty-string storageClassName means "NO default storage class" and
-  # strands the claim — and with it all four model pods, which mount it.
-  {{- /* Per-surface override wins, chart-wide pluggable.storageClassName
-  is the fallback — the same precedence every other storage surface uses
-  (the surface key sits beside its storageSize). */ -}}
+  # Per-surface override wins, chart-wide pluggable.storageClassName is
+  # the fallback — the same precedence every other storage surface uses
+  # (the surface key sits beside its storageSize). An empty-string
+  # storageClassName inherits the chart-wide value; both empty means the
+  # field is omitted and the claim lands on the cluster default class —
+  # pinning "" literally would strand the claim, and with it all four
+  # model pods that mount it.
   {{- with ($opeaModelsCache.storageClassName | default $pluggable.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}

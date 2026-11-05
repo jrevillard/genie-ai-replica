@@ -66,3 +66,37 @@ def test_cursor_empty_progress_raises(monkeypatch):
         assert False
     except RuntimeError as e:
         assert "no progress" in str(e)
+
+
+def test_cursor_error_payload_raises(monkeypatch):
+    # A failing query comes back as {"error": true, "errorNum": ...} with NO
+    # `result` field. Reading `.result` off it would silently yield [] —
+    # indistinguishable from an empty collection (#1079).
+    p = {"error": True, "errorNum": 1203, "errorMessage": "collection or view not found: OKF_solar"}
+    monkeypatch.setattr(arango.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(p))
+    try:
+        arango.cursor("FOR x IN c RETURN x")
+        assert False
+    except RuntimeError as e:
+        assert "1203" in str(e)
+        assert "OKF_solar" in str(e)
+
+
+def test_source_chunks_quotes_hyphenated_collection(monkeypatch):
+    # GRAPH_SOURCE is stack-derived (GRAPH_<stack-prefix>_SOURCE) and OKF
+    # graph names carry the bundle slug — both routinely contain hyphens,
+    # which AQL parses as subtraction unless the identifier is backticked.
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["body"] = json.loads(req.data.decode())
+        return _FakeResp({"result": [], "hasMore": False})
+
+    monkeypatch.setattr(arango.urllib.request, "urlopen", fake_urlopen)
+    arango.source_chunks("GRAPH_genieai-el-salvador_SOURCE", "chunk_text")
+    assert "FOR doc IN `GRAPH_genieai-el-salvador_SOURCE`" in captured["body"]["query"]
+
+
+def test_quote_collection_strips_embedded_backticks():
+    assert arango.quote_collection("OKF_solar-system_v1_SOURCE") == "`OKF_solar-system_v1_SOURCE`"
+    assert arango.quote_collection("a`b") == "`ab`"

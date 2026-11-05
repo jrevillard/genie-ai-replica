@@ -16,6 +16,20 @@ ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
+def quote_collection(name: str) -> str:
+    """Backtick-quote an AQL collection identifier (#1079).
+
+    AQL parses an unquoted hyphen as subtraction, so ``FOR doc IN
+    OKF_solar-system_v1_SOURCE`` fails with errorNum 1203 while the same
+    name backtick-quoted reads the collection. Every OKF graph collection
+    (``OKF_<slug>_v<n>_SOURCE``) and every stack-derived ``GRAPH_SOURCE``
+    (``GRAPH_<stack-prefix>_SOURCE``) carries hyphens. Embedded backticks
+    are stripped: they never occur in a server-side collection name and
+    would break out of the quoting.
+    """
+    return "`{}`".format(str(name).replace("`", ""))
+
+
 def cursor(
     aql: str,
     bind_vars: dict | None = None,
@@ -59,6 +73,17 @@ def cursor(
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 payload = json.load(resp)
+            # Fail loud on a cursor error payload (#1079). ArangoDB answers a
+            # failing query with `{"error": true, "errorNum": ..., ...}` and NO
+            # `result` field — reading `.result` off that payload yields an
+            # empty list that is indistinguishable from a legitimately empty
+            # collection ("no duplicates", "nothing to migrate", recall 0).
+            if payload.get("error"):
+                raise RuntimeError(
+                    "Arango query failed (errorNum {}: {})".format(
+                        payload.get("errorNum"), payload.get("errorMessage")
+                    )
+                )
             prev_len = len(rows)
             if expected is None:
                 expected = payload.get("count")
@@ -109,6 +134,6 @@ def source_chunks(
     AQL — text is fetched ONCE and projected per-mode.
     """
     return cursor(
-        f"FOR doc IN {graph_source} RETURN {{key: doc._key, text: doc.{text_field}}}",
+        f"FOR doc IN {quote_collection(graph_source)} RETURN {{key: doc._key, text: doc.{text_field}}}",
         **(conn or {}),
     )

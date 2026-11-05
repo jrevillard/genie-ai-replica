@@ -20,7 +20,7 @@ import json
 import os
 import sys
 
-from arango import cursor
+from arango import cursor, quote_collection
 from chunk_identity import content_hash
 
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
@@ -34,7 +34,7 @@ def _query_rows(text_field: str) -> list[dict]:
     surfaces as ``text: None``, NOT as a missing row)."""
     return cursor(
         f"""
-        FOR doc IN {GRAPH_SOURCE}
+        FOR doc IN {quote_collection(GRAPH_SOURCE)}
             SORT doc._key
             RETURN {{
                 "key": doc._key,

@@ -396,6 +396,36 @@ describe('VictoriaLogsAdapter — _normalizeRows edge cases', () => {
     const queryCall = mockGet.mock.calls.find((c) => c[0] === '/select/logsql/query');
     expect(queryCall[1].params.query).toBe(reservedQ);
   });
+
+  it('query() forwards `offset` to VL — the server-side pagination arg', async () => {
+    // `offset` is VL's own pagination arg on /select/logsql/query: it
+    // skips the <offset> matching rows with the biggest `_time` values,
+    // so `offset=0,1000,2000…` walks a result set larger than one page.
+    // The security scan pages with it to count every matching row.
+    const { adapter, mockGet } = makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true });
+    mockGet.mockResolvedValue({ data: [] });
+
+    await adapter.query({ ...baseQuery, limit: 1000, offset: 2000 });
+
+    const queryCall = mockGet.mock.calls.find((c) => c[0] === '/select/logsql/query');
+    expect(queryCall[1].params).toEqual({
+      query: baseQuery.q,
+      start: baseQuery.start,
+      end: baseQuery.end,
+      limit: 1000,
+      offset: 2000
+    });
+  });
+
+  it('query() omits `offset` when the caller does not pass one', async () => {
+    const { adapter, mockGet } = makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true });
+    mockGet.mockResolvedValue({ data: [] });
+
+    await adapter.query({ ...baseQuery, limit: 1000 });
+
+    const queryCall = mockGet.mock.calls.find((c) => c[0] === '/select/logsql/query');
+    expect(queryCall[1].params.offset).toBeUndefined();
+  });
 });
 
 // ----- hits() — prototype pollution guard ------------------------------------

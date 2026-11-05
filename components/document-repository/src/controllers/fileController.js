@@ -242,20 +242,27 @@ function errorDetail(err) {
 // file failure.
 //
 // The 409 status alone is not the signal: only the guard's own conflict is.
-// The guard names the file it is about ("An ingest task for fileId 'X' is
-// already running"), so the check is on BOTH halves — the id must be the one
-// we submitted, compared EXACTLY (a substring match would swallow a conflict
-// about a different file whose id merely contains ours), and the message must
-// carry the guard's meaning (a conflict about our file that says something
-// else is a real conflict). Any other 409 stays on the error path.
+// The machine-readable half of the contract is the structured `code` field
+// in the 409 body (the guard emits `code: 'ingest_already_running'` and no
+// other 409 may carry it) — the classification rides the code, so a reword
+// of the human-readable `detail` cannot silently disable the carve-out. The
+// prose match below is the backward-compat path for producer images that
+// predate the field: the guard names the file it is about ("An ingest task
+// for fileId 'X' is already running"), so the check is on BOTH halves — the
+// id must be the one we submitted, compared EXACTLY (a substring match would
+// swallow a conflict about a different file whose id merely contains ours),
+// and the message must carry the guard's meaning. Any other 409 stays on
+// the error path.
 //
-// If dataprep ever rewords the message, this stops matching and the file
-// falls back to the failure path — the pre-fix behaviour, which is visible in
-// the ingestion log. That direction is deliberate: a reword must not turn a
-// real conflict into a silent success.
+// If dataprep ever drops the `code` field AND rewords the message, this
+// stops matching and the file falls back to the failure path — the pre-fix
+// behaviour, which is visible in the ingestion log. That direction is
+// deliberate: a reword must not turn a real conflict into a silent success.
 function isIngestAlreadyRunning(err, fileId) {
   const response = err && err.response;
   if (!response || response.status !== 409) return false;
+  const data = response.data || {};
+  if (data.code) return data.code === 'ingest_already_running';
   const detail = errorDetail(err);
   const named = detail.match(/fileId\s+'?([^'\s]+)'?/);
   if (!named || !fileId || named[1] !== String(fileId)) return false;

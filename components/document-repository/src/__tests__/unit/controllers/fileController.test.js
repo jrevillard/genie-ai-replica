@@ -421,9 +421,10 @@ describe('fileController', () => {
     const metadataService = require('../../../services/metadataService');
     const fileService = require('../../../services/fileService');
 
-    const conflict = (detail) => {
+    const conflict = (detailOrBody) => {
       const error = new Error('Request failed with status code 409');
-      error.response = { status: 409, data: { detail } };
+      const data = typeof detailOrBody === 'string' ? { detail: detailOrBody } : detailOrBody;
+      error.response = { status: 409, data };
       return error;
     };
 
@@ -471,6 +472,23 @@ describe('fileController', () => {
       expect(fileService.addIngestionLog).not.toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
     });
 
+    // The machine-readable half of the contract (dataprep emits `code`):
+    // the classification rides the code, so a REWORD of the prose `detail`
+    // cannot silently disable the carve-out (the #1251 regression class).
+    it('carves out a 409 carrying the ingest_already_running code even when the detail is reworded', async () => {
+      axios.post.mockRejectedValue(
+        conflict({ detail: 'Another ingestion of f1 is in progress elsewhere', code: 'ingest_already_running' })
+      );
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).not.toHaveBeenCalled();
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ level: 'INFO', stage: 'dataprep' })
+      );
+    });
+
     // Only the guard's own conflict is carved out: a 409 that names THIS file
     // AND says it is already running. Every other conflict is a real failure
     // and must still mark the file.
@@ -484,6 +502,20 @@ describe('fileController', () => {
       ]
     ])('still errors on a 409 that %s', async (_case, detail) => {
       axios.post.mockRejectedValue(conflict(detail));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
+    });
+
+    it('still errors on a 409 carrying a different code', async () => {
+      // A future guard cause gets its own code; only the idempotency guard's
+      // code is a success signal.
+      axios.post.mockRejectedValue(conflict({ detail: "Conflict: fileId 'f1' is locked", code: 'file_locked' }));
 
       await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
 

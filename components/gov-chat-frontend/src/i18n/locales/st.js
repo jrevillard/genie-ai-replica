@@ -1560,6 +1560,60 @@ export default {
       'Sebaka sa ho etsa upload bakeng sa RAG: tokomane e nngwe le e nngwe eo u e uploadang e ka fetoha tsebo e hlophisitsoeng, e nang le ditag — ditokomane tse tsamaitseng hantle le tse hlophisitsoeng di fumanwa ka nepo e kgolo ho feta faele e le nngwe e telele.'
   },
   okf: {
+    retrieval: {
+      title: 'Boemo bo ea bo phatlela',
+      refresh: 'Ntjhafatsa',
+      loading: 'O se o bala…',
+      engaged: 'Ho kotloa ho sebele',
+      notEngaged: 'Ha ho ntlha',
+      servingCount: '{n} li graph tse sebele',
+      sourceLabel: 'Mohlaka',
+      invalidValue: 'Kenisa nomoro e phetseng mahareng ho {min} le {max}.',
+      source: {
+        database: 'Mokha o laoloheloang',
+        'env-defaults': 'Sebetsa ka mora ka tikologo'
+      },
+      revision: 'Phetoho',
+      updatedAt: 'O ncha',
+      updatedBy: 'Ke',
+      modeLabel: 'Mokhoa',
+      mode: {
+        legacy: 'Kale',
+        okf_only: 'OKF feela',
+        hybrid: 'Tlatsoa'
+      },
+      consequence: {
+        legacy: 'Kotloa ha OKF ho koe — karabo li tla tsena kante ea lipale tsa lifefo.',
+        unknown: 'Mokhetho o tsebetseng.',
+        okf_only: 'Li graph tsa OKF feela li khanna liarabo — mokhoa oa lipale tsa lifefo o a ka sesa.',
+        hybrid: 'Li graph tsa OKF li khanna liarabo, mokhoa oa lipale tsa lifefo o na le ntla.'
+      },
+      warnZeroServing:
+        'okf_only ntle le li graph tse sebele — tlaello ea OKF ke ea zero. Batsa mme ua kenya repositori pele.',
+      servingList: 'Li graph tse sebele',
+      advanced: 'Mecanegolo e metso',
+      save: 'Boloka',
+      revert: 'Khutlisa',
+      cancel: 'Kansela',
+      confirm: 'Sebetsa',
+      confirmTitle: 'Fetola boemo bo ea bo phatlela?',
+      confirmLead:
+        'Bo ena ke boemong bo lefatsohe — bo fetola kamoo karabo ka tafolo e mong le e mong ka motsheo oa 30 sekonte.',
+      readFailed: 'Ha a ka bale boemo bo ea bo phatlela.',
+      nothingToSave: 'Ha ho letho le ho boloka.',
+      saveFailed: 'Phetoho e ile e hana.',
+      audit: 'Hisetori ea phetoho',
+      auditLoading: 'Ho pakisa hisetori…',
+      auditEmpty: 'Ha ho na phetoho e se ng kae.',
+      auditFailed: 'Ha a ka bale hisetori ea phetoho.',
+      limit: {
+        max_fanout_graphs: 'Li graph ka potoloho',
+        spine_max_hops: 'Mihleng ea lekala la bohare',
+        extracted_hop_cap: 'Mihleng e neng',
+        candidate_cap_per_graph: 'Ba khethang ka graph',
+        candidate_cap_global: 'Ba khethang ka potoloho'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Mefutso ea mangolo e ntse e sebetsa (ho hlahloba). Bula polokelo ena ho mohlophisi — lenaneo la mangolo le bontsa ke efe, kenyo e qale hape ka o iketsang. Phatlalatsa hape ha mongolo o mong le o mong o bontsa hore o hlahlobilwe.',
@@ -2357,7 +2411,7 @@ export default {
       autocorrect:
         'Tokiso ea boikemelo e khoma frontmatter feela (ditlohoho, mefuta, sebopeho) — e sa khohong mongolo oa hao. Dikhothaletso di bontshwa pele ho se seng le se seng se fetoha; ho di sebedisa ho ngola ditokiso hang-hang mme o ka hlahloba sephetho ho Curate.',
       handoff:
-        'Mokete oa lifecycle (submit → approve → publish) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
+        'Mokete oa lifecycle ({chain}) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
       lifecycle:
         "Konteraka ea mehato e mengataro: draft → review → approved → published (mint + bundle) → ingested (serving ho RAG) → retracted (khutla ho edit). Litaba li fetoha tsa ho qotsoa ka mor'a ingest feela — mme litaba tse hlahlojoeng feela di ka phatlalatsoa.",
       labelsAuto:
@@ -2483,7 +2537,10 @@ export default {
         }
       },
       draft: {
-        notReady: "Li-draft ha li e-s'o khone ho bolokoa lehlakoreng la seva; li bolokiloe mona sebakeng."
+        notReady:
+          'Li-draft ha li khone ho bolokoa lehlakoreng la seva hajale — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe kapa seva e ka se lumellane.',
+        repoGone:
+          'Polokelo ena haese sa sebakengodi — lemoqiao ea hao li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa.'
       },
       mode: {
         basic: 'Pele',
@@ -2692,7 +2749,7 @@ export default {
           'Pono ea ho qetela pele u fana ka repo: faele nngwe le nngwe e ka tlase, markdown ea eona le ditag ea eona — ka mokhoa oo mothusi a tlang ho li qotsa ka oona.',
         noRepo: 'Ha ho repo ho fihlela jwale — hlahlobo ea difaele e tla hlaha mona ha repo e le teng.',
         ritualOutside:
-          'Mokete oa hlahlobo — submit bakeng sa hlahlobo, tumello ea mohlahlobi, publish — o etsahala ho Editor le dashboard ea Studio, eseng mona. Bula Editor ho qeta.',
+          'Mokete oa tlhahlobo o etsahala editor le dashboard ea Studio, konopo e le nngwe ka nako — eseng mona. Bula editor ho phethela.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2705,7 +2762,7 @@ export default {
         frontmatterOk: 'Malafrontmatter a amohelehile',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Phekola e feditse',
-        hint: 'Repo ena e loketse hlahlobo. Publish e ka sa etsahala mona ka mohla — e romelle bakeng sa tumello dashboard, ebe o amohela o phatlalatsa ho tloha dashboard kapa editor.',
+        hint: 'Kono polokelo e loketse ho tlhahlobo. Ho publish hang ha etsahetseng moo — lifecycle e matha dashboard le editor, konopo e le nngwe ka nako.',
         nameOk: 'Lebitso la polokelo le behiloe',
         labelsOk: 'Lileibole li khethiloe',
         topicsOk: 'Lihlooho li hlahlobiloe',
@@ -2715,7 +2772,7 @@ export default {
         frozen:
           'Repo ena e sebeletsa — kakaretso ea ho bala feela mona. Bula Editor ho laola mefuta kapa ho etsa retract.',
         ritual:
-          'E latelang: submit bakeng sa tumello ho dashboard ea Studio → mohlahlobi a amohela → publish ho tloha dashboard kapa editor. Wizard e ema mona ka boithaopo.',
+          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — {chain}. Wizard e ema mona ka boithaopo.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3019,6 +3076,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Tlhahisong',
       approve: 'Lumeletsana',
       publish: 'Phatlalatsa',

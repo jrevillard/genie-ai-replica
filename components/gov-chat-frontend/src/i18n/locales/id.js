@@ -1555,6 +1555,59 @@ export default {
       'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang.'
   },
   okf: {
+    retrieval: {
+      title: 'Postur retrieval',
+      refresh: 'Segarkan',
+      loading: 'Membaca…',
+      engaged: 'Grounding aktif',
+      notEngaged: 'Tidak berkontribusi',
+      servingCount: '{n} graf yang melayani',
+      sourceLabel: 'Sumber',
+      invalidValue: 'Masukkan bilangan bulat antara {min} dan {max}.',
+      source: {
+        database: 'Baris yang dikelola',
+        'env-defaults': 'Nilai bawaan lingkungan'
+      },
+      revision: 'Revisi',
+      updatedAt: 'Diperbarui',
+      updatedBy: 'Oleh',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Lama',
+        okf_only: 'Hanya OKF',
+        hybrid: 'Hibrida'
+      },
+      consequence: {
+        legacy: 'Grounding OKF dimatikan — jawaban hanya datang dari jalur teks bebas.',
+        unknown: 'Mode tidak dikenal.',
+        okf_only: 'Hanya graf OKF yang menjadi dasar jawaban — konteks teks bebas tidak ditanyakan.',
+        hybrid: 'Graf OKF menjadi dasar jawaban, dan konteks teks bebas tetap berkontribusi.'
+      },
+      warnZeroServing:
+        'okf_only tanpa graf yang melayani — kontribusi OKF nol. Terbitkan dan ingest repositori terlebih dahulu.',
+      servingList: 'Graf yang melayani',
+      advanced: 'Batas lanjutan',
+      save: 'Simpan',
+      revert: 'Kembalikan',
+      cancel: 'Batal',
+      confirm: 'Terapkan',
+      confirmTitle: 'Ubah postur retrieval?',
+      confirmLead: 'Ini adalah pengaturan global — mengubah cara setiap kueri ditopang, dalam sekitar 30 detik.',
+      readFailed: 'Tidak dapat membaca postur retrieval.',
+      nothingToSave: 'Tidak ada yang perlu disimpan.',
+      saveFailed: 'Perubahan ditolak.',
+      audit: 'Riwayat perubahan',
+      auditLoading: 'Memuat riwayat…',
+      auditEmpty: 'Belum ada perubahan yang tercatat.',
+      auditFailed: 'Tidak dapat membaca riwayat perubahan.',
+      limit: {
+        max_fanout_graphs: 'Graf per kueri',
+        spine_max_hops: 'Lompatan tulang punggung',
+        extracted_hop_cap: 'Lompatan terekstrak',
+        candidate_cap_per_graph: 'Kandidat per graf',
+        candidate_cap_global: 'Kandidat per kueri'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Beberapa berkas masih diproses (diindekskan). Buka repositori ini di editor — daftar berkas menunjukkan yang mana, dan ingestion mencoba ulang otomatis. Publikasikan kembali setelah setiap berkas berstatus terindeks.',
@@ -2349,7 +2402,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup (kirim → setujui → publikasikan) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup ({chain}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2474,7 +2527,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
+        notReady:
+          'Draf tidak dapat disimpan di server saat ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman atau server mungkin tidak sinkron.',
+        repoGone:
+          'Repositori ini tidak lagi tersedia di server — perubahan Anda hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang.'
       },
       mode: {
         basic: 'Dasar',
@@ -2682,7 +2738,7 @@ export default {
           'Tinjauan akhir sebelum Anda menyerahkan: setiap file di bawah, markdown dan labelnya — persis seperti yang akan dikutip asisten.',
         noRepo: 'Belum ada repositori — tinjauan file muncul di sini setelah repositori ada.',
         ritualOutside:
-          'Ritual tinjauan — kirim untuk ditinjau, persetujuan peninjau, publikasikan — terjadi di Editor dan dasbor Studio, bukan di sini. Buka Editor untuk menyelesaikannya.',
+          'Ritual peninjauan terjadi di editor dan dasbor Studio, satu tombol pada satu waktu — tidak di sini. Buka editor untuk menyelesaikan.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2695,7 +2751,7 @@ export default {
         frontmatterOk: 'Tag frontmatter disetujui',
         frontmatterServing: 'Tag frontmatter ditetapkan',
         title: 'Amankan dan Selesaikan',
-        hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
+        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
@@ -2705,7 +2761,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: kirim untuk persetujuan di dasbor Studio → pemberi persetujuan menerima → publikasikan dari dasbor atau editor. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — {chain}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3009,6 +3065,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Kirim untuk ditinjau',
       approve: 'Setujui',
       publish: 'Publikasikan',

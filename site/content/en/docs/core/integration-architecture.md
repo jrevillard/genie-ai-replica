@@ -153,7 +153,7 @@ client-side by `oidc-client-ts`.
 | `/api/me/context` | GET | Get user context / preferences | JSON |
 | `/api/analytics/*` | GET | Analytics dashboards | JSON |
 | `/api/service-categories` | GET | Knowledge-base category tree | JSON |
-| `/api/services` | GET | Service catalog | JSON |
+| `/api/services` | GET | Service catalog (deprecated — 301 to `/api/service-categories`) | 301 |
 | `/api/database/*` | GET/POST | Database operations | JSON |
 | `/api/admin/*` | GET/POST | Admin operations | JSON |
 | `/api/weather` | GET | Weather widget data | JSON |

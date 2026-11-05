@@ -49,4 +49,17 @@ async function putRetrievalConfig(req, res, next) {
   }
 }
 
-module.exports = { getRetrievalConfig, putRetrievalConfig };
+/** GET /api/okf/retrieval-config/audit — the governance trail (Story 10.7,
+ * #995): the last N before→after audit rows for the retrieval config.
+ * Tools-admin only (the route enforces it); the rows name the actor, the
+ * timestamp and the field-level change. */
+async function getRetrievalConfigAudit(req, res, next) {
+  try {
+    const rows = await retrievalConfigService.listConfigAudit({ limit: req.query.limit });
+    res.status(200).json({ rows });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getRetrievalConfig, putRetrievalConfig, getRetrievalConfigAudit };

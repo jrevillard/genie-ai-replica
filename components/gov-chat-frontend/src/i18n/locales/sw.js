@@ -1550,6 +1550,59 @@ export default {
       'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu.'
   },
   okf: {
+    retrieval: {
+      title: 'Hali ya u retrieval',
+      refresh: 'Onyesha Upya',
+      loading: 'Inasoma…',
+      engaged: 'Grounding iko hai',
+      notEngaged: 'Haichangii',
+      servingCount: 'Grafu {n} zinazohudumia',
+      sourceLabel: 'Chanzo',
+      invalidValue: 'Weka namba kamili kati ya {min} na {max}.',
+      source: {
+        database: 'Safu inayosimamiwa',
+        'env-defaults': 'Thamani chaguo-msingi ya mazingira'
+      },
+      revision: 'Revisheni',
+      updatedAt: 'Imesasishwa',
+      updatedBy: 'Na',
+      modeLabel: 'Hali',
+      mode: {
+        legacy: 'Zamani',
+        okf_only: 'OKF pekee',
+        hybrid: 'Changanyiko'
+      },
+      consequence: {
+        legacy: 'Grounding ya OKF imezimwa — majibu yanatoka kwenye njia ya maandishi huria pekee.',
+        unknown: 'Hali isiyojulikana.',
+        okf_only: 'Grafu za OKF pekee ndio zinazobainisha majibu — muktadha wa maandishi huria hautafumiwi.',
+        hybrid: 'Grafu za OKF zinazobainisha majibu, na muktadha wa maandishi huria bado unachangia.'
+      },
+      warnZeroServing:
+        'okf_only bila grafu zinazohudumia — mchango wa OKF ni zero. Chapisha na ingiza repositori kwanza.',
+      servingList: 'Grafu zinazohudumia',
+      advanced: 'Mipaka ya juu',
+      save: 'Hifadhi',
+      revert: 'Rudisha',
+      cancel: 'Ghairi',
+      confirm: 'Tumia',
+      confirmTitle: 'Badilisha hali ya u retrieval?',
+      confirmLead: 'Hii ni mpangilio wa kimakutani — hubadilisha jinsi kila swali linavyotumika, ndani ya sekunde 30.',
+      readFailed: 'Haiwezi kusoma hali ya u retrieval.',
+      nothingToSave: 'Hakuna kitu cha kuhifadhi.',
+      saveFailed: 'Mabadiliko yalizitishwa.',
+      audit: 'Historia ya mabadiliko',
+      auditLoading: 'Inapakia historia…',
+      auditEmpty: 'Hakuna mabadiliko yaliyorekodiwa bado.',
+      auditFailed: 'Haiwezi kusoma historia ya mabadiliko.',
+      limit: {
+        max_fanout_graphs: 'Grafu kwa swali',
+        spine_max_hops: 'Mipaka ya uti wa kati',
+        extracted_hop_cap: 'Mipaka iliyotolewa',
+        candidate_cap_per_graph: 'Wagombezi kwa grafu',
+        candidate_cap_global: 'Wagombezi kwa swali'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Baadhi ya faili bado zinachakatwa (kuwekwa kwenye faharasa). Fungua hazina hii kwenye kihariri — orodha ya faili inaonyesha zipi, na kumeza kunajaribu tena kiotomatiki. Chapisha tena faili zikionyesha zimeingizwa.',
@@ -2343,7 +2396,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha ({chain}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2468,7 +2521,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
+        notReady:
+          'Rasimu haziwezi kuhifadhiwa kwenye seva kwa sasa — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa au seva zinaweza kuwa nje ya ulandanishi.',
+        repoGone:
+          'Ghala hili si tayari haipatikani kwenye seva — mabadiliko yako yatabaki kwenye kichupo kiki cha kivinjari tu na hupotea kikichupo kikifungwa au kupakiwa upya.'
       },
       mode: {
         basic: 'Msingi',
@@ -2677,7 +2733,7 @@ export default {
           'Tazama la mwisho kabla ya kuhamisha: kila faili hapa chini, markdown yake na lebo zake — hasa kama msaidizi atakavyozitaja.',
         noRepo: 'Bado hakuna hazina — ukaguzi wa faili utaonekana hapa mara hazina ikianza kuwepo.',
         ritualOutside:
-          'Mtaratibu wa ukaguzi — wasilisha kwa ukaguzi, idhini ya mkaguzi, chapisha — unafanyika kwenye Mhariri na dashibodi ya Studio, si hapa. Fungua Mhariri ukamilishe.',
+          'Taratibu wa ukaguzi hufanyika kwenye mhariri na dashibodi ya Studio, kitufe kimoja kwa hatua moja — si hapa. Fungua mhariri ili ukamilishe.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2690,7 +2746,7 @@ export default {
         frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
         frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
-        hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
+        hint: 'Ghala hili la OKF limekuwa tayari kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na kwenye mhariri, kitufe kimoja kwa wakati mmoja.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',
@@ -2700,7 +2756,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: wasilisha kwa idhini kwenye dashibodi ya Studio → muidhinishaji anakubali → chapisha kutoka kwenye dashibodi au mhariri. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — {chain}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3004,6 +3060,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Wasilisha kwa ukaguzi',
       approve: 'Idhinisha',
       publish: 'Chapisha',

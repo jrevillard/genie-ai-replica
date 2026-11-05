@@ -1,0 +1,144 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// CROSS-BOUNDARY ROUTE CONTRACT (#1056).
+//
+// The frontend's studioService and the okf-server draft routes live in
+// different packages, and each side's own suite pins its half exactly —
+// the client URL in studioService.test.js, the server route in
+// repos-routes.test.js — while nothing JOINS the two. A one-sided repoint
+// (or a coordinated repoint of both sides to the same wrong path) passes
+// both suites; that is how #1056 shipped. This test mounts the REAL
+// okf-server Express app and replays every `/okf/` URL the frontend service
+// builds — verb and path extracted from the httpService calls in the
+// frontend SOURCE, never restated here, so the two sides cannot drift
+// independently.
+//
+// Mapping: the frontend builds paths like `/okf/repos/:id/draft` against
+// httpService's base URL (`/api`), so the server-side path is `/api` + the
+// template. `${...}` interpolations are substituted with a concrete repo id.
+// Only `httpService.<verb>(`...`)` call sites are extracted — comments may
+// legitimately mention path shapes and must not enter the contract.
+//
+// An authenticated, scope-carrying caller is required for the assertion to
+// be meaningful: the router-wide `requireScope('read')` gate runs BEFORE
+// route matching, so an unmatched path only reaches the Express 404 when the
+// caller's scope passes the gate. Any non-404 status (200 / 403 / 409 / …)
+// proves the route is registered; a 404 proves it is not.
+
+jest.mock('../shared-lib/keycloak-auth-service', () => ({ verifyToken: jest.fn() }));
+jest.mock('../services/repository-service');
+jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+}));
+jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn() }));
+jest.mock('../services/crawl-conversion-service');
+jest.mock('../services/studio-draft-service');
+jest.mock('../services/concept-meta-service');
+jest.mock('../services/llm-curation-service');
+jest.mock('../services/parser-service');
+jest.mock('../services/pii-service');
+jest.mock('../services/ingest-service', () => ({
+  ingestRepoConcepts: jest.fn(),
+  resplitRepo: jest.fn(),
+  deleteConcept: jest.fn(),
+  maxConceptsFromEnv: jest.fn(() => 200)
+}));
+
+const fs = require('fs');
+const path = require('path');
+const request = require('supertest');
+const { createApp } = require('../index');
+const keycloakAuthService = require('../shared-lib/keycloak-auth-service');
+const draftService = require('../services/studio-draft-service');
+
+const TOKEN = 'Bearer test-token';
+const FRONTEND_STUDIO_SERVICE = path.join(__dirname, '../../gov-chat-frontend/src/services/studioService.js');
+
+/** Configure the mocked token verifier to resolve a user with okf scopes. */
+function authScoped(okfScopes) {
+  keycloakAuthService.verifyToken.mockResolvedValue({
+    sub: 'steward-1',
+    preferred_username: 'steward',
+    okf_scopes: okfScopes,
+    realm_access: { roles: ['user'] }
+  });
+}
+
+/**
+ * Every `httpService.<verb>(`/okf/...`)` call the frontend studioService
+ * makes: { verb, template }. Template literals only, call sites only.
+ * Memoized: the file is read once per suite run, not once per assertion.
+ */
+let cachedCalls = null;
+function frontendOkfCalls() {
+  if (cachedCalls) return cachedCalls;
+  let src;
+  try {
+    src = fs.readFileSync(FRONTEND_STUDIO_SERVICE, 'utf8');
+  } catch {
+    // A moved/renamed frontend file must fail the anchor assertion below
+    // (readable diff), never abort the suite at collection time.
+    cachedCalls = [];
+    return cachedCalls;
+  }
+  const calls = [];
+  const re = /httpService\.(get|post|put|delete|patch)\(`(\/okf\/[^`]*)`/g;
+  let m;
+  while ((m = re.exec(src)) !== null) calls.push({ verb: m[1], template: m[2] });
+  cachedCalls = calls;
+  return calls;
+}
+
+/** `${encodeURIComponent(repoId)}` → a concrete segment, for a real request. */
+function concrete(template) {
+  return template.replace(/\$\{[^}]*\}/g, 'r1');
+}
+
+beforeEach(() => jest.clearAllMocks());
+
+describe('okf frontend↔server route contract (#1056)', () => {
+  test('the frontend studioService builds the expected URL families', () => {
+    // Anchors the extraction itself: if the frontend refactors its URLs, this
+    // fails first and tells the reader the contract below must be re-checked,
+    // rather than silently skipping it.
+    const calls = frontendOkfCalls();
+    expect(calls.map((c) => c.verb).sort()).toEqual(['delete', 'get', 'put']);
+    expect([...new Set(calls.map((c) => c.template))]).toEqual(['/okf/repos/${encodeURIComponent(repoId)}/draft']);
+  });
+
+  test('every draft verb the frontend builds is routed by the real app', async () => {
+    // Read scope suffices to pass the router gate; for PUT/DELETE the
+    // route's own admin gate answers 403 — which still proves the route
+    // exists (an unmatched path would fall through to a bare 404).
+    const app = createApp();
+    const built = frontendOkfCalls();
+    expect(built.length).toBeGreaterThan(0);
+    for (const { verb, template } of built) {
+      authScoped(['okf:t1:r1:read']);
+      const res = await request(app)
+        [verb]('/api' + concrete(template))
+        .set('Authorization', TOKEN);
+      expect(res.status).not.toBe(404);
+    }
+  });
+
+  test('with an admin scope the draft verbs reach the draft service', async () => {
+    const app = createApp();
+    authScoped(['okf:t1:r1:admin']);
+    draftService.getDraft.mockResolvedValue({ repo_id: 'r1', draft: null });
+    draftService.saveDraft.mockResolvedValue({ repo_id: 'r1', draft: {} });
+    draftService.clearDraft.mockResolvedValue({ repo_id: 'r1', deleted: true });
+    const serverPath = '/api' + concrete(frontendOkfCalls()[0].template);
+    const get = await request(app).get(serverPath).set('Authorization', TOKEN);
+    expect(get.status).toBe(200);
+    expect(get.body).toEqual({ repo_id: 'r1', draft: null });
+    const put = await request(app).put(serverPath).set('Authorization', TOKEN).send({ studio_step: 3 });
+    expect(put.status).toBe(200);
+    const del = await request(app).delete(serverPath).set('Authorization', TOKEN);
+    expect(del.status).toBe(200);
+    expect(draftService.getDraft).toHaveBeenCalledTimes(1);
+    expect(draftService.saveDraft).toHaveBeenCalledTimes(1);
+    expect(draftService.clearDraft).toHaveBeenCalledTimes(1);
+  });
+});

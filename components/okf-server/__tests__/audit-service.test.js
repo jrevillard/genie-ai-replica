@@ -15,7 +15,7 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
-const { writeAudit, listRepoLogs } = require('../services/audit-service');
+const { writeAudit, listRepoLogs, listAuditLogsByAction } = require('../services/audit-service');
 
 describe('audit-service (okf_audit_logs)', () => {
   beforeEach(() => mockDb._reset());
@@ -87,5 +87,55 @@ describe('audit-service (okf_audit_logs)', () => {
     expect(mockDb.query.mock.calls[1][1].limit).toBe(200);
     await listRepoLogs('r-1', {});
     expect(mockDb.query.mock.calls[2][1].limit).toBe(200);
+  });
+
+  // Story 10.7 (#995) — the by-action read. The retrieval config's audit rows
+  // live under the '_system' pseudo-repo, where unrelated system actions
+  // share the same repo_id — so the filter is by ACTION, never by repo.
+  test('listAuditLogsByAction filters by ACTION (not repo_id) and projects the UI field set', async () => {
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [
+        {
+          ts: '2026-11-05T09:00:00Z',
+          actor: 'steward-1',
+          actor_name: 'Steward',
+          action: 'system.retrieval_config.update',
+          description: 'Retrieval config updated: mode: "legacy" → "hybrid"'
+        }
+      ]
+    });
+    const rows = await listAuditLogsByAction('system.retrieval_config.update', { limit: 25 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty('_key'); // internals projected away
+    const [aqlText, bind] = mockDb.query.mock.calls[0];
+    expect(aqlText).toContain('okf_audit_logs');
+    expect(aqlText).toContain('FILTER l.action == @act');
+    expect(aqlText).not.toContain('l.repo_id == @rid');
+    expect(aqlText).toContain('SORT l.ts DESC');
+    expect(bind).toMatchObject({ act: 'system.retrieval_config.update', limit: 25 });
+  });
+
+  test('listAuditLogsByAction clamps the limit (200 max; 0/absent → the 50 default)', async () => {
+    mockDb.query.mockResolvedValue({ all: async () => [] });
+    await listAuditLogsByAction('a', { limit: 99999 });
+    expect(mockDb.query.mock.calls[0][1].limit).toBe(200);
+    await listAuditLogsByAction('a', { limit: 0 });
+    expect(mockDb.query.mock.calls[1][1].limit).toBe(50);
+    await listAuditLogsByAction('a', {});
+    expect(mockDb.query.mock.calls[2][1].limit).toBe(50);
+  });
+
+  test('listAuditLogsByAction floors a STRING limit to an integer (the query param arrives as text)', async () => {
+    // req.query.limit is a string: "25" must become 25, and "2.5" must not
+    // reach the AQL LIMIT as a float (the database rejects a non-integer).
+    mockDb.query.mockResolvedValue({ all: async () => [] });
+    await listAuditLogsByAction('a', { limit: '25' });
+    expect(mockDb.query.mock.calls[0][1].limit).toBe(25);
+    await listAuditLogsByAction('a', { limit: '2.5' });
+    expect(mockDb.query.mock.calls[1][1].limit).toBe(2);
+    await listAuditLogsByAction('a', { limit: 'abc' });
+    expect(mockDb.query.mock.calls[2][1].limit).toBe(50); // non-numeric → the default
+    await listAuditLogsByAction('a', { limit: '-5' });
+    expect(mockDb.query.mock.calls[3][1].limit).toBe(1); // the floor
   });
 });

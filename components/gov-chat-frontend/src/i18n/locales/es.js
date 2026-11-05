@@ -1558,6 +1558,59 @@ export default {
       'Por qué las subidas importan para el RAG: cada documento que suba puede convertirse en conocimiento curado y etiquetado — los documentos enfocados y bien estructurados se recuperan con mucha más precisión que un único archivo largo.'
   },
   okf: {
+    retrieval: {
+      title: 'Postura de recuperación',
+      refresh: 'Actualizar',
+      loading: 'Leyendo…',
+      engaged: 'Anclaje activo',
+      notEngaged: 'No aporta',
+      servingCount: '{n} grafo(s) en servicio',
+      sourceLabel: 'Fuente',
+      invalidValue: 'Introduce un número entero entre {min} y {max}.',
+      source: {
+        database: 'Fila gobernada',
+        'env-defaults': 'Valor por defecto del entorno'
+      },
+      revision: 'Revisión',
+      updatedAt: 'Actualizado',
+      updatedBy: 'Por',
+      modeLabel: 'Modo',
+      mode: {
+        legacy: 'Legado',
+        okf_only: 'Solo OKF',
+        hybrid: 'Híbrido'
+      },
+      consequence: {
+        legacy: 'El anclaje OKF está desactivado: las respuestas vienen solo de la vía de texto libre.',
+        unknown: 'Modo desconocido.',
+        okf_only: 'Solo los grafos OKF fundamentan las respuestas; el contexto libre no se consulta.',
+        hybrid: 'Los grafos OKF fundamentan las respuestas y el contexto libre sigue fftore.'
+      },
+      warnZeroServing:
+        'okf_only sin grafos en servicio: la contribución OKF es cero. Publica e ingesta un repositorio primero.',
+      servingList: 'Grafos en servicio',
+      advanced: 'Límites avanzados',
+      save: 'Guardar',
+      revert: 'Revertir',
+      cancel: 'Cancelar',
+      confirm: 'Aplicar',
+      confirmTitle: '¿Cambiar la postura de recuperación?',
+      confirmLead: 'Es un ajuste global: cambia cómo se ancla cada consulta, en unos 30 segundos.',
+      readFailed: 'No se pudo leer la postura de recuperación.',
+      nothingToSave: 'No hay nada que guardar.',
+      saveFailed: 'El cambio fue rechazado.',
+      audit: 'Historial de cambios',
+      auditLoading: 'Cargando el historial…',
+      auditEmpty: 'Aún no hay cambios registrados.',
+      auditFailed: 'No se pudo leer el historial de cambios.',
+      limit: {
+        max_fanout_graphs: 'Grafos por consulta',
+        spine_max_hops: 'Saltos del spine',
+        extracted_hop_cap: 'Saltos extraídos',
+        candidate_cap_per_graph: 'Candidatos por grafo',
+        candidate_cap_global: 'Candidatos por consulta'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Algunos archivos aún se están procesando (indexando). Abra este repositorio en el editor — la lista de archivos muestra cuáles, y la ingesta reintenta automáticamente. Vuelva a publicar cuando todos los archivos aparezcan como indexados.',
@@ -2362,7 +2415,7 @@ export default {
       autocorrect:
         'La autocorrección solo toca el frontmatter (títulos, tipos, estructura) — nunca su contenido escrito. Las propuestas se muestran antes de cambiar nada; al aplicar, las correcciones se escriben de inmediato y puede revisar el resultado en Curate.',
       handoff:
-        'El ritual del ciclo de vida (enviar → aprobar → publicar) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
+        'El ritual del ciclo de vida ({chain}) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
       lifecycle:
         'El contrato de seis pasos: borrador → revisión → aprobado → publicado (emitir + empaquetar) → ingestado (en servicio en RAG) → retirado (de vuelta a edición). El contenido solo se vuelve citable tras la ingesta — y solo el contenido revisado puede publicarse.',
       labelsAuto:
@@ -2488,7 +2541,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Los borradores aún no pueden guardarse en el servidor; guardados localmente.'
+        notReady:
+          'Los borradores no pueden guardarse en el servidor en este momento — permanecen solo en esta pestaña del navegador y se pierden si se cierra o recarga la pestaña. La página o el servidor pueden estar desincronizados.',
+        repoGone:
+          'Este repositorio ya no está disponible en el servidor — tus cambios permanecen solo en esta pestaña del navegador y se pierden si se cierra o recarga la pestaña.'
       },
       mode: {
         basic: 'Básico',
@@ -2698,7 +2754,7 @@ export default {
           'Última mirada antes de entregar: cada archivo de abajo, su markdown y sus etiquetas — exactamente como el asistente los citará.',
         noRepo: 'Aún no hay repositorio — la revisión de archivos aparecerá aquí cuando exista un repositorio.',
         ritualOutside:
-          'El ritual de revisión — enviar a revisión, aprobación del revisor, publicación — ocurre en el Editor y en el panel de Studio, no aquí. Abra el Editor para terminar.',
+          'El ritual de revisión ocurre en el editor y en el panel de Studio, un botón cada vez — no aquí. Abra el editor para terminar.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2711,7 +2767,7 @@ export default {
         frontmatterOk: 'Etiquetas frontmatter aprobadas',
         frontmatterServing: 'Etiquetas frontmatter establecidas',
         title: 'Asegurar y finalizar',
-        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación en el panel, luego apruebe y publique desde el panel o el editor.',
+        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — el ciclo de vida se recorre en el panel y en el editor, un botón cada vez.',
         nameOk: 'Nombre del repositorio establecido',
         labelsOk: 'Etiquetas seleccionadas',
         topicsOk: 'Temas revisados',
@@ -2721,7 +2777,7 @@ export default {
         frozen:
           'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Siguiente: enviar para aprobación en el panel de Studio → un aprobador acepta → publicar desde el panel o el editor. El asistente se detiene aquí por diseño.',
+          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — {chain}. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3028,6 +3084,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Enviar para revisión',
       approve: 'Aprobar',
       publish: 'Publicar',

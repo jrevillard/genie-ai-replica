@@ -1565,6 +1565,60 @@ export default {
       "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier."
   },
   okf: {
+    retrieval: {
+      title: 'Posture de récupération',
+      refresh: 'Actualiser',
+      loading: 'Lecture…',
+      engaged: 'Ancrage actif',
+      notEngaged: 'Ne contribue pas',
+      servingCount: '{n} graphe(s) en service',
+      sourceLabel: 'Source',
+      invalidValue: 'Saisissez un nombre entier entre {min} et {max}.',
+      source: {
+        database: 'Ligne gouvernée',
+        'env-defaults': 'Valeur par défaut de l’environnement'
+      },
+      revision: 'Révision',
+      updatedAt: 'Modifié',
+      updatedBy: 'Par',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Hérité',
+        okf_only: 'OKF uniquement',
+        hybrid: 'Hybride'
+      },
+      consequence: {
+        legacy: "L'ancrage OKF est désactivé — les réponses viennent uniquement du chemin libre.",
+        unknown: 'Mode inconnu.',
+        okf_only: 'Seuls les graphes OKF fondent les réponses — le contexte libre nest pas consulté.',
+        hybrid: 'Les graphes OKF fondent les réponses et le contexte libre contribue toujours.'
+      },
+      warnZeroServing:
+        'okf_only sans aucun graphe en service — la contribution OKF est nulle. Publiez et ingérez un dépôt.',
+      servingList: 'Graphes en service',
+      advanced: 'Limites avancées',
+      save: 'Enregistrer',
+      revert: 'Annuler les modifications',
+      cancel: 'Annuler',
+      confirm: 'Appliquer',
+      confirmTitle: 'Changer la posture de récupération ?',
+      confirmLead:
+        'C’est un paramètre global — il change la façon dont chaque requête est ancrée, en une trentaine de secondes.',
+      readFailed: 'Impossible de lire la posture de récupération.',
+      nothingToSave: 'Il n’y a rien à enregistrer.',
+      saveFailed: 'La modification a été refusée.',
+      audit: 'Historique des modifications',
+      auditLoading: 'Chargement de l’historique…',
+      auditEmpty: 'Aucune modification enregistrée.',
+      auditFailed: 'Impossible de lire l’historique des modifications.',
+      limit: {
+        max_fanout_graphs: 'Graphes par requête',
+        spine_max_hops: 'Sauts de la colonne vertébrale',
+        extracted_hop_cap: 'Sauts extraits',
+        candidate_cap_per_graph: 'Candidats par graphe',
+        candidate_cap_global: 'Candidats par requête'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         "Certains fichiers sont encore en cours de traitement (indexation). Ouvrez ce dépôt dans l'éditeur — la liste des fichiers indique lesquels, et l'ingestion réessaie automatiquement. Republiez lorsque chaque fichier apparaît comme indexé.",
@@ -2368,7 +2422,7 @@ export default {
       autocorrect:
         "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        "Le rituel de cycle de vie (soumettre → approuver → publier) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
+        "Le rituel de cycle de vie ({chain}) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
         "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
@@ -2494,7 +2548,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Les brouillons ne peuvent pas encore être enregistrés côté serveur ; enregistrés localement.'
+        notReady:
+          "Les brouillons ne peuvent pas être enregistrés sur le serveur pour le moment — ils restent uniquement dans cet onglet du navigateur et sont perdus si l'onglet est fermé ou rechargé. La page ou le serveur peuvent être désynchronisés.",
+        repoGone:
+          "Ce référentiel n'est plus disponible sur le serveur — vos modifications restent uniquement dans cet onglet du navigateur et sont perdues si l'onglet est fermé ou rechargé."
       },
       mode: {
         basic: 'Base',
@@ -2706,7 +2763,7 @@ export default {
           "Dernier coup d'œil avant la remise : chaque fichier ci-dessous, son markdown et ses libellés — exactement comme l'assistant les citera.",
         noRepo: "Aucun dépôt pour le moment — la revue des fichiers apparaît ici dès qu'un dépôt existe.",
         ritualOutside:
-          "Le rituel de revue — soumission pour revue, approbation du réviseur, publication — se fait dans l'éditeur et le tableau de bord Studio, pas ici. Ouvrez l'éditeur pour terminer.",
+          "Le rituel de revue se déroule dans l'éditeur et sur le tableau de bord Studio, un bouton à la fois — pas ici. Ouvrez l'éditeur pour terminer.",
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2719,7 +2776,7 @@ export default {
         frontmatterOk: 'Balises frontmatter approuvées',
         frontmatterServing: 'Balises frontmatter définies',
         title: 'Sécuriser et terminer',
-        hint: "Ce référentiel est prêt pour examen. La publication n'a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l'approbation et la publication se font depuis le tableau de bord ou l'éditeur.",
+        hint: "Ce référentiel est prêt pour la revue. La publication n'a jamais lieu ici — le cycle de vie se déroule sur le tableau de bord et dans l'éditeur, un bouton à la fois.",
         nameOk: 'Nom du référentiel défini',
         labelsOk: 'Libellés sélectionnés',
         topicsOk: 'Sujets examinés',
@@ -2729,7 +2786,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : soumettre pour approbation sur le tableau de bord Studio → un approbateur accepte → publier depuis le tableau de bord ou l'éditeur. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — {chain}. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3034,6 +3091,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Soumettre pour examen',
       approve: 'Approuver',
       publish: 'Publier',

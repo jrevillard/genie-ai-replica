@@ -89,7 +89,7 @@
         {{
           translate(
             'okf.steps.review.ritualOutside',
-            'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.'
+            'The review ritual happens in the Editor and the Studio dashboard, one button at a time — not here. Open the Editor to finish.'
           )
         }}
         <DsInfoTip

@@ -1210,6 +1210,210 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     expect(res.body.warnings).toHaveLength(1);
   });
 
+  test('the apply audit row names the concept scope and the fields (#1066)', async () => {
+    // result.changes is per-CONCEPT; the old description printed that count as
+    // "N change(s) across the repository" and an operator read 17 concepts as
+    // 17 tag edits and re-ran the LLM tag suggestion as a precaution. The
+    // FAILED concept is planned, not applied — it must not be counted, or the
+    // row contradicts itself ("2 concept(s) ... 1 concept(s) FAILED").
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [
+        {
+          concept_id: 'conceptA',
+          changes: [
+            { field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' },
+            { field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }
+          ]
+        },
+        {
+          concept_id: 'conceptB',
+          changes: [{ field: 'title', before: null, after: 'Other', reason: 'MISSING_TITLE' }]
+        },
+        {
+          concept_id: 'conceptC',
+          changes: [{ field: 'title', before: null, after: 'Third', reason: 'MISSING_TITLE' }]
+        }
+      ],
+      warnings: [],
+      applied: 2,
+      failed: 1,
+      failures: [{ concept_id: 'conceptC', error: 'concept row not found' }],
+      total_concepts: 3
+    });
+    await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description:
+          'Applied frontmatter autocorrect — 2 concept(s) applied, 3 frontmatter field change(s) (title, type)' +
+          ', 1 concept(s) FAILED and reported to the client'
+      })
+    );
+  });
+
+  test('an apply that changed NOTHING writes no audit row (#1066)', async () => {
+    // "Applied frontmatter autocorrect — 0 concept(s) applied" describes an
+    // apply that did not happen: the audit log records MODIFICATIONS. A run
+    // that patched nothing and failed nothing leaves no trace (same rule as
+    // the curated branch).
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [],
+      warnings: [],
+      applied: 0,
+      failed: 0,
+      failures: [],
+      total_concepts: 7
+    });
+    await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.autocorrect' }));
+  });
+
+  test('the curated apply writes no audit row when no proposal carried a change (#1066)', async () => {
+    // The curated branch had the same hole: a run whose proposals carried
+    // no change wrote "Applied curated frontmatter proposals (llm) — 0
+    // concept(s)" — an apply that changed nothing.
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [], after: { type: 'topic' } }
+    ]);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(0);
+    expect(conceptMetaService.patchConceptFields).not.toHaveBeenCalled();
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.autocorrect' }));
+  });
+
+  test('both branches echo dry_run so a client can tell a scan from an apply (#1066)', async () => {
+    // The curated branch returned it; the heuristics branch stayed silent,
+    // so only one of the two paths was legible from the response alone.
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
+    const scan = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: true });
+    expect(scan.body.dry_run).toBe(true);
+    const apply = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(apply.body.dry_run).toBe(false);
+  });
+
+  test('a body-less request is a scan (dry_run defaults true) and writes NO "Applied" audit row (#1066)', async () => {
+    // The audit gate must read the SAME effective flag the service gets:
+    // the old gate treated a missing body flag as an APPLY and wrote a false
+    // "Applied … N concept(s)" row for a run that modified nothing.
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [
+        {
+          concept_id: 'conceptA',
+          changes: [{ field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }]
+        }
+      ],
+      warnings: [],
+      applied: 0,
+      failed: 0,
+      failures: [],
+      total_concepts: 1
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.autocorrectRepo).toHaveBeenCalledWith('repoA', true, expect.anything());
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description: expect.stringContaining('concept(s) applied')
+      })
+    );
+  });
+
+  test('a body-less request against an llm-classified repo is ALSO a scan — nothing applied, no audit row (#1066)', async () => {
+    // The curated (llm/hybrid) branch used its own gate: a missing body flag
+    // applied EVERY proposal and wrote an "Applied" row. The default is a
+    // scan on BOTH branches.
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [{ field: 'type' }], after: { type: 'topic' } }
+    ]);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.dry_run).toBe(true);
+    expect(res.body.applied).toBe(0);
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.autocorrect', description: expect.stringContaining('Applied') })
+    );
+  });
+
+  test('the curated apply isolates per-concept failures and still writes the audit row (#1066)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [{ field: 'type' }], after: { type: 'topic' } },
+      { concept_id: 'conceptB', changes: [{ field: 'type' }], after: { type: 'topic' } },
+      { concept_id: 'conceptC', changes: [{ field: 'type' }], after: { type: 'topic' } }
+    ]);
+    conceptMetaService.patchConceptFields
+      .mockResolvedValueOnce({ concept_id: 'conceptA' }) // A: ok
+      .mockRejectedValueOnce(new Error('transient db')) // B attempt 1: transient
+      .mockResolvedValueOnce({ concept_id: 'conceptB' }) // B attempt 2: the retry absorbs it
+      .mockRejectedValueOnce(new Error('row vanished')) // C attempt 1
+      .mockRejectedValueOnce(new Error('row vanished')); // C attempt 2: dead
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(2);
+    expect(res.body.failures).toEqual([{ concept_id: 'conceptC', error: 'row vanished' }]);
+    // The apply must go through patchConceptFields ({frontmatterPatch}) —
+    // patchConceptMeta treats its argument as a FULL parsed concept and
+    // would blank the markdown body and re-hash empty content.
+    expect(conceptMetaService.patchConceptFields).toHaveBeenCalledWith(
+      'repoA',
+      expect.any(String),
+      expect.objectContaining({ frontmatterPatch: expect.any(Object) })
+    );
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description:
+          'Applied curated frontmatter proposals (llm) — 2 concept(s) (type), 1 concept(s) FAILED and reported to the client'
+      })
+    );
+  });
+
   test('200 with no body — defaults to dry_run=true', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
@@ -1493,8 +1697,10 @@ describe('POST / born-right ACL slug — server authority (coordinator ruling, 2
 
 // ---------------------------------------------------------------------------
 // Story 10.5 — the wizard's resumable curation draft. All three verbs live
-// under /:repo_id/draft; the retired /:repo_id/studio_drafts shape must never
-// exist (the endpoint was never deployed, so an alias would be dead code).
+// under /:repo_id/draft. The retired client shapes must never exist: the
+// pre-3f1c733ba bundle PUT/DELETE'd the TOP-LEVEL /studio_drafts/:repo_id
+// (repo id LAST) — a shape no okf-server version ever served — and the
+// nested /:repo_id/studio_drafts shape was called by no client at all.
 // ---------------------------------------------------------------------------
 describe('studio draft routes (Story 10.5)', () => {
   const draftService = require('../services/studio-draft-service');
@@ -1655,7 +1861,21 @@ describe('studio draft routes (Story 10.5)', () => {
     });
   });
 
-  test('the retired /:repo_id/studio_drafts path is NOT registered', async () => {
+  test('the retired top-level /studio_drafts/:repo_id path is NOT registered', async () => {
+    // The REAL retired client shape (repo id LAST — the pre-3f1c733ba bundle
+    // PUT/DELETE'd exactly this path against a server that never served it).
+    authScoped(['okf:t1:r1:admin']);
+    await request(createApp()).get('/api/okf/studio_drafts/r1').set('Authorization', TOKEN);
+    await request(createApp()).put('/api/okf/studio_drafts/r1').set('Authorization', TOKEN).send(body);
+    await request(createApp()).delete('/api/okf/studio_drafts/r1').set('Authorization', TOKEN);
+    expect(draftService.getDraft).not.toHaveBeenCalled();
+    expect(draftService.saveDraft).not.toHaveBeenCalled();
+    expect(draftService.clearDraft).not.toHaveBeenCalled();
+  });
+
+  test('the nested /:repo_id/studio_drafts shape is NOT registered either', async () => {
+    // Called by no client ever (the historical guard's URL, kept for the
+    // record — a resurrection under /repos must stay impossible too).
     authScoped(['okf:t1:r1:admin']);
     await request(createApp()).get('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN);
     await request(createApp()).put('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN).send(body);

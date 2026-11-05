@@ -734,15 +734,17 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
   });
 
   it('autocorrectRepo: dry run proposes without applying; apply patches every proposal with changes', async () => {
+    const mod = require('../services/concept-meta-service');
+    mod.patchConceptFields.mockClear();
+    mod.patchConceptMeta.mockClear();
     llmCuration.proposeFrontmatter.mockResolvedValueOnce([
       { concept_id: 'c1', changes: [{ field: 'topic' }], after: { topic: ['x'] } },
       { concept_id: 'c2', changes: [], after: {} } // no changes — skipped
     ]);
-    const mod = require('../services/concept-meta-service');
     let { res } = await drive(controller.autocorrectRepo, { body: { mode: 'llm', dry_run: true } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ ok: true, dry_run: true, applied: 0 });
-    expect(mod.patchConceptMeta).not.toHaveBeenCalled();
+    expect(mod.patchConceptFields).not.toHaveBeenCalled();
 
     llmCuration.proposeFrontmatter.mockResolvedValueOnce({
       concept_id: 'c1',
@@ -751,7 +753,13 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     });
     ({ res } = await drive(controller.autocorrectRepo, { body: { mode: 'llm', dry_run: false } }));
     expect(res.body).toMatchObject({ dry_run: false, applied: 1 });
-    expect(mod.patchConceptMeta).toHaveBeenCalledWith('r1', 'c1', { frontmatter: { topic: ['y'] } });
+    // The apply must merge frontmatter (patchConceptFields) — NOT hand the
+    // proposal to patchConceptMeta, which treats its argument as a FULL
+    // parsed concept and would blank the concept's markdown body.
+    expect(mod.patchConceptFields).toHaveBeenCalledWith('r1', 'c1', {
+      frontmatterPatch: { topic: ['y'] }
+    });
+    expect(mod.patchConceptMeta).not.toHaveBeenCalled();
   });
 
   it('every one of these handlers forwards a service throw to next(err)', async () => {

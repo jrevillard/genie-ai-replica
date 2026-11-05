@@ -1563,6 +1563,60 @@ export default {
       'Warum Uploads für RAG wichtig sind: Jedes hochgeladene Dokument kann zu kuratiertem, gelabeltem Wissen werden — fokussierte, gut strukturierte Dokumente werden deutlich genauer abgerufen als eine lange Einzeldatei.'
   },
   okf: {
+    retrieval: {
+      title: 'Abruf-Haltung',
+      refresh: 'Aktualisieren',
+      loading: 'Wird gelesen…',
+      engaged: 'Grounding aktiv',
+      notEngaged: 'Trägt nicht bei',
+      servingCount: '{n} Graph(en) im Betrieb',
+      sourceLabel: 'Quelle',
+      invalidValue: 'Gib eine ganze Zahl zwischen {min} und {max} ein.',
+      source: {
+        database: 'Verwaltete Zeile',
+        'env-defaults': 'Umgebungs-Standardwert'
+      },
+      revision: 'Revision',
+      updatedAt: 'Geändert',
+      updatedBy: 'Von',
+      modeLabel: 'Modus',
+      mode: {
+        legacy: 'Alt',
+        okf_only: 'Nur OKF',
+        hybrid: 'Hybrid'
+      },
+      consequence: {
+        legacy: 'OKF-Grounding ist aus — Antworten kommen nur aus dem Freitext-Pfad.',
+        unknown: 'Unbekannter Modus.',
+        okf_only: 'Nur OKF-Graphen begründen die Antworten — Freitext-Kontext wird nicht herangezogen.',
+        hybrid: 'OKF-Graphen begründen die Antworten, und der Freitext-Kontext trägt weiterhin bei.'
+      },
+      warnZeroServing:
+        'okf_only ohne Graphen im Betrieb — der OKF-Beitrag ist null. Bitte zuerst ein Repository veröffentlichen und einlesen.',
+      servingList: 'Graphen im Betrieb',
+      advanced: 'Erweiterte Limits',
+      save: 'Speichern',
+      revert: 'Zurücksetzen',
+      cancel: 'Abbrechen',
+      confirm: 'Anwenden',
+      confirmTitle: 'Abruf-Haltung ändern?',
+      confirmLead:
+        'Dies ist eine globale Einstellung — sie ändert, wie jede Anfrage verankert wird, innerhalb von etwa 30 Sekunden.',
+      readFailed: 'Die Abruf-Haltung konnte nicht gelesen werden.',
+      nothingToSave: 'Es gibt nichts zu speichern.',
+      saveFailed: 'Die Änderung wurde abgelehnt.',
+      audit: 'Änderungsverlauf',
+      auditLoading: 'Verlauf wird geladen…',
+      auditEmpty: 'Noch keine Änderungen aufgezeichnet.',
+      auditFailed: 'Der Änderungsverlauf konnte nicht gelesen werden.',
+      limit: {
+        max_fanout_graphs: 'Graphen pro Anfrage',
+        spine_max_hops: 'Spine-Sprünge',
+        extracted_hop_cap: 'Extrahierte Sprünge',
+        candidate_cap_per_graph: 'Kandidaten pro Graph',
+        candidate_cap_global: 'Kandidaten pro Anfrage'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Einige Dateien werden noch verarbeitet (indiziert). Öffnen Sie dieses Repository im Editor — die Dateiliste zeigt, welche; die Aufnahme wiederholt sich automatisch. Veröffentlichen Sie erneut, sobald jede Datei als indiziert erscheint.',
@@ -2370,7 +2424,7 @@ export default {
       autocorrect:
         'Auto-Fix fasst nur das Frontmatter an (Titel, Typen, Struktur) — nie Ihren geschriebenen Inhalt. Vorschläge werden angezeigt, bevor sich etwas ändert; das Anwenden schreibt die Korrekturen sofort, und Sie können das Ergebnis in Curate prüfen.',
       handoff:
-        'Der Lifecycle-Ritus (submit → approve → publish) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
+        'Der Lifecycle-Ritus ({chain}) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
       lifecycle:
         'Der Sechs-Schritte-Vertrag: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (zurück zur Bearbeitung). Inhalt wird erst nach dem Ingest zitierfähig — und nur geprüfter Inhalt kann veröffentlicht werden.',
       labelsAuto:
@@ -2496,7 +2550,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Entwürfe können serverseitig noch nicht gespeichert werden; lokal gespeichert.'
+        notReady:
+          'Entwürfe können derzeit nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite oder Server können nicht synchron sein.',
+        repoGone:
+          'Dieses Repository ist auf dem Server nicht mehr verfügbar — Ihre Änderungen bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird.'
       },
       mode: {
         basic: 'Standard',
@@ -2710,7 +2767,7 @@ export default {
           'Letzter Blick vor der Übergabe: jede Datei unten, ihr Markdown und ihre Labels — exakt so, wie der Assistent sie zitieren wird.',
         noRepo: 'Noch kein Repository — die Dateiprüfung erscheint hier, sobald ein Repository existiert.',
         ritualOutside:
-          'Der Prüf-Ritus — zur Überprüfung einreichen, Freigabe durch die prüfende Person, Veröffentlichen — findet im Editor und auf dem Studio-Dashboard statt, nicht hier. Öffnen Sie den Editor zum Abschluss.',
+          'Der Review-Ritus findet im Editor und im Studio-Dashboard statt, jeweils ein Schritt pro Schaltfläche — nicht hier. Öffnen Sie den Editor, um abzuschließen.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2723,7 +2780,7 @@ export default {
         frontmatterOk: 'Frontmatter-Tags genehmigt',
         frontmatterServing: 'Frontmatter-Tags gesetzt',
         title: 'Absichern und fertigstellen',
-        hint: 'Dieses Repository ist bereit zur Prüfung. Die Veröffentlichung erfolgt hier nie — reichen Sie es auf dem Dashboard zur Freigabe ein und veröffentlichen Sie dann über das Dashboard oder den Editor.',
+        hint: 'Dieses Repository ist bereit zur Prüfung. Veröffentlicht wird hier nie — der Lebenszyklus läuft im Dashboard und im Editor, jeweils ein Schritt pro Schaltfläche.',
         nameOk: 'Repository-Name festgelegt',
         labelsOk: 'Labels ausgewählt',
         topicsOk: 'Themen überprüft',
@@ -2733,7 +2790,7 @@ export default {
         frozen:
           'Dieses Repository ist im Einsatz — hier eine schreibgeschützte Zusammenfassung. Öffnen Sie den Editor, um Versionen zu verwalten oder zurückzuziehen.',
         ritual:
-          'Weiter: auf dem Studio-Dashboard zur Freigabe einreichen → eine prüfende Person nimmt an → über das Dashboard oder den Editor veröffentlichen. Der Assistent endet hier bewusst.',
+          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — {chain}. Der Assistent endet hier bewusst.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3042,6 +3099,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Zur Überprüfung einreichen',
       approve: 'Genehmigen',
       publish: 'Veröffentlichen',

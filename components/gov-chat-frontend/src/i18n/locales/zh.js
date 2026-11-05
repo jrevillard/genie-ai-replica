@@ -1514,6 +1514,58 @@ export default {
       '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
   okf: {
+    retrieval: {
+      title: '检索态势',
+      refresh: '刷新',
+      loading: '读取中…',
+      engaged: '接地已启用',
+      notEngaged: '未参与',
+      servingCount: '{n} 个服务中的图',
+      sourceLabel: '来源',
+      invalidValue: '请输入 {min} 到 {max} 之间的整数。',
+      source: {
+        database: '受管记录',
+        'env-defaults': '环境默认值'
+      },
+      revision: '版本',
+      updatedAt: '更新于',
+      updatedBy: '更新者',
+      modeLabel: '模式',
+      mode: {
+        legacy: '传统',
+        okf_only: '仅 OKF',
+        hybrid: '混合'
+      },
+      consequence: {
+        legacy: 'OKF 接地已关闭——答案仅来自自由文本路径。',
+        unknown: '未知模式。',
+        okf_only: '仅由 OKF 图为答案提供依据——不查询自由文本上下文。',
+        hybrid: '由 OKF 图为答案提供依据，同时自由文本上下文仍然参与。'
+      },
+      warnZeroServing: 'okf_only 且没有任何服务中的图——OKF 贡献为零。请先发布并摄取一个仓库。',
+      servingList: '服务中的图',
+      advanced: '高级限制',
+      save: '保存',
+      revert: '还原',
+      cancel: '取消',
+      confirm: '应用',
+      confirmTitle: '要更改检索态势吗？',
+      confirmLead: '这是全局设置——它会在约 30 秒内改变每个查询的接地方式。',
+      readFailed: '无法读取检索态势。',
+      nothingToSave: '没有需要保存的内容。',
+      saveFailed: '更改被拒绝。',
+      audit: '变更历史',
+      auditLoading: '正在加载历史…',
+      auditEmpty: '尚无变更记录。',
+      auditFailed: '无法读取变更历史。',
+      limit: {
+        max_fanout_graphs: '每次查询的图数',
+        spine_max_hops: '主干跳数',
+        extracted_hop_cap: '抽取跳数',
+        candidate_cap_per_graph: '每个图的候选数',
+        candidate_cap_global: '每次查询的候选数'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         '部分文件仍在处理（索引）中。在编辑器中打开此仓库 — 文件列表会显示是哪些文件，系统会自动重试摄取。当每个文件都显示为已索引后，再重新发布。',
@@ -2276,7 +2328,7 @@ export default {
       autocorrect:
         '自动修复只触及 frontmatter（标题、类型、结构）——绝不会改动您撰写的内容。任何更改之前都会先展示提案；应用后会立即写入修复，您可以在策展步骤中查看结果。',
       handoff:
-        '生命周期仪式（提交 → 批准 → 发布）有意设在此向导之外：审批属于仪表盘和编辑器中的治理流程，版本与服务状态在那里管理。',
+        '生命周期仪式（{chain}）有意设在此向导之外：审批属于仪表盘和编辑器中的治理流程，版本与服务状态在那里管理。',
       lifecycle:
         '六步契约：草稿 → 审查 → 已批准 → 已发布（铸造 + 打包）→ 已摄取（在 RAG 中服务）→ 已撤回（回到编辑）。内容只有在摄取后才可被引用——且只有经过复核的内容才能发布。',
       labelsAuto: '标签从知识层级自动分配——L2 服务限定在此仓库的主题领域内。请在策展步骤中逐主题复核和调整。',
@@ -2399,7 +2451,9 @@ export default {
         }
       },
       draft: {
-        notReady: '草稿暂不支持服务端保存；现已保存在本地。'
+        notReady:
+          '目前无法将草稿保存到服务器 — 草稿仅保留在此浏览器标签页中，关闭或重新加载该标签页后会丢失。页面或服务器可能不同步。',
+        repoGone: '该知识库在服务器上已不可用 — 您的更改仅保留在此浏览器标签页中，关闭或重新加载该标签页后会丢失。'
       },
       mode: {
         basic: '基础',
@@ -2603,8 +2657,7 @@ export default {
         labelsSet: '在策展步骤中按主题设置',
         browserHint: '移交前的最后浏览：下方每个文件、其 markdown 及标签——与助手引用它们的形态完全一致。',
         noRepo: '尚无仓库——创建仓库后，文件复核会显示在这里。',
-        ritualOutside:
-          '复核仪式——提交审查、审核者批准、发布——在编辑器和 Studio 仪表盘中进行，而非此处。请打开编辑器完成后续操作。',
+        ritualOutside: '审核仪式在编辑器和 Studio 仪表盘上进行，每次只需点击一个按钮 — 不在此处。打开编辑器以完成。',
         versions: '版本',
         logs: '操作日志',
         rename: '重命名',
@@ -2617,7 +2670,7 @@ export default {
         frontmatterOk: 'frontmatter 标签已批准',
         frontmatterServing: '已设置 frontmatter 标签',
         title: '安全设置并完成',
-        hint: '此知识库已准备就绪，可供审查。这里从不进行发布——请在仪表盘上提交审批，然后从仪表盘或编辑器批准并发布。',
+        hint: '此知识库已可审核。此处从不发布 — 生命周期在仪表盘和编辑器中进行，每次只需点击一个按钮。',
         nameOk: '知识库名称已设定',
         labelsOk: '标签已选定',
         topicsOk: '主题已审核',
@@ -2625,7 +2678,7 @@ export default {
         topicsServing: '主题服务中',
         noTopics: '尚无主题——请返回策展步骤生成或撰写它们。',
         frozen: '此仓库正在提供服务——此处为只读摘要。请打开编辑器管理版本或执行撤回。',
-        ritual: '下一步：在 Studio 仪表盘提交审批 → 批准人接受 → 从仪表盘或编辑器发布。向导有意在此止步。',
+        ritual: '下一步：在 Studio 仪表盘上，这张卡片在整个生命周期中只有一个按钮 — {chain}。向导有意在此止步。',
         openDashboard: '打开仪表盘'
       }
     },
@@ -2916,6 +2969,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: '提交审核',
       approve: '批准',
       publish: '发布',

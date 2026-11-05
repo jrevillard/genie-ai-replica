@@ -108,6 +108,57 @@ the ORDER and the cross-stream slots.
 | Not scheduled | **#909** air-gap/retention sweep | Parked; trigger = a sovereignty/air-gapped deployment contract |
 | On child closure | Umbrellas **#889 #904 #956 #960** | Close when the last child closes (David) |
 
+> **#995 STATUS 2026-11-05: MERGED to main (MR !775, merge commit `d63370445`), issue closed.**
+> The card (`components/gov-chat-frontend/src/components/okf/RetrievalCard.vue`)
+> is mounted in `StudioTab` above the repository kanban. It names the
+> EFFECTIVE posture (the server's read-model, never a local guess), the
+> engagement gate, the serving-graph count and the per-repo serving list, and
+> it names the `okf_only` + zero-serving foot-gun in the operator's own
+> language. Read-only for every curator; the mode selector + the fan-out caps
+> + the change history are `tools-admin` only (the SAME realm role the PUT
+> route enforces server-side).
+>
+> Two backend additions came with it, both needed by the card:
+> `GET /api/okf/retrieval-config/audit` (tools-admin only — the governance
+> trail, which lives under the `_system` pseudo-repo and is therefore
+> unreachable through the per-repo logs route) and the read-model now carries
+> the validator's `limits`/`modes` so the card never keeps its own copy of
+> the bounds.
+>
+> The write is a before→after confirmation, then a PATCH of the CHANGED
+> fields only, then a re-read from the GET — the card never renders its own
+> optimistic guess as truth.
+>
+> **Two defects were found by David in the local build and fixed before the
+> merge** (both are the same class of error — a mock that did not mirror the
+> producer):
+> 1. **The controls never rendered.** The card read the user through
+>    `mapGetters('auth', ['currentUser'])`, but the auth module declares NO
+>    `namespaced: true` — its getters live at the STORE ROOT. The namespaced
+>    lookup resolved to `undefined`, so `canEdit` was always false and the
+>    mode selector, the caps, Save/Revert and the change history were absent
+>    while the posture itself rendered fine. The suite missed it because its
+>    store mock NAMESPACED the auth module; the mock now mirrors the real
+>    store and a test pins that the namespaced path is `undefined`.
+> 2. **One untranslated locale leaf.** `sw`'s `okf.retrieval.mode.legacy` was
+>    still the English string ("Legacy") — the CI guard only flags leaves of
+>    ≥25 characters. Fixed to "Zamani"; the other five values identical to
+>    English are legitimate cognates (de "Revision"/"Hybrid", fr
+>    "Source"/"Mode", id "Mode").
+>
+> **Correction to the card's own premise:** the OKF Studio lives INSIDE the
+> Admin Dashboard, whose backend routes are gated on the `admin` realm role —
+> so a normal user never reaches the card. The split the role gate can
+> actually express is **admin vs tools-admin**, not curator vs admin. The
+> card's comments and this plan now say so.
+>
+> Verified in a real browser against the local build (Playwright + the repo's
+> own `loginViaUI`): controls render for a tools-admin; a limit change PUTs
+> exactly the changed field; the card re-reads the server's truth; the
+> revision bumps; the audit row is written; an emptied or out-of-bounds input
+> blocks Save with the bounds hint; the mode round-trip works. David then ran
+> the same smoke test by hand and it checked out.
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

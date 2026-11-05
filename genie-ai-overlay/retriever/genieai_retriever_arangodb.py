@@ -311,6 +311,9 @@ def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
 # only the character set ArangoDB itself accepts may reach that text (#501).
 _GRAPH_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
 
+# One WARN per process when a request tries to supply a traversal template.
+_TRAVERSAL_QUERY_WARNED = False
+
 
 def _escape_aql_string(value) -> str:
     """Escape a value for interpolation into an AQL string literal.
@@ -1435,16 +1438,29 @@ class GenieaiArangoRetriever(OpeaComponent):
                         "traversal_score_threshold a number."
                     ),
                 ) from exc
+            # float() accepts NaN and ±Inf (JSON 1e999 → inf); either would be
+            # interpolated into a FILTER comparison and error every traversal
+            # query at runtime (#501).
+            if not math.isfinite(traversal_score_threshold):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid traversal parameters: traversal_score_threshold must be a finite number.",
+                )
             # The traversal TEMPLATE is operator configuration
             # (ARANGO_TRAVERSAL_QUERY). Never accept one from the request: the
             # template is interpolated into AQL text, so a caller-supplied
             # value is an AQL injection surface (#501).
             traversal_query = ARANGO_TRAVERSAL_QUERY
             if input_dict.get("traversal_query"):
-                logger.warning(
-                    "Request supplied 'traversal_query' — ignored. "
-                    "The traversal template is operator configuration only."
-                )
+                # Log ONCE per process: a client that always sends the field
+                # would otherwise emit one WARN per retrieval request.
+                global _TRAVERSAL_QUERY_WARNED
+                if not _TRAVERSAL_QUERY_WARNED:
+                    _TRAVERSAL_QUERY_WARNED = True
+                    logger.warning(
+                        "Request supplied 'traversal_query' — ignored. "
+                        "The traversal template is operator configuration only."
+                    )
 
             filter_data = input_dict.get("context", {})
             # Same normalization as the deployment value, so both paths accept
@@ -2625,6 +2641,19 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     import asyncio
 
     from tracing import get_tracer
+
+    # Carrier graph names are interpolated into AQL text by the routing
+    # probes (backticked collection names) BEFORE any leg runs — validate
+    # them at the fan-out entry so a crafted carrier cannot inject AQL
+    # through the probe queries (#501). Same character set as
+    # _extract_for_graph enforces.
+    for _graph in encoded_graph_names:
+        if not isinstance(_graph, str) or not _GRAPH_NAME_PATTERN.fullmatch(_graph):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid graph name on the request carrier: {_graph!r}. Graph names may only "
+                "contain letters, digits, underscores and hyphens.",
+            )
 
     tracer = get_tracer("retriever.fanout")
     span = tracer.start_span("retriever.fanout")

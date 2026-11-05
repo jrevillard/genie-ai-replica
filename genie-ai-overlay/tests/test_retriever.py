@@ -479,6 +479,38 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_non_finite_score_threshold_rejected_400(self, invoke_env):
+        """float() accepts NaN and ±Inf (JSON 1e999 parses to inf); either
+        interpolated into a FILTER comparison breaks the traversal query at
+        runtime — refused with 400."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(
+                create_mock_input(enable_traversal=True, traversal_score_threshold=float("inf"))
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fanout_carrier_injection_payload_rejected_400(self, invoke_env):
+        """Carrier graph names reach AQL text in the routing probes BEFORE any
+        leg runs — a crafted carrier name must be refused at the fan-out
+        entry, with no probe query executed."""
+        invoke_env["db"].aql.execute = MagicMock()
+        payload = 'OKF_evil` FOR leet IN @@c FILTER leet.x == "y'
+        import retriever.genieai_retriever_arangodb as retriever_module
+
+        with pytest.raises(HTTPException) as exc_info:
+            await retriever_module.invoke_fanout(
+                invoke_env["retriever"],
+                create_mock_input(),
+                {"search_start": "chunk"},
+                ["OKF_good_v1", payload],
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["db"].aql.execute.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):
         """Summarizer path on vLLM context overflow: skip the chunk (keep original page_content)
         instead of bubbling a 500 to chatqna. Fail-loud mirrors the reranker+dataprep pattern.

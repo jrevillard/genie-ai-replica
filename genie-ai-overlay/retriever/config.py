@@ -51,10 +51,6 @@ HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Directory pathss
-current_file_path = os.path.abspath(__file__)
-parent_dir = os.path.dirname(current_file_path)
-
 
 #######################################################
 #                     ArangoDB                        #

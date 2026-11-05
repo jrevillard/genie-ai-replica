@@ -104,6 +104,13 @@ observability:
     storageSize: 20Gi
   grafana:
     enabled: false
+    # Pin the Grafana image version on the CR. Without it the operator
+    # (v5.25.0) substitutes its built-in default, 13.1.3 — a broken
+    # Docker Hub tag whose amd64 /run.sh is 0 bytes, so the pod
+    # crashloops with `exec /run.sh: exec format error` on every fresh
+    # pull (#1420). 12.4 is the version docker-compose pins (line 3188):
+    # one Grafana version across both delivery paths.
+    version: "12.4"
     # The Grafana admin USERNAME. The operator writes it into
     # genieai-grafana-admin-credentials on every reconcile and it wins
     # over any user an operator-provided Secret carried; the PASSWORD is

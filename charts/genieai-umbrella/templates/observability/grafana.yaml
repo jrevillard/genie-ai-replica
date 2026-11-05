@@ -73,6 +73,12 @@ metadata:
     # alert rules silently unimported.
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "grafana") | nindent 4 }}
 spec:
+  # Explicit image version. Without it the operator substitutes its
+  # built-in default — 13.1.3 on v5.25.0 — and that Docker Hub tag's
+  # amd64 /run.sh is 0 bytes: the pod crashloops with `exec /run.sh:
+  # exec format error` on every fresh pull (#1420). Default 12.4 = the
+  # version docker-compose pins, one Grafana across both paths.
+  version: {{ $obsGrafana.version | default "12.4" | quote }}
   # Resource overrides: the operator's own defaults are 100m/256Mi
   # request and 1024Mi limit. The container-level block is what the
   # CRD accepts (see the note below) and the operator merges it by

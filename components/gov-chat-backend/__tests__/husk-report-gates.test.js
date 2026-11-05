@@ -15,8 +15,7 @@ const {
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL,
   LEGACY_LOOKALIKE_AQL,
-  ALL_DOCS_AQL,
-  printSampledList
+  ALL_DOCS_AQL
 } = require('../scripts/report-husk-user-docs');
 
 const huskDoc = {
@@ -59,7 +58,14 @@ function fakeDb({
         ? {} // a removal result with no stats — the honest-answer-unknown case
         : { extra: { stats: { writesExecuted } } };
     }
-    return { next: async () => ({ count: lookalikeCount, sample: lookalikes }) };
+    if (aql === LEGACY_LOOKALIKE_AQL) {
+      return { next: async () => ({ count: lookalikeCount, sample: lookalikes }) };
+    }
+    // An unknown AQL is a loud failure, not a plausible-looking answer: a
+    // second report query added later would otherwise be answered with the
+    // lookalike payload, and the suite would stay green while the script
+    // read lookalike numbers as the new query's.
+    throw new Error(`fakeDb: unexpected AQL: ${aql}`);
   });
   return {
     query,
@@ -95,6 +101,16 @@ const divergentDocs = (extraN, missedN = extraN) => ({
     _key: `missed-${i}`,
     _id: `users/missed-${i}`
   }))
+});
+
+describe('the module surface', () => {
+  it('does not export the listing helper (issue #1508: no new exports)', () => {
+    // Issue #1508 asked for a PURE in-file extraction: the helper is internal
+    // to the script, not part of its surface. Its behaviour is pinned through
+    // main() instead, so no export is needed to reach it.
+    const script = require('../scripts/report-husk-user-docs');
+    expect(script.printSampledList).toBeUndefined();
+  });
 });
 
 describe('parseAndGateArgs', () => {
@@ -162,33 +178,6 @@ describe('parseAndGateArgs', () => {
       expect(process.exitCode).toBe(1);
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HUSK_SAMPLE_LIMIT'));
     }
-  });
-});
-
-describe('printSampledList', () => {
-  // The helper is the single place the cap is applied, so the cap's OWN
-  // invariant lives here: a listing is NEVER unbounded. Before the default
-  // was added, an omitted limit made slice(0, undefined) return the WHOLE
-  // array — a listing with no cap at all.
-  const docs = Array.from({ length: 60 }, (_, i) => ({ _key: `k-${i}` }));
-
-  it('caps the listing at the default when the caller omits the limit', () => {
-    const written = [];
-    printSampledList({ write: (l) => written.push(l), docs, format: (d) => `  entry ${d._key}` });
-    expect(written.filter((l) => l.startsWith('  entry '))).toHaveLength(50);
-    expect(written.some((l) => l.includes('(not listed)'))).toBe(true);
-  });
-
-  it('honours an explicit cap', () => {
-    const written = [];
-    printSampledList({ write: (l) => written.push(l), docs, limit: 10, format: (d) => `  entry ${d._key}` });
-    expect(written.filter((l) => l.startsWith('  entry '))).toHaveLength(10);
-  });
-
-  it('does not list an elision line when nothing was withheld', () => {
-    const written = [];
-    printSampledList({ write: (l) => written.push(l), docs: docs.slice(0, 5), format: (d) => `  entry ${d._key}` });
-    expect(written.filter((l) => l.includes('(not listed)'))).toHaveLength(0);
   });
 });
 
@@ -489,6 +478,28 @@ describe('main safety wiring', () => {
     expect(stdout).toContain('HUSK_SAMPLE_LIMIT=75');
   });
 
+  it('counts the withheld entries from what was LISTED, not from the cap (issue #1507)', async () => {
+    // The two formulas agree only while the server returns exactly
+    // min(total, limit) rows — true today, but the moment the server-side
+    // bound is decoupled from the client cap, `total - limit` reports a
+    // wrong count and can go NEGATIVE, which suppresses the elision line
+    // entirely and hides the withheld entries with no trace. The count must
+    // come from what the listing actually showed.
+    //
+    // 75 lookalikes, of which the server returns 40 (fewer than the cap of
+    // 50): the withheld count is 75 - 40 = 35, not 75 - 50 = 25.
+    const lookalikes = Array.from({ length: 40 }, (_, i) => ({
+      _key: `l-${i}`,
+      createdAt: '2025-01-01T00:00:00.000Z'
+    }));
+    const db = fakeDb({ lookalikeCount: 75, lookalikes });
+    await runMain(db);
+    const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(stdout.split('\n').filter((l) => l.includes('lookalike _key='))).toHaveLength(40);
+    expect(stdout).toContain('... and 35 more (not listed)');
+    expect(stdout).not.toContain('... and 25 more (not listed)');
+  });
+
   it('applies the RAISED cap to the husk listing, not just to the divergence listing (issue #1507)', async () => {
     // The override must reach EVERY listing, not only the abort path's. A
     // client-side cap still pinned to the default would leave the report
@@ -569,22 +580,35 @@ describe('main safety wiring', () => {
     expect(stderrText(errorSpy)).toContain('capped at 200 entries per direction');
   });
 
-  it('does not tell the operator to list entries the same --delete run removes', async () => {
-    // On the --delete path the withheld husks are removed by THIS run, so
-    // the dry-run advice would point at documents that are about to be gone.
-    // The elision line must say what actually happens to them.
+  it('tells the operator to inspect the withheld entries INSTEAD of this --delete run', async () => {
+    // On the --delete path the withheld husks are removed by THIS run, right
+    // after the report. An advice that says "re-run" is then useless: the
+    // re-run finds nothing, because the entries are gone. The line must
+    // therefore point at a run that PRECEDES this one.
     const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
     const db = fakeDb({ husks, allDocs: husks, writesExecuted: 60 });
     await runMain(db, ['--delete', '--yes']);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     const elision = stdout.split('\n').find((l) => l.includes('more (not listed)'));
     expect(elision).toBeDefined();
-    expect(elision).not.toContain('re-run the dry run');
-    expect(elision).toContain('included in the removal below');
+    // The withheld entries are named as part of the removal...
+    expect(elision).toContain('part of the removal below');
+    // ...and the inspection run is stated as ALTERNATIVE to this run, not as
+    // a later step of it. Both wordings are pinned: "afterwards" and a
+    // "(with --delete)" pointer would each send the operator at documents
+    // that no longer exist, or at the destructive command.
+    expect(elision).toContain('INSTEAD of this run');
+    expect(elision).not.toContain('afterwards');
+    expect(elision).not.toContain('(with --delete)');
+    expect(elision).toContain('(without --delete)');
     // The knob still works on this path: the report is printed BEFORE the
     // removal, so a raised cap lists the withheld matches in the audit
     // record of the very run that removes them.
     expect(elision).toContain('HUSK_SAMPLE_LIMIT=60');
+    // And the output-size caveat is here too — the cap exists to keep the
+    // log pipeline from being flooded, so EVERY listing that raises it must
+    // say where the output goes.
+    expect(elision).toContain('redirect the output to a file');
   });
 
   it('removes the WITHHELD matches too — the cap caps the LISTING, not the removal', async () => {

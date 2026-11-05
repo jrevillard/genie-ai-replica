@@ -188,11 +188,16 @@ function quotedKey(key) {
 }
 
 /**
- * Prints a per-document listing capped at `limit` entries, followed by ONE
- * elision line when entries were withheld. Every per-document listing in this
- * script goes through this helper, so the cap, the `>` boundary and the
+ * Prints a per-document listing capped at the run's effective cap, followed by
+ * ONE elision line when entries were withheld. Every per-document listing in
+ * this script goes through this helper, so the cap, the `>` boundary and the
  * elision wording live in ONE place and the three sites cannot drift apart
  * (issue #1508).
+ *
+ * The cap is read from the resolved run configuration (`gated.sampleLimit`),
+ * NOT from a parameter: a call site can then neither omit the cap (which
+ * would slice(0, undefined) — the WHOLE array) nor override it with a
+ * different one. The gate is the single place the cap is decided.
  *
  * `total` defaults to the length of `docs` and is stated separately only
  * where the two differ: the lookalike sample is truncated SERVER-side, so
@@ -201,29 +206,39 @@ function quotedKey(key) {
  * copies is the one that lists this listing in full.
  * @param {Object} params
  * @param {Function} params.write - the sink (console.log / console.error)
- * @param {string} params.label - the noun in the elision line ('' for none)
+ * @param {Object} params.gated - the resolved run configuration (the cap
+ *   source); REQUIRED — a missing cap must fail loudly, never silently widen
+ *   the listing
+ * @param {string} [params.label] - the noun in the elision line; omit it when
+ *   the listing's own header already says what the listing is
  * @param {Array<Object>} params.docs - the entries to list
- * @param {number} params.total - how many entries exist in this listing
- * @param {number} params.limit - the cap (defaults to DEFAULT_SAMPLE_LIMIT, so
- *   an omitted cap is BOUNDED rather than an unbounded listing)
+ * @param {number} [params.total] - how many entries exist in this listing.
+ *   OMIT it when that is docs.length. Pass it ONLY where the two differ — the
+ *   lookalike sample is truncated SERVER-side, so there the total is the
+ *   server's count and the docs are the truncated sample. Passing
+ *   docs.length there would understate how many entries were withheld.
  * @param {Function} params.format - renders one entry line
  * @param {string} [params.remedy] - what to tell the operator about the
  *   withheld entries. Defaults to the dry-run re-run advice; the --delete path
  *   passes its own, because there the withheld entries are about to be
  *   REMOVED, not left for a later look.
  */
-function printSampledList({ write, label, docs, total = docs.length, limit = DEFAULT_SAMPLE_LIMIT, format, remedy }) {
-  const listed = docs.slice(0, limit);
+function printSampledList({ write, gated, label, docs, total = docs.length, format, remedy }) {
+  const listed = docs.slice(0, gated.sampleLimit);
   for (const doc of listed) {
     write(format(doc));
   }
   const withheld = total - listed.length;
   if (withheld > 0) {
-    const advice =
-      remedy ??
-      `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all ` +
-        '(redirect the output to a file if that is many entries)';
-    write(`  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ${advice}`);
+    const advice = remedy ?? `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all`;
+    // The output-size caveat is appended HERE, not by each caller: the cap
+    // exists to keep the log pipeline from being flooded, so every listing
+    // that raises it must say where the output goes. A path that replaced the
+    // whole advice would otherwise be the one path without the caveat.
+    write(
+      `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ${advice} ` +
+        '(redirect the output to a file if that is many entries)'
+    );
   }
 }
 
@@ -380,15 +395,21 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Listing cap:   ${gated.sampleLimit} entries per listing (override: HUSK_SAMPLE_LIMIT)`);
   // One closure per scope: the sink and the cap are stated ONCE per run
   // path, so the two stdout listings cannot drift apart on either.
-  const printStdoutList = (options) => printSampledList({ write: console.log, limit: gated.sampleLimit, ...options });
+  //
+  // The per-call fields are named explicitly, NOT spread: a spread would let
+  // a call site pass its own `write` or `gated` and silently override the
+  // run-wide sink and the cap — exactly the listing-to-listing drift #1508
+  // removed. With named fields, the override is not expressible.
+  const printStdoutList = ({ docs, total, format, remedy }) =>
+    printSampledList({ docs, total, format, remedy, write: console.log, gated });
   printStdoutList({
     docs: husks,
     // On the --delete path the withheld matches are removed by THIS run, so
     // the dry-run advice would point at documents that are about to be gone.
     remedy:
       gated.mode === 'delete'
-        ? 'these withheld entries are included in the removal below — ' +
-          `run the dry run (without --delete) beforehand with HUSK_SAMPLE_LIMIT=${husks.length} to see them`
+        ? 'these withheld entries are part of the removal below — to inspect them, ' +
+          `run the report (without --delete) with HUSK_SAMPLE_LIMIT=${husks.length} INSTEAD of this run`
         : undefined,
     format: (doc) =>
       `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
@@ -571,9 +592,9 @@ async function main({
     ]) {
       printSampledList({
         write: console.error,
+        gated,
         label,
         docs,
-        limit: gated.sampleLimit,
         format: (doc) => `  ${label} _key=${quotedKey(doc._key)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
       });
     }
@@ -607,7 +628,6 @@ if (require.main === module) {
 
 module.exports = {
   isHuskDoc,
-  printSampledList,
   compareSignatureSets,
   parseAndGateArgs,
   main,

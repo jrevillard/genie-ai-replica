@@ -3268,6 +3268,11 @@ class TestDocRepoIngestPayload:
         live_task.done.return_value = False
         with (
             patch.object(ms, "acquire_ingest_slot", return_value=MagicMock()),
+            # Hermetic teardown: the guard path's finally removes the (never
+            # really written — open is mocked) temp file; keep os.remove away
+            # from the real host filesystem, like the sibling tests do.
+            patch.object(ms.os.path, "exists", return_value=True),
+            patch.object(ms.os, "remove") as remove_mock,
             self._ingest_mocks({payload.fileId: live_task}),
         ):
             response = await ms.ingest_file_from_repo(payload)
@@ -3276,6 +3281,7 @@ class TestDocRepoIngestPayload:
         assert body["code"] == "ingest_already_running"
         assert "my-file" in body["detail"]
         assert "already" in body["detail"]
+        remove_mock.assert_called_once()
 
     @pytest.mark.asyncio
     @requires_fcntl
@@ -3289,8 +3295,14 @@ class TestDocRepoIngestPayload:
         with (
             patch.object(ms, "acquire_ingest_slot", return_value=MagicMock()),
             patch.object(ms.asyncio, "create_task", return_value=fake_task),
+            # Hermetic teardown — see the 409-body test above.
+            patch.object(ms.os.path, "exists", return_value=True),
+            patch.object(ms.os, "remove"),
             self._ingest_mocks({payload.fileId: done_task}) as (_ms, mock_loader, _flock),
         ):
+            # A plain MagicMock (not AsyncMock): create_task is mocked, so the
+            # loader's coroutine would never be awaited and would warn on GC.
+            mock_loader.ingest_file_with_guardrail = MagicMock()
             result = await ms.ingest_file_from_repo(payload)
         # The success CONTRACT, not merely "not a 409": an error-shaped dict
         # (success=False) or an HTTPException on this path is a regression.

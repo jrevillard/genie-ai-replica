@@ -528,6 +528,33 @@ describe('fileController', () => {
       expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
     });
 
+    it('still errors on a coded 409 after a degraded clear already destroyed the file chunks', async () => {
+      // The 'Ingested with Warnings' path retracts the file's chunks and
+      // zeroes its count BEFORE the ingest POST. A coded 409 arriving after
+      // that leaves the file wiped — the code classifies the 409 as a
+      // duplicate, but the degraded-clear exception must still win: the
+      // file must be reported as a failure, not shrugged off.
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
+        file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
+        filePath: '/uploads/f1.bin'
+      });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
+      // The retract (first POST) succeeds; the ingest (second POST) gets the 409.
+      axios.post
+        .mockResolvedValueOnce({ data: { success: true } })
+        .mockRejectedValueOnce(
+          conflict({ detail: 'Another ingestion of f1 is in progress', code: 'ingest_already_running' })
+        );
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
+    });
+
     it('still errors on a 409 after a degraded clear already destroyed the file chunks', async () => {
       // The 'Ingested with Warnings' path retracts the file's chunks and
       // zeroes its count BEFORE the ingest POST. A 409 arriving after that

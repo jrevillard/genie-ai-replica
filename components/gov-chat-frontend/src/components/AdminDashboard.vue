@@ -3938,7 +3938,9 @@ export default {
 .delete-refuse-strip {
   align-self: center;
   max-width: 40rem;
-  color: var(--text-secondary);
+  /* UX-2 (#1513): --text-secondary died with the pre-OKLch theme; the
+     strip has been rendering in inherited ink since the migration. */
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 
@@ -3950,12 +3952,17 @@ export default {
   display: flex;
 }
 
-/* Admin dashboard container */
+/* Admin dashboard container.
+   UX-2 (#1513): the page sits on --bg like every other page in the app
+   (theme-components paints .content-area/--bg), so the --surface cards
+   and the tab rack read by fill instead of floating as same-colour
+   slabs separated only by their 1px borders — the pre-theme look this
+   pass retires. Pure paint; no layout or behaviour change. */
 .admin-dashboard {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: var(--surface);
+  background-color: var(--bg);
 }
 
 /* Close button */
@@ -3999,7 +4006,9 @@ export default {
 /* Main Content */
 .main {
   padding: var(--space-lg);
-  background-color: var(--surface);
+  /* UX-2 (#1513): page ground, not panel ground — the --surface cards
+     inside read by fill against it. */
+  background-color: var(--bg);
   height: 100%;
   overflow-y: auto;
 }
@@ -4303,9 +4312,12 @@ export default {
   font-size: var(--text-base);
 }
 
+/* UX-2 (#1513): the DS selected-state vocabulary is a soft accent fill
+   with accent ink (Pill, Table selected rows, Stepper, ModeSwitch) —
+   the solid-accent slab is the pre-theme pattern. */
 .page-btn.active {
-  background-color: var(--accent);
-  color: var(--accent-fg);
+  background-color: var(--accent-muted);
+  color: var(--accent);
   border-color: var(--accent);
 }
 
@@ -4847,7 +4859,11 @@ input:checked + .slider:before {
 
 .pattern-match-card {
   padding: var(--space-md);
-  background-color: var(--bg-secondary);
+  /* UX-2 (#1513): --bg-secondary died with the pre-OKLch theme — the card
+     has painted itself transparent (invisible on the panel) since the
+     migration. --bg-tertiary is the same role in the current token set,
+     and what the sibling .pattern-match-sample already uses. */
+  background-color: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-left: 3px solid var(--muted-soft);
   border-radius: var(--radius-sm);
@@ -4869,7 +4885,7 @@ input:checked + .slider:before {
   border-radius: var(--radius-sm);
   font-family: var(--font-mono, monospace);
   font-size: var(--text-xs);
-  color: var(--text-secondary);
+  color: var(--muted);
   white-space: pre-wrap;
   word-break: break-word;
 }

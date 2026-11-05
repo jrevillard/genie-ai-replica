@@ -9,9 +9,10 @@
  * the matcher template changes (see MR !752 for the latest validation).
  */
 
+const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
 const {
   isHuskDoc,
-  findDivergences,
+  compareSignatureSets,
   HUSK_IDENTITY_FIELDS,
   HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,
@@ -126,16 +127,27 @@ describe('HUSK_MATCHER_AQL', () => {
   });
 });
 
-describe('findDivergences', () => {
-  // The abort guard the script runs before any destructive step: every AQL
-  // hit must pass the JS predicate, or the run aborts without deleting.
-  it('returns nothing when every AQL hit passes the predicate', () => {
-    expect(findDivergences([huskDoc, { ...huskDoc, _key: '6789' }])).toEqual([]);
+describe('compareSignatureSets', () => {
+  // The abort guard the script runs before any destructive step: the AQL
+  // match set and the JS-computed set must agree in BOTH directions.
+  const healthyDoc = { ...huskDoc, _key: 'healthy', iss_sub: 'kc:1', sub: '1', email: 'a@b.c' };
+
+  it('finds no mismatch when both sides agree', () => {
+    const docs = [huskDoc, healthyDoc];
+    expect(compareSignatureSets([huskDoc], docs)).toEqual({ extra: [], missed: [] });
   });
 
-  it('flags AQL hits that fail the predicate', () => {
-    const stray = { ...huskDoc, customSettings: { theme: 'dark' } };
-    expect(findDivergences([huskDoc, stray])).toEqual([stray]);
+  it('flags AQL hits the predicate rejects (AQL too permissive)', () => {
+    const stray = { ...huskDoc, _key: 'stray', customSettings: { theme: 'dark' } };
+    const result = compareSignatureSets([huskDoc, stray], [huskDoc, stray]);
+    expect(result.extra).toEqual([stray]);
+    expect(result.missed).toEqual([]);
+  });
+
+  it('flags documents the predicate accepts but the AQL missed (the silent direction)', () => {
+    const result = compareSignatureSets([], [huskDoc]);
+    expect(result.extra).toEqual([]);
+    expect(result.missed).toEqual([huskDoc]);
   });
 });
 
@@ -158,8 +170,30 @@ describe('HUSK_REMOVAL_AQL', () => {
     expect(HUSK_REMOVAL_AQL).toContain('MINUS(ATTRIBUTES(u), ');
   });
 
-  it('targets the collection and removes the matched documents', () => {
+  it('reads the keys first and removes by key (does not iterate the collection it modifies)', () => {
     expect(HUSK_REMOVAL_AQL).toContain('FOR u IN @@collection');
-    expect(HUSK_REMOVAL_AQL.trimEnd().endsWith('REMOVE u IN @@collection')).toBe(true);
+    expect(HUSK_REMOVAL_AQL).toContain('RETURN u._key');
+    expect(HUSK_REMOVAL_AQL.trimEnd().endsWith('REMOVE { _key: k } IN @@collection')).toBe(true);
+  });
+});
+
+describe('signature vocabulary vs the app field vocabulary', () => {
+  // The script keeps its own field lists (it is a standalone ops tool and
+  // describes the OLD reset's husk shape), but the identity fields it tests
+  // for absence must stay a subset of the app's own protected-field list —
+  // a new issuer adding an identity field there would otherwise silently
+  // make the script's signature stale.
+  it('tests only fields the app also treats as identity/protected fields', () => {
+    for (const field of HUSK_IDENTITY_FIELDS) {
+      expect(JIT_PROTECTED_FIELDS).toContain(field);
+    }
+  });
+
+  it('allows exactly the old-reset-preserved fields from the app vocabulary', () => {
+    // The husk keeps only what the OLD reset preserved (the timestamps and
+    // the soft-delete marker). Any other app-protected field that becomes
+    // husk-allowed would widen the signature silently.
+    const shared = JIT_PROTECTED_FIELDS.filter((field) => HUSK_ALLOWED_FIELDS.includes(field));
+    expect(shared.sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
   });
 });

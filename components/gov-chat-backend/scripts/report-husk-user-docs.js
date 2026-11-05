@@ -42,10 +42,13 @@
 const { Database } = require('arangojs');
 const path = require('path');
 
-const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
 const SAMPLE_LIMIT = 50;
 
 // --- The husk signature, defined once --------------------------------------
+// Deliberately NOT imported from constants/jit-fields.js: that module describes
+// the fields the CURRENT reset (post-#1428) manages, while this signature
+// describes the shape the OLD reset (pre-#1428) left behind — the husk keeps
+// only the timestamps that reset preserved.
 // ArangoDB's own document fields (the complete set — anything else that
 // looks internal but is not one of these disqualifies the document).
 const HUSK_SYSTEM_FIELDS = ['_key', '_id', '_rev'];
@@ -80,14 +83,23 @@ function isHuskDoc(doc) {
 }
 
 /**
- * Returns the AQL hits that failed the JS predicate — a non-empty result
- * means the two sides of the signature disagree and nothing may be deleted.
+ * Compares the AQL match set with the set the JS predicate computes from the
+ * whole collection — in BOTH directions. `extra` = AQL matched a document the
+ * predicate rejects (AQL too permissive); `missed` = the predicate accepts a
+ * document the AQL never returned (AQL too restrictive — the silent
+ * direction, which would report "0 husks" on a database full of them).
  * Exported for tests.
- * @param {Array<Object>} husks
- * @returns {Array<Object>}
+ * @param {Array<Object>} aqlHits
+ * @param {Array<Object>} allDocs
+ * @returns {{extra: Array<Object>, missed: Array<Object>}}
  */
-function findDivergences(husks) {
-  return husks.filter((doc) => !isHuskDoc(doc));
+function compareSignatureSets(aqlHits, allDocs) {
+  const expectedKeys = new Set(allDocs.filter(isHuskDoc).map((doc) => doc._key));
+  const aqlKeys = new Set(aqlHits.map((doc) => doc._key));
+  return {
+    extra: aqlHits.filter((doc) => !expectedKeys.has(doc._key)),
+    missed: allDocs.filter((doc) => isHuskDoc(doc) && !aqlKeys.has(doc._key))
+  };
 }
 
 const IDENTITY_FILTERS_AQL = HUSK_IDENTITY_FIELDS.map((field) => `FILTER u.${field} == null`).join('\n');
@@ -119,10 +131,13 @@ FOR u IN @@collection
 // signature at removal time so a concurrent disqualifying write (e.g. a GDPR
 // soft-delete landing between SELECT and REMOVE) is skipped, not destroyed.
 const HUSK_REMOVAL_AQL = `
-FOR u IN @@collection
+FOR k IN (
+  FOR u IN @@collection
   FILTER u._key IN @keys
   ${HUSK_SIGNATURE_FILTERS_AQL}
-  REMOVE u IN @@collection
+  RETURN u._key
+)
+REMOVE { _key: k } IN @@collection
 `;
 
 // Docs with no iss_sub/sub but WITH an email: the dangerous lookalikes.
@@ -138,6 +153,7 @@ LET lookalikeDocs = (
   FOR u IN @@collection
   ${LOOKALIKE_IDENTITY_FILTERS_AQL}
     FILTER u.email != null
+    FILTER u.deleted == null || u.deleted == false
     RETURN KEEP(u, '_key', 'createdAt')
 )
 RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
@@ -148,6 +164,10 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // Resolved here, not at module scope: dotenv loads the repo-root .env when
+  // the script runs, so a module-scope read would miss ARANGO_COLLECTION.
+  const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
+  const ARANGO_URL = process.env.ARANGO_URL || 'http://localhost:8529';
   const doDelete = process.argv.includes('--delete');
   const doConfirm = process.argv.includes('--yes');
 
@@ -164,7 +184,7 @@ async function main() {
   }
 
   const db = new Database({
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
+    url: ARANGO_URL,
     databaseName: process.env.ARANGO_DB || 'genie-ai',
     auth: {
       username: process.env.ARANGO_USER || 'root',
@@ -178,20 +198,47 @@ async function main() {
   const husks = await huskCursor.all();
 
   // Defense against AQL/predicate divergence — abort before any destructive
-  // step if the two disagree about what a husk is. Only _key and attribute
-  // NAMES are printed: the mismatch documents are by definition not husks and
-  // can carry real PII, which must not reach the log store via stderr.
-  const mismatches = findDivergences(husks);
-  if (mismatches.length > 0) {
+  // step if the two disagree about what a husk is, in EITHER direction: an
+  // AQL hit the predicate rejects (AQL too permissive) or a document the
+  // predicate accepts that the AQL never returned (AQL too restrictive — the
+  // silent direction, which would otherwise report "0 husks" on a database
+  // full of them). Only _key and attribute NAMES are printed: the mismatch
+  // documents are by definition not husks and can carry real PII, which must
+  // not reach the log store via stderr.
+  const allDocsCursor = await db.query('FOR u IN @@collection RETURN u', { '@collection': COLLECTION });
+  const allDocs = await allDocsCursor.all();
+  const { extra, missed } = compareSignatureSets(husks, allDocs);
+  if (extra.length > 0 || missed.length > 0) {
     console.error(
-      `ABORT: ${mismatches.length} AQL hits failed the JS husk predicate — signature divergence, nothing was deleted:`
+      `ABORT: the AQL matcher and the signature disagree — ${extra.length} AQL hit(s) rejected by the predicate, ` +
+        `${missed.length} document(s) accepted by the predicate but not matched by the AQL. Nothing was deleted.`
     );
-    for (const doc of mismatches) {
-      console.error(`  mismatched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    for (const doc of extra) {
+      console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    }
+    for (const doc of missed) {
+      console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
     }
     process.exitCode = 1;
     return;
   }
+
+  // Field census over the whole collection: any field outside the signature's
+  // allowlist, with its count. The operator sees shape surprises the signature
+  // cannot know about (a field every document carries, a new issuer's field),
+  // instead of a bare "N husks" that cannot explain itself.
+  const fieldCounts = new Map();
+  for (const doc of allDocs) {
+    for (const key of Object.keys(doc)) {
+      if (!fieldCounts.has(key)) {
+        fieldCounts.set(key, 0);
+      }
+      fieldCounts.set(key, fieldCounts.get(key) + 1);
+    }
+  }
+  const unexpectedFields = [...fieldCounts.entries()]
+    .filter(([key]) => !HUSK_SYSTEM_FIELDS.includes(key) && !HUSK_ALLOWED_FIELDS.includes(key))
+    .sort((a, b) => b[1] - a[1]);
 
   let lookalikeCount = 0;
   let lookalikes = [];
@@ -208,6 +255,7 @@ async function main() {
   }
 
   console.log('--- Husk user-document report (READ ONLY unless --delete) ---');
+  console.log(`Arango URL:    ${ARANGO_URL}`);
   console.log(`Database:      ${db.name}`);
   console.log(`Collection:    ${COLLECTION}`);
   console.log(`Total docs:    ${total}`);
@@ -221,8 +269,14 @@ async function main() {
   if (husks.length > SAMPLE_LIMIT) {
     console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
   }
+  if (unexpectedFields.length > 0) {
+    console.log('Fields present outside the husk signature (not husks, never deleted):');
+    for (const [key, count] of unexpectedFields) {
+      console.log(`  field ${key}: ${count} document(s)`);
+    }
+  }
   if (doDelete) {
-    console.log('Legacy lookalikes: not measured in --delete mode (reviewed in the prior dry run).');
+    console.log('Legacy lookalikes: not measured in --delete mode.');
   } else {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
     for (const doc of lookalikes) {
@@ -265,7 +319,8 @@ async function main() {
   console.log(
     `Done. ${writesExecuted} of ${husks.length} selected documents removed.` +
       (writesExecuted < husks.length
-        ? ` ${husks.length - writesExecuted} no longer matched the signature (skipped).`
+        ? ` ${husks.length - writesExecuted} were NOT removed — the reason is not observable ` +
+          'from this run (the removal re-checks the signature at removal time); re-run the dry run to see what remains.'
         : '')
   );
 }
@@ -275,14 +330,19 @@ if (require.main === module) {
   // tests) must not pull the operator's .env into the test process.
   require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
   main().catch((err) => {
-    console.error('Report failed:', err);
+    // Message + stack, not the whole arangojs response object (it dumps the
+    // entire HTTP exchange, which buries the actual cause).
+    console.error('Report failed:', err.message);
+    if (err.stack) {
+      console.error(err.stack);
+    }
     process.exitCode = 1;
   });
 }
 
 module.exports = {
   isHuskDoc,
-  findDivergences,
+  compareSignatureSets,
   HUSK_IDENTITY_FIELDS,
   HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,

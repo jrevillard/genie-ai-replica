@@ -587,6 +587,21 @@ describe('main safety wiring', () => {
     expect(elision).toContain('HUSK_SAMPLE_LIMIT=60');
   });
 
+  it('removes the WITHHELD matches too — the cap caps the LISTING, not the removal', async () => {
+    // The --delete elision line tells the operator the withheld entries are
+    // included in the removal. That claim must be true: the removal binds
+    // every matched key, not only the ones the listing showed. A cap that
+    // leaked into the removal would leave documents behind that the report
+    // said were being removed.
+    const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
+    const db = fakeDb({ husks, allDocs: husks, writesExecuted: 60 });
+    await runMain(db, ['--delete', '--yes']);
+    const calls = db.removalCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].bind.keys).toHaveLength(60);
+    expect(calls[0].bind.keys).toContain('h-59');
+  });
+
   it("reconciles the in-output advice with the cap's stated purpose (issue #1507)", async () => {
     // The remedy names the value that lists the withheld entries in full —
     // which for a large collection means a large dump. The file header says

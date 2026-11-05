@@ -1366,8 +1366,10 @@ async function reingestFailed(req, res, next) {
  * (both branches).
  *
  * Returns, for the curated branch, { ok, mode, dry_run, proposals, applied,
- * failures }; for the heuristics branch, the autocorrectRepo result
- * { ok, changes, warnings, applied, failed, failures, total_concepts }.
+ * failures }; for the heuristics branch, { ok, dry_run } plus the
+ * autocorrectRepo result { changes, warnings, applied, failed, failures,
+ * total_concepts }. BOTH branches echo dry_run: a client can tell a scan
+ * from an apply on the response alone.
  */
 async function autocorrectRepo(req, res, next) {
   try {

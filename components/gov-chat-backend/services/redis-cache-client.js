@@ -51,11 +51,28 @@ function resolveRedisCacheSettings() {
  * @returns {import('ioredis').Redis} the client
  */
 function createRedisCacheClient(options = {}) {
-  const unknown = Object.keys(options || {}).filter((key) => !ALLOWED_OPTIONS.includes(key));
+  if (options !== null && typeof options !== 'object') {
+    throw new Error('createRedisCacheClient: options must be an object');
+  }
+  const opts = options || {};
+  const unknown = Object.keys(opts).filter((key) => !ALLOWED_OPTIONS.includes(key));
   if (unknown.length > 0) {
     throw new Error(`createRedisCacheClient: unknown option(s): ${unknown.join(', ')}`);
   }
-  const { enableOfflineQueue = false, maxRetriesPerRequest = 3 } = options || {};
+  // The names are checked above; the types matter too — ioredis gates the
+  // per-command retry cap on `typeof === "number"`, so a string value would
+  // silently remove the cap instead of failing loudly.
+  if ('enableOfflineQueue' in opts && typeof opts.enableOfflineQueue !== 'boolean') {
+    throw new Error('createRedisCacheClient: enableOfflineQueue must be a boolean');
+  }
+  if (
+    'maxRetriesPerRequest' in opts &&
+    opts.maxRetriesPerRequest !== null &&
+    typeof opts.maxRetriesPerRequest !== 'number'
+  ) {
+    throw new Error('createRedisCacheClient: maxRetriesPerRequest must be a number or null');
+  }
+  const { enableOfflineQueue = false, maxRetriesPerRequest = 3 } = opts;
   const { host, port, password } = resolveRedisCacheSettings();
 
   return new Redis({

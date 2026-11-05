@@ -100,6 +100,24 @@ describe('redis-cache-client factory', () => {
     expect(Redis).not.toHaveBeenCalled();
   });
 
+  test('a wrong-typed option fails loudly', () => {
+    // ioredis gates the per-command retry cap on `typeof === "number"`, so a
+    // string value would silently remove the cap; a truthy non-boolean would
+    // silently switch the offline queue on. Both must fail at the factory.
+    expect(() => createRedisCacheClient({ maxRetriesPerRequest: '3' })).toThrow(
+      /maxRetriesPerRequest must be a number or null/
+    );
+    expect(() => createRedisCacheClient({ enableOfflineQueue: 'yes' })).toThrow(/enableOfflineQueue must be a boolean/);
+    expect(Redis).not.toHaveBeenCalled();
+  });
+
+  test('a non-object options argument fails with a clear type error', () => {
+    // Object.keys on a string yields per-character keys, which would name
+    // phantom options instead of the actual mistake
+    expect(() => createRedisCacheClient('config-name')).toThrow(/options must be an object/);
+    expect(Redis).not.toHaveBeenCalled();
+  });
+
   test('a null options argument means "no options", not a TypeError', () => {
     // A caller forwarding a nullable config object must not crash with an
     // unrelated "Cannot convert undefined or null to object"

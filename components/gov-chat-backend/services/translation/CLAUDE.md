@@ -80,17 +80,20 @@ the chatqna backend:
 
 ```bash
 C=$(docker ps --format '{{.Names}}' | grep -E 'genieai.*_backend\.' | head -1)
-docker exec "$C" node -e "const {createRedisCacheClient}=require('/app/services/redis-cache-client');const r=createRedisCacheClient({enableOfflineQueue:true});(async()=>{const k=await r.keys('translation:*');console.log('deleting',k.length);if(k.length)await r.del(k);r.disconnect();})().catch(e=>{console.error(e.message);process.exit(1);});"
+docker exec "$C" node -e "const {createRedisCacheClient}=require('/app/services/redis-cache-client');const r=createRedisCacheClient({enableOfflineQueue:true,maxRetriesPerRequest:null});(async()=>{const k=await r.keys('translation:*');console.log('deleting',k.length);if(k.length)await r.del(k);r.disconnect();})().catch(e=>{console.error(e.message);process.exit(1);});"
 ```
 
 This deletes only `translation:*` keys (not other Redis data). `TRANSLATION_CACHE=on`
 enables the cache; the key prefix is always `translation:`.
 
-The command uses the shared client factory, with one deliberate divergence:
+The command uses the shared client factory, with two deliberate divergences:
 `enableOfflineQueue` is on, so the command waits for the socket instead of
-being rejected the moment the client is created. The service clients keep the
-fail-fast contract (a Redis outage surfaces as a failed command); a one-off
-operator script must not race the connection handshake.
+being rejected the moment the client is created; and the per-command retry
+cap is off (`maxRetriesPerRequest: null`), so a queued command is not flushed
+with an error after a few seconds of reconnects — the command waits out a
+Redis that is still coming up, for as long as it takes. The service clients
+keep the fail-fast contract (a Redis outage surfaces as a failed command); a
+one-off operator script must not race the connection handshake.
 
 ## Files in this directory
 

@@ -472,12 +472,13 @@ describe('TranslationService', () => {
 
       const options = mockRedis.options;
       expect(options).toBeDefined();
+      // The endpoint comes from the env vars at this call site (the factory
+      // pins the values themselves), and the resilience contract is the
+      // shared one — the full contract is pinned by the factory's own suite
       expect(options.host).toBe('localhost');
       expect(options.port).toBe(6379);
-      expect(options.maxRetriesPerRequest).toBe(3);
       expect(options.enableOfflineQueue).toBe(false);
-      expect(options.retryStrategy(1)).toBe(500);
-      expect(options.retryStrategy(10)).toBe(2000);
+      expect(options.maxRetriesPerRequest).toBe(3);
     });
   });
 });

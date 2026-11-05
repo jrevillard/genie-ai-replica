@@ -479,7 +479,7 @@ export default {
         this.configs = Array.isArray(res.configs) ? res.configs : [];
         // null when the server did not say — an unknown state must not read
         // as "the gate is closed".
-        this.llmLegsEnabled = typeof res.llm_legs_enabled === 'boolean' ? res.llm_legs_enabled : null;
+        this.llmLegsEnabled = res.llm_legs_enabled ?? null;
       } else if (res && /403|forbidden|scope/i.test(res.message || '')) {
         this.error = this.translate('okf.models.adminOnly', 'Model configurations require the platform admin role.');
       } else if (res) this.error = res.message;

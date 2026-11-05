@@ -539,17 +539,14 @@ async function runDocumentsConversion(job) {
         if (lower === '.xlsx' || lower === '.csv') {
           allDrafts.push(...converted.concepts);
           const entry = { file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length };
-          const topicsSource = converted.topics && converted.topics.source;
-          if (topicsSource && topicsSource.startsWith('fallback-')) {
-            // The topics leg degraded. The import lands anyway, but the
-            // operator must SEE it: the conversion report carries the fact
-            // and the file's ingestion log carries the reason (#1228).
-            const reason =
-              topicsSource === 'fallback-no-endpoint'
-                ? 'no LLM engine is configured (VLLM_ENDPOINT is unset)'
-                : `the topic summariser degraded (${topicsSource})`;
-            entry.topics_source = topicsSource;
-            const warning = `LLM topics degraded — ${reason}. The file was imported without LLM-derived topics.`;
+          // The topics leg states WHY it degraded (the fallback owner owns
+          // the vocabulary); the importer copies that reason into the import
+          // report and into the file's ingestion log. The import lands
+          // anyway, but the operator must SEE it (#1228).
+          const topics = converted.topics;
+          if (topics && topics.reason) {
+            entry.topics_source = topics.source;
+            const warning = `Topics degraded — ${topics.reason}. The file was imported without LLM-derived topics.`;
             entry.warning = warning;
             await mirrorIngestionLog(file_id, `[${repo_id}] ${warning}`);
           }

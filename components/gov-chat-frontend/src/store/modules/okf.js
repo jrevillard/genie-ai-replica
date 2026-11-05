@@ -1997,10 +1997,10 @@ const actions = {
         configs: Array.isArray(envelope && envelope.configs) ? envelope.configs : [],
         env_judge: (envelope && envelope.env_judge) || null,
         env_pick: (envelope && envelope.env_pick) || null,
-        // The deployment opt-in for the OKF LLM legs — null when the server
-        // does not say (an older backend omits it), so the panel warns only
-        // on a state it actually knows.
-        llm_legs_enabled: envelope && typeof envelope.llm_legs_enabled === 'boolean' ? envelope.llm_legs_enabled : null
+        // The deployment opt-in for the OKF LLM legs — the service owns the
+        // normalisation (null when the server does not say), so the panel
+        // warns only on a state it actually knows.
+        llm_legs_enabled: (envelope && envelope.llm_legs_enabled) ?? null
       };
     } catch (err) {
       return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };

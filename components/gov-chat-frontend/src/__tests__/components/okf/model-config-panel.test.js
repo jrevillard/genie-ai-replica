@@ -70,11 +70,15 @@ function mountPanel() {
   });
 }
 
+// The list envelope the mock answers with — the tests below vary it.
+let listEnvelope;
+
 beforeEach(() => {
   jest.clearAllMocks();
   dispatch.mockReset();
+  listEnvelope = { configs: configs() };
   dispatch.mockImplementation(async (action) => {
-    if (action === 'okf/modelConfigList') return { ok: true, configs: configs() };
+    if (action === 'okf/modelConfigList') return { ok: true, ...listEnvelope };
     if (action === 'okf/modelConfigModels' || action === 'okf/modelConfigModelsPreview')
       return { ok: true, models: ['claude-opus', 'claude-sonnet'] };
     return { ok: true, result: {} };
@@ -83,10 +87,7 @@ beforeEach(() => {
 
 describe('ModelConfigPanel — the deployment opt-in warning (#1228)', () => {
   const mountWith = async (envelope) => {
-    dispatch.mockImplementation(async (action) => {
-      if (action === 'okf/modelConfigList') return { ok: true, ...envelope };
-      return { ok: true, result: {} };
-    });
+    listEnvelope = envelope;
     const w = mountPanel();
     await new Promise((r) => setTimeout(r, 0));
     return w;

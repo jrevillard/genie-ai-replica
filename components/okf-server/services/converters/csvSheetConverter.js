@@ -178,7 +178,7 @@ async function convertCsv(buffer, meta, opts = {}) {
         file_name: fileName,
         code: err.code
       });
-      topics = { ...csvTopics.fallbackTopics(fileName), source: 'fallback-no-endpoint' };
+      topics = csvTopics.fallbackTopics(fileName, 'fallback-no-endpoint');
     } else {
       // Defensive: the service degrades on its own errors, so this only
       // fires if an injected/test double throws. An import must still land.
@@ -186,7 +186,7 @@ async function convertCsv(buffer, meta, opts = {}) {
         file_id: meta && meta.file_id,
         error: err.message
       });
-      topics = { topics: [], purpose: '', source: 'fallback-threw' };
+      topics = { topics: [], purpose: '', source: 'fallback-threw', reason: 'the topic summariser failed' };
     }
   }
 

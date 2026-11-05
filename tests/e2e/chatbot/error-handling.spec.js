@@ -47,18 +47,13 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'First attempt will fail');
 
-    // Wait for spinner to disappear (frontend handled the error)
-    // The app renders a spinner only while a bot answer is still empty
-    // (`.streaming-indicator`); the class the old wait used is not in
-    // the app at all, so the wait could never observe anything.
-    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
-
-    // Verify error message is displayed to the user (AC4)
-    const statusError = page.locator('[data-testid="answer-error"]');
-    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card, and that card IS the
+    // wait: the app renders it only once the stream has closed. The
+    // class the old wait used (`.loading-spinner`) is rendered by no
+    // component, and its old fallback (`.status-error-message`) by
+    // none either — so neither half of that assertion could ever pass
+    // on its own, and the error was never really observed.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again after error
     const textarea = page.locator('[data-testid="composer-field"]');
@@ -93,18 +88,13 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'This should fail with network error');
 
-    // Wait for spinner to disappear
-    // The app renders a spinner only while a bot answer is still empty
-    // (`.streaming-indicator`); the class the old wait used is not in
-    // the app at all, so the wait could never observe anything.
-    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
-
-    // Verify error message is displayed (AC4)
-    const statusError = page.locator('[data-testid="answer-error"]');
-    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card, and that card IS the
+    // wait: the app renders it only once the stream has closed. The
+    // class the old wait used (`.loading-spinner`) is rendered by no
+    // component, and its old fallback (`.status-error-message`) by
+    // none either — so neither half of that assertion could ever pass
+    // on its own, and the error was never really observed.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Verify the chat is not stuck
     const textarea = page.locator('[data-testid="composer-field"]');
@@ -126,18 +116,13 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Trigger internal error');
 
-    // Wait for spinner to disappear
-    // The app renders a spinner only while a bot answer is still empty
-    // (`.streaming-indicator`); the class the old wait used is not in
-    // the app at all, so the wait could never observe anything.
-    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0, { timeout: 30000 });
-
-    // Verify error message is displayed (AC4)
-    const statusError = page.locator('[data-testid="answer-error"]');
-    const botBubble = page.locator('[data-testid="message-bubble-bot"]').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card, and that card IS the
+    // wait: the app renders it only once the stream has closed. The
+    // class the old wait used (`.loading-spinner`) is rendered by no
+    // component, and its old fallback (`.status-error-message`) by
+    // none either — so neither half of that assertion could ever pass
+    // on its own, and the error was never really observed.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again
     const textarea = page.locator('[data-testid="composer-field"]');

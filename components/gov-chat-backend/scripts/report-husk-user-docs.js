@@ -196,11 +196,14 @@ function quotedKey(doc) {
  * @param {Function} params.write - the sink (console.log / console.error)
  * @param {string} params.label - the noun in the elision line ('' for none)
  * @param {Array<Object>} params.docs - the entries to list
- * @param {number} params.total - how many entries exist in total
+ * @param {number} params.total - how many entries exist in this listing
  * @param {number} params.limit - the cap
+ * @param {number} params.suggestedLimit - the HUSK_SAMPLE_LIMIT value that
+ *   lists EVERYTHING this run withholds (the knob is global, so it must cover
+ *   every listing of the run, not just this one)
  * @param {Function} params.format - renders one entry line
  */
-function printSampledList({ write, label, docs, total, limit, format }) {
+function printSampledList({ write, label, docs, total, limit, suggestedLimit, format }) {
   const listed = docs.slice(0, limit);
   for (const doc of listed) {
     write(format(doc));
@@ -209,7 +212,7 @@ function printSampledList({ write, label, docs, total, limit, format }) {
   if (withheld > 0) {
     write(
       `  ... and ${withheld} more${label ? ` ${label}` : ''} (not listed) — ` +
-        `re-run with HUSK_SAMPLE_LIMIT=${total} to list them all`
+        `re-run with HUSK_SAMPLE_LIMIT=${suggestedLimit} to list them all`
     );
   }
 }
@@ -354,11 +357,17 @@ async function runReport(db, gated, total, husks, allDocs) {
   console.log(`Collection:    ${gated.collection}`);
   console.log(`Total docs:    ${total}`);
   console.log(`Husk matches:  ${husks.length}`);
+  // The knob is global, so the value the elision line names must cover
+  // EVERY listing of this run — the husk listing and the lookalike listing
+  // are capped by the same limit, and naming only one of the two totals
+  // would leave the other still elided.
+  const suggestedLimit = Math.max(husks.length, lookalikeCount);
   printSampledList({
     write: console.log,
     docs: husks,
     total: husks.length,
     limit: gated.sampleLimit,
+    suggestedLimit,
     format: (doc) =>
       `  husk _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
       `attributes=${JSON.stringify(Object.keys(doc).sort())}`
@@ -379,6 +388,7 @@ async function runReport(db, gated, total, husks, allDocs) {
       // The sample is truncated SERVER-side; the count is the full number.
       total: lookalikeCount,
       limit: gated.sampleLimit,
+      suggestedLimit,
       format: (doc) => `  lookalike _key=${quotedKey(doc)} createdAt=${doc.createdAt || '?'}`
     });
     console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
@@ -535,6 +545,10 @@ async function main({
     // operator raises HUSK_SAMPLE_LIMIT for one diagnostic run — issue
     // #1507). (The fields census in runReport stays unbounded by design: one
     // line per DISTINCT unexpected field name, not per document.)
+    // The knob is global and BOTH directions are capped by it, so the value
+    // the elision line names must cover the larger of the two — naming one
+    // direction's total would leave the other still elided.
+    const suggestedLimit = Math.max(extra.length, missed.length);
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]
@@ -545,6 +559,7 @@ async function main({
         docs,
         total: docs.length,
         limit: gated.sampleLimit,
+        suggestedLimit,
         format: (doc) => `  ${label} _key=${quotedKey(doc)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
       });
     }

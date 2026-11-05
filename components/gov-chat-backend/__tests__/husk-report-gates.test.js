@@ -387,6 +387,27 @@ describe('main safety wiring', () => {
     expect(stderr).toContain('HUSK_SAMPLE_LIMIT=60');
   });
 
+  it('names the count that covers EVERY listing of the run, not just the one that was elided (issue #1507)', async () => {
+    // The knob is global: both divergence directions are capped by it, and
+    // so are the husk and lookalike listings of the report. Naming only the
+    // elided listing's total would leave the others still capped — the
+    // operator would follow the advice and STILL not see everything.
+    const { extra } = divergentDocs(60);
+    // 60 over-matched, 100 under-matched: the two directions have DIFFERENT
+    // totals, so a per-direction suggestion is visibly the wrong number.
+    const manyMissed = Array.from({ length: 100 }, (_, i) => ({
+      ...huskDoc,
+      _key: `missed-${i}`,
+      _id: `users/missed-${i}`
+    }));
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...manyMissed] });
+    await runMain(db, ['--delete', '--yes']);
+    const stderr = stderrText(errorSpy);
+    // 100 covers both directions (60 and 100).
+    expect(stderr).toContain('HUSK_SAMPLE_LIMIT=100');
+    expect(stderr).not.toMatch(/HUSK_SAMPLE_LIMIT=60\b/);
+  });
+
   it('applies the same cap and elision wording to the husk and lookalike listings (issue #1508)', async () => {
     // The three per-document listings share ONE cap and ONE elision wording:
     // the husk listing (stdout), the lookalike listing (stdout, sample
@@ -426,6 +447,12 @@ describe('main safety wiring', () => {
     expect(lookalikeLines).toHaveLength(50);
     expect(stdout).toContain('... and 25 more (not listed)');
     expect(lookalikeLines[0]).toContain('createdAt=');
+    // Both stdout listings are capped by the SAME knob, so the value the
+    // elision line names must cover both — 75 (the lookalike count), not 60
+    // (the husk count), or the operator follows the advice and the
+    // lookalikes stay capped.
+    expect(stdout).toContain('HUSK_SAMPLE_LIMIT=75');
+    expect(stdout).not.toMatch(/HUSK_SAMPLE_LIMIT=60\b/);
   });
 
   it('couples the lookalike server-side slice to the configured cap (issue #1507)', async () => {

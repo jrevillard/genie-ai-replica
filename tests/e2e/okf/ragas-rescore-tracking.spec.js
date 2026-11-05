@@ -31,10 +31,8 @@ const USER = 'okf-rescore-e2e';
 const PW = 'RescoreE2ePass123!';
 
 test.describe('the RAGAS guide explains the output, and a re-score is a tracked run', () => {
-  // The session-mint recipe covers both slots: describe.configure carries
-  // the tests (their inline login stacks past 60s on a stalled stack),
-  // the in-hook test.setTimeout carries beforeAll. See
-  // SESSION_MINT_TIMEOUT_MS in tests/e2e/helpers/auth.js.
+  // describe.configure covers the tests, the in-hook test.setTimeout
+  // covers beforeAll — see SESSION_MINT_TIMEOUT_MS in helpers/auth.js.
   test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
   let adminToken;

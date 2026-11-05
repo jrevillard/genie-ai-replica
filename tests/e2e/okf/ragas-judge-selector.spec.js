@@ -21,7 +21,7 @@
 //   cd C:/Dev/builds/main && npx playwright test --config=D:/ITU-Gitlab/playwright.config.js
 
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, request } = require('../helpers/auth');
+const { getAdminToken, request, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -35,6 +35,12 @@ test.describe('the RAGAS model selection is in the UI', () => {
   let userId;
 
   test.beforeAll(async () => {
+    // The mint (admin token + user creation) stacks several
+    // 30s-capped admin requests: past the 60s project hook slot the
+    // hook dies mid-mint and the cleanup loses its userId. See
+    // SESSION_MINT_TIMEOUT_MS in tests/e2e/helpers/auth.js.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     adminToken = await getAdminToken();
     userId = await createUser(adminToken, REALM, {
       username: USER,

@@ -595,9 +595,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             _existing = active_ingestion_tasks.get(payload.fileId)
             if _existing is not None and not _existing.done():
                 logger.warning(f"Rejecting ingest for {payload.fileId}: a task is already in flight (409)")
+                # `code` is the machine-readable half of the 409 contract —
+                # consumers classify on it when present (the prose match
+                # survives in consumers only as a legacy fallback for
+                # producer images predating this field). No other 409 in
+                # this service may carry it. Reachability: with the default
+                # single ingest slot a live task holds that slot, so a
+                # duplicate kick is answered 429 by the slot gate BEFORE
+                # this guard — the 409 contract fires when ingest
+                # concurrency >= 2 (and in the completion race window).
+                # Pin: tests/test_dataprep.py,
+                # TestDocRepoIngestPayload (409 CONTRACT block).
                 return JSONResponse(
                     status_code=409,
-                    content={"detail": f"An ingest task for fileId '{payload.fileId}' is already running"},
+                    content={
+                        "detail": f"An ingest task for fileId '{payload.fileId}' is already running",
+                        "code": "ingest_already_running",
+                    },
                 )
 
             # Metrics first (main, 2026-10-24): once the task exists it owns

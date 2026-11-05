@@ -241,21 +241,22 @@ function errorDetail(err) {
 // file and writes its own final status — so doc-repo must not turn it into a
 // file failure.
 //
-// The 409 status alone is not the signal: only the guard's own conflict is.
-// The guard names the file it is about ("An ingest task for fileId 'X' is
-// already running"), so the check is on BOTH halves — the id must be the one
-// we submitted, compared EXACTLY (a substring match would swallow a conflict
-// about a different file whose id merely contains ours), and the message must
-// carry the guard's meaning (a conflict about our file that says something
-// else is a real conflict). Any other 409 stays on the error path.
-//
-// If dataprep ever rewords the message, this stops matching and the file
-// falls back to the failure path — the pre-fix behaviour, which is visible in
-// the ingestion log. That direction is deliberate: a reword must not turn a
-// real conflict into a silent success.
+// `code: 'ingest_already_running'` in the body is the contract (producer
+// pin: tests/test_dataprep.py, TestDocRepoIngestPayload). It names the condition, not
+// a file, so it carries no exact-fileId check — requiring the prose to still
+// name our id would reintroduce the wording dependence the code removes.
+// The prose match below is the backward-compat path for producer images
+// that predate the field, on BOTH halves: the id must be the one we
+// submitted, compared EXACTLY (a substring match would swallow a conflict
+// about a different file whose id merely contains ours), and the message
+// must carry the guard's meaning. Any other 409 stays on the error path.
+// Failure direction is deliberate: if both paths stop matching, the file
+// falls back to the visible failure path — never a silent fake success.
 function isIngestAlreadyRunning(err, fileId) {
   const response = err && err.response;
   if (!response || response.status !== 409) return false;
+  const data = response.data || {};
+  if (data.code) return data.code === 'ingest_already_running';
   const detail = errorDetail(err);
   const named = detail.match(/fileId\s+'?([^'\s]+)'?/);
   if (!named || !fileId || named[1] !== String(fileId)) return false;

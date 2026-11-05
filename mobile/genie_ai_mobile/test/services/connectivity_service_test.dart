@@ -1,49 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
 
-/// Fake provider returning a configurable result.
-class FakeAsyncProvider extends ConnectivityProvider {
-  final ConnectivityResult result;
-  int callCount = 0;
-
-  FakeAsyncProvider(this.result);
-
-  @override
-  Future<List<ConnectivityResult>> checkConnectivity() async {
-    callCount++;
-    return [result];
-  }
-
-  @override
-  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
-      const Stream.empty();
-}
-
-/// Fake provider that never completes (for testing concurrency guard).
-class HangingProvider extends ConnectivityProvider {
-  final Completer<List<ConnectivityResult>> completer = Completer();
-
-  @override
-  Future<List<ConnectivityResult>> checkConnectivity() => completer.future;
-
-  @override
-  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
-      const Stream.empty();
-}
-
-Future<List<InternetAddress>> _fakeDnsSuccess(String host) async => [
-  InternetAddress('8.8.8.8'),
-];
-
-Future<List<InternetAddress>> _fakeDnsFailure(String host) async =>
-    throw const SocketException('DNS failed');
-
-Future<List<InternetAddress>> _fakeDnsTimeout(String host) async =>
-    Future.delayed(const Duration(seconds: 10), () => <InternetAddress>[]);
+import '../helpers/connectivity_fakes.dart';
 
 void main() {
   late ConnectivityService service;
@@ -235,10 +198,10 @@ void main() {
 
     group('concurrent recheck', () {
       test('overlapping calls are blocked by _isChecking guard', () async {
-        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final fakeProvider = FakeConnectivityProvider(ConnectivityResult.none);
         final service = ConnectivityService.test(
           provider: fakeProvider,
-          dnsLookup: _fakeDnsFailure,
+          dnsLookup: dnsFailure,
         );
         service.setUserOfflineMode(false);
 
@@ -256,7 +219,7 @@ void main() {
       });
 
       test('guard resets after completion', () async {
-        final fakeProvider = FakeAsyncProvider(ConnectivityResult.wifi);
+        final fakeProvider = FakeConnectivityProvider(ConnectivityResult.wifi);
         final service = ConnectivityService.test(provider: fakeProvider);
         service.setUserOfflineMode(false);
 
@@ -273,10 +236,12 @@ void main() {
       test(
         'treats as online when DNS succeeds but hardware says none',
         () async {
-          final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+          final fakeProvider = FakeConnectivityProvider(
+            ConnectivityResult.none,
+          );
           final service = ConnectivityService.test(
             provider: fakeProvider,
-            dnsLookup: _fakeDnsSuccess,
+            dnsLookup: dnsSuccess,
           );
           service.setUserOfflineMode(false);
 
@@ -284,8 +249,8 @@ void main() {
           // Force hardware to offline by simulating a none result without DNS
           // Use a separate call to establish offline state
           final service2 = ConnectivityService.test(
-            provider: FakeAsyncProvider(ConnectivityResult.none),
-            dnsLookup: _fakeDnsFailure,
+            provider: FakeConnectivityProvider(ConnectivityResult.none),
+            dnsLookup: dnsFailure,
           );
           service2.setUserOfflineMode(false);
           await service2.recheckConnectivity();
@@ -294,8 +259,8 @@ void main() {
 
           // Now test the DNS success path with fresh instance
           final service3 = ConnectivityService.test(
-            provider: FakeAsyncProvider(ConnectivityResult.none),
-            dnsLookup: _fakeDnsSuccess,
+            provider: FakeConnectivityProvider(ConnectivityResult.none),
+            dnsLookup: dnsSuccess,
           );
           service3.setUserOfflineMode(false);
           // Force hardware state to false first
@@ -311,10 +276,10 @@ void main() {
       );
 
       test('treats as offline when DNS fails', () async {
-        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final fakeProvider = FakeConnectivityProvider(ConnectivityResult.none);
         final service = ConnectivityService.test(
           provider: fakeProvider,
-          dnsLookup: _fakeDnsFailure,
+          dnsLookup: dnsFailure,
         );
         service.setUserOfflineMode(false);
 
@@ -327,10 +292,12 @@ void main() {
       test(
         'treats as offline when DNS times out',
         () async {
-          final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+          final fakeProvider = FakeConnectivityProvider(
+            ConnectivityResult.none,
+          );
           final service = ConnectivityService.test(
             provider: fakeProvider,
-            dnsLookup: _fakeDnsTimeout,
+            dnsLookup: dnsTimeout,
           );
           service.setUserOfflineMode(false);
 
@@ -350,7 +317,7 @@ void main() {
 
       test('dispose cancels timer and closes stream', () async {
         // Start monitoring manually (normally done by init)
-        final fakeProvider = FakeAsyncProvider(ConnectivityResult.wifi);
+        final fakeProvider = FakeConnectivityProvider(ConnectivityResult.wifi);
         final service = ConnectivityService.test(provider: fakeProvider);
         service.setUserOfflineMode(false);
 

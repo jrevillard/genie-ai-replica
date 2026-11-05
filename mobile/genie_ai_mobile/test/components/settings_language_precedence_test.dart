@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/mock_current_user_api.dart';
 import '../helpers/pump_frames.dart';
+import '../helpers/settle_preference_writes.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
@@ -24,7 +25,7 @@ void main() {
     I18nService().changeLanguage('en');
     // The write is asynchronous: let it land before the storage is cleared,
     // or it would seed the next test (see i18n_language_persistence_test).
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await settlePreferenceWrites();
     SharedPreferences.setMockInitialValues({});
   });
 
@@ -73,7 +74,6 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(I18nService.languagePreferenceKey), isNull);
-    expect(I18nService().hasStoredLanguage, isFalse);
   });
 
   testWidgets('the account copy keeps updating a device that never chose', (

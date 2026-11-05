@@ -93,7 +93,7 @@ class I18nService extends ChangeNotifier {
   void changeLanguage(String languageCode) {
     debugPrint("[I18N SERVICE] changeLanguage called with: $languageCode");
 
-    if (!supportedLanguages.containsKey(languageCode)) {
+    if (!_isSupported(languageCode)) {
       debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
       return;
     }
@@ -116,13 +116,18 @@ class I18nService extends ChangeNotifier {
     debugPrint(
       "[I18N SERVICE] applyAccountLanguage called with: $languageCode",
     );
-    if (!supportedLanguages.containsKey(languageCode)) {
+    if (!_isSupported(languageCode)) {
       debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
       return;
     }
 
     _applyLocale(languageCode);
   }
+
+  /// Whether this deployment serves the language (its flavor restricts the
+  /// active locales).
+  bool _isSupported(String languageCode) =>
+      supportedLanguages.containsKey(languageCode);
 
   /// Applies the locale and notifies listeners. Returns false when the
   /// language is already active (no notification is sent then).
@@ -141,12 +146,10 @@ class I18nService extends ChangeNotifier {
     return true;
   }
 
-  /// Whether this device holds a language choice of its own.
-  ///
-  /// The account copy of the language only seeds a device that never made a
-  /// choice (a fresh install, or a new phone); a language the device stored
-  /// wins, exactly like the theme and the font scale.
-  bool get hasStoredLanguage => _hasStoredLanguage;
+  /// Whether this device holds a language choice of its own. The account
+  /// copy of the language only seeds a device that never made a choice (a
+  /// fresh install, or a new phone); a language the device stored wins,
+  /// exactly like the theme and the font scale.
   bool _hasStoredLanguage = false;
 
   /// Reads the language the user last selected on this device and applies it.
@@ -159,19 +162,15 @@ class I18nService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(languagePreferenceKey);
-      if (stored == null || !supportedLanguages.containsKey(stored)) {
+      if (stored == null || !_isSupported(stored)) {
         _hasStoredLanguage = false;
         debugPrint(
           "[I18N SERVICE] No stored language to restore (stored: $stored).",
         );
         return false;
       }
-      final bool changed = _currentLocale.languageCode != stored;
-      _currentLocale = Locale(stored);
       _hasStoredLanguage = true;
-      if (changed) {
-        notifyListeners();
-      }
+      _applyLocale(stored);
       debugPrint("[I18N SERVICE] Restored stored language: $stored");
       return true;
     } catch (error) {

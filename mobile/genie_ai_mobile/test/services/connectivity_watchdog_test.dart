@@ -1,37 +1,17 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
 
-/// Fake provider returning a fixed result, with the connectivity stream the
-/// service listens to under the test's control.
-class WatchdogProvider extends ConnectivityProvider {
-  WatchdogProvider(this.result);
-
-  final ConnectivityResult result;
-  final StreamController<List<ConnectivityResult>> controller =
-      StreamController<List<ConnectivityResult>>.broadcast();
-  int callCount = 0;
-
-  @override
-  Future<List<ConnectivityResult>> checkConnectivity() async {
-    callCount++;
-    return [result];
-  }
-
-  @override
-  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
-      controller.stream;
-}
-
-Future<List<InternetAddress>> _dnsFailure(String host) async =>
-    throw const SocketException('DNS failed');
+import '../helpers/connectivity_fakes.dart';
 
 /// Fake provider whose checks after the first one never complete, so a poll
-/// can be held in flight while the service is disposed.
+/// can be held in flight — while the service is disposed, or while another
+/// check holds the concurrency guard.
 class GatedProvider extends ConnectivityProvider {
   final Completer<List<ConnectivityResult>> gate =
       Completer<List<ConnectivityResult>>();
@@ -40,13 +20,29 @@ class GatedProvider extends ConnectivityProvider {
   @override
   Future<List<ConnectivityResult>> checkConnectivity() {
     callCount++;
-    if (callCount == 1) return Future.value([ConnectivityResult.wifi]);
+    if (callCount == 1) return Future.value([ConnectivityResult.none]);
     return gate.future;
   }
 
   @override
   Stream<List<ConnectivityResult>> get onConnectivityChanged =>
       const Stream.empty();
+}
+
+/// Starts the watchdog against a fake provider answering [result] forever,
+/// and registers the teardowns every test needs.
+Future<(ConnectivityService, FakeConnectivityProvider)> startWatchdog(
+  WidgetTester tester,
+  ConnectivityResult result,
+) async {
+  final provider = FakeConnectivityProvider(result);
+  final service = ConnectivityService.test(
+    provider: provider,
+    dnsLookup: dnsFailure,
+  );
+  addTearDown(provider.controller.close);
+  await service.init();
+  return (service, provider);
 }
 
 /// The watchdog is the reliability backup of the connectivity stream: it
@@ -61,14 +57,10 @@ void main() {
   testWidgets(
     'the watchdog polls every 5 seconds while the device is reachable',
     (tester) async {
-      final provider = WatchdogProvider(ConnectivityResult.wifi);
-      final service = ConnectivityService.test(
-        provider: provider,
-        dnsLookup: _dnsFailure,
+      final (service, provider) = await startWatchdog(
+        tester,
+        ConnectivityResult.wifi,
       );
-      addTearDown(provider.controller.close);
-
-      await service.init();
       expect(provider.callCount, 1);
 
       await tester.pump(const Duration(seconds: 5));
@@ -86,14 +78,10 @@ void main() {
   testWidgets('the watchdog slows down while the device stays unreachable', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.none);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.none,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
     expect(provider.callCount, 1);
     expect(service.isOnline, isFalse);
 
@@ -129,14 +117,10 @@ void main() {
   testWidgets('the watchdog stops while the app is in the background', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.wifi);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.wifi,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
     expect(provider.callCount, 1);
 
     service.didChangeAppLifecycleState(AppLifecycleState.paused);
@@ -157,14 +141,10 @@ void main() {
   testWidgets('a connectivity event restores the fast watchdog cadence', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.none);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.none,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
     await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     expect(provider.callCount, 2);
@@ -187,7 +167,7 @@ void main() {
       final provider = GatedProvider();
       final service = ConnectivityService.test(
         provider: provider,
-        dnsLookup: _dnsFailure,
+        dnsLookup: dnsFailure,
       );
 
       await service.init();
@@ -198,7 +178,7 @@ void main() {
       expect(provider.callCount, 2);
 
       service.dispose();
-      provider.gate.complete([ConnectivityResult.wifi]);
+      provider.gate.complete([ConnectivityResult.none]);
       await tester.pump();
       await tester.pump(const Duration(seconds: 30));
       await tester.pump();
@@ -211,14 +191,10 @@ void main() {
   testWidgets('a connectivity event while backgrounded restarts nothing', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.wifi);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.wifi,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
     expect(provider.callCount, 1);
 
     service.didChangeAppLifecycleState(AppLifecycleState.paused);
@@ -238,14 +214,10 @@ void main() {
   testWidgets('a connectivity event after disposal reaches nothing', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.wifi);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.wifi,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
 
     service.dispose();
     // A status change after the disposal would hit the closed status
@@ -261,14 +233,10 @@ void main() {
   testWidgets('a "none" event does not restore the fast cadence', (
     tester,
   ) async {
-    final provider = WatchdogProvider(ConnectivityResult.none);
-    final service = ConnectivityService.test(
-      provider: provider,
-      dnsLookup: _dnsFailure,
+    final (service, provider) = await startWatchdog(
+      tester,
+      ConnectivityResult.none,
     );
-    addTearDown(provider.controller.close);
-
-    await service.init();
     await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     expect(provider.callCount, 2);
@@ -283,6 +251,37 @@ void main() {
     expect(provider.callCount, 2);
 
     await tester.pump(const Duration(seconds: 10));
+    await tester.pump();
+    expect(provider.callCount, 3);
+
+    service.dispose();
+  });
+
+  testWidgets('a watchdog tick the concurrency guard skipped climbs nothing', (
+    tester,
+  ) async {
+    final provider = GatedProvider();
+    final service = ConnectivityService.test(
+      provider: provider,
+      dnsLookup: dnsFailure,
+    );
+
+    await service.init();
+    expect(service.isOnline, isFalse);
+
+    // A check held in flight blocks the watchdog's own tick: the tick has no
+    // fresh sample, so it must not climb the ladder on the previous one.
+    unawaited(service.recheckConnectivity());
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+
+    provider.gate.complete([ConnectivityResult.none]);
+    await tester.pump();
+
+    // The next tick runs on the fast rung: it polls 5s after the skipped one.
+    await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     expect(provider.callCount, 3);
 

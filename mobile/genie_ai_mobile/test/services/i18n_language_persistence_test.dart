@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/settle_preference_writes.dart';
+
 /// The language the user picks must survive a restart: the app reads the
 /// choice back from the device storage at startup, before the first frame.
 /// These tests pin that contract at the storage boundary — the same place
@@ -14,7 +16,7 @@ void main() {
     service.changeLanguage('en');
     // The write of the previous state is asynchronous: let it land before
     // the storage is cleared, or it would seed the next test.
-    await _settle();
+    await settlePreferenceWrites();
     SharedPreferences.setMockInitialValues({});
     // Reading the storage back also resets the "the device holds a language
     // choice" flag, which a fresh device does not hold.
@@ -27,7 +29,7 @@ void main() {
 
   test('a language the user selected is stored on the device', () async {
     service.changeLanguage('es');
-    await _settle();
+    await settlePreferenceWrites();
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(I18nService.languagePreferenceKey), 'es');
@@ -66,33 +68,33 @@ void main() {
   });
 
   test('a device that stored a language claims it', () async {
-    expect(service.hasStoredLanguage, isFalse);
-
     service.changeLanguage('es');
-    await _settle();
+    await settlePreferenceWrites();
 
-    expect(service.hasStoredLanguage, isTrue);
+    // The stored choice locks the device against account updates.
+    service.applyAccountLanguage('de');
+    expect(service.currentLocale.languageCode, 'es');
   });
 
-  test('a device that stored nothing claims no language', () async {
+  test('a device that stored nothing can be seeded again', () async {
     service.changeLanguage('es');
-    await _settle();
+    await settlePreferenceWrites();
 
     // A storage cleared behind the app's back (app data wiped) leaves the
     // device without a choice: the account copy may seed it again.
     SharedPreferences.setMockInitialValues({});
     await service.restoreLanguage();
 
-    expect(service.hasStoredLanguage, isFalse);
+    service.applyAccountLanguage('de');
+    expect(service.currentLocale.languageCode, 'de');
   });
 
   test('the account copy applies without claiming the device', () async {
     service.applyAccountLanguage('fr');
 
     expect(service.currentLocale.languageCode, 'fr');
-    expect(service.hasStoredLanguage, isFalse);
 
-    await _settle();
+    await settlePreferenceWrites();
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(I18nService.languagePreferenceKey), isNull);
   });
@@ -108,7 +110,3 @@ void main() {
     expect(service.currentLocale.languageCode, 'es');
   });
 }
-
-/// Lets the asynchronous preference write land.
-Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 20));

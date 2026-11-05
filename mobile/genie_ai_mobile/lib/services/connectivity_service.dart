@@ -92,9 +92,6 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Index of the rung the watchdog currently waits on.
   int _pollRung = 0;
 
-  /// Whether the service registered itself as a lifecycle observer.
-  bool _observesLifecycle = false;
-
   /// Whether the app is currently in the background. The watchdog has no
   /// work to do there, and nothing it does may re-arm the timer.
   bool _appBackgrounded = false;
@@ -132,7 +129,6 @@ class ConnectivityService with WidgetsBindingObserver {
     // 0. Watch the app lifecycle: the watchdog has no work to do while the
     // app sits in the background.
     WidgetsBinding.instance.addObserver(this);
-    _observesLifecycle = true;
 
     // 1. Get initial hardware state
     await recheckConnectivity();
@@ -147,12 +143,7 @@ class ConnectivityService with WidgetsBindingObserver {
           ? results.first
           : ConnectivityResult.none;
       _updateHardwareStatus(result);
-      // The stream is the authoritative signal that the device is reachable
-      // again: drop the backoff so the watchdog is quick again. A "none"
-      // event means it just became unreachable — keep climbing.
-      if (result != ConnectivityResult.none) {
-        _pollRung = 0;
-      }
+      _resetRungIfReachable();
       _scheduleWatchdog();
     });
 
@@ -184,18 +175,27 @@ class ConnectivityService with WidgetsBindingObserver {
       // falsely reported "none" (common on Android).
       final bool ran = await recheckConnectivity();
       if (ran) {
-        _advancePollRung();
+        _climbPollRung();
       }
       _scheduleWatchdog();
     });
   }
 
-  /// Moves the watchdog one rung up the ladder while the device stays
-  /// unreachable, and back to the fast cadence as soon as it is reachable.
-  void _advancePollRung() {
+  /// Drops the watchdog back to its fast cadence when the latest sample
+  /// shows the device reachable. Runs after every fresh sample — a poll, a
+  /// connectivity event or the app coming back — so the drop rule lives in
+  /// this one method.
+  void _resetRungIfReachable() {
     if (_isNetworkHardwareAvailable) {
       _pollRung = 0;
-    } else if (_pollRung < _pollLadder.length - 1) {
+    }
+  }
+
+  /// Climbs one rung up the ladder after a watchdog check found the device
+  /// unreachable. Only the watchdog climbs, and only on its own sample —
+  /// a check the concurrency guard skipped carries no evidence.
+  void _climbPollRung() {
+    if (!_isNetworkHardwareAvailable && _pollRung < _pollLadder.length - 1) {
       _pollRung++;
     }
   }
@@ -205,7 +205,6 @@ class ConnectivityService with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       debugPrint('[Connectivity] App resumed. Restarting the watchdog.');
       _appBackgrounded = false;
-      _pollRung = 0;
       _scheduleWatchdog();
       unawaited(recheckConnectivity());
     } else if (state == AppLifecycleState.paused ||
@@ -222,8 +221,7 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Uses DNS fallback if hardware reports offline but internet might be available.
   ///
   /// Returns whether a check actually ran — false when another check was
-  /// already in flight and this one was skipped. A caller that reacts to the
-  /// result (like the watchdog's backoff) must only do so for a fresh sample.
+  /// already in flight and this one was skipped.
   Future<bool> recheckConnectivity() async {
     // Prevent overlapping checks (e.g. Watchdog + Manual Toggle firing at once)
     if (_isChecking) {
@@ -249,6 +247,7 @@ class ConnectivityService with WidgetsBindingObserver {
       }
 
       _updateHardwareStatus(result);
+      _resetRungIfReachable();
     } catch (e) {
       debugPrint('[Connectivity] Recheck failed: $e');
     } finally {
@@ -347,9 +346,9 @@ class ConnectivityService with WidgetsBindingObserver {
     _monitorTimer = null;
     unawaited(_connectivitySubscription?.cancel());
     _connectivitySubscription = null;
-    if (_observesLifecycle) {
+    if (_initialized) {
       WidgetsBinding.instance.removeObserver(this);
-      _observesLifecycle = false;
+      _initialized = false;
     }
     if (!_statusController.isClosed) {
       _statusController.close();

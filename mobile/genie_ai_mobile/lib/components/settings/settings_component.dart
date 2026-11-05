@@ -155,8 +155,9 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
 
         // The language is client-authoritative like the theme and the font
         // scale: the account copy only seeds a device that never made a
-        // choice of its own (a fresh install, or a new phone).
-        if (userMap['language'] != null && !I18nService().hasStoredLanguage) {
+        // choice of its own (applyAccountLanguage ignores it once the
+        // device holds one).
+        if (userMap['language'] != null) {
           I18nService().applyAccountLanguage(userMap['language']);
         }
         // Theme and fontSize are client-authoritative — applied immediately

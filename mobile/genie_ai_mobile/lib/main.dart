@@ -81,10 +81,11 @@ void main() async {
   // Restore the language the user last selected on this device, before the
   // first frame: the app opens in that language instead of falling back to
   // English. A stored language this deployment does not serve is ignored.
-  await I18nService().restoreLanguage();
-
-  // Initialize Connectivity (Online/Offline)
-  await ConnectivityService().init();
+  // Both startups steps are independent — wait for the two together.
+  await Future.wait([
+    I18nService().restoreLanguage(),
+    ConnectivityService().init(),
+  ]);
 
   runApp(const ProviderScope(child: MyApp()));
 }

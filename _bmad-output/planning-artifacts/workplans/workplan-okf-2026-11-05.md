@@ -231,6 +231,39 @@ the ORDER and the cross-stream slots.
 > asserts a row whose text comes only from the `is_bundle=true` payload); the
 > ASSERTION raced it. Fixed with an explicit bounded wait
 > (`expect.poll`, 15 s) — an implicit race is what makes an E2E suite flaky.
+>
+> **Merged with `origin/main` a SECOND time** (the #991 crawl-worker fix —
+> the only conflict was the CHANGELOG, whose two sides added DISTINCT
+> entries to the same list, so the resolution is the union). Coverage
+> re-measured: identical (89.09 / 89.04 / 76.28 / 67.49) — main's two new
+> commits touch NO frontend file, so the baseline could not have moved.
+>
+> **The smoke harness's W6 phase, re-run LIVE: PASS** (three assertions —
+> the bundle is listed by `is_bundle=true`, it does NOT appear in the
+> document list, and it carries its `repo_id`). The REST of the harness run
+> is red on `main` — the wave's harness diff is purely additive (54 lines,
+> one block) and every failing assertion is byte-identical to `origin/main`,
+> proved by a control run with main's own copy of the file. The causes are
+> the harness's own staleness (it expects the pre-slug graph name, and it
+> never performs the `ingest` lifecycle transition that is the only writer of
+> `rag_drain_active` — the worker's claim filter). Filed as **#1568**.
+>
+> **Security review, re-run on the MERGED result** (a merge can drop a
+> guard): **no HIGH/MEDIUM finding**. The wave adds ZERO server-side
+> changes — the whole diff is frontend + i18n + tests + a CI comment + the
+> smoke script — so no server rule could have been added, removed or
+> weakened. The WS2 bundle guard is single-sourced and **fails closed**
+> (`503 BUNDLE_GUARD_UNAVAILABLE`); the client's `is_bundle: false` filter is
+> a HIDE, not a grant; the new `?repo=` deep link is server-gated on every
+> read (404 anti-enumeration) and every write (`requireRepoScope('admin')`).
+> The `npm audit` sweep found the wave added **no** dependency — the 6 HIGH
+> advisories are `vue-i18n` 9.14.5 and the `webpack-dev-server` dev chain,
+> both **unreachable** here (`srcdoc` appears nowhere in the frontend
+> source, `escapeParameter` is never called, and the house `translateMixin`
+> does a raw message lookup). `9.14.5` is the last 9.x release, so the fix
+> exists only in the 11.x major → filed as **#1566**, not bumped here (a
+> vue-i18n 9 → 11 migration touches every locale file and every call site
+> and cannot ride along on a feature MR).
 
 ## Standing rules that carry over
 

@@ -57,7 +57,7 @@ flowchart TB
     DocRepo["document-repository<br/>(3001)"]
     Dataprep["dataprep (5000)<br/>Python / FastAPI"]
     Arango["arango-vector-db (8529)"]
-    Redis["redis-cache (6379)<br/>(translation-service only)"]
+    Redis["redis-cache (6379)<br/>(translation cache + provisioning invalidation)"]
     Keycloak["keycloak (8080)"]
     ClamAV["clamav (3310)"]
 

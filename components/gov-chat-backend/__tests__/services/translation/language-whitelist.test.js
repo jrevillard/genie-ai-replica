@@ -11,7 +11,14 @@ const mockRedis = {
   on: jest.fn()
 };
 
-jest.mock('ioredis', () => jest.fn().mockImplementation(() => mockRedis));
+// The constructor options are kept so the service can log the endpoint it
+// dialled — it reads them back from the client, not from the env
+jest.mock('ioredis', () =>
+  jest.fn().mockImplementation((options) => {
+    mockRedis.options = options;
+    return mockRedis;
+  })
+);
 
 // Only the logger is replaced — the backend and the service are the real ones,
 // with the real language map loaded from disk. The numeric parser is the real

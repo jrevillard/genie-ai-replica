@@ -77,7 +77,7 @@ graph TB
 
     subgraph Data Layer
         ADB[(ArangoDB<br/>Documents / Graph / Vector)]
-        REDIS[(Redis<br/>(translation-service only))]
+        REDIS[(Redis<br/>(translation cache + provisioning invalidation))]
         PG[(PostgreSQL<br/>Kong + Keycloak)]
     end
 
@@ -131,7 +131,7 @@ graph TB
 | API Gateway | NGINX, Kong | TLS termination, reverse proxy, CORS, rate limiting |
 | Application | Backend, Document Repository, ClamAV | Business logic, session management, file upload with virus scanning |
 | Identity | Keycloak | User authentication, session management, identity brokering |
-| Data | ArangoDB, Redis, PostgreSQL | Document storage, vector search, graph database; Redis caches backend translations; PostgreSQL stores Kong and Keycloak data |
+| Data | ArangoDB, Redis, PostgreSQL | Document storage, vector search, graph database; Redis caches backend translations and carries the provisioning invalidation pub/sub; PostgreSQL stores Kong and Keycloak data |
 | AI | ChatQnA, Retriever, Reranker, vLLM, TEI, Dataprep, Translation | RAG pipeline, embeddings, LLM inference |
 
 ---

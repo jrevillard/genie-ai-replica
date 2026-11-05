@@ -11,7 +11,14 @@ const mockRedis = {
   on: jest.fn()
 };
 
-jest.mock('ioredis', () => jest.fn().mockImplementation(() => mockRedis));
+// The constructor options are kept so a test can pin the connection
+// contract the client was created with (host, port, resilience options)
+jest.mock('ioredis', () =>
+  jest.fn().mockImplementation((options) => {
+    mockRedis.options = options;
+    return mockRedis;
+  })
+);
 
 jest.mock('crypto', () => ({
   createHash: jest.fn().mockReturnValue({
@@ -442,6 +449,36 @@ describe('TranslationService', () => {
 
       // Same request to the model, same translation, one entry.
       expect(keyForMnk).toBe(keyForMan);
+    });
+  });
+  describe('the cache client', () => {
+    it('is created with the shared Redis contract', () => {
+      // #1477 — the translation cache and the provisioning invalidation
+      // clients share one factory; this pins the translation call site to
+      // it (the provisioning suite pins its own two call sites).
+      setEnv('TRANSLATION_CACHE', 'on');
+      // The endpoint comes from the env vars — a developer with them
+      // exported (or a compose stack running) would otherwise make this
+      // suite assert on their host/port instead of the defaults
+      setEnv('TRANSLATION_CACHE_HOST', undefined);
+      setEnv('TRANSLATION_CACHE_PORT', undefined);
+      setEnv('TRANSLATION_CACHE_PASSWORD', undefined);
+      // Clear what an earlier test captured: the assertion below must read
+      // the options THIS service created, not a leftover
+      mockRedis.options = undefined;
+      jest.isolateModules(() => {
+        require('../../services/translation-service');
+      });
+
+      const options = mockRedis.options;
+      expect(options).toBeDefined();
+      // The endpoint comes from the env vars at this call site (the factory
+      // pins the values themselves), and the resilience contract is the
+      // shared one — the full contract is pinned by the factory's own suite
+      expect(options.host).toBe('localhost');
+      expect(options.port).toBe(6379);
+      expect(options.enableOfflineQueue).toBe(false);
+      expect(options.maxRetriesPerRequest).toBe(3);
     });
   });
 });

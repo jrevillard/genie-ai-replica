@@ -10,7 +10,10 @@
  * Every client created during a test is collected in MockRedis.instances —
  * clear the array in beforeEach.
  */
-const MockRedis = jest.fn(function () {
+const MockRedis = jest.fn(function (options) {
+  // Keep the constructor options so a test can assert on the connection
+  // contract a client was created with (host, port, resilience options)
+  this.options = options;
   this.publish = jest.fn().mockResolvedValue('1');
   this.subscribe = jest.fn().mockResolvedValue(1);
   this.on = jest.fn();

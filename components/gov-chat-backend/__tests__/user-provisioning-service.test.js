@@ -19,8 +19,7 @@ jest.mock(
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
     },
-    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
-    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
   }),
   { virtual: true }
 );
@@ -704,6 +703,30 @@ describe('userProvisioningService', () => {
       mockGetConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
 
       await expect(userProvisioningService.markUserAsDeleted(ISS_SUB)).rejects.toThrow('ArangoDB unreachable');
+    });
+  });
+  describe('invalidation pub/sub clients', () => {
+    it('creates the publisher with the shared contract and the subscriber with its overrides', async () => {
+      // #1477 — both clients come from the shared Redis cache-client factory;
+      // only the subscriber may diverge (offline queue on, no per-command
+      // retry cap) so its buffered subscribe survives a cold Redis start.
+      const MockRedis = require('ioredis');
+      MockRedis.mockClear();
+      MockRedis.instances.length = 0;
+
+      await userProvisioningService.initialize();
+
+      const clients = MockRedis.instances.map((instance) => instance.options);
+      const publisher = clients.find((options) => options.enableOfflineQueue === false);
+      const subscriber = clients.find((options) => options.enableOfflineQueue === true);
+
+      expect(publisher).toBeDefined();
+      expect(publisher.maxRetriesPerRequest).toBe(3);
+      expect(subscriber).toBeDefined();
+      expect(subscriber.maxRetriesPerRequest).toBeNull();
+      // Both clients dial the same server — only the resilience contract differs
+      expect(subscriber.host).toBe(publisher.host);
+      expect(subscriber.port).toBe(publisher.port);
     });
   });
 });

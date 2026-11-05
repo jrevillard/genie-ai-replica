@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/i18n/locales/en.dart';
@@ -33,6 +36,9 @@ class I18nService extends ChangeNotifier {
   // Current Locale State (Default to English)
   Locale _currentLocale = const Locale('en');
   Locale get currentLocale => _currentLocale;
+
+  /// Storage key holding the language the user last selected.
+  static const String languagePreferenceKey = 'language_preference';
 
   // Master set of locale codes → display names for every locale shipped in the
   // build. The subset active for this deployment is selected per-flavor via
@@ -80,27 +86,113 @@ class I18nService extends ChangeNotifier {
     'st': stLocale,
   };
 
-  /// Changes the language and notifies listeners to rebuild the app
-  void changeLanguage(String languageCode) {
+  /// Changes the language and notifies listeners to rebuild the app.
+  ///
+  /// The choice is also stored on the device so it survives a restart;
+  /// [restoreLanguage] reads it back at startup. Every explicit pick is
+  /// stored and claims the device — including a pick of the language that
+  /// is already active (a dropdown fires for it too), which the account
+  /// copy must never override afterwards.
+  ///
+  /// The returned future completes once the choice is stored; callers that
+  /// do not care about the write may ignore it.
+  Future<void> changeLanguage(String languageCode) async {
     debugPrint("[I18N SERVICE] changeLanguage called with: $languageCode");
 
-    if (!supportedLanguages.containsKey(languageCode)) {
+    if (!_isSupported(languageCode)) {
       debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
       return;
     }
 
+    _applyLocale(languageCode);
+    _hasStoredLanguage = true;
+    await _persistLanguage(languageCode);
+  }
+
+  /// Applies the language recorded on the account, when the device has not
+  /// made a choice of its own yet.
+  ///
+  /// Unlike [changeLanguage], the applied language is not stored on the
+  /// device and does not claim one: the account copy keeps updating the
+  /// device until the user picks a language here.
+  void applyAccountLanguage(String languageCode) {
+    if (_hasStoredLanguage) return;
+
+    debugPrint(
+      "[I18N SERVICE] applyAccountLanguage called with: $languageCode",
+    );
+    if (!_isSupported(languageCode)) {
+      debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
+      return;
+    }
+
+    _applyLocale(languageCode);
+  }
+
+  /// Whether this deployment serves the language (its flavor restricts the
+  /// active locales).
+  bool _isSupported(String languageCode) =>
+      supportedLanguages.containsKey(languageCode);
+
+  /// Applies the locale and notifies listeners. Returns false when the
+  /// language is already active (no notification is sent then).
+  bool _applyLocale(String languageCode) {
     if (_currentLocale.languageCode == languageCode) {
       debugPrint(
         "[I18N SERVICE] Language is already $languageCode. No change.",
       );
-      return;
+      return false;
     }
-
     _currentLocale = Locale(languageCode);
     debugPrint(
       "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...",
     );
     notifyListeners();
+    return true;
+  }
+
+  /// Whether this device holds a language choice of its own. The account
+  /// copy of the language only seeds a device that never made a choice (a
+  /// fresh install, or a new phone); a language the device stored wins,
+  /// exactly like the theme and the font scale.
+  bool _hasStoredLanguage = false;
+
+  /// Reads the language the user last selected on this device and applies it.
+  ///
+  /// Called once at startup, before the first frame, so the app opens in the
+  /// language the user picked instead of falling back to English. A stored
+  /// language this deployment does not serve (its flavor restricts the
+  /// active locales) is ignored.
+  Future<bool> restoreLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString(languagePreferenceKey);
+      if (stored == null || !_isSupported(stored)) {
+        _hasStoredLanguage = false;
+        debugPrint(
+          "[I18N SERVICE] No stored language to restore (stored: $stored).",
+        );
+        return false;
+      }
+      _hasStoredLanguage = true;
+      _applyLocale(stored);
+      debugPrint("[I18N SERVICE] Restored stored language: $stored");
+      return true;
+    } catch (error) {
+      debugPrint("[I18N SERVICE] Could not read the stored language: $error");
+      return false;
+    }
+  }
+
+  /// Stores the language the user selected on the device.
+  Future<void> _persistLanguage(String languageCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(languagePreferenceKey, languageCode);
+      debugPrint("[I18N SERVICE] Stored language: $languageCode");
+    } catch (error) {
+      debugPrint("[I18N SERVICE] Could not store the language: $error");
+    }
   }
 
   /// Main translation method

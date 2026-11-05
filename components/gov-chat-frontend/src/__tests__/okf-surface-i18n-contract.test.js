@@ -26,6 +26,7 @@ const SURFACES = [
   'src/components/okf/Narrative.vue',
   'src/components/okf/FrontmatterPanel.vue',
   'src/components/okf/LabelEditor.vue',
+  'src/components/okf/RetrievalCard.vue',
   'src/components/okf/piiReview.js',
   'src/components/okf/editor/',
   'src/components/okf/steps/',

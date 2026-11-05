@@ -1555,6 +1555,57 @@ export default {
       'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang.'
   },
   okf: {
+    retrieval: {
+      title: 'Postur retrieval',
+      refresh: 'Segarkan',
+      loading: 'Membaca…',
+      engaged: 'Grounding aktif',
+      notEngaged: 'Tidak berkontribusi',
+      servingCount: '{n} graf yang melayani',
+      sourceLabel: 'Sumber',
+      source: {
+        database: 'Baris yang dikelola',
+        'env-defaults': 'Nilai bawaan lingkungan'
+      },
+      revision: 'Revisi',
+      updatedAt: 'Diperbarui',
+      updatedBy: 'Oleh',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Lama',
+        okf_only: 'Hanya OKF',
+        hybrid: 'Hibrida'
+      },
+      consequence: {
+        legacy: 'Grounding OKF dimatikan — jawaban hanya datang dari jalur teks bebas.',
+        unknown: 'Mode tidak dikenal.',
+        okf_only: 'Hanya graf OKF yang menjadi dasar jawaban — konteks teks bebas tidak ditanyakan.',
+        hybrid: 'Graf OKF menjadi dasar jawaban, dan konteks teks bebas tetap berkontribusi.'
+      },
+      warnZeroServing:
+        'okf_only tanpa graf yang melayani — kontribusi OKF nol. Terbitkan dan ingest repositori terlebih dahulu.',
+      servingList: 'Graf yang melayani',
+      advanced: 'Batas lanjutan',
+      save: 'Simpan',
+      revert: 'Kembalikan',
+      cancel: 'Batal',
+      confirm: 'Terapkan',
+      confirmTitle: 'Ubah postur retrieval?',
+      confirmLead: 'Ini adalah pengaturan global — mengubah cara setiap kueri ditopang, dalam sekitar 30 detik.',
+      readFailed: 'Tidak dapat membaca postur retrieval.',
+      saveFailed: 'Perubahan ditolak.',
+      audit: 'Riwayat perubahan',
+      auditLoading: 'Memuat riwayat…',
+      auditEmpty: 'Belum ada perubahan yang tercatat.',
+      auditFailed: 'Tidak dapat membaca riwayat perubahan.',
+      limit: {
+        max_fanout_graphs: 'Graf per kueri',
+        spine_max_hops: 'Lompatan tulang punggung',
+        extracted_hop_cap: 'Lompatan terekstrak',
+        candidate_cap_per_graph: 'Kandidat per graf',
+        candidate_cap_global: 'Kandidat per kueri'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Beberapa berkas masih diproses (diindekskan). Buka repositori ini di editor — daftar berkas menunjukkan yang mana, dan ingestion mencoba ulang otomatis. Publikasikan kembali setelah setiap berkas berstatus terindeks.',

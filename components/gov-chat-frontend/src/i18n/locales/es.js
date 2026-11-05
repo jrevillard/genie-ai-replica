@@ -1558,6 +1558,57 @@ export default {
       'Por qué las subidas importan para el RAG: cada documento que suba puede convertirse en conocimiento curado y etiquetado — los documentos enfocados y bien estructurados se recuperan con mucha más precisión que un único archivo largo.'
   },
   okf: {
+    retrieval: {
+      title: 'Postura de recuperación',
+      refresh: 'Actualizar',
+      loading: 'Leyendo…',
+      engaged: 'Anclaje activo',
+      notEngaged: 'No aporta',
+      servingCount: '{n} grafo(s) en servicio',
+      sourceLabel: 'Fuente',
+      source: {
+        database: 'Fila gobernada',
+        'env-defaults': 'Valor por defecto del entorno'
+      },
+      revision: 'Revisión',
+      updatedAt: 'Actualizado',
+      updatedBy: 'Por',
+      modeLabel: 'Modo',
+      mode: {
+        legacy: 'Legado',
+        okf_only: 'Solo OKF',
+        hybrid: 'Híbrido'
+      },
+      consequence: {
+        legacy: 'El anclaje OKF está desactivado: las respuestas vienen solo de la vía de texto libre.',
+        unknown: 'Modo desconocido.',
+        okf_only: 'Solo los grafos OKF fundamentan las respuestas; el contexto libre no se consulta.',
+        hybrid: 'Los grafos OKF fundamentan las respuestas y el contexto libre sigue fftore.'
+      },
+      warnZeroServing:
+        'okf_only sin grafos en servicio: la contribución OKF es cero. Publica e ingesta un repositorio primero.',
+      servingList: 'Grafos en servicio',
+      advanced: 'Límites avanzados',
+      save: 'Guardar',
+      revert: 'Revertir',
+      cancel: 'Cancelar',
+      confirm: 'Aplicar',
+      confirmTitle: '¿Cambiar la postura de recuperación?',
+      confirmLead: 'Es un ajuste global: cambia cómo se ancla cada consulta, en unos 30 segundos.',
+      readFailed: 'No se pudo leer la postura de recuperación.',
+      saveFailed: 'El cambio fue rechazado.',
+      audit: 'Historial de cambios',
+      auditLoading: 'Cargando el historial…',
+      auditEmpty: 'Aún no hay cambios registrados.',
+      auditFailed: 'No se pudo leer el historial de cambios.',
+      limit: {
+        max_fanout_graphs: 'Grafos por consulta',
+        spine_max_hops: 'Saltos del spine',
+        extracted_hop_cap: 'Saltos extraídos',
+        candidate_cap_per_graph: 'Candidatos por grafo',
+        candidate_cap_global: 'Candidatos por consulta'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Algunos archivos aún se están procesando (indexando). Abra este repositorio en el editor — la lista de archivos muestra cuáles, y la ingesta reintenta automáticamente. Vuelva a publicar cuando todos los archivos aparezcan como indexados.',

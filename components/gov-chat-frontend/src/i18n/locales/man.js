@@ -1535,6 +1535,56 @@ export default {
       'Elego mun na a maa RAG la: dokuuma kili-kili min i yelata, a be run ka ke kibaro curated, labeled ye — dokuudu focused, dada kumbalu soto jaabi faama ju be dokuuma warayaa kili bolo.'
   },
   okf: {
+    retrieval: {
+      title: 'Gbangbang njeng',
+      refresh: 'Kurandi',
+      loading: 'Ndeŋ…',
+      engaged: 'Dingir e neng yeeɲi',
+      notEngaged: 'E fɔ e la',
+      servingCount: 'Graf {n} nemma',
+      sourceLabel: 'Gbelegele',
+      source: {
+        database: 'Row bɛ naɲɩi',
+        'env-defaults': 'Default ka environment'
+      },
+      revision: 'Opir-i',
+      updatedAt: 'Jɔɔrɩ',
+      updatedBy: 'Nin',
+      modeLabel: 'MODO',
+      mode: {
+        legacy: 'Fafan',
+        okf_only: 'OKF fɔlɔ',
+        hybrid: 'Fɔlɔ nɛnɛ'
+      },
+      consequence: {
+        legacy: 'Dingir OKF e jenɩ — koj answers bɛ fɔ ka kandeɩe fɔlɔ yɔlɔ.',
+        unknown: 'Mokhetho o tsebetseng.',
+        okf_only: 'Graf OKF fɔlɔ ye n bai answers — kandeɩe fɔlɔ yɔlɔ ma fɔ.',
+        hybrid: 'Graf OKF ye n bai answers, nɛnɛ kandeɩe fɔlɔ yɔlɔ di bɛ to bɔ.'
+      },
+      warnZeroServing: 'okf_only nɛnɛ graf 0 di nemma — OKF ye 0. Ɲeɲɩe ɲinɩ bɛ bɔ kaɲɩ, bɔ kaɲɩ kɛnɩɲɩ.',
+      servingList: 'Graf di nemma',
+      advanced: 'Kɛbɛkɛrɛw',
+      save: 'Bɛ',
+      revert: 'Kɛsɛ',
+      cancel: 'Kabo',
+      confirm: 'Ɲɛ',
+      confirmTitle: 'Sɛnɩna gbangbang njeng?',
+      confirmLead: 'Ena ye ɲɛcɛ wullɔ — e nɔ ka bɔ koAnswers bɛɛ fɔɲɛw, bɔ 30 sɔnɔ kɔnɔ.',
+      readFailed: 'An fɔ ka bɔ gbangbang njeng.',
+      saveFailed: 'A bɛɛ.',
+      audit: 'Iɲiɲɛri dɔw',
+      auditLoading: 'Iɲiɲɛri dɔw bɛɛ…',
+      auditEmpty: 'Fɔlɔw, kɔnɔ ɲiɲɛri ɲɔ.',
+      auditFailed: 'An fɔ ka bɔ iɲiɲɛri dɔw.',
+      limit: {
+        max_fanout_graphs: 'Graf ka sɔnsogɔ',
+        spine_max_hops: 'Hop ka spine',
+        extracted_hop_cap: 'Hop bɛ minɛ',
+        candidate_cap_per_graph: 'Candidate ka graf',
+        candidate_cap_global: 'Candidate ka sɔnsogɔ'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'I filew fan be kɛ ka jɔ (indexing). Kɔnɔkow ye repository ini a la editor kɔnɔ — filew lisiti be jira fila minnu ye, an ingestion be to na kɛ o ye automatic. Publish kɔ a la filew sila ye indexed i diya.',

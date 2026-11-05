@@ -1550,6 +1550,57 @@ export default {
       'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu.'
   },
   okf: {
+    retrieval: {
+      title: 'Hali ya u retrieval',
+      refresh: 'Onyesha Upya',
+      loading: 'Inasoma…',
+      engaged: 'Grounding iko hai',
+      notEngaged: 'Haichangii',
+      servingCount: 'Grafu {n} zinazohudumia',
+      sourceLabel: 'Chanzo',
+      source: {
+        database: 'Safu inayosimamiwa',
+        'env-defaults': 'Thamani chaguo-msingi ya mazingira'
+      },
+      revision: 'Revisheni',
+      updatedAt: 'Imesasishwa',
+      updatedBy: 'Na',
+      modeLabel: 'Hali',
+      mode: {
+        legacy: 'Legacy',
+        okf_only: 'OKF pekee',
+        hybrid: 'Changanyiko'
+      },
+      consequence: {
+        legacy: 'Grounding ya OKF imezimwa — majibu yanatoka kwenye njia ya maandishi huria pekee.',
+        unknown: 'Hali isiyojulikana.',
+        okf_only: 'Grafu za OKF pekee ndio zinazobainisha majibu — muktadha wa maandishi huria hautafumiwi.',
+        hybrid: 'Grafu za OKF zinazobainisha majibu, na muktadha wa maandishi huria bado unachangia.'
+      },
+      warnZeroServing:
+        'okf_only bila grafu zinazohudumia — mchango wa OKF ni zero. Chapisha na ingiza repositori kwanza.',
+      servingList: 'Grafu zinazohudumia',
+      advanced: 'Mipaka ya juu',
+      save: 'Hifadhi',
+      revert: 'Rudisha',
+      cancel: 'Ghairi',
+      confirm: 'Tumia',
+      confirmTitle: 'Badilisha hali ya u retrieval?',
+      confirmLead: 'Hii ni mpangilio wa kimakutani — hubadilisha jinsi kila swali linavyotumika, ndani ya sekunde 30.',
+      readFailed: 'Haiwezi kusoma hali ya u retrieval.',
+      saveFailed: 'Mabadiliko yalizitishwa.',
+      audit: 'Historia ya mabadiliko',
+      auditLoading: 'Inapakia historia…',
+      auditEmpty: 'Hakuna mabadiliko yaliyorekodiwa bado.',
+      auditFailed: 'Haiwezi kusoma historia ya mabadiliko.',
+      limit: {
+        max_fanout_graphs: 'Grafu kwa swali',
+        spine_max_hops: 'Mipaka ya uti wa kati',
+        extracted_hop_cap: 'Mipaka iliyotolewa',
+        candidate_cap_per_graph: 'Wagombezi kwa grafu',
+        candidate_cap_global: 'Wagombezi kwa swali'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Baadhi ya faili bado zinachakatwa (kuwekwa kwenye faharasa). Fungua hazina hii kwenye kihariri — orodha ya faili inaonyesha zipi, na kumeza kunajaribu tena kiotomatiki. Chapisha tena faili zikionyesha zimeingizwa.',

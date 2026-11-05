@@ -56,6 +56,9 @@ const {
 const COLLECTION = 'okf_system_config';
 const DOC_KEY = 'retrieval';
 const AUDIT_REPO = '_system';
+// The audit action the governance write stamps (the trail the Studio card
+// reads back — Story 10.7).
+const CONFIG_AUDIT_ACTION = 'system.retrieval_config.update';
 
 // Shared DB connection — cache the RESOLVED proxy (not the promise). Same
 // pattern as audit-service/collections.js; the SHARED db-connection-service
@@ -224,12 +227,32 @@ async function getRetrievalConfig(caller = {}) {
       config: cfg,
       source,
       scope_mode: scopeMode,
+      // Story 10.7 (#995): the VALIDATION bounds travel with the read-model
+      // so the Studio card's inputs are bounded by the SERVER's own limits
+      // (validators/retrieval-config-validator.js) — never a second copy of
+      // the numbers in the frontend.
+      limits: LIMITS,
+      modes: MODES,
       serving_graph_count: servingCount,
       serving_repo_ids: serving.map((r) => r.repo_id),
       serving_graphs: serving.map((r) => ({ repo_id: r.repo_id, graph_name: r.graph_name, domain: r.domain })),
       engaged,
       warnings
     };
+  });
+}
+
+/**
+ * The governance trail for the retrieval config (Story 10.7, #995): the
+ * before→after audit rows the PUT path writes, newest first. The rows live
+ * under the '_system' pseudo-repo; the action filter is what distinguishes
+ * them from unrelated system audits.
+ */
+async function listConfigAudit({ limit = 50 } = {}) {
+  return withSpan('okf.retrieval_config.audit', async (span) => {
+    const rows = await auditService.listAuditLogsByAction(CONFIG_AUDIT_ACTION, { limit });
+    span.setAttribute('okf.retrieval.audit_rows', rows.length);
+    return rows;
   });
 }
 
@@ -286,7 +309,7 @@ async function putRetrievalConfig(body, actor, source_ip) {
         await auditService.writeAudit({
           actor: actor ? actor.sub : null,
           actor_name: actor ? actor.name : null,
-          action: 'system.retrieval_config.update',
+          action: CONFIG_AUDIT_ACTION,
           repo_id: AUDIT_REPO,
           description,
           details: { before, after: next, patch, before_source: beforeSource, before_stored: beforeStored },
@@ -311,6 +334,7 @@ async function putRetrievalConfig(body, actor, source_ip) {
 module.exports = {
   getEffectiveConfig,
   getRetrievalConfig,
+  listConfigAudit,
   servingRepos,
   putRetrievalConfig,
   _resetServingCache,

@@ -1565,6 +1565,58 @@ export default {
       "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier."
   },
   okf: {
+    retrieval: {
+      title: 'Posture de récupération',
+      refresh: 'Actualiser',
+      loading: 'Lecture…',
+      engaged: 'Ancrage actif',
+      notEngaged: 'Ne contribue pas',
+      servingCount: '{n} graphe(s) en service',
+      sourceLabel: 'Source',
+      source: {
+        database: 'Ligne gouvernée',
+        'env-defaults': 'Valeur par défaut de l’environnement'
+      },
+      revision: 'Révision',
+      updatedAt: 'Modifié',
+      updatedBy: 'Par',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Hérité',
+        okf_only: 'OKF uniquement',
+        hybrid: 'Hybride'
+      },
+      consequence: {
+        legacy: "L'ancrage OKF est désactivé — les réponses viennent uniquement du chemin libre.",
+        unknown: 'Mode inconnu.',
+        okf_only: 'Seuls les graphes OKF fondent les réponses — le contexte libre nest pas consulté.',
+        hybrid: 'Les graphes OKF fondent les réponses et le contexte libre contribue toujours.'
+      },
+      warnZeroServing:
+        'okf_only sans aucun graphe en service — la contribution OKF est nulle. Publiez et ingérez un dépôt.',
+      servingList: 'Graphes en service',
+      advanced: 'Limites avancées',
+      save: 'Enregistrer',
+      revert: 'Annuler les modifications',
+      cancel: 'Annuler',
+      confirm: 'Appliquer',
+      confirmTitle: 'Changer la posture de récupération ?',
+      confirmLead:
+        'C’est un paramètre global — il change la façon dont chaque requête est ancrée, en une trentaine de secondes.',
+      readFailed: 'Impossible de lire la posture de récupération.',
+      saveFailed: 'La modification a été refusée.',
+      audit: 'Historique des modifications',
+      auditLoading: 'Chargement de l’historique…',
+      auditEmpty: 'Aucune modification enregistrée.',
+      auditFailed: 'Impossible de lire l’historique des modifications.',
+      limit: {
+        max_fanout_graphs: 'Graphes par requête',
+        spine_max_hops: 'Sauts de la colonne vertébrale',
+        extracted_hop_cap: 'Sauts extraits',
+        candidate_cap_per_graph: 'Candidats par graphe',
+        candidate_cap_global: 'Candidats par requête'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         "Certains fichiers sont encore en cours de traitement (indexation). Ouvrez ce dépôt dans l'éditeur — la liste des fichiers indique lesquels, et l'ingestion réessaie automatiquement. Republiez lorsque chaque fichier apparaît comme indexé.",

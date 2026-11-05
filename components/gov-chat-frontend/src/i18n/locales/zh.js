@@ -1514,6 +1514,56 @@ export default {
       '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
   okf: {
+    retrieval: {
+      title: '检索态势',
+      refresh: '刷新',
+      loading: '读取中…',
+      engaged: '接地已启用',
+      notEngaged: '未参与',
+      servingCount: '{n} 个服务中的图',
+      sourceLabel: '来源',
+      source: {
+        database: '受管记录',
+        'env-defaults': '环境默认值'
+      },
+      revision: '版本',
+      updatedAt: '更新于',
+      updatedBy: '更新者',
+      modeLabel: '模式',
+      mode: {
+        legacy: '传统',
+        okf_only: '仅 OKF',
+        hybrid: '混合'
+      },
+      consequence: {
+        legacy: 'OKF 接地已关闭——答案仅来自自由文本路径。',
+        unknown: '未知模式。',
+        okf_only: '仅由 OKF 图为答案提供依据——不查询自由文本上下文。',
+        hybrid: '由 OKF 图为答案提供依据，同时自由文本上下文仍然参与。'
+      },
+      warnZeroServing: 'okf_only 且没有任何服务中的图——OKF 贡献为零。请先发布并摄取一个仓库。',
+      servingList: '服务中的图',
+      advanced: '高级限制',
+      save: '保存',
+      revert: '还原',
+      cancel: '取消',
+      confirm: '应用',
+      confirmTitle: '要更改检索态势吗？',
+      confirmLead: '这是全局设置——它会在约 30 秒内改变每个查询的接地方式。',
+      readFailed: '无法读取检索态势。',
+      saveFailed: '更改被拒绝。',
+      audit: '变更历史',
+      auditLoading: '正在加载历史…',
+      auditEmpty: '尚无变更记录。',
+      auditFailed: '无法读取变更历史。',
+      limit: {
+        max_fanout_graphs: '每次查询的图数',
+        spine_max_hops: '主干跳数',
+        extracted_hop_cap: '抽取跳数',
+        candidate_cap_per_graph: '每个图的候选数',
+        candidate_cap_global: '每次查询的候选数'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         '部分文件仍在处理（索引）中。在编辑器中打开此仓库 — 文件列表会显示是哪些文件，系统会自动重试摄取。当每个文件都显示为已索引后，再重新发布。',

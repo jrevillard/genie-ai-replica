@@ -1560,6 +1560,57 @@ export default {
       'Por que os envios importam para o RAG: cada documento que você envia pode se tornar conhecimento curado e rotulado — documentos focados e bem estruturados são recuperados com muito mais precisão do que um único arquivo longo.'
   },
   okf: {
+    retrieval: {
+      title: 'Postura de recuperação',
+      refresh: 'Atualizar',
+      loading: 'A ler…',
+      engaged: 'Fundação ativa',
+      notEngaged: 'Não contribui',
+      servingCount: '{n} grafo(s) em serviço',
+      sourceLabel: 'Fonte',
+      source: {
+        database: 'Linha governada',
+        'env-defaults': 'Predefinição do ambiente'
+      },
+      revision: 'Revisão',
+      updatedAt: 'Atualizado',
+      updatedBy: 'Por',
+      modeLabel: 'Modo',
+      mode: {
+        legacy: 'Legado',
+        okf_only: 'Apenas OKF',
+        hybrid: 'Híbrido'
+      },
+      consequence: {
+        legacy: 'A fundamentação OKF está desligada — as respostas vêm apenas do caminho de texto livre.',
+        unknown: 'Modo desconhecido.',
+        okf_only: 'Apenas os grafos OKF fundamentam as respostas — o contexto livre não é consultado.',
+        hybrid: 'Os grafos OKF fundamentam as respostas e o contexto livre continua a contribuir.'
+      },
+      warnZeroServing:
+        'okf_only sem grafos em serviço — a contribuição OKF é zero. Publique e ingira um repositório primeiro.',
+      servingList: 'Grafos em serviço',
+      advanced: 'Limites avançados',
+      save: 'Guardar',
+      revert: 'Reverter',
+      cancel: 'Cancelar',
+      confirm: 'Aplicar',
+      confirmTitle: 'Alterar a postura de recuperação?',
+      confirmLead: 'É uma definição global — muda a forma como cada consulta é fundamentada, em cerca de 30 segundos.',
+      readFailed: 'Não foi possível ler a postura de recuperação.',
+      saveFailed: 'A alteração foi recusada.',
+      audit: 'Histórico de alterações',
+      auditLoading: 'A carregar o histórico…',
+      auditEmpty: 'Ainda não há alterações registadas.',
+      auditFailed: 'Não foi possível ler o histórico de alterações.',
+      limit: {
+        max_fanout_graphs: 'Grafos por consulta',
+        spine_max_hops: 'Saltos da espinha',
+        extracted_hop_cap: 'Saltos extraídos',
+        candidate_cap_per_graph: 'Candidatos por grafo',
+        candidate_cap_global: 'Candidatos por consulta'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Alguns arquivos ainda estão sendo processados (indexados). Abra este repositório no editor — a lista de arquivos mostra quais, e a ingestão tenta novamente automaticamente. Publique novamente quando todos os arquivos aparecerem como indexados.',

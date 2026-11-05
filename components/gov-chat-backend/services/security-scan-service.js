@@ -13,13 +13,24 @@ const DAYS_TO_PROCESS = 10;
 // reported ~1,000, distorting the severity dashboards). The scan pages
 // with VL's own `offset` arg, which skips the <offset> matching rows
 // with the biggest `_time` values — a row-count cursor, so no row is
-// lost or double-counted at a page boundary. The page cap bounds VL
-// load — the literal fetch is deliberately over-broad (see
-// `extractLiterals` below) and can match hundreds of thousands of
-// unrelated lines; hitting the cap logs a warning naming the pattern
-// instead of undercounting in silence.
+// lost or double-counted at a page boundary while the result set is
+// stable (the scan window ends at the scan start time; only logs with
+// backdated timestamps ingested mid-scan can shift a boundary). The
+// page cap bounds VL load — the literal fetch is deliberately
+// over-broad (see `extractLiterals` below) and can match hundreds of
+// thousands of unrelated lines; hitting the cap logs a warning naming
+// the pattern instead of undercounting in silence.
 const VL_SCAN_PAGE_SIZE = 1000;
 const VL_SCAN_MAX_PAGES = 20;
+
+// Detail lists (failed logins, suspicious activities) are capped
+// independently of the row fetch: `matchedCount`/`occurrences` stay
+// exact up to the page cap, but the per-entry lists are persisted whole
+// in the scan-result file and returned verbatim by the admin route —
+// uncapped, a 20,000-row burst would make both multi-MB. The cap keeps
+// the newest entries (VL pages newest-first), matching the old
+// single-page ceiling.
+const VL_SCAN_DETAIL_LIMIT = 1000;
 
 // Bare-phrase patterns: reported as pattern matches, not as severities.
 // Their regex is a word or two that ordinary operational prose contains,
@@ -352,19 +363,39 @@ const securityScanService = {
     // `label` names the consumer in the cap warning.
     const fetchAllRows = async (msgClause, label) => {
       const rows = [];
-      const fetchPage = (offset) =>
-        client.query({ q: msgClause, start: startIso, end: endIso, limit: VL_SCAN_PAGE_SIZE, offset });
+      const fetchPage = (offset, limit) =>
+        client.query({ q: msgClause, start: startIso, end: endIso, limit: limit ?? VL_SCAN_PAGE_SIZE, offset });
       for (let page = 0; page < VL_SCAN_MAX_PAGES; page += 1) {
-        const pageRows = await fetchPage(rows.length);
-        if (!Array.isArray(pageRows) || pageRows.length === 0) return rows;
+        // The offset advances by page INDEX, not by rows received: the
+        // adapter drops malformed JSONL lines (throttled warn in
+        // `_parseJsonlResponse`), so a page can come back one row short
+        // while the server moved a full page — advancing by rows.length
+        // there would shift every following page and silently drop the
+        // pattern's tail.
+        const pageRows = await fetchPage(page * VL_SCAN_PAGE_SIZE);
+        if (!Array.isArray(pageRows)) {
+          throw new Error(`VL scan page for ${label} returned a non-array payload`);
+        }
+        if (pageRows.length === 0) return rows;
         rows.push(...pageRows);
-        if (pageRows.length < VL_SCAN_PAGE_SIZE) return rows;
       }
       // The cap is reached — but the match set may end exactly there, in
-      // which case nothing was truncated. Probe once more so the
-      // warning only fires when rows really are missing.
-      const probe = await fetchPage(rows.length);
-      if (Array.isArray(probe) && probe.length > 0) {
+      // which case nothing was truncated. Probe with a 1-row fetch so
+      // the warning only fires when rows really are missing; if the
+      // probe itself fails, warn anyway rather than risk a silent
+      // undercount.
+      const probeTruncated = async () => {
+        try {
+          const probe = await fetchPage(rows.length, 1);
+          return Array.isArray(probe) && probe.length > 0;
+        } catch (err) {
+          logger.warn(
+            `VL scan pagination probe failed for ${label}: ${err.message} — treating the result as truncated`
+          );
+          return true;
+        }
+      };
+      if (await probeTruncated()) {
         logger.warn(
           `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`
         );
@@ -431,7 +462,7 @@ const securityScanService = {
           // Failed-login detection: collect the matching row as a side
           // effect of the main loop (instead of re-running a separate
           // VL query + 1000-row scan — see original lines 513-551).
-          if (pattern.type === 'failed_login') {
+          if (pattern.type === 'failed_login' && failedLogins.length < VL_SCAN_DETAIL_LIMIT) {
             failedLogins.push({
               timestamp: ts || new Date().toISOString(),
               level: (row.level || pattern.severity || '').toString().toUpperCase(),
@@ -520,7 +551,7 @@ const securityScanService = {
             // keep raw as text
           }
         }
-        if (re.test(text)) {
+        if (re.test(text) && suspiciousActivities.length < VL_SCAN_DETAIL_LIMIT) {
           suspiciousActivities.push({
             timestamp: row._time || row.timestamp || new Date().toISOString(),
             pattern: firstMatchOf(re, text) || literals[0],

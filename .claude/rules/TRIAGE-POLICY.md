@@ -80,6 +80,14 @@ orchestrator dispatches from. An issue leaves `backlog` only when it has:
 
 Promotion happens in batch during sweeps. Workers never promote.
 
+### Dispatch order
+
+Which issue a free seat takes next, from the `status::ready-for-dev` queue:
+`priority::high` first (the operator's override, whatever the type), then
+`type::bug` (something is broken), then **newest first** — the current wave is
+the set of issues raised during it, so the wave in progress drains before the
+older backlog.
+
 ## Staleness and closing
 
 - The only auto-close candidate is `status::awaiting-operator` inert past the

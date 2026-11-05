@@ -2731,7 +2731,7 @@ export default {
           'Tazama la mwisho kabla ya kuhamisha: kila faili hapa chini, markdown yake na lebo zake — hasa kama msaidizi atakavyozitaja.',
         noRepo: 'Bado hakuna hazina — ukaguzi wa faili utaonekana hapa mara hazina ikianza kuwepo.',
         ritualOutside:
-          'Mtaratibu wa ukaguzi — wasilisha kwa ukaguzi, idhini ya mkaguzi, chapisha — unafanyika kwenye Mhariri na dashibodi ya Studio, si hapa. Fungua Mhariri ukamilishe.',
+          'Taratibu wa ukaguzi hufanyika kwenye mhariri na dashibodi ya Studio, kitufe kimoja kwa hatua moja — si hapa. Fungua mhariri ili ukamilishe.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2754,7 +2754,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: {chain}. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — {chain}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3058,6 +3058,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Wasilisha kwa ukaguzi',
       approve: 'Idhinisha',
       publish: 'Chapisha',

@@ -3554,7 +3554,7 @@ export default {
           'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'The review ritual happens in the Editor and the Studio dashboard, one button at a time — not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -3576,7 +3576,7 @@ export default {
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
         ritual:
-          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {chain}. The wizard stops here by design.',
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — {chain}. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3806,6 +3806,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Submit for review',
       approve: 'Approve',
       publish: 'Publish',

@@ -122,6 +122,24 @@ describe('okf/saveDraft — wizard idempotency', () => {
     expect(store.state.okf.draftsUnavailable).toBe(true);
   });
 
+  it('#1056: a repo deleted under the curator is dead ONLY for itself — no doomed PUTs, no session latch', async () => {
+    studioService.saveDraft.mockRejectedValue({ status: 404, data: { error: 'REPO_NOT_FOUND' } });
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    store.commit('okf/upsertRepo', { repo_id: 'r2', lifecycle_state: 'draft' });
+    const first = await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(first.code).toBe('REPO_NOT_FOUND');
+    expect(store.state.okf.draftsUnavailable).toBe(false);
+    // the second save of the SAME repo never reaches the server again
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT, studio_step: 4 } });
+    expect(studioService.saveDraft).toHaveBeenCalledTimes(1);
+    // ...while ANOTHER repo saves normally
+    studioService.saveDraft.mockResolvedValueOnce({});
+    const other = await store.dispatch('okf/saveDraft', { repoId: 'r2', draft: { ...DRAFT } });
+    expect(other.ok).toBe(true);
+    expect(studioService.saveDraft).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects a missing repoId/draft before touching the network', async () => {
     const store = buildStore();
     const res = await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: null });

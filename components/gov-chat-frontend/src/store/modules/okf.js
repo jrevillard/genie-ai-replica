@@ -35,6 +35,13 @@ const initialState = () => ({
   // writing it (no spam). Story 10.5 shipped the route, so this only arms
   // against an older backend, never against an empty draft.
   draftsUnavailable: false,
+  // PER-REPO dead set (#1056): a repo that answers 404 REPO_NOT_FOUND on a
+  // draft save is gone (deleted / soft-deleted / outside the caller's scope)
+  // — a definitive answer, NOT a missing endpoint. Only THAT repo stops
+  // getting server writes; the session-wide latch must not arm, or one
+  // deleted repo would push every other repo's saves to local-only while a
+  // notice blames a version mismatch nobody can act on.
+  draftsDeadByRepo: {},
   reposById: {},
   // Lifecycle lanes (David, 2026-08-28): five columns — In progress /
   // In review / Published / Ingested / Retracted. Published ≠ Ingested:
@@ -238,6 +245,10 @@ const mutations = {
   setDraftsUnavailable(state) {
     state.draftsUnavailable = true;
   },
+  setDraftDead(state, repoId) {
+    if (!repoId) return;
+    state.draftsDeadByRepo = { ...state.draftsDeadByRepo, [repoId]: true };
+  },
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
     state.reposById = { ...state.reposById, [repo.repo_id]: repo };
@@ -404,6 +415,12 @@ const actions = {
       await dispatch('setDraftLocal', { repoId, draft });
       return { ok: true, skipped: 'unavailable' };
     }
+    if (state.draftsDeadByRepo[repoId]) {
+      // The repo is gone (deleted under the curator) — server writes are
+      // pointless; keep the local draft and stop the doomed PUTs.
+      await dispatch('setDraftLocal', { repoId, draft });
+      return { ok: true, skipped: 'repo-gone' };
+    }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
     // has nothing to draft — the server write is SKIPPED entirely (it would
     // 409-spam); the in-memory draft still updates so the wizard keeps
@@ -427,6 +444,13 @@ const actions = {
         // the session stops re-hammering a route it cannot reach.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      }
+      if (err && err.data && err.data.error === 'REPO_NOT_FOUND') {
+        // Definitive answer: the repo is gone. Mark ONLY this repo dead —
+        // arming the session latch here would blame a version mismatch for
+        // every other repo's saves.
+        commit('setDraftDead', repoId);
+        return { ok: false, code: 'REPO_NOT_FOUND', message: err.message };
       }
       return {
         ok: false,

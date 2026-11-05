@@ -1312,6 +1312,63 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     );
   });
 
+  test('a body-less request against an llm-classified repo is ALSO a scan — nothing applied, no audit row (#1066)', async () => {
+    // The curated (llm/hybrid) branch used its own gate: a missing body flag
+    // applied EVERY proposal and wrote an "Applied" row. The default is a
+    // scan on BOTH branches.
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [{ field: 'type' }], after: { type: 'topic' } }
+    ]);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.dry_run).toBe(true);
+    expect(res.body.applied).toBe(0);
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.autocorrect', description: expect.stringContaining('Applied') })
+    );
+  });
+
+  test('the curated apply isolates per-concept failures and still writes the audit row (#1066)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    const llmCuration = require('../services/llm-curation-service');
+    llmCuration.proposeFrontmatter.mockResolvedValue([
+      { concept_id: 'conceptA', changes: [{ field: 'type' }], after: { type: 'topic' } },
+      { concept_id: 'conceptB', changes: [{ field: 'type' }], after: { type: 'topic' } },
+      { concept_id: 'conceptC', changes: [{ field: 'type' }], after: { type: 'topic' } }
+    ]);
+    conceptMetaService.patchConceptMeta
+      .mockResolvedValueOnce({ concept_id: 'conceptA' })
+      .mockRejectedValueOnce(Object.assign(new Error('transient db'), {}))
+      .mockResolvedValueOnce(null); // row vanished mid-run
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(1);
+    expect(res.body.failures).toEqual([
+      { concept_id: 'conceptB', error: 'transient db' },
+      { concept_id: 'conceptC', error: 'concept row not found' }
+    ]);
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description:
+          'Applied curated frontmatter proposals (llm) — 1 concept(s), 2 concept(s) FAILED and reported to the client'
+      })
+    );
+  });
+
   test('200 with no body — defaults to dry_run=true', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });

@@ -2695,7 +2695,7 @@ export default {
           'Hand-off kaben etoo labang: fayilu bee juu kono, a markdown ani a labelu — assistantoo cite cogo min la o waa.',
         noRepo: 'Repository ti je saaying — repository kelen na, fayil reviewoo jang na wuli.',
         ritualOutside:
-          'Review ritual — submit for review, reviewer approval, publish — Editor ani Studio dashboard kono ke, jang ti. Editoroo aade ka a ban ke.',
+          'Review ritual ej run editor im Studio dashboard la, button tok ba mis tok — noon ilo ni. Komałoktok editor in nan kōnono.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2718,7 +2718,7 @@ export default {
         frozen:
           'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — enaj relabel ilo every step: {chain}. Wizardoo jang a ban o wajibya la.',
+          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — {chain}. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3016,6 +3016,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'A dii juube ma',
       approve: 'Song',
       publish: 'A ke',

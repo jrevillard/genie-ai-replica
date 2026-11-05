@@ -1391,15 +1391,34 @@ async function autocorrectRepo(req, res, next) {
       : ['llm', 'hybrid'].includes(repoDoc.classification)
         ? repoDoc.classification
         : 'heuristics';
+    // ONE effective dry-run flag for BOTH branches (declared before the
+    // curated branch so it gates the apply there too): a missing body flag is
+    // a scan, not an apply — otherwise a body-less request against an
+    // llm-classified repo silently WROTE frontmatter on every concept and
+    // audited it as an apply (#1066: the row must not lie; the route contract
+    // states the default).
+    const effectiveDryRun = typeof dry_run === 'boolean' ? dry_run : true;
     if (mode !== 'heuristics') {
       const proposals = await llmCuration.proposeFrontmatter(repoDoc, bodyConceptId || null, { classification: mode });
       let appliedCount = 0;
-      if (!(dry_run === true)) {
+      const failures = [];
+      if (!effectiveDryRun) {
         const list = Array.isArray(proposals) ? proposals : [proposals];
         for (const p of list) {
           if (!p || !p.changes || p.changes.length === 0) continue;
-          await conceptMetaService.patchConceptMeta(repo_id, p.concept_id, { frontmatter: p.after });
-          appliedCount += 1;
+          // One concept failing must not abort the run (the heuristics branch
+          // has the same rule): a mid-loop throw used to leave earlier
+          // concepts written with NO audit row for the partial apply, and a
+          // missing row was counted as applied.
+          try {
+            const updated = await conceptMetaService.patchConceptMeta(repo_id, p.concept_id, {
+              frontmatter: p.after
+            });
+            if (updated) appliedCount += 1;
+            else failures.push({ concept_id: p.concept_id, error: 'concept row not found' });
+          } catch (err) {
+            failures.push({ concept_id: p.concept_id, error: (err && err.message) || String(err) });
+          }
         }
         auditService
           .writeAudit({
@@ -1408,20 +1427,23 @@ async function autocorrectRepo(req, res, next) {
             actor_name: actorFrom(req).name,
             repo_id,
             source_ip: req.ip,
-            description: 'Applied curated frontmatter proposals (' + mode + ') — ' + appliedCount + ' concept(s)',
-            details: { mode, applied: appliedCount }
+            description:
+              'Applied curated frontmatter proposals (' +
+              mode +
+              ') — ' +
+              appliedCount +
+              ' concept(s)' +
+              (failures.length > 0 ? `, ${failures.length} concept(s) FAILED and reported to the client` : ''),
+            details: { mode, applied: appliedCount, failures }
           })
           .catch(() => {
             /* best-effort */
           });
       }
-      return res.status(200).json({ ok: true, mode, dry_run: dry_run === true, proposals, applied: appliedCount });
+      return res
+        .status(200)
+        .json({ ok: true, mode, dry_run: effectiveDryRun, proposals, applied: appliedCount, failures });
     }
-    // ONE effective dry-run flag: the service treats a missing body flag as
-    // dry_run=true (a read), so the audit gate must read the SAME flag —
-    // otherwise a body-less request wrote an "Applied … N concept(s)" audit
-    // row for a run that applied nothing (#1066: the row must not lie).
-    const effectiveDryRun = typeof dry_run === 'boolean' ? dry_run : true;
     const result = await conceptMetaService.autocorrectRepo(repo_id, effectiveDryRun, actorFrom(req));
     // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
     if (!effectiveDryRun) {

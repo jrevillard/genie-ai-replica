@@ -2747,7 +2747,7 @@ export default {
           'Pono ea ho qetela pele u fana ka repo: faele nngwe le nngwe e ka tlase, markdown ea eona le ditag ea eona — ka mokhoa oo mothusi a tlang ho li qotsa ka oona.',
         noRepo: 'Ha ho repo ho fihlela jwale — hlahlobo ea difaele e tla hlaha mona ha repo e le teng.',
         ritualOutside:
-          'Mokete oa hlahlobo — submit bakeng sa hlahlobo, tumello ea mohlahlobi, publish — o etsahala ho Editor le dashboard ea Studio, eseng mona. Bula Editor ho qeta.',
+          'Mokete oa tlhahlobo o etsahala editor le dashboard ea Studio, konopo e le e ntle e mong le e mong — eseng mona. Bula editor ho phethela.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2770,7 +2770,7 @@ export default {
         frozen:
           'Repo ena e sebeletsa — kakaretso ea ho bala feela mona. Bula Editor ho laola mefuta kapa ho etsa retract.',
         ritual:
-          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — e fetola lebitso ea sona sehlateng se seng le se seng: {chain}. Wizard e ema mona ka boithaopo.',
+          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — {chain}. Wizard e ema mona ka boithaopo.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3074,6 +3074,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Tlhahisong',
       approve: 'Lumeletsana',
       publish: 'Phatlalatsa',

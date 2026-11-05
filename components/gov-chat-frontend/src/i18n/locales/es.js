@@ -2752,7 +2752,7 @@ export default {
           'Última mirada antes de entregar: cada archivo de abajo, su markdown y sus etiquetas — exactamente como el asistente los citará.',
         noRepo: 'Aún no hay repositorio — la revisión de archivos aparecerá aquí cuando exista un repositorio.',
         ritualOutside:
-          'El ritual de revisión — enviar a revisión, aprobación del revisor, publicación — ocurre en el Editor y en el panel de Studio, no aquí. Abra el Editor para terminar.',
+          'El ritual de revisión ocurre en el editor y en el panel de Studio, un botón cada vez — no aquí. Abra el editor para terminar.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2775,7 +2775,7 @@ export default {
         frozen:
           'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: {chain}. El asistente se detiene aquí por diseño.',
+          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — {chain}. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3082,6 +3082,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Enviar para revisión',
       approve: 'Aprobar',
       publish: 'Publicar',

@@ -2765,7 +2765,7 @@ export default {
           'Letzter Blick vor der Übergabe: jede Datei unten, ihr Markdown und ihre Labels — exakt so, wie der Assistent sie zitieren wird.',
         noRepo: 'Noch kein Repository — die Dateiprüfung erscheint hier, sobald ein Repository existiert.',
         ritualOutside:
-          'Der Prüf-Ritus — zur Überprüfung einreichen, Freigabe durch die prüfende Person, Veröffentlichen — findet im Editor und auf dem Studio-Dashboard statt, nicht hier. Öffnen Sie den Editor zum Abschluss.',
+          'Der Review-Ritus findet im Editor und im Studio-Dashboard statt, jeweils ein Schritt pro Schaltfläche — nicht hier. Öffnen Sie den Editor, um abzuschließen.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2788,7 +2788,7 @@ export default {
         frozen:
           'Dieses Repository ist im Einsatz — hier eine schreibgeschützte Zusammenfassung. Öffnen Sie den Editor, um Versionen zu verwalten oder zurückzuziehen.',
         ritual:
-          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — er beschriftet sich bei jedem Schritt neu: {chain}. Der Assistent endet hier bewusst.',
+          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — {chain}. Der Assistent endet hier bewusst.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3097,6 +3097,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Zur Überprüfung einreichen',
       approve: 'Genehmigen',
       publish: 'Veröffentlichen',

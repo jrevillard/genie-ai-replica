@@ -139,17 +139,21 @@ export default {
     // chain is built ONCE (one order, one separator) and interpolated into
     // both sentences as a single {chain} token.
     lifecycleChain() {
+      // The separator is a locale string: RTL locales mirror the arrow (an
+      // arrow glyph is not bidi-mirrored, so a hardcoded '→' would invert
+      // the perceived step order in Arabic).
+      const separator = this.translate('okf.lifecycle.chainArrow', ' → ');
       return [
         this.translate('okf.lifecycle.submit', 'Submit for review'),
         this.translate('okf.lifecycle.approve', 'Approve'),
         this.translate('okf.lifecycle.publish', 'Publish'),
         this.translate('okf.lifecycle.ingest', 'Ingest')
-      ].join(' → ');
+      ].join(separator);
     },
     lifecycleRitual() {
       return this.translate(
         'okf.steps.publish.ritual',
-        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {chain}. The wizard stops here by design.',
+        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — {chain}. The wizard stops here by design.',
         { chain: this.lifecycleChain }
       );
     },

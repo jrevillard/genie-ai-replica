@@ -2761,7 +2761,7 @@ export default {
           "Dernier coup d'œil avant la remise : chaque fichier ci-dessous, son markdown et ses libellés — exactement comme l'assistant les citera.",
         noRepo: "Aucun dépôt pour le moment — la revue des fichiers apparaît ici dès qu'un dépôt existe.",
         ritualOutside:
-          "Le rituel de revue — soumission pour revue, approbation du réviseur, publication — se fait dans l'éditeur et le tableau de bord Studio, pas ici. Ouvrez l'éditeur pour terminer.",
+          "Le rituel de revue se déroule dans l'éditeur et sur le tableau de bord Studio, un bouton à la fois — pas ici. Ouvrez l'éditeur pour terminer.",
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2784,7 +2784,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : {chain}. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — {chain}. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3089,6 +3089,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Soumettre pour examen',
       approve: 'Approuver',
       publish: 'Publier',

@@ -2656,8 +2656,7 @@ export default {
         labelsSet: '在策展步骤中按主题设置',
         browserHint: '移交前的最后浏览：下方每个文件、其 markdown 及标签——与助手引用它们的形态完全一致。',
         noRepo: '尚无仓库——创建仓库后，文件复核会显示在这里。',
-        ritualOutside:
-          '复核仪式——提交审查、审核者批准、发布——在编辑器和 Studio 仪表盘中进行，而非此处。请打开编辑器完成后续操作。',
+        ritualOutside: '审核仪式在编辑器和 Studio 仪表盘上进行，每次只需点击一个按钮 — 不在此处。打开编辑器以完成。',
         versions: '版本',
         logs: '操作日志',
         rename: '重命名',
@@ -2678,8 +2677,7 @@ export default {
         topicsServing: '主题服务中',
         noTopics: '尚无主题——请返回策展步骤生成或撰写它们。',
         frozen: '此仓库正在提供服务——此处为只读摘要。请打开编辑器管理版本或执行撤回。',
-        ritual:
-          '下一步：在 Studio 仪表盘上，这张卡片在整个生命周期中只有一个按钮 — 它会在每一步更换标签：{chain}。向导有意在此止步。',
+        ritual: '下一步：在 Studio 仪表盘上，这张卡片在整个生命周期中只有一个按钮 — {chain}。向导有意在此止步。',
         openDashboard: '打开仪表盘'
       }
     },
@@ -2970,6 +2968,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: '提交审核',
       approve: '批准',
       publish: '发布',

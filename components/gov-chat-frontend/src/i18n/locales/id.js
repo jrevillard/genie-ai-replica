@@ -2736,7 +2736,7 @@ export default {
           'Tinjauan akhir sebelum Anda menyerahkan: setiap file di bawah, markdown dan labelnya — persis seperti yang akan dikutip asisten.',
         noRepo: 'Belum ada repositori — tinjauan file muncul di sini setelah repositori ada.',
         ritualOutside:
-          'Ritual tinjauan — kirim untuk ditinjau, persetujuan peninjau, publikasikan — terjadi di Editor dan dasbor Studio, bukan di sini. Buka Editor untuk menyelesaikannya.',
+          'Ritual peninjauan terjadi di editor dan dasbor Studio, satu tombol pada satu waktu — tidak di sini. Buka editor untuk menyelesaikan.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2759,7 +2759,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: {chain}. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — {chain}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3063,6 +3063,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Kirim untuk ditinjau',
       approve: 'Setujui',
       publish: 'Publikasikan',

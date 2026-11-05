@@ -43,15 +43,16 @@
          refresh loses the curation state. Say so, party-neutrally, at the TAB
          level: the zip-import path lands on the dashboard without ever
          entering the wizard, so a wizard-only surface would stay quiet for it. -->
-    <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice" role="status">
-      {{
-        translate(
-          'okf.studio.draft.notReady',
-          'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
-        )
-      }}
-    </p>
-)
+    <div class="okf-studio-tab__draft-live" aria-live="polite">
+      <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
+        {{
+          translate(
+            'okf.studio.draft.notReady',
+            'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
+          )
+        }}
+      </p>
+    </div>
 
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
@@ -798,6 +799,9 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+.okf-studio-tab__draft-live:empty {
+  display: none;
 }
 .okf-studio-tab__draft-notice {
   margin: 0;

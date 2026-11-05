@@ -203,7 +203,9 @@ function quotedKey(key) {
  * where the two differ: the lookalike sample is truncated SERVER-side, so
  * the count of all lookalikes and the returned sample are different numbers.
  * The elision line names THIS listing's total, so the number the operator
- * copies is the one that lists this listing in full.
+ * copies is the one that lists this listing in full. The remedy is worded for
+ * the REPORT the reader is holding; the abort path — where --delete is in
+ * play — passes its own (see main).
  * @param {Object} params
  * @param {Function} params.write - the sink (console.log / console.error)
  * @param {Object} params.gated - the resolved run configuration (the cap
@@ -224,13 +226,21 @@ function quotedKey(key) {
  *   REMOVED, not left for a later look.
  */
 function printSampledList({ write, gated, label, docs, total = docs.length, format, remedy }) {
+  // Enforce the promise the JSDoc makes: slice(0, undefined) returns the WHOLE
+  // array, so a gated object that somehow lacks the cap must fail here rather
+  // than silently widen the listing into the flood the cap exists to prevent.
+  if (!Number.isInteger(gated.sampleLimit) || gated.sampleLimit <= 0) {
+    throw new Error(
+      `printSampledList: the run cap is not a positive integer (got ${JSON.stringify(gated.sampleLimit)})`
+    );
+  }
   const listed = docs.slice(0, gated.sampleLimit);
   for (const doc of listed) {
     write(format(doc));
   }
   const withheld = total - listed.length;
   if (withheld > 0) {
-    const advice = remedy ?? `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${total} to list them all`;
+    const advice = remedy ?? `re-run this report with HUSK_SAMPLE_LIMIT=${total} to list them all`;
     // The output-size caveat is appended HERE, not by each caller: the cap
     // exists to keep the log pipeline from being flooded, so every listing
     // that raises it must say where the output goes. A path that replaced the
@@ -400,10 +410,11 @@ async function runReport(db, gated, total, husks, allDocs) {
   // a call site pass its own `write` or `gated` and silently override the
   // run-wide sink and the cap — exactly the listing-to-listing drift #1508
   // removed. With named fields, the override is not expressible.
-  const printStdoutList = ({ docs, total, format, remedy }) =>
-    printSampledList({ docs, total, format, remedy, write: console.log, gated });
+  const printStdoutList = ({ docs, total, label, format, remedy }) =>
+    printSampledList({ docs, total, label, format, remedy, write: console.log, gated });
   printStdoutList({
     docs: husks,
+    label: 'husks',
     // On the --delete path the withheld matches are removed by THIS run, so
     // the dry-run advice would point at documents that are about to be gone.
     remedy:
@@ -427,6 +438,7 @@ async function runReport(db, gated, total, husks, allDocs) {
     console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
     printStdoutList({
       docs: lookalikes,
+      label: 'lookalikes',
       // The sample is truncated SERVER-side; the count is the full number.
       total: lookalikeCount,
       format: (doc) => `  lookalike _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'}`
@@ -595,6 +607,9 @@ async function main({
         gated,
         label,
         docs,
+        // The abort fires on the --delete path too, so the advice must name
+        // the SAFE run; the helper's default is worded for the plain report.
+        remedy: `re-run the dry run (without --delete) with HUSK_SAMPLE_LIMIT=${docs.length} to list them all`,
         format: (doc) => `  ${label} _key=${quotedKey(doc._key)} attributes=${JSON.stringify(Object.keys(doc).sort())}`
       });
     }

@@ -9,6 +9,7 @@
  * database factory (createApp()-style).
  */
 
+const script = require('../scripts/report-husk-user-docs');
 const {
   parseAndGateArgs,
   main,
@@ -104,12 +105,26 @@ const divergentDocs = (extraN, missedN = extraN) => ({
 });
 
 describe('the module surface', () => {
-  it('does not export the listing helper (issue #1508: no new exports)', () => {
-    // Issue #1508 asked for a PURE in-file extraction: the helper is internal
-    // to the script, not part of its surface. Its behaviour is pinned through
-    // main() instead, so no export is needed to reach it.
-    const script = require('../scripts/report-husk-user-docs');
-    expect(script.printSampledList).toBeUndefined();
+  it('exports exactly the established surface — nothing new beyond the test seams (issue #1508)', () => {
+    // Issue #1508 asked for a PURE in-file extraction. A single-symbol check
+    // would stay green through any ADDED export, so the whole set is pinned:
+    // the listing helper stays internal (its behaviour is reached through
+    // main()), and the only exports are the #1494 test seams and the AQL
+    // templates — the same template-export convention the matcher, removal
+    // and all-docs queries already follow.
+    expect(Object.keys(script).sort()).toEqual([
+      'ALL_DOCS_AQL',
+      'HUSK_ALLOWED_FIELDS',
+      'HUSK_IDENTITY_FIELDS',
+      'HUSK_MATCHER_AQL',
+      'HUSK_REMOVAL_AQL',
+      'HUSK_SYSTEM_FIELDS',
+      'LEGACY_LOOKALIKE_AQL',
+      'compareSignatureSets',
+      'isHuskDoc',
+      'main',
+      'parseAndGateArgs'
+    ]);
   });
 });
 
@@ -261,11 +276,11 @@ describe('main safety wiring', () => {
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
   });
 
-  it('caps the abort listing at SAMPLE_LIMIT entries per direction and says how many were elided (issue #1505)', async () => {
+  it('caps the abort listing at the run cap entries per direction and says how many were elided (issue #1505)', async () => {
     // 60 over-matched and 60 under-matched documents: the abort fires exactly
     // when divergence can cover the whole collection — an uncapped listing
     // would emit one stderr line per document through the log pipeline.
-    // Mirrors the script's other listings: SAMPLE_LIMIT entries, then one
+    // Mirrors the script's other listings: the run cap entries, then one
     // "... and N more (not listed)" line per direction.
     const { extra, missed } = divergentDocs(60);
     const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
@@ -348,7 +363,7 @@ describe('main safety wiring', () => {
     expect(stderrText(errorSpy)).toContain('(boom)');
   });
 
-  it('lists every entry with NO elision line when divergence length equals SAMPLE_LIMIT exactly (boundary pin)', async () => {
+  it('lists every entry with NO elision line when divergence length equals the default cap exactly (boundary pin)', async () => {
     // Guards the '>' in the elision check: a '>=' drift would print a bogus
     // '... and 0 more (not listed)' on an exactly-full sample.
     const { extra, missed } = divergentDocs(50);
@@ -430,7 +445,25 @@ describe('main safety wiring', () => {
     expect(underElision).toContain('HUSK_SAMPLE_LIMIT=100');
     // The remedy names the DRY RUN: on a destructive script, an unqualified
     // "re-run" could be read as "re-run the same command", which deletes.
+    // (The ABORT path carries this --delete-aware wording; the plain report's
+    // elision lines say "re-run this report" — pinned below.)
     expect(overElision).toContain('re-run the dry run (without --delete)');
+  });
+
+  it('words the stdout elision remedy for the report the operator is reading', async () => {
+    // The stdout listings are printed by the report itself — the operator
+    // never passed --delete there, so a "(without --delete)" parenthetical
+    // would have no referent. The remedy says to re-run THIS report.
+    const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
+    const db = fakeDb({ husks, allDocs: husks, lookalikeCount: 75, lookalikes: [] });
+    await runMain(db);
+    const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const elisions = stdout.split('\n').filter((l) => l.includes('(not listed)'));
+    expect(elisions.length).toBeGreaterThan(0);
+    for (const elision of elisions) {
+      expect(elision).toContain('re-run this report with HUSK_SAMPLE_LIMIT=');
+      expect(elision).not.toContain('(without --delete)');
+    }
   });
 
   it('applies the same cap and elision wording to the husk and lookalike listings (issue #1508)', async () => {
@@ -456,10 +489,11 @@ describe('main safety wiring', () => {
     });
     await runMain(db);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
-    // The husk listing caps at 50 and elides the rest — with ITS own count.
+    // The husk listing caps at 50 and elides the rest — with ITS own count
+    // and ITS OWN NOUN, so a reader cannot confuse one elision with another.
     const huskLines = stdout.split('\n').filter((l) => l.includes('husk _key='));
     expect(huskLines).toHaveLength(50);
-    expect(stdout).toContain('... and 10 more (not listed)');
+    expect(stdout).toContain('... and 10 more husks (not listed)');
     // The husk line keeps its full shape (the listing is not degraded to a
     // bare key while it is being unified).
     expect(huskLines[0]).toContain('createdAt=');
@@ -470,7 +504,7 @@ describe('main safety wiring', () => {
     // lookalikes).
     const lookalikeLines = stdout.split('\n').filter((l) => l.includes('lookalike _key='));
     expect(lookalikeLines).toHaveLength(50);
-    expect(stdout).toContain('... and 25 more (not listed)');
+    expect(stdout).toContain('... and 25 more lookalikes (not listed)');
     expect(lookalikeLines[0]).toContain('createdAt=');
     // Each listing names its OWN count: 60 for the husks, 75 for the
     // lookalikes. Neither is inflated by the other.
@@ -496,8 +530,8 @@ describe('main safety wiring', () => {
     await runMain(db);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(stdout.split('\n').filter((l) => l.includes('lookalike _key='))).toHaveLength(40);
-    expect(stdout).toContain('... and 35 more (not listed)');
-    expect(stdout).not.toContain('... and 25 more (not listed)');
+    expect(stdout).toContain('... and 35 more lookalikes (not listed)');
+    expect(stdout).not.toContain('... and 25 more lookalikes (not listed)');
   });
 
   it('applies the RAISED cap to the husk listing, not just to the divergence listing (issue #1507)', async () => {
@@ -589,7 +623,7 @@ describe('main safety wiring', () => {
     const db = fakeDb({ husks, allDocs: husks, writesExecuted: 60 });
     await runMain(db, ['--delete', '--yes']);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
-    const elision = stdout.split('\n').find((l) => l.includes('more (not listed)'));
+    const elision = stdout.split('\n').find((l) => l.includes('more husks (not listed)'));
     expect(elision).toBeDefined();
     // The withheld entries are named as part of the removal...
     expect(elision).toContain('part of the removal below');

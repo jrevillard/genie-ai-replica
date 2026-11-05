@@ -2380,7 +2380,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // the anchor check instead of silently escaping it). The npx spelling is
   // the contract: a first invocation in another spelling fails loudly below,
   // and script text that merely MENTIONS the invocation (an echo, say) is
-  // captured too — loud, conservative over-capture.
+  // captured too — loud, conservative over-capture. The canonical list is
+  // coverage-shaped, not the runner's matcher: how an entry selects a test
+  // file lives in scanTargets below, which mirrors Playwright's unanchored
+  // regex arg matching.
   const executedPaths = () => {
     const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
     expect(invocations.length).toBeGreaterThan(0);
@@ -2661,10 +2664,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return findings;
   };
 
-  // The spec files the invocation executes: real files under the executed
-  // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
-  // directory boundary, a sibling `X-v2/` is not covered — an exact entry
-  // stays exact). Playwright's default testMatch glob
+  // The spec files the invocation executes: real files selected by the
+  // executed targets through scanTargets (the runner's own arg semantics,
+  // mirrored there). Playwright's default testMatch glob
   // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
   // t, then a REQUIRED s (the trailing ? quantifies only the x), then
   // optional x — the selection regex (EXECUTED_SPEC_RE, module top)
@@ -2679,12 +2681,39 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
+  // How an invocation target selects a test file — EXACTLY as the runner
+  // selects it. Every Playwright CLI arg becomes an UNANCHORED case-
+  // insensitive regex (forceRegExp in the runner's util) tested against the
+  // test file path: the file executes whenever its path CONTAINS the arg's
+  // text. No anchors, no escaping — the arg is the regex. So the canonical
+  // `X/**/*` entry (a trailing-slash dir arg, whose slash the canonical
+  // form folded into the glob) selects every path CONTAINING `X/` — the
+  // unfold below restores that slash, which IS the directory boundary a
+  // plain prefix match would lose (…/chatbot/ does not match
+  // …/chatbot-v2/…) — and an exact entry selects every path containing it
+  // verbatim: a basename sibling does NOT contain the arg text and is not
+  // executed, while a nested tail-duplicate
+  // (…/helpers/tests/e2e/theme-runtime-config.spec.js) does and is.
+  // Modeling the containment instead of assuming "exact file" keeps the
+  // executed set never narrower than the runner's. The `g` flag the runner
+  // adds is dead weight for a boolean .test and carries a lastIndex trap on
+  // a precompiled regex — 'i' alone matches identically.
+  const scanTargets = (files, executedGlobs) => {
+    const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
+    return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
+  };
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
-    const uncovered = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED].filter((p) => !isCovered(anchorPaths, p));
+    // Per-file demands on top of the glob entries: a file the runner would
+    // execute OUTSIDE the directories the exact/dir entries name (the
+    // unanchored matching above reaches beyond the subtree) must still find
+    // its anchor entry, or a train touching it skips e2e silently.
+    const uncovered = [
+      ...EXECUTED_GLOBS,
+      ...EXECUTED_SPECS.map((f) => toAnchorPath(f, false)),
+      ...DERIVED_CONSUMED
+    ].filter((p) => !isCovered(anchorPaths, p));
     // The diff names every uncovered path, not just the first.
     expect(uncovered).toEqual([]);
   });
@@ -2791,6 +2820,28 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
     test('a sibling directory beyond the glob boundary is not executed', () => {
       expect(scanTargets(['tests/e2e/chatbot-v2/x.spec.js', 'tests/e2e/chatbotless.spec.js'], GLOBS)).toEqual([]);
+    });
+
+    // The runner matches args as UNANCHORED regex over the test path — the
+    // units pin the containment both ways: a path containing an exact arg's
+    // text (a nested tail-duplicate) executes, while a basename sibling
+    // (which does NOT contain the arg's text contiguously) does not. The
+    // dir entry is the same containment with the restored trailing slash —
+    // the slash IS the directory boundary.
+    test('an exact arg executes a path containing its text (nested tail-duplicate)', () => {
+      expect(scanTargets(['tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js'], GLOBS)).toEqual([
+        'tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js'
+      ]);
+    });
+
+    test('a basename sibling does not contain the exact arg text and is not executed', () => {
+      expect(scanTargets(['tests/e2e/documents/theme-runtime-config.spec.js'], GLOBS)).toEqual([]);
+    });
+
+    test('a dir arg executes a contained path carrying the restored trailing slash', () => {
+      expect(scanTargets(['tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'], GLOBS)).toEqual([
+        'tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'
+      ]);
     });
   });
 

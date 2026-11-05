@@ -68,7 +68,7 @@ const axios = require('axios');
 // rate limiting, geoip) — heavyweight for a leaf helper (see
 // components/CLAUDE.md "When deep imports are unavoidable").
 const { logger } = require('../shared-lib/logger');
-const { openAiModelsUrl } = require('./llm-url');
+const { normalizedBase, openAiModelsUrl } = require('./llm-url');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
 const PROBE_TIMEOUT_DEFAULT_MS = 10000;
@@ -108,6 +108,11 @@ const _negative = new Map();
 // twice per LLM call in the curation loops — and a malformed base is a
 // CONFIG error, not a per-call event. One line per pair, ever.
 const _malformedWarned = new Set();
+// Soft-path unexpected-error signatures already warned about (base|message):
+// the probe-chain failures are windowed by the negative stub, but a PRE-probe
+// seam (URL / credential construction) has no window — one line per
+// failure signature, ever, is the same flood rule as malformed above.
+const _softWarned = new Set();
 
 /** The deployer pin, both spellings. Each spelling is trimmed BEFORE the
  * fallback so a whitespace-only VLLM_LLM_MODEL_ID cannot shadow a valid
@@ -270,6 +275,15 @@ function probeBudgetBucket(timeoutMs) {
   return Math.ceil(effectiveProbeBudget(timeoutMs) / 1000);
 }
 
+/** The ONE count bound for the bounded maps: the OLDEST insertion goes,
+ * so its fallback (a stale id, a warn window) goes with it and the next
+ * call re-probes / re-warns. Every bounded map in this file evicts here. */
+function pruneOldest(set) {
+  while (set.size > MAX_CACHE_ENTRIES) {
+    set.delete(set.keys().next().value);
+  }
+}
+
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
  * (a null id would hide the reason from the caller). `quiet` marks the
@@ -393,9 +407,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
  * price of the bound: the OLDEST entry goes, so its stale fallback goes
  * with it (that base re-probes on its next call). */
 function pruneCache() {
-  while (_cache.size > MAX_CACHE_ENTRIES) {
-    _cache.delete(_cache.keys().next().value); // the oldest insertion first
-  }
+  pruneOldest(_cache); // the oldest insertion goes first
   for (const [key, value] of _negative) {
     if (!negativeEntryIsLive(value.ts)) _negative.delete(key);
   }
@@ -404,16 +416,14 @@ function pruneCache() {
   // the container's lifetime (each stub carries the full failure, axios
   // cause included). Same count bound as the id cache, same eviction: the
   // oldest stub goes, that key re-probes.
-  while (_negative.size > MAX_CACHE_ENTRIES) {
-    _negative.delete(_negative.keys().next().value);
-  }
   // The malformed-pair set too — a long-lived server under config churn
   // would otherwise grow it for the container's lifetime (a redeploy that
   // changes the deployment base doubles the pair space). The oldest pair
-  // re-warns, at most once more.
-  while (_malformedWarned.size > MAX_CACHE_ENTRIES) {
-    _malformedWarned.delete(_malformedWarned.keys().next().value);
-  }
+  // re-warns, at most once more. (The soft-path signature set is NOT
+  // bounded here: its pre-probe seam never reaches this settle sweep, so
+  // it bounds itself at the warn site.)
+  pruneOldest(_negative);
+  pruneOldest(_malformedWarned);
 }
 
 /** The loud no-answer error shared by both resolving variants. */
@@ -584,7 +594,39 @@ async function deploymentServedModelId({ timeoutMs } = {}) {
 async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
     return await getServedModelId(baseUrl, { timeoutMs, apiKey, quiet: true });
-  } catch {
+  } catch (err) {
+    // null means "the endpoint did not answer" (ModelDiscoveryError — the
+    // only class getServedModelId throws for a probe failure) — never
+    // "anything". Any OTHER class is a bug on this soft path: it stays
+    // null (the provenance label must not fail) but cannot stay silent,
+    // or every label would read as a healthy miss. One line per failure
+    // signature: the probe-chain failures are windowed by the negative
+    // stub, but a PRE-probe throw never reaches that machinery (nor the
+    // pruneCache settle sweep) — so the signature set is bounded HERE.
+    if (!(err instanceof ModelDiscoveryError)) {
+      // An Error's message; a non-Error with a message keeps that; anything
+      // else is stringified so the warn stays contentful.
+      const message = err && err.message ? String(err.message) : String(err);
+      // The base is normalized by the ONE base rule (the same normalization
+      // getServedModelId cache-keys on), so one pre-probe bug warns once
+      // per BASE, not once per spelling. The bound here (not in
+      // pruneCache's settle sweep — a pre-probe throw never reaches it) is
+      // a deliberate tradeoff: past MAX_CACHE_ENTRIES distinct bases a
+      // persistent pre-probe bug degrades to warn-per-visit, which beats
+      // the unbounded growth the set exists to prevent.
+      const url = normalizedBase(baseUrl).base;
+      const signature = `${url}|${message}`;
+      if (!_softWarned.has(signature)) {
+        try {
+          logger.warn('vllm_model_cache.soft_path_unexpected_error', { url, error: message });
+          _softWarned.add(signature);
+          pruneOldest(_softWarned);
+        } catch {
+          // A throwing logger leaves the signature unrecorded — the next
+          // call retries the line. The label answer is null either way.
+        }
+      }
+    }
     return null;
   }
 }
@@ -639,6 +681,7 @@ function clearModelCache() {
   _cache.clear();
   _negative.clear();
   _malformedWarned.clear();
+  _softWarned.clear();
   _inflight.clear();
 }
 

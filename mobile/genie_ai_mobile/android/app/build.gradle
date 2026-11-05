@@ -83,18 +83,14 @@ android {
 
     buildTypes {
         release {
-            // A release build must NEVER be silently debug-signed.
-            // The fallback stays (local test releases have no keystore), but it
-            // is loud: the keystore is supplied locally through
+            // A release build must NEVER be silently debug-signed. The
+            // fallback stays (a local test release has no keystore); the
+            // task-graph hook below warns when a release artifact is really
+            // built. The keystore is supplied locally through
             // android/key.properties (gitignored) — never committed.
             signingConfig = keystorePropertiesFile.exists()
                 ? signingConfigs.release
                 : signingConfigs.debug
-            if (!keystorePropertiesFile.exists()) {
-                logger.warn("Release build is DEBUG-SIGNED: no ${keystorePropertiesFile.name} found. " +
-                    "Copy android/key.properties.example to android/key.properties and fill it in " +
-                    "before publishing this artifact.")
-            }
             // R8/ProGuard rules — see proguard-rules.pro for the rationale.
             // flutter_secure_storage's bundled Tink library references
             // com.google.errorprone.annotations.* and javax.annotation.*,
@@ -105,8 +101,18 @@ android {
             // shipped unminified. The Flutter engine/plugin keep rules live in
             // proguard-rules.pro.
             minifyEnabled true
-            shrinkResources true
         }
+    }
+}
+
+// Loud, but only when a RELEASE artifact is actually built: a debug build
+// must not cry wolf about a signing key it will never use.
+gradle.taskGraph.whenReady { graph ->
+    def releaseTask = graph.allTasks.any { it.name.toLowerCase().contains("release") }
+    if (releaseTask && !keystorePropertiesFile.exists()) {
+        logger.warn("Release build is DEBUG-SIGNED: no ${keystorePropertiesFile.name} found. " +
+            "Copy android/key.properties.example to android/key.properties and fill it in " +
+            "before publishing this artifact.")
     }
 }
 

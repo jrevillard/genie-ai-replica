@@ -148,15 +148,18 @@ async function nameTaken(db, name, exceptKey) {
   return rows.some((k) => k !== exceptKey);
 }
 
+// The actor is the SHARED controller shape {sub, name, source_ip} from
+// controllers/actor-from.js (issue #1188) — same contract as
+// repository-service, not the retired local user_id variant.
 function audit(action, doc, opts, description) {
   return auditService.writeAudit({
-    actor: (opts.actor && opts.actor.user_id) || 'system',
+    actor: (opts.actor && opts.actor.sub) || 'system',
     actor_name: (opts.actor && opts.actor.name) || null,
     action: `model_config.${action}`,
     repo_id: 'model-configs',
     description,
     details: { config_key: doc && doc._key, name: doc && doc.name },
-    source_ip: opts.source_ip || null
+    source_ip: (opts.actor && opts.actor.source_ip) || null
   });
 }
 
@@ -214,8 +217,8 @@ async function createConfig(payload = {}, opts = {}) {
       active: false, // created INACTIVE — activation is an explicit act
       created_at: now,
       updated_at: now,
-      created_by: (opts.actor && opts.actor.user_id) || 'system',
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      created_by: (opts.actor && opts.actor.sub) || 'system',
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     await db.collection(COLLECTION).save(doc);
     span.setAttribute('okf.model_config.name', doc.name);
@@ -257,7 +260,7 @@ async function updateConfig(key, payload = {}, opts = {}) {
     const patch = {
       ...clean,
       updated_at: new Date().toISOString(),
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     if (payload.default_model !== undefined) {
       patch.default_model =
@@ -295,8 +298,8 @@ async function copyConfig(key, opts = {}) {
       active: false,
       created_at: now,
       updated_at: now,
-      created_by: (opts.actor && opts.actor.user_id) || 'system',
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      created_by: (opts.actor && opts.actor.sub) || 'system',
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     await db.collection(COLLECTION).save(doc);
     span.setAttribute('okf.model_config.name', name);

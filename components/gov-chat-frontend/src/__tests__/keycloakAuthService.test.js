@@ -9,8 +9,11 @@ const mockRemoveUser = jest.fn();
 const mockClearStaleState = jest.fn();
 const mockSigninSilent = jest.fn();
 const mockStoreUser = jest.fn();
-const mockAddUserLoaded = jest.fn(() => jest.fn());
-const mockAddSilentRenewError = jest.fn(() => jest.fn());
+// The event handlers return an unsubscribe function; one factory, used both
+// at declaration and when the isolation hook restores it.
+const unsubscribeMock = () => jest.fn();
+const mockAddUserLoaded = jest.fn(unsubscribeMock);
+const mockAddSilentRenewError = jest.fn(unsubscribeMock);
 // A named factory, so the isolation hook can restore it after
 // jest.resetAllMocks() strips every implementation.
 const userManagerMock = () => ({
@@ -73,8 +76,10 @@ function createMockUser(overrides = {}) {
   };
 }
 
-// Isolation for every test in this file — the MOCK IMPLEMENTATIONS and the
-// renew protocol's localStorage state. jest.clearAllMocks() clears call
+// Isolation for every test in this file: the MOCK IMPLEMENTATIONS and the
+// renew protocol's localStorage state. (The service MODULE's own state —
+// renewInFlight, currentUser, accessTokenCallbacks — is NOT reset here; see
+// #1530.) jest.clearAllMocks() clears call
 // history but NOT implementations, so a test omitting its own mock setup
 // silently inherits the previous test's mockResolvedValue/mockRejectedValue —
 // and the UserManager mocks swallow those inherited rejections (logout
@@ -87,14 +92,20 @@ function createMockUser(overrides = {}) {
 // reproducible locally too).
 // jest.resetAllMocks() covers every mock, present and future — but it also
 // strips the factory implementations the unsubscribe assertions depend on, so
-// those three are restored here.
+// those are restored here. jest.restoreAllMocks() undoes a spy a failing test
+// leaked: without it the leaked spy's call-through is neutered and
+// localStorage stops persisting, silently disabling this very wipe.
 beforeEach(() => {
   jest.resetAllMocks();
+  jest.restoreAllMocks();
   MockUserManager.mockImplementation(userManagerMock);
-  mockAddUserLoaded.mockImplementation(() => jest.fn());
-  mockAddSilentRenewError.mockImplementation(() => jest.fn());
+  mockAddUserLoaded.mockImplementation(unsubscribeMock);
+  mockAddSilentRenewError.mockImplementation(unsubscribeMock);
   // getUser() returns a PROMISE in the real UserManager; a reset mock would
-  // return undefined and break `await manager.getUser().catch(...)`.
+  // return undefined and break `await manager.getUser().catch(...)`. The
+  // default is "no stored session" — a rejecting default would be
+  // indistinguishable, because initialize() catches the rejection and
+  // returns null either way.
   mockGetUser.mockResolvedValue(null);
   window.localStorage.removeItem(RENEW_LEASE_KEY);
   window.localStorage.removeItem(RENEW_USER_KEY);
@@ -833,8 +844,6 @@ describe('cross-tab renew lease (#80800)', () => {
       expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'holder-token-2tab' }));
     } finally {
       jest.useRealTimers();
-      window.localStorage.removeItem(RENEW_LEASE_KEY);
-      window.localStorage.removeItem(RENEW_USER_KEY);
     }
   });
 

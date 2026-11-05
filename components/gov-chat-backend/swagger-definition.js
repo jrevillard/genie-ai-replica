@@ -26,18 +26,22 @@ module.exports = {
       // client-generation pin (scripts/generate-api-client.sh sets it
       // under env -i to bake a deterministic base into the committed Dart
       // artifacts). A value that is not an absolute http(s) URL after
-      // normalization (trim, control-character rejection, trailing-slash
-      // strip) is ignored — a scheme-only, scheme-less or broken value
+      // normalization (trim, trailing-slash strip, base-usability check
+      // below) is ignored — a scheme-only, scheme-less or broken value
       // would serve a broken server entry. No shared helper with
       // document-repository: the generator loads this module with bare
       // node (no Jest mapper), where ./shared-lib does not resolve.
       url: (() => {
         const raw = (process.env.API_URL || '').trim();
-        // WHATWG parsing strips tab/LF/CR before parsing, so a value with
-        // an embedded control character must be rejected before the URL
-        // is built — otherwise it would be served silently rewritten.
-        if (/[\t\n\r]/.test(raw)) return '/';
         const base = raw.replace(/\/+$/, '');
+        // The base-usability check: WHATWG parsing REWRITES the characters
+        // below (it strips the C0 controls and percent-encodes the
+        // others), and the value is served verbatim — so a value carrying
+        // one would be served in a form the parser never validated (a
+        // control byte in the served document, a query swallowing the
+        // joined path). A whitespace is in the same class.
+        // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
+        if (/[\s\u0000-\u001F"#<>?`{}]/.test(base)) return '/';
         try {
           // WHATWG parsing is the exact validator: it rejects scheme-only
           // and scheme-less values; a valid URL is served verbatim

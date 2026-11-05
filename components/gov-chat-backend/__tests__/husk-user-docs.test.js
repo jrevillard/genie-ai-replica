@@ -3,10 +3,12 @@
  * issue #1430). The AQL matcher is generated from the same constants the JS
  * predicate reads, so these tests pin the predicate semantics (the signature's
  * meaning) and guard the AQL template against corruption (each FILTER clause,
- * the deleted carve-out, the allowed-field subset, a final RETURN). The AQL's
- * runtime semantics against a real ArangoDB cannot run in CI — it is
- * re-validated against a throwaway ArangoDB with a synthetic corpus whenever
- * the matcher template changes (see MR !752 for the latest validation).
+ * the deleted carve-out, the allowed-field subset, a final RETURN). The
+ * template pins cannot see the AQL's RUNTIME semantics — a template edit that
+ * keeps its substrings, or a constant edit both sides share, passes them
+ * green. Those are covered against a real ArangoDB by
+ * __tests__/integration/husk-report.db.test.js (the test:backend-arango CI
+ * job, issue #1501).
  */
 
 const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
@@ -195,5 +197,55 @@ describe('signature vocabulary vs the app field vocabulary', () => {
     // husk-allowed would widen the signature silently.
     const shared = JIT_PROTECTED_FIELDS.filter((field) => HUSK_ALLOWED_FIELDS.includes(field));
     expect(shared.sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
+  });
+
+  it('allows EXACTLY the three preserved fields — not one more', () => {
+    // The intersection check above only sees the fields the app lists as
+    // PROTECTED; a field added to the allowlist from another vocabulary (a
+    // client preference, a profile section, any new field) would widen the
+    // selection on BOTH sides of the contract — the predicate and the AQL
+    // move together, the divergence guard sees agreement, and the deletion
+    // wave starts removing accounts that carry that field. No corpus can
+    // pin a field it does not contain: the list itself is pinned here.
+    expect([...HUSK_ALLOWED_FIELDS].sort()).toEqual(['createdAt', 'deleted', 'updatedAt']);
+  });
+
+  it('treats EXACTLY the three ArangoDB system fields as internal', () => {
+    // Same reasoning for the internal-field list: a field added to it
+    // (or a system field removed from it) moves both sides together, and
+    // only the exact list pins it.
+    expect([...HUSK_SYSTEM_FIELDS].sort()).toEqual(['_id', '_key', '_rev']);
+  });
+});
+
+describe('the script stays out of the auto-executed migrations directory', () => {
+  // scripts/migrations/run-migrations.js is executed by the db-migrations
+  // init container on every deploy (docs/database-migrations.md). It picks
+  // up the files matching /^\d{3}-.*\.js$/ and runs their exported up(db).
+  // The husk report is an operator tool a human runs on purpose: promoted
+  // into that directory under a matching name it would abort the migration
+  // init (it exports no up(db)), and a renamed copy would run its removal
+  // query on every deployment (issue #1501).
+  //
+  // The guard scans the migration FILES, not the script's own location: a
+  // moved script fails this suite at require time anyway, while a copied
+  // one (a 042-husk-report.js referencing the removal query) leaves the
+  // script where it is and would only show up here.
+  it('no migration file references the husk report', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../scripts/migrations');
+    // The identifiers a migration would carry if it required or copied the
+    // script, plus the signature's own AQL fragment — a migration that
+    // INLINED the husk query without importing it would carry that one.
+    const MARKERS = ['report-husk-user-docs', 'HUSK_MATCHER_AQL', 'HUSK_REMOVAL_AQL', 'MINUS(ATTRIBUTES(u)'];
+    const offenders = fs
+      .readdirSync(dir)
+      .filter((file) => /^\d{3}-.*\.js$/.test(file))
+      .filter((file) => {
+        const source = fs.readFileSync(path.join(dir, file), 'utf8');
+        return MARKERS.some((marker) => source.includes(marker));
+      });
+    expect(offenders).toEqual([]);
   });
 });

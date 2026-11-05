@@ -828,11 +828,28 @@ describe('SecurityScanService', () => {
         _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
-      expect(calls.filter((c) => c.q === BF_CLAUSE)).toHaveLength(20);
+      // 20 pages plus the probe that proves rows are really missing.
+      expect(calls.filter((c) => c.q === BF_CLAUSE)).toHaveLength(21);
       const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
       expect(bruteForce.instanceCount).toBe(20000);
       const { logger } = require('../../shared-lib');
       expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/page cap/));
+    });
+
+    it('does not warn when the match set ends exactly at the page cap', async () => {
+      // 20 full pages and nothing beyond: nothing was truncated, so the
+      // cap warning would be a false alarm.
+      const rows = Array.from({ length: 20000 }, (_, i) => bfRow(i));
+      const { query } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
+
+      const result = await securityScanService.processLogsInParallel({
+        _getVlClient: jest.fn().mockResolvedValue({ query })
+      });
+
+      const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
+      expect(bruteForce.instanceCount).toBe(20000);
+      const { logger } = require('../../shared-lib');
+      expect(logger.warn).not.toHaveBeenCalledWith(expect.stringMatching(/page cap/));
     });
 
     it('paginates the suspicious-term scan the same way', async () => {

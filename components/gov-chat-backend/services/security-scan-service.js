@@ -352,21 +352,23 @@ const securityScanService = {
     // `label` names the consumer in the cap warning.
     const fetchAllRows = async (msgClause, label) => {
       const rows = [];
+      const fetchPage = (offset) =>
+        client.query({ q: msgClause, start: startIso, end: endIso, limit: VL_SCAN_PAGE_SIZE, offset });
       for (let page = 0; page < VL_SCAN_MAX_PAGES; page += 1) {
-        const pageRows = await client.query({
-          q: msgClause,
-          start: startIso,
-          end: endIso,
-          limit: VL_SCAN_PAGE_SIZE,
-          offset: rows.length
-        });
+        const pageRows = await fetchPage(rows.length);
         if (!Array.isArray(pageRows) || pageRows.length === 0) return rows;
         rows.push(...pageRows);
         if (pageRows.length < VL_SCAN_PAGE_SIZE) return rows;
       }
-      logger.warn(
-        `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`
-      );
+      // The cap is reached — but the match set may end exactly there, in
+      // which case nothing was truncated. Probe once more so the
+      // warning only fires when rows really are missing.
+      const probe = await fetchPage(rows.length);
+      if (Array.isArray(probe) && probe.length > 0) {
+        logger.warn(
+          `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`
+        );
+      }
       return rows;
     };
 

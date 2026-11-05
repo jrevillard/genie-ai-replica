@@ -2305,10 +2305,13 @@ export default {
         // scope's labels for ones nobody chose. A single unambiguous
         // button is re-installed; anything else re-installs the CATEGORY
         // itself, which is the scope the chip actually showed. A BROKEN
-        // button is never re-installed: it would block every subsequent
-        // send, and removing the chip again would re-add the same broken
-        // button — the user could not recover from here.
-        if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
+        // card is never re-installed — the same quickHelpCardBroken
+        // verdict the grid card and the composer render: a broken scope
+        // would block every subsequent send, and a missing title would
+        // come back as a chip with a blank label — and either way
+        // removing the chip again would re-add the same broken card —
+        // the user could not recover from here.
+        if (quickHelpOption && this.quickHelpCardBroken(quickHelpOption)) {
           this.currentCategoryId = null;
         } else if (quickHelpOption) {
           this.$store.commit('conversation/setContextItems', [quickHelpContextItem(quickHelpOption)]);

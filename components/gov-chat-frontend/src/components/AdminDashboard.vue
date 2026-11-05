@@ -485,6 +485,7 @@
                     <DsSelect
                       v-model="documentFilters.status"
                       class="filter-select"
+                      data-test-id="admin-status-filter"
                       :placeholder="translate('admin.documents.allStatuses', 'All Statuses')"
                     >
                       <option value="all">
@@ -619,7 +620,7 @@
                         </tr>
 
                         <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
-                          <td colspan="6" class="table-message">
+                          <td colspan="6" class="table-message" data-test-id="table-message">
                             {{ translate('admin.documents.empty', 'No documents found.') }}
                           </td>
                         </tr>

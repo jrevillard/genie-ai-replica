@@ -56,7 +56,7 @@ const COMPOSITING_TIMEOUT_MS = 15000;
 async function waitForBannerEntrance(page) {
   await page.waitForFunction(
     () => {
-      const banner = document.querySelector('.quick-help-banner');
+      const banner = document.querySelector('[data-testid="quick-help-banner"]');
       return banner !== null && banner.getAnimations().every((a) => a.playState !== 'running');
     },
     undefined,
@@ -66,7 +66,7 @@ async function waitForBannerEntrance(page) {
 
 async function waitForCompositingSettled(page) {
   const clip = await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-banner');
+    const el = document.querySelector('[data-testid="quick-help-banner"]');
     const r = el.getBoundingClientRect();
     return {
       x: Math.max(r.left, 0),
@@ -144,10 +144,10 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
   // before a single pixel is sampled, or the sampler reads the splash
   // image instead of the scrim. A reload skips it (the session flag is
   // set) and leaves the page ready to sample.
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
   if (reload) {
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
   }
   await waitForBannerEntrance(page);
   return { ctx, page };
@@ -168,12 +168,14 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  * stopping testing.
  */
 function visualLayerState(doc) {
-  const overlay = doc.querySelector('.quick-help-overlay');
+  const overlay = doc.querySelector('[data-testid="quick-help-overlay"]');
   const html = doc.documentElement;
   const visualOn = html.getAttribute('data-visual') === 'on';
-  // .genie-living-intelligence lives on .dashboard-content, an ancestor
-  // of .quick-help-overlay (DashboardView wraps the ChatBotComponent).
-  const gliOn = overlay ? overlay.closest('.genie-living-intelligence') !== null : false;
+  // The visual layer scopes itself to the dashboard wrapper, an ancestor
+  // of the welcome overlay (DashboardView wraps the ChatBotComponent).
+  // The wrapper declares the handle; the layer's scope class on it is
+  // styling, not an addressable element.
+  const gliOn = overlay ? overlay.closest('[data-test-id="dashboard-content"]') !== null : false;
   return { hasOverlay: !!overlay, visualOn, gliOn };
 }
 
@@ -286,7 +288,7 @@ return { lum, contrastRatio };`;
  *   await page.evaluate(
  *     ({ layerSource }) => ({
  *       ...new Function(layerSource)()(document),
- *       overflowX: getComputedStyle(document.querySelector('.quick-help-overlay')).overflowX
+ *       overflowX: getComputedStyle(document.querySelector('[data-testid="quick-help-overlay"]')).overflowX
  *     }),
  *     { layerSource: LAYER_STATE_BIND }
  *   )

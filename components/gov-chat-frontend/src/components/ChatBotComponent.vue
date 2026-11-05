@@ -57,11 +57,11 @@
       <!-- The conversation header: names the open conversation and closes
            it. The close button runs startNewChat, whose confirm guards
            unsaved changes; saved history is never removed by closing. -->
-      <div class="conversation-header">
+      <div class="conversation-header" data-testid="conversation-header">
         <span class="conversation-header__title" data-testid="conversation-header-title">
           {{ conversationTitle }}
         </span>
-        <div class="conversation-header__actions">
+        <div class="conversation-header__actions" data-testid="conversation-header-actions">
           <button
             v-if="openMessages.length > 0"
             type="button"
@@ -98,11 +98,11 @@
         </button>
       </div>
       <!-- Context Panel for selected tree nodes -->
-      <div v-if="selectedContextItems.length > 0" class="context-panel">
+      <div v-if="selectedContextItems.length > 0" class="context-panel" data-testid="context-panel">
         <div class="context-header">
           <span class="context-title">{{ translate('chatbot.queryContext') }}</span>
         </div>
-        <div class="context-items">
+        <div class="context-items" data-testid="context-items">
           <DsPill v-for="(item, index) in selectedContextItems" :key="index">
             <span>{{ item.service }}</span>
             <DsButton
@@ -117,12 +117,13 @@
         </div>
       </div>
       <!-- The scrollable chat window -->
-      <div ref="chatWindow" class="chat-window" aria-live="polite">
+      <div ref="chatWindow" class="chat-window" data-testid="chat-window" aria-live="polite">
         <div
           v-for="(msg, index) in openMessages"
           :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
           class="chat-message"
           :class="msg.sender"
+          :data-testid="`chat-message-${msg.sender}`"
         >
           <div
             v-if="msg.sender === 'bot'"
@@ -135,7 +136,9 @@
           </div>
           <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
             <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
-            <span v-else-if="userInitials" class="message-avatar__initials">{{ userInitials }}</span>
+            <span v-else-if="userInitials" class="message-avatar__initials" data-testid="message-avatar-initials">{{
+              userInitials
+            }}</span>
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
@@ -151,8 +154,12 @@
                   <span>{{ translate('chatbot.retry', 'Retry') }}</span>
                 </button>
               </div>
-              <div v-else class="message-bubble">
-                <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
+              <div v-else class="message-bubble" data-testid="message-bubble-bot">
+                <div
+                  v-if="msg.isStreaming && !msg.content"
+                  class="streaming-indicator"
+                  data-testid="streaming-indicator"
+                >
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
                 </div>
@@ -173,7 +180,7 @@
                   <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
-                <div v-show="msg.sourcesOpen" class="answer-sources__list">
+                <div v-show="msg.sourcesOpen" class="answer-sources__list" data-testid="answer-sources-list">
                   <button
                     v-for="(d, di) in msg.sources"
                     :key="d.id"
@@ -192,7 +199,7 @@
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-              <div v-if="msg.isGrounded === false" class="answer-warning" role="note">
+              <div v-if="msg.isGrounded === false" class="answer-warning" data-testid="answer-warning" role="note">
                 <AlertTriangle :size="15" aria-hidden="true" />
                 <span>{{
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
@@ -269,17 +276,21 @@
                 </span>
               </div>
             </div>
-            <div v-else class="message-bubble">
+            <div v-else class="message-bubble" data-testid="message-bubble-user">
               <span>{{ msg.content }}</span>
             </div>
-            <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
+            <span class="message-time" data-testid="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted" class="quick-help-overlay">
+      <div
+        v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted"
+        class="quick-help-overlay"
+        data-testid="quick-help-overlay"
+      >
         <!-- The banner is a real element so its height can grow with the
              heading + subtitle inside it (a content-aware box), and the
              heading reads as sitting inside the artwork instead of below
@@ -287,14 +298,18 @@
              off, the banner has no special styling and the layout is
              identical to the legacy version: heading + subtitle stack
              above the composer / grid as ordinary block-flow children. -->
-        <div class="quick-help-banner">
-          <div class="quick-help-content">
-            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
+        <div class="quick-help-banner" data-testid="quick-help-banner">
+          <div class="quick-help-content" data-testid="quick-help-content">
+            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading" data-testid="quick-help-heading">
               <template #brandwordmark>
-                <span :class="brandWordmarkClass">{{ brandName }}</span>
+                <span :class="brandWordmarkClass" :data-wordmark="brandWordmarkClass ? 'true' : 'false'">{{
+                  brandName
+                }}</span>
               </template>
             </i18n-t>
-            <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
+            <p class="quick-help-subtitle" data-testid="quick-help-subtitle">
+              {{ translate('chatbot.quickHelpSubtitle') }}
+            </p>
           </div>
         </div>
 
@@ -309,7 +324,7 @@
              the placeholder (the accname computation's LAST resort,
              invisible until focus) so a screen-reader user hears the
              configured identity, not a generic invite. -->
-        <div v-if="composerEntry" class="quick-help-composer">
+        <div v-if="composerEntry" class="quick-help-composer" data-testid="quick-help-composer">
           <ChatComposer
             v-model="newMessage"
             input-id="welcome-composer-input"
@@ -358,7 +373,7 @@
              and the hierarchy is what names it. A button rendered before
              the hierarchy is known cannot say whether its scope is valid
              — and a click it cannot answer is a dead click. -->
-        <div v-if="quickHelpScopeSettled" class="quick-help-grid">
+        <div v-if="quickHelpScopeSettled" class="quick-help-grid" data-testid="quick-help-grid">
           <DsCard
             v-for="button in tileButtons"
             :key="button.id"
@@ -367,6 +382,9 @@
             :hoverable="!quickHelpCardBroken(button)"
             class="quick-help-item"
             :class="{ 'just-chat': !button.category, 'config-error': quickHelpCardBroken(button) }"
+            data-testid="quick-help-item"
+            :data-scope="button.category ? 'scoped' : 'just-chat'"
+            :data-state="quickHelpCardBroken(button) ? 'config-error' : 'ok'"
             :style="buttonTintStyle(button)"
             @click="selectQuickHelpOption(button)"
           >
@@ -374,6 +392,7 @@
               v-if="quickHelpCardBroken(button)"
               class="quick-help-icon config-error-icon"
               aria-hidden="true"
+              data-testid="quick-help-error-icon"
             />
             <img v-else class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
             <div class="quick-help-text">{{ button.service }}</div>
@@ -388,7 +407,7 @@
         </div>
       </div>
       <!-- Input Area -->
-      <div v-else class="chat-input">
+      <div v-else class="chat-input" data-testid="chat-input">
         <ChatComposer
           v-model="newMessage"
           input-id="chat-composer-input"

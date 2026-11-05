@@ -41,17 +41,24 @@
 // evaluate rather than in two.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('./helpers/chatbot');
+const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('./helpers/welcome');
-const { waitForWidthSettled } = require('./helpers/layout');
+const {
+  waitForWidthSettled,
+  SIDEBAR_LEFT,
+  SIDEBAR_RIGHT,
+  QUICK_HELP_GRID,
+  QUICK_HELP_ITEM,
+  QUICK_HELP_GRID_ITEM
+} = require('./helpers/layout');
 
 // 217 - 20 = 197 px. See the report for why this is the floor rather
 // than the unreachable target.
 const CARD_MIN = 197;
 
 async function gotoChatbot(page) {
-  await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+  await navigateToChatbot(page);
+  await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
 }
 
 // The sidebar widths animate over a 0.3 s transition and the layout
@@ -84,12 +91,15 @@ async function measureLayout(page) {
   // same either way, and the grid is the element the column count
   // below is actually derived from.
   // --space-xl is the global token.
-  const tokens = await page.evaluate(() => {
+  // Selectors cross the evaluate boundary as arguments: Playwright
+  // serializes only the function source, so a Node-scope constant is
+  // undefined in the page context.
+  const tokens = await page.evaluate((gridSel) => {
     const parsePx = (raw) => {
       const m = /^([\d.]+)px$/.exec(raw.trim());
       return m ? parseFloat(m[1]) : NaN;
     };
-    const grid = document.querySelector('.quick-help-grid');
+    const grid = document.querySelector(gridSel);
     const root = document.documentElement;
     const gridStyle = grid ? window.getComputedStyle(grid) : null;
     const rootStyle = window.getComputedStyle(root);
@@ -97,15 +107,15 @@ async function measureLayout(page) {
       cardMin: gridStyle ? parsePx(gridStyle.getPropertyValue('--qh-card-min')) : NaN,
       gap: parsePx(rootStyle.getPropertyValue('--space-xl'))
     };
-  });
+  }, QUICK_HELP_GRID);
 
-  const layout = await page.evaluate(() => {
-    const wrap = document.querySelector('.main-container');
-    const centre = document.querySelector('.chatbot-container');
-    const left = document.querySelector('.side-bar');
-    const right = document.querySelector('.sidebar');
-    const grid = document.querySelector('.quick-help-grid');
-    const items = grid ? Array.from(grid.querySelectorAll('.quick-help-item')) : [];
+  const layout = await page.evaluate(({ wrapSel, centreSel, leftSel, rightSel, gridSel, itemSel }) => {
+    const wrap = document.querySelector(wrapSel);
+    const centre = document.querySelector(centreSel);
+    const left = document.querySelector(leftSel);
+    const right = document.querySelector(rightSel);
+    const grid = document.querySelector(gridSel);
+    const items = grid ? Array.from(grid.querySelectorAll(itemSel)) : [];
     const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
     const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
     const lr = left && left.getBoundingClientRect();
@@ -127,6 +137,13 @@ async function measureLayout(page) {
       cardWidths,
       cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
     };
+  }, {
+    wrapSel: '[data-test-id="main-container"]',
+    centreSel: '[data-test-id="chatbot-container"]',
+    leftSel: SIDEBAR_LEFT,
+    rightSel: SIDEBAR_RIGHT,
+    gridSel: QUICK_HELP_GRID,
+    itemSel: QUICK_HELP_ITEM
   });
 
   // Derived: the column-count the invariant says we should have.
@@ -179,8 +196,8 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
       // The sidebar widths settle through the 0.3s transition and the
       // Vue-driven position reflow; the read below must see the final
       // geometry, so wait until both panels' widths hold steady.
-      await waitForWidthSettled(page, '.side-bar');
-      await waitForWidthSettled(page, '.sidebar');
+      await waitForWidthSettled(page, SIDEBAR_LEFT);
+      await waitForWidthSettled(page, SIDEBAR_RIGHT);
 
       const m = await measureLayout(page);
 
@@ -247,13 +264,13 @@ const WELCOME_OVERFLOW_THEMES = ['light', 'dark'];
 // so this evaluate can compose it with the panel's own geometry.
 async function readWelcomePanel(page) {
   const tag = await page.addStyleTag({
-    content: '.quick-help-overlay .quick-help-banner { display: none !important; }'
+    content: '[data-testid="quick-help-overlay"] [data-testid="quick-help-banner"] { display: none !important; }'
   });
   try {
     return await page.evaluate(
       ({ layerSource }) => {
         const layer = new Function(layerSource)()(document);
-        const overlay = document.querySelector('.quick-help-overlay');
+        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
         if (!overlay) return { ...layer, overflowX: null, scrollWidth: null, clientWidth: null };
         return {
           ...layer,
@@ -291,7 +308,7 @@ test.describe('Welcome panel does not scroll horizontally', () => {
           ).toBe(true);
           expect(
             m.gliOn,
-            '.genie-living-intelligence must be on <html> or an ancestor for the wave layer'
+            'the dashboard wrapper must be an ancestor of the panel for the wave layer'
           ).toBe(true);
 
           // 1. the property that decides whether the panel draws a

@@ -45,7 +45,7 @@ test.describe('Document Search', () => {
   test('search for non-existent file name shows no results message', async ({ page }) => {
     await searchDocuments(page, 'nonexistent-file-xyz-12345');
 
-    const emptyMessage = page.locator('.table-message');
+    const emptyMessage = page.locator('[data-test-id="table-message"]');
     await expect(emptyMessage).toBeVisible({ timeout: 10000 });
     const text = await emptyMessage.innerText();
     expect(text.toLowerCase()).toContain('no documents');
@@ -56,7 +56,7 @@ test.describe('Document Search', () => {
     await waitForDocumentInTable(page, 'test-document.txt');
 
     await searchDocuments(page, 'nonexistent-xyz');
-    const emptyMessage = page.locator('.table-message');
+    const emptyMessage = page.locator('[data-test-id="table-message"]');
     await expect(emptyMessage).toBeVisible({ timeout: 10000 });
 
     await searchDocuments(page, '');
@@ -70,7 +70,7 @@ test.describe('Document Search', () => {
     await waitForDocumentInTable(page, 'test-document.txt');
 
     // DsSelect renders the passed class on the native select itself
-    const statusFilter = page.locator('select.filter-select');
+    const statusFilter = page.locator('[data-test-id="admin-status-filter"]');
     await expect(statusFilter).toBeVisible({ timeout: 5000 });
     // The filter watcher fires loadDocuments immediately (no debounce) —
     // wait for that request, then one render tick, before reading rows.

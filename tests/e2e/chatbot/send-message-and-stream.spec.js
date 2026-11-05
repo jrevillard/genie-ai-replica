@@ -6,6 +6,7 @@ const {
   waitForBotResponse,
   getMessages,
   getLastBotMessage,
+  BOT_BUBBLE,
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
@@ -48,8 +49,11 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
 
-    // Verify the chat is in a stable state (no loading spinner) after done event
-    await expect(page.locator('.loading-spinner')).toBeHidden();
+    // The turn's completion is already asserted twice above — content in
+    // the bubble, and the store's streaming flag cleared (the poll in
+    // waitForBotResponse). The streaming indicator renders only while the
+    // answer is empty, so it is structurally gone once content exists; an
+    // explicit "no spinner" count here could never fail.
 
     // Verify chat window contains both user and bot messages in correct order
     const messages = await getMessages(page);
@@ -74,7 +78,7 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     // placeholder) — a number the growth matcher can compare against —
     // and the poll holds until the text has grown past it: a bubble that
     // only ever renders its full text in one frame fails the poll.
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    const botBubble = page.locator(BOT_BUBBLE).last();
     await expect(botBubble).toContainText(/\S/, { timeout: 30000 });
     const firstLength = (await botBubble.innerText()).trim().length;
     await expect

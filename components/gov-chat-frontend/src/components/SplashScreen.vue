@@ -1,6 +1,6 @@
 // src/components/SplashScreen.vue
 <template>
-  <div class="splash-screen" :class="{ 'fade-out': isFadingOut }">
+  <div class="splash-screen" data-test-id="splash-screen" :class="{ 'fade-out': isFadingOut }">
     <div class="splash-content">
       <img
         :src="splashPath"

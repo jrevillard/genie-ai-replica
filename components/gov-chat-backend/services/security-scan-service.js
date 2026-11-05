@@ -10,11 +10,11 @@ const DAYS_TO_PROCESS = 10;
 // VL scan pagination. VL's `limit` caps rows per query — a pattern
 // matching more than one page had its tail silently dropped and
 // `matchedCount` counted only the first page (a pattern with 4,000 hits
-// reported ~1,000, distorting the severity dashboards). Pages walk
-// backwards in time: each next query ends at the oldest `_time` already
-// fetched, and VL's `end` is exclusive ([start ... end)), so the
-// boundary row is neither re-fetched nor skipped. The page cap bounds
-// VL load — the literal fetch is deliberately over-broad (see
+// reported ~1,000, distorting the severity dashboards). The scan pages
+// with VL's own `offset` arg, which skips the <offset> matching rows
+// with the biggest `_time` values — a row-count cursor, so no row is
+// lost or double-counted at a page boundary. The page cap bounds VL
+// load — the literal fetch is deliberately over-broad (see
 // `extractLiterals` below) and can match hundreds of thousands of
 // unrelated lines; hitting the cap logs a warning naming the pattern
 // instead of undercounting in silence.
@@ -348,22 +348,21 @@ const securityScanService = {
     const yieldEventLoop = () => new Promise((resolve) => setImmediate(resolve));
 
     // Fetch every row the literal clause matches in the scan window,
-    // paging backwards in time (see VL_SCAN_PAGE_SIZE above for why).
+    // paging with VL's `offset` (see VL_SCAN_PAGE_SIZE above for why).
     // `label` names the consumer in the cap warning.
     const fetchAllRows = async (msgClause, label) => {
       const rows = [];
-      let end = endIso;
       for (let page = 0; page < VL_SCAN_MAX_PAGES; page += 1) {
-        const pageRows = await client.query({ q: msgClause, start: startIso, end, limit: VL_SCAN_PAGE_SIZE });
+        const pageRows = await client.query({
+          q: msgClause,
+          start: startIso,
+          end: endIso,
+          limit: VL_SCAN_PAGE_SIZE,
+          offset: rows.length
+        });
         if (!Array.isArray(pageRows) || pageRows.length === 0) return rows;
         rows.push(...pageRows);
         if (pageRows.length < VL_SCAN_PAGE_SIZE) return rows;
-        // Pages come back newest-first; the cursor is the oldest `_time`
-        // on the page. VL accepts the `_time` format it emits, so the
-        // raw string is passed back verbatim (nanosecond precision kept).
-        const times = pageRows.map((r) => r._time).filter((t) => typeof t === 'string' && t !== '');
-        if (times.length === 0) return rows;
-        end = times.reduce((oldest, t) => (t < oldest ? t : oldest));
       }
       logger.warn(
         `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`

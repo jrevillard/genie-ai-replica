@@ -421,9 +421,10 @@ describe('fileController', () => {
     const metadataService = require('../../../services/metadataService');
     const fileService = require('../../../services/fileService');
 
-    const conflict = (detail) => {
+    const conflict = (detailOrBody) => {
       const error = new Error('Request failed with status code 409');
-      error.response = { status: 409, data: { detail } };
+      const data = typeof detailOrBody === 'string' ? { detail: detailOrBody } : detailOrBody;
+      error.response = { status: 409, data };
       return error;
     };
 
@@ -471,8 +472,27 @@ describe('fileController', () => {
       expect(fileService.addIngestionLog).not.toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
     });
 
-    // Only the guard's own conflict is carved out: a 409 that names THIS file
-    // AND says it is already running. Every other conflict is a real failure
+    // The machine-readable half of the contract (dataprep emits `code`):
+    // the classification rides the code, so a REWORD of the prose `detail`
+    // cannot silently disable the carve-out (the #1251 regression class).
+    it('carves out a 409 carrying the ingest_already_running code even when the detail is reworded', async () => {
+      axios.post.mockRejectedValue(
+        conflict({ detail: 'Another ingestion of f1 is in progress elsewhere', code: 'ingest_already_running' })
+      );
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).not.toHaveBeenCalled();
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ level: 'INFO', stage: 'dataprep' })
+      );
+    });
+
+    // On the backward-compat prose path, only the guard's own conflict is
+    // carved out: a 409 that names THIS file AND says it is already running.
+    // (The code-first path above carves out any 409 carrying the contract
+    // code, regardless of prose.) Every other conflict is a real failure
     // and must still mark the file.
     it.each([
       ['is not the idempotency guard at all', 'Conflict: the file is locked'],
@@ -481,9 +501,42 @@ describe('fileController', () => {
       [
         "names a file whose id merely contains ours ('f1' is inside 'f12')",
         "An ingest task for fileId 'f12' is already running"
+      ],
+      [
+        // The code check returns early: an UNRECOGNIZED code suppresses the
+        // prose fallback entirely — even guard-matching prose stays a real
+        // conflict (a future refactor must not fall through to prose).
+        'carries an unrecognized code alongside guard-matching prose',
+        { detail: "An ingest task for fileId 'f1' is already running", code: 'file_locked' }
       ]
-    ])('still errors on a 409 that %s', async (_case, detail) => {
-      axios.post.mockRejectedValue(conflict(detail));
+    ])('still errors on a 409 that %s', async (_case, detailOrBody) => {
+      axios.post.mockRejectedValue(conflict(detailOrBody));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
+    });
+
+    it.each([
+      ['a prose-carveout 409', conflict("An ingest task for fileId 'f1' is already running")],
+      ['a coded 409', conflict({ detail: 'Another ingestion of f1 is in progress', code: 'ingest_already_running' })]
+    ])('still errors on %s after a degraded clear already destroyed the file chunks', async (_case, conflictErr) => {
+      // The 'Ingested with Warnings' path retracts the file's chunks and
+      // zeroes its count BEFORE the ingest POST. A 409 arriving after that
+      // leaves the file wiped — the classification says "duplicate" either
+      // way, but the degraded-clear exception must still win: the file must
+      // be reported as a failure, not shrugged off.
+      jest.spyOn(fileController, '_getFileAndPath').mockResolvedValue({
+        file: { file_id: 'f1', chunk_count: 260, dataprep: { status: 'Ingested with Warnings' } },
+        filePath: '/uploads/f1.bin'
+      });
+      jest.spyOn(fileController, '_readFileBase64').mockResolvedValue('b64');
+      // The retract (first POST) succeeds; the ingest (second POST) gets the 409.
+      axios.post.mockResolvedValueOnce({ data: { success: true } }).mockRejectedValueOnce(conflictErr);
 
       await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
 

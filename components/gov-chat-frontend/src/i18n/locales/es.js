@@ -2542,7 +2542,7 @@ export default {
       },
       draft: {
         notReady:
-          'Los borradores no pueden guardarse en el servidor en esta sesión — permanecen solo en esta pestaña del navegador y se pierden si se cierra o recarga la pestaña. La página, el servidor o el repositorio pueden estar desincronizados.'
+          'Los borradores no pueden guardarse en el servidor en este momento — permanecen solo en esta pestaña del navegador y se pierden si se cierra o recarga la pestaña. La página, el servidor o el repositorio pueden estar desincronizados.'
       },
       mode: {
         basic: 'Básico',

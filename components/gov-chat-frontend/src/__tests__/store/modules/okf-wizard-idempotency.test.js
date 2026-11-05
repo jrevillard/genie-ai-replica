@@ -122,6 +122,21 @@ describe('okf/saveDraft — wizard idempotency', () => {
     expect(store.state.okf.draftsUnavailable).toBe(true);
   });
 
+  it('#1056: a successful server round-trip clears a latch armed by a transient failure', async () => {
+    // A save fired during an okf-server restart arms the latch for the
+    // session; the next successful round-trip proves the endpoint exists
+    // and must recover it instead of silencing saves until a full reload.
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('NOT_READY'), { code: 'NOT_READY' }));
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(store.state.okf.draftsUnavailable).toBe(true);
+    // a real (non-cached) fetch succeeds → the latch recovers
+    studioService.getDraft.mockResolvedValueOnce({ studio_step: 3 });
+    await store.dispatch('okf/fetchDraft', { repoId: 'r1', force: true });
+    expect(store.state.okf.draftsUnavailable).toBe(false);
+  });
+
   it('#1056: a repo deleted under the curator is dead ONLY for itself — no doomed PUTs, no session latch', async () => {
     // The typed shape studioService's classifier throws (the store switches on code).
     studioService.saveDraft.mockRejectedValue(

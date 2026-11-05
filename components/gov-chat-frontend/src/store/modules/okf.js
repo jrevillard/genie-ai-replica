@@ -247,6 +247,9 @@ const mutations = {
   setDraftsUnavailable(state) {
     state.draftsUnavailable = true;
   },
+  clearDraftsUnavailable(state) {
+    state.draftsUnavailable = false;
+  },
   setDraftDead(state, repoId) {
     if (!repoId) return;
     state.draftsDeadByRepo = { ...state.draftsDeadByRepo, [repoId]: true };
@@ -386,6 +389,10 @@ const actions = {
       // The wire draft is FLAT — commit it verbatim. A server that echoes a
       // stale/other repo_id would corrupt the map key, so trust the id we asked for.
       commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
+      // A successful round-trip proves the endpoint exists: a latch armed by
+      // a transient failure (a save fired during a server restart) recovers
+      // here instead of silencing saves until a full reload.
+      if (state.draftsUnavailable) commit('clearDraftsUnavailable');
       return { ok: true, draft };
     } catch (err) {
       if (err && err.code === 'NOT_READY') {

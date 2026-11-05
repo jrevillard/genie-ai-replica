@@ -1345,7 +1345,7 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
       { concept_id: 'conceptB', changes: [{ field: 'type' }], after: { type: 'topic' } },
       { concept_id: 'conceptC', changes: [{ field: 'type' }], after: { type: 'topic' } }
     ]);
-    conceptMetaService.patchConceptMeta
+    conceptMetaService.patchConceptFields
       .mockResolvedValueOnce({ concept_id: 'conceptA' }) // A: ok
       .mockRejectedValueOnce(new Error('transient db')) // B attempt 1: transient
       .mockResolvedValueOnce({ concept_id: 'conceptB' }) // B attempt 2: the retry absorbs it
@@ -1358,6 +1358,15 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     expect(res.status).toBe(200);
     expect(res.body.applied).toBe(2);
     expect(res.body.failures).toEqual([{ concept_id: 'conceptC', error: 'row vanished' }]);
+    // The apply must go through patchConceptFields ({frontmatterPatch}) —
+    // patchConceptMeta treats its argument as a FULL parsed concept and
+    // would blank the markdown body and re-hash empty content.
+    expect(conceptMetaService.patchConceptFields).toHaveBeenCalledWith(
+      'repoA',
+      expect.any(String),
+      expect.objectContaining({ frontmatterPatch: expect.any(Object) })
+    );
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
     const { writeAudit } = require('../services/audit-service');
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({

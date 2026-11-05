@@ -2538,7 +2538,7 @@ export default {
       },
       draft: {
         notReady:
-          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe, seva kapa polokelo e ka se lumellane.'
+          'Li-draft ha li khone ho bolokoa lehlakoreng la seva hajale — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe, seva kapa polokelo e ka se lumellane.'
       },
       mode: {
         basic: 'Pele',

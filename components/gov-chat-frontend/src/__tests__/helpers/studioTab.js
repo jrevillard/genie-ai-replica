@@ -1,10 +1,13 @@
 'use strict';
 
 /**
- * STUDIO TAB TEST RIG — the ONE mock battery + store + mount for
- * `components/okf/StudioTab.vue`. It was copied verbatim into every Studio
- * Tab suite, and a copy drifts: a new StudioTab service import has to be
- * mocked in N files, and a suite that forgot one mounts the real service.
+ * STUDIO TAB TEST RIG — the mock battery + store + mount for
+ * `components/okf/StudioTab.vue`. New StudioTab suites MUST use this rig:
+ * a new service import is mocked in ONE file, and a suite that forgets a
+ * mock mounts the real service. (studio-tab-domain and
+ * studio-tab-draft-notice use it; the older wizard-handoff and
+ * studio-draft-resume suites still carry their own batteries — migrate
+ * them when next touched.)
  *
  * The StudioTab dependencies are mocked HERE (module scope, so jest hoists
  * them for every importing suite); the per-suite jest.fn handles are

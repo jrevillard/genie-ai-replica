@@ -2522,7 +2522,7 @@ export default {
       },
       draft: {
         notReady:
-          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa, seva au ghala linaweza kuwa nje ya ulandanishi.'
+          'Rasimu haziwezi kuhifadhiwa kwenye seva kwa sasa — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa, seva au ghala linaweza kuwa nje ya ulandanishi.'
       },
       mode: {
         basic: 'Msingi',

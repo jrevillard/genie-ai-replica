@@ -53,7 +53,7 @@
         {{
           translate(
             'okf.studio.draft.notReady',
-            'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
+            'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page, the server or the repository may be out of sync.'
           )
         }}
       </p>

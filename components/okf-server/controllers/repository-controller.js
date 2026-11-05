@@ -1365,7 +1365,9 @@ async function reingestFailed(req, res, next) {
  * DEFAULTS TO TRUE: a request that omits the flag is a scan, never an apply
  * (both branches).
  *
- * Returns { ok, changes, warnings }.
+ * Returns, for the curated branch, { ok, mode, dry_run, proposals, applied,
+ * failures }; for the heuristics branch, the autocorrectRepo result
+ * { ok, changes, warnings, applied, failed, failures, total_concepts }.
  */
 async function autocorrectRepo(req, res, next) {
   try {
@@ -1401,6 +1403,7 @@ async function autocorrectRepo(req, res, next) {
       const proposals = await llmCuration.proposeFrontmatter(repoDoc, bodyConceptId || null, { classification: mode });
       let appliedCount = 0;
       const failures = [];
+      const appliedProposals = [];
       if (!effectiveDryRun) {
         const list = Array.isArray(proposals) ? proposals : [proposals];
         const fields = new Set();
@@ -1415,8 +1418,13 @@ async function autocorrectRepo(req, res, next) {
           let lastError = null;
           for (let attempt = 0; attempt < 2 && !updated; attempt += 1) {
             try {
-              updated = await conceptMetaService.patchConceptMeta(repo_id, p.concept_id, {
-                frontmatter: p.after
+              // patchConceptFields ({frontmatterPatch}), NOT patchConceptMeta:
+              // the meta variant treats its argument as a FULL parsed concept
+              // and would blank the markdown body, re-hash the empty content
+              // and reset index_status. The patch merges into the existing
+              // frontmatter and leaves the body untouched.
+              updated = await conceptMetaService.patchConceptFields(repo_id, p.concept_id, {
+                frontmatterPatch: p.after
               });
               if (!updated) lastError = 'concept row not found';
             } catch (err) {
@@ -1425,6 +1433,7 @@ async function autocorrectRepo(req, res, next) {
           }
           if (updated) {
             appliedCount += 1;
+            appliedProposals.push({ concept_id: p.concept_id, changes: p.changes, after: p.after });
             for (const c of p.changes) fields.add(c.field);
           } else {
             failures.push({ concept_id: p.concept_id, error: lastError || 'unknown error' });
@@ -1446,7 +1455,7 @@ async function autocorrectRepo(req, res, next) {
               ' concept(s)' +
               (fieldList.length ? ' (' + fieldList.join(', ') + ')' : '') +
               (failures.length > 0 ? `, ${failures.length} concept(s) FAILED and reported to the client` : ''),
-            details: { mode, applied: appliedCount, failures }
+            details: { mode, applied: appliedCount, changes: appliedProposals, failures }
           })
           .catch(() => {
             /* best-effort */

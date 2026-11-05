@@ -1568,6 +1568,7 @@ export default {
       notEngaged: 'Não contribui',
       servingCount: '{n} grafo(s) em serviço',
       sourceLabel: 'Fonte',
+      invalidValue: 'Introduza um número inteiro entre {min} e {max}.',
       source: {
         database: 'Linha governada',
         'env-defaults': 'Predefinição do ambiente'
@@ -1598,6 +1599,7 @@ export default {
       confirmTitle: 'Alterar a postura de recuperação?',
       confirmLead: 'É uma definição global — muda a forma como cada consulta é fundamentada, em cerca de 30 segundos.',
       readFailed: 'Não foi possível ler a postura de recuperação.',
+      nothingToSave: 'Não há nada para guardar.',
       saveFailed: 'A alteração foi recusada.',
       audit: 'Histórico de alterações',
       auditLoading: 'A carregar o histórico…',

@@ -1571,6 +1571,7 @@ export default {
       notEngaged: 'Trägt nicht bei',
       servingCount: '{n} Graph(en) im Betrieb',
       sourceLabel: 'Quelle',
+      invalidValue: 'Gib eine ganze Zahl zwischen {min} und {max} ein.',
       source: {
         database: 'Verwaltete Zeile',
         'env-defaults': 'Umgebungs-Standardwert'
@@ -1602,6 +1603,7 @@ export default {
       confirmLead:
         'Dies ist eine globale Einstellung — sie ändert, wie jede Anfrage verankert wird, innerhalb von etwa 30 Sekunden.',
       readFailed: 'Die Abruf-Haltung konnte nicht gelesen werden.',
+      nothingToSave: 'Es gibt nichts zu speichern.',
       saveFailed: 'Die Änderung wurde abgelehnt.',
       audit: 'Änderungsverlauf',
       auditLoading: 'Verlauf wird geladen…',

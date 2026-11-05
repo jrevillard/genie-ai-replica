@@ -1556,6 +1556,7 @@ export default {
       notEngaged: 'অবদান করে না',
       servingCount: '{n}টি সার্ভিং গ্রাফ',
       sourceLabel: 'উৎস',
+      invalidValue: '{min} থেকে {max}-এর মধ্যে একটি পূর্ণসংখ্যা লিখুন।',
       source: {
         database: 'পরিচালিত সারি',
         'env-defaults': 'পরিবেশের ডিফল্ট'
@@ -1586,6 +1587,7 @@ export default {
       confirmTitle: 'পুনরুত্রণের অবস্থান বদলাবেন?',
       confirmLead: 'এটি একটি বৈশ্বিক সেটিং — প্রায় ৩০ সেকেন্ডের মধ্যে প্রতিটি প্রশ্নের গ্রাউন্ডিং বদলায়।',
       readFailed: 'পুনরুত্রণের অবস্থান পড়া যায়নি।',
+      nothingToSave: 'সংরক্ষণের কিছু নেই।',
       saveFailed: 'পরিবর্তন প্রত্যাখ্যাত হয়েছে।',
       audit: 'পরিবর্তনের ইতিহাস',
       auditLoading: 'ইতিহাস লোড হচ্ছে…',

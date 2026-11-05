@@ -1547,6 +1547,7 @@ export default {
       notEngaged: 'لا يساهم',
       servingCount: '{n} شبكة في الخدمة',
       sourceLabel: 'المصدر',
+      invalidValue: 'أدخل عددًا صحيحًا بين {min} و{max}.',
       source: {
         database: 'صف مُدار',
         'env-defaults': 'الافتراضي من البيئة'
@@ -1576,6 +1577,7 @@ export default {
       confirmTitle: 'هل تريد تغيير وضعية الاسترجاع؟',
       confirmLead: 'هذا إعداد عام — يغيّر تأريض كل استعلام خلال نحو 30 ثانية.',
       readFailed: 'تعذّرت قراءة وضعية الاسترجاع.',
+      nothingToSave: 'لا يوجد ما يُحفظ.',
       saveFailed: 'رُفض التغيير.',
       audit: 'سجل التغييرات',
       auditLoading: 'جارٍ تحميل السجل…',

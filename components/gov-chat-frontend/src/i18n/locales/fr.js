@@ -1573,6 +1573,7 @@ export default {
       notEngaged: 'Ne contribue pas',
       servingCount: '{n} graphe(s) en service',
       sourceLabel: 'Source',
+      invalidValue: 'Saisissez un nombre entier entre {min} et {max}.',
       source: {
         database: 'Ligne gouvernée',
         'env-defaults': 'Valeur par défaut de l’environnement'
@@ -1604,6 +1605,7 @@ export default {
       confirmLead:
         'C’est un paramètre global — il change la façon dont chaque requête est ancrée, en une trentaine de secondes.',
       readFailed: 'Impossible de lire la posture de récupération.',
+      nothingToSave: 'Il n’y a rien à enregistrer.',
       saveFailed: 'La modification a été refusée.',
       audit: 'Historique des modifications',
       auditLoading: 'Chargement de l’historique…',

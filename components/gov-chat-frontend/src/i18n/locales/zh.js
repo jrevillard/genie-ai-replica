@@ -1522,6 +1522,7 @@ export default {
       notEngaged: '未参与',
       servingCount: '{n} 个服务中的图',
       sourceLabel: '来源',
+      invalidValue: '请输入 {min} 到 {max} 之间的整数。',
       source: {
         database: '受管记录',
         'env-defaults': '环境默认值'
@@ -1551,6 +1552,7 @@ export default {
       confirmTitle: '要更改检索态势吗？',
       confirmLead: '这是全局设置——它会在约 30 秒内改变每个查询的接地方式。',
       readFailed: '无法读取检索态势。',
+      nothingToSave: '没有需要保存的内容。',
       saveFailed: '更改被拒绝。',
       audit: '变更历史',
       auditLoading: '正在加载历史…',

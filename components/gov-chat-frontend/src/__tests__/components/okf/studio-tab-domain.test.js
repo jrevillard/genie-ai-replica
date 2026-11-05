@@ -18,9 +18,23 @@ jest.mock('@/services/repoOkfService', () => ({
     // now — it reads this on mount. Without it the card renders its error
     // state, which is a lie about the surface this suite mounts.
     getRetrievalConfig: jest.fn().mockResolvedValue({
-      config: { mode: 'legacy', revision: 0 },
+      config: {
+        mode: 'legacy',
+        revision: 0,
+        max_fanout_graphs: 5,
+        spine_max_hops: 2,
+        extracted_hop_cap: 1,
+        candidate_cap_per_graph: 50,
+        candidate_cap_global: 200
+      },
       source: 'env-defaults',
-      limits: {},
+      limits: {
+        max_fanout_graphs: { min: 1, max: 20 },
+        spine_max_hops: { min: 1, max: 3 },
+        extracted_hop_cap: { min: 1, max: 3 },
+        candidate_cap_per_graph: { min: 1, max: 200 },
+        candidate_cap_global: { min: 1, max: 1000 }
+      },
       modes: ['legacy', 'okf_only', 'hybrid'],
       serving_graph_count: 0,
       serving_graphs: [],

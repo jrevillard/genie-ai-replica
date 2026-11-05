@@ -1568,6 +1568,7 @@ export default {
       notEngaged: 'Ha ho ntlha',
       servingCount: '{n} li graph tse sebele',
       sourceLabel: 'Mohlaka',
+      invalidValue: 'Kenisa nomoro e phetseng mahareng ho {min} le {max}.',
       source: {
         database: 'Mokha o laoloheloang',
         'env-defaults': 'Sebetsa ka mora ka tikologo'
@@ -1599,6 +1600,7 @@ export default {
       confirmLead:
         'Bo ena ke boemong bo lefatsohe — bo fetola kamoo karabo ka tafolo e mong le e mong ka motsheo oa 30 sekonte.',
       readFailed: 'Ha a ka bale boemo bo ea bo phatlela.',
+      nothingToSave: 'Ha ho letho le ho boloka.',
       saveFailed: 'Phetoho e ile e hana.',
       audit: 'Hisetori ea phetoho',
       auditLoading: 'Ho pakisa hisetori…',

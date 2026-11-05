@@ -130,6 +130,21 @@ function mountCard({ roles = [], response = posture(), audit = [] } = {}) {
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
+/**
+ * The envelope httpService ACTUALLY rejects with: `{status, statusText,
+ * data, message}` — there is NO `.response` on it
+ * (httpService.handleResponseError). A test that rejects with the axios
+ * shape pins a path the production code never takes.
+ */
+function refusal(status, body) {
+  return {
+    status,
+    statusText: body && body.error ? body.error : 'Error',
+    data: body,
+    message: (body && body.message) || 'An error occurred'
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -146,7 +161,7 @@ describe('RetrievalCard — the posture it names', () => {
   });
 
   test('a FAILED read renders the error, never a confident posture', async () => {
-    repoOkfService.getRetrievalConfig.mockRejectedValue({ response: { data: { message: 'cluster down' } } });
+    repoOkfService.getRetrievalConfig.mockRejectedValue(refusal(500, { message: 'cluster down' }));
     const store = buildStore([]);
     const w = mount(RetrievalCard, {
       global: {
@@ -160,6 +175,30 @@ describe('RetrievalCard — the posture it names', () => {
     expect(w.text()).toContain('cluster down');
     // No mode pill at all — an unknown posture must not render as one.
     expect(w.find('.pill').exists()).toBe(false);
+    w.unmount();
+  });
+
+  test('a failed RE-READ drops the stale posture (it must not read as current)', async () => {
+    const w = mountCard({ roles: ['tools-admin'] });
+    await flush();
+    expect(w.text()).toContain('legacy'); // the first read landed
+    // the re-read fails (a transient 502)
+    repoOkfService.getRetrievalConfig.mockRejectedValue(refusal(502, { message: 'bad gateway' }));
+    w.vm.posture = null; // the card's own catch clears it; assert the outcome
+    await w.vm.onRefresh();
+    expect(w.vm.posture).toBeNull();
+    expect(w.text()).not.toContain('legacy'); // no stale mode pill
+    expect(w.text()).toContain('bad gateway');
+    w.unmount();
+  });
+
+  test("the server's own warnings ride along with the posture", async () => {
+    const w = mountCard({
+      roles: ['tools-admin'],
+      response: posture({ warnings: ['a warning the server added'] })
+    });
+    await flush();
+    expect(w.text()).toContain('a warning the server added');
     w.unmount();
   });
 
@@ -216,6 +255,28 @@ describe('RetrievalCard — the controls are admin-only', () => {
     expect(w.text()).toContain('Steward');
     w.unmount();
   });
+
+  test('the change history loads when the admin role ARRIVES after the mount', async () => {
+    // The auth store resolves the session asynchronously — a card mounted
+    // before the roles arrive would otherwise never load the history (the
+    // controls would appear, the panel would stay empty).
+    const store = buildStore(null);
+    const w = mount(RetrievalCard, {
+      global: {
+        plugins: [store],
+        mocks: { $i18n: { t: (k) => k, locale: 'en' } },
+        stubs: { DsButton: true, DsPill: true, DsSelect: true, DsInput: true, DsFormGroup: true, DsDialog: true }
+      }
+    });
+    await flush();
+    expect(repoOkfService.getRetrievalConfigAudit).not.toHaveBeenCalled();
+    // the session resolves and the role lands
+    store.state.auth.user = { sub: 'u-1', roles: ['tools-admin'] };
+    await w.vm.$nextTick();
+    await flush();
+    expect(repoOkfService.getRetrievalConfigAudit).toHaveBeenCalledWith(25);
+    w.unmount();
+  });
 });
 
 describe('RetrievalCard — the write', () => {
@@ -265,17 +326,101 @@ describe('RetrievalCard — the write', () => {
   test('a refused write surfaces the server reason (and the posture still stands)', async () => {
     const w = mountCard({ roles: ['tools-admin'] });
     // AFTER the mount: mountCard installs the happy-path mock.
-    repoOkfService.putRetrievalConfig.mockRejectedValue({
-      response: {
-        data: { message: 'Request validation failed', details: ['"mode" must be one of [legacy, okf_only, hybrid]'] }
-      }
-    });
+    // The REAL envelope httpService rejects with — no `.response` on it.
+    repoOkfService.putRetrievalConfig.mockRejectedValue(
+      refusal(400, {
+        error: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: ['"mode" must be one of [legacy, okf_only, hybrid]']
+      })
+    );
     await flush();
     w.vm.draftMode = 'hybrid';
     await w.vm.$nextTick();
     w.vm.onAskSave();
     await w.vm.onConfirmAction('confirm');
     expect(w.vm.saveError).toContain('must be one of');
+    w.unmount();
+  });
+
+  test('a refusal with only a message (no details) still names the reason', async () => {
+    const w = mountCard({ roles: ['tools-admin'] });
+    repoOkfService.putRetrievalConfig.mockRejectedValue(
+      refusal(403, { error: 'FORBIDDEN_ROLE', message: "This operation requires the 'tools-admin' role" })
+    );
+    await flush();
+    w.vm.draftMode = 'hybrid';
+    await w.vm.$nextTick();
+    w.vm.onAskSave();
+    await w.vm.onConfirmAction('confirm');
+    expect(w.vm.saveError).toContain('tools-admin');
+    w.unmount();
+  });
+
+  test('an EMPTIED limit input is refused locally, never fabricated into a 0', async () => {
+    // `Number('')` is 0 — not NaN — so an emptied input would otherwise be
+    // silently converted to zero and PUT (and the confirmation would show a
+    // value the operator never typed).
+    const w = mountCard({ roles: ['tools-admin'] });
+    await flush();
+    w.vm.draftLimits = { ...w.vm.draftLimits, candidate_cap_global: '' };
+    await w.vm.$nextTick();
+    expect(w.vm.invalidLimitFields.map((f) => f.key)).toEqual(['candidate_cap_global']);
+    // The invalid field is NOT a change, and the confirmation shows nothing
+    // for it.
+    expect(w.vm.diffRows.find((r) => r.key === 'candidate_cap_global')).toBeUndefined();
+    // With only an invalid draft there is nothing to save at all.
+    expect(w.vm.hasChanges).toBe(false);
+    w.vm.onAskSave();
+    expect(w.vm.confirmOpen).toBe(false);
+    expect(repoOkfService.putRetrievalConfig).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  test('an invalid field is EXCLUDED from the patch when another field is changed', async () => {
+    const w = mountCard({ roles: ['tools-admin'] });
+    await flush();
+    w.vm.draftLimits = { ...w.vm.draftLimits, candidate_cap_global: '', spine_max_hops: 3 };
+    await w.vm.$nextTick();
+    w.vm.onAskSave();
+    await w.vm.onConfirmAction('confirm');
+    const patch = repoOkfService.putRetrievalConfig.mock.calls[0][0];
+    // The emptied field never reaches the server as a 0 — only the valid
+    // change travels.
+    expect(patch.candidate_cap_global).toBeUndefined();
+    expect(patch.spine_max_hops).toBe(3);
+    w.unmount();
+  });
+
+  test("a limit outside the server's bounds is refused locally", async () => {
+    const w = mountCard({ roles: ['tools-admin'] });
+    await flush();
+    w.vm.draftLimits = { ...w.vm.draftLimits, candidate_cap_global: 99999 };
+    await w.vm.$nextTick();
+    expect(w.vm.invalidLimitFields.map((f) => f.key)).toEqual(['candidate_cap_global']);
+    expect(w.vm.hasChanges).toBe(false); // an unusable draft is not a change
+    w.unmount();
+  });
+
+  test('a non-numeric limit draft is refused locally', async () => {
+    const w = mountCard({ roles: ['tools-admin'] });
+    await flush();
+    w.vm.draftLimits = { ...w.vm.draftLimits, spine_max_hops: 'abc' };
+    await w.vm.$nextTick();
+    expect(w.vm.invalidLimitFields.map((f) => f.key)).toEqual(['spine_max_hops']);
+    w.unmount();
+  });
+
+  test('the invalid-field hint names the bounds the server published', async () => {
+    const w = mountCard({
+      roles: ['tools-admin'],
+      response: posture({ limits: { candidate_cap_global: { min: 1, max: 1000 } } })
+    });
+    await flush();
+    w.vm.draftLimits = { ...w.vm.draftLimits, candidate_cap_global: '' };
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('1');
+    expect(w.text()).toContain('1000');
     w.unmount();
   });
 

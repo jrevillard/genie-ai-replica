@@ -1555,6 +1555,7 @@ export default {
       notEngaged: 'Not contributing',
       servingCount: '{n} serving graph(s)',
       sourceLabel: 'Source',
+      invalidValue: 'Enter a whole number between {min} and {max}.',
       source: {
         database: 'Governed row',
         'env-defaults': 'Environment default'
@@ -1585,6 +1586,7 @@ export default {
       confirmTitle: 'Change the retrieval posture?',
       confirmLead: 'This is a global setting — it changes how every query is grounded, within about 30 seconds.',
       readFailed: 'Could not read the retrieval posture.',
+      nothingToSave: 'There is nothing to save.',
       saveFailed: 'The change was refused.',
       audit: 'Change history',
       auditLoading: 'Loading history…',

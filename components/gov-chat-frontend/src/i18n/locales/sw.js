@@ -1558,6 +1558,7 @@ export default {
       notEngaged: 'Haichangii',
       servingCount: 'Grafu {n} zinazohudumia',
       sourceLabel: 'Chanzo',
+      invalidValue: 'Weka namba kamili kati ya {min} na {max}.',
       source: {
         database: 'Safu inayosimamiwa',
         'env-defaults': 'Thamani chaguo-msingi ya mazingira'
@@ -1588,6 +1589,7 @@ export default {
       confirmTitle: 'Badilisha hali ya u retrieval?',
       confirmLead: 'Hii ni mpangilio wa kimakutani — hubadilisha jinsi kila swali linavyotumika, ndani ya sekunde 30.',
       readFailed: 'Haiwezi kusoma hali ya u retrieval.',
+      nothingToSave: 'Hakuna kitu cha kuhifadhi.',
       saveFailed: 'Mabadiliko yalizitishwa.',
       audit: 'Historia ya mabadiliko',
       auditLoading: 'Inapakia historia…',

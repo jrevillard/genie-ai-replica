@@ -1566,6 +1566,7 @@ export default {
       notEngaged: 'No aporta',
       servingCount: '{n} grafo(s) en servicio',
       sourceLabel: 'Fuente',
+      invalidValue: 'Introduce un número entero entre {min} y {max}.',
       source: {
         database: 'Fila gobernada',
         'env-defaults': 'Valor por defecto del entorno'
@@ -1596,6 +1597,7 @@ export default {
       confirmTitle: '¿Cambiar la postura de recuperación?',
       confirmLead: 'Es un ajuste global: cambia cómo se ancla cada consulta, en unos 30 segundos.',
       readFailed: 'No se pudo leer la postura de recuperación.',
+      nothingToSave: 'No hay nada que guardar.',
       saveFailed: 'El cambio fue rechazado.',
       audit: 'Historial de cambios',
       auditLoading: 'Cargando el historial…',

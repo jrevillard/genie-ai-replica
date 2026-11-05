@@ -1563,6 +1563,7 @@ export default {
       notEngaged: 'Tidak berkontribusi',
       servingCount: '{n} graf yang melayani',
       sourceLabel: 'Sumber',
+      invalidValue: 'Masukkan bilangan bulat antara {min} dan {max}.',
       source: {
         database: 'Baris yang dikelola',
         'env-defaults': 'Nilai bawaan lingkungan'
@@ -1593,6 +1594,7 @@ export default {
       confirmTitle: 'Ubah postur retrieval?',
       confirmLead: 'Ini adalah pengaturan global — mengubah cara setiap kueri ditopang, dalam sekitar 30 detik.',
       readFailed: 'Tidak dapat membaca postur retrieval.',
+      nothingToSave: 'Tidak ada yang perlu disimpan.',
       saveFailed: 'Perubahan ditolak.',
       audit: 'Riwayat perubahan',
       auditLoading: 'Memuat riwayat…',

@@ -1559,6 +1559,7 @@ export default {
       notEngaged: 'Не участвует',
       servingCount: 'Обслуживающих графов: {n}',
       sourceLabel: 'Источник',
+      invalidValue: 'Введите целое число от {min} до {max}.',
       source: {
         database: 'Управляемая запись',
         'env-defaults': 'Значение по умолчанию окружения'
@@ -1589,6 +1590,7 @@ export default {
       confirmTitle: 'Изменить режим извлечения?',
       confirmLead: 'Это глобальная настройка — она меняет опору каждого запроса в течение примерно 30 секунд.',
       readFailed: 'Не удалось прочитать режим извлечения.',
+      nothingToSave: 'Нечего сохранять.',
       saveFailed: 'Изменение отклонено.',
       audit: 'История изменений',
       auditLoading: 'Загрузка истории…',

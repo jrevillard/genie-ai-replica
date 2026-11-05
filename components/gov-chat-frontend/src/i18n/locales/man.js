@@ -1543,6 +1543,7 @@ export default {
       notEngaged: 'E fɔ e la',
       servingCount: 'Graf {n} nemma',
       sourceLabel: 'Gbelegele',
+      invalidValue: 'Ɲa wa kɛsɛ nn-digit kɔfɛ {min} ni {max}.',
       source: {
         database: 'Row bɛ naɲɩi',
         'env-defaults': 'Default ka environment'
@@ -1572,6 +1573,7 @@ export default {
       confirmTitle: 'Sɛnɩna gbangbang njeng?',
       confirmLead: 'Ena ye ɲɛcɛ wullɔ — e nɔ ka bɔ koAnswers bɛɛ fɔɲɛw, bɔ 30 sɔnɔ kɔnɔ.',
       readFailed: 'An fɔ ka bɔ gbangbang njeng.',
+      nothingToSave: 'Foy to foy mɛn na.',
       saveFailed: 'A bɛɛ.',
       audit: 'Iɲiɲɛri dɔw',
       auditLoading: 'Iɲiɲɛri dɔw bɛɛ…',

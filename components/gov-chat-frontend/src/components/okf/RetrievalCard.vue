@@ -90,6 +90,16 @@
       }}
     </p>
 
+    <!-- THE SERVER'S OWN WARNINGS: the read-model carries them (ADR-039 D2),
+         so a warning added server-side later reaches the operator without a
+         frontend change. Supplementary to the card's translated sentence
+         above — never a replacement for it. -->
+    <ul v-if="serverWarnings.length" class="okf-retrieval__warnings">
+      <li v-for="(warning, i) in serverWarnings" :key="i" class="okf-retrieval__warning-item">
+        {{ warning }}
+      </li>
+    </ul>
+
     <details v-if="posture && posture.serving_graphs && posture.serving_graphs.length" class="okf-retrieval__serving">
       <summary class="okf-retrieval__summary">
         {{ translate('okf.retrieval.servingList', 'Serving graphs') }} ({{ posture.serving_graphs.length }})
@@ -137,12 +147,27 @@
               :max="field.max"
               :disabled="busy"
             />
+            <!-- AN UNUSABLE DRAFT is named, not silently dropped: an emptied
+                 input would otherwise be fabricated into a 0 and refused by
+                 the server with no clue which field was at fault. -->
+            <p v-if="limitDraft(field) === null" class="okf-retrieval__invalid" role="alert">
+              {{
+                translate('okf.retrieval.invalidValue', 'Enter a whole number between {min} and {max}.')
+                  .replace('{min}', String(field.min))
+                  .replace('{max}', String(field.max))
+              }}
+            </p>
           </DsFormGroup>
         </div>
       </details>
 
       <div class="okf-retrieval__actions">
-        <DsButton variant="primary" small :disabled="busy || !hasChanges" @click="onAskSave">
+        <DsButton
+          variant="primary"
+          small
+          :disabled="busy || !hasChanges || invalidLimitFields.length > 0"
+          @click="onAskSave"
+        >
           {{ translate('okf.retrieval.save', 'Save') }}
         </DsButton>
         <DsButton variant="ghost" small :disabled="busy || !hasChanges" @click="resetDraft">
@@ -179,6 +204,7 @@
       :visible="confirmOpen"
       :title="translate('okf.retrieval.confirmTitle', 'Change the retrieval posture?')"
       size="sm"
+      persistent
       :actions="confirmActions"
       @close="confirmOpen = false"
       @action="onConfirmAction"
@@ -224,6 +250,20 @@ const LIMIT_FIELDS = [
   { key: 'candidate_cap_per_graph', min: 1, max: 200 },
   { key: 'candidate_cap_global', min: 1, max: 1000 }
 ];
+
+/**
+ * The server's reason for a refusal, read from the envelope httpService
+ * actually rejects with: `{ status, statusText, data, message }` — there is
+ * NO `.response` on it (httpService.handleResponseError). The axios shape is
+ * accepted as a fallback so a raw axios rejection still reads.
+ * @returns {{body: object|null, message: string, details: string[]|null}}
+ */
+function refusalReason(err) {
+  const body = (err && err.data) || (err && err.response && err.response.data) || null;
+  const details = body && Array.isArray(body.details) ? body.details : null;
+  const message = (body && body.message) || (err && err.message) || '';
+  return { body, message, details };
+}
 
 export default {
   name: 'OkfRetrievalCard',
@@ -280,6 +320,11 @@ export default {
     servingCount() {
       return this.posture ? Number(this.posture.serving_graph_count || 0) : 0;
     },
+    /** The server's own warnings (ADR-039 D2) — the read-model's list. */
+    serverWarnings() {
+      const warnings = this.posture && this.posture.warnings;
+      return Array.isArray(warnings) ? warnings.filter((w) => typeof w === 'string' && w) : [];
+    },
     modeVariant() {
       if (!this.posture) return 'neutral';
       if (this.posture.config.mode === 'legacy') return 'neutral';
@@ -290,10 +335,25 @@ export default {
     isFootGun() {
       return !!(this.posture && this.posture.config.mode === 'okf_only' && this.servingCount === 0);
     },
+    /**
+     * The draft value for ONE limit field, or null when the operator has
+     * left it in a state the server would refuse (empty, non-numeric, or
+     * outside the bounds the SERVER published). `Number('')` is 0 — NOT
+     * NaN — so an emptied input would otherwise be silently fabricated into
+     * a 0 and sent; the server's joi would refuse it and the confirmation
+     * would have shown a value the operator never typed.
+     */
+    invalidLimitFields() {
+      return this.limitFields.filter((f) => this.limitDraft(f) === null);
+    },
     hasChanges() {
       if (!this.posture) return false;
       if (this.draftMode !== this.posture.config.mode) return true;
-      return this.limitFields.some((f) => Number(this.draftLimits[f.key]) !== Number(this.posture.config[f.key]));
+      return this.limitFields.some((f) => {
+        const draft = this.limitDraft(f);
+        if (draft === null) return false; // invalid drafts are not a change
+        return draft !== Number(this.posture.config[f.key]);
+      });
     },
     /** The before→after rows the confirmation shows. */
     diffRows() {
@@ -310,9 +370,10 @@ export default {
       }
       for (const f of this.limitFields) {
         const before = this.posture.config[f.key];
-        const after = Number(this.draftLimits[f.key]);
-        if (Number(before) !== after) {
-          rows.push({ key: f.key, label: label(f.key), before: String(before), after: String(after) });
+        const draft = this.limitDraft(f);
+        if (draft === null) continue; // nothing valid to show
+        if (Number(before) !== draft) {
+          rows.push({ key: f.key, label: label(f.key), before: String(before), after: String(draft) });
         }
       }
       return rows;
@@ -324,16 +385,44 @@ export default {
       ];
     }
   },
+  watch: {
+    // The auth store resolves the session ASYNCHRONOUSLY — a card mounted
+    // before the roles arrive would never load the change history (the
+    // controls would appear, the history panel would not). Watch the
+    // transition instead of reading it once at mount time.
+    canEdit(isAdmin) {
+      if (isAdmin && !this.auditRows.length && !this.auditLoading) this.loadAudit();
+    }
+  },
   mounted() {
     this.onRefresh();
   },
   methods: {
+    /**
+     * The draft value for ONE limit field, or null when the operator has
+     * left it in a state the server would refuse (empty, non-numeric, or
+     * outside the bounds the SERVER published). `Number('')` is 0 — NOT
+     * NaN — so an emptied input would otherwise be silently fabricated into
+     * a 0 and sent; the server's joi would refuse it and the confirmation
+     * would have shown a value the operator never typed.
+     */
+    limitDraft(field) {
+      const raw = this.draftLimits[field.key];
+      if (raw === '' || raw === null || raw === undefined) return null;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) return null;
+      if (value < field.min || value > field.max) return null;
+      return value;
+    },
     async onRefresh() {
       this.loading = true;
       this.error = '';
       try {
         const posture = await repoOkfService.getRetrievalConfig();
         if (!posture) {
+          // An unknown posture must not render as a confident one — the
+          // previous read is dropped with it (see the catch below).
+          this.posture = null;
           this.error = this.translate('okf.retrieval.readFailed', 'Could not read the retrieval posture.');
           return;
         }
@@ -341,9 +430,13 @@ export default {
         this.resetDraft();
         if (this.canEdit) this.loadAudit();
       } catch (err) {
-        this.error =
-          (err && err.response && err.response.data && err.response.data.message) ||
-          this.translate('okf.retrieval.readFailed', 'Could not read the retrieval posture.');
+        // A failed re-read must not leave the STALE posture on screen next
+        // to the error — an operator would read the old mode pill as the
+        // current one (and, after a write whose re-read failed, conclude the
+        // change never landed).
+        this.posture = null;
+        const { message } = refusalReason(err);
+        this.error = message || this.translate('okf.retrieval.readFailed', 'Could not read the retrieval posture.');
       } finally {
         this.loading = false;
       }
@@ -368,24 +461,31 @@ export default {
       this.confirmOpen = false;
       this.busy = true;
       this.saveError = '';
-      // ONLY the changed fields — the server rejects an empty patch, and a
-      // full-config PUT would bump the revision for nothing.
-      const patch = {};
-      if (this.draftMode !== this.posture.config.mode) patch.mode = this.draftMode;
-      for (const f of this.limitFields) {
-        const value = Number(this.draftLimits[f.key]);
-        if (Number(this.posture.config[f.key]) !== value) patch[f.key] = value;
-      }
       try {
+        if (!this.posture) return;
+        // ONLY the changed fields — the server rejects an empty patch, and a
+        // full-config PUT would bump the revision for nothing. An INVALID
+        // draft is never sent (it would be refused, and the operator would
+        // not know which field was at fault).
+        const patch = {};
+        if (this.draftMode !== this.posture.config.mode) patch.mode = this.draftMode;
+        for (const f of this.limitFields) {
+          const value = this.limitDraft(f);
+          if (value === null) continue;
+          if (Number(this.posture.config[f.key]) !== value) patch[f.key] = value;
+        }
+        if (!Object.keys(patch).length) {
+          this.saveError = this.translate('okf.retrieval.nothingToSave', 'There is nothing to save.');
+          return;
+        }
         await repoOkfService.putRetrievalConfig(patch);
         // The card renders the SERVER's truth, never the optimistic guess.
         await this.onRefresh();
       } catch (err) {
-        const details = err && err.response && err.response.data && err.response.data.details;
+        const { message, details } = refusalReason(err);
         this.saveError =
-          (Array.isArray(details) && details.length && details.join('; ')) ||
-          (err && err.response && err.response.data && err.response.data.message) ||
-          (err && err.message) ||
+          (details && details.length && details.join('; ')) ||
+          message ||
           this.translate('okf.retrieval.saveFailed', 'The change was refused.');
       } finally {
         this.busy = false;
@@ -399,9 +499,8 @@ export default {
       } catch (err) {
         // The server's own reason when it gives one (a 403 names the missing
         // role) — a bare "failed" would send the admin hunting.
-        this.auditError =
-          (err && err.response && err.response.data && err.response.data.message) ||
-          this.translate('okf.retrieval.auditFailed', 'Could not read the change history.');
+        const { message } = refusalReason(err);
+        this.auditError = message || this.translate('okf.retrieval.auditFailed', 'Could not read the change history.');
       } finally {
         this.auditLoading = false;
       }
@@ -458,6 +557,20 @@ export default {
   margin: 0;
   color: var(--danger);
   font-size: var(--text-xs);
+}
+.okf-retrieval__invalid {
+  margin: var(--space-xs) 0 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+.okf-retrieval__warnings {
+  margin: 0;
+  padding-left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 .okf-retrieval__summary {
   cursor: pointer;

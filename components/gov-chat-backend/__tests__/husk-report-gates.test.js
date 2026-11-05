@@ -64,14 +64,20 @@ async function runMain(db, argv = [], env = gateEnv) {
 const stderrText = (errorSpy) => errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
 
 // n over-matched and n under-matched documents, driving both directions of
-// the divergence cross-check (issue #1505).
+// the divergence cross-check (issue #1505). _id derives from _key — the
+// fixtures must look like real documents, not huskDoc with a swapped key.
 const divergentDocs = (n) => ({
   extra: Array.from({ length: n }, (_, i) => ({
     ...huskDoc,
     _key: `extra-${i}`,
+    _id: `users/extra-${i}`,
     customSettings: { theme: 'dark' }
   })),
-  missed: Array.from({ length: n }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }))
+  missed: Array.from({ length: n }, (_, i) => ({
+    ...huskDoc,
+    _key: `missed-${i}`,
+    _id: `users/missed-${i}`
+  }))
 });
 
 describe('parseAndGateArgs', () => {
@@ -192,7 +198,9 @@ describe('main safety wiring', () => {
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
     const message = stderrText(errorSpy);
-    expect(message).toContain('removed');
+    // The LEAD is pinned, not just the word 'removed': a message that merely
+    // mentions 'the number removed' could still imply nothing happened.
+    expect(message).toMatch(/^REMOVED an unknown number/);
     expect(message).toContain('unknown');
     // The technical cause stays named: it is what distinguishes an arangojs
     // drift from a server bug.
@@ -218,6 +226,33 @@ describe('main safety wiring', () => {
     expect(underMatched).toHaveLength(50);
     expect(stderr).toContain('... and 10 more over-matched (not listed)');
     expect(stderr).toContain('... and 10 more under-matched (not listed)');
+  });
+
+  it('says the removal MAY have executed when the removal query itself rejects (lost response ≠ nothing happened)', async () => {
+    // A rejection after the request reached ArangoDB (ECONNRESET, timeout)
+    // can leave documents removed with no stats at all — the same
+    // unknown-outcome honesty as the missing-stats branch (issue #1505).
+    const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc] });
+    db.query = jest.fn(async (aql) => {
+      if (aql === HUSK_REMOVAL_AQL) {
+        throw new Error('socket hang up');
+      }
+      if (aql === HUSK_MATCHER_AQL) {
+        return { all: async () => [huskDoc] };
+      }
+      if (aql === ALL_DOCS_AQL) {
+        return { all: async () => [huskDoc] };
+      }
+      return { next: async () => ({ count: 0, sample: [] }) };
+    });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    const message = stderrText(errorSpy);
+    expect(message).toMatch(/^REMOVED an unknown number/);
+    expect(message).toContain('socket hang up');
+    expect(message).toContain('dry run');
+    expect(message).not.toContain('ABORT');
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
   });
 
   it('lists every entry with NO elision line when divergence length equals SAMPLE_LIMIT exactly (boundary pin)', async () => {

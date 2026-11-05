@@ -297,10 +297,25 @@ async function runReport(db, gated, total, husks, allDocs) {
 // gated.collection, never the arangojs handle it also holds under `collection`.
 async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-    '@collection': collectionName,
-    keys: husks.map((doc) => doc._key)
-  });
+  // A rejection here can mean the removal DID reach ArangoDB and execute and
+  // only the response was lost (ECONNRESET, timeout) — so this path reports
+  // the same unknown-outcome honesty as the missing-stats branch below: the
+  // operator must verify with a dry run, never assume nothing happened.
+  let removalCursor;
+  try {
+    removalCursor = await db.query(HUSK_REMOVAL_AQL, {
+      '@collection': collectionName,
+      keys: husks.map((doc) => doc._key)
+    });
+  } catch (err) {
+    console.error(
+      'REMOVED an unknown number of documents — the removal query failed before its ' +
+        `outcome was known (${err.message}) and may still have executed server-side. ` +
+        'Verify with a dry run: re-run the report to see what remains.'
+    );
+    process.exitCode = 1;
+    return;
+  }
   // The removal re-asserts the signature, so docs disqualified since the
   // SELECT are skipped server-side — report what actually executed, not the
   // selection size. If the stats are missing, say so and fail rather than
@@ -393,10 +408,12 @@ async function main({
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
-    // Bounded like every other listing in this script (SAMPLE_LIMIT): the
-    // abort fires precisely when the divergence can cover the whole
-    // collection, and one stderr line per document would flood the log
-    // pipeline. The elision line says how many were not listed.
+    // Bounded like the other per-document listings in this script
+    // (SAMPLE_LIMIT): the abort fires precisely when the divergence can
+    // cover the whole collection, and one stderr line per document would
+    // flood the log pipeline. The elision line says how many were not
+    // listed. (The fields census in runReport stays unbounded by design:
+    // one line per DISTINCT unexpected field name, not per document.)
     for (const [label, docs] of [
       ['over-matched', extra],
       ['under-matched', missed]

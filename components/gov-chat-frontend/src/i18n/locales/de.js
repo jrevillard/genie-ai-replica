@@ -1563,6 +1563,60 @@ export default {
       'Warum Uploads für RAG wichtig sind: Jedes hochgeladene Dokument kann zu kuratiertem, gelabeltem Wissen werden — fokussierte, gut strukturierte Dokumente werden deutlich genauer abgerufen als eine lange Einzeldatei.'
   },
   okf: {
+    retrieval: {
+      title: 'Abruf-Haltung',
+      refresh: 'Aktualisieren',
+      loading: 'Wird gelesen…',
+      engaged: 'Grounding aktiv',
+      notEngaged: 'Trägt nicht bei',
+      servingCount: '{n} Graph(en) im Betrieb',
+      sourceLabel: 'Quelle',
+      invalidValue: 'Gib eine ganze Zahl zwischen {min} und {max} ein.',
+      source: {
+        database: 'Verwaltete Zeile',
+        'env-defaults': 'Umgebungs-Standardwert'
+      },
+      revision: 'Revision',
+      updatedAt: 'Geändert',
+      updatedBy: 'Von',
+      modeLabel: 'Modus',
+      mode: {
+        legacy: 'Alt',
+        okf_only: 'Nur OKF',
+        hybrid: 'Hybrid'
+      },
+      consequence: {
+        legacy: 'OKF-Grounding ist aus — Antworten kommen nur aus dem Freitext-Pfad.',
+        unknown: 'Unbekannter Modus.',
+        okf_only: 'Nur OKF-Graphen begründen die Antworten — Freitext-Kontext wird nicht herangezogen.',
+        hybrid: 'OKF-Graphen begründen die Antworten, und der Freitext-Kontext trägt weiterhin bei.'
+      },
+      warnZeroServing:
+        'okf_only ohne Graphen im Betrieb — der OKF-Beitrag ist null. Bitte zuerst ein Repository veröffentlichen und einlesen.',
+      servingList: 'Graphen im Betrieb',
+      advanced: 'Erweiterte Limits',
+      save: 'Speichern',
+      revert: 'Zurücksetzen',
+      cancel: 'Abbrechen',
+      confirm: 'Anwenden',
+      confirmTitle: 'Abruf-Haltung ändern?',
+      confirmLead:
+        'Dies ist eine globale Einstellung — sie ändert, wie jede Anfrage verankert wird, innerhalb von etwa 30 Sekunden.',
+      readFailed: 'Die Abruf-Haltung konnte nicht gelesen werden.',
+      nothingToSave: 'Es gibt nichts zu speichern.',
+      saveFailed: 'Die Änderung wurde abgelehnt.',
+      audit: 'Änderungsverlauf',
+      auditLoading: 'Verlauf wird geladen…',
+      auditEmpty: 'Noch keine Änderungen aufgezeichnet.',
+      auditFailed: 'Der Änderungsverlauf konnte nicht gelesen werden.',
+      limit: {
+        max_fanout_graphs: 'Graphen pro Anfrage',
+        spine_max_hops: 'Spine-Sprünge',
+        extracted_hop_cap: 'Extrahierte Sprünge',
+        candidate_cap_per_graph: 'Kandidaten pro Graph',
+        candidate_cap_global: 'Kandidaten pro Anfrage'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Einige Dateien werden noch verarbeitet (indiziert). Öffnen Sie dieses Repository im Editor — die Dateiliste zeigt, welche; die Aufnahme wiederholt sich automatisch. Veröffentlichen Sie erneut, sobald jede Datei als indiziert erscheint.',

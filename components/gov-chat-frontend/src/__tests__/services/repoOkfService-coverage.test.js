@@ -476,3 +476,47 @@ describe('repoOkfService — Step-7 validation + citations + topic links', () =>
     expect(repoOkfService.getTopicLinkRun).toBe(getTopicLinkRun);
   });
 });
+
+// Story 10.7 (#995) — the retrieval governance posture (ADR-okf-039). GLOBAL,
+// not per-repo: the read-model is per-caller (the serving view follows the
+// caller's scopes) while the config posture stays global.
+describe('repoOkfService — the retrieval posture (Story 10.7)', () => {
+  it('getRetrievalConfig GETs /okf/retrieval-config (no /api prefix) and unwraps the body', async () => {
+    const body = { config: { mode: 'hybrid' }, source: 'database', engaged: true };
+    httpService.get.mockResolvedValueOnce(ok(body));
+    expect(await repoOkfService.getRetrievalConfig()).toEqual(body);
+    expect(httpService.get.mock.calls[0][0]).toBe('/okf/retrieval-config');
+    expect(httpService.get.mock.calls[0][0].startsWith('/api/')).toBe(false);
+  });
+
+  it('getRetrievalConfig degrades to null on an empty body (no crash in the card)', async () => {
+    httpService.get.mockResolvedValueOnce({});
+    expect(await repoOkfService.getRetrievalConfig()).toBeNull();
+  });
+
+  it('putRetrievalConfig PUTs the patch to /okf/retrieval-config', async () => {
+    httpService.put.mockResolvedValueOnce(ok({ ok: true, config: { revision: 4 } }));
+    const out = await repoOkfService.putRetrievalConfig({ mode: 'hybrid' });
+    expect(httpService.put).toHaveBeenCalledWith('/okf/retrieval-config', { mode: 'hybrid' });
+    expect(out).toEqual({ ok: true, config: { revision: 4 } });
+  });
+
+  it('putRetrievalConfig returns null on an empty body', async () => {
+    httpService.put.mockResolvedValueOnce({});
+    expect(await repoOkfService.putRetrievalConfig({ mode: 'legacy' })).toBeNull();
+  });
+
+  it('getRetrievalConfigAudit GETs the audit route with the limit and unwraps {rows}', async () => {
+    httpService.get.mockResolvedValueOnce(ok({ rows: [{ ts: '2026-11-05T09:00:00Z' }] }));
+    const rows = await repoOkfService.getRetrievalConfigAudit(25);
+    expect(httpService.get.mock.calls[0][0]).toBe('/okf/retrieval-config/audit?limit=25');
+    expect(rows).toEqual([{ ts: '2026-11-05T09:00:00Z' }]);
+  });
+
+  it('getRetrievalConfigAudit degrades to [] when the server sends no rows (never undefined)', async () => {
+    httpService.get.mockResolvedValueOnce(ok({}));
+    expect(await repoOkfService.getRetrievalConfigAudit()).toEqual([]);
+    httpService.get.mockResolvedValueOnce(ok({ rows: 'not-an-array' }));
+    expect(await repoOkfService.getRetrievalConfigAudit()).toEqual([]);
+  });
+});

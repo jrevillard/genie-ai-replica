@@ -33,6 +33,12 @@
       </DsButton>
     </nav>
 
+    <!-- Story 10.7 (#995): the live retrieval posture — GLOBAL governance,
+         so it sits above the per-repo kanban: it is what every query on
+         every repository is grounded by. Read-only for non-admins (the
+         posture must be visible to everyone), editable for tools-admin. -->
+    <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
+
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
     <DsDialog
@@ -197,6 +203,7 @@ import DsInfoTip from '../ds/InfoTip.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
+import OkfRetrievalCard from './RetrievalCard.vue';
 // #80931: the create-failure message is the SHARED composer (same as the
 // wizard's Entry step — one tested owner).
 import { describeCreateFailure } from './steps/failureMessages';
@@ -215,6 +222,7 @@ export default {
     OkfNarrative,
     OkfStudioDashboard,
     OkfStudioWizard,
+    OkfRetrievalCard,
     OkfRepoEditorShell
   },
   mixins: [translateMixin],

@@ -105,4 +105,33 @@ async function listRepoLogs(repo_id, { limit = 200 } = {}) {
   });
 }
 
-module.exports = { writeAudit, listRepoLogs };
+/**
+ * Newest-first audit rows for ONE ACTION (Story 10.7, #995 — the retrieval
+ * config's governance trail). The config's rows live under the '_system'
+ * pseudo-repo, where unrelated system actions share the same repo_id — so
+ * the filter is by ACTION, not by repo. Same projection and cap discipline
+ * as listRepoLogs (a recent-history view, not a forensic export).
+ * @returns {Promise<Array<{ts, actor, actor_name, action, description, details}>>}
+ */
+async function listAuditLogsByAction(action, { limit = 50 } = {}) {
+  return withSpan('okf.audit.listByAction', async (span) => {
+    span.setAttribute('okf.audit.action', action);
+    // The limit arrives as a QUERY STRING (req.query.limit), so it is
+    // floored to an integer before it becomes an AQL LIMIT — a float
+    // ("2.5") is rejected by the database, and a non-numeric string must
+    // fall back to the default rather than reach the query as NaN.
+    const capped = Math.max(1, Math.min(200, Math.floor(Number(limit)) || 50));
+    const db = await getDb();
+    return (
+      await db.query(
+        'FOR l IN ' +
+          COLLECTION +
+          ' FILTER l.action == @act SORT l.ts DESC LIMIT @limit ' +
+          'RETURN KEEP(l, ["ts", "actor", "actor_name", "action", "description", "details"])',
+        { act: action, limit: capped }
+      )
+    ).all();
+  });
+}
+
+module.exports = { writeAudit, listRepoLogs, listAuditLogsByAction };

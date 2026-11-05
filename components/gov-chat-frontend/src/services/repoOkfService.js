@@ -380,6 +380,35 @@ const repoOkfService = {
     return res && res.data && Array.isArray(res.data.logs) ? res.data.logs : [];
   },
 
+  // --- Story 10.7 (#995): the retrieval governance posture (ADR-okf-039) ---
+  //
+  // GLOBAL, not per-repo: the mode (legacy / okf_only / hybrid) and the
+  // caps govern the whole OKF grounding path. The read-model is per-caller
+  // (the SERVING view follows the caller's scopes) while the config posture
+  // stays global — the card shows the EFFECTIVE posture, not a default.
+
+  /** The live posture: effective config + source + engagement gate + the
+   *  caller's serving-graph view + the server's validation limits. */
+  async getRetrievalConfig() {
+    const res = await httpService.get('/okf/retrieval-config');
+    return res && res.data ? res.data : null;
+  },
+
+  /** Write the governance posture (tools-admin only server-side). The body
+   *  is a PATCH of the fields that change; the server validates, bumps the
+   *  revision and audits before→after. */
+  async putRetrievalConfig(patch) {
+    const res = await httpService.put('/okf/retrieval-config', patch);
+    return res && res.data ? res.data : null;
+  },
+
+  /** The governance trail: the newest before→after audit rows for the
+   *  config (tools-admin only server-side). */
+  async getRetrievalConfigAudit(limit = 25) {
+    const res = await httpService.get(`/okf/retrieval-config/audit?limit=${encodeURIComponent(limit)}`);
+    return res && res.data && Array.isArray(res.data.rows) ? res.data.rows : [];
+  },
+
   /**
    * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's
    * CURRENT content returning per-occurrence {where, type, start, end, score}

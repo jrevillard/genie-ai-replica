@@ -8,7 +8,6 @@
 // loads jose (ESM-only under Jest). Pattern: __tests__/repos-routes.test.js.
 
 jest.mock('../shared-lib/keycloak-auth-service', () => ({ verifyToken: jest.fn() }));
-jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
@@ -18,6 +17,10 @@ jest.mock('../shared-lib/tracing', () => ({
 }));
 jest.mock('../services/retrieval-config-service');
 jest.mock('../services/authz-resolver-service');
+jest.mock('../services/audit-service', () => ({
+  writeAudit: jest.fn().mockResolvedValue(null),
+  listAuditLogsByAction: jest.fn().mockResolvedValue([])
+}));
 
 const request = require('supertest');
 const { createApp } = require('../index');
@@ -160,6 +163,52 @@ describe('PUT /api/okf/retrieval-config', () => {
       .put('/api/okf/retrieval-config')
       .set('Authorization', TOKEN)
       .send({ mode: 'okf_only' });
+    expect(res.status).toBe(500);
+  });
+});
+
+// Story 10.7 (#995) — the governance trail the Studio card reads back. The
+// rows live under the '_system' pseudo-repo where unrelated system actions
+// share the repo_id, so the read is by ACTION and the route is tools-admin
+// only (it names WHO changed the global posture).
+describe('GET /api/okf/retrieval-config/audit', () => {
+  beforeEach(() => {
+    retrievalConfigService.listConfigAudit.mockResolvedValue([
+      {
+        ts: '2026-11-05T09:00:00Z',
+        actor: 'steward-1',
+        actor_name: 'Steward',
+        action: 'system.retrieval_config.update',
+        description: 'Retrieval config updated: mode: "legacy" → "hybrid"'
+      }
+    ]);
+  });
+
+  test('200 for tools-admin — the rows pass through and the limit reaches the service', async () => {
+    authAdmin();
+    const res = await request(createApp()).get('/api/okf/retrieval-config/audit?limit=25').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.rows).toHaveLength(1);
+    expect(retrievalConfigService.listConfigAudit).toHaveBeenCalledWith({ limit: '25' });
+  });
+
+  test('403 FORBIDDEN_ROLE for a merely-scoped caller (the trail is admin-only)', async () => {
+    authScoped(['okf:itu:*:read']); // even a wildcard-READ scope is not tools-admin
+    const res = await request(createApp()).get('/api/okf/retrieval-config/audit').set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_ROLE');
+    expect(retrievalConfigService.listConfigAudit).not.toHaveBeenCalled();
+  });
+
+  test('401 without a token', async () => {
+    const res = await request(createApp()).get('/api/okf/retrieval-config/audit');
+    expect(res.status).toBe(401);
+  });
+
+  test('service failure surfaces via next(err) → 500', async () => {
+    authAdmin();
+    retrievalConfigService.listConfigAudit.mockRejectedValue(new Error('cluster down'));
+    const res = await request(createApp()).get('/api/okf/retrieval-config/audit').set('Authorization', TOKEN);
     expect(res.status).toBe(500);
   });
 });

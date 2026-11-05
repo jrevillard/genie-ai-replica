@@ -840,6 +840,56 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(mockSigninSilent).toHaveBeenCalledTimes(2);
   });
 
+  // The adoption SERVES a rehydrated oidc User (#1521 review): the plain
+  // JSON object has no `expired` getter, so isAuthenticated() would keep
+  // returning true past the token's real expiry, and an adopted renewal
+  // reaches the auth store's onAccessTokenUpdated callbacks exactly like a
+  // granted one (a granted renew rides addUserLoaded; storeUser raises no
+  // oidc event).
+  it('the adopted user carries oidc User semantics — isAuthenticated turns false when its tokens expire (#1521 review)', async () => {
+    delete navigator.locks;
+    jest.useFakeTimers();
+    try {
+      const holderUser = createMockUser({
+        access_token: 'soon-expiring-token',
+        expires_at: Math.floor(Date.now() / 1000) + 7
+      });
+      window.localStorage.setItem(
+        USER_KEY,
+        JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser })
+      );
+      mockGetUser.mockResolvedValue(null);
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'unused-grant' }));
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('soon-expiring-token');
+      expect(keycloakAuthService.isAuthenticated()).toBe(true);
+      await jest.advanceTimersByTimeAsync(10000);
+      // The plain JSON object's `expired` would be undefined — a lie. The
+      // rehydrated User computes it from expires_at.
+      expect(keycloakAuthService.isAuthenticated()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+      window.localStorage.clear();
+    }
+  });
+
+  it('an ADOPTED renewal fires the onAccessTokenUpdated callbacks like a granted one (#1521 review)', async () => {
+    delete navigator.locks;
+    const holderUser = createMockUser({ access_token: 'adopted-callback-token' });
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, tab: 'holder-tab', user: holderUser }));
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'unused-grant' }));
+    const cb = jest.fn();
+    keycloakAuthService.onAccessTokenUpdated(cb);
+    try {
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('adopted-callback-token');
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'adopted-callback-token' }));
+    } finally {
+      keycloakAuthService.removeAccessTokenUpdatedCallback(cb);
+    }
+  });
+
   it('treats an owner-less (old-build) publication as its own: stale stamp → own grant (#1521)', async () => {
     delete navigator.locks;
     // A publication written by an older build carries no tab id — the

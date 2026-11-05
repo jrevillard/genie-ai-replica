@@ -201,15 +201,23 @@ function readPublishedRenew() {
  * the User instance's methods are gone — and oidc-client-ts 3.5.0's
  * storeUser calls user.toStorageString() internally, which THROWS on a
  * plain object (the local catch swallowed it and the tab silently kept its
- * stale store). Rehydrate a real User from the plain fields first. */
+ * stale store). Rehydrate a real User and serve THAT (#1521 review): the
+ * plain object has none of oidc's getters, so `expired` (and the
+ * isAuthenticated()/escalation checks that read it) silently lie.
+ * CALLBACKS (#1521 review): a granted renew reaches the auth store through
+ * the addUserLoaded event; storeUser raises no oidc event, so the adopt
+ * path fires the module's own callbacks itself — an adopted renewal is
+ * observed exactly like a granted one. */
 async function adoptPublishedUser(manager, user) {
+  const rehydrated = new User(user);
   try {
-    await manager.storeUser(new User(user));
+    await manager.storeUser(rehydrated);
   } catch {
-    /* keep the returned user even if the store write fails */
+    /* keep the rehydrated user even if the store write fails */
   }
-  currentUser = user;
-  return user;
+  currentUser = rehydrated;
+  accessTokenCallbacks.forEach((cb) => cb(rehydrated));
+  return rehydrated;
 }
 
 /** The RAW grant (#80941) — manager.signinSilent is the WRAPPED module

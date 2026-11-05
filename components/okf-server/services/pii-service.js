@@ -952,7 +952,7 @@ async function fileActionPii(repo_id, concept_id, payload, actor) {
  * requested from the UI. */
 const REPO_BULK_ACTION_ENUM = FILE_ACTION_ENUM;
 
-async function repoBulkAction(repo_id, payload, actor) {
+async function repoBulkAction(repo_id, payload, actor, opts = {}) {
   return withSpan('okf.pii.repoBulk', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     const action = payload && payload.action;
@@ -978,6 +978,10 @@ async function repoBulkAction(repo_id, payload, actor) {
     const by = (actor && actor.sub) || 'system';
     const now = new Date().toISOString();
     let affected = 0;
+    // UX-4 (#1514): the detached bulk job reports processed-of-total; the
+    // total is known the moment the flagged set is read. A synchronous
+    // caller passes no onProgress and pays nothing.
+    if (typeof opts.onProgress === 'function') opts.onProgress({ total: flagged.length, processed: 0 });
     for (const doc of flagged) {
       const prevSummary = doc.pii_hits_summary && typeof doc.pii_hits_summary === 'object' ? doc.pii_hits_summary : {};
       if (action === 'accept') {
@@ -1022,6 +1026,7 @@ async function repoBulkAction(repo_id, payload, actor) {
         pii_scan_error: null // no longer an error state — a stale reason would mislead
       });
       affected++;
+      if (typeof opts.onProgress === 'function') opts.onProgress({ total: flagged.length, processed: affected });
     }
     if (affected > 0) {
       // The review decision doubles as the completed scan for the gate.
@@ -1043,6 +1048,74 @@ async function repoBulkAction(repo_id, payload, actor) {
     logger.info('PII repo bulk action', { repo_id, action, affected, actor: by });
     return { ok: true, action, concepts_affected: affected };
   });
+}
+
+// ─── DETACHED BULK JOB (UX-4, #1514) ────────────────────────────────────────
+// A bulk PII action over a large flagged set is minutes of sequential DB
+// writes in one request; the editor held a single busy token over the whole
+// thing with zero feedback. The job wraps repoBulkAction and reports
+// processed-of-total per concept, the same 202+poll contract as the suggest
+// job (in-memory registry; single-replica service, same class).
+const bulkPiiJobs = new Map();
+const BULK_PII_JOB_CAP = 100;
+
+/** Validate + arm. Throws the SAME piiError repoBulkAction throws for a bad
+ * action, so the arm route answers 400 before any job exists. */
+function startRepoBulkPiiJob(repo_id, payload, actor) {
+  const action = payload && payload.action;
+  if (!REPO_BULK_ACTION_ENUM.includes(action)) {
+    throw piiError('VALIDATION_ERROR', "action must be one of 'redact'|'remove'|'accept'", 400);
+  }
+  const id = `bp${Date.now()}-${nodeCrypto.randomUUID().slice(0, 6)}`;
+  const job = {
+    job_id: id,
+    repo_id,
+    action,
+    status: 'running',
+    total: 0,
+    processed: 0,
+    started_at: new Date().toISOString()
+  };
+  bulkPiiJobs.set(id, job);
+  if (bulkPiiJobs.size > BULK_PII_JOB_CAP) {
+    for (const [k, v] of bulkPiiJobs) {
+      if (bulkPiiJobs.size <= BULK_PII_JOB_CAP) break;
+      if (v.status !== 'running') bulkPiiJobs.delete(k);
+    }
+  }
+  // fire-and-forget worker; every outcome lands ON the job. onProgress only
+  // moves forward (a stale poll must never show a lower number).
+  (async () => {
+    try {
+      const out = await repoBulkAction(repo_id, payload, actor, {
+        onProgress: (p) => {
+          if (p.total > job.total) job.total = p.total;
+          if (p.processed > job.processed) job.processed = p.processed;
+        }
+      });
+      job.result = out;
+      job.status = 'done';
+    } catch (e) {
+      job.status = 'failed';
+      job.error = (e && e.message) || String(e);
+    } finally {
+      job.finished_at = new Date().toISOString();
+      logger.info('PII repo bulk job settled', {
+        repo_id,
+        action,
+        job_id: id,
+        status: job.status,
+        total: job.total,
+        processed: job.processed
+      });
+    }
+  })();
+  return { ...job };
+}
+
+function getRepoBulkPiiJob(id) {
+  const job = bulkPiiJobs.get(id);
+  return job ? { ...job } : null;
 }
 
 /** REDACT THE WHOLE FILE (David, 2026-09-09): when flagged entities dominate
@@ -1787,6 +1860,8 @@ module.exports = {
   acceptPii,
   fileActionPii,
   repoBulkAction,
+  startRepoBulkPiiJob,
+  getRepoBulkPiiJob,
   redactWholeFile,
   listResolutions,
   subtractAccepted,

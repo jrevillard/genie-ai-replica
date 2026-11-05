@@ -345,6 +345,44 @@ describe('repoOkfService — PII surface', () => {
     );
   });
 
+  it('bulkPiiActionDetached arms the job, polls to done, and reports progress (#1514)', async () => {
+    const updates = [];
+    httpService.post.mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp1', status: 'running', total: 4 }));
+    httpService.get
+      .mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp1', status: 'running', total: 4, processed: 2 }))
+      .mockResolvedValueOnce(
+        ok({
+          repo_id: 'r1',
+          job_id: 'bp1',
+          status: 'done',
+          total: 4,
+          processed: 4,
+          result: { ok: true, action: 'accept', concepts_affected: 4 }
+        })
+      );
+    const out = await repoOkfService.bulkPiiActionDetached('r1', 'accept', {
+      onProgress: (p) => updates.push(p),
+      pollMs: 1
+    });
+    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/pii-bulk/jobs', { action: 'accept' });
+    expect(httpService.get).toHaveBeenCalledWith('/okf/repos/r1/pii-bulk/jobs/bp1');
+    expect(out).toEqual({ ok: true, action: 'accept', concepts_affected: 4 });
+    // progress flows to the caller: the arm total, the mid-run snapshot, the final
+    expect(updates).toEqual([
+      { total: 4, processed: 0 },
+      { total: 4, processed: 2 },
+      { total: 4, processed: 4 }
+    ]);
+  });
+
+  it('bulkPiiActionDetached throws when the job fails', async () => {
+    httpService.post.mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp2', status: 'running', total: 1 }));
+    httpService.get.mockResolvedValueOnce(
+      ok({ repo_id: 'r1', job_id: 'bp2', status: 'failed', total: 1, processed: 0, error: 'boom' })
+    );
+    await expect(repoOkfService.bulkPiiActionDetached('r1', 'redact', { pollMs: 1 })).rejects.toThrow('boom');
+  });
+
   it('scanConceptPii builds the one-concept scan body; startRepoPiiScan arms; getRepoPiiScan polls', async () => {
     httpService.post.mockResolvedValue(ok({ scanned: 1 }));
     await repoOkfService.scanConceptPii('r1', 'c1', { frontmatter: { topic: ['a'] }, body: 'text' });

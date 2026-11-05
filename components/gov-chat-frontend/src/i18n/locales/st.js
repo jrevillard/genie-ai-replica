@@ -2018,6 +2018,7 @@ export default {
         done_redact:
           'Phetile — litaba tse tšoailitsoeng ho dikgopolo {n} li nkelwe sebaka ke tsebiso ea ho pata boitsebiso.',
         done_remove: 'Phetile — litaba tse tšoailitsoeng ho dikgopolo {n} li tlositsoe.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Sireletsa boitsebiso ho litaba tsohle tse tšoailoeng',
           remove: 'Tlosa litaba tsohle tse tšoailoeng',
@@ -3067,6 +3068,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Maea a haellang — kenya hape ho a sebetsa',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM e kgutlisitse ha ho na ditag. Leka hape ha korpusi e ntse e hola.',
       suggestCoverage:
         'E qobetiloe ho {sampled} ho {total} mohlopong, maphapalong {labels} le labelo tsa hierarchyla tsebohetsoeng.',

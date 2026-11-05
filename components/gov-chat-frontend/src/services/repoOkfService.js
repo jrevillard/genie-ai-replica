@@ -473,6 +473,40 @@ const repoOkfService = {
   },
 
   /**
+   * UX-4 (#1514): the DETACHED bulk PII action. Arms the job (202), then
+   * polls until done/failed and returns the job's final shape. onProgress
+   * (optional) receives {total, processed} per poll so the editor can drive
+   * a real progress bar over a large flagged set. The arm answers the SAME
+   * validation/freeze errors the synchronous call answers (400 bad action,
+   * 409 drain-freeze via assertWritable).
+   */
+  async bulkPiiActionDetached(repoId, action, { onProgress, pollMs = 1000, timeoutMs = 15 * 60 * 1000 } = {}) {
+    const base = `/okf/repos/${encodeURIComponent(repoId)}/pii-bulk`;
+    const start = await httpService.post(`${base}/jobs`, { action });
+    const job = start && start.data;
+    const jobId = job && job.job_id;
+    if (!jobId) return { ok: false };
+    if (typeof onProgress === 'function') onProgress({ total: Number(job.total || 0), processed: 0 });
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const res = await httpService.get(`${base}/jobs/${encodeURIComponent(jobId)}`);
+      const snap = res && res.data;
+      if (!snap) return { ok: false };
+      if (typeof onProgress === 'function') {
+        onProgress({ total: Number(snap.total || 0), processed: Number(snap.processed || 0) });
+      }
+      if (snap.status === 'done') return snap.result || { ok: true, action, concepts_affected: snap.processed };
+      if (snap.status === 'failed') {
+        const err = new Error(snap.error || 'bulk PII job failed');
+        err.bulkPiiJobFailed = true;
+        throw err;
+      }
+      if (Date.now() > deadline) throw new Error('bulk PII job did not finish in time');
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+  },
+
+  /**
    * RE-INGEST FAILED CONCEPTS (David, 2026-10-14).
    *
    * The recovery path the drain's dead-letter text has always promised

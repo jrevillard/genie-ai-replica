@@ -2027,6 +2027,7 @@ export default {
           'Fertig — jede markierte Entität auf {n} Konzept(en) ist als geprüft und beibehalten markiert. Die PII-Flags sind entfernt.',
         done_redact: 'Fertig — der markierte Inhalt auf {n} Konzept(en) ist durch den Schwärzungshinweis ersetzt.',
         done_remove: 'Fertig — der markierte Inhalt auf {n} Konzept(en) ist entfernt.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Alle markierten Inhalte schwärzen',
           remove: 'Alle markierten Inhalte entfernen',
@@ -3091,6 +3092,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Labels veraltet — zum Anwenden neu einlesen',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'Das LLM hat keine Tags zurückgegeben. Versuchen Sie es erneut, wenn der Korpus gewachsen ist.',
       suggestCoverage: 'Abgeleitet aus {sampled} von {total} Konzepten, über {labels} Labels der Wissenshierarchie.',
       suggestFailed: 'Suggest failed.',

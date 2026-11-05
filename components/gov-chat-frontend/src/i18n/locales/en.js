@@ -2818,6 +2818,7 @@ export default {
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -3800,6 +3801,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Labels stale — re-ingest to apply',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestCoverage: 'Derived from {sampled} of {total} concepts across {labels} knowledge-hierarchy labels.',
       suggestFailed: 'Suggest failed.',

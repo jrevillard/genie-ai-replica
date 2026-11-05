@@ -2024,6 +2024,7 @@ export default {
           'Hecho — todas las entidades marcadas de {n} concepto(s) quedan como revisadas y conservadas. Las marcas de PII se retiran.',
         done_redact: 'Hecho — el contenido marcado de {n} concepto(s) se sustituye por el aviso de redacción.',
         done_remove: 'Hecho — el contenido marcado de {n} concepto(s) se elimina.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Ocultar todo el contenido marcado',
           remove: 'Eliminar todo el contenido marcado',
@@ -3077,6 +3078,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Etiquetas obsoletas — vuelva a ingestar para aplicarlas',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'El LLM no devolvió etiquetas. Pruebe de nuevo cuando crezca el corpus.',
       suggestCoverage:
         'Derivado de {sampled} de {total} conceptos, repartidos en {labels} etiquetas de la jerarquía del conocimiento.',

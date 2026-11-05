@@ -2013,6 +2013,7 @@ export default {
           'Selesai — setiap entitas yang ditandai ditandai sebagai telah ditinjau-dan-disimpan pada {n} konsep. Penanda PII dibersihkan.',
         done_redact: 'Selesai — konten yang ditandai pada {n} konsep diganti dengan pemberitahuan redaksi.',
         done_remove: 'Selesai — konten yang ditandai pada {n} konsep dihapus.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Redaksi semua konten yang ditandai',
           remove: 'Hapus semua konten yang ditandai',
@@ -3057,6 +3058,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Label sudah kedaluwarsa — ingest ulang untuk menerapkannya',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM tidak mengembalikan tag. Coba lagi setelah korpus bertambah.',
       suggestCoverage: 'Diturunkan dari {sampled} dari {total} konsep, pada {labels} label hierarki pengetahuan.',
       suggestFailed: 'Suggest failed.',

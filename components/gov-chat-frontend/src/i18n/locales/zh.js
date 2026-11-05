@@ -1953,6 +1953,7 @@ export default {
         done_accept: '完成——{n} 个概念上的每个被标记实体均已设为“已核对并保留”。PII 标记已清除。',
         done_redact: '完成——{n} 个概念上的被标记内容已替换为遮盖提示。',
         done_remove: '完成——{n} 个概念上的被标记内容已移除。',
+        progress: '正在应用… {done}/{total}',
         title: {
           redact: '遮盖所有标记内容',
           remove: '移除所有标记内容',
@@ -2963,6 +2964,7 @@ export default {
       refresh: '刷新建议',
       labelsStale: '标签已过期 — 重新摄取后生效',
       suggesting: '正在整理…',
+      suggestingElapsed: '正在整理… {s}s',
       suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
       suggestFailed: '建议失败。',

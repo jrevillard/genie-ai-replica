@@ -25,7 +25,10 @@ jest.mock('@/services/repoOkfService', () => ({
     importConcepts: (...a) => mockImportConcepts(...a),
     listConcepts: (...a) => mockListConcepts(...a),
     deleteConcept: (...a) => mockDeleteConcept(...a),
-    bulkPiiAction: (...a) => mockBulkPiiAction(...a)
+    bulkPiiAction: (...a) => mockBulkPiiAction(...a),
+    // UX-4 (#1514): the step drives the DETACHED bulk job now — same
+    // resolution shape, no poll (the mock resolves immediately).
+    bulkPiiActionDetached: (...a) => mockBulkPiiAction(...a)
   }
 }));
 
@@ -361,7 +364,8 @@ describe('Input workbench — bulk PII actions (#1040)', () => {
     await wrapper.vm.onPiiBulkAction('confirm'); // the dialog's Apply action
     await settled(wrapper);
     await settled(wrapper);
-    expect(mockBulkPiiAction).toHaveBeenCalledWith('r1', 'accept');
+    // UX-4: the DETACHED call — (repoId, action, { onProgress })
+    expect(mockBulkPiiAction).toHaveBeenCalledWith('r1', 'accept', expect.any(Object));
     // the "{n} flagged" pill and the per-row PII badges are gone
     expect(wrapper.text()).not.toContain('2 flagged');
     // #1040 follow-up: explicit post-action feedback — what ran and on how

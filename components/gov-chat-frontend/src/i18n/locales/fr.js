@@ -2028,6 +2028,7 @@ export default {
           'Terminé — chaque entité signalée est marquée vérifiée-et-conservée sur {n} concept(s). Les drapeaux PII sont levés.',
         done_redact: 'Terminé — le contenu signalé sur {n} concept(s) est remplacé par la mention de caviardage.',
         done_remove: 'Terminé — le contenu signalé sur {n} concept(s) est supprimé.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
@@ -3083,6 +3084,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: "Le LLM n'a renvoyé aucun tag. Réessayez une fois le corpus étoffé.",
       suggestCoverage:
         'Dérivé de {sampled} concepts sur {total}, répartis sur {labels} étiquettes de la hiérarchie de connaissances.',

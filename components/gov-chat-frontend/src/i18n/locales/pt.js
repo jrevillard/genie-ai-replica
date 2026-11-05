@@ -2022,6 +2022,7 @@ export default {
           'Concluído — toda entidade sinalizada em {n} conceito(s) foi marcada como revisada e mantida. Os sinais de PII são removidos.',
         done_redact: 'Concluído — o conteúdo sinalizado em {n} conceito(s) foi substituído pelo aviso de ocultação.',
         done_remove: 'Concluído — o conteúdo sinalizado em {n} conceito(s) foi removido.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Ocultar todo o conteúdo sinalizado',
           remove: 'Remover todo o conteúdo sinalizado',
@@ -3070,6 +3071,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Etiquetas desatualizadas — reingira para aplicar',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'O LLM não retornou tags. Tente novamente depois que o corpus crescer.',
       suggestCoverage: 'Derivado de {sampled} de {total} conceitos, em {labels} rótulos da hierarquia do conhecimento.',
       suggestFailed: 'Suggest failed.',

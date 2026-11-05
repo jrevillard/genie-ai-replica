@@ -2006,6 +2006,7 @@ export default {
           'Imekamilika — kila kitambulisho kilichowekewa alama kimeitiwa alama ya kukaguliwa na kuhifadhiwa kwenye dhana {n}. Alama za PII zimeondolewa.',
         done_redact: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yamebadilishwa na taarifa ya kuficha.',
         done_remove: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yameondolewa.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Kinga maelezo yote yaliyowekewa alama',
           remove: 'Ondoa maudhui yote yaliyowekewa alama',
@@ -3052,6 +3053,7 @@ export default {
       refresh: 'Refresh suggestions',
       labelsStale: 'Lebo zimepitwa na wakati — ingiza tena ili zitumike',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM haikurudisha lebo zozote. Jaribu tena baada ya korpus kukua.',
       suggestCoverage: 'Imetokana na {sampled} kati ya {total} dhana, katika {labels} lebo za mpangilio wa maarifa.',
       suggestFailed: 'Suggest failed.',

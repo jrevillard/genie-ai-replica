@@ -272,11 +272,21 @@ export default {
       // Explicit post-action feedback (David: "no visual feedback in step 3"):
       // the dialog closes and the flagged pill vanishes — without this line
       // nothing TELLS the user what just happened.
-      piiBulkNote: ''
+      piiBulkNote: '',
+      // UX-4 (#1514): live processed-of-total from the detached bulk job.
+      piiBulkProgress: null
     };
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
+    // UX-4 (#1514): the live note while the detached bulk job runs — the
+    // processed-of-total readout under the busy dialog.
+    piiBulkProgressLabel() {
+      const p = this.piiBulkProgress || { done: 0, total: 0 };
+      return this.translate('okf.editor.piiBulk.progress', 'Applying… {done}/{total}')
+        .replace('{done}', String(p.done))
+        .replace('{total}', String(p.total));
+    },
     variant() {
       return (this.draft && this.draft.source) || 'documents';
     },
@@ -443,7 +453,19 @@ export default {
       this.inputError = '';
       const action = this.piiBulkAsk;
       try {
-        const result = await repoOkfService.bulkPiiAction(this.repoId, action);
+        // UX-4 (#1514): the DETACHED job — the arm answers the same 409
+        // drain-freeze / 400 the synchronous call did, and onProgress turns
+        // the note into a live processed-of-total readout (a large flagged
+        // set is minutes of sequential writes; the busy dialog alone froze
+        // silently over them).
+        this.piiBulkProgress = { done: 0, total: 0 };
+        this.piiBulkNote = this.piiBulkProgressLabel;
+        const result = await repoOkfService.bulkPiiActionDetached(this.repoId, action, {
+          onProgress: (p) => {
+            this.piiBulkProgress = { done: Number(p.processed || 0), total: Number(p.total || 0) };
+            this.piiBulkNote = this.piiBulkProgressLabel;
+          }
+        });
         if (!result || !result.ok) {
           this.inputError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
           return;
@@ -473,6 +495,7 @@ export default {
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;
+        this.piiBulkProgress = null;
       }
     },
     // T2: the tree is the live truth — refreshed after EVERY mutation.

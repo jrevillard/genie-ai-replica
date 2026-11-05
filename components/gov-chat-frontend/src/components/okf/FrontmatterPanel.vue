@@ -63,6 +63,12 @@
         }}
       </DsButton>
     </header>
+    <!-- UX-4 (#1514): the suggest job is one long LLM call — the bar is
+         indeterminate on purpose; the elapsed ticker is the "alive" signal. -->
+    <div v-if="suggesting" class="okf-fmp__suggest-progress">
+      <DsProgress :value="1" :max="1" indeterminate variant="accent" size="sm" :aria-label="suggestProgressLabel" />
+      <span class="okf-fmp__suggest-elapsed">{{ suggestProgressLabel }}</span>
+    </div>
     <p v-if="!compact" class="okf-fmp__help">
       {{
         translate(
@@ -163,6 +169,7 @@ import { mapActions } from 'vuex';
 import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
 import DsPill from '../ds/Pill.vue';
+import DsProgress from '../ds/Progress.vue';
 import { isLabelsStale } from '../../services/okfRepoOps';
 import { getFrontmatter, suggestFrontmatter } from '../../services/frontmatterService';
 
@@ -186,7 +193,7 @@ function emptyShape() {
 
 export default {
   name: 'FrontmatterPanel',
-  components: { DsButton, DsPill },
+  components: { DsButton, DsPill, DsProgress },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -213,6 +220,10 @@ export default {
       shape: emptyShape(),
       addDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
       suggesting: false,
+      // UX-4 (#1514): elapsed seconds while the suggest job runs — the honest
+      // progress signal for a single long LLM call (see onSuggestTags).
+      suggestStartedAt: null,
+      suggestElapsed: 0,
       suggestionError: null,
       // 1-8g-m — provenance of the current suggestion (see the coverage /
       // rejected notes above the footer).
@@ -238,6 +249,14 @@ export default {
       const repoById = this.$store.getters['okf/repoById'];
       return isLabelsStale(typeof repoById === 'function' ? repoById(this.repoId) : null);
     },
+    // UX-4 (#1514): "Curating… {n}s" — the elapsed readout beside the
+    // indeterminate bar (a single LLM call has no fractional progress).
+    suggestProgressLabel() {
+      return this.translate('okf.frontmatter.suggestingElapsed', 'Curating… {s}s').replace(
+        '{s}',
+        String(this.suggestElapsed)
+      );
+    },
     canSave() {
       // Save is allowed when the shape has any content. We send the
       // whole shape on every save (the server merges it), so the only
@@ -259,6 +278,13 @@ export default {
       handler(id) {
         if (id) this.loadFrontmatter();
       }
+    }
+  },
+  beforeUnmount() {
+    // UX-4 (#1514): an unmount mid-suggest must not leak the ticker.
+    if (this._suggestTicker) {
+      clearInterval(this._suggestTicker);
+      this._suggestTicker = null;
     }
   },
   methods: {
@@ -335,6 +361,17 @@ export default {
       this.suggestionError = null;
       this.suggestionCoverage = null;
       this.suggestionRejected = [];
+      // UX-4 (#1514): the suggest job is ONE sampled LLM call server-side
+      // (202 + poll inside the service) — there is no fractional progress to
+      // show honestly, so the bar is indeterminate and the elapsed ticker is
+      // what tells the curator the run is alive on a large repo (thinking
+      // models get minutes, not seconds).
+      this.suggestStartedAt = Date.now();
+      this.suggestElapsed = 0;
+      if (this._suggestTicker) clearInterval(this._suggestTicker);
+      this._suggestTicker = setInterval(() => {
+        this.suggestElapsed = Math.round((Date.now() - this.suggestStartedAt) / 1000);
+      }, 1000);
       try {
         const res = await suggestFrontmatter(this.repoId);
         const suggested = (res && res.suggested) || null;
@@ -379,6 +416,10 @@ export default {
         this.$emit('error', { phase: 'suggest', error: e });
       } finally {
         this.suggesting = false;
+        if (this._suggestTicker) {
+          clearInterval(this._suggestTicker);
+          this._suggestTicker = null;
+        }
       }
     },
     async onSave() {
@@ -456,6 +497,23 @@ export default {
   flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
+}
+/* UX-4 (#1514): the suggest progress row — bar and elapsed readout. */
+.okf-fmp__suggest-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-xs) 0 0;
+}
+.okf-fmp__suggest-progress :deep(.ds-progress) {
+  flex: 1;
+  min-width: 0;
+}
+.okf-fmp__suggest-elapsed {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .okf-fmp__help {
   margin: 0;

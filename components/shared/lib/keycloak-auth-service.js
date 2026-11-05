@@ -456,8 +456,7 @@ const keycloakAuthService = {
   // (components/gov-chat-backend/services/keycloak-auth-service.js): a 401
   // carrying WWW-Authenticate error="invalid_token",
   // error_description="User disabled" means the user is disabled; any other
-  // 401 stays ambiguous (the old every-401-null contract was disproven by
-  // #1476).
+  // 401 stays ambiguous.
 
   TokenVerificationError,
 

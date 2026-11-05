@@ -23,8 +23,12 @@ class _FakeCursor:
         self._payloads = list(payloads)
         self.calls = 0
 
-    def __call__(self, aql: str) -> list[dict]:
+    def __call__(self, aql: str, bind_vars: dict | None = None) -> list[dict]:
+        # The collection name travels as a bind parameter (@@src), not
+        # spliced into the AQL text — so the name never reaches the query
+        # parser (a hyphen in it would parse as subtraction, #1079).
         self.calls += 1
+        self.bind_vars = bind_vars
         return self._payloads.pop(0)
 
 

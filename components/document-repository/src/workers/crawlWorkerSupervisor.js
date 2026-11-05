@@ -16,7 +16,9 @@
 const { Worker } = require('worker_threads');
 const path = require('path');
 
-const { logger } = require('../shared-lib');
+// Depth 2 like every other src/workers module — under Jest the moduleNameMapper
+// resolves BOTH depths, but the runtime image only ships /app/shared-lib.
+const { logger } = require('../../shared-lib');
 
 const RESTART_BASE_DELAY_MS = 5000;
 const RESTART_MAX_ATTEMPTS = 5; // max delay = base * 2^(attempts-1) = 80s
@@ -59,7 +61,7 @@ const spawn = () => {
     // reset below cannot treat the attempt as a healthy long run.
     logger.error(`Crawl Worker spawn failed: ${error.message}`, error);
     spawnedAt = Date.now();
-    onExit(-1);
+    onExit(-1, { spawnFailed: true });
   }
 };
 
@@ -79,7 +81,7 @@ const scheduleRestart = () => {
   scheduleTimer(delay, spawn);
 };
 
-const onExit = (code) => {
+const onExit = (code, { spawnFailed = false } = {}) => {
   if (stopping) return; // deliberate stop (graceful shutdown) — never respawn
   state.running = false;
   state.lastExitCode = code;
@@ -91,7 +93,9 @@ const onExit = (code) => {
   const uptime = Date.now() - spawnedAt;
   if (uptime >= HEALTHY_UPTIME_MS) consecutiveFailures = 0;
   consecutiveFailures += 1;
-  state.restarts += 1;
+  // restarts counts workers that RAN and died — a failed construction never
+  // was one (it still feeds consecutiveFailures above).
+  if (!spawnFailed) state.restarts += 1;
 
   logger.error(`Crawl Worker exited with code ${code} (failure ${consecutiveFailures}/${RESTART_MAX_ATTEMPTS})`, {
     lastExitCode: code,
@@ -118,6 +122,9 @@ const onExit = (code) => {
 };
 
 const start = () => {
+  // Re-entry safe: a second start() must not leak a second live worker or a
+  // pending restart timer on top of the fresh one.
+  stop();
   stopping = false;
   consecutiveFailures = 0;
   state.gaveUp = false;

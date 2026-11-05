@@ -147,6 +147,26 @@ describe('crawlWorkerSupervisor', () => {
     expect(WorkerMock).toHaveBeenCalledTimes(1);
   });
 
+  it('a second start() does not leak a second worker or a pending timer', () => {
+    mod.start();
+    mod.start(); // re-entry while the first worker is LIVE: stop it, spawn fresh
+    expect(FakeWorker.instances[0].terminate).toHaveBeenCalled();
+    expect(WorkerMock).toHaveBeenCalledTimes(2);
+
+    FakeWorker.instances[1].emit('exit', 1); // the live worker dies
+    jest.runAllTimers();
+    expect(WorkerMock).toHaveBeenCalledTimes(3); // normal respawn — no stacked timer
+  });
+
+  it('a second start() clears a pending respawn timer instead of stacking on it', () => {
+    mod.start();
+    FakeWorker.instances[0].emit('exit', 1); // respawn timer armed
+    mod.start();
+    jest.runAllTimers();
+    expect(WorkerMock).toHaveBeenCalledTimes(2); // initial + the re-entry spawn only
+    expect(mod.getStatus()).toMatchObject({ running: true });
+  });
+
   it('never respawns after stop, even when the terminate-triggered exit fires late', () => {
     mod.start();
     mod.stop(); // terminate() → the real worker fires 'exit' AFTER stop returns
@@ -168,7 +188,8 @@ describe('crawlWorkerSupervisor', () => {
     });
     expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
     // running must be false (no worker exists) and the failure must count.
-    expect(mod.getStatus()).toMatchObject({ running: false, restarts: 2 }); // exit + failed spawn
+    // exit of the run that died; the failed construction is NOT a restart
+    expect(mod.getStatus()).toMatchObject({ running: false, restarts: 1 });
     // And the backoff continues: 10s later a fresh spawn is attempted.
     jest.advanceTimersByTime(10000);
     expect(WorkerMock).toHaveBeenCalledTimes(3);

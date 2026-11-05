@@ -68,7 +68,12 @@ describe('crawl worker startup zombie requeue', () => {
     await flush();
 
     expect(db.collection).toHaveBeenCalledWith('crawl_job');
-    expect(jobCollection.update).toHaveBeenCalledWith('job-1', { status: 'Pending' });
+    // the dead run's terminal fields are cleared with the requeue
+    expect(jobCollection.update).toHaveBeenCalledWith('job-1', {
+      status: 'Pending',
+      error_message: null,
+      finished_at: null
+    });
     expect(fileService.addCrawlLog).toHaveBeenCalledWith(
       'file-1',
       'WARN',
@@ -113,13 +118,36 @@ describe('crawl worker startup zombie requeue', () => {
     crawlWorker.start();
     await flush();
 
-    expect(jobCollection.update).toHaveBeenCalledWith('job-good', { status: 'Pending' });
+    expect(jobCollection.update).toHaveBeenCalledWith('job-good', expect.objectContaining({ status: 'Pending' }));
     expect(fileService.addCrawlLog).toHaveBeenCalledWith(
       'file-good',
       'WARN',
       'System',
       expect.stringContaining('requeued')
     );
+  });
+
+  it('retries the requeue on the poll cadence while the DB is down at boot', async () => {
+    // Boot-time DB race: first two connection attempts fail, third succeeds.
+    // The requeue must retry instead of stranding the previous container's
+    // jobs for the whole process lifetime.
+    dbService.getConnection
+      .mockRejectedValueOnce(new Error('db down 1'))
+      .mockRejectedValueOnce(new Error('db down 2'))
+      .mockResolvedValue(db);
+    zombieRows.push({ _key: 'job-1', file_id: 'file-1', status: 'Crawling' });
+
+    crawlWorker.start();
+    await flush();
+    expect(jobCollection.update).not.toHaveBeenCalled(); // still failing
+
+    jest.advanceTimersByTime(5000); // first retry
+    await flush();
+    expect(jobCollection.update).not.toHaveBeenCalled(); // second attempt fails
+
+    jest.advanceTimersByTime(5000); // second retry → DB is up
+    await flush();
+    expect(jobCollection.update).toHaveBeenCalledWith('job-1', expect.objectContaining({ status: 'Pending' }));
   });
 
   it('boots cleanly with no zombies and no DB', async () => {

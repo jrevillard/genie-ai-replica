@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '../../..');
-const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 
 // The spec and helper files the handle migration converted. In a listed
 // file, ANY class selector handed to a locator API is an offender: the
@@ -41,7 +40,8 @@ const MIGRATED_FILES = [
 // '.md' filename would false-positive. A selector built in a variable
 // and passed indirectly escapes this net — in the converted files every
 // locator call takes its selector literally.
-const LOCATOR_CALL = /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?)\(\s*/;
+const LOCATOR_CALL =
+  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?)\(\s*/;
 
 // Inside a locator argument the string IS a CSS selector, so every
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —

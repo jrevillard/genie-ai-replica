@@ -31,6 +31,12 @@ const USER = 'okf-judge-e2e';
 const PW = 'JudgeE2ePass123!';
 
 test.describe('the RAGAS model selection is in the UI', () => {
+  // The session-mint recipe covers both slots: describe.configure carries
+  // the tests (their inline login stacks past 60s on a stalled stack),
+  // the in-hook test.setTimeout carries beforeAll. See
+  // SESSION_MINT_TIMEOUT_MS in tests/e2e/helpers/auth.js.
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let adminToken;
   let userId;
 

@@ -302,11 +302,9 @@
           <div class="quick-help-content" data-testid="quick-help-content">
             <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading" data-testid="quick-help-heading">
               <template #brandwordmark>
-                <span
-                  :class="brandWordmarkClass"
-                  :data-wordmark="brandWordmarkClass ? 'true' : 'false'"
-                  >{{ brandName }}</span
-                >
+                <span :class="brandWordmarkClass" :data-wordmark="brandWordmarkClass ? 'true' : 'false'">{{
+                  brandName
+                }}</span>
               </template>
             </i18n-t>
             <p class="quick-help-subtitle" data-testid="quick-help-subtitle">

@@ -302,11 +302,30 @@ the live run happens at the sync.
   **89.09 %** lines / **89.04 %** statements / **76.28 %** branches /
   **67.49 %** functions vs the current main's **89.02 %** / **88.98 %** /
   **76.12 %** / **67.23 %** — above on all four metrics. The baseline was
-  measured in a throwaway worktree at `origin/main` (junctions for
-  `node_modules`), NOT from a remembered number. The one baseline suite that
-  failed there is the known `validate-pii-rescan` flake: main's copy still
-  has jest's 5 s default, and the wave raises that one test's ceiling to
-  30 s.
+  measured at `origin/main`, NOT from a remembered number. The one baseline
+  suite that failed there is the known `validate-pii-rescan` flake: main's
+  copy still has jest's 5 s default, and the wave raises that one test's
+  ceiling to 30 s.
+  - **Re-measured after the SECOND merge (main moved again — the #991
+    crawl-worker fix):** identical, **89.09 / 89.04 / 76.28 / 67.49**. Main's
+    two new commits touch **no** frontend file (measured: 0 files under
+    `components/gov-chat-frontend/`), so the baseline cannot have moved.
+- **Security review (re-run on the MERGED result, because a merge can drop a
+  guard): no HIGH/MEDIUM finding.** The wave adds **zero server-side
+  changes** — the whole diff is frontend Vue/services/utils + i18n + tests +
+  a CI comment + the smoke script, so no server rule could have been added,
+  removed or weakened. Traced and cleared: the `saveBlob` filename (the
+  server's `content-disposition` is sanitized server-side; `a.download` names
+  a file, not a path), the `downloadFile` header regex (the file id is
+  `encodeURIComponent`-encoded; the captured value only reaches
+  `a.download`), the Authorization header (the axios interceptor attaches
+  it — the wave REPLACES a 401-ing `<a href>` with an authenticated fetch),
+  the batch-delete filter (the server's `bundleProtectedIds` guard refuses
+  independently and **fails closed** with `503 BUNDLE_GUARD_UNAVAILABLE` —
+  the client's filter is a hide, not a grant), XSS (no `v-html`/`innerHTML`/
+  `eval` in the diff; the provenance string renders through `{{ }}`), and the
+  new `?repo=` deep link (every read is server-gated with a 404
+  anti-enumeration, every write with `requireRepoScope('admin')`).
 - **Security review:** no HIGH/MEDIUM finding introduced. The change set adds
   no endpoint, no server-side rule and no sink; the one genuinely new
   primitive (the `?tab=studio&repo=` deep link) is guarded server-side by two
@@ -321,6 +340,34 @@ the live run happens at the sync.
   checked, the pager keys), one re-scoped (the `bundleSelection` refusal
   branch stays as the stated RULE — the primary guard is the list filter — and
   its comment now says so), one documented (the 50-repository list limit).
+- **The smoke harness's W6 phase, re-run LIVE: PASS.** The harness's W6 block
+  (three assertions) passes against the running stack:
+  `PASS artifacts view source: the bundle is listed by is_bundle=true`,
+  `PASS … the bundle does NOT appear in the document list (the two views never
+  mix)`, `PASS … the bundle carries its repository (repo_id) for the
+  provenance pill`.
+  - **The rest of the harness run is RED — and it is pre-existing, NOT the
+    wave's.** The wave's harness diff is **purely additive**: 54 lines, one
+    block, at one place; every failing assertion sits upstream of it and is
+    byte-identical to `origin/main`. The failures are:
+    (a) the graph-name assertions — the harness expects `OKF_<repo_id>`
+    (`run-smoke.js:714`) while main's own naming authority is
+    `OKF_<slug>_v<N>` (`graph-lifecycle-service.js:78`), so the bundle
+    carries the slug name and the harness calls it wrong;
+    (b) the drain assertions — the harness never performs the `ingest`
+    lifecycle transition, and that transition is the ONLY writer of
+    `rag_drain_active` (`lifecycle-service.js:1055`), which is the worker's
+    claim filter (`ingestWorker.js:250`) — so the drain can never arm and
+    the poll times out;
+    (c) the bundle-state and manifest assertions, which follow from (b).
+    A control run with `origin/main`'s copy of the harness (unchanged)
+    reproduces them — the proof that they are not the wave's.
+  - **A real defect the live run DID find, in the harness's own tooling:**
+    `mint-tokens.mjs` read `KEYCLOAK_URL` from the deployment `.env`, which
+    carries the IN-NETWORK address (`http://keycloak:8080`) the host cannot
+    resolve — so the script's own documented host-side invocation failed with
+    `getaddrinfo ENOTFOUND keycloak` before minting anything. Fixed with an
+    `OKF_SMOKE_KEYCLOAK_URL` override (commit `7581a4744`).
 - **Live (local build, 2026-11-06): GREEN.** The tree was synced with the
   tooling (`--merge-prefer-target` — the tree's HEAD is a local merge of a
   branch upstream has since merged in its own shape, so it cannot fast-forward;

@@ -9,6 +9,7 @@ import inspect
 import json
 import math
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
@@ -304,6 +305,11 @@ def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
     if str(filter_strategy).upper() == "AND":
         return all(label in chunk_labels for label in labels_to_filter)
     return any(label in chunk_labels for label in labels_to_filter)
+
+
+# Graph/collection names are interpolated into backticked AQL identifiers —
+# only the character set ArangoDB itself accepts may reach that text (#501).
+_GRAPH_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
 def _escape_aql_string(value) -> str:
@@ -1411,11 +1417,34 @@ class GenieaiArangoRetriever(OpeaComponent):
             distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
             use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
             num_centroids = input_dict.get("num_centroids", ARANGO_NUM_CENTROIDS)
-            traversal_max_depth = input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH)
-            traversal_max_depth = int(traversal_max_depth)
-            traversal_max_returned = input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED)
-            traversal_score_threshold = input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
-            traversal_query = input_dict.get("traversal_query", ARANGO_TRAVERSAL_QUERY)
+            # The numeric traversal parameters are interpolated into AQL text
+            # (LIMIT / FILTER clauses) — coerce them here so a request cannot
+            # smuggle AQL through them (#501).
+            try:
+                traversal_max_depth = int(input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH))
+                traversal_max_returned = int(input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED))
+                traversal_score_threshold = float(
+                    input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
+                )
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Invalid traversal parameters: traversal_max_depth and "
+                        "traversal_max_returned must be integers and "
+                        "traversal_score_threshold a number."
+                    ),
+                ) from exc
+            # The traversal TEMPLATE is operator configuration
+            # (ARANGO_TRAVERSAL_QUERY). Never accept one from the request: the
+            # template is interpolated into AQL text, so a caller-supplied
+            # value is an AQL injection surface (#501).
+            traversal_query = ARANGO_TRAVERSAL_QUERY
+            if input_dict.get("traversal_query"):
+                logger.warning(
+                    "Request supplied 'traversal_query' — ignored. "
+                    "The traversal template is operator configuration only."
+                )
 
             filter_data = input_dict.get("context", {})
             # Same normalization as the deployment value, so both paths accept
@@ -1446,6 +1475,17 @@ class GenieaiArangoRetriever(OpeaComponent):
                 raise HTTPException(
                     status_code=400,
                     detail="Graph name is empty. Please provide a valid graph name.",
+                )
+
+            # graph_name is interpolated into backticked collection names in
+            # AQL text — accept only the character set ArangoDB itself allows
+            # for graph/collection names, so no AQL metacharacter can ride in
+            # on it (#501).
+            if not _GRAPH_NAME_PATTERN.fullmatch(graph_name):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid graph name: {graph_name!r}. Graph names may only "
+                    "contain letters, digits, underscores and hyphens.",
                 )
 
             if search_start == "node":

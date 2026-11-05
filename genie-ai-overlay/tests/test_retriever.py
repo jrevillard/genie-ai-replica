@@ -16,6 +16,7 @@ from core import embedding_query_prefix as core_query_prefix
 from core.label_contract import encode_filter_labels
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
+    ARANGO_TRAVERSAL_QUERY,
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
     _build_aql_filter_clause,
@@ -414,6 +415,68 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True))
         invoke_env["retriever"].fetch_neighborhoods.assert_called_once()
+
+    # --- AQL injection surface (#501): request values that reach the
+    # --- traversal AQL as TEXT must be validated or ignored at this boundary.
+
+    @pytest.mark.asyncio
+    async def test_request_traversal_query_template_is_ignored(self, invoke_env):
+        """The traversal template is operator configuration (ARANGO_TRAVERSAL_QUERY).
+
+        The template is interpolated into AQL text, so a caller-supplied
+        `traversal_query` is an AQL injection surface. The request value must
+        be ignored and the operator template used instead.
+        """
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        injected = "FOR x IN @@collection FILTER x.pwned == true RETURN x"
+        await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True, traversal_query=injected))
+        kwargs = invoke_env["retriever"].fetch_neighborhoods.call_args.kwargs
+        assert kwargs["traversal_query"] == ARANGO_TRAVERSAL_QUERY
+        assert kwargs["traversal_query"] != injected
+
+    @pytest.mark.asyncio
+    async def test_graph_name_injection_payload_rejected_400(self, invoke_env):
+        """graph_name is interpolated into collection names in AQL text; an
+        AQL metacharacter payload must be rejected with 400 before any query
+        is built. Every graph-name source (legacy constant, fan-out legs)
+        funnels through _extract_for_graph — that is the boundary."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        payload = 'GRAPH` RETURN 1 ) }} FOR leet IN @@c FILTER leet.x == "y'
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"]._extract_for_graph(
+                graph_name=payload,
+                input_dict={},
+                input=create_mock_input(),
+                query="test query",
+                start_time=0.0,
+                span=MagicMock(),
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_integer_traversal_max_returned_rejected_400(self, invoke_env):
+        """traversal_max_returned is interpolated into a LIMIT clause; a
+        non-numeric value must be rejected with 400, not interpolated."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(
+                create_mock_input(enable_traversal=True, traversal_max_returned="3 LIMIT 1")
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_score_threshold_rejected_400(self, invoke_env):
+        """traversal_score_threshold is interpolated into a FILTER clause; a
+        non-numeric value must be rejected with 400, not interpolated."""
+        invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(
+                create_mock_input(enable_traversal=True, traversal_score_threshold="0.5 RETURN 1 //")
+            )
+        assert exc_info.value.status_code == 400
+        invoke_env["retriever"].fetch_neighborhoods.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):

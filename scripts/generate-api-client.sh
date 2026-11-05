@@ -100,6 +100,22 @@ prepare_output_dir() {
   printf '%s\n' "$IGNORE_CONTENT" > "$1/.openapi-generator-ignore"
 }
 
+# assert_dart_output_layout <output-dir> — the patch functions read a fixed
+# dart output layout (lib/api/, README.md, doc/); a generator that changes
+# it must abort here with one explanatory message, not crash inside a patch
+# block (or silently no-op where a missing path makes a guard falsy). Call
+# ONCE after generate_client, before any patch runs.
+assert_dart_output_layout() {
+  for required in "$1/lib/api" "$1/README.md" "$1/doc"; do
+    if [ ! -e "$required" ]; then
+      echo "ERROR: the generator produced no $required — the dart output"
+      echo "       layout changed; inspect the output and update this"
+      echo "       script."
+      exit 1
+    fi
+  done
+}
+
 # patch_client <output-dir> — the dart generator emits non-compiling Dart for
 # an array-of-binary property in a multipart requestBody (verified on 7.22.0
 # and 7.26.0): for `List<MultipartFile> files` it writes
@@ -108,16 +124,6 @@ prepare_output_dir() {
 # Patch the pair to what the generator itself emitted for years
 # (mp.files.addAll(files)). No-op once upstream emits the correct form again.
 patch_client() {
-  # The layout guard comes FIRST: the node block below reads this very
-  # directory, so a changed output layout would abort the script with a
-  # raw node stack trace before the explanatory message could print.
-  if [ ! -d "$1/lib/api" ]; then
-    echo "ERROR: the generator produced no $1/lib/api directory — the dart"
-    echo "       output layout changed; inspect the output and update"
-    echo "       patch_client."
-    exit 1
-  fi
-
   node -e "
 const fs = require('fs');
 const path = require('path');
@@ -163,21 +169,14 @@ patch_markdown() {
 const fs = require('fs');
 const path = require('path');
 const dir = process.argv[1];
-const md = [];
-const collect = (d) => {
-  for (const e of fs.readdirSync(d, {withFileTypes: true})) {
-    const p = path.join(d, e.name);
-    if (e.isDirectory()) collect(p);
-    else if (e.name.endsWith('.md')) md.push(p);
-  }
-};
-collect(dir);
+const md = fs.readdirSync(dir, {recursive: true})
+  .filter((f) => f.endsWith('.md'))
+  .map((f) => path.join(dir, f));
 for (const p of md) {
   const src = fs.readFileSync(p, 'utf8');
   const fixed = src.replace(
-    /\/\/ TODO Configure OAuth2 access token for authorization: (\w+)\n\/\/defaultApiClient\.getAuthentication<OAuth>\('\1'\)\.accessToken = 'YOUR_ACCESS_TOKEN';\n\nfinal api_instance = (\w+)\(\);/g,
-    (m, scheme, apiClass) =>
-      '// TODO Configure OAuth2 access token for authorization: ' + scheme + '\n' +
+    /\/\/defaultApiClient\.getAuthentication<OAuth>\('\w+'\)\.accessToken = 'YOUR_ACCESS_TOKEN';\n\nfinal api_instance = (\w+)\(\);/g,
+    (m, apiClass) =>
       \"final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));\n\n\" +
       'final api_instance = ' + apiClass + '(api_client);'
   );
@@ -206,6 +205,7 @@ if [ "${1:-}" = "--check" ]; then
   CHECK_DIR="$(mktemp -d)"
   prepare_output_dir "$CHECK_DIR"
   generate_client "$CHECK_DIR"
+  assert_dart_output_layout "$CHECK_DIR"
   patch_client "$CHECK_DIR"
   patch_markdown "$CHECK_DIR"
   if diff -r "${DIFF_EXCLUDES[@]}" "$CHECK_DIR" "$OUTPUT_DIR" > /dev/null; then
@@ -224,6 +224,7 @@ echo "==> Generating Dart client..."
 rm -rf "$OUTPUT_DIR"
 prepare_output_dir "$OUTPUT_DIR"
 generate_client "$OUTPUT_DIR"
+assert_dart_output_layout "$OUTPUT_DIR"
 
 echo "==> Patching the dart generator's array-file emission (upstream bug)..."
 patch_client "$OUTPUT_DIR"

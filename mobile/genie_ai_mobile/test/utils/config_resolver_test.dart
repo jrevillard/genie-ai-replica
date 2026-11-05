@@ -63,11 +63,14 @@ void main() {
       );
     });
 
-    test('0 and false resolve to no text; a truthy number keeps its form', () {
-      expect(resolveConfigText(0, 'en'), '');
-      expect(resolveConfigText(false, 'en'), '');
-      expect(resolveConfigText(42, 'en'), '42');
-    });
+    test(
+      '0 and false resolve to no text; a truthy number renders in the web form',
+      () {
+        expect(resolveConfigText(0, 'en'), '');
+        expect(resolveConfigText(false, 'en'), '');
+        expect(resolveConfigText(42, 'en'), '42');
+      },
+    );
 
     // A number renders in the WEB's form: the web stringifies it with
     // String(), which drops the '.0' Dart keeps ('5' there, '5.0' here).

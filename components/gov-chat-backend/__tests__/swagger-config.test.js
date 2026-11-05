@@ -400,6 +400,15 @@ describe('Swagger Configuration', () => {
       });
     });
 
+    it('an API_URL is trimmed (a padded value would leak into the server URL)', () => {
+      withApiUrl('  https://gov.example.com  ', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('https://gov.example.com');
+      });
+      withApiUrl(' ', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+    });
+
     it('every annotated path starts with /api (Try-it-out keeps the prefix for any server base)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const spec = buildSpecWithRealFs(swaggerOptions);

@@ -86,7 +86,9 @@ time guessing what is wrong.
   the cross-origin failure (CORS plus nginx's `connect-src 'self'` on
   `/api-docs`) that the relative default removes. The document-repository
   spec (the `/api/files` endpoints are served by that service, not by the
-  BFF) follows the same rule with the same variable.
+  BFF) follows the same relative default; its Swagger UI is not routed
+  through the gateway, so leave `API_URL` unset for it unless you expose
+  that UI from the same origin as its spec.
 
 ## Verify your setup
 

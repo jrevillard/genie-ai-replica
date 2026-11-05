@@ -33,6 +33,11 @@ describe('Document Repository swagger config', () => {
     expect(loadConfig('https://gov.example.com/').definition.servers[0].url).toBe('https://gov.example.com');
   });
 
+  it('trims whitespace around API_URL (a padded value would leak into the server URL)', () => {
+    expect(loadConfig('  https://gov.example.com  ').definition.servers[0].url).toBe('https://gov.example.com');
+    expect(loadConfig(' ').definition.servers[0].url).toBe('/');
+  });
+
   it('treats an empty API_URL as unset (compose always passes the variable, often empty)', () => {
     expect(loadConfig('').definition.servers[0].url).toBe('/');
   });

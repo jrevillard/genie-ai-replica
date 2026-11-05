@@ -960,14 +960,34 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      // Log the docs path the served spec itself advertises (the relative
-      // default resolves against the page origin, so a bare path is the
-      // honest form; a localhost URL would be unreachable in every deployed
-      // topology — only nginx 80/443 is exposed). Reading the value from
-      // swaggerSpec pins the log to the served server entry — the two
-      // cannot drift apart.
+      // Warn on the API_URL shapes that silently re-create the failures
+      // this spec default exists to avoid (the knob's name invites the
+      // /api suffix — its frontend sibling VUE_APP_API_URL documents one).
+      const apiUrl = (process.env.API_URL || '').trim();
+      if (apiUrl && !/^https?:\/\//.test(apiUrl)) {
+        logger.warn(
+          'API_URL is not an absolute http(s) URL — external tooling resolves it as a relative reference against its own base'
+        );
+      }
+      if (/\/api(\/|$)/.test(apiUrl)) {
+        logger.warn(
+          'API_URL carries an /api suffix — the annotated paths already include /api, so Try-it-out builds doubled /api/api/... URLs'
+        );
+      }
+      // Log the docs URL the served spec itself advertises. The docs page
+      // mounts at the BFF root, so only the server URL's ORIGIN is a valid
+      // docs base; the relative default (and any unparseable value) logs
+      // the bare path — a localhost URL would be unreachable in every
+      // deployed topology (only nginx 80/443 is exposed).
       const specServerUrl = swaggerSpec?.servers?.[0]?.url;
-      const docsBase = specServerUrl && specServerUrl !== '/' ? specServerUrl.replace(/\/+$/, '') : '';
+      let docsBase = '';
+      if (specServerUrl && specServerUrl !== '/') {
+        try {
+          docsBase = new URL(specServerUrl).origin;
+        } catch {
+          docsBase = '';
+        }
+      }
       logger.info(`API Documentation available at: ${docsBase}/api-docs`);
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)

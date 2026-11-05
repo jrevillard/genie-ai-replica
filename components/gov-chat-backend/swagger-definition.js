@@ -22,9 +22,12 @@ module.exports = {
       // Default: RELATIVE ('/') — swagger-ui resolves it against the
       // origin the docs page is served from, same-origin in dev and behind
       // the gateway, so Try-it-out works in every topology without config.
-      // API_URL pins an absolute base instead (no /api suffix; trailing
-      // slashes are stripped — a raw join would build //api/... URLs).
-      url: (process.env.API_URL || '/').replace(/\/+$/, '') || '/',
+      // API_URL pins an absolute base instead: trimmed, no /api suffix
+      // (the paths carry it), no trailing slash (a raw join would build
+      // //api/... URLs). Keep this normalization in sync with
+      // components/document-repository/src/config/swaggerConfig.js —
+      // the two components pin the same contract with their own suites.
+      url: (process.env.API_URL || '').trim().replace(/\/+$/, '') || '/',
       description: 'API server base'
     }
   ],

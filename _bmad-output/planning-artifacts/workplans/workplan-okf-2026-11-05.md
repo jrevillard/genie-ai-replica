@@ -182,11 +182,15 @@ the ORDER and the cross-stream slots.
 > different default — sharing the module with it would change existing
 > renderings, which is out of scope for this wave.
 >
-> Verified: frontend suite **135 suites / 3912 tests** green; coverage lines
+> Verified: frontend suite **137 suites / 3946 tests** green; coverage lines
 > **89.05 %** vs the measured main baseline **88.97 %** (statements 89.01 vs
 > 88.92, branches 76.16 vs 76.00, functions 67.40 vs 67.14) — the
 > must-not-decrease bar is met on every metric, measured on this machine by
-> stashing the wave and re-running. The smoke harness gained the W6 phase
+> stashing the wave and re-running. **Re-measured against the CURRENT main**
+> after the branch merged `origin/main` (which moved the baseline): the wave
+> **89.09 %** lines / **89.04 %** statements / **76.28 %** branches /
+> **67.49 %** functions vs main's **89.02 %** / **88.98 %** / **76.12 %** /
+> **67.23 %** — above on all four. The smoke harness gained the W6 phase
 > (the artifacts view's data source: the bundle is listed by `is_bundle=true`
 > and does NOT appear in the document list) and the Playwright spec
 > (`tests/e2e/okf/artifacts-view.spec.js`, injected payloads) drives the view
@@ -212,7 +216,21 @@ the ORDER and the cross-stream slots.
 > (`EACCES` on upload). The two red CI jobs on MR !780 are the registry's
 > half-published `@playwright/test@1.65.0` (**#1561** — main is red on the
 > same job) and a timing flake in the okf-server RAGAS suite tests (passes
-> locally 121/121, in a component this wave does not touch).
+> locally 121/121, in a component this wave does not touch). **Both are GREEN
+> on the re-run after the merge.**
+>
+> **Re-verified after the merge (2026-11-06): GREEN.** The branch merged
+> `origin/main` (three new main commits — the keycloak silent-renew fix, the
+> draft-contract fix, the #995 record); the tree was re-synced to the merged
+> head, `frontend` / `okf-server` / `chatqna` / `retriever` rebuilt and
+> recreated, `verify-local-build.sh` 46 pass / 0 fail, and the spec re-run
+> against the merged stack. The re-run found ONE defect — the spec's first
+> assertion read the captured `is_bundle` filters right after the view became
+> VISIBLE, while the view fires its read from `mounted()`, so the capture
+> could land a tick later. The read was never in doubt (the provenance test
+> asserts a row whose text comes only from the `is_bundle=true` payload); the
+> ASSERTION raced it. Fixed with an explicit bounded wait
+> (`expect.poll`, 15 s) — an implicit race is what makes an E2E suite flaky.
 
 ## Standing rules that carry over
 

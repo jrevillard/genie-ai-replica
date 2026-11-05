@@ -560,8 +560,14 @@ async function runDocumentsConversion(job) {
             entry.topics_source = topics.source;
             // Phrased as the decision taken, not as an import outcome: the
             // ingestion log is append-only, so a warning that asserts
-            // completion would survive a later failed flush as a lie.
-            const warning = `Topics degraded — ${topics.reason}. The import proceeds with the filename slug instead of LLM-derived topics.`;
+            // completion would survive a later failed flush as a lie. And
+            // the two degradation shapes differ: a leg that degraded still
+            // carries a fallback topic, a summariser that threw carries
+            // none — the sentence says which.
+            const hasFallbackTopic = Array.isArray(topics.topics) && topics.topics.length > 0;
+            const warning = hasFallbackTopic
+              ? `Topics degraded — ${topics.reason}. The concepts carry a fallback topic instead of an LLM-derived one.`
+              : `Topics degraded — ${topics.reason}. No topic was applied to the concepts.`;
             entry.warning = warning;
             // NOT awaited: the mirror is best-effort (the same channel and the
             // same call the ingest worker fires without await — workers/ingestWorker.js),

@@ -465,8 +465,9 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
   // must not fail) but is warned, never silently swallowed. The throw is
   // produced at the only synchronous seam getServedModelId has before the
   // probe (the URL builder), isolated so the real module keeps serving the
-  // other tests.
-  test('a non-discovery error on the soft path warns and still resolves null', async () => {
+  // other tests (the doMock is disarmed right after — it survives the
+  // isolation's registry reset and would poison a later fresh require).
+  test('a non-discovery error on the soft path warns once and still resolves null', async () => {
     await jest.isolateModulesAsync(async () => {
       jest.doMock('../services/llm-url', () => ({
         ...jest.requireActual('../services/llm-url'),
@@ -478,15 +479,43 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
       const isolatedCache = require('../services/vllm-model-cache');
       isolatedCache.clearModelCache();
       await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+      // One line per failure signature: a PRE-probe seam has no negative
+      // stub to window it — the repeat stays silent.
+      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
       const warns = isolatedLogger.warn.mock.calls.filter(
         (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
       );
       expect(warns).toHaveLength(1);
-      expect(warns[0][1]).toMatchObject({ baseUrl: 'http://vllm:8000', error: 'cache-key construction bug' });
+      expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'cache-key construction bug' });
       // A discovery-shaped failure keeps its silence — the quiet contract is
       // unchanged by the classification.
       expect(isolatedLogger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
     });
+    jest.dontMock('../services/llm-url');
+  });
+
+  // A thrown non-Error (a bare string, say) must keep its detail: the warn
+  // is the only visibility into the soft-path bug, and `String(err)` is
+  // what carries it.
+  test('a non-Error throw keeps its detail in the warn', async () => {
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('../services/llm-url', () => ({
+        ...jest.requireActual('../services/llm-url'),
+        openAiModelsUrl: () => {
+          throw 'bare string throw';
+        }
+      }));
+      const isolatedLogger = require('../shared-lib/logger').logger;
+      const isolatedCache = require('../services/vllm-model-cache');
+      isolatedCache.clearModelCache();
+      await expect(isolatedCache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+      const warns = isolatedLogger.warn.mock.calls.filter(
+        (c) => c[0] === 'vllm_model_cache.soft_path_unexpected_error'
+      );
+      expect(warns).toHaveLength(1);
+      expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000', error: 'bare string throw' });
+    });
+    jest.dontMock('../services/llm-url');
   });
 
   test('a refresh mid-failure serves the caller the fresh id and keeps the warn silent', async () => {

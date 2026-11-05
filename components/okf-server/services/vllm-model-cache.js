@@ -108,6 +108,11 @@ const _negative = new Map();
 // twice per LLM call in the curation loops — and a malformed base is a
 // CONFIG error, not a per-call event. One line per pair, ever.
 const _malformedWarned = new Set();
+// Soft-path unexpected-error signatures already warned about (base|message):
+// the probe-chain failures are windowed by the negative stub, but a PRE-probe
+// seam (URL / credential construction) has no window — one line per
+// failure signature, ever, is the same flood rule as malformed above.
+const _softWarned = new Set();
 
 /** The deployer pin, both spellings. Each spelling is trimmed BEFORE the
  * fallback so a whitespace-only VLLM_LLM_MODEL_ID cannot shadow a valid
@@ -414,6 +419,11 @@ function pruneCache() {
   while (_malformedWarned.size > MAX_CACHE_ENTRIES) {
     _malformedWarned.delete(_malformedWarned.keys().next().value);
   }
+  // Same bound for the soft-path warn signatures: the oldest re-warns,
+  // at most once more.
+  while (_softWarned.size > MAX_CACHE_ENTRIES) {
+    _softWarned.delete(_softWarned.keys().next().value);
+  }
 }
 
 /** The loud no-answer error shared by both resolving variants. */
@@ -589,12 +599,19 @@ async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
     // only class getServedModelId throws for a probe failure) — never
     // "anything". Any OTHER class is a bug on this soft path: it stays
     // null (the provenance label must not fail) but cannot stay silent,
-    // or every label would read as a healthy miss.
+    // or every label would read as a healthy miss. One line per failure
+    // signature (the probe-chain failures are windowed by the negative
+    // stub; the pre-probe seams are not — the bound lives in pruneCache).
     if (!(err instanceof ModelDiscoveryError)) {
-      logger.warn('vllm_model_cache.soft_path_unexpected_error', {
-        baseUrl: String(baseUrl || ''),
-        error: err && err.message
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      const signature = `${String(baseUrl || '')}|${message}`;
+      if (!_softWarned.has(signature)) {
+        _softWarned.add(signature);
+        logger.warn('vllm_model_cache.soft_path_unexpected_error', {
+          url: String(baseUrl || ''),
+          error: message
+        });
+      }
     }
     return null;
   }
@@ -650,6 +667,7 @@ function clearModelCache() {
   _cache.clear();
   _negative.clear();
   _malformedWarned.clear();
+  _softWarned.clear();
   _inflight.clear();
 }
 

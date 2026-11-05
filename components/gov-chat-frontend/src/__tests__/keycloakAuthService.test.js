@@ -994,6 +994,27 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(mockSigninSilent).not.toHaveBeenCalled();
   });
 
+  it('logout clears the adoption memo — the same tokens are adoptable again after a logout (#1521 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    const holderUser = createMockUser({ access_token: 'memo-token' });
+    const seedHolder = () =>
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: holderUser }));
+    seedHolder();
+    const first = await keycloakAuthService.signinSilent();
+    expect(first.access_token).toBe('memo-token');
+    // The same publication is not adoptable twice — one-shot per token.
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant' }));
+    const second = await keycloakAuthService.signinSilent();
+    expect(second.access_token).toBe('own-grant');
+    // A logout ends the session: the memo (an access-token string in module
+    // scope) goes with it, so the tokens are adoptable again.
+    await keycloakAuthService.logout();
+    seedHolder();
+    const third = await keycloakAuthService.signinSilent();
+    expect(third.access_token).toBe('memo-token');
+  });
+
   it('a corrupt (at-less) publication is dropped at renew entry like a non-parsing one (#1521 review)', async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);

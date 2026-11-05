@@ -2412,7 +2412,7 @@ export default {
       autocorrect:
         'A correção automática toca apenas no frontmatter (títulos, tipos, estrutura) — nunca no conteúdo que você escreveu. As propostas são exibidas antes de qualquer mudança; aplicar grava as correções imediatamente e você pode revisar o resultado em Curate.',
       handoff:
-        'O ritual do ciclo de vida (submit → approve → publish → Ingerir) fica deliberadamente fora deste assistente: aprovações pertencem ao fluxo de governança no painel e no editor, onde versões e estado de serving são gerenciados.',
+        'O ritual do ciclo de vida ({submit} → {approve} → {publish} → {ingest}) fica deliberadamente fora deste assistente: aprovações pertencem ao fluxo de governança no painel e no editor, onde versões e estado de serving são gerenciados.',
       lifecycle:
         'O contrato de seis etapas: draft → review → approved → published (criação da versão + pacote) → ingested (serving no RAG) → retracted (de volta à edição). O conteúdo só se torna citável depois do ingest — e somente conteúdo revisado pode ser publicado.',
       labelsAuto:
@@ -2594,7 +2594,7 @@ export default {
       entry: {
         createdHint: 'Repositório criado — renomeie-o depois no editor.',
         title: 'Nome do repositório e área temática',
-        hint: 'Dê a este repositório OKF um nome claro e escolha sua área temática.',
+        hint: 'Este repositório está pronto para revisão. A publicação nunca acontece aqui — o ciclo de vida corre no painel e no editor, um botão de cada vez.',
         nameLabel: 'Nome do repositório',
         namePh: 'ex.: Autorizações de transporte NL',
         domainLabel: 'Área temática'

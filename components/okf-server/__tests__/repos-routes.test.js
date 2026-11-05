@@ -1279,6 +1279,39 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
     );
   });
 
+  test('a body-less request is a scan (dry_run defaults true) and writes NO "Applied" audit row (#1066)', async () => {
+    // The audit gate must read the SAME effective flag the service gets:
+    // the old gate treated a missing body flag as an APPLY and wrote a false
+    // "Applied … N concept(s)" row for a run that modified nothing.
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [
+        {
+          concept_id: 'conceptA',
+          changes: [{ field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }]
+        }
+      ],
+      warnings: [],
+      applied: 0,
+      failed: 0,
+      failures: [],
+      total_concepts: 1
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.autocorrectRepo).toHaveBeenCalledWith('repoA', true, expect.anything());
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description: expect.stringContaining('concept(s) applied')
+      })
+    );
+  });
+
   test('200 with no body — defaults to dry_run=true', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });

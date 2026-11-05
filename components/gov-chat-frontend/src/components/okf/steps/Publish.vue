@@ -35,7 +35,7 @@
       {{
         translate(
           'okf.steps.publish.hint',
-          'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.'
+          'This repository is ready for review. Publishing never happens here — the lifecycle runs on the dashboard and in the editor, one button at a time.'
         )
       }}
     </p>
@@ -63,14 +63,7 @@
       <DsButton variant="secondary" small @click="$emit('dashboard')">
         {{ translate('okf.steps.publish.openDashboard', 'Open the Dashboard') }}
       </DsButton>
-      <DsInfoTip
-        :text="
-          translate(
-            'okf.glossary.handoff',
-            'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
-          )
-        "
-      />
+      <DsInfoTip :text="handoffTip" />
     </div>
     <!-- Story 1-8 (2026-10-08): read-only head status + the Testing Lab.
          Publishing builds the vectorized head from the tags; this card tells
@@ -142,16 +135,33 @@ export default {
     // #1068: the ritual line names the four lifecycle steps through the SAME
     // translated labels the dashboard button renders (okf.lifecycle.*), so
     // the copy can never name a button the operator cannot find — the drift
-    // that made a hand-translated ritual useless in 12 of 14 locales.
+    // that made a hand-translated ritual useless in 12 of 14 locales. The
+    // labels are passed as NAMED interpolation (translateMixin's third
+    // argument), which replaces every occurrence of each {token}.
+    lifecycleLabels() {
+      return {
+        submit: this.translate('okf.lifecycle.submit', 'Submit for review'),
+        approve: this.translate('okf.lifecycle.approve', 'Approve'),
+        publish: this.translate('okf.lifecycle.publish', 'Publish'),
+        ingest: this.translate('okf.lifecycle.ingest', 'Ingest')
+      };
+    },
     lifecycleRitual() {
       return this.translate(
         'okf.steps.publish.ritual',
-        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {submit} → {approve} → {publish} → {ingest}. The wizard stops here by design.'
-      )
-        .replace('{submit}', this.translate('okf.lifecycle.submit', 'Submit for review'))
-        .replace('{approve}', this.translate('okf.lifecycle.approve', 'Approve'))
-        .replace('{publish}', this.translate('okf.lifecycle.publish', 'Publish'))
-        .replace('{ingest}', this.translate('okf.lifecycle.ingest', 'Ingest'));
+        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {submit} → {approve} → {publish} → {ingest}. The wizard stops here by design.',
+        this.lifecycleLabels
+      );
+    },
+    // The hand-off tooltip names the same four steps, same labels — a tip
+    // that listed three of them (or hand-translated ones) contradicted the
+    // ritual right above it.
+    handoffTip() {
+      return this.translate(
+        'okf.glossary.handoff',
+        'The lifecycle ritual ({submit} → {approve} → {publish} → {ingest}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        this.lifecycleLabels
+      );
     },
     // B8 (Amendment A): the checklist reads the LIVE repo doc — never the
     // dead draft shapes. Each item is a real readiness signal.

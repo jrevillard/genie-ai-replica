@@ -1417,22 +1417,23 @@ async function autocorrectRepo(req, res, next) {
       }
       return res.status(200).json({ ok: true, mode, dry_run: dry_run === true, proposals, applied: appliedCount });
     }
-    const applied = !(dry_run === true);
-    const result = await conceptMetaService.autocorrectRepo(
-      repo_id,
-      typeof dry_run === 'boolean' ? dry_run : true,
-      actorFrom(req)
-    );
+    // ONE effective dry-run flag: the service treats a missing body flag as
+    // dry_run=true (a read), so the audit gate must read the SAME flag —
+    // otherwise a body-less request wrote an "Applied … N concept(s)" audit
+    // row for a run that applied nothing (#1066: the row must not lie).
+    const effectiveDryRun = typeof dry_run === 'boolean' ? dry_run : true;
+    const result = await conceptMetaService.autocorrectRepo(repo_id, effectiveDryRun, actorFrom(req));
     // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
-    if (applied) {
+    if (!effectiveDryRun) {
       // #1066: result.changes is per-CONCEPT ({concept_id, changes[]}), so a
       // bare "N change(s)" mislabels the concept count as a change count and
       // sent an operator re-running the (unrelated) tag suggestion. Name the
       // scope and the fields actually touched — tags are never autocorrected.
-      // The FAILED concepts are excluded from both counts: they were planned,
-      // not applied, and counting them made the row contradict itself ("2
-      // concept(s) ... 1 concept(s) FAILED" read as three touched concepts).
-      const failedIds = new Set((result.failures || [] || []).map((f) => f.concept_id));
+      // The FAILED concepts are excluded from both counts AND from the
+      // details payload: they were planned, not applied, and counting them
+      // made the row contradict itself ("2 concept(s) … 1 concept(s) FAILED"
+      // read as three touched concepts).
+      const failedIds = new Set((result.failures || []).map((f) => f.concept_id));
       const conceptChanges = (Array.isArray(result.changes) ? result.changes : []).filter(
         (c) => !failedIds.has(c.concept_id)
       );
@@ -1447,13 +1448,21 @@ async function autocorrectRepo(req, res, next) {
           source_ip: req.ip,
           description:
             'Applied frontmatter autocorrect — ' +
-            conceptChanges.length +
+            // result.applied is the SERVICE's count of concepts actually
+            // patched — the authoritative number, not a re-derivation.
+            (typeof result.applied === 'number' ? result.applied : conceptChanges.length) +
             ' concept(s) applied, ' +
             fieldCount +
             ' frontmatter field change(s)' +
             (fields.length ? ' (' + fields.join(', ') + ')' : '') +
             (result.failed > 0 ? `, ${result.failed} concept(s) FAILED and reported to the client` : ''),
-          details: { changes: result.changes, warnings: result.warnings }
+          // The APPLIED set, so the payload matches the sentence above it;
+          // the failed concepts keep their own entry (concept_id + error).
+          details: {
+            changes: conceptChanges,
+            failures: result.failures || [],
+            warnings: result.warnings
+          }
         })
         .catch(() => {
           /* best-effort */

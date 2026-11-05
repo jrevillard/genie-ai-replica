@@ -2422,7 +2422,7 @@ export default {
       autocorrect:
         "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        "Le rituel de cycle de vie (soumettre → approuver → publier → Ingérer) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
+        "Le rituel de cycle de vie ({submit} → {approve} → {publish} → {ingest}) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
         "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
@@ -2604,7 +2604,7 @@ export default {
       entry: {
         createdHint: "Dépôt créé — renommez-le plus tard depuis l'éditeur.",
         title: 'Nom du référentiel et domaine',
-        hint: 'Donnez à ce référentiel OKF un nom clair et choisissez son domaine.',
+        hint: "Ce référentiel est prêt pour la revue. La publication n'a jamais lieu ici — le cycle de vie se déroule sur le tableau de bord et dans l'éditeur, un bouton à la fois.",
         nameLabel: 'Nom du référentiel',
         namePh: 'par ex. Permis de transport NL',
         domainLabel: 'Domaine'

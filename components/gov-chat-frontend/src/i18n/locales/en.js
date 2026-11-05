@@ -3186,7 +3186,7 @@ export default {
       autocorrect:
         'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish → Ingest) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'The lifecycle ritual ({submit} → {approve} → {publish} → {ingest}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
@@ -3402,7 +3402,7 @@ export default {
       entry: {
         createdHint: 'Repository created — rename it later from the editor.',
         title: 'Repository name & subject area',
-        hint: 'Give this OKF repository a clear name and pick its subject area.',
+        hint: 'This repository is ready for review. Publishing never happens here — the lifecycle runs on the dashboard and in the editor, one button at a time.',
         nameLabel: 'Repository name',
         namePh: 'e.g. Transport permits NL',
         domainLabel: 'Subject area'

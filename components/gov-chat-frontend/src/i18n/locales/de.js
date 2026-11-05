@@ -2424,7 +2424,7 @@ export default {
       autocorrect:
         'Auto-Fix fasst nur das Frontmatter an (Titel, Typen, Struktur) — nie Ihren geschriebenen Inhalt. Vorschläge werden angezeigt, bevor sich etwas ändert; das Anwenden schreibt die Korrekturen sofort, und Sie können das Ergebnis in Curate prüfen.',
       handoff:
-        'Der Lifecycle-Ritus (submit → approve → publish → Aufnehmen) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
+        'Der Lifecycle-Ritus ({submit} → {approve} → {publish} → {ingest}) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
       lifecycle:
         'Der Sechs-Schritte-Vertrag: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (zurück zur Bearbeitung). Inhalt wird erst nach dem Ingest zitierfähig — und nur geprüfter Inhalt kann veröffentlicht werden.',
       labelsAuto:
@@ -2606,7 +2606,7 @@ export default {
       entry: {
         createdHint: 'Repository erstellt — benennen Sie es später im Editor um.',
         title: 'Repository-Name & Themenbereich',
-        hint: 'Geben Sie diesem OKF-Repository einen eindeutigen Namen und wählen Sie dessen Themenbereich.',
+        hint: 'Dieses Repository ist bereit zur Prüfung. Veröffentlicht wird hier nie — der Lebenszyklus läuft im Dashboard und im Editor, jeweils ein Schritt pro Schaltfläche.',
         nameLabel: 'Repository-Name',
         namePh: 'z. B. Transportgenehmigungen NL',
         domainLabel: 'Themenbereich'

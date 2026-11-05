@@ -2411,7 +2411,7 @@ export default {
       autocorrect:
         'Tokiso ea boikemelo e khoma frontmatter feela (ditlohoho, mefuta, sebopeho) — e sa khohong mongolo oa hao. Dikhothaletso di bontshwa pele ho se seng le se seng se fetoha; ho di sebedisa ho ngola ditokiso hang-hang mme o ka hlahloba sephetho ho Curate.',
       handoff:
-        'Mokete oa lifecycle (submit → approve → publish → Ho ja) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
+        'Mokete oa lifecycle ({submit} → {approve} → {publish} → {ingest}) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
       lifecycle:
         "Konteraka ea mehato e mengataro: draft → review → approved → published (mint + bundle) → ingested (serving ho RAG) → retracted (khutla ho edit). Litaba li fetoha tsa ho qotsoa ka mor'a ingest feela — mme litaba tse hlahlojoeng feela di ka phatlalatsoa.",
       labelsAuto:
@@ -2593,7 +2593,7 @@ export default {
       entry: {
         createdHint: 'Repo e thehiloe — o ka e reha lebitso le lecha hamorao ho tloha ho editor.',
         title: 'Lebitso la polokelo & sebaka sa taba',
-        hint: "Fana ka lebitso le hlakileng polokelong ena ea OKF 'me u khethe sebaka sa taba ea eona.",
+        hint: 'Kono polokelo e loketse ho tlhahlobo. Ho publish hang ha etsahetseng moo — lifecycle e matha dashboard le editor, konopo e le e ntle e mong le e mong.',
         nameLabel: 'Lebitso la polokelo',
         namePh: 'mohlala: Litumello tsa lipalangoang NL',
         domainLabel: 'Sebaka sa taba'

@@ -43,7 +43,7 @@
          refresh loses the curation state. Say so, party-neutrally, at the TAB
          level: the zip-import path lands on the dashboard without ever
          entering the wizard, so a wizard-only surface would stay quiet for it. -->
-    <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" role="status">
+    <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice" role="status">
       {{
         translate(
           'okf.studio.draft.notReady',

@@ -2402,7 +2402,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup (kirim → setujui → publikasikan → Serap) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup ({submit} → {approve} → {publish} → {ingest}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2583,7 +2583,7 @@ export default {
       entry: {
         createdHint: 'Repositori dibuat — ganti namanya nanti dari editor.',
         title: 'Nama repositori & bidang subjek',
-        hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
+        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
         nameLabel: 'Nama repositori',
         namePh: 'mis. Izin transportasi NL',
         domainLabel: 'Bidang subjek'

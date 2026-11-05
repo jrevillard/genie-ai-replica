@@ -130,17 +130,19 @@ it('#1068: the hand-off names the four-click lifecycle (one dashboard button)', 
 it('#1068: the shipped ritual interpolates the lifecycle labels the dashboard renders', () => {
   // The labels come from okf.lifecycle.* — the SAME keys the dashboard button
   // renders. A hand-translated ritual named buttons that do not exist in 12
-  // of 14 locales; the placeholders make that impossible.
-  const ritual = en.okf.steps.publish.ritual;
-  expect(ritual).toContain('{submit}');
-  expect(ritual).toContain('{approve}');
-  expect(ritual).toContain('{publish}');
-  expect(ritual).toContain('{ingest}');
-  const filled = ritual
-    .replace('{submit}', en.okf.lifecycle.submit)
-    .replace('{approve}', en.okf.lifecycle.approve)
-    .replace('{publish}', en.okf.lifecycle.publish)
-    .replace('{ingest}', en.okf.lifecycle.ingest);
-  expect(filled).toContain(`${en.okf.lifecycle.submit} → ${en.okf.lifecycle.approve}`);
-  expect(filled).toContain(`${en.okf.lifecycle.publish} → ${en.okf.lifecycle.ingest}`);
+  // of 14 locales; the placeholders make that impossible. The COMPONENT's
+  // computed is asserted (not a copy of its interpolation chain), so
+  // dropping the chain turns this red.
+  const w = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
+  const ritual = w.vm.lifecycleRitual;
+  expect(ritual).not.toContain('{submit}');
+  expect(ritual).not.toContain('{approve}');
+  expect(ritual).not.toContain('{publish}');
+  expect(ritual).not.toContain('{ingest}');
+  expect(ritual).toContain(`${en.okf.lifecycle.submit} → ${en.okf.lifecycle.approve}`);
+  expect(ritual).toContain(`${en.okf.lifecycle.publish} → ${en.okf.lifecycle.ingest}`);
+  // The tooltip names the same four labels (it used to list three).
+  const tip = w.vm.handoffTip;
+  expect(tip).not.toContain('{ingest}');
+  expect(tip).toContain(en.okf.lifecycle.ingest);
 });

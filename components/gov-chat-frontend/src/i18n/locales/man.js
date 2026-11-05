@@ -2362,7 +2362,7 @@ export default {
       autocorrect:
         'Auto-fix frontmatter waa dinda (title, type, structure) — i la kono dada bee ti. Proposalu yitandi kaben haya ti yailama; apply bɛ fixu write saaying ani Curate kono fatala etale be run.',
       handoff:
-        'Lifecycle ritual (submit → approve → publish → A mara) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
+        'Lifecycle ritual ({submit} → {approve} → {publish} → {ingest}) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
       lifecycle:
         'Step-naa kontratoo: draft → review → approved → published (mint + bundle) → ingested (RAG serving) → retracted (edit murung). Koo cite be run ingest koto waa — ani review kono koo waa publish be run.',
       labelsAuto:
@@ -2543,7 +2543,7 @@ export default {
       entry: {
         createdHint: 'Repository dadata — a toh editor kono koto yailama.',
         title: 'Āt an jikin kakwōn & un ko',
-        hint: 'Kōm̦m̦an juon āt ealikkar ñan jikin kakwōn OKF in im kāālet un ko ie.',
+        hint: 'Kono kakwōn in redy dy review. Publish noon elhinn jer myr — lifecycle ej runs dashboard ani editor, button tok ba mis tok.',
         nameLabel: 'Āt an jikin kakwōn',
         namePh: 'āinwōt Peba in ettal NL',
         domainLabel: 'Un ko'

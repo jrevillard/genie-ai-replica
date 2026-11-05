@@ -98,13 +98,8 @@ describe('okf frontend↔server route contract (#1056)', () => {
   // abort the whole okf-server suite with an ENOENT.
   const calls = () => frontendOkfCalls();
   const draftCalls = () => calls().filter((c) => c.template.includes('/draft'));
-  const producerJobTemplates = () => [
-    ...new Set(
-      calls()
-        .filter((c) => c.template.startsWith('/okf/jobs/'))
-        .map((c) => c.template)
-    )
-  ];
+  const producerJobCalls = () => calls().filter((c) => c.template.startsWith('/okf/jobs/'));
+  const producerJobTemplates = () => [...new Set(producerJobCalls().map((c) => c.template))];
 
   test('the frontend studioService builds the expected URL families', () => {
     // Anchors the extraction itself: if the frontend refactors its URLs, this
@@ -122,6 +117,13 @@ describe('okf frontend↔server route contract (#1056)', () => {
       '/okf/jobs/${encodeURIComponent(jobId)}',
       '/okf/jobs/${encodeURIComponent(jobId)}/kill'
     ]);
+    // FULL-SURFACE guarantee (#1056): every `/okf/` call the frontend builds
+    // belongs to a family the contract below actually replays. A brand-new
+    // `/okf/…` endpoint added to studioService makes THIS assertion fail —
+    // the author must classify it here (served → the draft-style loop, or
+    // not-yet-served → the producer-style pin) instead of having it slip
+    // through unverified.
+    expect(calls().length).toEqual(draftCalls().length + producerJobCalls().length);
   });
 
   describe('the draft contract is served by the real app', () => {
@@ -169,9 +171,11 @@ describe('okf frontend↔server route contract (#1056)', () => {
     // is a loop and not `test.each` (an empty table is a jest collection
     // error, which would take the whole suite down).
     test('every producer-job URL the frontend builds is a 404 today', async () => {
-      const templates = producerJobTemplates();
-      expect(templates.length).toBeGreaterThan(0);
-      for (const template of templates) {
+      // NO length assertion: when the dead methods are removed the list is
+      // empty and nothing is pinned — the intended end state (see the
+      // comment above). An empty `test.each` table is a jest collection
+      // error, which is why this is a loop.
+      for (const template of producerJobTemplates()) {
         authScoped(['okf:t1:r1:admin']);
         const serverPath = '/api' + concrete(template);
         const get = await request(createApp()).get(serverPath).set('Authorization', TOKEN);

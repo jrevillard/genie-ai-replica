@@ -406,6 +406,8 @@ router.post('/:repo_id/resplit', requireRepoScope('repo_id', 'admin'), ctrl.resp
 // Story #978 — Editor "Autocorrect" action. Scans all concepts and applies
 // frontmatter-only autocorrect rules. Admin-scope. dry_run=true returns the
 // planned changes without applying; dry_run=false applies atomically.
+// dry_run DEFAULTS TO TRUE when the body omits it — a body-less request is a
+// scan, not an apply (and writes no audit row).
 router.post('/:repo_id/autocorrect', requireRepoScope('repo_id', 'admin'), ctrl.autocorrectRepo);
 
 // RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the drain's

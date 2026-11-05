@@ -2396,7 +2396,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha → Meza) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha ({submit} → {approve} → {publish} → {ingest}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2577,7 +2577,7 @@ export default {
       entry: {
         createdHint: 'Hazina imeundwa — badilisha jina lake baadaye kutoka kwenye mhariri.',
         title: 'Jina la ghala & eneo la mada',
-        hint: 'Lipe ghala hili la OKF jina lililo wazi na uchague eneo la mada yake.',
+        hint: 'Kihisi hiki kime ready kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na mhariri, kitufe kimoja kwa hatua moja.',
         nameLabel: 'Jina la ghala',
         namePh: 'mf. Vibali vya usafiri NL',
         domainLabel: 'Eneo la mada'

@@ -180,9 +180,13 @@ function clearRenewPublication() {
  * additionally drops corrupt (at-less) entries. The expiry is a
  * seconds-since-epoch stamp — a value past MAX_PLAUSIBLE_EXPIRY_S reads as
  * milliseconds stored as seconds: corruption, not a token that lives for
- * millennia, and unusable to both callers (#1535 review). */
+ * millennia, and unusable to both callers (#1535 review). The entry must
+ * also carry the access token the reader needs — an entry without one is
+ * readable by nobody, so the cleanup must not keep it (#1535 review). */
 function publishedTokenIsUsable(entry) {
-  const exp = entry && entry.user ? entry.user.expires_at : undefined;
+  const user = entry && entry.user;
+  if (!user || !user.access_token) return false;
+  const exp = user.expires_at;
   return typeof exp === 'number' && exp < MAX_PLAUSIBLE_EXPIRY_S && exp * 1000 > Date.now() + 5000;
 }
 
@@ -224,6 +228,12 @@ function clearStaleRenewPublication() {
  * CONSUMES the offer (#1521 review): a successful read records the adopted
  * TOKEN in lastAdoptedToken, so this is a one-shot per token — a holder's
  * next renew publishes new tokens, which are adoptable again.
+ * The entry carries the HOLDER's refresh token, and an adopter seeds its own
+ * store with it: the adopter's next renewal CONSUMES that refresh token
+ * while the entry on disk still names it, so a third tab adopting the same
+ * entry holds an invalidated refresh token and is rejected on its next
+ * renewal (#1535 review). Unavoidable while the entry is adoptable — the
+ * alternative (not adopting) hands that tab its own rotated-away token.
  * tryAdoptPublication is its only caller; a second reader would silently
  * burn the adoption. */
 // The token this tab last adopted (#1521 review, loop 5): re-adopting the
@@ -245,8 +255,8 @@ function readPublishedRenew() {
     if (!raw) return null;
     const entry = JSON.parse(raw);
     if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
-    if (!entry.user.access_token || adoptedTokens.has(entry.user.access_token)) return null;
     if (!publishedTokenIsUsable(entry)) return null;
+    if (adoptedTokens.has(entry.user.access_token)) return null;
     // These exact tokens are never adoptable again (until the bounded
     // memory drops them, which only a newer adoption can do).
     adoptedTokens.add(entry.user.access_token);
@@ -311,10 +321,13 @@ async function adoptPublishedUser(manager, user) {
  * valid handoff. RESTORE-ON-FAILURE (#1521 review, loop 4): a failed grant
  * may or may not have consumed the withdrawn token — the client cannot
  * tell. Restoring gives the other tabs the best available handoff: in the
- * common case (network blip before the request) the token is still valid,
- * and in the lost-response case the restored entry is dead but its tokens
- * are spent, so the retention cleanup drops it at the next renew entry —
- * the same trade as not restoring. Restored with
+ * common case (network blip before the request) the token is still valid.
+ * In the lost-response case the restored entry may carry a refresh token
+ * Keycloak already invalidated, and a waiter that adopts it is rejected on
+ * its NEXT renewal — the same rejection it gets granting on its own
+ * (rotated-away) token, and the reason the restore exists at all (the
+ * client cannot tell the two apart). The restored entry stays adoptable
+ * until its access token expires (the retention bound, #1535). Restored with
  * its ORIGINAL stamp (the entry is not younger than it was), and only
  * while the slot is still empty: a newer publication (this tab's own fresh
  * one, or another tab's) outranks the saved entry. */

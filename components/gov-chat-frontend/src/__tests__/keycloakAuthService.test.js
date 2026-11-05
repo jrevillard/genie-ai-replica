@@ -1083,21 +1083,52 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });
 
-  // The READER's expired arm, pinned through the shared predicate: a plain
-  // expired (not corrupt) publication is refused for adoption and this tab
-  // spends its own grant — the arm the "SURVIVES a failed grant" test no
-  // longer exercises since it reaches the withdraw path via the memo.
-  it('the reader refuses an expired foreign publication and the tab re-grants (#1535 review)', async () => {
+  // The READER's expired arm, pinned where only the reader can refuse: the
+  // publication appears DURING the wait (no renewal entry runs in between,
+  // so no cleanup can remove it) — the wait loop's consult is the reader's
+  // own gate. An expired handoff must be refused, and the waiter must spend
+  // its own grant.
+  it('the reader refuses an expired publication published mid-wait — the waiter re-grants (#1535 review)', async () => {
+    jest.useFakeTimers();
+    try {
+      await initialized();
+      mockGetUser.mockResolvedValue(createMockUser({ access_token: 'this-tab-stale-token' }));
+      // Another tab holds the lease; it publishes an EXPIRED user mid-wait.
+      window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: 'other-tab', at: Date.now() }));
+      const expired = createMockUser({
+        access_token: 'expired-published-token',
+        expires_at: Math.floor(Date.now() / 1000) - 10
+      });
+      setTimeout(() => {
+        window.localStorage.setItem(
+          RENEW_USER_KEY,
+          JSON.stringify({ at: Date.now(), tab: 'other-tab', user: expired })
+        );
+        window.localStorage.removeItem(RENEW_LEASE_KEY);
+      }, 300);
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-fresh-grant' }));
+      const p = keycloakAuthService.signinSilent();
+      await jest.advanceTimersByTimeAsync(600);
+      const user = await p;
+      expect(user.access_token).toBe('own-fresh-grant'); // its own grant, not the expired handoff
+      expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // A partially-written entry (no access token) is readable by nobody: the
+  // reader refuses it, so the cleanup must not keep it on disk carrying a
+  // token blob until its expiry passes (#1535 review).
+  it('a publication with no access token is dropped at the renew entry — no reader can use it (#1535 review)', async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
-    seedForeignPublication('expired-holder-token', {
-      at: Date.now(),
-      expiresAt: Math.floor(Date.now() / 1000) - 100
-    });
-    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-fresh-grant' }));
-    const user = await keycloakAuthService.signinSilent();
-    expect(user.access_token).toBe('own-fresh-grant'); // its own grant, not the expired handoff
-    expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+    const noToken = createMockUser({ access_token: '' });
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: noToken }));
+    mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
+    expect(mockSigninSilent).toHaveBeenCalledTimes(1); // not adopted — the tab granted
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });
 
   it("an owner-less (old-build) publication is adoptable — it can never be this tab's own (#1521)", async () => {
@@ -1153,19 +1184,38 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(entry.user.access_token).toBe('grant-one');
   });
 
-  it("another tab's publication SURVIVES this tab's failed grant — it may be another waiter's handoff (#1521 review)", async () => {
+  it("another tab's publication SURVIVES this tab's failed grant — the withdraw is ownership-aware (#1521 review)", async () => {
     delete navigator.locks;
     // Tab A publishes under ITS tab id with a live token. This tab ADOPTS
     // it first — the adoption memo then makes those exact tokens
     // inadmissible to THIS tab — so the NEXT renew falls through to its own
-    // grant, which fails.
+    // grant, which is left hanging so the withdraw can be observed WHILE
+    // the grant is in flight (asserting only after it failed would pass
+    // even if the withdraw had removed the foreign entry: the restore
+    // would put it back).
     seedForeignPublication('foreign-holder-token', { at: Date.now() });
     mockGetUser.mockResolvedValue(null);
     const adopted = await keycloakAuthService.signinSilent();
     expect(adopted.access_token).toBe('foreign-holder-token');
-    mockSigninSilent.mockRejectedValueOnce(new Error('grant refused'));
-    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
-    // The clear-before-grant is ownership-aware: the foreign entry is intact.
+    let rejectGrant;
+    let grantStarted;
+    const started = new Promise((resolve) => {
+      grantStarted = resolve;
+    });
+    mockSigninSilent.mockImplementationOnce(() => {
+      grantStarted();
+      return new Promise((_, reject) => {
+        rejectGrant = reject;
+      });
+    });
+    const p = keycloakAuthService.signinSilent();
+    await started; // the grant is in flight — the withdraw already happened
+    const during = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
+    expect(during.tab).toBe('holder-tab'); // the foreign handoff was NOT withdrawn
+    expect(during.user.access_token).toBe('foreign-holder-token');
+    rejectGrant(new Error('grant refused'));
+    await expect(p).rejects.toThrow('grant refused');
+    // And after the failure it is back (the restore), still the holder's.
     const entry = JSON.parse(window.localStorage.getItem(RENEW_USER_KEY));
     expect(entry.tab).toBe('holder-tab');
     expect(entry.user.access_token).toBe('foreign-holder-token');

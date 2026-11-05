@@ -819,7 +819,7 @@ export default {
   border: 1px solid var(--warning);
   border-radius: var(--radius-sm);
   background: var(--warning-bg);
-  color: var(--fg);
+  color: var(--warning-ink);
   font-size: var(--text-sm);
 }
 .okf-studio-tab__divider {

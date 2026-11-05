@@ -519,10 +519,10 @@ export default {
 .okf-wizard__draft-gone {
   margin: 0 0 var(--space-md);
   padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--border);
+  border: 1px solid var(--warning);
   border-radius: var(--radius-sm);
-  background: var(--warning-bg, var(--surface));
-  color: var(--fg);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
   font-size: var(--text-sm);
 }
 

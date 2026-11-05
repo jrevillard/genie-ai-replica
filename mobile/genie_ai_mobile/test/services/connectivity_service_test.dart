@@ -17,6 +17,10 @@ class FakeAsyncProvider extends ConnectivityProvider {
     callCount++;
     return [result];
   }
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      const Stream.empty();
 }
 
 /// Fake provider that never completes (for testing concurrency guard).
@@ -25,6 +29,10 @@ class HangingProvider extends ConnectivityProvider {
 
   @override
   Future<List<ConnectivityResult>> checkConnectivity() => completer.future;
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      const Stream.empty();
 }
 
 Future<List<InternetAddress>> _fakeDnsSuccess(String host) async => [

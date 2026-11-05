@@ -11,7 +11,9 @@ const mockSigninSilent = jest.fn();
 const mockStoreUser = jest.fn();
 const mockAddUserLoaded = jest.fn(() => jest.fn());
 const mockAddSilentRenewError = jest.fn(() => jest.fn());
-const MockUserManager = jest.fn().mockImplementation(() => ({
+// A named factory, so the isolation hook can restore it after
+// jest.resetAllMocks() strips every implementation.
+const userManagerMock = () => ({
   getUser: mockGetUser,
   signinRedirect: mockSigninRedirect,
   signinRedirectCallback: mockSigninRedirectCallback,
@@ -24,7 +26,8 @@ const MockUserManager = jest.fn().mockImplementation(() => ({
     addUserLoaded: mockAddUserLoaded,
     addSilentRenewError: mockAddSilentRenewError
   }
-}));
+});
+const MockUserManager = jest.fn(userManagerMock);
 
 jest.mock('oidc-client-ts', () => ({
   UserManager: MockUserManager,
@@ -46,8 +49,7 @@ jest.mock('@/config/oidcConfig', () => ({
   storeAuthStateInCookie: false
 }));
 
-const keycloakAuthService = require('@/services/keycloakAuthService').default;
-const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
+const { default: keycloakAuthService, RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
 
 function createMockUser(overrides = {}) {
   return {
@@ -83,22 +85,17 @@ function createMockUser(overrides = {}) {
 // resolution), so a surviving publication makes the next test's renew adopt
 // the previous test's user instead of running its own grant (#1518 flake,
 // reproducible locally too).
-// Deliberately NOT jest.resetAllMocks(): that would strip the factory
-// implementations of MockUserManager, mockAddUserLoaded and
-// mockAddSilentRenewError, which the unsubscribe assertions depend on — so
-// the mocks whose implementations this suite sets are reset one by one.
-// The service module's own state (renewInFlight, currentUser) is NOT reset
-// here; see the filed follow-up.
+// jest.resetAllMocks() covers every mock, present and future — but it also
+// strips the factory implementations the unsubscribe assertions depend on, so
+// those three are restored here.
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockGetUser.mockReset();
-  mockSigninRedirect.mockReset();
-  mockSigninRedirectCallback.mockReset();
-  mockSignoutRedirect.mockReset();
-  mockRemoveUser.mockReset();
-  mockClearStaleState.mockReset();
-  mockSigninSilent.mockReset();
-  mockStoreUser.mockReset();
+  jest.resetAllMocks();
+  MockUserManager.mockImplementation(userManagerMock);
+  mockAddUserLoaded.mockImplementation(() => jest.fn());
+  mockAddSilentRenewError.mockImplementation(() => jest.fn());
+  // getUser() returns a PROMISE in the real UserManager; a reset mock would
+  // return undefined and break `await manager.getUser().catch(...)`.
+  mockGetUser.mockResolvedValue(null);
   window.localStorage.removeItem(RENEW_LEASE_KEY);
   window.localStorage.removeItem(RENEW_USER_KEY);
 });
@@ -162,7 +159,6 @@ describe('keycloakAuthService', () => {
     it('silent renew errors are bounded: escalating only after the failure cap, and a success resets it', async () => {
       mockGetUser.mockResolvedValue(null); // no stored user → escalation calls login()
       mockSigninSilent.mockRejectedValue(new Error('grant refused'));
-      mockSigninRedirect.mockClear();
 
       await keycloakAuthService.initialize();
       const handler = mockAddSilentRenewError.mock.calls[0][0];
@@ -837,7 +833,8 @@ describe('cross-tab renew lease (#80800)', () => {
       expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'holder-token-2tab' }));
     } finally {
       jest.useRealTimers();
-      window.localStorage.clear();
+      window.localStorage.removeItem(RENEW_LEASE_KEY);
+      window.localStorage.removeItem(RENEW_USER_KEY);
     }
   });
 

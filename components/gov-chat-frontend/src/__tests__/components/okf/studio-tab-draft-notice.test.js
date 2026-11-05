@@ -9,80 +9,30 @@
  * Studio TAB (not the wizard) because the latch is session-global and the
  * zip-import path lands on the dashboard without ever entering the wizard.
  *
- * The suite mounts with the REAL English locale tree, so the assertions
- * cover the copy that ships — not the inline translate() fallback.
+ * The suite mounts with the REAL English catalogue, so the assertions cover
+ * the copy that ships — and the last test pins the inline fallback to the
+ * same sentence (the two sources of a string must not drift).
  */
 
-jest.mock('@/services/repoOkfService', () => ({
-  __esModule: true,
-  default: { list: jest.fn().mockResolvedValue([]), get: jest.fn(), getMetrics: jest.fn() }
-}));
-jest.mock('@/services/conceptService', () => ({
-  __esModule: true,
-  default: { listForRepo: jest.fn().mockResolvedValue([]), get: jest.fn(), update: jest.fn() }
-}));
-jest.mock('@/services/studioService', () => ({
-  __esModule: true,
-  default: {
-    saveDraft: jest.fn().mockRejectedValue({ status: 404 }),
-    getDraft: jest.fn().mockRejectedValue({ status: 404 })
-  }
-}));
-jest.mock('@/services/crawlerToOkfService', () => ({
-  __esModule: true,
-  default: { convertCrawlToOkf: jest.fn() }
-}));
-jest.mock('@/services/okfRepoOps', () => ({
-  __esModule: true,
-  default: {
-    loadSubjectAreaOptions: jest.fn().mockResolvedValue([]),
-    createRepo: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
-    importZipIntoRepo: jest.fn().mockResolvedValue({ ok: true })
-  }
-}));
-
-const Vuex = require('vuex');
-const { mount } = require('@vue/test-utils');
-const okfModule = require('@/store/modules/okf').default;
-const OkfStudioTab = require('@/components/okf/StudioTab.vue').default;
+const { buildStore, mountTab } = require('../../helpers/studioTab');
+const { realI18nMessagesMock } = require('../../helpers/realI18n');
 const en = require('@/i18n/locales/en.js').default;
-
-function buildStore() {
-  return new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
-  });
-}
-
-function mountTab(store) {
-  return mount(OkfStudioTab, {
-    global: {
-      plugins: [store],
-      mocks: { $i18n: { messages: { en }, locale: 'en' } },
-      stubs: {
-        OkfStudioDashboard: true,
-        OkfStudioWizard: true,
-        OkfRepoEditorShell: true,
-        OkfNarrative: true,
-        DsModeSwitch: true
-      }
-    }
-  });
-}
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
 it('a healthy session renders NO degraded-draft notice', async () => {
-  const wrapper = mountTab(buildStore());
+  const { store } = buildStore();
+  const wrapper = mountTab(store, { i18n: realI18nMessagesMock() });
   await wrapper.vm.$nextTick();
   expect(wrapper.find('.okf-studio-tab__draft-notice').exists()).toBe(false);
   wrapper.unmount();
 });
 
 it('#1056: the NOT_READY latch surfaces the degraded-draft notice on the tab', async () => {
-  const store = buildStore();
-  const wrapper = mountTab(store);
+  const { store } = buildStore();
+  const wrapper = mountTab(store, { i18n: realI18nMessagesMock() });
   await wrapper.vm.$nextTick();
   store.commit('okf/setDraftsUnavailable');
   await wrapper.vm.$nextTick();
@@ -93,15 +43,34 @@ it('#1056: the NOT_READY latch surfaces the degraded-draft notice on the tab', a
   wrapper.unmount();
 });
 
-it('#1056: the shipped notice does not prescribe a reload (a reload drops the only copy)', () => {
+it('#1056: the shipped notice states the consequence, not a reload, and names both stale parties', () => {
   // Drafts live in the Vuex store only — a reload clears them, so the copy
-  // must state the consequence instead of advising the curator to reload.
+  // must state the consequence instead of advising the curator to reload. A
+  // 404 alone cannot tell an older server from a stale page — the copy must
+  // not assert the backend is the stale one.
   expect(en.okf.studio.draft.notReady).not.toMatch(/reload the page/i);
   expect(en.okf.studio.draft.notReady).toMatch(/lost/i);
+  expect(en.okf.studio.draft.notReady).toMatch(/page and the server may be different versions/i);
 });
 
-it('#1056: the shipped notice names both stale parties, not one', () => {
-  // A 404 alone cannot tell an older server from a stale page — the copy
-  // must not assert the backend is the stale one.
-  expect(en.okf.studio.draft.notReady).toMatch(/page and the server may be different versions/i);
+it('#1056: the inline fallback and the shipped copy say the same thing', async () => {
+  // Two sources of one sentence: the locale catalogue (what ships) and the
+  // component's inline default (what renders when the i18n tree is absent).
+  // They drifted once already — the new copy landed under the WRONG key and
+  // the shipped sentence never changed.
+  const { store } = buildStore();
+  const withI18n = mountTab(store, { i18n: realI18nMessagesMock() });
+  await withI18n.vm.$nextTick();
+  store.commit('okf/setDraftsUnavailable');
+  await withI18n.vm.$nextTick();
+  const { store: store2 } = buildStore();
+  const withoutI18n = mountTab(store2);
+  await withoutI18n.vm.$nextTick();
+  store2.commit('okf/setDraftsUnavailable');
+  await withoutI18n.vm.$nextTick();
+  expect(withoutI18n.find('.okf-studio-tab__draft-notice').text()).toBe(
+    withI18n.find('.okf-studio-tab__draft-notice').text()
+  );
+  withI18n.unmount();
+  withoutI18n.unmount();
 });

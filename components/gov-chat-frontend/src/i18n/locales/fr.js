@@ -2422,7 +2422,7 @@ export default {
       autocorrect:
         "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        "Le rituel de cycle de vie ({submit} → {approve} → {publish} → {ingest}) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
+        "Le rituel de cycle de vie ({chain}) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
         "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
@@ -2604,7 +2604,7 @@ export default {
       entry: {
         createdHint: "Dépôt créé — renommez-le plus tard depuis l'éditeur.",
         title: 'Nom du référentiel et domaine',
-        hint: "Ce référentiel est prêt pour la revue. La publication n'a jamais lieu ici — le cycle de vie se déroule sur le tableau de bord et dans l'éditeur, un bouton à la fois.",
+        hint: 'Donnez à ce référentiel OKF un nom clair et choisissez son domaine.',
         nameLabel: 'Nom du référentiel',
         namePh: 'par ex. Permis de transport NL',
         domainLabel: 'Domaine'
@@ -2774,7 +2774,7 @@ export default {
         frontmatterOk: 'Balises frontmatter approuvées',
         frontmatterServing: 'Balises frontmatter définies',
         title: 'Sécuriser et terminer',
-        hint: "Ce référentiel est prêt pour examen. La publication n'a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l'approbation et la publication se font depuis le tableau de bord ou l'éditeur.",
+        hint: "Ce référentiel est prêt pour la revue. La publication n'a jamais lieu ici — le cycle de vie se déroule sur le tableau de bord et dans l'éditeur, un bouton à la fois.",
         nameOk: 'Nom du référentiel défini',
         labelsOk: 'Libellés sélectionnés',
         topicsOk: 'Sujets examinés',
@@ -2784,7 +2784,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : {submit} → {approve} → {publish} → {ingest}. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : {chain}. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },

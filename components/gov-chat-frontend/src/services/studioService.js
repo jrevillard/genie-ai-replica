@@ -34,6 +34,22 @@ import httpService from './httpService';
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
 /**
+ * Classify a failed draft request — ONE place, so the three verbs cannot
+ * drift on what a 404 means:
+ *   'REPO_NOT_FOUND' the repo is gone (deleted / soft-deleted): a definitive
+ *                   answer, NEVER a NOT_READY (the store turns NOT_READY into
+ *                   the session-global draftsUnavailable latch),
+ *   'NOT_READY'     the endpoint is not available on this server,
+ *   null            anything else — the caller propagates the error.
+ */
+function classifyDraftError(err) {
+  if (!err) return null;
+  if (err.status === 404 && backendErrorCode(err) === 'REPO_NOT_FOUND') return 'REPO_NOT_FOUND';
+  if (err.status === 404 || err.status === 501) return 'NOT_READY';
+  return null;
+}
+
+/**
  * Backend error code for a request that failed with `status`. Returns '' when
  * the body carries no recognizable `error` code (an nginx/Kong HTML error
  * page, a network-layer failure).
@@ -67,10 +83,9 @@ const studioService = {
       // REPO_NOT_FOUND is a DEFINITIVE answer, not a missing endpoint: the
       // repo is gone (deleted / soft-deleted / outside the caller's scope).
       // Resolving null keeps "repo is gone" distinct from NOT_READY.
-      if (err && err.status === 404 && backendErrorCode(err) === 'REPO_NOT_FOUND') {
-        return null;
-      }
-      if (err && (err.status === 404 || err.status === 501)) {
+      const kind = classifyDraftError(err);
+      if (kind === 'REPO_NOT_FOUND') return null;
+      if (kind === 'NOT_READY') {
         const err_not_ready = new Error('NOT_READY');
         err_not_ready.code = 'NOT_READY';
         err_not_ready.status = err.status;
@@ -93,10 +108,9 @@ const studioService = {
       // become a NOT_READY — that arms the SESSION-GLOBAL draftsUnavailable
       // latch, which would push every later save of every repo to local-only
       // and blame a version mismatch the operator cannot act on (#1056).
-      if (err && err.status === 404 && backendErrorCode(err) === 'REPO_NOT_FOUND') {
-        throw err;
-      }
-      if (err && (err.status === 404 || err.status === 501)) {
+      const kind = classifyDraftError(err);
+      if (kind === 'REPO_NOT_FOUND') throw err;
+      if (kind === 'NOT_READY') {
         const err_not_ready = new Error('NOT_READY');
         err_not_ready.code = 'NOT_READY';
         err_not_ready.status = err.status;
@@ -113,19 +127,9 @@ const studioService = {
     } catch (err) {
       // A missing draft is NOT an error (the server answers 200 deleted:false);
       // an absent endpoint is equally harmless — clearing is best-effort.
-      if (err && (err.status === 404 || err.status === 501)) return { ok: true };
+      if (classifyDraftError(err)) return { ok: true };
       throw err;
     }
-  },
-
-  async fetchProducerJob(jobId) {
-    const res = await httpService.get(`/okf/jobs/${encodeURIComponent(jobId)}`);
-    return res && res.data ? res.data : null;
-  },
-
-  async killProducerJob(jobId) {
-    const res = await httpService.post(`/okf/jobs/${encodeURIComponent(jobId)}/kill`);
-    return res && res.data ? res.data : { ok: true };
   }
 };
 

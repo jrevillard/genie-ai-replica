@@ -17,6 +17,7 @@ const { mount } = require('@vue/test-utils');
 const Vuex = require('vuex');
 const OkfStepPublish = require('@/components/okf/steps/Publish.vue').default;
 const en = require('@/i18n/locales/en.js').default;
+const { realI18nMessagesMock } = require('../../../helpers/realI18n');
 
 const mockFetchMetrics = jest.fn();
 const mockGetFrontmatter = jest.fn();
@@ -42,27 +43,30 @@ jest.mock('@/services/frontmatterService', () => ({
   }
 }));
 
-function mountPublish(repo) {
-  return mount(OkfStepPublish, {
-    props: { draft: { repo_id: 'r1', name: 'R' }, expert: false },
-    global: {
-      stubs: { DsStatusTag: true },
-      // The REAL English locale tree: the assertions below then cover the
-      // copy that ships, not the inline translate() fallback.
-      mocks: { $i18n: { messages: { en }, locale: 'en' } },
-      plugins: [
-        new Vuex.Store({
-          modules: {
-            okf: {
-              namespaced: true,
-              getters: { repoById: () => () => repo || null },
-              actions: { fetchRepoMetrics: () => mockFetchMetrics() }
-            }
+/**
+ * @param {object} repo
+ * @param {object} [options] { i18n: false } mounts WITHOUT an i18n tree —
+ *   the inline translate() fallback path.
+ */
+function mountPublish(repo, options = {}) {
+  const global = {
+    stubs: { DsStatusTag: true },
+    plugins: [
+      new Vuex.Store({
+        modules: {
+          okf: {
+            namespaced: true,
+            getters: { repoById: () => () => repo || null },
+            actions: { fetchRepoMetrics: () => mockFetchMetrics() }
           }
-        })
-      ]
-    }
-  });
+        }
+      })
+    ]
+  };
+  // The REAL English locale tree: the assertions then cover the copy that
+  // ships, not the inline translate() fallback.
+  if (options.i18n !== false) global.mocks = { $i18n: realI18nMessagesMock() };
+  return mount(OkfStepPublish, { props: { draft: { repo_id: 'r1', name: 'R' }, expert: false }, global });
 }
 
 beforeEach(() => {
@@ -121,28 +125,30 @@ it('a non-frozen repo without approved frontmatter stays gated (Story 1.6)', asy
 it('#1068: the hand-off names the four-click lifecycle (one dashboard button)', () => {
   // The lifecycle is ONE contextual button relabelling itself four times;
   // the step must say so or the operator hunts for four buttons that do not
-  // exist. The suite mounts the REAL en locale tree, so this asserts the
-  // shipped copy.
+  // exist. The labels come from okf.lifecycle.* — the SAME keys the dashboard
+  // button renders — joined into ONE chain, so the copy cannot name a button
+  // that does not exist.
   const w = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
-  expect(w.text()).toContain('Submit for review → Approve → Publish → Ingest');
+  const chain = [
+    en.okf.lifecycle.submit,
+    en.okf.lifecycle.approve,
+    en.okf.lifecycle.publish,
+    en.okf.lifecycle.ingest
+  ].join(' → ');
+  expect(w.text()).toContain(chain);
+  expect(w.text()).not.toContain('{chain}');
+  // The tooltip names the same four labels (it used to list three).
+  expect(w.vm.handoffTip).toContain(chain);
 });
 
-it('#1068: the shipped ritual interpolates the lifecycle labels the dashboard renders', () => {
-  // The labels come from okf.lifecycle.* — the SAME keys the dashboard button
-  // renders. A hand-translated ritual named buttons that do not exist in 12
-  // of 14 locales; the placeholders make that impossible. The COMPONENT's
-  // computed is asserted (not a copy of its interpolation chain), so
-  // dropping the chain turns this red.
-  const w = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
-  const ritual = w.vm.lifecycleRitual;
-  expect(ritual).not.toContain('{submit}');
-  expect(ritual).not.toContain('{approve}');
-  expect(ritual).not.toContain('{publish}');
-  expect(ritual).not.toContain('{ingest}');
-  expect(ritual).toContain(`${en.okf.lifecycle.submit} → ${en.okf.lifecycle.approve}`);
-  expect(ritual).toContain(`${en.okf.lifecycle.publish} → ${en.okf.lifecycle.ingest}`);
-  // The tooltip names the same four labels (it used to list three).
-  const tip = w.vm.handoffTip;
-  expect(tip).not.toContain('{ingest}');
-  expect(tip).toContain(en.okf.lifecycle.ingest);
+it('#1068: the inline fallbacks and the shipped copy say the same thing', () => {
+  // Two sources of one sentence: the locale catalogue (what ships) and the
+  // component's inline default (what renders when the i18n tree is absent).
+  // They drifted once already — the new copy landed under the WRONG key and
+  // the shipped sentence never changed.
+  const withI18n = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
+  const withoutI18n = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' }, { i18n: false });
+  expect(withoutI18n.vm.lifecycleRitual).toBe(withI18n.vm.lifecycleRitual);
+  expect(withoutI18n.vm.handoffTip).toBe(withI18n.vm.handoffTip);
+  expect(withoutI18n.find('.okf-step__hint').text()).toBe(withI18n.find('.okf-step__hint').text());
 });

@@ -2396,7 +2396,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha ({submit} → {approve} → {publish} → {ingest}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha ({chain}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2577,7 +2577,7 @@ export default {
       entry: {
         createdHint: 'Hazina imeundwa — badilisha jina lake baadaye kutoka kwenye mhariri.',
         title: 'Jina la ghala & eneo la mada',
-        hint: 'Kihisi hiki kime ready kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na mhariri, kitufe kimoja kwa hatua moja.',
+        hint: 'Lipe ghala hili la OKF jina lililo wazi na uchague eneo la mada yake.',
         nameLabel: 'Jina la ghala',
         namePh: 'mf. Vibali vya usafiri NL',
         domainLabel: 'Eneo la mada'
@@ -2744,7 +2744,7 @@ export default {
         frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
         frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
-        hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
+        hint: 'Kihisi hiki kime ready kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na mhariri, kitufe kimoja kwa hatua moja.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',
@@ -2754,7 +2754,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: {submit} → {approve} → {publish} → {ingest}. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: {chain}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },

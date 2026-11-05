@@ -136,21 +136,21 @@ export default {
     // translated labels the dashboard button renders (okf.lifecycle.*), so
     // the copy can never name a button the operator cannot find — the drift
     // that made a hand-translated ritual useless in 12 of 14 locales. The
-    // labels are passed as NAMED interpolation (translateMixin's third
-    // argument), which replaces every occurrence of each {token}.
-    lifecycleLabels() {
-      return {
-        submit: this.translate('okf.lifecycle.submit', 'Submit for review'),
-        approve: this.translate('okf.lifecycle.approve', 'Approve'),
-        publish: this.translate('okf.lifecycle.publish', 'Publish'),
-        ingest: this.translate('okf.lifecycle.ingest', 'Ingest')
-      };
+    // chain is built ONCE (one order, one separator) and interpolated into
+    // both sentences as a single {chain} token.
+    lifecycleChain() {
+      return [
+        this.translate('okf.lifecycle.submit', 'Submit for review'),
+        this.translate('okf.lifecycle.approve', 'Approve'),
+        this.translate('okf.lifecycle.publish', 'Publish'),
+        this.translate('okf.lifecycle.ingest', 'Ingest')
+      ].join(' → ');
     },
     lifecycleRitual() {
       return this.translate(
         'okf.steps.publish.ritual',
-        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {submit} → {approve} → {publish} → {ingest}. The wizard stops here by design.',
-        this.lifecycleLabels
+        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {chain}. The wizard stops here by design.',
+        { chain: this.lifecycleChain }
       );
     },
     // The hand-off tooltip names the same four steps, same labels — a tip
@@ -159,8 +159,8 @@ export default {
     handoffTip() {
       return this.translate(
         'okf.glossary.handoff',
-        'The lifecycle ritual ({submit} → {approve} → {publish} → {ingest}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-        this.lifecycleLabels
+        'The lifecycle ritual ({chain}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        { chain: this.lifecycleChain }
       );
     },
     // B8 (Amendment A): the checklist reads the LIVE repo doc — never the

@@ -2415,7 +2415,7 @@ export default {
       autocorrect:
         'La autocorrección solo toca el frontmatter (títulos, tipos, estructura) — nunca su contenido escrito. Las propuestas se muestran antes de cambiar nada; al aplicar, las correcciones se escriben de inmediato y puede revisar el resultado en Curate.',
       handoff:
-        'El ritual del ciclo de vida ({submit} → {approve} → {publish} → {ingest}) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
+        'El ritual del ciclo de vida ({chain}) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
       lifecycle:
         'El contrato de seis pasos: borrador → revisión → aprobado → publicado (emitir + empaquetar) → ingestado (en servicio en RAG) → retirado (de vuelta a edición). El contenido solo se vuelve citable tras la ingesta — y solo el contenido revisado puede publicarse.',
       labelsAuto:
@@ -2597,7 +2597,7 @@ export default {
       entry: {
         createdHint: 'Repositorio creado — renómbrelo más tarde desde el editor.',
         title: 'Nombre del repositorio y área temática',
-        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — el ciclo de vida se recorre en el panel y en el editor, un botón cada vez.',
+        hint: 'Asigne un nombre claro a este repositorio OKF y seleccione su área temática.',
         nameLabel: 'Nombre del repositorio',
         namePh: 'ej. Permisos de transporte NL',
         domainLabel: 'Área temática'
@@ -2765,7 +2765,7 @@ export default {
         frontmatterOk: 'Etiquetas frontmatter aprobadas',
         frontmatterServing: 'Etiquetas frontmatter establecidas',
         title: 'Asegurar y finalizar',
-        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación en el panel, luego apruebe y publique desde el panel o el editor.',
+        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — el ciclo de vida se recorre en el panel y en el editor, un botón cada vez.',
         nameOk: 'Nombre del repositorio establecido',
         labelsOk: 'Etiquetas seleccionadas',
         topicsOk: 'Temas revisados',
@@ -2775,7 +2775,7 @@ export default {
         frozen:
           'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: {submit} → {approve} → {publish} → {ingest}. El asistente se detiene aquí por diseño.',
+          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: {chain}. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },

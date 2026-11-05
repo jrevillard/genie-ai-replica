@@ -1449,8 +1449,8 @@ async function autocorrectRepo(req, res, next) {
           description:
             'Applied frontmatter autocorrect — ' +
             // result.applied is the SERVICE's count of concepts actually
-            // patched — the authoritative number, not a re-derivation.
-            (typeof result.applied === 'number' ? result.applied : conceptChanges.length) +
+            // patched — the authoritative number.
+            result.applied +
             ' concept(s) applied, ' +
             fieldCount +
             ' frontmatter field change(s)' +

@@ -2402,7 +2402,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup ({submit} → {approve} → {publish} → {ingest}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup ({chain}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2583,7 +2583,7 @@ export default {
       entry: {
         createdHint: 'Repositori dibuat — ganti namanya nanti dari editor.',
         title: 'Nama repositori & bidang subjek',
-        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
+        hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
         nameLabel: 'Nama repositori',
         namePh: 'mis. Izin transportasi NL',
         domainLabel: 'Bidang subjek'
@@ -2749,7 +2749,7 @@ export default {
         frontmatterOk: 'Tag frontmatter disetujui',
         frontmatterServing: 'Tag frontmatter ditetapkan',
         title: 'Amankan dan Selesaikan',
-        hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
+        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
@@ -2759,7 +2759,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: {submit} → {approve} → {publish} → {ingest}. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: {chain}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },

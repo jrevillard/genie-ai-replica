@@ -137,22 +137,4 @@ describe('studioService', () => {
       await expect(studioService.clearDraft('r-1')).resolves.toEqual({ ok: true });
     });
   });
-
-  describe('fetchProducerJob', () => {
-    it('GETs /okf/jobs/:id (no /api prefix)', async () => {
-      mockGet.mockResolvedValue({ data: { status: 'done' } });
-      await studioService.fetchProducerJob('job-1');
-      expect(mockGet).toHaveBeenCalledWith('/okf/jobs/job-1');
-      expect(mockGet.mock.calls[0][0].startsWith('/api/')).toBe(false);
-    });
-  });
-
-  describe('killProducerJob', () => {
-    it('POSTs /okf/jobs/:id/kill (no /api prefix)', async () => {
-      mockPost.mockResolvedValue({ data: { ok: true } });
-      await studioService.killProducerJob('job-2');
-      expect(mockPost).toHaveBeenCalledWith('/okf/jobs/job-2/kill');
-      expect(mockPost.mock.calls[0][0].startsWith('/api/')).toBe(false);
-    });
-  });
 });

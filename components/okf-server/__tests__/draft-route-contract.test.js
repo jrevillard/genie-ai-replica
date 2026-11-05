@@ -9,7 +9,7 @@
 // (or a coordinated repoint of both sides to the same wrong path) passes
 // both suites; that is how #1056 shipped. This test mounts the REAL
 // okf-server Express app and replays every `/okf/` URL the frontend service
-// builds — verb AND path, extracted from the httpService calls in the
+// builds — verb and path extracted from the httpService calls in the
 // frontend SOURCE, never restated here, so the two sides cannot drift
 // independently.
 //
@@ -68,20 +68,25 @@ function authScoped(okfScopes) {
 /**
  * Every `httpService.<verb>(`/okf/...`)` call the frontend studioService
  * makes: { verb, template }. Template literals only, call sites only.
+ * Memoized: the file is read once per suite run, not once per assertion.
  */
+let cachedCalls = null;
 function frontendOkfCalls() {
+  if (cachedCalls) return cachedCalls;
   let src;
   try {
     src = fs.readFileSync(FRONTEND_STUDIO_SERVICE, 'utf8');
   } catch {
     // A moved/renamed frontend file must fail the anchor assertion below
     // (readable diff), never abort the suite at collection time.
-    return [];
+    cachedCalls = [];
+    return cachedCalls;
   }
   const calls = [];
   const re = /httpService\.(get|post|put|delete|patch)\(`(\/okf\/[^`]*)`/g;
   let m;
   while ((m = re.exec(src)) !== null) calls.push({ verb: m[1], template: m[2] });
+  cachedCalls = calls;
   return calls;
 }
 
@@ -93,96 +98,47 @@ function concrete(template) {
 beforeEach(() => jest.clearAllMocks());
 
 describe('okf frontend↔server route contract (#1056)', () => {
-  // Read the frontend source INSIDE the tests (not at collection time): a
-  // moved or renamed frontend file must fail ONE readable assertion, not
-  // abort the whole okf-server suite with an ENOENT.
-  const calls = () => frontendOkfCalls();
-  const draftCalls = () => calls().filter((c) => c.template.includes('/draft'));
-  const producerJobCalls = () => calls().filter((c) => c.template.startsWith('/okf/jobs/'));
-  const producerJobTemplates = () => [...new Set(producerJobCalls().map((c) => c.template))];
-
   test('the frontend studioService builds the expected URL families', () => {
     // Anchors the extraction itself: if the frontend refactors its URLs, this
     // fails first and tells the reader the contract below must be re-checked,
     // rather than silently skipping it.
-    expect(
-      draftCalls()
-        .map((c) => c.verb)
-        .sort()
-    ).toEqual(['delete', 'get', 'put']);
-    expect([...new Set(draftCalls().map((c) => c.template))]).toEqual([
-      '/okf/repos/${encodeURIComponent(repoId)}/draft'
-    ]);
-    expect(producerJobTemplates().sort()).toEqual([
-      '/okf/jobs/${encodeURIComponent(jobId)}',
-      '/okf/jobs/${encodeURIComponent(jobId)}/kill'
-    ]);
-    // FULL-SURFACE guarantee (#1056): every `/okf/` call the frontend builds
-    // belongs to a family the contract below actually replays. A brand-new
-    // `/okf/…` endpoint added to studioService makes THIS assertion fail —
-    // the author must classify it here (served → the draft-style loop, or
-    // not-yet-served → the producer-style pin) instead of having it slip
-    // through unverified.
-    expect(calls().length).toEqual(draftCalls().length + producerJobCalls().length);
+    const calls = frontendOkfCalls();
+    expect(calls.map((c) => c.verb).sort()).toEqual(['delete', 'get', 'put']);
+    expect([...new Set(calls.map((c) => c.template))]).toEqual(['/okf/repos/${encodeURIComponent(repoId)}/draft']);
   });
 
-  describe('the draft contract is served by the real app', () => {
-    test('every draft verb the frontend builds is routed by the real app', async () => {
-      // Read scope suffices to pass the router gate; for PUT/DELETE the
-      // route's own admin gate answers 403 — which still proves the route
-      // exists (an unmatched path would fall through to a bare 404).
-      const built = draftCalls();
-      expect(built.length).toBeGreaterThan(0);
-      for (const { verb, template } of built) {
-        authScoped(['okf:t1:r1:read']);
-        const res = await request(createApp())
-          [verb]('/api' + concrete(template))
-          .set('Authorization', TOKEN);
-        expect(res.status).not.toBe(404);
-      }
-    });
-
-    test('with an admin scope the draft verbs reach the draft service', async () => {
-      authScoped(['okf:t1:r1:admin']);
-      draftService.getDraft.mockResolvedValue({ repo_id: 'r1', draft: null });
-      draftService.saveDraft.mockResolvedValue({ repo_id: 'r1', draft: {} });
-      draftService.clearDraft.mockResolvedValue({ repo_id: 'r1', deleted: true });
-      const serverPath = '/api' + concrete(draftCalls()[0].template);
-      const get = await request(createApp()).get(serverPath).set('Authorization', TOKEN);
-      expect(get.status).toBe(200);
-      expect(get.body).toEqual({ repo_id: 'r1', draft: null });
-      const put = await request(createApp()).put(serverPath).set('Authorization', TOKEN).send({ studio_step: 3 });
-      expect(put.status).toBe(200);
-      const del = await request(createApp()).delete(serverPath).set('Authorization', TOKEN);
-      expect(del.status).toBe(200);
-      expect(draftService.getDraft).toHaveBeenCalledTimes(1);
-      expect(draftService.saveDraft).toHaveBeenCalledTimes(1);
-      expect(draftService.clearDraft).toHaveBeenCalledTimes(1);
-    });
+  test('every draft verb the frontend builds is routed by the real app', async () => {
+    // Read scope suffices to pass the router gate; for PUT/DELETE the
+    // route's own admin gate answers 403 — which still proves the route
+    // exists (an unmatched path would fall through to a bare 404).
+    const app = createApp();
+    const built = frontendOkfCalls();
+    expect(built.length).toBeGreaterThan(0);
+    for (const { verb, template } of built) {
+      authScoped(['okf:t1:r1:read']);
+      const res = await request(app)
+        [verb]('/api' + concrete(template))
+        .set('Authorization', TOKEN);
+      expect(res.status).not.toBe(404);
+    }
   });
 
-  describe('the producer-job URLs are pinned NOT served (issue #1527)', () => {
-    // studioService.fetchProducerJob / killProducerJob build these paths but
-    // no okf-server version ever served `/api/okf/jobs/*` (the client methods
-    // are dead placeholders — nothing calls them). Pinned here so the flip is
-    // LOUD when the producer story lands: whoever implements the route must
-    // turn these assertions over in the same commit. When the dead methods
-    // are removed the list is empty and nothing is pinned — that is why this
-    // is a loop and not `test.each` (an empty table is a jest collection
-    // error, which would take the whole suite down).
-    test('every producer-job URL the frontend builds is a 404 today', async () => {
-      // NO length assertion: when the dead methods are removed the list is
-      // empty and nothing is pinned — the intended end state (see the
-      // comment above). An empty `test.each` table is a jest collection
-      // error, which is why this is a loop.
-      for (const template of producerJobTemplates()) {
-        authScoped(['okf:t1:r1:admin']);
-        const serverPath = '/api' + concrete(template);
-        const get = await request(createApp()).get(serverPath).set('Authorization', TOKEN);
-        const post = await request(createApp()).post(serverPath).set('Authorization', TOKEN);
-        expect(get.status).toBe(404);
-        expect(post.status).toBe(404);
-      }
-    });
+  test('with an admin scope the draft verbs reach the draft service', async () => {
+    const app = createApp();
+    authScoped(['okf:t1:r1:admin']);
+    draftService.getDraft.mockResolvedValue({ repo_id: 'r1', draft: null });
+    draftService.saveDraft.mockResolvedValue({ repo_id: 'r1', draft: {} });
+    draftService.clearDraft.mockResolvedValue({ repo_id: 'r1', deleted: true });
+    const serverPath = '/api' + concrete(frontendOkfCalls()[0].template);
+    const get = await request(app).get(serverPath).set('Authorization', TOKEN);
+    expect(get.status).toBe(200);
+    expect(get.body).toEqual({ repo_id: 'r1', draft: null });
+    const put = await request(app).put(serverPath).set('Authorization', TOKEN).send({ studio_step: 3 });
+    expect(put.status).toBe(200);
+    const del = await request(app).delete(serverPath).set('Authorization', TOKEN);
+    expect(del.status).toBe(200);
+    expect(draftService.getDraft).toHaveBeenCalledTimes(1);
+    expect(draftService.saveDraft).toHaveBeenCalledTimes(1);
+    expect(draftService.clearDraft).toHaveBeenCalledTimes(1);
   });
 });

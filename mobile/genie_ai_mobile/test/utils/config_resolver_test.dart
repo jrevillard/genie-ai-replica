@@ -50,6 +50,17 @@ void main() {
       expect(resolveConfigText(false, 'en'), '');
       expect(resolveConfigText(42, 'en'), '42');
     });
+
+    // A number renders in the WEB's form: the web stringifies it with
+    // String(), which drops the '.0' Dart keeps ('5' there, '5.0' here).
+    test('a number renders in the web number form', () {
+      expect(resolveConfigText(5.0, 'en'), '5');
+      expect(resolveConfigText(5.5, 'en'), '5.5');
+      // A negative zero is FALSY on both platforms (the web's `value || ''`
+      // skips it), so it resolves to no text at all — the number form
+      // never comes into it.
+      expect(resolveConfigText(-0.0, 'en'), '');
+    });
   });
 
   /// The ONE JS-truthiness read a config gate does — the shared falsy
@@ -122,6 +133,12 @@ void main() {
         }, 'en'),
         'Apply,Renew',
       );
+    });
+
+    // The locale-map title of the issue: a numeric title renders in the
+    // web's number form, wherever it sits in the map.
+    test('a numeric title renders in the web number form', () {
+      expect(resolveConfigText({'en': 5.0}, 'en'), '5');
     });
   });
 

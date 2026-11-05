@@ -2,28 +2,23 @@ require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
-
-/**
- * Week-axis keys of the satisfaction heatmap/gauge series.
- *
- * The payload carries these stable keys instead of display text: the frontend
- * translates them through its i18n bundle (`analytics.timePeriods.*`).
- * Localizing them here would duplicate every translation outside the only
- * place that owns them (#220).
- */
-const SATISFACTION_PERIOD_KEYS = ['current', 'week1', 'week2', 'week3', 'week4'];
+const {
+  SATISFACTION_PERIOD_KEYS,
+  CURRENT_PERIOD_KEY,
+  PREVIOUS_PERIOD_KEY,
+  SATISFACTION_WEEK_DURATION_MS
+} = require('../constants/satisfaction-periods');
 
 /**
  * Build the five weekly satisfaction periods, most recent last.
  * @param {Number} endTimestamp - End of the most recent period (ms)
- * @param {Number} weekDuration - Length of one week (ms)
  * @returns {Array<Object>} Periods with their key and time bounds
  */
-function buildSatisfactionPeriods(endTimestamp, weekDuration) {
+function buildSatisfactionPeriods(endTimestamp) {
   return SATISFACTION_PERIOD_KEYS.map((key, index) => ({
     key,
-    start: endTimestamp - (index + 1) * weekDuration,
-    end: endTimestamp - index * weekDuration
+    start: endTimestamp - (index + 1) * SATISFACTION_WEEK_DURATION_MS,
+    end: endTimestamp - index * SATISFACTION_WEEK_DURATION_MS
   }));
 }
 
@@ -616,20 +611,16 @@ class AnalyticsService {
    * Get satisfaction gauge data
    * @param {String} period - Period type (daily, weekly, monthly, all-time)
    * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw'). Accepted
-   *   for call compatibility; the week-axis labels are period keys and do not
-   *   depend on it.
    * @returns {Promise<Object>} Satisfaction gauge data; each historical entry
    *   carries a period key (see SATISFACTION_PERIOD_KEYS) as its label, not
    *   display text — the frontend translates it.
    */
-  async getSatisfactionGaugeData(period, selectedDate, locale = 'en') {
+  async getSatisfactionGaugeData(period, selectedDate) {
     try {
       await this.init();
       logger.debug('getSatisfactionGaugeData: Starting execution', {
         period,
         selectedDate,
-        locale,
         method: 'getSatisfactionGaugeData'
       });
 
@@ -655,11 +646,10 @@ class AnalyticsService {
           endDate = endDateISO;
       }
 
-      const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
 
       // Define time periods
-      const timePeriods = buildSatisfactionPeriods(endTimestamp, weekDuration);
+      const timePeriods = buildSatisfactionPeriods(endTimestamp);
 
       const result = {
         currentValue: 0,
@@ -702,9 +692,9 @@ class AnalyticsService {
           periodEnd: new Date(period.end).toISOString()
         });
 
-        if (period.key === 'current') {
+        if (period.key === CURRENT_PERIOD_KEY) {
           result.currentValue = periodValue;
-        } else if (period.key === 'week1') {
+        } else if (period.key === PREVIOUS_PERIOD_KEY) {
           result.previousValue = periodValue;
         }
       }
@@ -714,19 +704,6 @@ class AnalyticsService {
         result.previousValue > 0
           ? Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100)
           : 0;
-
-      // Ensure historicalData is always 5 entries
-      if (result.historicalData.length < 5) {
-        const defaultHistoricalData = SATISFACTION_PERIOD_KEYS.map((key, i) => ({
-          label: key,
-          value: 0,
-          periodStart: new Date(endTimestamp - (i + 1) * weekDuration).toISOString(),
-          periodEnd: new Date(endTimestamp - i * weekDuration).toISOString()
-        }));
-        result.historicalData = defaultHistoricalData
-          .slice(0, 5 - result.historicalData.length)
-          .concat(result.historicalData);
-      }
 
       logger.info('getSatisfactionGaugeData: Successful data retrieval', {
         currentValue: result.currentValue,
@@ -793,11 +770,10 @@ class AnalyticsService {
           endDate = endDateISO;
       }
 
-      const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
 
       // Define time periods
-      const timePeriods = buildSatisfactionPeriods(endTimestamp, weekDuration);
+      const timePeriods = buildSatisfactionPeriods(endTimestamp);
 
       // Use ServiceCategoryService to get all categories with translations
       logger.info('Getting categories with translations using ServiceCategoryService for heatmap...');
@@ -838,8 +814,11 @@ class AnalyticsService {
         data: timePeriods.map((period) => ({ x: period.key, y: 0 }))
       }));
 
+      // Category id -> index in the heatmap rows, resolved once per request
+      const categoryIndexById = new Map(categories.map((category, index) => [category.id, index]));
+
       // Batch query for all feedback per period
-      for (const period of timePeriods) {
+      for (const [periodIndex, period] of timePeriods.entries()) {
         const feedbackQuery = aql`
           FOR q IN queries
             FILTER q.userFeedback != null
@@ -862,16 +841,13 @@ class AnalyticsService {
 
           // Update heatmap data for this period
           feedbackResults.forEach((result) => {
-            const categoryIndex = categories.findIndex((c) => c.id === result.categoryId);
-            if (categoryIndex !== -1) {
-              const periodIndex = timePeriods.findIndex((p) => p.key === period.key);
-              if (periodIndex !== -1) {
-                const satisfactionPercentage = Math.floor((result.average / 5) * 100);
-                heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
-                logger.debug(
-                  `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.key}: ${satisfactionPercentage}%`
-                );
-              }
+            const categoryIndex = categoryIndexById.get(result.categoryId);
+            if (categoryIndex !== undefined) {
+              const satisfactionPercentage = Math.floor((result.average / 5) * 100);
+              heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
+              logger.debug(
+                `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.key}: ${satisfactionPercentage}%`
+              );
             }
           });
         } catch (queryError) {

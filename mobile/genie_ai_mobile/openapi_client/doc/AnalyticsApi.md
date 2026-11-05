@@ -257,7 +257,7 @@ Name | Type | Description  | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAnalyticsSatisfactionGaugeGet**
-> ApiAnalyticsSatisfactionGaugeGet200Response apiAnalyticsSatisfactionGaugeGet(startDate, endDate, locale)
+> ApiAnalyticsSatisfactionGaugeGet200Response apiAnalyticsSatisfactionGaugeGet(startDate, endDate)
 
 Get satisfaction gauge data
 
@@ -272,10 +272,9 @@ import 'package:openapi/api.dart';
 final api_instance = AnalyticsApi();
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
 final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
-final locale = locale_example; // String | Language locale (e.g. en, fr, sw, ar, id, es, etc.)
 
 try {
-    final result = api_instance.apiAnalyticsSatisfactionGaugeGet(startDate, endDate, locale);
+    final result = api_instance.apiAnalyticsSatisfactionGaugeGet(startDate, endDate);
     print(result);
 } catch (e) {
     print('Exception when calling AnalyticsApi->apiAnalyticsSatisfactionGaugeGet: $e\n');
@@ -288,7 +287,6 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **startDate** | **DateTime**| Start date (ISO format) | [optional] 
  **endDate** | **DateTime**| End date (ISO format) | [optional] 
- **locale** | **String**| Language locale (e.g. en, fr, sw, ar, id, es, etc.) | [optional] [default to 'en']
 
 ### Return type
 

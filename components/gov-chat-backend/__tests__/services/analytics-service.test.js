@@ -535,7 +535,7 @@ describe('AnalyticsService', () => {
       for (let i = 0; i < 5; i++) {
         mockDb.query.mockResolvedValueOnce(createMockCursor([]));
       }
-      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15', 'fr');
+      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15');
       expect(result.historicalData.map((entry) => entry.label)).toEqual([
         'current',
         'week1',
@@ -545,17 +545,14 @@ describe('AnalyticsService', () => {
       ]);
     });
 
-    it('should return the same period keys whatever the locale', async () => {
-      const labelsFor = async (locale) => {
-        for (let i = 0; i < 5; i++) {
-          mockDb.query.mockResolvedValueOnce(createMockCursor([]));
-        }
-        const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15', locale);
-        return result.historicalData.map((entry) => entry.label);
-      };
-
-      expect(await labelsFor('sw')).toEqual(await labelsFor('en'));
-      expect(await labelsFor('fr')).toEqual(await labelsFor('en'));
+    it('should not localize the labels', async () => {
+      // The gauge takes no locale: its week-axis labels are period keys the
+      // client translates.
+      for (let i = 0; i < 5; i++) {
+        mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      }
+      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15');
+      expect(result.historicalData.every((entry) => /^(current|week[1-4])$/.test(entry.label))).toBe(true);
     });
 
     it('should calculate change percentage when previousValue > 0', async () => {
@@ -564,7 +561,7 @@ describe('AnalyticsService', () => {
       for (let i = 0; i < 5; i++) {
         mockDb.query.mockResolvedValueOnce(createMockCursor(categoryResults));
       }
-      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15', 'en');
+      const result = await analyticsService.getSatisfactionGaugeData('daily', '2026-01-15');
       expect(result.currentValue).toBeGreaterThan(0);
       expect(result.previousValue).toBeGreaterThan(0);
       // changePercentage should be non-zero since previousValue > 0
@@ -596,7 +593,7 @@ describe('AnalyticsService', () => {
       for (let i = 0; i < 5; i++) {
         mockDb.query.mockResolvedValueOnce(createMockCursor([{ categoryId: 'cat1', average: 4.5 }]));
       }
-      const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15', 'en');
+      const result = await analyticsService.getSatisfactionGaugeData('weekly', '2026-01-15');
       expect(result.historicalData).toHaveLength(5);
       expect(result.historicalData[1].label).toBe('week1');
       expect(result.currentValue).toBe(90); // 4.5/5 * 100 = 90

@@ -20,6 +20,7 @@
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -77,7 +78,7 @@ export default {
     chartSeries() {
       return this.chartData.map((category) => ({
         ...category,
-        data: (category.data || []).map((point) => ({ ...point, x: this.periodLabel(point.x) }))
+        data: (category.data || []).map((point) => ({ ...point, x: translatePeriodLabel(point.x, this.$i18n) }))
       }));
     }
   },
@@ -213,15 +214,6 @@ export default {
         }
       }
       return defaultValue;
-    },
-
-    /**
-     * Translate a satisfaction period key ('current', 'week1'...'week4') into
-     * its display text. Values that are not keys (legacy plain labels) are
-     * returned unchanged.
-     */
-    periodLabel(key) {
-      return this.translate(`analytics.timePeriods.${key}`, key);
     },
 
     checkMobile() {

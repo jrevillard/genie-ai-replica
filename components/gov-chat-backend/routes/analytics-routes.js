@@ -454,12 +454,6 @@ module.exports = (analyticsService) => {
      *           type: string
      *           format: date-time
      *         description: End date (ISO format)
-     *       - in: query
-     *         name: locale
-     *         schema:
-     *           type: string
-     *           default: en
-     *         description: Language locale (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Satisfaction gauge data
@@ -492,9 +486,7 @@ module.exports = (analyticsService) => {
      *         description: Server error
      */
     router.get('/satisfaction/gauge', (req, res) => {
-      logger.info(
-        `Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`
-      );
+      logger.info(`Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate}`);
       analyticsController.getSatisfactionGauge(req, res);
     });
 

@@ -306,6 +306,9 @@ class ServiceCategoryService {
    * Check if a category exists
    * @param {String} categoryKey - Category key
    * @returns {Promise<Boolean>} True if the category exists
+   * @throws {Error} Real faults (a missing collection, a DB outage) — the
+   *   caller's error path turns them into 5xx; only an expected absence
+   *   answers false.
    */
   async categoryExists(categoryKey) {
     try {
@@ -319,12 +322,18 @@ class ServiceCategoryService {
       logger.info(`Category existence check successful: ${categoryKey} exists`);
       return true;
     } catch (error) {
-      if (error.code === 404) {
+      // The verdict comes from the canonical absence classifier
+      // (components/shared/lib/arango-absence.js), NOT from the HTTP
+      // status: a missing COLLECTION also answers 404 (errorNum 1203), and
+      // reporting that as "no such category" would render a broken
+      // deployment as an ordinary missing resource. Non-absence errors
+      // propagate.
+      if (dbService._isExpectedAbsence(error)) {
         logger.info(`Category existence check: ${categoryKey} does not exist`);
         return false;
       }
       logger.error(`Error checking if category ${categoryKey} exists: ${error.message}`, { stack: error.stack });
-      return false;
+      throw error;
     }
   }
 
@@ -813,7 +822,7 @@ class ServiceCategoryService {
     try {
       logger.info(`Fetching all translations for category: ${categoryKey}`);
       if (!categoryKey) {
-        throw new Error('Invalid category key provided');
+        throw new ValidationError('Invalid category key provided');
       }
 
       // Typed 404 for an unknown id, matching the write paths for the same
@@ -854,7 +863,7 @@ class ServiceCategoryService {
     try {
       logger.info(`Fetching all translations for service: ${serviceKey}`);
       if (!serviceKey) {
-        throw new Error('Invalid service key provided');
+        throw new ValidationError('Invalid service key provided');
       }
 
       // Typed 404 for an unknown id, matching the write paths (see the

@@ -423,24 +423,41 @@ describe('ServiceCategoryService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when category not found (404)', async () => {
-      const err = new Error('Not found');
-      err.code = 404;
-      mockServiceCategories.document.mockRejectedValue(err);
+    it('should return false for a canonical absence (driver document-not-found)', async () => {
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
 
       const result = await service.categoryExists('missing');
       expect(result).toBe(false);
     });
 
-    it('should return false when categoryKey is missing', async () => {
-      const result = await service.categoryExists(null);
+    it('should return false for the ArangoDB 3.12 no-match absence', async () => {
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('no match'), { errorNum: 404 }));
+
+      const result = await service.categoryExists('missing');
       expect(result).toBe(false);
     });
 
-    it('should return false on other errors', async () => {
-      mockServiceCategories.document.mockRejectedValue(new Error('DB error'));
+    it('rethrows a missing-collection error (1203) instead of answering "does not exist"', async () => {
+      // A missing/misnamed collection also carries HTTP 404 (errorNum 1203).
+      // Classifying it as "the category does not exist" renders a broken
+      // deployment as an ordinary missing resource.
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('collection or index not found'), { code: 404, errorNum: 1203 })
+      );
 
-      const result = await service.categoryExists('cat-1');
+      await expect(service.categoryExists('cat-1')).rejects.toThrow('collection or index not found');
+    });
+
+    it('rethrows a DB outage instead of answering "does not exist" (a 404 would lie)', async () => {
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.categoryExists('cat-1')).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('should return false when categoryKey is missing', async () => {
+      const result = await service.categoryExists(null);
       expect(result).toBe(false);
     });
   });
@@ -786,8 +803,15 @@ describe('ServiceCategoryService', () => {
       await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
     });
 
-    it('should throw Error when categoryKey is missing', async () => {
-      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
+    it('throws a ValidationError when categoryKey is missing', async () => {
+      try {
+        await service.getCategoryTranslations(null);
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('ValidationError');
+        expect(e.statusCode).toBe(400);
+        expect(e.message).toBe('Invalid category key provided');
+      }
     });
   });
 
@@ -820,8 +844,15 @@ describe('ServiceCategoryService', () => {
       await expect(service.getServiceTranslations('svc-1')).rejects.toThrow('ECONNREFUSED');
     });
 
-    it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key provided');
+    it('throws a ValidationError when serviceKey is missing', async () => {
+      try {
+        await service.getServiceTranslations(null);
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('ValidationError');
+        expect(e.statusCode).toBe(400);
+        expect(e.message).toBe('Invalid service key provided');
+      }
     });
   });
 

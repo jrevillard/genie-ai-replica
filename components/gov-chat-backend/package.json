@@ -48,7 +48,6 @@
       "^\\.\\./shared-lib/tracing-background$": "<rootDir>/../shared/lib/tracing-background.js",
       "^\\.\\./shared-lib/melt$": "<rootDir>/../shared/lib/melt/index.js",
       "^\\.\\./shared-lib$": "<rootDir>/../shared/lib/index.js",
-      "^\\./shared-lib/validation-utils$": "<rootDir>/../shared/lib/validation-utils.js",
       "^\\.\\./shared-lib/validation-utils$": "<rootDir>/../shared/lib/validation-utils.js"
     },
     "collectCoverageFrom": [

@@ -84,7 +84,8 @@ docker exec "$C" node -e "const {createRedisCacheClient}=require('/app/services/
 ```
 
 This deletes only `translation:*` keys (not other Redis data). `TRANSLATION_CACHE=on`
-enables the cache; the key prefix is always `translation:`.
+enables the cache; the key prefix is always `translation:`. The command uses the shared
+client factory, so it fails fast when Redis is unreachable instead of waiting on it.
 
 ## Files in this directory
 

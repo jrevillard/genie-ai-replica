@@ -43,14 +43,19 @@ function resolveRedisCacheSettings() {
  * @returns {import('ioredis').Redis} the client
  */
 function createRedisCacheClient(options = {}) {
-  const unknown = Object.keys(options).filter((key) => !ALLOWED_OPTIONS.includes(key));
+  const unknown = Object.keys(options || {}).filter((key) => !ALLOWED_OPTIONS.includes(key));
   if (unknown.length > 0) {
     throw new Error(`createRedisCacheClient: unknown option(s): ${unknown.join(', ')}`);
   }
-  const { enableOfflineQueue = false, maxRetriesPerRequest = 3, endpoint } = options;
+  const { enableOfflineQueue = false, maxRetriesPerRequest = 3, endpoint } = options || {};
+  // Only the endpoint fields the resolver produces reach the client — the
+  // pre-resolved endpoint must not smuggle extra ioredis options in
+  const { host, port, password } = endpoint || resolveRedisCacheSettings();
 
   return new Redis({
-    ...(endpoint || resolveRedisCacheSettings()),
+    host,
+    port,
+    password,
     retryStrategy(times) {
       return Math.min(times * 500, 2000);
     },

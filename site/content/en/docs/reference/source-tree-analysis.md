@@ -247,6 +247,7 @@ components/gov-chat-backend/
 │   ├── admin-dashboard-service.js # Admin dashboard data
 │   ├── service-category-service.js # Service category hierarchy
 │   ├── translation-service.js    # Translation proxy (CPU/GPU backends)
+│   ├── redis-cache-client.js     # Shared Redis client factory (cache + invalidation pub/sub)
 │   ├── translation/
 │   │   ├── cpu-translate-backend.js  # CPU translation (Google/Marian)
 │   │   └── gpu-translate-backend.js  # GPU translation (vLLM)
@@ -283,7 +284,7 @@ components/gov-chat-backend/
 
 - **Keycloak:** OIDC authentication, admin API proxy (`services/keycloak-auth-service.js`, `services/keycloak-proxy-service.js`)
 - **ArangoDB:** Direct connection for all data operations (users, conversations, messages, service categories)
-- **Redis:** Translation-service cache only (`services/translation-service.js`) — not used for sessions or general caching
+- **Redis:** Translation cache and user-provisioning invalidation pub/sub (`services/redis-cache-client.js`) — not used for sessions or general caching
 - **OPEA ChatQnA:** Chat query orchestration (`services/query-service.js` → `genie-ai-overlay/chatqna/`)
 - **Document Repository:** File upload proxy (`services/security-scan-service.js` → `components/document-repository/`)
 - **Translation Service:** Translation backend proxy (`services/translation-service.js` → GPU/CPU backends)
@@ -684,7 +685,7 @@ flowchart TB
    - `backend` - Node.js/Express API (`components/gov-chat-backend/`)
    - `doc-repo` - Document repository (`components/document-repository/`)
    - `arangodb` - ArangoDB database
-   - `redis` - Translation cache only (`services/translation-service.js`)
+   - `redis` - Translation cache and provisioning invalidation (`services/redis-cache-client.js`)
 
 3. **Layer 3: API Gateway**
    - `kong` - Kong API Gateway

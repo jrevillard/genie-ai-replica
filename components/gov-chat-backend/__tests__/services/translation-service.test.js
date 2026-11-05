@@ -457,6 +457,9 @@ describe('TranslationService', () => {
       // clients share one factory; this pins the translation call site to
       // it (the provisioning suite pins its own two call sites).
       setEnv('TRANSLATION_CACHE', 'on');
+      // Clear what an earlier test captured: the assertion below must read
+      // the options THIS service created, not a leftover
+      mockRedis.options = undefined;
       jest.isolateModules(() => {
         require('../../services/translation-service');
       });

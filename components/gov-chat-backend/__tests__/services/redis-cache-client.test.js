@@ -92,11 +92,15 @@ describe('redis-cache-client factory', () => {
   });
 
   test('a pre-resolved endpoint is used as given', () => {
-    createRedisCacheClient({ endpoint: { host: 'redis.internal', port: 6380, password: 'secret' } });
+    createRedisCacheClient({
+      endpoint: { host: 'redis.internal', port: 6380, password: 'secret', db: 3 }
+    });
 
     const options = Redis.mock.calls[0][0];
     expect(options.host).toBe('redis.internal');
     expect(options.port).toBe(6380);
     expect(options.password).toBe('secret');
+    // Only the endpoint fields the resolver produces reach the client
+    expect(options.db).toBeUndefined();
   });
 });

@@ -19,8 +19,7 @@ jest.mock(
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
     },
-    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
-    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
   }),
   { virtual: true }
 );

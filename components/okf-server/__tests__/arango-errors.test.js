@@ -8,7 +8,7 @@
 // collection raised errorNum 1203 / 'collection or view not found', which the
 // document-level classifier must keep EXCLUDING.
 
-const { isArangoNotFound, isArangoCollectionNotFound } = require('../services/arango-errors');
+const { isArangoNotFound, isArangoCollectionNotFound, isConnectionError } = require('../services/arango-errors');
 
 describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
   test('isArangoNotFound: 1202 and 1204 are absence', () => {
@@ -41,5 +41,58 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     expect(isArangoCollectionNotFound({ code: 404 })).toBe(false); // no bare-status fallback
     expect(isArangoCollectionNotFound(null)).toBe(false);
     expect(isArangoCollectionNotFound(undefined)).toBe(false);
+  });
+
+  // Issue #1391 round-3 review: the union of db-connection-service's socket
+  // codes and llm-transient-errors' RETRIABLE_CODES — one home so a new
+  // connection-code lesson lands once.
+  test('isConnectionError: socket codes, axios aborts and stream disconnects', () => {
+    expect(isConnectionError(Object.assign(new Error('connect ECONNREFUSED x'), { code: 'ECONNREFUSED' }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }))).toBe(true);
+    // axios abort (our own timeout) — in llm-transient-errors, not in the
+    // socket-code list.
+    expect(isConnectionError(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))).toBe(
+      true
+    );
+    expect(
+      isConnectionError(Object.assign(new Error('stream has been aborted'), { code: 'ERR_STREAM_PREMATURE_CLOSE' }))
+    ).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }))).toBe(
+      true
+    );
+    expect(isConnectionError(new Error('socket hang up'))).toBe(true);
+    // STRICT matching (this file's contract): a message that merely contains
+    // a transport word, with no code, is NOT evidence of a transport failure
+    // — matching it would retry a deterministic fault.
+    expect(isConnectionError(new Error('fetch failed'))).toBe(false);
+    expect(isConnectionError(Object.assign(new Error('x'), { code: 'EAI_AGAIN' }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('x'), { code: 'ENOTFOUND' }))).toBe(true);
+    // Transient gateway statuses (the llm-transient-errors status set) — the
+    // shape an arangojs error carries through a proxy under load.
+    expect(isConnectionError(Object.assign(new Error('Service Unavailable'), { response: { status: 503 } }))).toBe(
+      true
+    );
+    expect(isConnectionError(Object.assign(new Error('Bad Gateway'), { response: { status: 502 } }))).toBe(true);
+    expect(isConnectionError(Object.assign(new Error('Too Many Requests'), { statusCode: 429 }))).toBe(true);
+    // A present-but-statusless response must not short-circuit the chain
+    // (round-5 review): the outer layers' status fields are still consulted.
+    expect(isConnectionError(Object.assign(new Error('x'), { response: {}, statusCode: 503 }))).toBe(true);
+    // The ARANGOJS DRIVER shapes (final review — db.query never produces an
+    // axios-shaped error): ArangoError{errorNum, code:503, response:<body>}
+    // and HttpError{code:502, response:{statusCode:502}} carry the status on
+    // err.code / err.response.statusCode, not on err.status.
+    expect(isConnectionError(Object.assign(new Error('service unavailable'), { errorNum: 1495, code: 503 }))).toBe(
+      true
+    );
+    expect(
+      isConnectionError(Object.assign(new Error('bad gateway'), { code: 502, response: { statusCode: 502 } }))
+    ).toBe(true);
+    // A permanent 4xx/5xx status is NOT connection-class.
+    expect(isConnectionError(Object.assign(new Error('Forbidden'), { response: { status: 403 } }))).toBe(false);
+    expect(isConnectionError(Object.assign(new Error('Server Error'), { response: { status: 500 } }))).toBe(false);
+    // Deterministic faults are NOT connection-class.
+    expect(isConnectionError(Object.assign(new Error('auth failed'), { errorNum: 11 }))).toBe(false);
+    expect(isConnectionError(new Error('AQL: parse error near FILTER'))).toBe(false);
+    expect(isConnectionError(null)).toBe(false);
   });
 });

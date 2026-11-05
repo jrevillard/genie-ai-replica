@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 
@@ -22,8 +23,18 @@ void main() {
         await GenieAiConfig.load();
 
         expect(GenieAiConfig.title, 'GENIE.AI');
-        expect(GenieAiConfig.iconPath, 'config/logo-genie-ai.jpeg');
+        // The icon path must name an asset that EXISTS in the MOBILE bundle:
+        // the config used to carry the web path '/config/logo-genie-ai.jpeg',
+        // which resolves to neither a bundled file nor a valid asset key.
+        expect(GenieAiConfig.iconPath, 'assets/config/genie-ai-icon.svg');
         expect(GenieAiConfig.isLoaded, isTrue);
+      });
+
+      test('the configured icon asset resolves in the bundle', () async {
+        await GenieAiConfig.load();
+        // The contract the config value must honour: the asset key resolves.
+        final data = await rootBundle.load(GenieAiConfig.iconPath);
+        expect(data, isNotNull);
       });
 
       test('load is idempotent', () async {

@@ -62,6 +62,9 @@ const { authedAxios } = require('../services/service-token');
 const edgeService = require('../services/edge-service');
 
 const REPO = '99999999-9999-4999-8999-999999999999';
+/** The claim value the mocked stamp returns (the server-stamped
+ * worker_claimed_at the job carries and the 429 unclaim CASes on). */
+const STAMPED_CLAIM = '2026-11-05T00:00:00.000Z';
 
 /** Program the mock db.query sequence (the worker queries by position:
  * 1st = claim read, then terminal polls; sweep = orphan query + per-orphan removes).
@@ -77,10 +80,21 @@ function queryText(q) {
 
 function programQueries(...results) {
   let i = 0;
+  let claimRow = null; // the row the claim-read returned (the stamp mirrors its attempts)
   mockDb.query.mockImplementation(async (q) => {
     const text = queryText(q);
+    if (text.includes('ingest_attempts: MAX([')) {
+      // 429 unclaim — unpositioned side-write (CAS lands). Keyed on the
+      // decrement expression, NOT on 'worker_claimed_at: null': the
+      // graph-missing reset writes the same literal.
+      return { all: async () => [{ key: 'unclaim' }] };
+    }
     if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
-      return { all: async () => [] }; // claim stamp — unpositioned side-write
+      // claim stamp — landed; the values are the SERVER-stamped claim the job
+      // carries and the 429 unclaim CASes on, plus the server-side attempt
+      // count (RETURN {claim, attempts}).
+      const attempts = ((claimRow && claimRow.ingest_attempts) || 0) + 1;
+      return { all: async () => [{ claim: STAMPED_CLAIM, attempts }] };
     }
     if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
       return { all: async () => [{ _key: 'settle-lease' }] }; // settle CAS — lease acquired
@@ -90,6 +104,7 @@ function programQueries(...results) {
     }
     const r = results[Math.min(i, results.length - 1)];
     i += 1;
+    if (i === 1) claimRow = Array.isArray(r) ? r[0] : r;
     return { all: async () => (Array.isArray(r) ? r : [r]) };
   });
 }
@@ -173,6 +188,27 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(unclaimCall).toBeUndefined();
   });
 
+  test('a stamp that loses the ownership CAS (0 rows returned) refuses the claim too (#1391)', async () => {
+    // The stamp is conditional on the claim value the claim-read saw: two
+    // lanes that read the same head row cannot both stamp — the loser's
+    // UPDATE matches NOTHING (no throw, an empty RETURN). That must refuse
+    // the claim exactly like a thrown conflict does.
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        return { all: async () => [] }; // CAS matched nothing — the row moved
+      }
+      return {
+        all: async () => [
+          { repo_id: REPO, concept_id: 'unstamped', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# u' }
+        ]
+      };
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
   test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
     programQueries(
       [
@@ -226,7 +262,9 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   });
 
   test('429 busy → back off, NO meta transition, NO crash (dataprep single-flight)', async () => {
-    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    programQueries([
+      { repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a', ingest_attempts: 1 }
+    ]);
     const busy = Object.assign(new Error('429'), { response: { status: 429 } });
     authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(busy);
@@ -248,7 +286,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
         return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
       });
     expect(unclaimCall).toBeDefined();
-    expect(unclaimCall.query).toContain('- 1, 0)');
+    // AQL's MAX takes ONE array argument — MAX(a, b) is a parse error on
+    // ArangoDB 3.12 (error 1541), so the two-argument form never executed.
+    expect(unclaimCall.query).toContain('MAX([');
+    expect(unclaimCall.query).toContain('- 1, 0]');
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
     // 429 LANE COOL-DOWN (incident 2026-09-28): the NEXT cycle must not claim
     // while the cool-down is armed — the old 1/sec hot loop across a saturated
@@ -261,6 +302,314 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // unclaim AQL — conceptMeta.upsertConceptMeta stays at ZERO calls, and
     // still no second claim/kick after the cool-down armed.
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  // Issue #1391: the unclaim UPDATE races concurrent meta writers (rocksDB
+  // 1200 write-write conflict). A single best-effort write that loses the
+  // race leaves a GHOST claim — the row counts as in-flight in the fair pick
+  // for a full claim window and starves its repo. The unclaim is a CAS on
+  // the STAMPED CLAIM VALUE (job.worker_claimed_at) and RETRIES conflicts +
+  // connection-class failures until the write lands.
+
+  /** Program a busy lane for the 1391 unclaim tests: the claimed fixture row
+   * (ingest_attempts/worker_claimed_at are the PRE-stamp values — the worker
+   * mirrors the post-stamp ones onto the job), retract OK, kick 429. The
+   * retry backoff is the production constant (no test seam). Returns the
+   * base query impl for tests that override the unclaim write. */
+  function setupBusyLane() {
+    programQueries([
+      {
+        repo_id: REPO,
+        concept_id: 'a',
+        graph_name: `OKF_${REPO}`,
+        frontmatter: {},
+        body: '# a',
+        ingest_attempts: 1,
+        worker_claimed_at: null
+      }
+    ]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    return mockDb.query.getMockImplementation();
+  }
+
+  /** Make the unclaim write fail `failures` times with makeErr(), then land.
+   * Returns a reader for the attempt count. */
+  function failUnclaimThenLand(base, failures, makeErr) {
+    let unclaims = 0;
+    mockDb.query.mockImplementation(async (q) => {
+      if (queryText(q).includes('ingest_attempts: MAX([')) {
+        unclaims += 1;
+        if (unclaims <= failures) throw makeErr();
+        return { all: async () => [{ key: 'u' }] }; // this attempt lands
+      }
+      return base(q);
+    });
+    return () => unclaims;
+  }
+
+  test('429 unclaim write conflict → CAS on the stamped claim, retried until the write lands (#1391)', async () => {
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 2, () =>
+      Object.assign(new Error('conflict: write-write'), { errorNum: 1200 })
+    );
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaimCount()).toBe(3); // retried past the conflicts — the claim IS released
+    // The write is a CAS on the CLAIM VALUE: it only clears the claim while
+    // the row still carries THIS lane's stamp — a reset that requeued the
+    // row (claim nulled) or another lane that re-claimed it (a different
+    // claim value) makes the CAS match nothing. Assert the BOUND VALUE, not
+    // just the predicate: a `== null` bind would clear ANY claim (the exact
+    // defect #1391 removes) and still match the query text.
+    const unclaimBinds = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => q && q.query && q.query.includes('ingest_attempts: MAX(['))
+      .map((q) => Object.values(q.bindVars || {}));
+    expect(unclaimBinds.length).toBeGreaterThan(0);
+    expect(unclaimBinds.every((b) => b.includes(STAMPED_CLAIM))).toBe(true);
+  });
+
+  test('429 unclaim that fails ALL retries is logged as an error, not silently dropped (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const base = setupBusyLane();
+    failUnclaimThenLand(base, Infinity, () => Object.assign(new Error('conflict: write-write'), { errorNum: 1200 }));
+    const res = await worker._processOneJob();
+    // The kick refusal itself was handled (lane cools down, outcome busy) —
+    // but the failed release must surface at ERROR level so a persisting
+    // ghost claim is visible instead of a warn nobody greps for.
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+  });
+
+  // Connection-class failures (statement never executed / ack lost) ARE
+  // retried — the CAS makes even a lost-ack retry safe from double-decrement.
+  test('429 unclaim connection failure → retried like a conflict (#1391)', async () => {
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 1, () =>
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8529'), { code: 'ECONNREFUSED' })
+    );
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaimCount()).toBe(2);
+  });
+
+  // Fail CLOSED: without the stamped claim value the CAS cannot be
+  // expressed, and an unguarded write could clear a foreign claim (the
+  // graph-missing reset requeues rows while lanes hold fresh claims).
+  // Both claim strategies guarantee the stamp on a returned job, so this is
+  // defense-in-depth — exercised directly on the helper.
+  test('429 unclaim without a stamped claim value → skipped, no unguarded write (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const querySpy = jest.spyOn(mockDb, 'query');
+    await worker._unclaimAttempt(mockDb, REPO, 'a', undefined);
+    expect(querySpy).not.toHaveBeenCalled(); // NO unguarded write was attempted
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim skipped'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+    querySpy.mockRestore();
+  });
+
+  // Visibility: a CAS that matches nothing (claim already released, reset
+  // or re-stamped by someone else) is a designed outcome — but it must be
+  // VISIBLE, or a stale job value turns every unclaim into a silent no-op.
+  test('429 unclaim whose CAS matches nothing warns and skips the write (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const base = setupBusyLane();
+    mockDb.query.mockImplementation(async (q) => {
+      if (queryText(q).includes('ingest_attempts: MAX([')) {
+        return { all: async () => [] }; // the CAS matched nothing — the row moved
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('matched nothing'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+  });
+
+  // A transient gateway status (503 under load — exactly when conflict
+  // storms happen) is connection-class too: retried, not misread as a
+  // deterministic fault (round-4 review).
+  test('429 unclaim HTTP 503 → retried like a conflict (#1391)', async () => {
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(base, 1, () =>
+      Object.assign(new Error('Service Unavailable'), { response: { status: 503 } })
+    );
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaimCount()).toBe(2);
+  });
+
+  // The claim stamp gets the same transient-class retry: a connection
+  // failure that never executed is retried against the SAME CAS — a stamp
+  // that already landed makes the CAS match nothing (refusal), never a
+  // double stamp (round-4 review).
+  // Review round 2 (critical): the stamp's CAS is written against the claim
+  // value the claim-READ saw. A row admitted through the stale-claim branch
+  // carries an OLD claim value — if the projection lost it, the CAS would
+  // bind null, match nothing, and the FIFO lane would never claim that row
+  // again (the queue blocks behind one stale head row).
+  test('a STALE-claimed row is stamped against its OWN prior claim value (#1391)', async () => {
+    const staleClaim = '2026-01-01T00:00:00.000Z';
+    programQueries(
+      [
+        {
+          repo_id: REPO,
+          concept_id: 'stale',
+          graph_name: `OKF_${REPO}`,
+          frontmatter: {},
+          body: '# stale',
+          ingest_attempts: 3,
+          worker_claimed_at: staleClaim
+        }
+      ],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done
+    );
+    await worker._processOneJob();
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('UPDATE m WITH') && q.query.includes('worker_claimed_at'));
+    expect(stampCall).toBeDefined();
+    // The CAS binds the PRIOR claim value, not null.
+    expect(Object.values(stampCall.bindVars || {})).toContain(staleClaim);
+    // The claim-READ must PROJECT the claim value: KEEP drops an attribute the
+    // list does not name, and the stamp CAS is written against it.
+    const claimRead = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('RETURN KEEP(m,'));
+    expect(claimRead).toBeDefined();
+    // The projection LIST is a bind value: it must name the claim field.
+    const projected = Object.values(claimRead.bindVars || {}).find((v) => Array.isArray(v));
+    expect(projected).toBeDefined();
+    expect(projected).toContain('worker_claimed_at');
+  });
+
+  // The lost-ack signature: attempt 1 fails with a connection error, the
+  // retry's CAS then misses — attempt 1 probably COMMITTED and the row now
+  // carries this lane's stamp that nobody will work. That must be VISIBLE.
+  test('a stamp whose retry CAS misses after a connection failure warns about the ghost claim (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // (unreached — the claim is refused)
+    );
+    const base = mockDb.query.getMockImplementation();
+    let stampAttempts = 0;
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        stampAttempts += 1;
+        if (stampAttempts === 1) {
+          const err = new Error('connect ECONNRESET');
+          err.code = 'ECONNRESET';
+          throw err; // attempt 1: connection failure (effect unknown)
+        }
+        return { all: async () => [] }; // attempt 2: CAS matched nothing
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    expect(stampAttempts).toBe(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('possible ghost claim'),
+      expect.objectContaining({ concept_id: 'a' })
+    );
+  });
+
+  // Review round 2: the stamp must return null (never undefined) when every
+  // attempt fails — the caller treats undefined as "not a claim" but the
+  // function contract (and the retry budget) says null.
+  test('a claim stamp that fails every attempt refuses the claim (no undefined) (#1391)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        const err = new Error('connect ECONNREFUSED');
+        err.code = 'ECONNREFUSED';
+        throw err; // every attempt fails
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' }); // refused, not crashed, no kick
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  // Round-5 review, empirically reproduced: the arangojs aql tag DROPS an
+  // undefined bind — a never-claimed row has NO worker_claimed_at attribute,
+  // and the broken query text was an AQL syntax error that refused EVERY
+  // fresh claim. The stamp must bind null for a never-claimed row.
+  test('claim stamp of a NEVER-CLAIMED row binds null, not undefined (#1391)', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'fresh', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# f' }], // no worker_claimed_at — KEEP omits it
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    await worker._processOneJob();
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => q && q.query && q.query.includes('UPDATE m WITH') && q.query.includes('worker_claimed_at'));
+    expect(stampCall).toBeDefined();
+    const binds = Object.values(stampCall.bindVars || {});
+    expect(binds.includes(null)).toBe(true); // null bind — AQL == null matches missing attribute too
+    expect(binds.includes(undefined)).toBe(false); // an undefined bind is DROPPED by the aql tag
+    expect(stampCall.query).toContain('worker_claimed_at ==');
+  });
+
+  test('claim stamp connection failure → retried; the claim then proceeds normally', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done
+    );
+    let stamps = 0;
+    const base = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q) => {
+      const s = queryText(q);
+      if (s.includes('UPDATE m WITH') && s.includes('worker_claimed_at')) {
+        stamps += 1;
+        if (stamps === 1) {
+          const err = new Error('connect ECONNRESET');
+          err.code = 'ECONNRESET';
+          throw err;
+        }
+        // The stamp's contract: { claim, attempts } from RETURN NEW.
+        return {
+          all: async () => [{ claim: STAMPED_CLAIM, attempts: 2 }]
+        };
+      }
+      return base(q);
+    });
+    const res = await worker._processOneJob();
+    expect(res.outcome).not.toBe('idle'); // the claim succeeded after the retry
+    expect(authedAxios.post).toHaveBeenCalled(); // the kick proceeded
+    expect(stamps).toBe(2);
+  });
+
+  // A NON-retryable failure (parse/auth — deterministic fault) is never
+  // retried: it surfaces at ERROR on the FIRST attempt (#1391).
+  test('429 unclaim non-retryable failure → no retry, error on the first attempt (#1391)', async () => {
+    const { logger } = require('../shared-lib/logger');
+    const base = setupBusyLane();
+    const unclaimCount = failUnclaimThenLand(
+      base,
+      Infinity,
+      () => Object.assign(new Error('auth failed'), { errorNum: 11 }) // not a conflict, not a connection failure
+    );
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(unclaimCount()).toBe(1); // NO retry on a deterministic fault
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unclaim'),
+      expect.objectContaining({ concept_id: 'a', error_num: 11 })
+    );
   });
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
@@ -456,6 +805,14 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
         return t.includes('UPDATE m WITH') && t.includes('worker_claimed_at');
       });
     expect(stampCalls).toHaveLength(0);
+    // The job carries the POST-stamp claim value (#1391): the 429 unclaim
+    // CASes on it, so a job carrying the PRE-stamp value (cand) would make
+    // every unclaim a silent no-op and bring the ghost claim back. The
+    // projection list is a bind value — it must name the claim field (the
+    // fair statement returns NEW, so KEEP projects the stamped row).
+    const fairBinds = Object.values(fair.bindVars || {});
+    const projected = fairBinds.find((v) => Array.isArray(v) && v.includes('worker_claimed_at'));
+    expect(projected).toBeDefined();
   });
 
   test('cap env flows into the query as a bind value', async () => {

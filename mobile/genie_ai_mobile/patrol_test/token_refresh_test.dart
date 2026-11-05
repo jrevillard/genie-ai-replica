@@ -65,9 +65,7 @@ void main() {
         //    Testing actual token expiry would require issuing a short-lived
         //    token (updateRealmSettings only affects newly-issued tokens,
         //    not the one already in storage).
-        await $.platformAutomator.mobile.openApp(
-          appId: 'com.example.genie_ai_mobile.e2e',
-        );
+        await $.platformAutomator.mobile.openApp(appId: 'com.itu.genieai.e2e');
 
         // 5. Verify state stays authenticated
         await $(

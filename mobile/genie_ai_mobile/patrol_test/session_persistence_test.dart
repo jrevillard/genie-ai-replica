@@ -63,9 +63,7 @@ void main() {
         await Future<void>.delayed(const Duration(seconds: 2));
 
         // 4. Foreground the app
-        await $.platformAutomator.mobile.openApp(
-          appId: 'com.example.genie_ai_mobile.e2e',
-        );
+        await $.platformAutomator.mobile.openApp(appId: 'com.itu.genieai.e2e');
         await Future<void>.delayed(const Duration(seconds: 1));
         await $.pumpAndSettle();
 

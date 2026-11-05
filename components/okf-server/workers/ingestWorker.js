@@ -30,6 +30,7 @@ const { authedAxios } = require('../services/service-token');
 const conceptMetaService = require('../services/concept-meta-service');
 const config = require('../config');
 const graphLifecycle = require('../services/graph-lifecycle-service');
+const { isArangoConflict, isConnectionError } = require('../services/arango-errors');
 
 const DEFAULT_INTERVAL_MS = 15000;
 const DEFAULT_SWEEP_INTERVAL_MS = 3600000;
@@ -109,7 +110,21 @@ const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
 // still never parks (a freed slot must be claimable instantly); the LANE
 // waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
 const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
+// Claim/unclaim transient-write retry policy. NOT env-tunable:
+// an env knob that is wired into no compose/env/ansible surface is dead
+// configuration, and no operator asked for this policy to be tunable.
+// Linear + jittered backoff (the db-connection-service idiom: base × attempt,
+// jitter ≤25%) so lanes losing against the same bulk writer do not retry in
+// lockstep.
+const CLAIM_RETRY_ATTEMPTS = 3;
+const CLAIM_RETRY_BACKOFF_MS = 500;
+const claimRetryDelayMs = (attempt) => {
+  const delay = CLAIM_RETRY_BACKOFF_MS * attempt;
+  return delay + Math.floor(delay * 0.25 * Math.random());
+};
 let _dataprepBusyUntil = 0;
+/** File-local sleep (same idiom as rerank-client / ragas-suite-service). */
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Park delay for a failed kick: exponential in the CURRENT attempt number
  * (job.ingest_attempts — the claim already bumped it), capped, jittered.
  * Returns null when backoff is disabled (base 0). */
@@ -208,6 +223,12 @@ const CLAIM_KEEP_FIELDS = [
   'repo_id',
   'concept_id',
   'graph_name',
+  // The claim value the claim-READ saw: the stamp's CAS is written
+  // against it (a stale-claim row must be stamped against its OWN prior
+  // claim, never against null), and a non-null value here is what marks a
+  // stale reclaim — the dataprep-liveness probe the FIFO lane honours,
+  // exactly like the fair lane (which reads the full row).
+  'worker_claimed_at',
   'frontmatter',
   'body',
   'ingest_labels',
@@ -251,6 +272,9 @@ async function claimNextJob(db) {
       // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
       // in-flight on another lane — never double-claim it. A STALE claim
       // (past the drain window) belongs to a dead lane and is reclaimable.
+      // An EMPTY-STRING claim also falls through here: DATE_TIMESTAMP('')
+      // returns null and AQL orders null before numbers, so the staleness
+      // comparison is true — the same reason the reaper guards != ''.
       FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
       // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
       // not claimable until its next_attempt_after. Inert until the first
@@ -273,65 +297,222 @@ async function claimNextJob(db) {
   // we do not own AND let the 429 un-claim below decrement an attempt that was
   // never counted (the counter drifts below the truth and the poison-pill
   // reaper fires late). Fail the claim instead: the row is never claimed.
-  if (!(await _stampClaim(db, rows[0].repo_id, rows[0].concept_id))) {
+  // The stamp value comes from the DB CLOCK (staleness is judged against
+  // DATE_NOW() server-side, so an app-host clock must never become
+  // load-bearing) — _stampClaim returns the SERVER-stamped
+  // worker_claimed_at, and the job must carry exactly that value: the 429
+  // unclaim CASes on it.
+  const stampedClaim = await _stampClaim(db, rows[0].repo_id, rows[0].concept_id, rows[0].worker_claimed_at);
+  if (!stampedClaim) {
     logger.warn('Ingest worker: claim stamp failed — row NOT claimed this cycle', {
       repo_id: rows[0].repo_id,
       concept_id: rows[0].concept_id
     });
     return null;
   }
-  return rows[0];
+  // Mirror the SERVER-stamped claim + attempt count onto a CLONE — a clean
+  // copy of the read row carrying the post-stamp values. The attempt count
+  // comes from the stamp's own RETURN (not from the read + 1): another
+  // writer can reset the counter between the read and the stamp, and a
+  // mirrored guess would put the backoff exponent out of step.
+  return Object.assign({}, rows[0], {
+    worker_claimed_at: stampedClaim.claim,
+    ingest_attempts: stampedClaim.attempts
+  });
 }
 
-/** Stamp the claim on a claimed row. Returns true when the stamp landed,
- * false when it failed — the caller then treats the row as NOT claimed, so
- * every RETURNED job carries its counted attempt and _unclaimAttempt can
- * only ever un-count a real stamp (round 20, #80804). */
-async function _stampClaim(db, repoId, conceptId) {
-  try {
-    await db.query(
-      aql`
-      FOR m IN okf_concepts_meta
-        FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
-        UPDATE m WITH {
-          worker_claimed_at: DATE_ISO8601(DATE_NOW()),
-          ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
-        } IN okf_concepts_meta
-    `,
-      {}
-    );
-    return true;
-  } catch (err) {
-    logger.warn('Ingest worker: claim stamp failed (claim refused)', { concept_id: conceptId, error: err.message });
-    return false;
+/** Stamp the claim on a claimed row. The stamp is a CAS:
+ * only lands while the row still carries the claim value the claim-read saw
+ * — two lanes that read the same head row cannot both stamp, the loser's
+ * UPDATE matches nothing. Returns the SERVER-stamped claim value and attempt
+ * count when the stamp landed (the DB clock, never the app-host clock —
+ * staleness is judged against DATE_NOW()), null when it failed (lost the
+ * CAS, or a write error that survived the connection retry) — the caller
+ * then treats the row as NOT claimed, so every RETURNED job carries its
+ * counted attempt and _unclaimAttempt can only ever un-count a real stamp.
+ */
+async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
+  // The arangojs aql tag DROPS an undefined bind (the query text loses the
+  // placeholder and the server sees a syntax error) — a never-claimed row
+  // has NO worker_claimed_at attribute, so KEEP omits it and the raw value
+  // here is undefined. Normalize to null: AQL `== null` matches both the
+  // stored null and the missing attribute.
+  const priorClaim = priorClaimedAt == null ? null : priorClaimedAt;
+  // One immediate retry on a connection-class failure, never a sleep: the
+  // stamp runs inside the serialized claim chain, where a sleep parks every
+  // other lane's claim (final review). The unclaim retry (outside the chain)
+  // keeps the backed-off policy.
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await db.query(
+        aql`
+        FOR m IN okf_concepts_meta
+          FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+          FILTER m.worker_claimed_at == ${priorClaim}
+          UPDATE m WITH {
+            worker_claimed_at: DATE_ISO8601(DATE_NOW()),
+            ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
+          } IN okf_concepts_meta
+          RETURN { claim: NEW.worker_claimed_at, attempts: NEW.ingest_attempts }
+      `,
+        {}
+      );
+      const rows = await result.all();
+      if (rows.length > 0) return rows[0]; // the server-stamped claim + attempt count
+      if (attempt > 1) {
+        // A CAS miss on the RETRY, after attempt 1 failed with a connection
+        // error, is the signature of a LOST ACK: attempt 1 probably committed
+        // and the row now carries THIS lane's stamp that nobody will work.
+        // The claim ages out at the staleness window — surface it.
+        logger.warn(
+          'Ingest worker: claim stamp CAS missed after a connection failure — possible ghost claim until staleness',
+          {
+            repo_id: repoId,
+            concept_id: conceptId
+          }
+        );
+      }
+      // CAS matched nothing — the row moved under us. Deterministic refusal:
+      // the claim-read is stale and the row is someone else's. NO retry —
+      // the next claim cycle re-reads on a fresh snapshot, and sleeping here
+      // parks every other lane's serialized claim behind it.
+      return null;
+    } catch (err) {
+      if (!isConnectionError(err)) {
+        // A conflict (the row moved) or a deterministic fault — no point
+        // retrying inside the serialized claim chain; the next cycle's
+        // claim-read sees the moved row.
+        // A persistent fault here (parse error, auth…) stalls EVERY FIFO
+        // claim with only this line — it must not be a warn nobody greps for.
+        logger.error('Ingest worker: claim stamp failed (claim refused)', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          error: err.message
+        });
+        return null;
+      }
+      // Connection-class failure: the statement never executed (or the ack
+      // was lost), so ONE immediate retry against the SAME CAS is safe — a
+      // stamp that landed makes the CAS match nothing = refusal, never a
+      // double stamp. NO sleep: the stamp runs inside the serialized claim
+      // chain, and sleeping here parks every other lane's claim (final
+      // review). A second blip is left to the next poll cycle.
+      if (attempt < maxAttempts) {
+        logger.warn('Ingest worker: claim stamp connection failure — retrying once', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          error: err.message
+        });
+      } else {
+        logger.warn('Ingest worker: claim stamp lost every retry (claim refused)', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          attempts: maxAttempts,
+          error: err.message
+        });
+      }
+    }
   }
+  return null;
 }
 
-/** The claim stamp counted the attempt, but the kick was REFUSED (dataprep
+/**
+ * The claim stamp counted the attempt, but the kick was REFUSED (dataprep
  * 429) — no ingest work happened. Un-count it while clearing the claim, so
  * the poison-pill reaper (>= OKF_INGEST_WORKER_MAX_CLAIMS REAL attempts)
  * cannot dead-letter healthy rows that merely bounced off a busy slot under
- * routine cross-repo contention (review !622 wave 2, #78658). Same
- * single-writer lane as the claim itself, so read-modify-write is safe.
- * Round 20, #80804: both claim strategies now guarantee a returned job's
- * attempt was STAMPED (fifo refuses the claim on a failed stamp; fair stamps
- * inside the fused statement), so this decrement always un-counts a real
- * increment — never a bare 0-row. */
-async function _unclaimAttempt(db, repoId, conceptId) {
-  try {
-    await db.query(
-      aql`
-      FOR m IN okf_concepts_meta
-        FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
-        UPDATE m WITH {
-          worker_claimed_at: null,
-          ingest_attempts: MAX((m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0)
-        } IN okf_concepts_meta
-    `,
-      {}
-    );
-  } catch (err) {
-    logger.warn('Ingest worker: 429 unclaim failed (non-fatal)', { concept_id: conceptId, error: err.message });
+ * routine cross-repo contention. The write races NON-worker meta writers
+ * (user-triggered repo/lifecycle ops on the same row) — it is NOT
+ * single-writer, which is why the CAS + retry below exist. Both claim
+ * strategies now guarantee a
+ * returned job's attempt was STAMPED (fifo refuses the claim on a failed
+ * stamp; fair stamps inside the fused statement), so this decrement always
+ * un-counts a real increment — never a bare 0-row. The decrement happens
+ * ONLY when the CAS matches (the row still carries this lane's claim). On a
+ * CAS miss the claim is already gone and the counter may keep the +1 (a
+ * writer that releases a claim without resetting the counter does not
+ * reconcile it).
+ */
+async function _unclaimAttempt(db, repoId, conceptId, claimedAt) {
+  // The one invariant the JSDoc above does not carry: a CAS match on NOTHING
+  // is a designed outcome (the claim was reset/reclaimed), which is why both
+  // retryable classes are safe — a losing write can never clear a foreign
+  // claim or double-decrement.
+  if (claimedAt == null) {
+    // Fail CLOSED: without the stamped claim value the CAS cannot be
+    // expressed, and an unguarded write could clear a foreign claim (the
+    // graph-missing reset requeues rows while lanes hold fresh claims).
+    logger.error('Ingest worker: 429 unclaim skipped — stamped claim value unknown (ghost claim until staleness)', {
+      repo_id: repoId,
+      concept_id: conceptId
+    });
+    return;
+  }
+  const maxAttempts = CLAIM_RETRY_ATTEMPTS;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await db.query(
+        aql`
+        FOR m IN okf_concepts_meta
+          FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+          FILTER m.worker_claimed_at == ${claimedAt}
+          UPDATE m WITH {
+            worker_claimed_at: null,
+            // AQL's MAX takes ONE array argument — MAX(a, b) is a parse
+            // error, not a two-argument maximum.
+            ingest_attempts: MAX([(m.ingest_attempts == null ? 0 : m.ingest_attempts) - 1, 0])
+          } IN okf_concepts_meta
+          RETURN OLD._key
+      `,
+        {}
+      );
+      if ((await result.all()).length === 0) {
+        // Designed outcome (see above) — surfaced so a strategy that ever
+        // returns a stale claim value is visible at once.
+        logger.warn('Ingest worker: 429 unclaim matched nothing — claim already released/reclaimed', {
+          repo_id: repoId,
+          concept_id: conceptId
+        });
+      }
+      return;
+    } catch (err) {
+      if (!isArangoConflict(err) && !isConnectionError(err)) {
+        // Not a conflict and not a connection failure (parse error, auth…) —
+        // a deterministic fault no retry can fix. Surface it: the claim
+        // stays stamped until staleness (the fair pick starves this repo
+        // meanwhile) and ingest_attempts stays +1, so repeated losses can
+        // dead-letter the row via the poison-pill reaper.
+        logger.error('Ingest worker: 429 unclaim failed — ghost claim until staleness', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          error: err.message,
+          error_num: err.errorNum
+        });
+        return;
+      }
+      if (attempt === maxAttempts) {
+        logger.error('Ingest worker: 429 unclaim lost every retry — ghost claim until staleness', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          attempts: maxAttempts,
+          error: err.message,
+          error_num: err.errorNum
+        });
+      } else {
+        logger.warn('Ingest worker: 429 unclaim transient failure — retrying', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          attempt,
+          failure: isArangoConflict(err) ? 'conflict' : 'connection',
+          error: err.message
+        });
+        // Linear + jittered backoff (the db-connection-service idiom:
+        // 500 × attempt), jitter ≤25% so lanes losing against the same bulk
+        // writer do not retry in lockstep.
+        await sleepMs(claimRetryDelayMs(attempt));
+      }
+    }
   }
 }
 
@@ -399,12 +580,20 @@ async function claimNextJobFair(db) {
           RETURN m
       )
       FILTER cand != null
+      // The stamp carries the DB clock; KEEP(NEW, …) puts the exact stamped
+      // value on the job — the 429 unclaim CASes on it.
       UPDATE cand WITH {
         worker_claimed_at: DATE_ISO8601(DATE_NOW()),
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
-        job: MERGE(KEEP(NEW, ${CLAIM_KEEP_FIELDS}), { was_stale_reclaim: cand.worker_claimed_at != null }),
+        // The job carries the POST-stamp claim value (the 429 unclaim
+        // CASes on it): KEEP(NEW, CLAIM_KEEP_FIELDS) projects it from the
+        // stamped row. The FIFO lane mirrors the stamp's RETURN instead (see
+        // claimNextJob).
+        job: MERGE(KEEP(NEW, ${CLAIM_KEEP_FIELDS}), {
+          was_stale_reclaim: cand.worker_claimed_at != null
+        }),
         repo_in_flight: pick.in_flight,
         repo_queue_depth: pick.queue_depth,
         claim_wait_ms: DATE_NOW() - DATE_TIMESTAMP(NEW.updated_at)
@@ -953,12 +1142,18 @@ async function _processOneJob() {
         // claim stamped ingest_attempts+1 but no kick happened, and the
         // poison-pill reaper would dead-letter the row after 8 mere slot-busy
         // bounces.
-        await _unclaimAttempt(db, job.repo_id, conceptId);
+        // Stamp the lane cool-down BEFORE the unclaim: the unclaim retries
+        // can take ~1.5 s — not-yet-started cycles of other lanes must not
+        // keep kicking (each 429 of theirs would spawn its own retry loop)
+        // while this lane releases. Lanes already mid-cycle still complete
+        // their kick — this reduces, not prevents, concurrent retries.
+        const cooldownMs = kick429CooldownMs();
+        _dataprepBusyUntil = Date.now() + cooldownMs;
+        await _unclaimAttempt(db, job.repo_id, conceptId, job.worker_claimed_at);
         logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
           concept_id: conceptId,
-          cooldown_ms: kick429CooldownMs()
+          cooldown_ms: cooldownMs
         });
-        _dataprepBusyUntil = Date.now() + kick429CooldownMs();
         recordJob('busy', job.repo_id);
         return { outcome: 'busy', concept_id: conceptId };
       }
@@ -1649,6 +1844,7 @@ module.exports = {
   _reconcileArmedRepos,
   _refreshRagIngestion,
   _resetLaneCooldown,
+  _unclaimAttempt,
   claimNextJob,
   getBundleFileId,
   jobWindowMs,

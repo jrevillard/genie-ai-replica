@@ -163,6 +163,23 @@ LET lookalikeDocs = (
 RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
 `;
 
+// Renders a rejection value as a short cause string for an operator-facing
+// error line. Errors render as their message; anything else is stringified
+// (guarded, so a circular structure cannot crash the error path itself).
+function causeOf(err) {
+  if (err instanceof Error) {
+    return err.message || String(err);
+  }
+  if (typeof err === 'string') {
+    return err;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Safety gates and run modes
 // ---------------------------------------------------------------------------
@@ -310,16 +327,18 @@ async function runDelete(db, collectionName, husks) {
     '@collection': collectionName,
     keys: husks.map((doc) => doc._key)
   };
-  const causeOf = (err) =>
-    err instanceof Error ? err.message || String(err) : typeof err === 'string' ? err : JSON.stringify(err);
   let removalCursor;
   try {
     removalCursor = await db.query(HUSK_REMOVAL_AQL, bind);
   } catch (err) {
     if (typeof err?.code === 'number' && err.code < 500) {
+      // A 4xx status from ArangoDB means the statement was definitively
+      // rejected and nothing executed. The dry-run directive stays because
+      // the equivalence assumes ARANGO_URL answers directly — an
+      // intermediary that answers in ArangoDB's place voids it.
       console.error(
         `NOTHING was removed — the server rejected the removal statement (HTTP ${err.code}: ${causeOf(err)}). ` +
-          'No change was made; investigate the error before re-running.'
+          'Verify with a dry run: re-run the report to see what remains.'
       );
     } else {
       console.error(
@@ -463,7 +482,7 @@ if (require.main === module) {
   main().catch((err) => {
     // Message + stack, not the whole arangojs response object (it dumps the
     // entire HTTP exchange, which buries the actual cause).
-    console.error('Report failed:', err.message);
+    console.error('Report failed:', causeOf(err));
     if (err.stack) {
       console.error(err.stack);
     }

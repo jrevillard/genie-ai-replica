@@ -275,7 +275,21 @@ describe('main safety wiring', () => {
     expect(message).toContain('HTTP 403');
     expect(message).toContain('not authorized');
     expect(message).not.toContain('may have been removed');
+    expect(message).toContain('dry run');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
+  });
+
+  it('survives a circular non-Error rejection without crashing the error path', async () => {
+    // causeOf renders unknown rejection shapes via JSON.stringify, guarded
+    // so a circular structure cannot throw from INSIDE the catch — that
+    // would replace the honest removal lead with the generic 'Report
+    // failed' line, which says nothing about the destructive outcome.
+    const circular = {};
+    circular.self = circular;
+    const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], removalError: circular });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    expect(stderrText(errorSpy)).toMatch(/^REMOVAL OUTCOME UNKNOWN/);
   });
 
   it('renders a usable cause when the removal query rejects with a non-Error value', async () => {

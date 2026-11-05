@@ -14,6 +14,12 @@ const mockStoreUser = jest.fn();
 const unsubscribeMock = () => jest.fn();
 const mockAddUserLoaded = jest.fn(unsubscribeMock);
 const mockAddSilentRenewError = jest.fn(unsubscribeMock);
+// The REAL User class, evaluated ONCE: the isolation hook's
+// jest.resetModules() re-runs the jest.mock factory before every test, and
+// a requireActual inside the factory would re-evaluate the whole
+// oidc-client-ts library each time. (The `mock` prefix is what lets a
+// jest.mock factory reference a file-scope variable.)
+const mockOidcUser = jest.requireActual('oidc-client-ts').User;
 // A named factory, so the isolation hook can restore it after
 // jest.resetAllMocks() strips every implementation.
 const userManagerMock = () => ({
@@ -37,7 +43,7 @@ jest.mock('oidc-client-ts', () => ({
   // The REAL User class: the adoption path rehydrates the published plain
   // object into a User so storeUser's toStorageString() works (round 23) —
   // mocking it away would hide exactly the bug the fix exists for.
-  User: jest.requireActual('oidc-client-ts').User
+  User: mockOidcUser
 }));
 
 // Mock oidcConfig to avoid window.APP_CONFIG dependency
@@ -519,26 +525,28 @@ describe('keycloakAuthService', () => {
     // module-scoped accessTokenCallbacks set starts empty. Without that, a
     // callback registered by an EARLIER test still fires in this one — the
     // cross-test leak the hook exists to close, and one no other assertion
-    // in this file would catch.
-    let callsFromAnEarlierTest = 0;
-
-    it('registers a callback that a later test must not see', async () => {
+    // in this file would catch. Self-contained on purpose: it re-requires a
+    // second instance inside the test, so it does not depend on the order
+    // jest runs the tests in.
+    it('does not invoke a callback registered by another module instance', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
       await keycloakAuthService.initialize();
 
+      let callsFromTheOtherInstance = 0;
       keycloakAuthService.onAccessTokenUpdated(() => {
-        callsFromAnEarlierTest += 1;
+        callsFromTheOtherInstance += 1;
       });
-    });
 
-    it('does not invoke a callback registered by an earlier test', async () => {
+      // Simulate the NEXT test: a fresh module, its own manager, its own
+      // (empty) callback registry.
+      jest.resetModules();
+      const nextTestService = require('@/services/keycloakAuthService').default;
       mockGetUser.mockResolvedValue(createMockUser());
-      await keycloakAuthService.initialize();
+      await nextTestService.initialize();
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[mockAddUserLoaded.mock.calls.length - 1][0];
+      addUserLoadedCb(createMockUser({ access_token: 'next-test-token' }));
 
-      const addUserLoadedCb = mockAddUserLoaded.mock.calls[0][0];
-      addUserLoadedCb(createMockUser({ access_token: 'fresh-token' }));
-
-      expect(callsFromAnEarlierTest).toBe(0);
+      expect(callsFromTheOtherInstance).toBe(0);
     });
 
     it('should invoke registered callback when addUserLoaded fires', async () => {
@@ -813,27 +821,18 @@ describe('cross-tab renew lease (#80800)', () => {
     // navigator.locks, so signinSilent takes renewViaLease — exactly the
     // engine class the fallback exists for. Pre-fix, this test goes red:
     // the grant runs and mockSigninSilent IS called.
-    // The delete is restored below: it mutates a global, and a later test
-    // that installed navigator.locks must not inherit its absence.
-    const hadLocks = 'locks' in navigator;
-    const savedLocks = navigator.locks;
     delete navigator.locks;
-    try {
-      const holderUser = createMockUser({ access_token: 'lease-holder-token' });
-      // +5s stamp: admissible to the startedAt gate without racing it (the
-      // same CI-flake rationale as the free-lock test below — round 25 moved
-      // it INSIDE the web-locks describe, under this test).
-      window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
-      mockGetUser.mockResolvedValue(null);
-      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
-      const user = await keycloakAuthService.signinSilent();
-      expect(user.access_token).toBe('lease-holder-token'); // adopted
-      expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
-      expect(mockStoreUser).toHaveBeenCalled();
-    } finally {
-      if (hadLocks) navigator.locks = savedLocks;
-      else delete navigator.locks;
-    }
+    const holderUser = createMockUser({ access_token: 'lease-holder-token' });
+    // +5s stamp: admissible to the startedAt gate without racing it (the
+    // same CI-flake rationale as the free-lock test below — round 25 moved
+    // it INSIDE the web-locks describe, under this test).
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
+    mockGetUser.mockResolvedValue(null);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('lease-holder-token'); // adopted
+    expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
+    expect(mockStoreUser).toHaveBeenCalled();
   });
 
   it('logout removes any publication from disk (round 23 retention)', async () => {

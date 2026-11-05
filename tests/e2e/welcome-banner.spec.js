@@ -1460,7 +1460,7 @@ test.describe('Welcome banner invariants', () => {
           expect(shipped.visualOn, `${where} the first reading is not with the layer on`).toBe(true);
           expect(
             shipped.gliOn,
-            `${where} the panel is not inside .genie-living-intelligence, so the layer never applied to it`
+            `${where} the panel is not inside the dashboard wrapper, so the layer never applied to it`
           ).toBe(true);
           const on = await veilGeometry(page);
           const onOwn = await panelOwnership(page);

@@ -627,7 +627,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     const visualOn = await readVisualLayerState(page);
     expect(visualOn.hasOverlay, 'the welcome overlay should be present on /chat').toBe(true);
     expect(visualOn.visualOn, 'data-visual="on" must be set for the wave band to render').toBe(true);
-    expect(visualOn.gliOn, '.genie-living-intelligence must be on <html> or an ancestor').toBe(true);
+    expect(visualOn.gliOn, 'the dashboard wrapper must be an ancestor of the panel').toBe(true);
 
     // (A) — 1920×900 from `beforeEach`. The clamped-band regression
     // was invisible at this width (panel ≈ 1150 px, below the

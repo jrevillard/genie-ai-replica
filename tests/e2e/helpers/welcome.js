@@ -171,9 +171,11 @@ function visualLayerState(doc) {
   const overlay = doc.querySelector('[data-testid="quick-help-overlay"]');
   const html = doc.documentElement;
   const visualOn = html.getAttribute('data-visual') === 'on';
-  // .genie-living-intelligence lives on .dashboard-content, an ancestor
-  // of .quick-help-overlay (DashboardView wraps the ChatBotComponent).
-  const gliOn = overlay ? overlay.closest('.genie-living-intelligence') !== null : false;
+  // The visual layer scopes itself to the dashboard wrapper, an ancestor
+  // of the welcome overlay (DashboardView wraps the ChatBotComponent).
+  // The wrapper declares the handle; the layer's scope class on it is
+  // styling, not an addressable element.
+  const gliOn = overlay ? overlay.closest('[data-test-id="dashboard-content"]') !== null : false;
   return { hasOverlay: !!overlay, visualOn, gliOn };
 }
 

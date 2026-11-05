@@ -291,7 +291,7 @@ test.describe('Welcome panel does not scroll horizontally', () => {
           ).toBe(true);
           expect(
             m.gliOn,
-            '.genie-living-intelligence must be on <html> or an ancestor for the wave layer'
+            'the dashboard wrapper must be an ancestor of the panel for the wave layer'
           ).toBe(true);
 
           // 1. the property that decides whether the panel draws a

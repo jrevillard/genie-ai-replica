@@ -68,6 +68,12 @@ class OidcLoginScreen extends ConsumerWidget {
                   GenieAiConfig.iconPath,
                   height: 80,
                   fit: BoxFit.contain,
+                  // Same graceful degradation as the raster branch: a broken
+                  // icon must not throw during widget build on the login
+                  // screen.
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.error, size: 40, color: tokens.danger);
+                  },
                 )
               : Image.asset(
                   GenieAiConfig.iconPath,

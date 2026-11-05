@@ -10,6 +10,34 @@ change requires manual action from deployers.
 
 ### Breaking Changes
 
+#### Android application id renamed: `com.example.genie_ai_mobile*` → `com.itu.genieai*`
+
+The mobile app's Android `applicationId`/`namespace` were the Flutter template
+identity; they now follow the repo convention `com.itu.genieai[.dev|.staging|.e2e]`
+— the same value as the per-flavour OIDC redirect scheme.
+
+**Impact:** Android treats a different application id as a different app. A
+device with an installed build under the old id cannot be updated in place
+(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), and the locally stored state (the
+encrypted preferences of `flutter_secure_storage`, keyed by application id) is
+unreachable from the new id — every user signs in again.
+
+**Migration:**
+
+```bash
+# Uninstall the old-id app (its local state goes with it).
+adb uninstall com.example.genie_ai_mobile
+
+# Install the new-id build.
+adb install -r build/app/outputs/flutter-apk/app-itu-release.apk
+```
+
+The Keycloak client is unaffected: the redirect scheme was already
+`com.itu.genieai*` before the rename, so `redirectUris` stay as they are. Only
+`webOrigins` entries that named the old package id need the new value
+(`android-app://com.itu.genieai[.<flavor>]`). See the mobile deployment guide,
+Step 4b.
+
 #### Translation language overrides: `LANGUAGE_CODES_FILEPATH` / `LANGUAGE_SCRIPTS_FILEPATH` → `LANGUAGE_REGISTRY_FILEPATH`
 
 The supported translation languages are now read from a single canonical

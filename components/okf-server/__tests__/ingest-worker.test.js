@@ -124,7 +124,6 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
   delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
-  delete process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS; // never leak the 1ms test base
 });
 
 describe('ingestWorker._processOneJob (content-only — claim a parsed meta row → POST to dataprep → wait for the callback)', () => {
@@ -314,11 +313,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
 
   /** Program a busy lane for the 1391 unclaim tests: the claimed fixture row
    * (ingest_attempts/worker_claimed_at are the PRE-stamp values — the worker
-   * mirrors the post-stamp ones onto the job), retract OK, kick 429, 1 ms
-   * retry backoff. Returns the base query impl for tests that override the
-   * unclaim write. */
+   * mirrors the post-stamp ones onto the job), retract OK, kick 429. The
+   * retry backoff is the production constant (no test seam). Returns the
+   * base query impl for tests that override the unclaim write. */
   function setupBusyLane() {
-    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries([
       {
         repo_id: REPO,
@@ -534,7 +532,6 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   });
 
   test('claim stamp connection failure → retried; the claim then proceeds normally', async () => {
-    process.env.OKF_INGEST_CLAIM_RETRY_BACKOFF_MS = '1'; // no wall-time sleeps
     programQueries(
       [{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }],
       [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done
@@ -550,7 +547,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
           err.code = 'ECONNRESET';
           throw err;
         }
-        return { all: async () => ['2026-11-05T00:00:00.000Z'] }; // stamp landed, server value returned
+        // The stamp's contract: { claim, attempts } from RETURN NEW.
+        return {
+          all: async () => [{ claim: STAMPED_CLAIM, attempts: 2 }]
+        };
       }
       return base(q);
     });
@@ -774,8 +774,12 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
     expect(stampCalls).toHaveLength(0);
     // The job carries the POST-stamp claim value (#1391): the 429 unclaim
     // CASes on it, so a job carrying the PRE-stamp value (cand) would make
-    // every unclaim a silent no-op and bring the ghost claim back.
-    expect(fair.query).toContain('NEW.worker_claimed_at');
+    // every unclaim a silent no-op and bring the ghost claim back. The
+    // projection list is a bind value — it must name the claim field (the
+    // fair statement returns NEW, so KEEP projects the stamped row).
+    const fairBinds = Object.values(fair.bindVars || {});
+    const projected = fairBinds.find((v) => Array.isArray(v) && v.includes('worker_claimed_at'));
+    expect(projected).toBeDefined();
   });
 
   test('cap env flows into the query as a bind value', async () => {

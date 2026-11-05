@@ -113,12 +113,13 @@ function isArangoConflict(err) {
  * idempotent statements safe to retry. DELEGATES the shared transient
  * classes (socket codes, 429/502/503/504 response statuses, the abort
  * message regexes) to the in-component home llm-transient-errors.js — one
- * home per transient class — and adds only the DB-side extras. Strict
- * matching, like the rest of this file: the socket codes are matched on
- * err.code, NEVER on a message substring (a message that merely CONTAINS
- * a code word is not evidence of a transport failure). The
- * cross-component lift (db-connection-service._isConnectionError) is
- * tracked in #1550. */
+ * home per transient class — and adds only the DB-side extras. THIS file's
+ * own additions match strictly on err.code / numeric status (a message that
+ * merely contains a code word is not evidence of a transport failure); the
+ * ONE message-regex exception is the shared classifier's own, learned from
+ * the 2026-10-12 stream-abort incident and owned by
+ * llm-transient-errors.js. The cross-component lift
+ * (db-connection-service._isConnectionError) is tracked in #1550. */
 const EXTRA_CONNECTION_CODES = new Set(['ENOTFOUND', 'EHOSTUNREACH', 'EAI_AGAIN']);
 function isConnectionError(err) {
   if (!err) return false;

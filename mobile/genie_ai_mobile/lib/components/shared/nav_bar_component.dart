@@ -65,6 +65,10 @@ class NavBarComponent extends StatelessWidget {
                     ? SvgPicture.asset(
                         GenieAiConfig.iconPath,
                         fit: BoxFit.contain,
+                        // Same graceful degradation as the raster branch: a
+                        // broken icon must not throw during widget build.
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.error),
                       )
                     : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
               ),

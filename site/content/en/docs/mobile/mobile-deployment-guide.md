@@ -26,7 +26,7 @@ Every `<PLACEHOLDER>` in the code blocks below must be substituted before runnin
 export KEYCLOAK_URL="https://keycloak.<your-domain>"
 export KC_MOBILE_CLIENT_ID="genie-mobile-<institution>"
 export KC_MOBILE_REDIRECT_SCHEME="com.<institution>.genieai"
-export APPLICATION_ID="com.example.genie_ai_mobile"
+export APPLICATION_ID="com.itu.genieai"
 export BUNDLE_ID="com.example.genieAiMobile"
 export TEAM_ID="<Apple Developer Team ID>"
 export SHA256_FINGERPRINT="<release-key SHA-256>"
@@ -38,7 +38,7 @@ export SHA256_FINGERPRINT="<release-key SHA-256>"
 | `<institution>` | Your institution short name (lowercase, no spaces) |
 | `<KC_MOBILE_CLIENT_ID>` | The mobile OIDC client ID (defaults to `genie-mobile-<institution>`) |
 | `<KC_MOBILE_REDIRECT_SCHEME>` | Reverse-DNS scheme, e.g. `com.<institution>.genieai` |
-| `<APPLICATION_ID>` | Android `applicationId` from `build.gradle` (e.g. `com.example.genie_ai_mobile`) |
+| `<APPLICATION_ID>` | Android `applicationId` from `build.gradle` (e.g. `com.itu.genieai`) |
 | `<BUNDLE_ID>` | iOS `PRODUCT_BUNDLE_IDENTIFIER` from the XCConfig triplet |
 | `<TEAM_ID>` | Apple Developer Team ID (from [Apple Developer Portal](https://developer.apple.com/account)) |
 | `<SHA256_FINGERPRINT>` | Output of `keytool -list -v -keystore <keystore>` for the release key |
@@ -592,7 +592,7 @@ Host the verification file at `https://<keycloak-domain>/.well-known/assetlinks.
 
 | Placeholder | Value |
 |-------------|-------|
-| `<APPLICATION_ID>` | Android `applicationId` per flavor (e.g. `com.example.genie_ai_mobile`) |
+| `<APPLICATION_ID>` | Android `applicationId` per flavor (e.g. `com.itu.genieai`) |
 | `<SHA256_FINGERPRINT>` | SHA-256 fingerprint of the app signing certificate |
 
 > **IMPORTANT: Debug vs release fingerprints**

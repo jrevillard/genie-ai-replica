@@ -272,7 +272,10 @@ async function claimNextJob(db) {
       // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
       // in-flight on another lane — never double-claim it. A STALE claim
       // (past the drain window) belongs to a dead lane and is reclaimable.
-      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
+      // An EMPTY-STRING claim is no claim at all (the reaper guards the same
+      // shape) — DATE_TIMESTAMP('') is null, which would match NEITHER branch
+      // and block the queue head forever.
+      FILTER m.worker_claimed_at == null OR m.worker_claimed_at == '' OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
       // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
       // not claimable until its next_attempt_after. Inert until the first
       // backoff write (all rows have the field null/absent).
@@ -357,6 +360,20 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
       );
       const rows = await result.all();
       if (rows.length > 0) return rows[0]; // the server-stamped claim + attempt count
+      if (attempt > 1) {
+        // A CAS miss on the RETRY, after attempt 1 failed with a connection
+        // error, is the signature of a LOST ACK: attempt 1 probably committed
+        // and the row now carries THIS lane's stamp that nobody will work.
+        // The claim ages out at the staleness window — surface it (#1551
+        // tracks the lane-owned-token fix that would let the lane adopt it).
+        logger.warn(
+          'Ingest worker: claim stamp CAS missed after a connection failure — possible ghost claim until staleness',
+          {
+            repo_id: repoId,
+            concept_id: conceptId
+          }
+        );
+      }
       // CAS matched nothing — the row moved under us. Deterministic refusal:
       // the claim-read is stale and the row is someone else's. NO retry —
       // the next claim cycle re-reads on a fresh snapshot, and sleeping here
@@ -380,13 +397,23 @@ async function _stampClaim(db, repoId, conceptId, priorClaimedAt) {
       // double stamp. NO sleep: the stamp runs inside the serialized claim
       // chain, and sleeping here parks every other lane's claim (final
       // review). A second blip is left to the next poll cycle.
-      logger.warn('Ingest worker: claim stamp connection failure — retrying once', {
-        repo_id: repoId,
-        concept_id: conceptId,
-        error: err.message
-      });
+      if (attempt < maxAttempts) {
+        logger.warn('Ingest worker: claim stamp connection failure — retrying once', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          error: err.message
+        });
+      } else {
+        logger.warn('Ingest worker: claim stamp lost every retry (claim refused)', {
+          repo_id: repoId,
+          concept_id: conceptId,
+          attempts: maxAttempts,
+          error: err.message
+        });
+      }
     }
   }
+  return null;
 }
 
 /**
@@ -560,11 +587,10 @@ async function claimNextJobFair(db) {
       } IN okf_concepts_meta
       RETURN {
         // The job carries the POST-stamp claim value (#1391 — the 429 unclaim
-        // CASes on it). The fair statement returns NEW, so the value comes
-        // from the stamped row; the FIFO lane mirrors the stamp's RETURN
-        // (see claimNextJob).
+        // CASes on it): KEEP(NEW, CLAIM_KEEP_FIELDS) projects it from the
+        // stamped row. The FIFO lane mirrors the stamp's RETURN instead (see
+        // claimNextJob).
         job: MERGE(KEEP(NEW, ${CLAIM_KEEP_FIELDS}), {
-          worker_claimed_at: NEW.worker_claimed_at,
           was_stale_reclaim: cand.worker_claimed_at != null
         }),
         repo_in_flight: pick.in_flight,

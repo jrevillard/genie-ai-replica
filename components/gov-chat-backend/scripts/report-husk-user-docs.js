@@ -388,7 +388,7 @@ async function runReport(db, gated, total, husks, allDocs) {
     remedy:
       gated.mode === 'delete'
         ? 'these withheld entries are included in the removal below — ' +
-          `raise HUSK_SAMPLE_LIMIT=${husks.length} to list them all in this run's record`
+          `run the dry run (without --delete) beforehand with HUSK_SAMPLE_LIMIT=${husks.length} to see them`
         : undefined,
     format: (doc) =>
       `  husk _key=${quotedKey(doc._key)} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +

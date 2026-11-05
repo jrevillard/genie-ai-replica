@@ -179,6 +179,9 @@ describe('main safety wiring', () => {
     const message = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(message).toContain('removed');
     expect(message).toContain('unknown');
+    // The technical cause stays named: it is what distinguishes an arangojs
+    // drift from a server bug.
+    expect(message).toContain('writesExecuted');
     expect(message).not.toContain('ABORT');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
   });
@@ -205,6 +208,25 @@ describe('main safety wiring', () => {
     expect(underMatched).toHaveLength(50);
     expect(stderr).toContain('... and 10 more over-matched (not listed)');
     expect(stderr).toContain('... and 10 more under-matched (not listed)');
+  });
+
+  it('lists every entry with NO elision line when divergence length equals SAMPLE_LIMIT exactly (boundary pin)', async () => {
+    // Guards the '>' in the elision check: a '>=' drift would print a bogus
+    // '... and 0 more (not listed)' on an exactly-full sample.
+    const extra = Array.from({ length: 50 }, (_, i) => ({
+      ...huskDoc,
+      _key: `extra-${i}`,
+      customSettings: { theme: 'dark' }
+    }));
+    const missed = Array.from({ length: 50 }, (_, i) => ({ ...huskDoc, _key: `missed-${i}` }));
+    const db = fakeDb({ husks: extra, allDocs: [...extra, ...missed] });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    const stderr = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(stderr.split('\n').filter((l) => l.includes('over-matched _key='))).toHaveLength(50);
+    expect(stderr.split('\n').filter((l) => l.includes('under-matched _key='))).toHaveLength(50);
+    expect(stderr).not.toContain('more over-matched');
+    expect(stderr).not.toContain('more under-matched');
   });
 
   it('fails when the database does not exist (a wrong db reads as clean)', async () => {

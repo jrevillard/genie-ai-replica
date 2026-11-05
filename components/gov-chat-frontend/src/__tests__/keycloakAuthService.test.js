@@ -9,6 +9,7 @@ const mockRemoveUser = jest.fn();
 const mockClearStaleState = jest.fn();
 const mockSigninSilent = jest.fn();
 const mockStoreUser = jest.fn();
+const mockEventsLoad = jest.fn();
 // The event handlers return an unsubscribe function; one factory, used both
 // at declaration and when the isolation hook restores it.
 const unsubscribeMock = () => jest.fn();
@@ -32,6 +33,7 @@ const userManagerMock = () => ({
   signinSilent: mockSigninSilent,
   storeUser: mockStoreUser,
   events: {
+    load: mockEventsLoad,
     addUserLoaded: mockAddUserLoaded,
     addSilentRenewError: mockAddSilentRenewError
   }
@@ -864,9 +866,12 @@ describe('cross-tab renew lease (#80800)', () => {
       expect(user.access_token).toBe('soon-expiring-token');
       expect(keycloakAuthService.isAuthenticated()).toBe(true);
       // oidc's expiring/expired timers are one-shot and re-armed only by the
-      // grant's internal load — the adoption re-arms them through the public
-      // manager.getUser() (raiseEvent defaults false).
-      expect(mockGetUser).toHaveBeenCalled();
+      // grant's internal load — the adoption re-arms them from the USER IN
+      // HAND (no store round-trip), raiseEvent false.
+      expect(mockEventsLoad).toHaveBeenCalledWith(
+        expect.objectContaining({ access_token: 'soon-expiring-token' }),
+        false
+      );
       await jest.advanceTimersByTimeAsync(10000);
       // The plain JSON object's `expired` would be undefined — a lie. The
       // rehydrated User computes it from expires_at.
@@ -918,11 +923,12 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(mockSigninRedirect).not.toHaveBeenCalled();
   });
 
-  it('treats an owner-less (old-build) publication as its own: stale stamp → own grant (#1521)', async () => {
+  it('treats an owner-less (old-build) publication as its own → own grant (#1521)', async () => {
     delete navigator.locks;
     // A publication written by an older build carries no tab id — the
-    // conservative reading treats it as this tab's own, so a stale stamp is
-    // inadmissible and this tab renews itself.
+    // conservative reading treats it as this tab's own, so it is
+    // inadmissible and this tab renews itself. (The gate reads ownership,
+    // not recency — the timestamp in the seed is inert.)
     const orphanUser = createMockUser({ access_token: 'orphan-published-token' });
     window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, user: orphanUser }));
     mockGetUser.mockResolvedValue(null);
@@ -934,21 +940,23 @@ describe('cross-tab renew lease (#80800)', () => {
 
   // CLEAR-BEFORE-GRANT (#1521 review): the grant rotates this tab's refresh
   // token away from the one its own publication carries — the publication is
-  // dropped BEFORE the grant so a waiter starting mid-grant finds no stale
-  // handoff. A failed grant must not leave the pre-grant publication behind,
-  // and a foreign tab's publication must survive another tab's grant.
-  it("a FAILED grant clears THIS tab's pre-grant publication — no stale handoff left on disk (#1521 review)", async () => {
+  // withdrawn BEFORE the grant so a waiter starting mid-grant finds no stale
+  // handoff. A grant that fails WITHOUT rotating leaves the withdrawn token
+  // valid, so the handoff is RESTORED; a foreign tab's publication survives
+  // another tab's grant either way.
+  it("a FAILED grant RESTORES this tab's withdrawn publication — the token was never consumed (#1521 review)", async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
     // First renew: our own grant, published under OUR tab id.
     mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'grant-one' }));
     await keycloakAuthService.signinSilent();
     expect(window.localStorage.getItem(USER_KEY)).not.toBeNull();
-    // Second renew fails: its clear-before-grant removed grant-one's
-    // publication, and the failed grant publishes nothing in its place.
-    mockSigninSilent.mockRejectedValueOnce(new Error('grant refused'));
-    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
-    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
+    // Second renew fails on a network error: the grant was never consumed,
+    // so the withdrawn publication goes back on disk for the other tabs.
+    mockSigninSilent.mockRejectedValueOnce(new Error('network blip'));
+    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('network blip');
+    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    expect(entry.user.access_token).toBe('grant-one');
   });
 
   it("another tab's publication SURVIVES this tab's failed grant — it may be another waiter's handoff (#1521 review)", async () => {

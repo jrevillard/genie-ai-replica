@@ -210,8 +210,10 @@ function readPublishedRenew() {
  * directly. TIMER RE-ARM: oidc's expiring/expired timers are ONE-SHOT and
  * re-armed only by the grant's internal _events.load — an adoption would
  * otherwise leave the tab without proactive silent renewal forever (its
- * timer already fired to get here). manager.getUser() is the public path
- * that re-arms them (raiseEvent defaults false — no userLoaded double-fire). */
+ * timer already fired to get here). manager.events.load(user, false) arms
+ * them from the USER IN HAND — no store round-trip, so a swallowed
+ * storeUser failure cannot leave the timers armed from a stale or expired
+ * store user (raiseEvent false — no userLoaded double-fire). */
 async function adoptPublishedUser(manager, user) {
   const rehydrated = new User(user);
   try {
@@ -221,7 +223,7 @@ async function adoptPublishedUser(manager, user) {
   }
   onUserLoaded(rehydrated);
   try {
-    await manager.getUser(); // re-arms oidc's one-shot renew timers
+    await manager.events.load(rehydrated, false); // re-arm oidc's one-shot renew timers
   } catch {
     /* the re-arm is best-effort — the adopted user is already served */
   }
@@ -238,13 +240,30 @@ async function adoptPublishedUser(manager, user) {
  * starting mid-grant finds no handoff, waits under the lock/lease, and
  * adopts the FRESH publication instead of a token being rotated away. Only
  * this tab's own entry — a foreign tab's may be another waiter's only
- * valid handoff. */
+ * valid handoff. RESTORE-ON-FAILURE (#1521 review, loop 4): a grant that
+ * fails WITHOUT rotating (network blip, 5xx) leaves the withdrawn token
+ * valid — put the publication back, or every other tab loses its handoff
+ * for a full TTL and re-grants on already-rotated tokens. Restored only
+ * while the slot is still empty: a newer publication (this tab's own fresh
+ * one, or another tab's) outranks the saved entry. */
 async function runRawGrantAndPublish(manager) {
+  const saved = window.localStorage.getItem(RENEW_USER_KEY);
   clearOwnRenewPublication();
-  const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
-  if (user) currentUser = user;
-  publishRenewedUser(user);
-  return user;
+  try {
+    const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
+    if (user) currentUser = user;
+    publishRenewedUser(user);
+    return user;
+  } catch (error) {
+    try {
+      if (saved && !window.localStorage.getItem(RENEW_USER_KEY)) {
+        window.localStorage.setItem(RENEW_USER_KEY, saved);
+      }
+    } catch {
+      /* best-effort */
+    }
+    throw error;
+  }
 }
 
 /** One non-queueing Web-Lock probe: run `fn` under the lock if free, else

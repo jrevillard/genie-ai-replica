@@ -101,8 +101,9 @@ a *Cloned from* badge when applicable):
     status card with the [Testing Lab](/docs/knowledge-base/testing-lab/)
     (view and test only), and two handoffs — **Open the Editor** in the
     footer and **Open the Dashboard** in the step. The wizard stops here by
-    design; the ritual — submit for approval on the dashboard → an approver
-    accepts → publish from the dashboard or the editor — lives outside it.
+    design; the ritual lives outside it — on the dashboard, the card's one
+    contextual button advances the repository through **Submit for review →
+    Approve → Publish → Ingest** (and, once serving, **Retract**).
 
 The wizard and the editor have **functional parity**: anything the wizard can
 do, the editor can do too, on a live repository.

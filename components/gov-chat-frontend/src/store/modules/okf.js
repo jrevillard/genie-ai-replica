@@ -216,6 +216,12 @@ const getters = {
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
+  // The session latch: the draft endpoint is not available on this server.
+  // ONE degraded state, ONE notice. A repo that is gone (REPO_NOT_FOUND) is
+  // NOT a session state — it is that repo's own outcome, reported to the
+  // caller (the wizard surfaces it); arming the latch for it would push
+  // every OTHER repo's saves to local-only behind a notice nobody can act on.
+  draftsUnavailable: (state) => state.draftsUnavailable === true,
   selection: (state) => state.selection,
   error: (state) => state.error
 };
@@ -234,6 +240,9 @@ const mutations = {
   // hammered once per step change.
   setDraftsUnavailable(state) {
     state.draftsUnavailable = true;
+  },
+  clearDraftsUnavailable(state) {
+    state.draftsUnavailable = false;
   },
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
@@ -344,20 +353,41 @@ const actions = {
    *   { ok: true, draft: null }    the repo exists but has no draft yet, or
    *                                the repo is gone (REPO_NOT_FOUND resolves to
    *                                null in studioService) — NOT an error,
-   *   { ok: false, code: 'NOT_READY' } the endpoint is missing on this server
-   *                                (an older backend); flags the session so
-   *                                later saves do not hammer it.
+   *   { ok: false, code: 'NOT_READY' } the endpoint is not available on this
+   *                                server; flags the session so later saves
+   *                                do not hammer it.
    *
    * draftsUnavailable is set ONLY on a genuine NOT_READY — never on a
    * null draft, which is the normal first-open case.
    */
   async fetchDraft({ commit, state }, { repoId, force = false } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId required' };
-    if (!force && state.drafts[repoId]) {
+    // While the session latch is armed, the CACHED draft proves nothing about
+    // the endpoint: the server may have been upgraded (or the routing gap
+    // that answered 404 closed) since it was fetched. Probe the server
+    // instead — that probe is what recovers the latch, so the cache must not
+    // short-circuit it.
+    const latched = state.draftsUnavailable === true;
+    if (!force && !latched && state.drafts[repoId]) {
       return { ok: true, draft: state.drafts[repoId], cached: true };
     }
     try {
       const draft = await studioService.getDraft(repoId);
+      if (latched) {
+        // The endpoint ANSWERED: the 404 that armed the latch was a routing
+        // gap, not a missing route — recover. A null draft is an answer too
+        // (the repo has no draft yet, or is gone — a REPO_NOT_FOUND 404 still
+        // means the route exists), so the recovery must not sit behind the
+        // null-draft early return.
+        commit('clearDraftsUnavailable');
+        // Keep the LOCAL draft: while the latch was armed, saves went
+        // local-only, so the local copy is the fresher one. The server's
+        // copy predates it and must not overwrite the curator's work.
+        if (state.drafts[repoId]) return { ok: true, draft: state.drafts[repoId] };
+        if (!draft) return { ok: true, draft: null };
+        commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
+        return { ok: true, draft };
+      }
       if (!draft) return { ok: true, draft: null };
       // The wire draft is FLAT — commit it verbatim. A server that echoes a
       // stale/other repo_id would corrupt the map key, so trust the id we asked for.
@@ -365,9 +395,12 @@ const actions = {
       return { ok: true, draft };
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
-        // The endpoint does not exist on this server. Flag the session so
-        // saveDraft stops re-hammering it; the wizard keeps working off the
-        // in-memory draft exactly as it did before Story 10.5.
+        // The endpoint is not available on this server (the server may be
+        // older than this page, or the page older than the server — a 404
+        // alone cannot tell the two apart, so the message stays party-neutral).
+        // Flag the session so saveDraft stops re-hammering it; the wizard
+        // keeps working off the in-memory draft exactly as it did before
+        // Story 10.5.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
       }
@@ -418,9 +451,18 @@ const actions = {
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
         // Only reachable against a server WITHOUT the endpoint — flag it so
-        // the session stops re-hammering a route that does not exist.
+        // the session stops re-hammering a route it cannot reach.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      }
+      if (err && err.code === 'REPO_NOT_FOUND') {
+        // Definitive answer (typed by studioService's classifier — the ONE
+        // owner of what a 404 means): THIS repo is gone. It must NOT arm
+        // the session latch — that would push every OTHER repo's saves to
+        // local-only behind a notice that blames a version mismatch. The
+        // local draft stays (committed above); the caller surfaces the
+        // repo-scoped outcome.
+        return { ok: false, code: 'REPO_NOT_FOUND', message: err.message };
       }
       return {
         ok: false,

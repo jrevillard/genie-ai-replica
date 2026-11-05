@@ -122,6 +122,76 @@ describe('okf/saveDraft — wizard idempotency', () => {
     expect(store.state.okf.draftsUnavailable).toBe(true);
   });
 
+  it('#1056: a successful server round-trip clears a latch armed by a transient failure', async () => {
+    // A save fired while the server answered 404 (a routing gap) arms the
+    // latch for the session; the next round-trip proves the endpoint
+    // answers and must recover it instead of silencing saves until a full
+    // reload. The recovery needs NO force flag: while the latch is armed,
+    // the cache is bypassed and the server is probed.
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('NOT_READY'), { code: 'NOT_READY' }));
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(store.state.okf.draftsUnavailable).toBe(true);
+    // the fetch probes the server (the cached draft does not short-circuit it)
+    studioService.getDraft.mockResolvedValueOnce({ studio_step: 3 });
+    await store.dispatch('okf/fetchDraft', { repoId: 'r1' });
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+    expect(studioService.getDraft).toHaveBeenCalled();
+  });
+
+  it('#1056: the recovery hydrates the store when the curator has no local copy', async () => {
+    // The wizard resumes from the STORE's draft map, not from the action's
+    // return value: a recovery that returned the server's draft without
+    // committing it would leave the wizard on the permissive fallback.
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('NOT_READY'), { code: 'NOT_READY' }));
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(store.getters['okf/draftsUnavailable']).toBe(true);
+    // drop the local copy the failed save left behind — the curator has
+    // nothing in the browser, only the server's draft
+    store.commit('okf/clearDraft', 'r1');
+    studioService.getDraft.mockResolvedValueOnce({ repo_id: 'r1', studio_step: 7 });
+    const res = await store.dispatch('okf/fetchDraft', { repoId: 'r1' });
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+    expect(res.draft.studio_step).toBe(7);
+    expect(store.getters['okf/activeDraft']('r1').studio_step).toBe(7);
+  });
+
+  it('#1056: a 200-with-null also clears the latch — a null draft is an answer', async () => {
+    // The repo exists but has no draft yet: the route answered, so the
+    // endpoint exists. The recovery must not sit behind the null-draft
+    // early return.
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('NOT_READY'), { code: 'NOT_READY' }));
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(store.getters['okf/draftsUnavailable']).toBe(true);
+    studioService.getDraft.mockResolvedValueOnce(null);
+    await store.dispatch('okf/fetchDraft', { repoId: 'r1' });
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+  });
+
+  it('#1056: a repo deleted under the curator never arms the SESSION latch', async () => {
+    // The typed shape studioService's classifier throws (the store switches on code).
+    studioService.saveDraft.mockRejectedValue(
+      Object.assign(new Error('REPO_NOT_FOUND'), { code: 'REPO_NOT_FOUND', status: 404 })
+    );
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    store.commit('okf/upsertRepo', { repo_id: 'r2', lifecycle_state: 'draft' });
+    const first = await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    // the outcome is repo-scoped: the caller (the wizard) surfaces it
+    expect(first.code).toBe('REPO_NOT_FOUND');
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+    // ...and ANOTHER repo saves normally
+    studioService.saveDraft.mockResolvedValueOnce({});
+    const other = await store.dispatch('okf/saveDraft', { repoId: 'r2', draft: { ...DRAFT } });
+    expect(other.ok).toBe(true);
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+  });
+
   it('rejects a missing repoId/draft before touching the network', async () => {
     const store = buildStore();
     const res = await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: null });

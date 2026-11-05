@@ -172,7 +172,10 @@ describe('T4 — autocorrect step', () => {
 describe('T5 — handoff step (D4)', () => {
   it('names the ritual explicitly and never publishes from the wizard', () => {
     const wrapper = mountStep(OkfStepPublish);
-    expect(wrapper.text()).toContain('submit it for approval on the dashboard');
+    // #1068: the hint no longer enumerates the lifecycle actions (it
+    // contradicted the ritual line right below it) — the RITUAL names the
+    // four steps, the hint says where they happen.
+    expect(wrapper.text()).toContain('the lifecycle runs on the dashboard and in the editor');
     expect(wrapper.text()).toContain('The wizard stops here by design');
     // no publish affordance anywhere
     const buttons = wrapper

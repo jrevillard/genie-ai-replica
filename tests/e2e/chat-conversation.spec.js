@@ -552,7 +552,9 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.
     await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
-    await page.locator('[aria-label="Settings"]').locator('visible=true').first().click();
+    // The Settings entry twice over (mobile + desktop nav); either
+    // mounted instance is the one the click reaches.
+    await page.locator('[data-test-id^="nav-icon-btn-settings"]').locator('visible=true').first().click();
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
     // Release the stream while the chat view is unmounted: the store
     // must keep consuming it.

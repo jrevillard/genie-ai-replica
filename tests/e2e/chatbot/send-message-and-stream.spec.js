@@ -49,10 +49,11 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
 
-    // Verify the chat is in a stable state after the done event: the app
-    // renders a spinner only while a bot answer is still empty, and the
-    // class the old assertion used is not in the app at all.
-    await expect(page.locator('[data-testid="streaming-indicator"]')).toHaveCount(0);
+    // The turn's completion is already asserted twice above — content in
+    // the bubble, and the store's streaming flag cleared (the poll in
+    // waitForBotResponse). The streaming indicator renders only while the
+    // answer is empty, so it is structurally gone once content exists; an
+    // explicit "no spinner" count here could never fail.
 
     // Verify chat window contains both user and bot messages in correct order
     const messages = await getMessages(page);

@@ -33,10 +33,15 @@ const MIGRATED_FILES = [
   'tests/e2e/capture-dashboard.js'
 ];
 
-// Locator-style APIs a class selector can travel through. A selector
-// built in a variable and passed indirectly escapes this net — in the
-// converted files every locator call takes its selector literally.
-const LOCATOR_CALL = /(?:locator|querySelector|querySelectorAll|waitForSelector|\$\$?)\(\s*/;
+// Locator-style APIs a class selector can travel through: the locator
+// object, the DOM queries, the wait, the page-level $ shorthands, and
+// the action APIs whose FIRST argument is always a selector (click,
+// hover, check, ...). `fill`/`press`/`type` are deliberately absent —
+// on a locator their argument is input text, not a selector, and a
+// '.md' filename would false-positive. A selector built in a variable
+// and passed indirectly escapes this net — in the converted files every
+// locator call takes its selector literally.
+const LOCATOR_CALL = /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?)\(\s*/;
 
 // Inside a locator argument the string IS a CSS selector, so every
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —

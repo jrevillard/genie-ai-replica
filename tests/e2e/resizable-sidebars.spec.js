@@ -28,7 +28,19 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
 const { readVisualLayerState } = require('./helpers/welcome');
-const { waitForWidthSettled } = require('./helpers/layout');
+// The panel and handle selectors are the shared layout constants — one
+// definition in helpers/layout.js, re-used by every sidebar spec.
+const {
+  waitForWidthSettled,
+  SIDEBAR_LEFT: LEFT,
+  SIDEBAR_RIGHT: RIGHT,
+  SIDEBAR_HANDLE_LEFT: LEFT_HANDLE,
+  SIDEBAR_HANDLE_RIGHT: RIGHT_HANDLE,
+  SIDEBAR_HANDLE_BUTTON_LEFT: LEFT_HANDLE_BUTTON,
+  SIDEBAR_HANDLE_BUTTON_RIGHT: RIGHT_HANDLE_BUTTON,
+  QUICK_HELP_GRID_ITEM
+} = require('./helpers/layout');
+
 
 // The centre's usable minimum, from the quick-help grid's own
 // arithmetic: two cards of 217 px plus one 32 px gap = 466 px, so 480
@@ -49,16 +61,9 @@ const CENTRE_MIN_WIDTH = 480;
 // SIDEBAR_INFLOW_MIN_WIDTH in the layout module.
 const IN_FLOW_MIN_WIDTH = 1400;
 
-const LEFT = '[data-testid="side-bar"]';
-const RIGHT = '[data-testid="sidebar"]';
-const LEFT_HANDLE = '[data-testid="sidebar-handle-left"]';
-const RIGHT_HANDLE = '[data-testid="sidebar-handle-right"]';
-const LEFT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-left"]';
-const RIGHT_HANDLE_BUTTON = '[data-testid="sidebar-handle-button-right"]';
-
 async function gotoChatbot(page) {
   await navigateToChatbot(page);
-  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+  await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
 }
 
 // The same invariant responsive-layout.spec.js derives: column count
@@ -157,7 +162,7 @@ async function seedAndReload(page, widths) {
     localStorage.removeItem('sidebarOpenRight');
   }, widths);
   await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+  await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
   // The restore path renders the seeded widths through the 0.3 s
   // transition; the caller measures the layout, so it must wait out.
   await waitForWidthSettled(page, [LEFT, RIGHT]);
@@ -373,7 +378,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'false');
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
     const m = await measure(page);
@@ -983,7 +988,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // from storage does not.
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     // The restore path renders through the 0.3 s transition; the
     // clamp assertions below read the settled geometry.
     await waitForWidthSettled(page, [LEFT, RIGHT]);
@@ -1017,7 +1022,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // the user chose.
     await page.setViewportSize({ width: 2400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
     expect(
       (await measure(page)).left.width,

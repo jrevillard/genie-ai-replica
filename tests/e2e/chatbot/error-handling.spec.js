@@ -3,6 +3,8 @@ const {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
+  waitForBotResponse,
+  getLastBotMessage,
   BASE_URL,
 } = require('../helpers/chatbot');
 
@@ -65,8 +67,12 @@ test.describe('RAG error handling', () => {
     // Remove the intercept so subsequent requests go through normally
     await page.unroute('**/api/queries/stream');
 
-    // Send another message — should work now (retry probe)
+    // Send another message — should work now (retry probe). The
+    // probe is only a probe if the retry actually ANSWERS: a second
+    // turn that silently fails must fail this test too.
     await sendMessage(page, 'Second attempt should work');
+    await waitForBotResponse(page, { timeout: 120000 });
+    expect(await getLastBotMessage(page), 'the retry must produce an answer').not.toBe('');
 
     // Verify the input is still functional
     await expect(textarea).toBeVisible({ timeout: 5000 });

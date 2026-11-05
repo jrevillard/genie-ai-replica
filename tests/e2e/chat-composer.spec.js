@@ -46,6 +46,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const { openWelcomeScreen } = require('./helpers/welcome');
+const { QUICK_HELP_GRID_ITEM } = require('./helpers/layout');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
@@ -240,14 +241,14 @@ test.describe('grid after placement extraction', () => {
   test('grid holds eight tiles; just-chat is not among them', async ({ browser }) => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     // The Living Intelligence entrance animation mounts the tiles over
     // ~650 ms — the count assertion waits out the whole entrance.
-    await expect(page.locator('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]')).toHaveCount(8);
+    await expect(page.locator(QUICK_HELP_GRID_ITEM)).toHaveCount(8);
 
     // The "just chat" string is the entry's localised title. A tile that
     // still carries it would mean the placement filter bypassed the grid.
-    const tiles = page.locator('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]');
+    const tiles = page.locator(QUICK_HELP_GRID_ITEM);
     const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
     const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
     expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(false);

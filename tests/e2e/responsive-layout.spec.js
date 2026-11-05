@@ -43,7 +43,14 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('./helpers/welcome');
-const { waitForWidthSettled } = require('./helpers/layout');
+const {
+  waitForWidthSettled,
+  SIDEBAR_LEFT,
+  SIDEBAR_RIGHT,
+  QUICK_HELP_GRID,
+  QUICK_HELP_ITEM,
+  QUICK_HELP_GRID_ITEM
+} = require('./helpers/layout');
 
 // 217 - 20 = 197 px. See the report for why this is the floor rather
 // than the unreachable target.
@@ -51,7 +58,7 @@ const CARD_MIN = 197;
 
 async function gotoChatbot(page) {
   await navigateToChatbot(page);
-  await page.waitForSelector('[data-testid="quick-help-grid"] [data-testid="quick-help-item"]', { timeout: 15000 });
+  await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
 }
 
 // The sidebar widths animate over a 0.3 s transition and the layout
@@ -89,7 +96,7 @@ async function measureLayout(page) {
       const m = /^([\d.]+)px$/.exec(raw.trim());
       return m ? parseFloat(m[1]) : NaN;
     };
-    const grid = document.querySelector('[data-testid="quick-help-grid"]');
+    const grid = document.querySelector(QUICK_HELP_GRID);
     const root = document.documentElement;
     const gridStyle = grid ? window.getComputedStyle(grid) : null;
     const rootStyle = window.getComputedStyle(root);
@@ -102,10 +109,10 @@ async function measureLayout(page) {
   const layout = await page.evaluate(() => {
     const wrap = document.querySelector('[data-test-id="main-container"]');
     const centre = document.querySelector('[data-test-id="chatbot-container"]');
-    const left = document.querySelector('[data-testid="side-bar"]');
-    const right = document.querySelector('[data-testid="sidebar"]');
-    const grid = document.querySelector('[data-testid="quick-help-grid"]');
-    const items = grid ? Array.from(grid.querySelectorAll('[data-testid="quick-help-item"]')) : [];
+    const left = document.querySelector(SIDEBAR_LEFT);
+    const right = document.querySelector(SIDEBAR_RIGHT);
+    const grid = document.querySelector(QUICK_HELP_GRID);
+    const items = grid ? Array.from(grid.querySelectorAll(QUICK_HELP_ITEM)) : [];
     const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
     const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
     const lr = left && left.getBoundingClientRect();
@@ -179,8 +186,8 @@ test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
       // The sidebar widths settle through the 0.3s transition and the
       // Vue-driven position reflow; the read below must see the final
       // geometry, so wait until both panels' widths hold steady.
-      await waitForWidthSettled(page, '[data-testid="side-bar"]');
-      await waitForWidthSettled(page, '[data-testid="sidebar"]');
+      await waitForWidthSettled(page, SIDEBAR_LEFT);
+      await waitForWidthSettled(page, SIDEBAR_RIGHT);
 
       const m = await measureLayout(page);
 

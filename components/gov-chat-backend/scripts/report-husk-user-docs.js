@@ -161,27 +161,33 @@ RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLi
 `;
 
 // ---------------------------------------------------------------------------
-// Main
+// Safety gates and run modes
 // ---------------------------------------------------------------------------
 
-async function main() {
-  // Resolved here, not at module scope: dotenv loads the repo-root .env when
-  // the script runs, so a module-scope read would miss ARANGO_COLLECTION.
-  const COLLECTION = process.env.ARANGO_COLLECTION || 'users';
-  const ARANGO_URL = process.env.ARANGO_URL || 'http://localhost:8529';
-  const doDelete = process.argv.includes('--delete');
-  const doConfirm = process.argv.includes('--yes');
+/**
+ * Parses the CLI arguments and the operator gates. Pure: reads only its
+ * parameters. On a failed gate it prints the reason to stderr, sets
+ * process.exitCode and returns null; when every gate passes it returns the
+ * run configuration { mode: 'report' | 'delete', collection, arangoUrl }.
+ * Exported for tests (issue #1494).
+ * @param {string[]} argv
+ * @param {Object} env
+ * @returns {Object|null}
+ */
+function parseAndGateArgs(argv, env) {
+  const doDelete = argv.includes('--delete');
+  const doConfirm = argv.includes('--yes');
 
   if (doDelete && !doConfirm) {
     console.error('--delete requires --yes: re-run with `--delete --yes` after reviewing the dry-run output.');
     process.exitCode = 1;
-    return;
+    return null;
   }
 
-  if (!process.env.ARANGO_PASSWORD) {
+  if (!env.ARANGO_PASSWORD) {
     console.error('ARANGO_PASSWORD is required (from the shell or a .env at the repo root).');
     process.exitCode = 1;
-    return;
+    return null;
   }
 
   // No default database name: the app's database differs per deployment
@@ -189,21 +195,152 @@ async function main() {
   // wrong-but-existing database reports "0 husks" with exit code 0 — the
   // operator cannot tell "this environment is clean" from "this is the wrong
   // database". So the operator must name it, and it must exist.
-  if (!process.env.ARANGO_DB) {
+  if (!env.ARANGO_DB) {
     console.error(
       'ARANGO_DB is required (the database the app uses — e.g. genie-ai in docker-compose ' +
         'deployments, node-services elsewhere). No default: a wrong database reports 0 husks.'
     );
     process.exitCode = 1;
-    return;
+    return null;
   }
 
-  const db = new Database({
+  return {
+    mode: doDelete ? 'delete' : 'report',
+    collection: env.ARANGO_COLLECTION || 'users',
+    arangoUrl: env.ARANGO_URL || 'http://localhost:8529'
+  };
+}
+
+/**
+ * The report body: the field census over the whole collection, the match
+ * listing and — in report mode only — the legacy-lookalike context query and
+ * the dry-run closing line. A --delete run has already been through a
+ * reviewed dry run and needs nothing from the lookalikes.
+ */
+async function runReport(db, gated, total, husks, allDocs) {
+  let lookalikeCount = 0;
+  let lookalikes = [];
+  if (gated.mode === 'report') {
+    const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
+      '@collection': gated.collection,
+      sampleLimit: SAMPLE_LIMIT
+    });
+    const lookalikeResult = (await lookalikeCursor.next()) || {};
+    lookalikeCount = lookalikeResult.count || 0;
+    lookalikes = lookalikeResult.sample || [];
+  }
+
+  const fieldCounts = new Map();
+  for (const doc of allDocs) {
+    for (const key of Object.keys(doc)) {
+      if (!fieldCounts.has(key)) {
+        fieldCounts.set(key, 0);
+      }
+      fieldCounts.set(key, fieldCounts.get(key) + 1);
+    }
+  }
+  const unexpectedFields = [...fieldCounts.entries()]
+    .filter(([key]) => !HUSK_SYSTEM_FIELDS.includes(key) && !HUSK_ALLOWED_FIELDS.includes(key))
+    .sort((a, b) => b[1] - a[1]);
+
+  console.log('--- Husk user-document report (READ ONLY unless --delete) ---');
+  console.log(`Arango URL:    ${gated.arangoUrl}`);
+  console.log(`Database:      ${db.name}`);
+  console.log(`Collection:    ${gated.collection}`);
+  console.log(`Total docs:    ${total}`);
+  console.log(`Husk matches:  ${husks.length}`);
+  for (const doc of husks.slice(0, SAMPLE_LIMIT)) {
+    console.log(
+      `  husk _key=${doc._key} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
+        `attributes=${JSON.stringify(Object.keys(doc).sort())}`
+    );
+  }
+  if (husks.length > SAMPLE_LIMIT) {
+    console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
+  }
+  if (unexpectedFields.length > 0) {
+    console.log('Fields present outside the husk signature (not husks, never deleted):');
+    for (const [key, count] of unexpectedFields) {
+      console.log(`  field ${key}: ${count} document(s)`);
+    }
+  }
+  if (gated.mode === 'delete') {
+    console.log('Legacy lookalikes: not measured in --delete mode.');
+  } else {
+    console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
+    for (const doc of lookalikes) {
+      console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
+    }
+    if (lookalikeCount > lookalikes.length) {
+      console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
+    }
+    console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
+  }
+}
+
+/**
+ * The destructive tail — reached only with --delete --yes, after the
+ * predicate cross-check in main() has passed for every match. One bulk
+ * statement that RE-ASSERTS the husk signature, so a document concurrently
+ * disqualified between the SELECT and the REMOVE (e.g. a GDPR soft-delete
+ * writing deleted:true) is left alone; a mid-way failure cannot leave an
+ * ambiguous partial state.
+ */
+async function runDelete(db, gated, husks) {
+  console.log(`--delete given: removing ${husks.length} husk documents...`);
+  const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
+    '@collection': gated.collection,
+    keys: husks.map((doc) => doc._key)
+  });
+  // The removal re-asserts the signature, so docs disqualified since the
+  // SELECT are skipped server-side — report what actually executed, not the
+  // selection size. If the stats are missing, say so and fail rather than
+  // claim success: on a destructive path the honest answer is "unknown".
+  const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
+  if (typeof writesExecuted !== 'number') {
+    console.error(
+      'ABORT: the removal result carried no writesExecuted stats — the actual ' +
+        'number of removed documents is unknown. Re-run the dry run to verify.'
+    );
+    process.exitCode = 1;
+    return;
+  }
+  console.log(
+    `Done. ${writesExecuted} of ${husks.length} selected documents removed.` +
+      (writesExecuted < husks.length
+        ? ` ${husks.length - writesExecuted} were NOT removed — the reason is not observable ` +
+          'from this run (the removal re-checks the signature at removal time); re-run the dry run to see what remains.'
+        : '')
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+/**
+ * CLI entry point. Injectable for tests (issue #1494): argv, env and the
+ * Database factory can all be passed in, so the gate wiring and the
+ * divergence-before-remove ordering run against a fake db.
+ * @param {{argv?: string[], env?: Object, createDatabase?: Function}} deps
+ */
+async function main({
+  argv = process.argv,
+  env = process.env,
+  createDatabase = (config) => new Database(config)
+} = {}) {
+  const gated = parseAndGateArgs(argv, env);
+  if (!gated) {
+    return;
+  }
+  const { mode, collection: COLLECTION, arangoUrl: ARANGO_URL } = gated;
+
+  const db = createDatabase({
     url: ARANGO_URL,
-    databaseName: process.env.ARANGO_DB || 'genie-ai',
+    databaseName: env.ARANGO_DB,
     auth: {
-      username: process.env.ARANGO_USER || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      username: env.ARANGO_USER || 'root',
+      password: env.ARANGO_PASSWORD || ''
     }
   });
   if (!(await db.exists())) {
@@ -254,106 +391,11 @@ async function main() {
     return;
   }
 
-  // Field census over the whole collection: any field outside the signature's
-  // allowlist, with its count. The operator sees shape surprises the signature
-  // cannot know about (a field every document carries, a new issuer's field),
-  // instead of a bare "N husks" that cannot explain itself.
-  const fieldCounts = new Map();
-  for (const doc of allDocs) {
-    for (const key of Object.keys(doc)) {
-      if (!fieldCounts.has(key)) {
-        fieldCounts.set(key, 0);
-      }
-      fieldCounts.set(key, fieldCounts.get(key) + 1);
-    }
-  }
-  const unexpectedFields = [...fieldCounts.entries()]
-    .filter(([key]) => !HUSK_SYSTEM_FIELDS.includes(key) && !HUSK_ALLOWED_FIELDS.includes(key))
-    .sort((a, b) => b[1] - a[1]);
-
-  let lookalikeCount = 0;
-  let lookalikes = [];
-  if (!doDelete) {
-    // Context for the dry-run report only — a --delete run has already been
-    // through a reviewed dry run and needs nothing from these lookalikes.
-    const lookalikeCursor = await db.query(LEGACY_LOOKALIKE_AQL, {
-      '@collection': COLLECTION,
-      sampleLimit: SAMPLE_LIMIT
-    });
-    const lookalikeResult = (await lookalikeCursor.next()) || {};
-    lookalikeCount = lookalikeResult.count || 0;
-    lookalikes = lookalikeResult.sample || [];
-  }
-
-  console.log('--- Husk user-document report (READ ONLY unless --delete) ---');
-  console.log(`Arango URL:    ${ARANGO_URL}`);
-  console.log(`Database:      ${db.name}`);
-  console.log(`Collection:    ${COLLECTION}`);
-  console.log(`Total docs:    ${total}`);
-  console.log(`Husk matches:  ${husks.length}`);
-  for (const doc of husks.slice(0, SAMPLE_LIMIT)) {
-    console.log(
-      `  husk _key=${doc._key} createdAt=${doc.createdAt || '?'} updatedAt=${doc.updatedAt || '?'} ` +
-        `attributes=${JSON.stringify(Object.keys(doc).sort())}`
-    );
-  }
-  if (husks.length > SAMPLE_LIMIT) {
-    console.log(`  ... and ${husks.length - SAMPLE_LIMIT} more (not listed)`);
-  }
-  if (unexpectedFields.length > 0) {
-    console.log('Fields present outside the husk signature (not husks, never deleted):');
-    for (const [key, count] of unexpectedFields) {
-      console.log(`  field ${key}: ${count} document(s)`);
-    }
-  }
-  if (doDelete) {
-    console.log('Legacy lookalikes: not measured in --delete mode.');
-  } else {
-    console.log(`Legacy lookalikes (identity-less but WITH email — NOT husks, never deleted): ${lookalikeCount}`);
-    for (const doc of lookalikes) {
-      console.log(`  lookalike _key=${doc._key} createdAt=${doc.createdAt || '?'}`);
-    }
-    if (lookalikeCount > lookalikes.length) {
-      console.log(`  ... and ${lookalikeCount - lookalikes.length} more (not listed)`);
-    }
-  }
-
-  if (!doDelete) {
-    console.log('Dry run — nothing was deleted. Re-run with --delete to remove the matches.');
+  if (mode === 'report') {
+    await runReport(db, gated, total, husks, allDocs);
     return;
   }
-
-  // Destructive path — reached only with --delete --yes, after the predicate
-  // cross-check above has passed for every match. One bulk statement that
-  // RE-ASSERTS the husk signature, so a document concurrently disqualified
-  // between the SELECT and the REMOVE (e.g. a GDPR soft-delete writing
-  // deleted:true) is left alone; a mid-way failure cannot leave an ambiguous
-  // partial state.
-  console.log(`--delete given: removing ${husks.length} husk documents...`);
-  const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
-    '@collection': COLLECTION,
-    keys: husks.map((doc) => doc._key)
-  });
-  // The removal re-asserts the signature, so docs disqualified since the
-  // SELECT are skipped server-side — report what actually executed, not the
-  // selection size. If the stats are missing, say so and fail rather than
-  // claim success: on a destructive path the honest answer is "unknown".
-  const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
-  if (typeof writesExecuted !== 'number') {
-    console.error(
-      'ABORT: the removal result carried no writesExecuted stats — the actual ' +
-        'number of removed documents is unknown. Re-run the dry run to verify.'
-    );
-    process.exitCode = 1;
-    return;
-  }
-  console.log(
-    `Done. ${writesExecuted} of ${husks.length} selected documents removed.` +
-      (writesExecuted < husks.length
-        ? ` ${husks.length - writesExecuted} were NOT removed — the reason is not observable ` +
-          'from this run (the removal re-checks the signature at removal time); re-run the dry run to see what remains.'
-        : '')
-  );
+  await runDelete(db, gated, husks);
 }
 
 if (require.main === module) {
@@ -374,6 +416,8 @@ if (require.main === module) {
 module.exports = {
   isHuskDoc,
   compareSignatureSets,
+  parseAndGateArgs,
+  main,
   HUSK_IDENTITY_FIELDS,
   HUSK_SYSTEM_FIELDS,
   HUSK_ALLOWED_FIELDS,

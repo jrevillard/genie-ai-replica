@@ -73,6 +73,17 @@ function createMockUser(overrides = {}) {
 describe('keycloakAuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // The cross-tab renew protocol keeps its state in window.localStorage:
+    // the holder PUBLISHES the user it minted under RENEW_USER_KEY, and the
+    // NEXT renew in this tab reads that publication FIRST (the adoption gate
+    // is `entry.at >= startedAt`). The publish survives the test that wrote
+    // it, so without this wipe the next test's renew adopts the PREVIOUS
+    // test's published user instead of running its own grant — and a test
+    // that asserts "the grant yielded null" sees the previous test's token
+    // instead. Same-millisecond renews are the racing case: the gate's
+    // millisecond resolution lets a publication stamped in the same tick
+    // as the renew's start pass. #1518 (CI-only flake).
+    window.localStorage.clear();
   });
 
   describe('initialize', () => {

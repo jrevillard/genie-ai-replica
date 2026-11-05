@@ -82,7 +82,8 @@ function dictionaryForTopics(headers, grid, maxColumns = 30) {
  * @param {object} meta {file_id, file_name, baseResource}
  * @param {object} [opts]
  * @param {Function} [opts.deriveTopics] injectable topic summariser (tests);
- *        defaults to the remote-endpoint LLM call, which fails soft.
+ *        defaults to the remote-endpoint LLM call, which degrades on engine
+ *        failure and raises on a closed opt-in.
  * @returns {Promise<{concepts: Array<{path, frontmatter, body}>,
  *          sheets: Array<{name, rows, groups}>, topics: object}>}
  * @throws Error with `.code` when the CSV is unreadable or empty.
@@ -155,8 +156,9 @@ async function convertCsv(buffer, meta, opts = {}) {
   }
 
   // TOPICS (David 2026-10-12: "tabular markdown data WITH topics"). One call
-  // per file against the REMOTE endpoint; it degrades rather than fails — see
-  // csvTopicsService for the fail-soft contract.
+  // per file against the REMOTE endpoint. Engine failures degrade; a CLOSED
+  // opt-in RAISES (the closed-gate error), and the catch below keeps the
+  // import landing while recording the degradation (#1228).
   const dictionary = dictionaryForTopics(built.headers, grid);
   const derive = opts.deriveTopics || csvTopics.deriveTopics;
   let topics;

@@ -333,10 +333,11 @@ describe('csvTopicsService — response handling', () => {
   });
 
   it('NEVER calls the LLM when VLLM_ENDPOINT is unset, and says so LOUDLY', async () => {
-    // #1228: a closed gate is a misconfiguration, and the other legs say so
-    // loudly (curation, topic-link raise `llm-not-configured`). The CSV leg
-    // used to answer with a silent filename slug — one misconfiguration, two
-    // different answers.
+    // #1228: a closed gate is a misconfiguration, and the sibling legs raise
+    // the same `llm-not-configured` error for it (curation, topic-link — each
+    // catches its own raise and records a count). The CSV leg used to answer
+    // with a silent filename slug and left no trace — one misconfiguration,
+    // two different answers.
     delete process.env.VLLM_ENDPOINT;
     const called = jest.fn();
     jest.doMock('../services/frontmatter-service', () => ({ vllmChatCompletions: called }));

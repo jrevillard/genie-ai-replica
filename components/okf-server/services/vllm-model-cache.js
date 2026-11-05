@@ -583,7 +583,7 @@ function optedInVllmBase() {
 /** The identity every leg matches on when the deployment opt-in is CLOSED
  * (no endpoint). ONE owner, so the legs cannot drift apart: curation,
  * topic-link and the CSV topics leg raise the SAME error for the same
- * misconfiguration, instead of one throwing and another degrading silently.
+ * misconfiguration, and each caller decides what to record about it.
  * The message is the code — the legs have always matched on it. */
 const LLM_NOT_CONFIGURED = 'llm-not-configured';
 

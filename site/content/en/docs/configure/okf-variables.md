@@ -302,10 +302,10 @@ to heuristics).
 
 With `VLLM_ENDPOINT` unset, the legs that follow the deployment opt-in are
 OFF: topic links, CSV topics and the manifest summary. A **named model
-configuration** (the Studio's *Models* tab) does not enable them — it serves
-the services its own checkboxes name — so the tab warns when a configuration
-is active while the opt-in is closed, and `VLLM_ENDPOINT` is what turns those
-legs on.
+configuration** (the Admin Dashboard's *Models* tab) does not enable them —
+it serves the services its own checkboxes name — so the tab warns when a
+configuration is active while the opt-in is closed, and `VLLM_ENDPOINT` is
+what turns those legs on.
 
 An import whose CSV topics leg degraded is recorded rather than silent: the
 conversion report's per-file entry carries the topic source and a warning,

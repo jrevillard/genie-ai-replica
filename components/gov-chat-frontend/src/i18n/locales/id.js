@@ -753,7 +753,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal eCitizen',
-    taxFiling: 'Sistem Pelaporan Pajak',
     idApplication: 'Aplikasi KTP',
     businessReg: 'Pendaftaran Usaha',
     drivingLicense: 'Surat Izin Mengemudi'

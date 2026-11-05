@@ -749,7 +749,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen Portal',
-    taxFiling: 'Tax Filing System',
     idApplication: 'ID Application',
     businessReg: 'Business Registration',
     drivingLicense: 'Driving License'

@@ -348,12 +348,12 @@ class LogsService {
    * as a typed `VlUnavailableError` (503 `vl_unreachable`) so
    * the route layer renders the standard `{error, message}` envelope.
    *
-   * Note on pagination: VictoriaLogs' `/_internal/logsql/query` endpoint
-   * accepts only a `limit` parameter — there is **no native offset**. The
-   * adapter passes `limit = limit + offset` (the "window") and this
-   * method then slices `[offset, offset + limit)` client-side. Wide
-   * ranges therefore download the full window every call; an explicit
-   * `q` filter and a tight window are how we keep the payload bounded.
+   * Note on pagination: this method downloads a `limit + offset` window
+   * and slices `[offset, offset + limit)` client-side, although the
+   * adapter also exposes VL's native `offset` arg (see #1541 for
+   * switching this method over). Wide ranges therefore download the
+   * full window every call; an explicit `q` filter and a tight window
+   * are how we keep the payload bounded.
    *
    * Envelope shape — reviewers will reject future drift from this contract:
    * ```

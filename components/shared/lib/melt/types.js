@@ -26,6 +26,9 @@
  *              builds date windows upstream.
  *  - `end`    : ISO 8601 upper bound (exclusive). Same string form.
  *  - `limit`  : Optional max row count. Adapter defaults when omitted.
+ *  - `offset` : Optional number of matching rows to skip (VL's own
+ *               pagination arg — skips the rows with the biggest
+ *               `_time` values on the selected range).
  *  - `fields` : Optional whitelist of fields to project server-side.
  *
  * @typedef {Object} LogQuery
@@ -33,6 +36,7 @@
  * @property {string} start     ISO 8601 lower bound (inclusive).
  * @property {string} end       ISO 8601 upper bound (exclusive).
  * @property {number} [limit]   Optional max rows to return.
+ * @property {number} [offset]  Optional number of matching rows to skip.
  * @property {string[]} [fields] Optional field whitelist for projection.
  */
 

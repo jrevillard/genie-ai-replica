@@ -348,10 +348,11 @@ processors:
   # so the admin panel + Grafana dashboards can filter by it directly
   # without re-parsing the JSON envelope client-side.
   #
-  # Idempotent: only writes when severity_text is unset or `Unspecified`
-  # (the OTel SDK default for fluentd-sourced rows), so records that
-  # already carry a proper severity — from the OTel SDK `otlp` receiver —
-  # keep their original value.
+  # Idempotent: only writes when severity_text is unset (the fluentd
+  # receivers leave it empty; "Unspecified" is what VL renders from
+  # severity_number 0 at export time, downstream of this transform), so
+  # records that already carry a proper severity — from the OTel SDK
+  # `otlp` receiver — keep their original value.
   #
   # Also extracts the `service` field from the Winston JSON envelope
   # (when present) and stamps `service.name` ONLY if the resource
@@ -391,10 +392,19 @@ processors:
           # never sees an empty result on plain-text bodies (nginx
           # access logs, ClamAV banners) — without that guard, every
           # non-matching line logged a "key not found in map" warn under
-          # error_mode: ignore.
-          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
-          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
-          - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+          # error_mode: ignore. All three also require severity_text to
+          # be unset — a record that already carries a real severity is
+          # never restamped, so reprocessing the same record twice
+          # leaves the same severity_text both times (the guard the
+          # block comment above promises). The upstream getter returns
+          # the record's SeverityText() string, so unset is normally the
+          # empty string; the nil clause is belt-and-braces for a
+          # nil-valued representation (OTTL compares string-vs-nil as
+          # plain false, never an error), so the stamp cannot be
+          # silently disabled by a representation change.
+          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where (severity_text == "" or severity_text == nil) and IsString(body) and Substring(body, 0, 1) == "{"'
+          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where (severity_text == "" or severity_text == nil) and IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
+          - 'set(severity_text, ToUpperCase(body["level"])) where (severity_text == "" or severity_text == nil) and IsMap(body) and IsString(body["level"])'
           # Normalise Winston JSON envelopes: replace `body` with the inner
           # `.message` field so VictoriaLogs `_msg` carries the human-readable
           # log line instead of the JSON envelope. Without this transform the

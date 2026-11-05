@@ -747,7 +747,6 @@ export default {
   },
   services: {
     eCitizen: 'بوابة eCitizen',
-    taxFiling: 'نظام تقديم الضرائب',
     idApplication: 'طلب الهوية',
     businessReg: 'تسجيل الأعمال',
     drivingLicense: 'رخصة القيادة'

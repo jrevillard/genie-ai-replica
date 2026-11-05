@@ -747,7 +747,6 @@ export default {
   },
   services: {
     eCitizen: 'พอร์ทัล eCitizen',
-    taxFiling: 'ระบบยื่นภาษี',
     idApplication: 'การสมัคร ID',
     businessReg: 'การจดทะเบียนธุรกิจ',
     drivingLicense: 'ใบขับขี่'

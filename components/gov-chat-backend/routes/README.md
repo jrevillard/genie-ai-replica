@@ -81,7 +81,7 @@ graph TD
     A[Client] -->|HTTP Requests| B[Express Router]
     B --> C[Authentication Middleware]
     C -->|Authenticated| D[Route Handlers]
-    
+
     D --> E[Admin Routes]
     D --> F[Analytics Routes]
     D --> G[Auth Routes]
@@ -146,35 +146,38 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/admin`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/system-health` | Retrieve system health metrics |
-| GET | `/database/stats` | Get database statistics |
-| GET | `/logs` | Retrieve system logs with filtering |
-| GET | `/user-stats` | Get user statistics |
-| GET | `/security-metrics` | Retrieve security metrics |
-| POST | `/security-scan` | Run a security scan |
-| GET | `/security/last-scan` | Get details of the last security scan |
-| POST | `/diagnostics` | Run system diagnostics |
-| GET | `/logs/summary` | Get logs summary by type and service |
-| GET | `/logs/search` | Search logs with filtering |
-| GET | `/logs/debug-yesterday` | Retrieve debug logs for yesterday |
-| POST | `/database-operations/backup` | Backup database |
-| POST | `/database-operations/optimize` | Optimize database |
-| GET | `/users/search` | Search users with filtering |
+| Method | Endpoint                        | Description                           |
+| ------ | ------------------------------- | ------------------------------------- |
+| GET    | `/system-health`                | Retrieve system health metrics        |
+| GET    | `/database/stats`               | Get database statistics               |
+| GET    | `/logs`                         | Retrieve system logs with filtering   |
+| GET    | `/user-stats`                   | Get user statistics                   |
+| GET    | `/security-metrics`             | Retrieve security metrics             |
+| POST   | `/security-scan`                | Run a security scan                   |
+| GET    | `/security/last-scan`           | Get details of the last security scan |
+| POST   | `/diagnostics`                  | Run system diagnostics                |
+| GET    | `/logs/summary`                 | Get logs summary by type and service  |
+| GET    | `/logs/search`                  | Search logs with filtering            |
+| GET    | `/logs/debug-yesterday`         | Retrieve debug logs for yesterday     |
+| POST   | `/database-operations/backup`   | Backup database                       |
+| POST   | `/database-operations/optimize` | Optimize database                     |
+| GET    | `/users/search`                 | Search users with filtering           |
 
 #### Key Parameters
+
 - `limit`, `offset`: Pagination for logs and user searches.
 - `level`, `service`: Filter logs by level (INFO, WARNING, ERROR) or service name.
 - `term`, `field`: Search criteria for logs and users.
 - `date`, `dateRange`, `startDate`, `endDate`: Filter logs by date or range.
 
 #### Services Called
+
 - **Admin Service**: Handles system health, database stats, user stats, diagnostics, and database operations.
 - **Security Scan Service**: Manages security scans and metrics.
 - **Logs Service**: Retrieves log summaries and performs searches.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - All routes require admin privileges (`keycloakAuthMiddleware.requireAdmin`).
 - Security scan endpoints interact with `securityScanService` to monitor failed login attempts and suspicious activities.
@@ -183,18 +186,19 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/analytics`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/dashboard` | Get dashboard analytics within a date range |
-| GET | `/metric/:metric` | Get specific metric data (e.g., totalQueries, uniqueUsers) |
-| GET | `/timeseries/:metricType` | Get time series data for a metric |
-| POST | `/events` | Track a user event for analytics |
-| GET | `/records` | Get raw analytics records with pagination |
-| GET | `/events` | Get raw event records with pagination |
-| GET | `/satisfaction/gauge` | Get satisfaction gauge data |
-| GET | `/satisfaction/heatmap` | Get satisfaction heatmap data |
+| Method | Endpoint                  | Description                                                |
+| ------ | ------------------------- | ---------------------------------------------------------- |
+| GET    | `/dashboard`              | Get dashboard analytics within a date range                |
+| GET    | `/metric/:metric`         | Get specific metric data (e.g., totalQueries, uniqueUsers) |
+| GET    | `/timeseries/:metricType` | Get time series data for a metric                          |
+| POST   | `/events`                 | Track a user event for analytics                           |
+| GET    | `/records`                | Get raw analytics records with pagination                  |
+| GET    | `/events`                 | Get raw event records with pagination                      |
+| GET    | `/satisfaction/gauge`     | Get satisfaction gauge data                                |
+| GET    | `/satisfaction/heatmap`   | Get satisfaction heatmap data                              |
 
 #### Key Parameters
+
 - `startDate`, `endDate`: Define the analysis period (ISO format).
 - `metricType`: Type of metric (e.g., queries, users).
 - `interval`: Time grouping (hourly, daily, weekly, monthly).
@@ -202,9 +206,11 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - `filters`: JSON string for additional filtering criteria.
 
 #### Services Called
+
 - **Analytics Service**: Handles all analytics data retrieval and event tracking, interacting with the database to store and query analytics and event records.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - No admin privileges required, allowing authenticated users to access analytics.
 
@@ -212,52 +218,55 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/auth`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/logout` | Invalidate user session |
-| GET | `/me` | Get current user information |
+| Method | Endpoint  | Description                  |
+| ------ | --------- | ---------------------------- |
+| POST   | `/logout` | Invalidate user session      |
+| GET    | `/me`     | Get current user information |
 
 #### Services Called
+
 - **Auth Service**: Manages user authentication via Keycloak OIDC.
 - **Auth Controller**: Handles business logic for authentication routes.
 
 #### Security
+
 - All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`).
 
 ### Chat History Routes
 
 **Base Path**: `/api/chat`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/conversations` | Get user conversations with pagination |
-| GET | `/conversations/:conversationId` | Get conversation details |
-| POST | `/conversations` | Create a new conversation |
-| PATCH | `/conversations/:conversationId` | Update conversation properties |
-| DELETE | `/conversations/:conversationId` | Delete a conversation |
-| GET | `/conversations/:conversationId/messages` | Get conversation messages |
-| POST | `/conversations/:conversationId/messages` | Add message to conversation |
-| POST | `/conversations/:conversationId/messages/read` | Mark messages as read |
-| GET | `/query/:queryId/messages` | Get messages for a query |
-| GET | `/messages/:messageId/query` | Get originating query for a message |
-| POST | `/query/:queryId/conversation` | Create conversation from query |
-| GET | `/search` | Search conversations |
-| GET | `/recent` | Get recent conversations |
-| GET | `/stats` | Get conversation statistics |
-| GET | `/folders` | Get user folders |
-| POST | `/folders` | Create a new folder |
-| GET | `/folders/:folderId` | Get folder details |
-| PATCH | `/folders/:folderId` | Update folder properties |
-| DELETE | `/folders/:folderId` | Delete a folder |
-| GET | `/folders/search` | Search folders |
-| POST | `/folders/reorder` | Reorder folders |
-| GET | `/folders/:folderId/path` | Get folder path |
-| POST | `/folders/:folderId/conversations/:conversationId` | Add conversation to folder |
-| DELETE | `/folders/:folderId/conversations/:conversationId` | Remove conversation from folder |
-| GET | `/conversations/:conversationId/folder` | Get conversation's folder |
-| POST | `/conversations/:conversationId/move` | Move conversation between folders |
+| Method | Endpoint                                           | Description                            |
+| ------ | -------------------------------------------------- | -------------------------------------- |
+| GET    | `/conversations`                                   | Get user conversations with pagination |
+| GET    | `/conversations/:conversationId`                   | Get conversation details               |
+| POST   | `/conversations`                                   | Create a new conversation              |
+| PATCH  | `/conversations/:conversationId`                   | Update conversation properties         |
+| DELETE | `/conversations/:conversationId`                   | Delete a conversation                  |
+| GET    | `/conversations/:conversationId/messages`          | Get conversation messages              |
+| POST   | `/conversations/:conversationId/messages`          | Add message to conversation            |
+| POST   | `/conversations/:conversationId/messages/read`     | Mark messages as read                  |
+| GET    | `/query/:queryId/messages`                         | Get messages for a query               |
+| GET    | `/messages/:messageId/query`                       | Get originating query for a message    |
+| POST   | `/query/:queryId/conversation`                     | Create conversation from query         |
+| GET    | `/search`                                          | Search conversations                   |
+| GET    | `/recent`                                          | Get recent conversations               |
+| GET    | `/stats`                                           | Get conversation statistics            |
+| GET    | `/folders`                                         | Get user folders                       |
+| POST   | `/folders`                                         | Create a new folder                    |
+| GET    | `/folders/:folderId`                               | Get folder details                     |
+| PATCH  | `/folders/:folderId`                               | Update folder properties               |
+| DELETE | `/folders/:folderId`                               | Delete a folder                        |
+| GET    | `/folders/search`                                  | Search folders                         |
+| POST   | `/folders/reorder`                                 | Reorder folders                        |
+| GET    | `/folders/:folderId/path`                          | Get folder path                        |
+| POST   | `/folders/:folderId/conversations/:conversationId` | Add conversation to folder             |
+| DELETE | `/folders/:folderId/conversations/:conversationId` | Remove conversation from folder        |
+| GET    | `/conversations/:conversationId/folder`            | Get conversation's folder              |
+| POST   | `/conversations/:conversationId/move`              | Move conversation between folders      |
 
 #### Key Parameters
+
 - `userId` (`iss_sub`): OIDC composite key (`${iss}#${sub}`) extracted from JWT for identity and logging.
 - `userKey` (`_key`): ArangoDB document key extracted from JWT for database operations (document handles, edge `_from`/`_to` references).
 - `conversationId`, `folderId`, `queryId`, `messageId`: Identifiers for specific resources.
@@ -267,9 +276,11 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - `format`: Export format (pdf, json).
 
 #### Services Called
+
 - **Chat History Service**: Manages conversations, messages, folders, and their relationships, including CRUD operations and linking queries to conversations.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - User ID extraction ensures operations are restricted to the authenticated user’s data.
 - Conversation and folder operations validate ownership and permissions.
@@ -278,18 +289,21 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/database`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/backup` | Backup database |
-| POST | `/optimize` | Optimize database |
+| Method | Endpoint    | Description       |
+| ------ | ----------- | ----------------- |
+| POST   | `/backup`   | Backup database   |
+| POST   | `/optimize` | Optimize database |
 
 #### Key Parameters
+
 - None (operations are system-wide).
 
 #### Services Called
+
 - **Database Service**: Performs database maintenance tasks like backups and optimization.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - Typically restricted to admin users (assumed to be enforced in the route or service layer).
 
@@ -297,19 +311,20 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/queries`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/` | Create a new query |
-| GET | `/:queryId` | Get query by ID |
-| POST | `/:queryId/feedback` | Add feedback to a query |
-| PATCH/PUT | `/:queryId/answered` | Mark a query as answered |
-| GET | `/` | Search queries with criteria |
-| PATCH | `/:queryId/responsetime` | Update query response time |
-| GET | `/:queryId/conversations` | Get conversations for a query |
-| POST | `/:queryId/conversation` | Create conversation from query |
-| POST | `/:queryId/link/:messageId` | Link query to message |
+| Method    | Endpoint                    | Description                    |
+| --------- | --------------------------- | ------------------------------ |
+| POST      | `/`                         | Create a new query             |
+| GET       | `/:queryId`                 | Get query by ID                |
+| POST      | `/:queryId/feedback`        | Add feedback to a query        |
+| PATCH/PUT | `/:queryId/answered`        | Mark a query as answered       |
+| GET       | `/`                         | Search queries with criteria   |
+| PATCH     | `/:queryId/responsetime`    | Update query response time     |
+| GET       | `/:queryId/conversations`   | Get conversations for a query  |
+| POST      | `/:queryId/conversation`    | Create conversation from query |
+| POST      | `/:queryId/link/:messageId` | Link query to message          |
 
 #### Key Parameters
+
 - `userId`, `text`: Required for creating queries.
 - `queryId`, `messageId`: Identifiers for specific resources.
 - `responseTime`: Time in milliseconds for query response.
@@ -318,9 +333,11 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - `categoryId`, `serviceId`, `isAnswered`, `startDate`, `endDate`: Search criteria.
 
 #### Services Called
+
 - **Query Service**: Manages query creation, retrieval, feedback, and linking to conversations and messages.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - User-specific operations validate `userId` to ensure data access restrictions.
 
@@ -328,22 +345,23 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/service-categories`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/categories` | Get all categories with services |
-| GET | `/categories/detailed` | Get all categories with detailed services for admin |
-| GET | `/categories/:categoryId` | Get a specific category with services |
-| GET | `/:categoryId/translations` | Get all translations for a category |
-| GET | `/services/:serviceId/translations` | Get all translations for a service |
-| GET | `/search` | Search categories and services |
-| POST | `/` | Create a new category |
-| POST | `/:categoryId/services` | Create a new service for a category |
-| PUT | `/:categoryId` | Update an existing category |
-| PUT | `/services/:serviceId` | Update an existing service |
-| DELETE | `/:categoryId` | Delete a category |
-| DELETE | `/services/:serviceId` | Delete a service |
+| Method | Endpoint                            | Description                                         |
+| ------ | ----------------------------------- | --------------------------------------------------- |
+| GET    | `/categories`                       | Get all categories with services                    |
+| GET    | `/categories/detailed`              | Get all categories with detailed services for admin |
+| GET    | `/categories/:categoryId`           | Get a specific category with services               |
+| GET    | `/:categoryId/translations`         | Get all translations for a category                 |
+| GET    | `/services/:serviceId/translations` | Get all translations for a service                  |
+| GET    | `/search`                           | Search categories and services                      |
+| POST   | `/`                                 | Create a new category                               |
+| POST   | `/:categoryId/services`             | Create a new service for a category                 |
+| PUT    | `/:categoryId`                      | Update an existing category                         |
+| PUT    | `/services/:serviceId`              | Update an existing service                          |
+| DELETE | `/:categoryId`                      | Delete a category                                   |
+| DELETE | `/services/:serviceId`              | Delete a service                                    |
 
 #### Key Parameters
+
 - `locale`: Language code (e.g., en, fr, sw) for localized content.
 - `categoryId`: Unique identifier for a category.
 - `serviceId`: Unique identifier for a service.
@@ -352,52 +370,56 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - `translations`: Array of `{ languageCode, translation }` — the locale names written with the entity.
 
 #### Services Called
+
 - **Service Category Service**: Manages category and service data, including CRUD operations and search.
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 
 ### Service Routes
 
-**Base Path**: `/api/services`
+**Base Path**: `/api/services` — DEPRECATED (#442)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/categories` | Get all categories with services |
-| GET | `/categories/:categoryId` | Get a specific category with services |
-| GET | `/search` | Search categories and services |
+The three GET routes are **301 redirects** to their canonical
+`/api/service-categories` counterparts (see Service Category Routes):
+the duplicate handlers were removed, existing clients and the Kong
+`/api/services` route keep working through the redirects, and the query
+string is preserved. New clients call the canonical prefix.
 
-#### Key Parameters
-- `locale`: Language code for localized content.
-- `categoryId`: Unique identifier for a category.
-- `query`: Search string for services.
-
-#### Services Called
-- **Service Category Service**: Shared with service category routes for managing category and service data.
+| Method | Endpoint                  | Redirects to                                     |
+| ------ | ------------------------- | ------------------------------------------------ |
+| GET    | `/categories`             | `/api/service-categories/categories`             |
+| GET    | `/categories/:categoryId` | `/api/service-categories/categories/:categoryId` |
+| GET    | `/search`                 | `/api/service-categories/search`                 |
 
 #### Security
+
 - All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 
 ### User Routes
 
 **Base Path**: `/api/me`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Get current user profile (resolved from JWT) |
-| PUT | `/` | Update current user profile |
-| GET | `/context` | Get user context for AI enrichment |
-| POST | `/reset-data` | Reset user profile data while preserving account |
+| Method | Endpoint      | Description                                      |
+| ------ | ------------- | ------------------------------------------------ |
+| GET    | `/`           | Get current user profile (resolved from JWT)     |
+| PUT    | `/`           | Update current user profile                      |
+| GET    | `/context`    | Get user context for AI enrichment               |
+| POST   | `/reset-data` | Reset user profile data while preserving account |
 
 #### Key Parameters
+
 - `data`, `files`: Profile data and optional file uploads for profile update.
 - User is resolved from JWT: `req.user.iss_sub` for identity/logging, `req.user._key` for ArangoDB document operations — no userId path parameter.
 
 #### Services Called
+
 - **User Service**: Manages user profile retrieval and updates.
 - **Keycloak Proxy Service**: Forwards JIT fields (email, name) to Keycloak Account API.
 
 #### Security
+
 - All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`).
 - The `/api/me` singleton is inherently self-scoped — no IDOR check needed.
 - File uploads are limited to 10MB and stored in memory using `multer`.
@@ -406,18 +428,21 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 **Base Path**: `/api/weather`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/` | Get weather data for a specified location |
+| Method | Endpoint | Description                               |
+| ------ | -------- | ----------------------------------------- |
+| POST   | `/`      | Get weather data for a specified location |
 
 #### Key Parameters
+
 - `latitude`, `longitude`: Coordinates for the location (optional, defaults to server location).
 - `userId` (`iss_sub`): ID of the user requesting weather data, extracted from JWT.
 
 #### Services Called
+
 - **Weather Service**: Retrieves current weather and forecast data, storing user-specific weather requests in the database.
 
 #### Security
+
 - Requires JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - Validates latitude (-90 to 90) and longitude (-180 to 180) to ensure valid coordinates.
 
@@ -432,6 +457,7 @@ All routes follow a consistent error handling approach:
 5. **500 Server Error**: Unexpected errors during processing.
 
 Error responses are formatted consistently:
+
 ```json
 {
   "message": "Error message details"

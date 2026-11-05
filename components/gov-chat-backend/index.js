@@ -960,10 +960,14 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      // The public base is nginx's, which this process does not know — a
-      // localhost URL in the logs is unreachable in every deployed topology
-      // (only nginx 80/443 is exposed). API_URL, when set, is that base.
-      const docsBase = (process.env.API_URL || '').replace(/\/+$/, '');
+      // Log the docs path the served spec itself advertises (the relative
+      // default resolves against the page origin, so a bare path is the
+      // honest form; a localhost URL would be unreachable in every deployed
+      // topology — only nginx 80/443 is exposed). Reading the value from
+      // swaggerSpec pins the log to the served server entry — the two
+      // cannot drift apart.
+      const specServerUrl = swaggerSpec?.servers?.[0]?.url;
+      const docsBase = specServerUrl && specServerUrl !== '/' ? specServerUrl.replace(/\/+$/, '') : '';
       logger.info(`API Documentation available at: ${docsBase}/api-docs`);
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)

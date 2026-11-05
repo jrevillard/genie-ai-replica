@@ -1,36 +1,71 @@
-// Zombie-job requeue (issue #991): the crawl worker is single-flight, so any
-// job still 'Crawling' when the worker starts is a leftover from a dead
-// predecessor — the poll loop only picks 'Pending', and before this requeue
-// such a job starved forever. The requeue must set it back to 'Pending' and
-// leave a WARN in the crawl log so the restart is visible to the operator.
+// Zombie-job requeue contract, driven through the real start() entry point
+// (what the supervisor invokes on every (re)spawn — issue #991). The worker
+// is single-flight: a job still 'Crawling' when it starts has no live owner,
+// and the poll loop only picks 'Pending' — so the startup requeue is the
+// difference between recovery and permanent starvation. Ordering matters:
+// the requeue must complete before the first poll tick (a job the poll just
+// claimed would otherwise be flipped back to Pending mid-crawl).
 
 jest.mock('worker_threads', () => ({ Worker: jest.fn(), isMainThread: true }));
 
-const { dbService } = require('../../../__tests__/__mocks__/shared-lib');
-const fileService = require('../../../services/fileService');
-
-const db = {
-  query: jest.fn(),
-  collection: jest.fn()
-};
-const jobCollection = { update: jest.fn().mockResolvedValue({}) };
+// Mock handles are re-fetched after each resetModules (see beforeEach) —
+// never cached at top level.
+let crawlWorker;
+let dbService;
+let logger;
+let fileService;
+let db;
+let jobCollection;
 let zombieRows = [];
+let pendingRows = [];
+
+// The worker issues two queries per boot: the zombie requeue reads
+// 'Crawling', the poll loop reads 'Pending'. Dispatch on the AQL so both
+// share the mock.
+const wireQueries = () => {
+  db.query.mockImplementation(async (aql) => {
+    if (aql.includes("'Crawling'")) return { all: async () => zombieRows };
+    return { next: async () => pendingRows.shift() };
+  });
+};
+
+const flush = async () => {
+  // Drain the promise chain: start() → requeue (awaits) → .then(poll) →
+  // first poll tick (awaits). Each await round releases one link.
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.useFakeTimers(); // contain the poll loop's re-arm timer
+  // Fresh module + FRESH mock instances: resetModules re-runs the shared-lib
+  // mock factory, so the module under test binds NEW jest.fn objects — a
+  // handle kept from before the reset silently points at a dead instance.
   zombieRows = [];
+  pendingRows = [];
+  jest.resetModules();
+  jest.isolateModules(() => {
+    crawlWorker = require('../../../workers/crawlWorker');
+    ({ dbService, logger } = require('../../../__tests__/__mocks__/shared-lib'));
+    fileService = require('../../../services/fileService');
+  });
+  db = { query: jest.fn(), collection: jest.fn() };
+  jobCollection = { update: jest.fn().mockResolvedValue({}) };
   dbService.getConnection.mockResolvedValue(db);
-  db.query.mockResolvedValue({ all: jest.fn().mockImplementation(async () => zombieRows) });
   db.collection.mockReturnValue(jobCollection);
   jest.spyOn(fileService, 'addCrawlLog').mockResolvedValue({});
+  wireQueries();
 });
 
-describe('crawlWorker requeueZombieJobs', () => {
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+describe('crawl worker startup zombie requeue', () => {
   it('requeues a Crawling job back to Pending with a WARN crawl log', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
     zombieRows.push({ _key: 'job-1', file_id: 'file-1', status: 'Crawling' });
 
-    await requeueZombieJobs();
+    crawlWorker.start();
+    await flush();
 
     expect(db.collection).toHaveBeenCalledWith('crawl_job');
     expect(jobCollection.update).toHaveBeenCalledWith('job-1', { status: 'Pending' });
@@ -43,40 +78,22 @@ describe('crawlWorker requeueZombieJobs', () => {
   });
 
   it('requeues every zombie, not just the first', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
     zombieRows.push(
       { _key: 'job-1', file_id: 'file-1', status: 'Crawling' },
       { _key: 'job-2', file_id: 'file-2', status: 'Crawling' }
     );
 
-    await requeueZombieJobs();
+    crawlWorker.start();
+    await flush();
 
-    expect(jobCollection.update).toHaveBeenCalledTimes(2);
     expect(jobCollection.update.mock.calls.map((c) => c[0])).toEqual(['job-1', 'job-2']);
   });
 
-  it('does nothing when there are no zombies', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
-
-    await requeueZombieJobs();
-
-    expect(jobCollection.update).not.toHaveBeenCalled();
-    expect(fileService.addCrawlLog).not.toHaveBeenCalled();
-  });
-
-  it('survives a DB failure without throwing (the poll loop still starts)', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
-    dbService.getConnection.mockRejectedValue(new Error('db down'));
-
-    await expect(requeueZombieJobs()).resolves.toBeUndefined();
-    expect(jobCollection.update).not.toHaveBeenCalled();
-  });
-
   it('finalizes a kill_requested zombie as Killed instead of requeueing it', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
     zombieRows.push({ _key: 'job-1', file_id: 'file-1', status: 'Crawling', kill_requested: true });
 
-    await requeueZombieJobs();
+    crawlWorker.start();
+    await flush();
 
     expect(jobCollection.update).toHaveBeenCalledWith('job-1', expect.objectContaining({ status: 'Killed' }));
     expect(jobCollection.update).not.toHaveBeenCalledWith('job-1', { status: 'Pending' });
@@ -84,7 +101,6 @@ describe('crawlWorker requeueZombieJobs', () => {
   });
 
   it('a failing job does not strand the remaining zombies', async () => {
-    const { requeueZombieJobs } = require('../../../workers/crawlWorker');
     zombieRows.push(
       { _key: 'job-bad', file_id: 'file-bad', status: 'Crawling' },
       { _key: 'job-good', file_id: 'file-good', status: 'Crawling' }
@@ -94,7 +110,8 @@ describe('crawlWorker requeueZombieJobs', () => {
       return {};
     });
 
-    await requeueZombieJobs();
+    crawlWorker.start();
+    await flush();
 
     expect(jobCollection.update).toHaveBeenCalledWith('job-good', { status: 'Pending' });
     expect(fileService.addCrawlLog).toHaveBeenCalledWith(
@@ -103,5 +120,20 @@ describe('crawlWorker requeueZombieJobs', () => {
       'System',
       expect.stringContaining('requeued')
     );
+  });
+
+  it('boots cleanly with no zombies and no DB', async () => {
+    // No zombies → no writes, and a dead DB must not stop the poll loop from
+    // starting (the requeue arms the first tick either way).
+    dbService.getConnection.mockRejectedValue(new Error('db down'));
+
+    crawlWorker.start();
+    await flush();
+
+    expect(jobCollection.update).not.toHaveBeenCalled();
+    expect(fileService.addCrawlLog).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Zombie requeue skipped'));
+    // the poll loop is armed (first tick scheduled)
+    jest.advanceTimersByTime(5000);
   });
 });

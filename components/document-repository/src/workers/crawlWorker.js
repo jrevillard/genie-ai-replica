@@ -452,4 +452,4 @@ if (!isMainThread) {
   start();
 }
 
-module.exports = { start, requeueZombieJobs };
+module.exports = { start };

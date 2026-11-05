@@ -10,8 +10,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3001',
-        description: 'Development server'
+        // RELATIVE base: swagger-ui resolves it against the origin the
+        // docs are served from, so Try-it-out is same-origin in every
+        // topology and needs no per-deployment configuration.
+        url: '/',
+        description: 'API server base'
       }
     ],
     components: {

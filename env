@@ -651,15 +651,11 @@ HUGGING_FACE_HUB_TOKEN=
 # Override for production deployment.
 
 # Absolute base URL of the public API, used by the OpenAPI spec's server entry
-# (backend swagger-definition.js, document-repository swaggerConfig.js).
-# Unset (default) = the spec carries a RELATIVE server URL ('/'), which
-# swagger-ui resolves against the origin the docs page is served from —
-# Try-it-out then works in dev AND through the gateway.
-# Set this only when external tooling needs an absolute base; NO /api suffix
-# (the annotated paths already carry it).
-# Note: an Ansible/Swarm deployment renders its .env from env.j2, not from
-# this template — there the equivalent knob is the `api_url` group variable
-# (deploy/ansible/README.md).
+# (backend, document-repository). Unset (default) = a RELATIVE server URL,
+# which swagger-ui resolves against the origin the docs page is served from.
+# Set only when external tooling needs an absolute base; NO /api suffix.
+# Note: Ansible/Swarm renders its .env from env.j2 — there the equivalent
+# knob is the `api_url` group variable (deploy/ansible/README.md).
 # Used by: backend, document-repository
 # API_URL=https://your-domain.com
 

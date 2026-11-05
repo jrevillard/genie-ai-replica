@@ -382,15 +382,6 @@ describe('Swagger Configuration', () => {
       });
     });
 
-    it('the server entry is labelled after what it points at, not as a dev server', () => {
-      withApiUrl(undefined, ({ swaggerOptions }) => {
-        expect(swaggerOptions.definition.servers[0].description).toBe('Same-origin server');
-      });
-      withApiUrl('https://gov.example.com', ({ swaggerOptions }) => {
-        expect(swaggerOptions.definition.servers[0].description).toBe('Configured API base');
-      });
-    });
-
     it('a custom API_URL is used verbatim as the suffix-free server base', () => {
       withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
         const url = swaggerOptions.definition.servers[0].url;
@@ -403,27 +394,22 @@ describe('Swagger Configuration', () => {
       });
     });
 
-    it('server URL joined with an annotated path resolves to a single /api segment', () => {
+    it('every annotated path starts with /api (Try-it-out keeps the prefix for any server base)', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         const spec = buildSpecWithRealFs(swaggerOptions);
 
         // A route the app actually serves, as declared in query-routes.js.
         const annotatedPath = '/api/queries/{queryId}/responsetime';
         expect(spec.paths).toHaveProperty(annotatedPath);
-        // The other half of the join invariant below: every annotated path
-        // starts with /api. An annotation without the prefix (a natural
-        // copy of the router's own mount-relative path) would make
-        // Try-it-out drop /api for that route.
+        // swagger-ui's Try-it-out executes servers[0].url + path, so every
+        // annotated path must carry the /api prefix itself. An annotation
+        // without it (a natural copy of the router's own mount-relative
+        // path) would make Try-it-out drop /api for that route. The join
+        // invariant for an absolute base is pinned by the API_URL test
+        // above; the relative default joins to the same path verbatim.
         for (const specPath of Object.keys(spec.paths)) {
           expect(specPath).toMatch(/^\/api\//);
         }
-
-        // swagger-ui's Try-it-out executes servers[0].url + path. The
-        // relative default joins to a same-origin absolute-path request.
-        const url = swaggerOptions.definition.servers[0].url;
-        const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
-        expect(joined).toBe(annotatedPath);
-        expect(joined).not.toContain('/api/api');
       });
     });
   });

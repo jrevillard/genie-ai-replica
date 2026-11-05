@@ -92,6 +92,7 @@ source first** (the file in the repo), then regenerate.
 | `DATAPREP_MAX_MODEL_LEN` | `0` | dataprep | The context window (tokens) dataprep sizes document contexts against. `0` = discover it at runtime from `VLLM_ENDPOINT`. `>0` = the deployer states the window the endpoint serves — the only lever on a strict OpenAI-compatible provider (its `/v1/models` carries no `max_model_len`) and the way to state the window of a `DATAPREP_CONTEXTUAL_MODEL` that is not the model the endpoint lists first. |
 | `CONTEXTUAL_STRATEGY` | `per_chunk` | dataprep | `per_chunk` (Anthropic recipe — default) or `doc_level` (N× cheaper, same context for every chunk) |
 | `CONTEXTUAL_LABEL_RAW` | `true` | dataprep | `true` = label raw chunk, use context only for embedding |
+| `API_URL` | _(unset = relative)_ | backend, document-repository | Absolute base for the OpenAPI spec's server entry (external tooling); unset = relative, resolved against the page origin |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://${NGINX_PUBLIC_DOMAIN:-localhost}` | backend | Comma-separated origins; localhost dev default |
 | `CSP_CONNECT_SRC` | `'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090` | nginx | Content-Security-Policy `connect-src`; localhost dev default |
 | `NGINX_PUBLIC_DOMAIN` | `localhost` | nginx | Public domain |

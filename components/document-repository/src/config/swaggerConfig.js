@@ -16,7 +16,7 @@ const swaggerOptions = {
         // absolute base for external tooling (no /api suffix — the annotated
         // paths already carry it).
         url: process.env.API_URL || '/',
-        description: process.env.API_URL ? 'Configured API base' : 'Same-origin server'
+        description: 'API server base'
       }
     ],
     components: {

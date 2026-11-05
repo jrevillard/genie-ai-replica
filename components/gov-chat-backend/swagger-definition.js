@@ -27,7 +27,7 @@ module.exports = {
       // Set API_URL (backend container environment) to pin an absolute
       // base for external tooling.
       url: process.env.API_URL || '/',
-      description: process.env.API_URL ? 'Configured API base' : 'Same-origin server'
+      description: 'API server base'
     }
   ],
   components: {

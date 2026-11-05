@@ -27,12 +27,10 @@ describe('Document Repository swagger config', () => {
     // own machine; a relative base resolves against the origin the docs
     // are served from, in every topology.
     expect(server.url).toBe('/');
-    expect(server.description).toBe('Same-origin server');
   });
 
   it('pins an absolute base when API_URL is set', () => {
     const server = loadConfig('https://gov.example.com').definition.servers[0];
     expect(server.url).toBe('https://gov.example.com');
-    expect(server.description).toBe('Configured API base');
   });
 });

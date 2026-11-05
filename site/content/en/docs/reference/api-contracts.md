@@ -82,8 +82,8 @@ time guessing what is wrong.
   in the deployment's own configuration: the root `env` template (section 6)
   for a Compose deployment, the `api_url` Ansible group variable (see
   `deploy/ansible/README.md`) for a Swarm deployment. The document-repository
-  spec (`/api-files` is served by that service, not by the BFF) follows the
-  same rule with the same variable.
+  spec (the `/api/files` endpoints are served by that service, not by the
+  BFF) follows the same rule with the same variable.
 
 ## Verify your setup
 

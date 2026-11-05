@@ -468,6 +468,8 @@ export default {
       saveError: 'Не удалось сохранить элемент иерархии.',
       loadError: 'Не удалось загрузить иерархию знаний.',
       loadTranslationsError: 'Не удалось загрузить переводы.',
+      translationsLoadFailedNotice: 'Не удалось загрузить переводы. Редактирование отключено до их загрузки.',
+      retryTranslations: 'Повторить',
       translationsNotLoaded: 'Переводы не загружены — перезагрузите перед сохранением.',
       confirmCancelTitle: 'Несохраненные изменения',
       confirmCancelEdit: 'У вас есть несохраненные изменения. Вы уверены, что хотите отменить?',

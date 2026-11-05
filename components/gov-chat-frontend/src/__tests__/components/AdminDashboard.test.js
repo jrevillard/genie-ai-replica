@@ -278,7 +278,11 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extra
       stubs: {
         DsButton: {
           template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-          props: ['disabled', 'variant', 'small', 'tag']
+          props: ['disabled', 'variant', 'small', 'tag'],
+          // The real primitive declares this emit — without it the listener
+          // is a fallthrough attr and a click fires the handler TWICE
+          // (emit + DOM bubble on the root).
+          emits: ['click']
         },
         DsTabs: {
           // UX-1: the stub mirrors the REAL primitive's nav markup (button per
@@ -3238,5 +3242,134 @@ describe('translation load-failure gate', () => {
     expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
     expect(wrapper.vm.hierarchyForm._key).toBe('cat-b');
     wrapper.unmount();
+  });
+
+  // -----------------------------------------------------------------------
+  // #1400 — a FAILED translation load must not leave an editable dead-end:
+  // while the failure holds, the translation inputs and row buttons are
+  // disabled, a persistent inline notice explains why, and a Retry action
+  // re-invokes the load.
+  // -----------------------------------------------------------------------
+  describe('translation load-failure dead-end UI', () => {
+    // Stubs that render the disabled state the real primitives support.
+    const editableStubs = {
+      DsSelect: {
+        template: '<select :disabled="disabled"><slot /></select>',
+        props: ['modelValue', 'placeholder', 'disabled']
+      },
+      DsInput: {
+        template:
+          '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        props: ['modelValue', 'type', 'placeholder', 'disabled']
+      }
+    };
+
+    async function mountFailedEdit() {
+      const treeMock = require('../../services/serviceTreeService');
+      // Deterministic queue: mockClear (beforeEach) does not drain
+      // once-implementations, so reset and re-arm the base before queueing.
+      treeMock.getServiceTranslations.mockReset();
+      treeMock.getServiceTranslations.mockResolvedValue([]);
+      treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('load blip'));
+      const wrapper = createAdminDashboardWrapper({}, {}, editableStubs);
+      await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.translationsLoadFailed).toBe(true);
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+      return { wrapper, treeMock };
+    }
+
+    it('a failed load disables the translation inputs and the add/remove row buttons', async () => {
+      const { wrapper } = await mountFailedEdit();
+
+      const selects = wrapper.findAll('.translation-lang-select');
+      expect(selects.length).toBeGreaterThan(0);
+      for (const select of selects) {
+        expect(select.attributes('disabled')).toBeDefined();
+      }
+      for (const input of wrapper.findAll('.translation-text-input')) {
+        expect(input.attributes('disabled')).toBeDefined();
+      }
+      for (const removeBtn of wrapper.findAll('.translation-delete-btn')) {
+        expect(removeBtn.attributes('disabled')).toBeDefined();
+      }
+      const addBtn = wrapper.findAll('button').find((b) => b.text().trim() === '+ Add Translation');
+      expect(addBtn).toBeTruthy();
+      expect(addBtn.attributes('disabled')).toBeDefined();
+      wrapper.unmount();
+    });
+
+    it('an editable form without a failure keeps the rows enabled and shows no notice', async () => {
+      const wrapper = createAdminDashboardWrapper({}, {}, editableStubs);
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration' }],
+        parentId: null
+      };
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeUndefined();
+      }
+      for (const input of wrapper.findAll('.translation-text-input')) {
+        expect(input.attributes('disabled')).toBeUndefined();
+      }
+      const addBtn = wrapper.findAll('button').find((b) => b.text().trim() === '+ Add Translation');
+      expect(addBtn.attributes('disabled')).toBeUndefined();
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('a failed load shows a persistent inline notice with a Retry action', async () => {
+      const { wrapper } = await mountFailedEdit();
+
+      const notice = wrapper.find('[data-test-id="hierarchy-translations-load-failed"]');
+      expect(notice.exists()).toBe(true);
+      expect(notice.text()).toContain('Translations could not be loaded');
+      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      expect(retryBtn).toBeTruthy();
+      wrapper.unmount();
+    });
+
+    it('Retry re-invokes the translation load and re-enables the form on success', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'Déclaration' }]);
+
+      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      await retryBtn.trigger('click');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(treeMock.getServiceTranslations).toHaveBeenCalledWith('svc-1');
+      expect(wrapper.vm.translationsLoadFailed).toBe(false);
+      expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'Déclaration' }]);
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(false);
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeUndefined();
+      }
+      wrapper.unmount();
+    });
+
+    it('a failed retry keeps the form disabled and the notice up', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('still down'));
+
+      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      await retryBtn.trigger('click');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(wrapper.vm.translationsLoadFailed).toBe(true);
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(true);
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeDefined();
+      }
+      wrapper.unmount();
+    });
   });
 });

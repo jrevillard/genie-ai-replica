@@ -467,6 +467,8 @@ export default {
       saveError: 'Imeshindwa kuhifadhi kipengee cha uongozi.',
       loadError: 'Imeshindwa kupakia uongozi wa maarifa.',
       loadTranslationsError: 'Imeshindwa kupakia tafsiri.',
+      translationsLoadFailedNotice: 'Tafsiri hazikuweza kupakiwa. Kuhariri kumezimwa hadi zipakiwe.',
+      retryTranslations: 'Jaribu tena',
       translationsNotLoaded: 'Tafsiri hazijapakiwa — pakia upya kabla ya kuhifadhi.',
       confirmCancelTitle: 'Mabadiliko Yasiyohifadhiwa',
       confirmCancelEdit: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kughairi?',

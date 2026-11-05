@@ -12,10 +12,12 @@
 // checks presence in `env`, and no check inspected the FORM of an
 // interpolation).
 //
-// The gate: a variable must not mix a bare form with a defaulted or
-// error form anywhere in docker-compose.yaml. Presence operators
-// (`${VAR:+true}`) are neither bare nor defaulted — they key on the
-// variable's presence and are exempt.
+// The gate: a variable must use ONE interpolation form everywhere in
+// docker-compose.yaml — mixing a bare `${VAR}` with a defaulted
+// `${VAR:-x}` (or the two default forms with each other) delivers
+// different values to different services when the variable is unset or
+// set to the empty string. Presence operators (`${VAR:+true}`) key on
+// the variable's presence and are exempt.
 
 /**
  * Classify one `${VAR...}` interpolation occurrence.
@@ -131,7 +133,7 @@ function findMixedInterpolationForms(content) {
     mixed.push({
       name,
       forms,
-      message: `${name} is interpolated with mixed forms — ${detail}. Pick ONE form per variable: a bare \${VAR} and a defaulted \${VAR:-x} deliver different values to different services when the variable is unset (#1074).`
+      message: `${name} is interpolated with mixed forms — ${detail}. Pick ONE form per variable: the forms disagree on an unset or empty value, so two services would receive different settings (#1074).`
     });
   }
   return mixed.sort((a, b) => a.name.localeCompare(b.name));

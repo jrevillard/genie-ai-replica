@@ -163,6 +163,23 @@ LET lookalikeDocs = (
 RETURN { count: LENGTH(lookalikeDocs), sample: SLICE(lookalikeDocs, 0, @sampleLimit) }
 `;
 
+// Renders a rejection value as a short cause string for an operator-facing
+// error line. Errors render as their message; anything else is stringified
+// (guarded, so a circular structure cannot crash the error path itself).
+function causeOf(err) {
+  if (err instanceof Error) {
+    return err.message || String(err);
+  }
+  if (typeof err === 'string') {
+    return err;
+  }
+  try {
+    return JSON.stringify(err) ?? String(err);
+  } catch {
+    return String(err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Safety gates and run modes
 // ---------------------------------------------------------------------------
@@ -297,19 +314,57 @@ async function runReport(db, gated, total, husks, allDocs) {
 // gated.collection, never the arangojs handle it also holds under `collection`.
 async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  const removalCursor = await db.query(HUSK_REMOVAL_AQL, {
+  // A rejection from the removal query splits into two honesty classes:
+  // a numeric err.code below 500 is an HTTP status the SERVER returned —
+  // the statement was definitively rejected and nothing executed, so the
+  // outcome is known. Everything else (network failure, timeout, 5xx,
+  // a non-Error rejection value) is genuinely ambiguous: the request may
+  // have executed server-side with only the response lost, so the lead
+  // states the one thing true in all of those cases — the outcome is
+  // unknown — and defers the removal possibility to a conditional clause
+  // (issue #1505).
+  const bind = {
     '@collection': collectionName,
     keys: husks.map((doc) => doc._key)
-  });
+  };
+  let removalCursor;
+  try {
+    removalCursor = await db.query(HUSK_REMOVAL_AQL, bind);
+  } catch (err) {
+    if (typeof err?.code === 'number' && err.code < 500) {
+      // A 4xx status from ArangoDB means the statement was definitively
+      // rejected and nothing executed. The dry-run directive stays because
+      // the equivalence assumes ARANGO_URL answers directly — an
+      // intermediary that answers in ArangoDB's place voids it.
+      console.error(
+        `NOTHING was removed — the server rejected the removal statement (HTTP ${err.code}: ${causeOf(err)}). ` +
+          'Verify with a dry run: re-run the report to see what remains.'
+      );
+    } else {
+      console.error(
+        'REMOVAL OUTCOME UNKNOWN — the removal query failed before its outcome was known ' +
+          `(${causeOf(err)}); if the request reached the server, an unknown number of ` +
+          'documents may have been removed. Verify with a dry run: re-run the report to see what remains.'
+      );
+    }
+    if (err && err.stack) {
+      console.error(err.stack);
+    }
+    process.exitCode = 1;
+    return;
+  }
   // The removal re-asserts the signature, so docs disqualified since the
   // SELECT are skipped server-side — report what actually executed, not the
   // selection size. If the stats are missing, say so and fail rather than
-  // claim success: on a destructive path the honest answer is "unknown".
+  // claim success: on a destructive path the honest answer is "unknown",
+  // and the removal has already executed at this point, so the lead must
+  // say an unknown number of documents may be gone (issue #1505).
   const writesExecuted = ((removalCursor.extra || {}).stats || {}).writesExecuted;
   if (typeof writesExecuted !== 'number') {
     console.error(
-      'ABORT: the removal result carried no writesExecuted stats — the actual ' +
-        'number of removed documents is unknown. Re-run the dry run to verify.'
+      'REMOVED an unknown number of documents — the removal query executed but its result ' +
+        'carried no writesExecuted stats, so the actual number removed is not observable. ' +
+        'Verify with a dry run: re-run the report to see what remains.'
     );
     process.exitCode = 1;
     return;
@@ -389,11 +444,23 @@ async function main({
         'The two reads are not atomic: a document provisioned between them also lands here — re-run the ' +
         'report; if it aborts again with the same counts, the AQL and the signature really disagree.'
     );
-    for (const doc of extra) {
-      console.error(`  over-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
-    }
-    for (const doc of missed) {
-      console.error(`  under-matched _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+    // Bounded like the other per-document listings in this script
+    // (SAMPLE_LIMIT): the abort fires on ANY divergence, and when it fires
+    // the divergence can be as large as the whole collection — an uncapped
+    // per-document listing would flood the log pipeline. The full counts
+    // stay in the ABORT header; the elision line says how many were not
+    // listed. (The fields census in runReport stays unbounded by design:
+    // one line per DISTINCT unexpected field name, not per document.)
+    for (const [label, docs] of [
+      ['over-matched', extra],
+      ['under-matched', missed]
+    ]) {
+      for (const doc of docs.slice(0, SAMPLE_LIMIT)) {
+        console.error(`  ${label} _key=${doc._key} attributes=${JSON.stringify(Object.keys(doc).sort())}`);
+      }
+      if (docs.length > SAMPLE_LIMIT) {
+        console.error(`  ... and ${docs.length - SAMPLE_LIMIT} more ${label} (not listed)`);
+      }
     }
     process.exitCode = 1;
     return;
@@ -415,7 +482,7 @@ if (require.main === module) {
   main().catch((err) => {
     // Message + stack, not the whole arangojs response object (it dumps the
     // entire HTTP exchange, which buries the actual cause).
-    console.error('Report failed:', err.message);
+    console.error('Report failed:', causeOf(err));
     if (err.stack) {
       console.error(err.stack);
     }

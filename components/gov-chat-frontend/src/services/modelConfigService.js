@@ -44,7 +44,11 @@ export default {
     return {
       configs: Array.isArray(body.configs) ? body.configs : [],
       env_judge: body.env_judge || null,
-      env_pick: body.env_pick || null
+      env_pick: body.env_pick || null,
+      // The deployment opt-in for the OKF LLM legs (topic links, CSV topics,
+      // manifest summary). null = the server did not say — an older backend
+      // omits the field, and an unknown state must not read as "closed".
+      deployment_opt_in: typeof body.deployment_opt_in === 'boolean' ? body.deployment_opt_in : null
     };
   },
   async create(payload) {

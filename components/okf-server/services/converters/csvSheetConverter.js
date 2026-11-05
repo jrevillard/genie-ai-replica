@@ -82,7 +82,8 @@ function dictionaryForTopics(headers, grid, maxColumns = 30) {
  * @param {object} meta {file_id, file_name, baseResource}
  * @param {object} [opts]
  * @param {Function} [opts.deriveTopics] injectable topic summariser (tests);
- *        defaults to the remote-endpoint LLM call, which fails soft.
+ *        defaults to the remote-endpoint LLM call, which degrades on engine
+ *        failure and raises on a closed opt-in.
  * @returns {Promise<{concepts: Array<{path, frontmatter, body}>,
  *          sheets: Array<{name, rows, groups}>, topics: object}>}
  * @throws Error with `.code` when the CSV is unreadable or empty.
@@ -155,21 +156,42 @@ async function convertCsv(buffer, meta, opts = {}) {
   }
 
   // TOPICS (David 2026-10-12: "tabular markdown data WITH topics"). One call
-  // per file against the REMOTE endpoint; it never throws — see
-  // csvTopicsService for the fail-soft contract.
+  // per file against the REMOTE endpoint. Engine failures degrade; a CLOSED
+  // opt-in raises the closed-gate error with the degraded shape attached,
+  // and the catch below keeps the import landing while the degradation is
+  // recorded.
   const dictionary = dictionaryForTopics(built.headers, grid);
   const derive = opts.deriveTopics || csvTopics.deriveTopics;
   let topics;
   try {
     topics = await derive({ columns: dictionary, fileName });
   } catch (err) {
-    // Defensive: the service already swallows its own errors, so this only
-    // fires if an injected/test double throws. An import must still land.
-    logger.warn('CSV topics: summariser threw — continuing without topics', {
-      file_id: meta && meta.file_id,
-      error: err.message
-    });
-    topics = { topics: [], purpose: '', source: 'fallback-threw' };
+    if (err && err.code === 'llm-not-configured' && err.topics) {
+      // The closed-gate error, recognised by its code — any other thrown
+      // error takes the generic path below. The degraded shape rides on the
+      // error (the leg owns the vocabulary). The import still lands: the
+      // filename slug stays (a row-group with no topic is a retrieval
+      // orphan) and the degradation is recorded so the operator sees it.
+      logger.error(`CSV topics: ${err.topics.reason} — imported with filename-slug topics`, {
+        file_id: meta && meta.file_id,
+        file_name: fileName,
+        code: err.code
+      });
+      topics = err.topics;
+    } else {
+      // Defensive: the service degrades on its own errors, so this only
+      // fires if an injected/test double throws. An import must still land.
+      logger.warn('CSV topics: summariser threw — continuing without topics', {
+        file_id: meta && meta.file_id,
+        error: err.message
+      });
+      topics = {
+        topics: [],
+        purpose: '',
+        source: 'fallback-threw',
+        reason: csvTopics.fallbackReason('fallback-threw')
+      };
+    }
   }
 
   // Stamp the topics on EVERY concept (dictionary AND each row-group): a

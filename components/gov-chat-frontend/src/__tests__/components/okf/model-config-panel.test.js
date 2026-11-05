@@ -70,14 +70,50 @@ function mountPanel() {
   });
 }
 
+// The list envelope the mock answers with — the tests below vary it.
+let listEnvelope;
+
 beforeEach(() => {
   jest.clearAllMocks();
   dispatch.mockReset();
+  listEnvelope = { configs: configs() };
   dispatch.mockImplementation(async (action) => {
-    if (action === 'okf/modelConfigList') return { ok: true, configs: configs() };
+    if (action === 'okf/modelConfigList') return { ok: true, ...listEnvelope };
     if (action === 'okf/modelConfigModels' || action === 'okf/modelConfigModelsPreview')
       return { ok: true, models: ['claude-opus', 'claude-sonnet'] };
     return { ok: true, result: {} };
+  });
+});
+
+describe('ModelConfigPanel — the deployment opt-in warning', () => {
+  const mountWith = async (envelope) => {
+    listEnvelope = envelope;
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    return w;
+  };
+
+  test('warns when a configuration is active while the OKF LLM legs are OFF', async () => {
+    const w = await mountWith({ configs: configs(), deployment_opt_in: false });
+    const warning = w.find('[data-test-id="okf-models-gate-warning"]');
+    expect(warning.exists()).toBe(true);
+    expect(warning.text()).toContain('VLLM_ENDPOINT');
+  });
+
+  test('no warning when the deployment opted in', async () => {
+    const w = await mountWith({ configs: configs(), deployment_opt_in: true });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
+  });
+
+  test('no warning when NO configuration is active (nothing could be mistaken for an engine)', async () => {
+    const inactive = configs().map((c) => ({ ...c, active: false }));
+    const w = await mountWith({ configs: inactive, deployment_opt_in: false });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
+  });
+
+  test('no warning when the server did not say (an older backend omits the field)', async () => {
+    const w = await mountWith({ configs: configs() });
+    expect(w.find('[data-test-id="okf-models-gate-warning"]').exists()).toBe(false);
   });
 });
 

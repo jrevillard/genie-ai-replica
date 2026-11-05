@@ -1598,6 +1598,8 @@ export default {
       title: 'Konfigurasi model',
       add: 'Konfigurasi baru',
       hint: 'Endpoint model jarak jauh bernama untuk penjurian dan generasi — permukaan apa pun yang kompatibel dengan OpenAI (OpenAI, gateway LiteLLM, vLLM, Gemini-compat, Ollama) atau Anthropic langsung. Tepat SATU konfigurasi dapat aktif; tanpa yang aktif, model default terkonfigurasi deployment digunakan. Kunci disimpan di sisi server dan tidak pernah ditampilkan.',
+      gateWarning:
+        'Kaki LLM OKF yang mengikuti aktivasi opsional pada deployment (tautan topik, topik CSV, ringkasan manifes) sedang MATI: deployment ini tidak memiliki VLLM_ENDPOINT. Konfigurasi bernama tidak mengaktifkannya — setel VLLM_ENDPOINT di server untuk mengaktifkannya.',
       name: 'Nama',
       provider: 'Penyedia',
       providerOpenai: 'Kompatibel OpenAI (OpenAI, LiteLLM, vLLM…)',

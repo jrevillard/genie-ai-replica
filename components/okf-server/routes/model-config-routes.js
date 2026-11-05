@@ -20,7 +20,9 @@
 //
 // The read envelope carries no secret: `mask()` strips the key and the
 // non-admin read omits the key HINT as well (the hint is only useful in
-// the admin Models tab). So:
+// the admin Models tab). It also states the deployment opt-in for the OKF
+// LLM legs (`deployment_opt_in`) — a boolean, so the Models tab can warn
+// that a named configuration does not enable those legs. So:
 //
 //   GET  /                     — read scope (any OKF user): the masked list
 //                                plus the env judge's base_url + model.

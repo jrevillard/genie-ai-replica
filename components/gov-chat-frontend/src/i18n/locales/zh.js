@@ -1552,6 +1552,8 @@ export default {
       title: '模型配置',
       add: '新建配置',
       hint: '用于评判和生成的命名远程模型端点——任何 OpenAI 兼容接口（OpenAI、LiteLLM 网关、vLLM、Gemini 兼容、Ollama）或 Anthropic 直连。同一时间只能有一个配置处于激活状态；无激活配置时使用部署环境配置的默认模型。密钥仅存储在服务端，绝不显示。',
+      gateWarning:
+        '遵循部署可选启用的 OKF LLM 功能（主题链接、CSV 主题、清单摘要）已关闭：此部署未设置 VLLM_ENDPOINT。命名配置不会启用它们 — 请在服务器上设置 VLLM_ENDPOINT 以启用。',
       name: '名称',
       provider: '提供商',
       providerOpenai: 'OpenAI 兼容（OpenAI、LiteLLM、vLLM…）',

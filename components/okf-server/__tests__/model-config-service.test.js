@@ -20,6 +20,7 @@ jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn(async () => 
 // so tests never leave the process.
 jest.mock('axios', () => ({ post: jest.fn() }));
 
+const { captureEnv } = require('./fixtures/env');
 const svc = require('../services/model-config-service');
 const axios = require('axios');
 const { __mockDb } = require('../shared-lib/db-connection-service');
@@ -528,5 +529,23 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     process.env.VLLM_MODEL_ID = 'plain/spelling-pin';
     expect(svc.judgeFidelity(null).model).toBeNull();
     delete process.env.VLLM_MODEL_ID;
+  });
+});
+
+describe('listConfigs envelope — the deployment opt-in rides along', () => {
+  const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
+
+  afterEach(() => {
+    restoreEndpoint();
+  });
+
+  test('deployment_opt_in is false with no endpoint and true with one', async () => {
+    // The panel warns when a named configuration is active while the legs
+    // that follow the deployment opt-in are OFF — the server owns that
+    // state, so it states it (the browser never sees the env).
+    delete process.env.VLLM_ENDPOINT;
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(false);
+    process.env.VLLM_ENDPOINT = 'https://gpu.example:444/llm';
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(true);
   });
 });

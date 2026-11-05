@@ -1592,6 +1592,8 @@ export default {
       title: 'Mipangilio ya modeli',
       add: 'Mipangilio mpya',
       hint: 'Viungo vya modeli za mbali vilivyopewa majina kwa uamuzi na uzalishaji — kioleso chochote kinacholingana na OpenAI (OpenAI, lango la LiteLLM, vLLM, Gemini-compat, Ollama) au Anthoric moja kwa moja. Mipangilio MOJA tu inaweza kuwa hai; bila iliyo hai, modeli chaguo-msingi iliyowekwa ya utumaji inatumika. Funguo huhifadhiwa upande wa seva na hazioneshwi kamwe.',
+      gateWarning:
+        'Miguu ya LLM ya OKF inayofuata uwezeshaji wa deployment (viungo vya mada, mada za CSV, muhtasari wa manifesto) imezimwa: deployment hii hana VLLM_ENDPOINT. Mipangilio iliyoitwa haiuisi — weka VLLM_ENDPOINT kwenye seva ili kuiwasilisha.',
       name: 'Jina',
       provider: 'Mtoa huduma',
       providerOpenai: 'Inalingana na OpenAI (OpenAI, LiteLLM, vLLM…)',

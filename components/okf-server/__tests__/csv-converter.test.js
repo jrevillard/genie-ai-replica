@@ -17,6 +17,7 @@ const { convertXlsx } = require('../services/converters/xlsxSheetConverter');
 const { inferType, cellText } = require('../services/converters/tableConcepts');
 const { parseTopics, normalizeTopics } = require('../services/converters/csvTopicsService');
 const { logger } = require('../shared-lib/logger');
+const { captureEnv } = require('./fixtures/env');
 const XLSX = require('xlsx');
 
 const META = {
@@ -26,6 +27,14 @@ const META = {
 };
 
 const csv = (s) => Buffer.from(s, 'utf8');
+
+// The gate tests below close the LLM opt-in; the restore keeps that from
+// reaching the next test.
+const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
+
+afterEach(() => {
+  restoreEndpoint();
+});
 
 /** Topic stub — the real summariser is exercised separately below against a
  * mocked vllmChatCompletions. */
@@ -280,14 +289,42 @@ describe('csvSheetConverter — topics (David: tabular data WITH topics)', () =>
     });
     expect(topics.source).toBe('fallback-empty-topics');
   });
+
+  it('adopts a degraded shape ONLY from the closed-gate error — a foreign payload is not a topic', async () => {
+    // The closed-gate error is recognised by its code. An error that merely
+    // carries a `topics` payload is some other failure: adopting it would
+    // stamp foreign topics on the concepts and mislabel the failure as a
+    // missing VLLM_ENDPOINT.
+    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META, {
+      deriveTopics: async () => {
+        const err = new Error('some other failure');
+        err.topics = { topics: ['foreign'], purpose: 'not ours', source: 'somewhere-else', reason: 'not ours' };
+        throw err;
+      }
+    });
+    expect(topics.source).toBe('fallback-threw');
+    expect(topics.topics).toEqual([]);
+    for (const c of concepts) expect(c.frontmatter.topic).toBeUndefined();
+  });
+
+  it('a CLOSED gate still imports — with the filename slug, and flagged as degraded', async () => {
+    // The REAL leg (no injected summariser): with the gate closed it raises
+    // the closed-gate error CARRYING the degraded shape, and the converter
+    // uses that shape — the import lands with the filename slug (a row-group
+    // with no topic is a retrieval orphan) and the degradation is recorded.
+    delete process.env.VLLM_ENDPOINT;
+    const { concepts, topics } = await convertCsv(csv('Region,Amount\nNorth,100\n'), META);
+    expect(topics.source).toBe('fallback-no-endpoint');
+    // The reason travels with the topics: the importer copies it into the
+    // import report and the file's ingestion log.
+    expect(topics.reason).toMatch(/no LLM engine is configured/);
+    expect(topics.topics).toEqual(['market']); // filename slug — kept
+    for (const c of concepts) expect(c.frontmatter.topic).toEqual(['market']);
+  });
 });
 
 describe('csvTopicsService — response handling', () => {
-  const originalEndpoint = process.env.VLLM_ENDPOINT;
-
   afterEach(() => {
-    if (originalEndpoint === undefined) delete process.env.VLLM_ENDPOINT;
-    else process.env.VLLM_ENDPOINT = originalEndpoint;
     jest.resetModules();
   });
 
@@ -312,15 +349,20 @@ describe('csvTopicsService — response handling', () => {
     ]);
   });
 
-  it('NEVER calls the LLM when VLLM_ENDPOINT is unset (no silent route to a local GPU)', async () => {
+  it('NEVER calls the LLM when VLLM_ENDPOINT is unset, and says so LOUDLY', async () => {
+    // A closed gate is a misconfiguration, and the sibling legs raise
+    // the same `llm-not-configured` error for it (curation, topic-link — each
+    // catches its own raise and records a count). The CSV leg used to answer
+    // with a silent filename slug and left no trace — one misconfiguration,
+    // two different answers.
     delete process.env.VLLM_ENDPOINT;
     const called = jest.fn();
     jest.doMock('../services/frontmatter-service', () => ({ vllmChatCompletions: called }));
     const svc = require('../services/converters/csvTopicsService');
-    const out = await svc.deriveTopics({ columns: [{ name: 'a', type: 'text', sample: 'x' }], fileName: 'x.csv' });
+    await expect(
+      svc.deriveTopics({ columns: [{ name: 'a', type: 'text', sample: 'x' }], fileName: 'x.csv' })
+    ).rejects.toMatchObject({ code: 'llm-not-configured' });
     expect(called).not.toHaveBeenCalled();
-    expect(out.source).toBe('fallback-no-endpoint');
-    expect(out.topics).toEqual(['x']); // filename slug
   });
 
   it('degrades to the filename slug when the LLM call throws', async () => {

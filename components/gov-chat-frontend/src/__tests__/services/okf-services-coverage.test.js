@@ -349,10 +349,16 @@ describe('modelConfigService — the 8-7 judge configuration client', () => {
     expect(await modelConfigService.list()).toEqual({
       configs: [{ key: 'a' }],
       env_judge: { model: 'g' },
-      env_pick: { config_key: 'a' }
+      env_pick: { config_key: 'a' },
+      deployment_opt_in: null
     });
     httpService.get.mockResolvedValueOnce(ok({ configs: 'garbage' }));
-    expect(await modelConfigService.list()).toEqual({ configs: [], env_judge: null, env_pick: null });
+    expect(await modelConfigService.list()).toEqual({
+      configs: [],
+      env_judge: null,
+      env_pick: null,
+      deployment_opt_in: null
+    });
   });
 
   it('CRUD verbs hit the keyed endpoints', async () => {

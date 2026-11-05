@@ -1609,6 +1609,8 @@ export default {
       title: 'Configurations de modèle',
       add: 'Nouvelle configuration',
       hint: "Points de terminaison de modèles distants nommés pour le jugement et la génération — toute surface compatible OpenAI (OpenAI, une passerelle LiteLLM, vLLM, Gemini-compat, Ollama) ou Anthropic direct. Une seule configuration peut être active ; sans aucune, le modèle par défaut configuré du déploiement s'applique. Les clés sont stockées côté serveur et jamais affichées.",
+      gateWarning:
+        'Les branches LLM d’OKF qui suivent l’activation du déploiement (liens de sujets, sujets CSV, résumés de manifeste) sont DÉSACTIVÉES : ce déploiement n’a pas de VLLM_ENDPOINT. Une configuration nommée ne les active pas — définissez VLLM_ENDPOINT sur le serveur pour les activer.',
       name: 'Nom',
       provider: 'Fournisseur',
       providerOpenai: 'Compatible OpenAI (OpenAI, LiteLLM, vLLM…)',

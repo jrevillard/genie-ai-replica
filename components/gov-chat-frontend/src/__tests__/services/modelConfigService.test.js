@@ -53,9 +53,16 @@ describe('modelConfigService.list', () => {
     expect(out.env_judge.model).toBe('ibm-granite/granite-4.1-8b');
   });
 
+  it('carries the deployment opt-in through — the panel warns on it', async () => {
+    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: false } });
+    expect((await modelConfigService.list()).deployment_opt_in).toBe(false);
+    httpService.get.mockResolvedValue({ data: { ...ENVELOPE, deployment_opt_in: true } });
+    expect((await modelConfigService.list()).deployment_opt_in).toBe(true);
+  });
+
   it('degrades to an empty envelope, never to undefined fields', async () => {
     httpService.get.mockResolvedValue({});
     const out = await modelConfigService.list();
-    expect(out).toEqual({ configs: [], env_judge: null, env_pick: null });
+    expect(out).toEqual({ configs: [], env_judge: null, env_pick: null, deployment_opt_in: null });
   });
 });

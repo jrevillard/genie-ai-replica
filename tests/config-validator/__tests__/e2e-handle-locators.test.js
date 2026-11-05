@@ -47,9 +47,11 @@ const LOCATOR_CALL =
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —
 // unlike in ordinary code, where `.padEnd` is a method call. Attribute
 // values are stripped first: a dot inside `[data-x="a.b"]` is data, not
-// a class. The trailing guard keeps `.sidebar` from matching inside the
-// single name `.sidebar-inner`.
-const CLASS_SELECTOR = /\.([a-z][a-z0-9_-]*)(?![a-z0-9_-])/g;
+// a class, in either quote spelling. Class names are matched
+// case-insensitively to the HTML class attribute (a `.ChatWindow`
+// locator is as much a class coupling as a lowercase one). The trailing
+// guard keeps `.sidebar` from matching inside `.sidebar-inner`.
+const CLASS_SELECTOR = /\.([a-zA-Z][a-zA-Z0-9_-]*)(?![a-zA-Z0-9_-])/g;
 
 const classSelectorsIn = (source) => {
   const found = [];
@@ -58,7 +60,7 @@ const classSelectorsIn = (source) => {
   // `.js` extension or a `.padEnd(4)` inside an unrelated template
   // string is not a locator and does not trip the gate.
   for (const call of source.matchAll(new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g'))) {
-    const selector = call[0].replace(/="[^"]*"/g, '=""');
+    const selector = call[0].replace(/=("[^"]*"|'[^']*')/g, '=""');
     for (const m of selector.matchAll(CLASS_SELECTOR)) {
       found.push({ className: m[1], quoted: call[0] });
     }
@@ -67,33 +69,45 @@ const classSelectorsIn = (source) => {
 };
 
 // Comments are prose about the code, not the code: a comment that names
-// the class the handle replaced must not fail the gate. A `//` inside a
-// string (a URL) is not a comment, so the stripper skips those.
-const stripComments = (source) =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => {
-      let inString = null;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inString) {
-          if (ch === '\\') {
-            i++;
-            continue;
-          }
-          if (ch === inString) inString = null;
-          continue;
-        }
-        if (ch === "'" || ch === '"' || ch === '`') {
-          inString = ch;
-          continue;
-        }
-        if (ch === '/' && line[i + 1] === '/') return line.slice(0, i);
+// the class the handle replaced must not fail the gate. One pass over
+// the whole source — string state (including multi-line template
+// literals) must survive across lines, or a `//` inside a backtick
+// template would cut real locator code as a comment. A `//` inside a
+// string (a URL) is not a comment, so the scanner skips those.
+const stripComments = (source) => {
+  let out = '';
+  let state = null; // null | "'" | '"' | '`'
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (state) {
+      out += ch;
+      if (ch === '\\') {
+        out += source[i + 1] || '';
+        i++;
+      } else if (ch === state) {
+        state = null;
       }
-      return line;
-    })
-    .join('\n');
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      state = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '/') {
+      while (i < source.length && source[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '*') {
+      const end = source.indexOf('*/', i + 2);
+      i = end === -1 ? source.length : end + 1;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+};
 
 describe('the e2e suite locates application elements by declared handle', () => {
   test('a converted file locates no element by class', () => {
@@ -140,6 +154,21 @@ describe('the e2e suite locates application elements by declared handle', () => 
   test('a mixed locator is still an offender', () => {
     const sample = 'page.locator(\'.chat-message.bot [data-testid="answer-error"]\')';
     expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['chat-message', 'bot']);
+  });
+
+  test('a mixed-quote attribute value inside a selector is not an offender', () => {
+    const sample = 'page.locator(\'[data-x=\'a.b\']\')';
+    expect(classSelectorsIn(sample)).toEqual([]);
+  });
+
+  test('an uppercase class locator is an offender', () => {
+    const sample = "page.locator('.ChatWindow')";
+    expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['ChatWindow']);
+  });
+
+  test('a class locator after a // inside a template literal is an offender', () => {
+    const sample = "const s = `x // `;\nawait page.click('.chat-composer');";
+    expect(classSelectorsIn(stripComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
   });
 
   test('an extension or method call in a template string is not an offender', () => {

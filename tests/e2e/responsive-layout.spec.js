@@ -91,12 +91,15 @@ async function measureLayout(page) {
   // same either way, and the grid is the element the column count
   // below is actually derived from.
   // --space-xl is the global token.
-  const tokens = await page.evaluate(() => {
+  // Selectors cross the evaluate boundary as arguments: Playwright
+  // serializes only the function source, so a Node-scope constant is
+  // undefined in the page context.
+  const tokens = await page.evaluate((gridSel) => {
     const parsePx = (raw) => {
       const m = /^([\d.]+)px$/.exec(raw.trim());
       return m ? parseFloat(m[1]) : NaN;
     };
-    const grid = document.querySelector(QUICK_HELP_GRID);
+    const grid = document.querySelector(gridSel);
     const root = document.documentElement;
     const gridStyle = grid ? window.getComputedStyle(grid) : null;
     const rootStyle = window.getComputedStyle(root);
@@ -104,15 +107,15 @@ async function measureLayout(page) {
       cardMin: gridStyle ? parsePx(gridStyle.getPropertyValue('--qh-card-min')) : NaN,
       gap: parsePx(rootStyle.getPropertyValue('--space-xl'))
     };
-  });
+  }, QUICK_HELP_GRID);
 
-  const layout = await page.evaluate(() => {
-    const wrap = document.querySelector('[data-test-id="main-container"]');
-    const centre = document.querySelector('[data-test-id="chatbot-container"]');
-    const left = document.querySelector(SIDEBAR_LEFT);
-    const right = document.querySelector(SIDEBAR_RIGHT);
-    const grid = document.querySelector(QUICK_HELP_GRID);
-    const items = grid ? Array.from(grid.querySelectorAll(QUICK_HELP_ITEM)) : [];
+  const layout = await page.evaluate(({ wrapSel, centreSel, leftSel, rightSel, gridSel, itemSel }) => {
+    const wrap = document.querySelector(wrapSel);
+    const centre = document.querySelector(centreSel);
+    const left = document.querySelector(leftSel);
+    const right = document.querySelector(rightSel);
+    const grid = document.querySelector(gridSel);
+    const items = grid ? Array.from(grid.querySelectorAll(itemSel)) : [];
     const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
     const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
     const lr = left && left.getBoundingClientRect();
@@ -134,6 +137,13 @@ async function measureLayout(page) {
       cardWidths,
       cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
     };
+  }, {
+    wrapSel: '[data-test-id="main-container"]',
+    centreSel: '[data-test-id="chatbot-container"]',
+    leftSel: SIDEBAR_LEFT,
+    rightSel: SIDEBAR_RIGHT,
+    gridSel: QUICK_HELP_GRID,
+    itemSel: QUICK_HELP_ITEM
   });
 
   // Derived: the column-count the invariant says we should have.

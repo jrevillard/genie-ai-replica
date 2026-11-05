@@ -4,7 +4,8 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
-const { mockChatStream, sseBody, ackFeedback } = require('./helpers/chatbot');
+const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
+const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
@@ -325,7 +326,7 @@ test.describe('Conversation — warning and error', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
     await page.locator('[data-testid="answer-retry"]').click();
-    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 45000 });
+    await page.waitForSelector(BOT_BUBBLE, { timeout: 45000 });
     const n = await page.locator('[data-testid="chat-message-user"]').count();
     expect(n, 'the retry does not duplicate the user turn').toBe(1);
     await ctx.close();
@@ -483,7 +484,7 @@ test.describe('Conversation — answer card', () => {
     expect(early.shadow, 'the card is elevated').toBe(true);
     expect(early.distinctFromGround, 'the card fills one step above the unified ground, not the same paint').toBe(true);
     expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
-    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 30000 });
+    await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     const late = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="answer-card"]');
       const bubble = card.querySelector('[data-testid="message-bubble-bot"]');
@@ -502,7 +503,7 @@ test.describe('Conversation — surface invariants', () => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
     await askAndAnswer(page, 'What is GENIE.AI?');
-    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 45000 });
+    await page.waitForSelector(BOT_BUBBLE, { timeout: 45000 });
     expect(await page.locator('[data-testid="context-panel"]').count(), 'no chip is fabricated for Just Chat').toBe(0);
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
     await ctx.close();
@@ -511,7 +512,7 @@ test.describe('Conversation — surface invariants', () => {
   // The header names the QuickHelp option that opened the chat.
   test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await page.locator('[data-testid="quick-help-item"]').filter({ hasText: 'Apply for ID' }).click();
+    await page.locator(QUICK_HELP_ITEM).filter({ hasText: 'Apply for ID' }).click();
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Apply for ID/i);
     // The option is a knowledge domain — its chip is shown as context.
     expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
@@ -565,9 +566,9 @@ test.describe('Conversation — surface invariants', () => {
     // the background — the wait below holds until the released stream's
     // frame has been consumed and rendered.
     await page.goBack();
-    await page.waitForSelector('[data-testid="message-bubble-bot"]', { timeout: 30000 });
+    await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
-    await expect(page.locator('[data-testid="message-bubble-bot"]').last()).toContainText(
+    await expect(page.locator(BOT_BUBBLE).last()).toContainText(
       'The answer completes in the background.'
     );
     // The transcript must be the VIEW, not merely present in the DOM

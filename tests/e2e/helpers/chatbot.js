@@ -147,7 +147,7 @@ async function sendMessage(page, message) {
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
 
-  await expect(BOT_BUBBLE.last()).toContainText(/\S/, { timeout });
+  await expect(page.locator(BOT_BUBBLE).last()).toContainText(/\S/, { timeout });
 
   await expect
     .poll(
@@ -193,7 +193,7 @@ async function getMessages(page) {
  * Get the last bot message text.
  */
 async function getLastBotMessage(page) {
-  const botMessages = BOT_BUBBLE;
+  const botMessages = page.locator(BOT_BUBBLE);
   const count = await botMessages.count();
   if (count === 0) {
     return '';
@@ -232,7 +232,7 @@ async function saveChat(page, title) {
  * signal.
  */
 async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
-  await expect(BOT_BUBBLE.last()).toContainText(text, { timeout });
+  await expect(page.locator(BOT_BUBBLE).last()).toContainText(text, { timeout });
 }
 
 /**

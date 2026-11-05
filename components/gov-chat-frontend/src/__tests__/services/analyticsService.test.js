@@ -167,7 +167,7 @@ describe('analyticsService', () => {
         const result = await analyticsService.getSatisfactionGauge('monthly', '2026-05-19');
 
         expect(mockGet).toHaveBeenCalledWith('analytics/satisfaction/gauge', {
-          params: expect.objectContaining({ locale: 'en' })
+          params: expect.not.objectContaining({ locale: expect.anything() })
         });
         expect(result.currentValue).toBe(82);
         expect(result.target).toBe(85);

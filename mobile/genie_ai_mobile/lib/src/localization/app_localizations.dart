@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// The title of the application
   ///
   /// In en, this message translates to:
-  /// **'genie_ai_mobile'**
+  /// **'GENIE.AI'**
   String get appTitle;
 }
 

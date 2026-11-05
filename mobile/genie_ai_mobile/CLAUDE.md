@@ -145,7 +145,7 @@ curl -sk -X POST "https://localhost:8443/auth/admin/realms/genie/clients" \
       "backchannel.logout.url": ""
     },
     "redirectUris": ["com.itu.genieai.dev://callback"],
-    "webOrigins": ["android-app://com.example.genie_ai_mobile.dev"]
+    "webOrigins": ["android-app://com.itu.genieai.dev"]
   }'
 
 # Verify
@@ -311,8 +311,8 @@ adb shell cat /system/etc/security/cacerts/${CERT_HASH}.0 | openssl x509 -noout 
 
 ```bash
 adb logcat -c
-adb shell am force-stop com.example.genie_ai_mobile.dev
-adb shell am start -n com.example.genie_ai_mobile.dev/com.example.genie_ai_mobile.MainActivity
+adb shell am force-stop com.itu.genieai.dev
+adb shell am start -n com.itu.genieai.dev/com.itu.genieai.MainActivity
 sleep 3
 adb shell input tap 540 1415  # Sign In button
 sleep 10
@@ -359,10 +359,10 @@ Each flavor registers a unique URL scheme for OIDC callback routing. Verify afte
 
 | Flavor | URL Scheme | Application ID |
 |--------|-----------|----------------|
-| dev | `com.itu.genieai.dev` | `com.example.genie_ai_mobile.dev` |
-| staging | `com.itu.genieai.staging` | `com.example.genie_ai_mobile.staging` |
-| e2e | `com.itu.genieai.e2e` | `com.example.genie_ai_mobile.e2e` |
-| itu | `com.itu.genieai` | `com.example.genie_ai_mobile` |
+| dev | `com.itu.genieai.dev` | `com.itu.genieai.dev` |
+| staging | `com.itu.genieai.staging` | `com.itu.genieai.staging` |
+| e2e | `com.itu.genieai.e2e` | `com.itu.genieai.e2e` |
+| itu | `com.itu.genieai` | `com.itu.genieai` |
 
 ### Android — Manifest Merger Inspection (Static)
 
@@ -386,7 +386,7 @@ find build/app/intermediates/merged_manifests/ -path "*ituDebug*" -name "Android
 adb install -r build/app/outputs/flutter-apk/app-itu-debug.apk
 
 # Verify scheme registered
-adb shell dumpsys package com.example.genie_ai_mobile | grep -A3 "android.intent.action.VIEW"
+adb shell dumpsys package com.itu.genieai | grep -A3 "android.intent.action.VIEW"
 # Expected: Scheme: "com.itu.genieai"
 
 # Test intent routing (app opens = scheme works)
@@ -395,7 +395,7 @@ adb shell am start -a android.intent.action.VIEW -d "com.itu.genieai://callback"
 
 # Verify in logcat
 adb logcat -d | grep "ActivityTaskManager.*START" | grep "com.itu.genieai"
-# Expected: cmp=com.example.genie_ai_mobile/net.openid.appauth.RedirectUriReceiverActivity
+# Expected: cmp=com.itu.genieai/net.openid.appauth.RedirectUriReceiverActivity
 ```
 
 ### Android — Cross-Flavor Routing (Two Apps on Same Device)
@@ -406,16 +406,16 @@ adb install -r build/app/outputs/flutter-apk/app-itu-debug.apk
 adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
 
 # Verify distinct schemes
-adb shell dumpsys package com.example.genie_ai_mobile | grep "Scheme:"
+adb shell dumpsys package com.itu.genieai | grep "Scheme:"
 # Expected: Scheme: "com.itu.genieai"
-adb shell dumpsys package com.example.genie_ai_mobile.dev | grep "Scheme:"
+adb shell dumpsys package com.itu.genieai.dev | grep "Scheme:"
 # Expected: Scheme: "com.itu.genieai.dev"
 
 # Test routing: each scheme must open the correct app
 adb shell am start -a android.intent.action.VIEW -d "com.itu.genieai://callback"    # → itu app
-# Expected: cmp=com.example.genie_ai_mobile/net.openid.appauth.RedirectUriReceiverActivity
+# Expected: cmp=com.itu.genieai/net.openid.appauth.RedirectUriReceiverActivity
 adb shell am start -a android.intent.action.VIEW -d "com.itu.genieai.dev://callback" # → dev app
-# Expected: cmp=com.example.genie_ai_mobile.dev/net.openid.appauth.RedirectUriReceiverActivity
+# Expected: cmp=com.itu.genieai.dev/net.openid.appauth.RedirectUriReceiverActivity
 ```
 
 ### iOS — XCConfig Verification

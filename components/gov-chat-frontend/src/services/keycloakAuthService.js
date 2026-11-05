@@ -127,7 +127,10 @@ function releaseRenewLease() {
  * of forever. The trade (#1521 review): a waiter starting more than one TTL
  * after the holder's publish finds the entry already wiped and grants on its
  * own (already-rotated) token — the handoff window is one TTL wide, which
- * renew timers sit well inside; before round 23 the entry lived forever. */
+ * renew timers sit well inside; before round 23 the entry lived forever. A
+ * future-stamped entry (a clock stepped backward after the publish) is
+ * bounded too: the single key is overwritten by any tab's next successful
+ * renew, and logout wipes it. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -154,10 +157,7 @@ function clearStaleRenewPublication() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
-    // Past the TTL in EITHER direction: a backward clock jump after the
-    // publish would otherwise keep a full minted token set at rest (and
-    // "stale") forever (#1521 review, loop 5).
-    if (entry && typeof entry.at === 'number' && Math.abs(Date.now() - entry.at) > RENEW_LEASE_TTL_MS) {
+    if (entry && typeof entry.at === 'number' && Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
       clearRenewPublication();
     }
   } catch {
@@ -169,18 +169,20 @@ function clearStaleRenewPublication() {
 /** The waiter's side of the handoff (#1521): ANOTHER tab's publication, with
  * a comfortably-future expires_at (the JSON round-trip drops the User class,
  * so check the raw field — oidc stores it in seconds).
- * The gate is ownership, not recency: a publication from THIS tab (or from
- * an owner-less entry written by an older build — the conservative reading)
- * is never adopted, because a publication read at a renew's entry always
- * predates that renew — re-serving it would skip the actual refresh. A
- * DIFFERENT tab's publication is the handoff itself and needs no recency
- * bound beyond the TTL cleanup: the waiter may legitimately start AFTER the
- * holder finished, and the holder clears its own entry before any new grant
+ * The gate is ownership, not recency: a publication from THIS tab is never
+ * adopted, because a publication read at a renew's entry always predates
+ * that renew — re-serving it would skip the actual refresh. ANY OTHER
+ * entry is the handoff itself and needs no recency bound beyond the TTL
+ * cleanup: the waiter may legitimately start AFTER the holder finished,
+ * and the holder withdraws its own entry before any new grant
  * (runRawGrantAndPublish), so an entry on disk is the holder's LATEST
- * settled publication. Owner-less entries (an older build publishing
- * without a tab id) are treated as this tab's own — during a rolling
- * deploy's mixed-version window the handoff to an old-build holder degrades
- * to per-tab grants, the pre-#1521 behavior, until every tab reloads. */
+ * settled publication. An owner-LESS entry can never be this tab's own —
+ * this tab's publications always carry its tab id — so it is an older
+ * build's handoff (rolling-deploy mixed-version window) and is adopted
+ * exactly like a tab-stamped one.
+ * CONSUMES the offer (#1521 review): a successful read records the stamp
+ * in lastAdoptedAt, so this is a one-shot per publication — tryAdoptPublication
+ * is its only caller; a second reader would silently burn the adoption. */
 // The `at` of the publication THIS tab last adopted (#1521 review, loop 5):
 // re-adopting the identical publication is never legitimate — it would
 // serve the same tokens twice, and with a short-lived adopted token the
@@ -194,7 +196,7 @@ function readPublishedRenew() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return null;
     const entry = JSON.parse(raw);
-    if (!entry || !entry.user || !entry.tab || entry.tab === RENEW_TAB_ID) return null;
+    if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
     if (entry.at === lastAdoptedAt) return null;
     const exp = entry.user.expires_at;
     if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
@@ -262,12 +264,9 @@ async function runRawGrantAndPublish(manager) {
   // One read+parse serves both the save and the withdrawal: removeOwnTabEntry
   // returns the entry it removed (own tab only — never a foreign handoff).
   const saved = removeOwnTabEntry(RENEW_USER_KEY);
-  try {
-    const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
-    if (user) currentUser = user;
-    publishRenewedUser(user);
-    return user;
-  } catch (error) {
+  const restoreSavedPublication = () => {
+    // Restored only while the slot is still empty: a newer publication
+    // (this tab's own fresh one, or another tab's) outranks the saved entry.
     try {
       if (saved && !window.localStorage.getItem(RENEW_USER_KEY)) {
         window.localStorage.setItem(RENEW_USER_KEY, saved);
@@ -275,6 +274,19 @@ async function runRawGrantAndPublish(manager) {
     } catch {
       /* best-effort */
     }
+  };
+  try {
+    const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
+    // A grant that resolves WITHOUT a user publishes nothing and consumed
+    // nothing observable — the withdrawn publication goes back (#1521 review).
+    if (!user) restoreSavedPublication();
+    else {
+      currentUser = user;
+      publishRenewedUser(user);
+    }
+    return user;
+  } catch (error) {
+    restoreSavedPublication();
     throw error;
   }
 }

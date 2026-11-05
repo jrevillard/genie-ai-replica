@@ -948,32 +948,21 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(mockSigninSilent).toHaveBeenCalledTimes(1);
   });
 
-  it('a publication stamped far into the FUTURE (clock jump) is dropped at renew entry, not kept forever (#1521 review loop 5)', async () => {
+  it("an owner-less (old-build) publication is adoptable — it can never be this tab's own (#1521)", async () => {
     delete navigator.locks;
-    mockGetUser.mockResolvedValue(null);
-    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant' }));
-    // A backward clock jump after the publish leaves `at` in the future —
-    // a full minted token set must not sit at rest past the TTL.
-    seedForeignPublication('future-stamped-pub', { at: Date.now() + 30000 });
-    await keycloakAuthService.signinSilent();
-    // The future entry is gone; this tab's own grant republished the slot.
-    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
-    expect(entry.user.access_token).toBe('own-grant');
-  });
-
-  it('treats an owner-less (old-build) publication as its own → own grant (#1521)', async () => {
-    delete navigator.locks;
-    // A publication written by an older build carries no tab id — the
-    // conservative reading treats it as this tab's own, so it is
-    // inadmissible and this tab renews itself. (The gate reads ownership,
-    // not recency — the timestamp in the seed is inert.)
+    // A publication written by an older build carries no tab id. This tab's
+    // own publications ALWAYS carry its tab id, so a tab-less entry can only
+    // be an old-build holder's handoff — rejecting it (the earlier
+    // conservative reading) forced a new-build waiter onto a fresh grant on
+    // an already-rotated token, worse than #1521 itself, for the whole
+    // mixed-version window.
     const orphanUser = createMockUser({ access_token: 'orphan-published-token' });
     window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() - 10, user: orphanUser }));
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
     const user = await keycloakAuthService.signinSilent();
-    expect(user.access_token).toBe('my-own-grant');
-    expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+    expect(user.access_token).toBe('orphan-published-token'); // adopted
+    expect(mockSigninSilent).not.toHaveBeenCalled(); // no grant burned
   });
 
   // CLEAR-BEFORE-GRANT (#1521 review): the grant rotates this tab's refresh
@@ -982,6 +971,21 @@ describe('cross-tab renew lease (#80800)', () => {
   // handoff. A grant that fails WITHOUT rotating leaves the withdrawn token
   // valid, so the handoff is RESTORED; a foreign tab's publication survives
   // another tab's grant either way.
+  it('a grant that resolves WITHOUT a user restores the withdrawn publication too (#1521 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // First renew: our own grant, published under OUR tab id.
+    mockSigninSilent.mockResolvedValueOnce(createMockUser({ access_token: 'grant-one' }));
+    await keycloakAuthService.signinSilent();
+    // Second renew resolves null — nothing published, nothing consumed, so
+    // the withdrawn handoff goes back on disk.
+    mockSigninSilent.mockResolvedValueOnce(null);
+    const user = await keycloakAuthService.signinSilent();
+    expect(user).toBeNull();
+    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    expect(entry.user.access_token).toBe('grant-one');
+  });
+
   it("a FAILED grant RESTORES this tab's withdrawn publication — the token was never consumed (#1521 review)", async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);

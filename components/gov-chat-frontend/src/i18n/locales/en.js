@@ -1547,6 +1547,59 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    retrieval: {
+      title: 'Retrieval posture',
+      refresh: 'Refresh',
+      loading: 'Reading…',
+      engaged: 'Grounding active',
+      notEngaged: 'Not contributing',
+      servingCount: '{n} serving graph(s)',
+      sourceLabel: 'Source',
+      invalidValue: 'Enter a whole number between {min} and {max}.',
+      source: {
+        database: 'Governed row',
+        'env-defaults': 'Environment default'
+      },
+      revision: 'Revision',
+      updatedAt: 'Updated',
+      updatedBy: 'By',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Legacy',
+        okf_only: 'OKF only',
+        hybrid: 'Hybrid'
+      },
+      consequence: {
+        legacy: 'OKF grounding is off — answers come from the free-form path only.',
+        unknown: 'Unknown mode.',
+        okf_only: 'Only OKF graphs ground the answers — free-form context is not consulted.',
+        hybrid: 'OKF graphs ground the answers, and free-form context still contributes.'
+      },
+      warnZeroServing:
+        'okf_only with zero serving graphs — OKF contribution is zero. Publish and ingest a repository first.',
+      servingList: 'Serving graphs',
+      advanced: 'Advanced limits',
+      save: 'Save',
+      revert: 'Revert',
+      cancel: 'Cancel',
+      confirm: 'Apply',
+      confirmTitle: 'Change the retrieval posture?',
+      confirmLead: 'This is a global setting — it changes how every query is grounded, within about 30 seconds.',
+      readFailed: 'Could not read the retrieval posture.',
+      nothingToSave: 'There is nothing to save.',
+      saveFailed: 'The change was refused.',
+      audit: 'Change history',
+      auditLoading: 'Loading history…',
+      auditEmpty: 'No changes recorded yet.',
+      auditFailed: 'Could not read the change history.',
+      limit: {
+        max_fanout_graphs: 'Graphs per query',
+        spine_max_hops: 'Spine hops',
+        extracted_hop_cap: 'Extracted hops',
+        candidate_cap_per_graph: 'Candidates per graph',
+        candidate_cap_global: 'Candidates per query'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.',

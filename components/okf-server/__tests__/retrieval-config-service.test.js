@@ -15,7 +15,10 @@ jest.mock('../shared-lib/db-connection-service', () => {
   const mockDb = require('./mocks/arango-mock').createMockDb();
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
-jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
+jest.mock('../services/audit-service', () => ({
+  writeAudit: jest.fn().mockResolvedValue(null),
+  listAuditLogsByAction: jest.fn().mockResolvedValue([])
+}));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const auditService = require('../services/audit-service');
@@ -362,6 +365,39 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         expect(err).toBeInstanceOf(Error);
         expect(err.stack).toBeTruthy();
       }
+    });
+  });
+
+  // Story 10.7 (#995) — the read-model the Studio card consumes, plus the
+  // governance trail it reads back.
+  describe('the Studio read-model (Story 10.7)', () => {
+    test('the read-model carries the VALIDATION bounds and the mode enum (the card never keeps its own copy)', async () => {
+      seedServing([repoRow()]);
+      const out = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: true });
+      expect(out.modes).toEqual(['legacy', 'okf_only', 'hybrid']);
+      expect(out.limits).toEqual(validator.LIMITS);
+      // the bounds ARE the validator's — one source, not a copy
+      expect(out.limits.max_fanout_graphs).toEqual({ min: 1, max: 20 });
+      expect(out.limits.candidate_cap_global).toEqual({ min: 1, max: 1000 });
+    });
+
+    test("listConfigAudit reads the trail by the config's OWN action constant", async () => {
+      auditService.listAuditLogsByAction.mockResolvedValueOnce([
+        { ts: '2026-11-05T09:00:00Z', actor: 'steward-1', description: 'Retrieval config updated' }
+      ]);
+      const rows = await svc.listConfigAudit({ limit: 25 });
+      expect(rows).toHaveLength(1);
+      expect(auditService.listAuditLogsByAction).toHaveBeenCalledWith('system.retrieval_config.update', { limit: 25 });
+    });
+
+    test('the WRITE stamps the SAME action the trail reads by (one constant, two sides)', async () => {
+      await svc.putRetrievalConfig({ mode: 'hybrid' }, { sub: 'steward-1', name: 'Steward' });
+      const written = auditService.writeAudit.mock.calls[0][0];
+      expect(written.action).toBe('system.retrieval_config.update');
+      // and the trail's filter is exactly that action
+      auditService.listAuditLogsByAction.mockClear();
+      await svc.listConfigAudit({});
+      expect(auditService.listAuditLogsByAction.mock.calls[0][0]).toBe(written.action);
     });
   });
 });

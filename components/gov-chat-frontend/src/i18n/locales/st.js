@@ -1560,6 +1560,60 @@ export default {
       'Sebaka sa ho etsa upload bakeng sa RAG: tokomane e nngwe le e nngwe eo u e uploadang e ka fetoha tsebo e hlophisitsoeng, e nang le ditag — ditokomane tse tsamaitseng hantle le tse hlophisitsoeng di fumanwa ka nepo e kgolo ho feta faele e le nngwe e telele.'
   },
   okf: {
+    retrieval: {
+      title: 'Boemo bo ea bo phatlela',
+      refresh: 'Ntjhafatsa',
+      loading: 'O se o bala…',
+      engaged: 'Ho kotloa ho sebele',
+      notEngaged: 'Ha ho ntlha',
+      servingCount: '{n} li graph tse sebele',
+      sourceLabel: 'Mohlaka',
+      invalidValue: 'Kenisa nomoro e phetseng mahareng ho {min} le {max}.',
+      source: {
+        database: 'Mokha o laoloheloang',
+        'env-defaults': 'Sebetsa ka mora ka tikologo'
+      },
+      revision: 'Phetoho',
+      updatedAt: 'O ncha',
+      updatedBy: 'Ke',
+      modeLabel: 'Mokhoa',
+      mode: {
+        legacy: 'Kale',
+        okf_only: 'OKF feela',
+        hybrid: 'Tlatsoa'
+      },
+      consequence: {
+        legacy: 'Kotloa ha OKF ho koe — karabo li tla tsena kante ea lipale tsa lifefo.',
+        unknown: 'Mokhetho o tsebetseng.',
+        okf_only: 'Li graph tsa OKF feela li khanna liarabo — mokhoa oa lipale tsa lifefo o a ka sesa.',
+        hybrid: 'Li graph tsa OKF li khanna liarabo, mokhoa oa lipale tsa lifefo o na le ntla.'
+      },
+      warnZeroServing:
+        'okf_only ntle le li graph tse sebele — tlaello ea OKF ke ea zero. Batsa mme ua kenya repositori pele.',
+      servingList: 'Li graph tse sebele',
+      advanced: 'Mecanegolo e metso',
+      save: 'Boloka',
+      revert: 'Khutlisa',
+      cancel: 'Kansela',
+      confirm: 'Sebetsa',
+      confirmTitle: 'Fetola boemo bo ea bo phatlela?',
+      confirmLead:
+        'Bo ena ke boemong bo lefatsohe — bo fetola kamoo karabo ka tafolo e mong le e mong ka motsheo oa 30 sekonte.',
+      readFailed: 'Ha a ka bale boemo bo ea bo phatlela.',
+      nothingToSave: 'Ha ho letho le ho boloka.',
+      saveFailed: 'Phetoho e ile e hana.',
+      audit: 'Hisetori ea phetoho',
+      auditLoading: 'Ho pakisa hisetori…',
+      auditEmpty: 'Ha ho na phetoho e se ng kae.',
+      auditFailed: 'Ha a ka bale hisetori ea phetoho.',
+      limit: {
+        max_fanout_graphs: 'Li graph ka potoloho',
+        spine_max_hops: 'Mihleng ea lekala la bohare',
+        extracted_hop_cap: 'Mihleng e neng',
+        candidate_cap_per_graph: 'Ba khethang ka graph',
+        candidate_cap_global: 'Ba khethang ka potoloho'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Mefutso ea mangolo e ntse e sebetsa (ho hlahloba). Bula polokelo ena ho mohlophisi — lenaneo la mangolo le bontsa ke efe, kenyo e qale hape ka o iketsang. Phatlalatsa hape ha mongolo o mong le o mong o bontsa hore o hlahlobilwe.',

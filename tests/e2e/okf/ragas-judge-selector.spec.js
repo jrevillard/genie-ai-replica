@@ -35,8 +35,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
   let userId;
 
   test.beforeAll(async () => {
-    // The mint stacks several 30s-capped admin requests — past the 60s
-    // project hook slot the hook dies mid-mint. See SESSION_MINT_TIMEOUT_MS.
+    // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     adminToken = await getAdminToken();

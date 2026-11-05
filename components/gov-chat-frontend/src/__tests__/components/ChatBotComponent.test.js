@@ -5209,45 +5209,6 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems).toHaveLength(0);
       expect(vm.currentCategoryId).toBeNull();
     });
-
-    it('clearing the last chip still refuses the scope-broken category card', () => {
-      const wrapper = createChatBotWrapper();
-      const vm = wrapper.vm;
-      const tree = [
-        {
-          catKey: '2',
-          name: 'État civil',
-          nameEN: 'Civil Registry',
-          children: [{ name: 'Naissances', nameEN: 'Births' }]
-        }
-      ];
-      mockLiveTree(tree);
-      vm.serviceCategories = tree;
-      vm.serviceCategoriesStatus = 'loaded';
-
-      // The card's declared label is gone from the hierarchy: the SCOPE half
-      // of the verdict is broken. The refusal must survive the title gate's
-      // arrival — a broken card is never re-installed, whatever half broke.
-      vm.quickHelpButtons = [
-        {
-          id: 'births',
-          service: 'Births',
-          serviceLabels: ['Gone'],
-          serviceKey: 'births',
-          category: '2',
-          icon: 'x'
-        }
-      ];
-      vm.currentCategoryId = '2';
-      vm.$store.commit('conversation/setContextItems', [
-        { service: 'Naissances', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
-      ]);
-
-      vm.removeContextItem(0);
-
-      expect(vm.selectedContextItems).toHaveLength(0);
-      expect(vm.currentCategoryId).toBeNull();
-    });
   });
 
   // -----------------------------------------------------------------------

@@ -129,7 +129,8 @@ the ORDER and the cross-stream slots.
 > fields only, then a re-read from the GET — the card never renders its own
 > optimistic guess as truth.
 
-> **W6 STATUS 2026-11-06: CODE COMPLETE, awaiting review + MR.**
+> **W6 STATUS 2026-11-06: CODE COMPLETE + LIVE-VERIFIED — MR !780, awaiting review.**
+> Issue **#1557** (wave-level, part of this #1409 umbrella).
 > The artifacts view (`components/gov-chat-frontend/src/components/okf/ArtifactsView.vue`)
 > is the second view of the admin dashboard's Document Management tab
 > (Documents | Artifacts). The default list now fetches `is_bundle: false`, so
@@ -151,16 +152,37 @@ the ORDER and the cross-stream slots.
 > different default — sharing the module with it would change existing
 > renderings, which is out of scope for this wave.
 >
-> Verified: frontend suite 134 suites / 3901 tests green; coverage lines
-> **89.02 %** vs the measured main baseline **88.97 %** (statements 88.99 vs
-> 88.92, branches 76.13 vs 76.00, functions 67.32 vs 67.14) — the
+> Verified: frontend suite **135 suites / 3912 tests** green; coverage lines
+> **89.05 %** vs the measured main baseline **88.97 %** (statements 89.01 vs
+> 88.92, branches 76.16 vs 76.00, functions 67.40 vs 67.14) — the
 > must-not-decrease bar is met on every metric, measured on this machine by
 > stashing the wave and re-running. The smoke harness gained the W6 phase
 > (the artifacts view's data source: the bundle is listed by `is_bundle=true`
 > and does NOT appear in the document list) and the Playwright spec
 > (`tests/e2e/okf/artifacts-view.spec.js`, injected payloads) drives the view
-> in a browser. LIVE verification rides the tree sync (David's one-time-reset
-> call).
+> in a browser.
+>
+> **LIVE: GREEN on the local build (2026-11-06).** The spec passes **5/5**
+> against the running stack. The live data contract, measured against the
+> running document repository: `is_bundle=true` → **24 artifacts** (16 with a
+> version, **8 without** — a third of the live set has no version, so the
+> honest "unknown version" is the common case, not a corner; all 24 carry a
+> `repo_id`), `is_bundle=false` → the documents, and **no bundle leaks into
+> the document list**. The tree was synced with the tooling
+> (`--merge-prefer-target`: the tree's HEAD is a local merge of a branch
+> upstream has since merged in its own shape, so it cannot fast-forward — the
+> tooling merges the target on top and verifies every conflicted file against
+> it; nothing was reset, the tree's own CSR work is intact), the images were
+> rebuilt, the containers recreated, `verify-local-build.sh` 46 pass / 0 fail.
+> Two local-build findings that were NOT the wave's: the e2e fixtures did not
+> exist in the local realm (every Playwright spec failed at login — Keycloak's
+> own log says `user_not_found`; the tooling gained
+> `provision-e2e-fixtures.sh`) and the recreated document-repository image
+> needed the one-shot `document-repository-init` chown for `/app/uploads`
+> (`EACCES` on upload). The two red CI jobs on MR !780 are the registry's
+> half-published `@playwright/test@1.65.0` (**#1561** — main is red on the
+> same job) and a timing flake in the okf-server RAGAS suite tests (passes
+> locally 121/121, in a component this wave does not touch).
 
 ## Standing rules that carry over
 

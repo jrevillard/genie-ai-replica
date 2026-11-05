@@ -311,7 +311,32 @@ the live run happens at the sync.
   checked, the pager keys), one re-scoped (the `bundleSelection` refusal
   branch stays as the stated RULE — the primary guard is the list filter — and
   its comment now says so), one documented (the 50-repository list limit).
-- **Live:** pending the tree sync — the manual smoke plan is in the MR body.
+- **Live (local build, 2026-11-06): GREEN.** The tree was synced with the
+  tooling (`--merge-prefer-target` — the tree's HEAD is a local merge of a
+  branch upstream has since merged in its own shape, so it cannot fast-forward;
+  the tooling merges the target on top and verifies every conflicted file
+  against it — nothing was reset). The frontend/backend/okf-server/
+  document-repository/retriever images were rebuilt and the containers
+  recreated; `verify-local-build.sh` reports 46 pass / 0 fail.
+  - **The wave's own browser spec: 5/5 green against the running stack**
+    (`tests/e2e/okf/artifacts-view.spec.js`) — the two views ask for two
+    different things, a row carries its provenance, an artifact with no
+    version says so, no row carries a delete control, and the deep link
+    opens the artifacts view.
+  - **The live data contract:** `is_bundle=true` → 24 rows (16 with a version,
+    8 without — the "unknown version" case is a THIRD of the live set, not a
+    corner; all 24 carry a `repo_id`); `is_bundle=false` → the documents; and
+    **no bundle leaks into the document list**.
+  - Two local-build findings that were NOT this wave: the e2e fixtures did
+    not exist in the local realm (every Playwright spec failed at login —
+    Keycloak's own log: `user_not_found`; the tooling gained
+    `provision-e2e-fixtures.sh`), and the recreated document-repository image
+    needed the one-shot `document-repository-init` chown for `/app/uploads`
+    (`EACCES` on upload).
+  - Still red in the local build, pre-existing and data-dependent:
+    `tests/e2e/documents/search.spec.js` hardcodes nine documents it expects
+    to be `Pending`; in this deployment all nine are `Retracted`. The UI is
+    correct (the Pending filter shows exactly the pending ones).
 
 ### The decisions the wave took beyond the story
 

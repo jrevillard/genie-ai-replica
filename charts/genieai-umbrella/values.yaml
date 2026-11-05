@@ -285,6 +285,7 @@ data:
     # only source of truth for its topology, on every profile.
     instances: null
     storageSize: 10Gi
+    storageClassName: ""              # "" = inherit pluggable.storageClassName ("" itself = cluster default)
   arangodb:
     enabled: true
     # Arango deployment mode. THIS VALUE IS THE ONLY SOURCE OF TRUTH for
@@ -301,6 +302,7 @@ data:
     # divergence, declared in scripts/ci/config-parity-allowlist.json.
     database: _system
     storageSize: 50Gi
+    # Covers the dbserver AND the agency volume (the agency keeps its own size only).
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:
@@ -439,7 +441,6 @@ data:
     # wires it from their secret backend; the secret MUST carry both
     # `username` and `password` keys for CNPG to bootstrap).
     db:
-      storageClassName: ""        # "" = inherit pluggable.storageClassName ("" itself = cluster default)
       secretName: keycloak-db-credentials
       vendor: postgres
       port: 5432
@@ -1312,7 +1313,7 @@ opea:
     # selects); multi-GPU clusters need RWX or per-model claims.
     cache:
       enabled: true
-      storageClassName: ""
+      storageClassName: ""   # surface wins over pluggable.storageClassName; "" = inherit it
       size: 100Gi
     # resources for ALL FOUR model Deployments (llm, reranker, embedding,
     # translation) — one shared dict, NOT per-model. Empty = no explicit

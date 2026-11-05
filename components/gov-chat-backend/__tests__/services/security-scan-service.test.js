@@ -759,9 +759,7 @@ describe('SecurityScanService', () => {
   });
 
   // A VL mock that honours `limit`/`offset` the way the server does:
-  // it returns the slice of `rows` starting at `offset`. `count` mirrors
-  // the port's stats query — the total number of rows the clause
-  // matches, independent of paging.
+  // it returns the slice of `rows` starting at `offset`.
   const pagedClient = (rowsFor) => {
     const calls = [];
     const query = jest.fn().mockImplementation(async ({ q, offset = 0, limit }) => {
@@ -769,8 +767,7 @@ describe('SecurityScanService', () => {
       const rows = rowsFor(q) || [];
       return rows.slice(offset, offset + limit);
     });
-    const count = jest.fn().mockImplementation(async ({ q }) => (rowsFor(q) || []).length);
-    return { query, count, calls };
+    return { query, calls };
   };
 
   describe('VL scan pagination', () => {
@@ -790,10 +787,10 @@ describe('SecurityScanService', () => {
 
     it('counts matches beyond the first 1000 rows by paging with offset', async () => {
       const rows = Array.from({ length: 1005 }, (_, i) => bfRow(i));
-      const { query, count, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
+      const { query, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
       // Each page asks for the next VL_SCAN_PAGE_SIZE rows by INDEX,
@@ -811,21 +808,19 @@ describe('SecurityScanService', () => {
 
     it('stops paging at the first empty page', async () => {
       const rows = Array.from({ length: 3 }, (_, i) => bfRow(i));
-      const { query, count, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
+      const { query, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
       // 3 rows make page 1 short; the fetcher cannot trust a short page
       // (a dropped JSONL line also shortens pages), so it confirms the
-      // end with one more query at the next page offset. The cap-count
-      // check never runs (the walk ended before the cap).
+      // end with one more query at the next page offset.
       expect(calls.filter((c) => c.q === BF_CLAUSE)).toEqual([
         { q: BF_CLAUSE, offset: 0, limit: 1000 },
         { q: BF_CLAUSE, offset: 1000, limit: 1000 }
       ]);
-      expect(count).not.toHaveBeenCalled();
       const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
       expect(bruteForce.instanceCount).toBe(3);
     });
@@ -834,37 +829,41 @@ describe('SecurityScanService', () => {
       // The match set never exhausts: every page comes back full, so the
       // fetcher must stop at VL_SCAN_MAX_PAGES and say so.
       const rows = Array.from({ length: 100000 }, (_, i) => bfRow(i));
-      const { query, count, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
+      const { query, calls } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
-      // 20 full pages; the count query then proves rows are missing.
+      // 20 full pages, then the walk stops and says the result is
+      // capped — warning even though a stats query might have shown
+      // "exactly 20,000": a count can race the ingestion view and hide
+      // real truncation, and a silent undercount is the bug this fix
+      // removes.
       expect(calls.filter((c) => c.q === BF_CLAUSE)).toEqual(
         Array.from({ length: 20 }, (_, p) => ({ q: BF_CLAUSE, offset: p * 1000, limit: 1000 }))
       );
-      expect(count).toHaveBeenCalledWith({ q: BF_CLAUSE, start: expect.any(String), end: expect.any(String) });
       const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
       expect(bruteForce.instanceCount).toBe(20000);
       const { logger } = require('../../shared-lib');
       expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/page cap/));
     });
 
-    it('does not warn when the match set ends exactly at the page cap', async () => {
-      // 20 full pages and nothing beyond: nothing was truncated, so the
-      // cap warning would be a false alarm.
+    it('warns when the match set ends exactly at the page cap', async () => {
+      // 20 full pages and nothing beyond: the result is complete, but
+      // the walk cannot know that without a stats query that can race
+      // ingestion — so reaching the cap always warns (conservative).
       const rows = Array.from({ length: 20000 }, (_, i) => bfRow(i));
-      const { query, count } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
+      const { query } = pagedClient((q) => (q === BF_CLAUSE ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
       const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
       expect(bruteForce.instanceCount).toBe(20000);
       const { logger } = require('../../shared-lib');
-      expect(logger.warn).not.toHaveBeenCalledWith(expect.stringMatching(/page cap/));
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/page cap/));
     });
 
     it('caps the failed-login and suspicious detail lists while keeping counts exact', async () => {
@@ -874,10 +873,10 @@ describe('SecurityScanService', () => {
       // route). The suspicious-term clause also contains the brute-force
       // literal, so routing by substring feeds both consumers.
       const rows = Array.from({ length: 1500 }, (_, i) => bfRow(i));
-      const { query, count } = pagedClient((q) => (q.includes('_msg:~"brute force"') ? rows : []));
+      const { query } = pagedClient((q) => (q.includes('_msg:~"brute force"') ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
       const bruteForce = result.vulnerabilities.medium.find((v) => v.type === 'brute_force');
@@ -897,10 +896,10 @@ describe('SecurityScanService', () => {
       // The attack_attempt pattern's clause (vulnerability loop) and the
       // suspicious-term clause both contain the XSS literal; both must
       // see the full paged set (1002 rows).
-      const { query, count } = pagedClient((q) => (q.includes('_msg:~"XSS"') ? rows : []));
+      const { query } = pagedClient((q) => (q.includes('_msg:~"XSS"') ? rows : []));
 
       const result = await securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
 
       // The detail list is capped at 1,000 entries even though the
@@ -924,11 +923,11 @@ describe('SecurityScanService', () => {
       'var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://localhost:8443"';
 
     const scanWith = async (message) => {
-      const { query, count } = pagedClient(() => [
+      const { query } = pagedClient(() => [
         { _time: '2026-09-25T08:13:01.983348506Z', _msg: message, service: 'grafana' }
       ]);
       return securityScanService.processLogsInParallel({
-        _getVlClient: jest.fn().mockResolvedValue({ query, count })
+        _getVlClient: jest.fn().mockResolvedValue({ query })
       });
     };
 

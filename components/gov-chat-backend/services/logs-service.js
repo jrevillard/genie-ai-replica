@@ -355,8 +355,8 @@ class LogsService {
    * (the "window") and slices `[offset, offset + limit)` client-side.
    * Wide ranges therefore download the full window every call; an
    * explicit `q` filter and a tight window are how we keep the payload
-   * bounded. Switching this method to the native offset is tracked
-   * separately.
+   * bounded. Switching this method to the native offset is tracked in
+   * issue #1541.
    *
    * Envelope shape — reviewers will reject future drift from this contract:
    * ```

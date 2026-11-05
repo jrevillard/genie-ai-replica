@@ -396,12 +396,15 @@ processors:
           # be unset — a record that already carries a real severity is
           # never restamped, so reprocessing the same record twice
           # leaves the same severity_text both times (the guard the
-          # block comment above promises). The OTTL getter for
-          # severity_text returns a plain string, so "unset" is the
-          # empty string — there is no nil to compare against.
-          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where severity_text == "" and IsString(body) and Substring(body, 0, 1) == "{"'
-          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where severity_text == "" and IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
-          - 'set(severity_text, ToUpperCase(body["level"])) where severity_text == "" and IsMap(body) and IsString(body["level"])'
+          # block comment above promises). The upstream getter returns
+          # the record's SeverityText() string, so unset is normally the
+          # empty string; the nil clause is belt-and-braces for a
+          # nil-valued representation (OTTL compares string-vs-nil as
+          # plain false, never an error), so the stamp cannot be
+          # silently disabled by a representation change.
+          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where (severity_text == "" or severity_text == nil) and IsString(body) and Substring(body, 0, 1) == "{"'
+          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where (severity_text == "" or severity_text == nil) and IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
+          - 'set(severity_text, ToUpperCase(body["level"])) where (severity_text == "" or severity_text == nil) and IsMap(body) and IsString(body["level"])'
           # Normalise Winston JSON envelopes: replace `body` with the inner
           # `.message` field so VictoriaLogs `_msg` carries the human-readable
           # log line instead of the JSON envelope. Without this transform the

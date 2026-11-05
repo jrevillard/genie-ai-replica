@@ -377,29 +377,17 @@ const securityScanService = {
           limit: VL_SCAN_PAGE_SIZE,
           offset: page * VL_SCAN_PAGE_SIZE
         });
-        if (!Array.isArray(pageRows)) {
-          throw new Error(`VL scan page for ${label} returned a non-array payload`);
-        }
         if (pageRows.length === 0) return rows;
         rows.push(...pageRows);
       }
-      // The cap is reached — but the match set may end exactly there.
-      // The port's count() answers "are rows missing?" with one tiny
-      // stats response, counting the same literal clause this loop pages
-      // through; if the count itself fails, warn anyway rather than
-      // risk a silent undercount.
-      let truncated = true;
-      try {
-        const total = await client.count({ q: msgClause, start: startIso, end: endIso });
-        truncated = total > rows.length;
-      } catch (err) {
-        logger.warn(`VL scan pagination count failed for ${label}: ${err.message} — treating the result as truncated`);
-      }
-      if (truncated) {
-        logger.warn(
-          `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows`
-        );
-      }
+      // The cap is reached: the result may be short of the true match
+      // count. Say so — a count() check would race the ingestion view
+      // (rows landing between the last page and the stats query can
+      // hide the truncation) and a silent undercount is exactly what
+      // this fix exists to remove.
+      logger.warn(
+        `VL scan pagination hit the ${VL_SCAN_MAX_PAGES}-page cap for ${label} — result capped at ${rows.length} rows (the true match count may be higher)`
+      );
       return rows;
     };
 

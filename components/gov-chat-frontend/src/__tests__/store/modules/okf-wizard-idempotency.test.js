@@ -140,6 +140,25 @@ describe('okf/saveDraft — wizard idempotency', () => {
     expect(studioService.getDraft).toHaveBeenCalled();
   });
 
+  it('#1056: the recovery hydrates the store when the curator has no local copy', async () => {
+    // The wizard resumes from the STORE's draft map, not from the action's
+    // return value: a recovery that returned the server's draft without
+    // committing it would leave the wizard on the permissive fallback.
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('NOT_READY'), { code: 'NOT_READY' }));
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'draft' });
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { ...DRAFT } });
+    expect(store.getters['okf/draftsUnavailable']).toBe(true);
+    // drop the local copy the failed save left behind — the curator has
+    // nothing in the browser, only the server's draft
+    store.commit('okf/clearDraft', 'r1');
+    studioService.getDraft.mockResolvedValueOnce({ repo_id: 'r1', studio_step: 7 });
+    const res = await store.dispatch('okf/fetchDraft', { repoId: 'r1' });
+    expect(store.getters['okf/draftsUnavailable']).toBe(false);
+    expect(res.draft.studio_step).toBe(7);
+    expect(store.getters['okf/activeDraft']('r1').studio_step).toBe(7);
+  });
+
   it('#1056: a 200-with-null also clears the latch — a null draft is an answer', async () => {
     // The repo exists but has no draft yet: the route answered, so the
     // endpoint exists. The recovery must not sit behind the null-draft

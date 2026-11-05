@@ -383,7 +383,10 @@ const actions = {
         // Keep the LOCAL draft: while the latch was armed, saves went
         // local-only, so the local copy is the fresher one. The server's
         // copy predates it and must not overwrite the curator's work.
-        return { ok: true, draft: state.drafts[repoId] || draft || null };
+        if (state.drafts[repoId]) return { ok: true, draft: state.drafts[repoId] };
+        if (!draft) return { ok: true, draft: null };
+        commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
+        return { ok: true, draft };
       }
       if (!draft) return { ok: true, draft: null };
       // The wire draft is FLAT — commit it verbatim. A server that echoes a

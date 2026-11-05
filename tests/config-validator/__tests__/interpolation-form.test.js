@@ -33,14 +33,11 @@ describe('classifyForm', () => {
 });
 
 describe('collectInterpolations', () => {
-  it('skips comment-only lines', () => {
-    const content = ['# same source spelling as (${DATA_DIR} —', '  FOO: ${FOO:-x}'].join('\n');
-    expect(collectInterpolations(content)).toEqual([{ name: 'FOO', form: 'default', line: 2, raw: '${FOO:-x}' }]);
-  });
-
-  it('strips trailing inline comments before classifying', () => {
-    const content = ['  FOO: ${FOO:-x} # was bare ${FOO} before #1074'].join('\n');
-    expect(collectInterpolations(content)).toEqual([{ name: 'FOO', form: 'default', line: 1, raw: '${FOO:-x}' }]);
+  it('ignores comments — full-line and trailing — that merely name a knob', () => {
+    const fullLine = ['# same source spelling as (${DATA_DIR} —', '  FOO: ${FOO:-x}'].join('\n');
+    expect(collectInterpolations(fullLine)).toEqual([{ name: 'FOO', form: 'default', line: 2, raw: '${FOO:-x}' }]);
+    const trailing = ['  FOO: ${FOO:-x} # was bare ${FOO} before #1074'].join('\n');
+    expect(collectInterpolations(trailing)).toEqual([{ name: 'FOO', form: 'default', line: 1, raw: '${FOO:-x}' }]);
   });
 
   it('reports every occurrence with its line number', () => {

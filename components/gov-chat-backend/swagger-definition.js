@@ -35,14 +35,10 @@ module.exports = {
       url: (() => {
         const raw = (process.env.API_URL || '').trim();
         const base = raw.replace(/\/+$/, '');
-        // The server base is JOINED with the annotated paths
-        // (servers[0].url + '/api/...'), so it must be usable as a base:
-        // a query or a fragment would swallow the joined path, and a
-        // whitespace is not a valid URL — WHATWG parsing only tolerates
-        // it by percent-encoding it (and strips tab/LF/CR before parsing,
-        // which would serve the value silently rewritten). Such a value
-        // would serve a broken server entry, so it is ignored like any
-        // other malformed value.
+        // The base-usability check the docstring names: a query or a
+        // fragment would swallow the joined path, and a whitespace is not
+        // a valid URL (WHATWG parsing only tolerates one by encoding or
+        // stripping it).
         if (/[\s?#]/.test(base)) return '/';
         try {
           // WHATWG parsing is the exact validator: it rejects scheme-only

@@ -37,7 +37,6 @@
 const {
   main,
   isHuskDoc,
-  compareSignatureSets,
   HUSK_MATCHER_AQL,
   HUSK_REMOVAL_AQL,
   ALL_DOCS_AQL
@@ -46,8 +45,9 @@ const {
 // The suite waits for the database to answer (the CI service container is
 // RUNNING long before ArangoDB serves): the wait's own budget must fit
 // inside Jest's hook timeout, or the hook dies with a generic timeout and
-// the wait's diagnostic never prints.
-jest.setTimeout(180000);
+// the wait's diagnostic never prints — one constant keeps the invariant.
+const WAIT_BUDGET_MS = 120000;
+jest.setTimeout(WAIT_BUDGET_MS * 1.5);
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || 'root';
@@ -109,9 +109,6 @@ const EXPECTED_HUSK_KEYS = ['husk-created-only', 'husk-deleted-false', 'husk-del
 // The HTTP calls (creating and dropping the database) carry the same
 // credentials the driver does.
 function authHeader() {
-  if (!TEST_USER) {
-    return {};
-  }
   return {
     Authorization: `Basic ${Buffer.from(`${TEST_USER}:${TEST_PASSWORD}`).toString('base64')}`
   };
@@ -150,7 +147,7 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
           'and this suite drives that script against the database.'
       );
     }
-    await waitForServer(120000);
+    await waitForServer(WAIT_BUDGET_MS);
     const { Database } = require('arangojs');
     // The database is created over the HTTP API (arangojs 8's Database
     // binds to an existing one; the same pattern the sibling suite uses)
@@ -171,7 +168,10 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
       body: JSON.stringify({ name: DB_NAME })
     });
     const createdBody = await created.json();
-    if (createdBody.error && !String(createdBody.errorMessage).includes('duplicate')) {
+    // The stale database was just dropped (checked above), so ANY create
+    // error is fatal — a tolerated 'duplicate' here would mean a concurrent
+    // run against the same throwaway database, which must not be raced.
+    if (createdBody.error) {
       throw new Error(`creating ${DB_NAME}: ${JSON.stringify(createdBody)}`);
     }
     db = new Database({
@@ -211,17 +211,13 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     expect(hits.map((doc) => doc._key).sort()).toEqual(EXPECTED_HUSK_KEYS);
   });
 
-  it('agrees with the JS predicate in BOTH directions', async () => {
-    const hits = await queryAll(HUSK_MATCHER_AQL, { '@collection': COLLECTION });
+  it('agrees with the JS predicate on the same corpus', async () => {
     const all = await queryAll(ALL_DOCS_AQL, { '@collection': COLLECTION });
-    const { extra, missed } = compareSignatureSets(hits, all);
-    // 'extra': the AQL matched a document the predicate rejects (too
-    // permissive). 'missed': the predicate accepts a document the AQL
-    // never returned (too restrictive — the silent direction).
-    expect(extra.map((doc) => doc._key)).toEqual([]);
-    expect(missed.map((doc) => doc._key)).toEqual([]);
     // The predicate is pinned against the corpus too, so a change to the
-    // JS side alone cannot hide behind an agreeing AQL.
+    // JS side alone cannot hide behind an agreeing AQL. (With both sets
+    // pinned to the oracle, no divergence is possible — the script's own
+    // cross-check is exercised on every runScript call below and asserted
+    // through the absence of its ABORT output.)
     expect(
       all
         .filter(isHuskDoc)

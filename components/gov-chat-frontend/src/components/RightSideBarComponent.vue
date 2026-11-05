@@ -1,5 +1,11 @@
 <template>
-  <div class="sidebar" :class="{ collapsed: sidebarCollapsed }" :style="{ '--sidebar-width': `${width}px` }">
+  <div
+    class="sidebar"
+    data-testid="sidebar"
+    :data-collapsed="sidebarCollapsed ? 'true' : 'false'"
+    :class="{ collapsed: sidebarCollapsed }"
+    :style="{ '--sidebar-width': `${width}px` }"
+  >
     <!-- The handle comes FIRST in the flex row. On the right panel
          the seam with the centre is the panel's LEFT edge, so a handle
          placed after the content lands on the far edge — against the

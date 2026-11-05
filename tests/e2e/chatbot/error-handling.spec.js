@@ -3,9 +3,18 @@ const {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
+  waitForBotResponse,
+  getLastBotMessage,
   BASE_URL,
 } = require('../helpers/chatbot');
 
+// A failed turn ends with the answer card's error block, and that card
+// is the turn's completion signal: the app renders it only once the
+// stream has closed. It is also the surface the old assertions missed —
+// `.loading-spinner` (the spinner wait) and `.status-error-message`
+// (the error fallback) are rendered by no component, so neither half of
+// the old assertion could ever pass on its own and the error was never
+// really observed. Every test below waits on the card instead.
 test.describe('RAG error handling', () => {
   let page;
   let context;
@@ -47,25 +56,23 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'First attempt will fail');
 
-    // Wait for spinner to disappear (frontend handled the error)
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
-
-    // Verify error message is displayed to the user (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again after error
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
 
     // Remove the intercept so subsequent requests go through normally
     await page.unroute('**/api/queries/stream');
 
-    // Send another message — should work now (retry probe)
+    // Send another message — should work now (retry probe). The
+    // probe is only a probe if the retry actually ANSWERS: a second
+    // turn that silently fails must fail this test too.
     await sendMessage(page, 'Second attempt should work');
+    await waitForBotResponse(page, { timeout: 120000 });
+    expect(await getLastBotMessage(page), 'the retry must produce an answer').not.toBe('');
 
     // Verify the input is still functional
     await expect(textarea).toBeVisible({ timeout: 5000 });
@@ -90,18 +97,12 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'This should fail with network error');
 
-    // Wait for spinner to disappear
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
-
-    // Verify error message is displayed (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Verify the chat is not stuck
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 
@@ -120,18 +121,12 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Trigger internal error');
 
-    // Wait for spinner to disappear
-    await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
-
-    // Verify error message is displayed (AC4)
-    const statusError = page.locator('.status-error-message');
-    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
-    await expect(
-      statusError.or(botBubble),
-    ).toBeVisible({ timeout: 5000 });
+    // The failed turn ends with the error card — see the describe
+    // comment for why that card is the wait.
+    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
 
     // Input should be usable again
-    const textarea = page.locator('.prompt-textarea');
+    const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 });

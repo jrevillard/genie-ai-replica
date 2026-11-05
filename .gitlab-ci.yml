@@ -3781,6 +3781,11 @@ config:validate:
         - "genie-ai-overlay/chatqna/**/*"
         - "deploy/ansible/**/*"
         - "tests/config-validator/**/*"
+        # The e2e handle gate (tests/config-validator/__tests__/e2e-handle-locators.test.js)
+        # reads the specs: a spec that reintroduces a class locator must fail
+        # the gate in the same pipeline, so a change under tests/e2e/ triggers
+        # the job that runs it.
+        - "tests/e2e/**/*"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

@@ -20,7 +20,7 @@
            the user-facing controls. -->
       <nav-bar-component :config="$config" @logout="handleLogout" />
 
-      <div class="main-container">
+      <div class="main-container" data-test-id="main-container">
         <!-- Sidebar (collapsible + resizable, only on routes with
              showSidebar meta). The handle on the inner edge handles
              both gestures. -->

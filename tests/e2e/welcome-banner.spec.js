@@ -300,7 +300,7 @@ const ONE_LINE_WITH_LAYER_OFF = ['fr', 'id'];
 // cross-checked against the colour the element actually paints with.
 async function scrimAlpha(page) {
   return await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-content');
+    const el = document.querySelector('[data-testid="quick-help-content"]');
     if (!el) return { ok: false, why: 'no scrim element' };
     const cs = getComputedStyle(el);
     const raw = cs.getPropertyValue('--qh-banner-scrim-alpha').trim();
@@ -349,7 +349,7 @@ async function scrimAlpha(page) {
 // exactly the case it exists to catch.
 async function wordmarkContrast(page) {
   const box = await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-heading .brand-wordmark');
+    const el = document.querySelector('[data-testid="quick-help-heading"] [data-wordmark="true"]');
     if (!el) return null;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return null;
@@ -358,16 +358,16 @@ async function wordmarkContrast(page) {
   if (!box) return { ok: false, why: 'no wordmark box' };
 
   const a = await capturePixels(page, box, null);
-  const b = await capturePixels(page, box, '.brand-wordmark{visibility:hidden !important;}');
+  const b = await capturePixels(page, box, '[data-wordmark="true"]{visibility:hidden !important;}');
   const hk = await capturePixels(
     page,
     box,
-    '.brand-wordmark{-webkit-text-fill-color:#000 !important;background-image:none !important;color:#000 !important;}'
+    '[data-wordmark="true"]{-webkit-text-fill-color:#000 !important;background-image:none !important;color:#000 !important;}'
   );
   const hw = await capturePixels(
     page,
     box,
-    '.brand-wordmark{-webkit-text-fill-color:#fff !important;background-image:none !important;color:#fff !important;}'
+    '[data-wordmark="true"]{-webkit-text-fill-color:#fff !important;background-image:none !important;color:#fff !important;}'
   );
 
   return await page.evaluate(
@@ -454,16 +454,16 @@ async function wordmarkContrast(page) {
 // composed fade spreads the same change over the whole ramp.
 async function scrimTopEdge(page) {
   const box = await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-banner');
+    const el = document.querySelector('[data-testid="quick-help-banner"]');
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { x: r.left, y: r.top, width: r.width, height: r.height };
   });
   if (!box) return { ok: false, why: 'no banner box' };
 
-  const HIDE_TEXT = '.quick-help-heading,.quick-help-subtitle{visibility:hidden !important;}';
+  const HIDE_TEXT = '[data-testid="quick-help-heading"],[data-testid="quick-help-subtitle"]{visibility:hidden !important;}';
   const withScrim = await capturePixels(page, box, HIDE_TEXT);
-  const withoutScrim = await capturePixels(page, box, `${HIDE_TEXT}.quick-help-content{visibility:hidden !important;}`);
+  const withoutScrim = await capturePixels(page, box, `${HIDE_TEXT}[data-testid="quick-help-content"]{visibility:hidden !important;}`);
 
   return await page.evaluate(
     async ({ withScrim, withoutScrim, wcag }) => {
@@ -581,9 +581,9 @@ async function scrimTopEdge(page) {
 // paint, and left in place no footprint check can pass.
 async function veilFootprintAndBlend(page) {
   const geo = await page.evaluate(() => {
-    const banner = document.querySelector('.quick-help-banner');
-    const veil = document.querySelector('.quick-help-content');
-    const heading = document.querySelector('.quick-help-heading');
+    const banner = document.querySelector('[data-testid="quick-help-banner"]');
+    const veil = document.querySelector('[data-testid="quick-help-content"]');
+    const heading = document.querySelector('[data-testid="quick-help-heading"]');
     if (!banner || !veil || !heading) return null;
     const b = banner.getBoundingClientRect();
     const v = veil.getBoundingClientRect();
@@ -600,7 +600,7 @@ async function veilFootprintAndBlend(page) {
     // so it is as wide as its WIDEST child, and in two shipped locales that
     // is the subtitle and not the title (Sesotho 515.0 against 390.4,
     // Portuguese 438.6 against 419.7).
-    const subtitleEl = document.querySelector('.quick-help-subtitle');
+    const subtitleEl = document.querySelector('[data-testid="quick-help-subtitle"]');
     const subtitle = subtitleEl ? document.createRange() : null;
     if (subtitle) subtitle.selectNodeContents(subtitleEl);
     // The clip is the banner's box intersected with the viewport. The banner
@@ -660,15 +660,15 @@ async function veilFootprintAndBlend(page) {
 
   const BASE_CSS =
     // The glyphs would otherwise pollute the pixel comparison.
-    '.quick-help-heading,.quick-help-subtitle{visibility:hidden !important;}' +
+    '[data-testid="quick-help-heading"],[data-testid="quick-help-subtitle"]{visibility:hidden !important;}' +
     // The banner's drop-shadow is computed from its own alpha, which the
     // veil raises wherever it paints; without this it haloed ~23 px outside
     // the veil's box in every capture.
-    '.quick-help-banner{filter:none !important;}';
+    '[data-testid="quick-help-banner"]{filter:none !important;}';
   const VEIL_OFF =
-    '.quick-help-content{background:transparent !important;mask-image:none !important;-webkit-mask-image:none !important;}';
+    '[data-testid="quick-help-content"]{background:transparent !important;mask-image:none !important;-webkit-mask-image:none !important;}';
   const VEIL_OPAQUE =
-    '.quick-help-content{background:var(--surface) !important;mask-image:none !important;-webkit-mask-image:none !important;}';
+    '[data-testid="quick-help-content"]{background:var(--surface) !important;mask-image:none !important;-webkit-mask-image:none !important;}';
 
   const shipped = await capturePixels(page, geo.clip, BASE_CSS);
   const bare = await capturePixels(page, geo.clip, BASE_CSS + VEIL_OFF);
@@ -790,10 +790,10 @@ async function veilFootprintAndBlend(page) {
 // lines and well above any difference within one.
 async function veilGeometry(page) {
   return await page.evaluate(() => {
-    const veil = document.querySelector('.quick-help-content');
-    const banner = document.querySelector('.quick-help-banner');
-    const heading = document.querySelector('.quick-help-heading');
-    const subtitleEl = document.querySelector('.quick-help-subtitle');
+    const veil = document.querySelector('[data-testid="quick-help-content"]');
+    const banner = document.querySelector('[data-testid="quick-help-banner"]');
+    const heading = document.querySelector('[data-testid="quick-help-heading"]');
+    const subtitleEl = document.querySelector('[data-testid="quick-help-subtitle"]');
     if (!veil || !banner || !heading) return null;
     const cs = getComputedStyle(veil);
     const hs = getComputedStyle(heading);
@@ -862,12 +862,12 @@ async function veilGeometry(page) {
 // contents are not.
 async function panelOwnership(page) {
   return await page.evaluate(() => {
-    const overlay = document.querySelector('.quick-help-overlay');
-    const veil = document.querySelector('.quick-help-content');
+    const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
+    const veil = document.querySelector('[data-testid="quick-help-content"]');
     if (!overlay || !veil) return null;
     const os = getComputedStyle(overlay);
     const vs = getComputedStyle(veil);
-    const hs = getComputedStyle(document.querySelector('.quick-help-heading'));
+    const hs = getComputedStyle(document.querySelector('[data-testid="quick-help-heading"]'));
     return {
       containerType: os.containerType || os.webkitContainerType || '',
       veilPadToken: vs.getPropertyValue('--qh-veil-pad').trim(),
@@ -888,9 +888,9 @@ async function panelOwnership(page) {
 // full-bleed geometry around it.
 async function boxGeometry(page) {
   return await page.evaluate(() => {
-    const banner = document.querySelector('.quick-help-banner');
-    const overlay = document.querySelector('.quick-help-overlay');
-    const grid = document.querySelector('.quick-help-grid');
+    const banner = document.querySelector('[data-testid="quick-help-banner"]');
+    const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
+    const grid = document.querySelector('[data-testid="quick-help-grid"]');
     if (!banner || !overlay || !grid) return null;
     const ov = getComputedStyle(overlay);
     const fRaw = ov.getPropertyValue('--f').trim();
@@ -955,8 +955,8 @@ async function boxGeometry(page) {
 // than at the worst width measured.
 async function subtitleContrast(page) {
   const geo = await page.evaluate(() => {
-    const el = document.querySelector('.quick-help-subtitle');
-    const head = document.querySelector('.quick-help-heading');
+    const el = document.querySelector('[data-testid="quick-help-subtitle"]');
+    const head = document.querySelector('[data-testid="quick-help-heading"]');
     if (!el || !head) return null;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return null;
@@ -981,7 +981,7 @@ async function subtitleContrast(page) {
   if (!geo) return { ok: false, why: 'no subtitle box' };
 
   const a = await capturePixels(page, geo.clip, null);
-  const b = await capturePixels(page, geo.clip, '.quick-help-subtitle{visibility:hidden !important;}');
+  const b = await capturePixels(page, geo.clip, '[data-testid="quick-help-subtitle"]{visibility:hidden !important;}');
 
   return await page.evaluate(
     async ({ a, b, geo, coverageFloor, minSpan, wcag }) => {
@@ -1460,7 +1460,7 @@ test.describe('Welcome banner invariants', () => {
           expect(shipped.visualOn, `${where} the first reading is not with the layer on`).toBe(true);
           expect(
             shipped.gliOn,
-            `${where} the panel is not inside .genie-living-intelligence, so the layer never applied to it`
+            `${where} the panel is not inside the dashboard wrapper, so the layer never applied to it`
           ).toBe(true);
           const on = await veilGeometry(page);
           const onOwn = await panelOwnership(page);

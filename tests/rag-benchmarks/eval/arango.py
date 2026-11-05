@@ -59,6 +59,17 @@ def cursor(
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 payload = json.load(resp)
+            # Fail loud on a cursor error payload (#1079). ArangoDB answers a
+            # failing query with `{"error": true, "errorNum": ..., ...}` and NO
+            # `result` field — reading `.result` off that payload yields an
+            # empty list that is indistinguishable from a legitimately empty
+            # collection ("no duplicates", "nothing to migrate", recall 0).
+            if payload.get("error"):
+                raise RuntimeError(
+                    "Arango query failed (errorNum {}: {})".format(
+                        payload.get("errorNum"), payload.get("errorMessage")
+                    )
+                )
             prev_len = len(rows)
             if expected is None:
                 expected = payload.get("count")
@@ -108,7 +119,13 @@ def source_chunks(
     of dump-tuples / anchor maps in ``run_eval`` are derived from this single
     AQL — text is fetched ONCE and projected per-mode.
     """
+    # The collection name is bound (@@src), not interpolated: OKF graph
+    # collections and stack-derived GRAPH_SOURCE names carry hyphens, which
+    # unquoted AQL parses as subtraction (errorNum 1203, #1079). A bind
+    # parameter carries any collection name safely — no quoting rule for
+    # future call sites to remember.
     return cursor(
-        f"FOR doc IN {graph_source} RETURN {{key: doc._key, text: doc.{text_field}}}",
+        f"FOR doc IN @@src RETURN {{key: doc._key, text: doc.{text_field}}}",
+        {"@src": graph_source},
         **(conn or {}),
     )

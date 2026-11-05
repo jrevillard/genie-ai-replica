@@ -841,13 +841,15 @@ services:
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       # GPU node API key for Authorization: Bearer (translation, vLLM calls)
       - VLLM_API_KEY=${VLLM_API_KEY:-}
-      # Email configuration (required)
-      - EMAIL_HOST=${EMAIL_HOST}
-      - EMAIL_PORT=${EMAIL_PORT}
-      - EMAIL_SECURE=${EMAIL_SECURE:-}
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
-      - EMAIL_FROM=${EMAIL_FROM}
+      # Email configuration (same fallback form as the Keycloak services
+      # below — an unset variable must reach every consumer identically,
+      # never bare in one service and defaulted in another, #1074)
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_SECURE=${EMAIL_SECURE:-false}
+      - EMAIL_USER=${EMAIL_USER:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
       # OPEA AI/ML service (the code default is the same service name)
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
       # Story 1.1 (BFF fan-out wire-up): okf-server internal endpoint for the
@@ -2853,7 +2855,7 @@ services:
       - GENIE_ADMIN_PASSWORD=${GENIE_ADMIN_PASSWORD}
       - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
-      - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
+      - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET:-}
       - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
       - KC_GRAFANA_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
       - KC_GRAFANA_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}

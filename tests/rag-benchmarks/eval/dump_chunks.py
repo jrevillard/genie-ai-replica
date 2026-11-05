@@ -34,14 +34,15 @@ def _query_rows(text_field: str) -> list[dict]:
     surfaces as ``text: None``, NOT as a missing row)."""
     return cursor(
         f"""
-        FOR doc IN {GRAPH_SOURCE}
+        FOR doc IN @@src
             SORT doc._key
             RETURN {{
                 "key": doc._key,
                 "text": doc.{text_field},
                 "labels": doc.chunk_labels || []
             }}
-        """
+        """,
+        {"@src": GRAPH_SOURCE},
     )
 
 

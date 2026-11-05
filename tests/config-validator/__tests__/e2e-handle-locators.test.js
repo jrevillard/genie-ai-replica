@@ -157,7 +157,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
   });
 
   test('a mixed-quote attribute value inside a selector is not an offender', () => {
-    const sample = 'page.locator(\'[data-x=\'a.b\']\')';
+    const sample = "page.locator('[data-x='a.b']')";
     expect(classSelectorsIn(sample)).toEqual([]);
   });
 

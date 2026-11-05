@@ -58,7 +58,7 @@ export default {
     try {
       // This points to the PUBLIC endpoint that returns simple data
       const response = await httpService.get(
-        'services/categories',
+        'service-categories/categories',
         { params: { locale } },
         { timeout: TREE_FETCH_TIMEOUT_MS }
       );
@@ -122,7 +122,7 @@ export default {
    */
   async getCategoryServices(categoryId, locale = 'en') {
     try {
-      const response = await httpService.get(`services/categories/${categoryId}`, {
+      const response = await httpService.get(`service-categories/categories/${categoryId}`, {
         params: { locale }
       });
 
@@ -141,7 +141,7 @@ export default {
    */
   async searchServices(query, locale = 'en') {
     try {
-      const response = await httpService.get('services/search', {
+      const response = await httpService.get('service-categories/search', {
         params: { query, locale }
       });
 

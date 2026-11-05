@@ -150,91 +150,43 @@ describe('Auth guard', () => {
 });
 
 // ============================================================
-// AC3.2: GET /api/services/categories
+// #442: the three /api/services GET routes are 301 redirects to the
+// canonical /api/service-categories paths (service-category-routes.js).
+// The query string must survive the redirect.
 // ============================================================
-describe('GET /api/services/categories', () => {
-  it('should return 200 with categories using default locale en', async () => {
-    const categories = [{ _key: 'cat1', nameEN: 'Health' }];
-    serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue(categories);
-
+describe('GET /api/services/categories redirects to the canonical route', () => {
+  it('should 301 to /api/service-categories/categories', async () => {
     const response = await authGet('/api/services/categories');
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(categories);
-    expect(serviceCategoryService.getAllCategoriesWithServices).toHaveBeenCalledWith('en');
+    expect(response.status).toBe(301);
+    expect(response.headers.location).toBe('/api/service-categories/categories');
+    expect(serviceCategoryService.getAllCategoriesWithServices).not.toHaveBeenCalled();
   });
 
-  it('should pass locale query parameter', async () => {
-    serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue([]);
-
+  it('should preserve the query string in the redirect target', async () => {
     const response = await authGet('/api/services/categories?locale=fr');
 
-    expect(response.status).toBe(200);
-    expect(serviceCategoryService.getAllCategoriesWithServices).toHaveBeenCalledWith('fr');
-  });
-
-  it('should return 500 on service error', async () => {
-    serviceCategoryService.getAllCategoriesWithServices.mockRejectedValue(new Error('DB error'));
-
-    const response = await authGet('/api/services/categories');
-
-    expect(response.status).toBe(500);
-    expect(response.body.message).toBe('DB error');
+    expect(response.status).toBe(301);
+    expect(response.headers.location).toBe('/api/service-categories/categories?locale=fr');
   });
 });
 
-// ============================================================
-// AC3.3: GET /api/services/categories/:categoryId
-// ============================================================
-describe('GET /api/services/categories/:categoryId', () => {
-  it('should return 200 with category', async () => {
-    const category = { _key: 'cat1', nameEN: 'Health', services: [] };
-    serviceCategoryService.getCategoryWithServices.mockResolvedValue(category);
-
+describe('GET /api/services/categories/:categoryId redirects to the canonical route', () => {
+  it('should 301 to /api/service-categories/categories/:categoryId', async () => {
     const response = await authGet('/api/services/categories/cat1');
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(category);
-    expect(serviceCategoryService.getCategoryWithServices).toHaveBeenCalledWith('cat1', 'en');
-  });
-
-  it('should return 500 via next(error) on service failure', async () => {
-    serviceCategoryService.getCategoryWithServices.mockRejectedValue(new Error('Not found'));
-
-    const response = await authGet('/api/services/categories/nonexistent');
-
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(301);
+    expect(response.headers.location).toBe('/api/service-categories/categories/cat1');
+    expect(serviceCategoryService.getCategoryWithServices).not.toHaveBeenCalled();
   });
 });
 
-// ============================================================
-// AC3.4: GET /api/services/search
-// ============================================================
-describe('GET /api/services/search', () => {
-  it('should return 200 with search results', async () => {
-    const results = { categories: [], services: [{ _key: 's1', nameEN: 'Service A' }] };
-    serviceCategoryService.searchCategoriesAndServices.mockResolvedValue(results);
-
+describe('GET /api/services/search redirects to the canonical route', () => {
+  it('should 301 to /api/service-categories/search with the query string', async () => {
     const response = await authGet('/api/services/search?query=health');
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(results);
-    expect(serviceCategoryService.searchCategoriesAndServices).toHaveBeenCalledWith('health', 'en');
-  });
-
-  it('should return 400 when query param is missing', async () => {
-    const response = await authGet('/api/services/search');
-
-    expect(response.status).toBe(400);
-    expect(response.body.message).toContain('required');
-  });
-
-  it('should return 500 on service error', async () => {
-    serviceCategoryService.searchCategoriesAndServices.mockRejectedValue(new Error('Search failed'));
-
-    const response = await authGet('/api/services/search?query=test');
-
-    expect(response.status).toBe(500);
-    expect(response.body.message).toBe('Search failed');
+    expect(response.status).toBe(301);
+    expect(response.headers.location).toBe('/api/service-categories/search?query=health');
+    expect(serviceCategoryService.searchCategoriesAndServices).not.toHaveBeenCalled();
   });
 });

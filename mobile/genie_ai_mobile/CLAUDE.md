@@ -16,7 +16,7 @@ The mobile app uses an auto-generated OpenAPI client from the backend spec. **Ne
 The script:
 1. Extracts the OpenAPI spec from backend JSDoc annotations (`components/gov-chat-backend/routes/*.js`) plus the shared envelope in `components/gov-chat-backend/swagger-definition.js` (info, servers, securitySchemes, tags — which pulls in the shared component schemas in `swagger-schemas.js`; both modules are required by the backend's `index.js` too — moving them back into `index.js` silently breaks generation: every `$ref` to them dangles and the generator drops the models) — no running server needed. The spec extraction runs under `env -i` with the envelope's env vars pinned to placeholders, so regeneration is deterministic whatever the invoking shell exports (see the pin list in `scripts/generate-api-client.sh`)
 2. Generates the Dart client into `openapi_client/` using `openapi-generator-cli`
-3. Patches one dart-generator emission bug (non-compiling Dart for an array-of-binary multipart property) — so always regenerate through the script; a bare `openapi-generator-cli generate` produces a client that does not compile
+3. Patches two dart-generator emission bugs (non-compiling Dart for an array-of-binary multipart property; a non-compiling OAuth2 auth snippet in the README/doc markdown) — so always regenerate through the script; a bare `openapi-generator-cli generate` produces a client that does not compile
 
 `./scripts/generate-api-client.sh --check` regenerates into a temp directory and exits non-zero when the committed client is stale against the backend spec.
 

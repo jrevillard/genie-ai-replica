@@ -273,7 +273,12 @@ Color quickHelpCardBackgroundFor(
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
   if (labels is List<String>) return labels;
-  if (labels is List) return labels.map((label) => label.toString()).toList();
+  // Each element in the WEB's form (jsFormOf): the web renders a
+  // numeric label as '5', not Dart's '5.0'. A null element renders
+  // empty — the web's own array-join rule.
+  if (labels is List) {
+    return labels.map((label) => jsFormOf(label) ?? '').toList();
+  }
   if (labels is String && labels.isNotEmpty) return [labels];
   return const <String>[];
 }

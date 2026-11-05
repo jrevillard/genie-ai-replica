@@ -3228,4 +3228,19 @@ void main() {
       );
     });
   });
+
+  /// The labels a scoped card names: each element in the web's form.
+  group('quickHelpServiceLabelsOf', () {
+    test('a numeric label renders in the web number form', () {
+      // The web renders a numeric service label as '5' (its array join
+      // stringifies with String()); a raw Dart toString would render
+      // '5.0' — a divergence only a malformed configuration produces.
+      expect(
+        quickHelpServiceLabelsOf(<String, dynamic>{
+          'serviceLabels': <dynamic>[5.0],
+        }),
+        ['5'],
+      );
+    });
+  });
 }

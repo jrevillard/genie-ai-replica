@@ -190,11 +190,14 @@ for (const p of md) {
 
   # The patch above matches an exact emission shape; if a future generator
   # version changes it, the broken snippet would ship again unnoticed. Fail
-  # loudly instead.
-  if grep -rn 'getAuthentication' "$1" > /dev/null 2>&1; then
-    echo "ERROR: the generated docs still contain a 'getAuthentication' snippet"
-    echo "       the patch block did not recognize — the generator's output"
-    echo "       shape changed; inspect the docs and update patch_markdown."
+  # loudly instead. Only the markdown the patch rewrites is grepped — a
+  # generated Dart method legitimately named getAuthentication in lib/
+  # must not trip the guard.
+  if grep -rn 'getAuthentication' "$1/README.md" "$1/doc" > /dev/null 2>&1; then
+    echo "ERROR: the generated docs (README.md, doc/) still contain a"
+    echo "       'getAuthentication' snippet the patch block did not"
+    echo "       recognize — the generator's output shape changed; inspect"
+    echo "       the docs and update patch_markdown."
     exit 1
   fi
 }

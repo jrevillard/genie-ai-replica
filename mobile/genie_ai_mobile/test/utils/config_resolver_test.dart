@@ -45,6 +45,24 @@ void main() {
       expect(resolveConfigText(['a', 'b'], 'en'), 'a,b');
     });
 
+    test('a numeric list element renders in the web number form', () {
+      // The web's array join stringifies every element with String(),
+      // so a numeric element renders '5' there where a raw Dart
+      // toString would render '5.0'.
+      expect(resolveConfigText([5.0], 'en'), '5');
+    });
+
+    test('a map element renders as the web object default', () {
+      // The web's template renders any object as '[object Object]';
+      // Dart's own toString would write a Dart map literal.
+      expect(
+        resolveConfigText([
+          {'a': 1},
+        ], 'en'),
+        '[object Object]',
+      );
+    });
+
     test('0 and false resolve to no text; a truthy number keeps its form', () {
       expect(resolveConfigText(0, 'en'), '');
       expect(resolveConfigText(false, 'en'), '');

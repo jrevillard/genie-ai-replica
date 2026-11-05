@@ -34,7 +34,7 @@ library;
 /// with commas on both platforms — the web's template calls the
 /// array's `toString`, which joins — and the mobile joins it the same
 /// way, ONE rule wherever the list nests. A NUMBER renders in the
-/// web's own number form ([jsNumberForm]) wherever it is rendered.
+/// web's own number form ([jsFormOf]) wherever it is rendered.
 String resolveConfigText(dynamic value, String locale) {
   if (value is Map) {
     // The first NON-EMPTY text wins — the web's `||` chain: a null key
@@ -56,7 +56,8 @@ String resolveConfigText(dynamic value, String locale) {
         // joins it; one rule for one shape, wherever it nests.
         return _listAsConfigText(candidate);
       } else if (configTruthy(candidate)) {
-        return jsFormOf(candidate) ?? '';
+        // configTruthy(null) is false, so jsFormOf cannot return null here.
+        return jsFormOf(candidate)!;
       }
     }
     return '';
@@ -68,7 +69,8 @@ String resolveConfigText(dynamic value, String locale) {
   // divergence only a malformed configuration produces.
   if (value is String) return value;
   if (value is List) return _listAsConfigText(value);
-  return configTruthy(value) ? (jsFormOf(value) ?? '') : '';
+  // configTruthy(null) is false, so jsFormOf cannot return null here.
+  return configTruthy(value) ? jsFormOf(value)! : '';
 }
 
 /// A list is not a text value: it renders as its elements joined with
@@ -77,7 +79,11 @@ String resolveConfigText(dynamic value, String locale) {
 /// (a bare title or an entry inside a locale map), and only a
 /// malformed configuration produces it; a card label stays one line.
 String _listAsConfigText(List value) =>
-    value.map((element) => element.toString()).join(',');
+    // Each element in the WEB's form (jsFormOf): JS's array join
+    // stringifies every element, so a numeric element renders '5' where
+    // a raw Dart toString would render '5.0'. A null element renders
+    // empty — JS's own join rule for null.
+    value.map((element) => jsFormOf(element) ?? '').join(',');
 
 /// The config value as a map — the ONE container guard every config
 /// descent uses. A value that is not a map (a string, a list, null: the
@@ -137,6 +143,10 @@ bool configTruthy(dynamic value) {
 /// decoders produced — no boundary rule can close that band.
 String? jsFormOf(dynamic raw) {
   if (raw == null) return null;
+  // A truthy Map (a malformed config) renders as the web's template
+  // default renders any object — '[object Object]' — where Dart's own
+  // toString would write a Dart map literal.
+  if (raw is Map) return '[object Object]';
   if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
     // JS String(-0) is '0' — Dart prints '-0'.
     if (raw == 0) return '0';

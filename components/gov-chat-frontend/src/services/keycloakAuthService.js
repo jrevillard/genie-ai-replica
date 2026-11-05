@@ -8,8 +8,9 @@
  * localStorage, RENEW_USER_KEY) — the handoff publishes the renewed user
  * so a second tab can adopt it instead of spending a second grant on an
  * already-rotated refresh token. The handoff entry is wiped at logout and
- * by the retention cleanup at each renew entry (bounded by the tokens' own
- * expiry, not by the lease clock).
+ * by the retention cleanup at each renew entry (bounded by the token's own
+ * expiry, not by the lease clock), and it rests on disk until that cleanup
+ * runs — so a browser that stops renewing keeps it.
  */
 
 import { UserManager, User } from 'oidc-client-ts';
@@ -140,11 +141,13 @@ function releaseRenewLease() {
  * still be perfectly adoptable (a throttled/backgrounded tab waking 30–60 s
  * after the publish), and wiping it then forces that tab to burn its own
  * grant on the already-rotated token. Bounded by the access token's
- * remaining life instead, the entry lives as long as a reader could adopt
- * it — which scales with the deployment's accessTokenLifespan (a
+ * remaining life instead, a reader can adopt the entry for as long as that
+ * token lives — which scales with the deployment's accessTokenLifespan (a
  * long-lived access token keeps the minted set at rest correspondingly
  * longer); logout wipes it, and any tab's next successful renew overwrites
- * the single key. */
+ * the single key. The entry itself rests on disk until the next renewal
+ * entry (the cleanup runs only there), so it can outlive its token's
+ * expiry in a browser that stops renewing. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -166,25 +169,30 @@ function clearRenewPublication() {
   }
 }
 
-/** Is the access token a publication carries still usable? ONE predicate,
- * two callers that must ask the SAME TOKEN question (#1535): the reader
- * (readPublishedRenew — may a waiter adopt this entry?) and the retention
- * cleanup (clearStaleRenewPublication — may it stay on disk?). A cleanup
- * bounded by a different clock than the reader either wipes a handoff a
- * reader could still adopt or keeps an entry no reader can use. The bound
- * is the token's OWN expiry with the reader's 5 s margin — not the lease
- * takeover clock (RENEW_LEASE_TTL_MS), which answers a different question
- * (how long a dead holder's lease claim may be trusted) and was the
- * stricter of the two. It is the token-life question only: the reader
- * additionally gates on ownership and the adoption memo, and the cleanup
- * additionally drops corrupt (at-less) entries. The expiry is a
- * seconds-since-epoch stamp — a value past MAX_PLAUSIBLE_EXPIRY_S reads as
- * milliseconds stored as seconds: corruption, not a token that lives for
- * millennia, and unusable to both callers (#1535 review). The entry must
- * also carry the access token the reader needs — an entry without one is
- * readable by nobody, so the cleanup must not keep it (#1535 review). */
+/** Is this publication still usable? ONE predicate, two callers that must
+ * ask the SAME question (#1535): the reader (readPublishedRenew — may a
+ * waiter adopt this entry?) and the retention cleanup
+ * (clearStaleRenewPublication — may it stay on disk?). A cleanup bounded
+ * differently than the reader either wipes a handoff a reader could still
+ * adopt or keeps an entry no reader can use.
+ * A usable publication carries: the publisher's `at` stamp (a valid-JSON
+ * entry without one is corruption — not a publication this build wrote,
+ * #1521 review), the access token a reader needs (an entry without one is
+ * readable by nobody, #1535 review), and an expiry that is still ahead.
+ * The bound is the token's OWN expiry with the reader's 5 s margin — not
+ * the lease takeover clock (RENEW_LEASE_TTL_MS), which answers a different
+ * question (how long a dead holder's lease claim may be trusted) and was
+ * the stricter of the two.
+ * The 5 s margin is the reader's own, unchanged: a waiter must be able to
+ * take a handoff whose token is nearly spent — refusing it would leave that
+ * waiter granting on its own rotated-away token, which fails immediately
+ * and repeatedly, where adopting it recovers (#1535 review).
+ * The expiry is a seconds-since-epoch stamp — a value past
+ * MAX_PLAUSIBLE_EXPIRY_S reads as milliseconds stored as seconds:
+ * corruption, not a token that lives for millennia (#1535 review). */
 function publishedTokenIsUsable(entry) {
-  const user = entry && entry.user;
+  if (!entry || typeof entry.at !== 'number') return false;
+  const user = entry.user;
   if (!user || !user.access_token) return false;
   const exp = user.expires_at;
   return typeof exp === 'number' && exp < MAX_PLAUSIBLE_EXPIRY_S && exp * 1000 > Date.now() + 5000;
@@ -195,12 +203,10 @@ function clearStaleRenewPublication() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
-    // A valid-JSON entry without a usable `at` is corruption like a
-    // non-parsing one — the publisher always stamps `at`, so an at-less
-    // entry is not a publication this build wrote (#1521 review).
-    if (!entry || typeof entry.at !== 'number' || !publishedTokenIsUsable(entry)) {
-      clearRenewPublication();
-    }
+    if (publishedTokenIsUsable(entry)) return;
+    // Remove ONLY the entry that was judged: a holder may have published a
+    // fresh handoff between the read above and this removal (#1535 review).
+    if (window.localStorage.getItem(RENEW_USER_KEY) === raw) clearRenewPublication();
   } catch {
     /* a corrupt entry is worse than a stale one — drop it */
     clearRenewPublication();
@@ -254,7 +260,7 @@ function readPublishedRenew() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return null;
     const entry = JSON.parse(raw);
-    if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
+    if (!entry || entry.tab === RENEW_TAB_ID) return null;
     if (!publishedTokenIsUsable(entry)) return null;
     if (adoptedTokens.has(entry.user.access_token)) return null;
     // These exact tokens are never adoptable again (until the bounded
@@ -725,11 +731,12 @@ async function signinSilent() {
   if (renewInFlight) return renewInFlight;
   // Bound the publication's disk lifetime (round 23 retention): the entry
   // is dropped once the access token it carries is no longer usable
-  // (#1535) — the token-life bound the reader also applies, so a valid
-  // handoff can no longer be wiped out from under a waiter. The cleanup
-  // runs HERE, at a renew entry — an idle browser keeps the entry until
-  // its next renewal (or until logout wipes it), which means an entry can
-  // linger past its token's expiry until one of those runs.
+  // (#1535) — the same bound the reader applies, so a valid handoff can no
+  // longer be wiped out from under a waiter. The cleanup runs HERE, at a
+  // renew entry: that bounds the entry's ADOPTABILITY (a waiter finds the
+  // handoff for as long as the token lives), not its disk lifetime — an
+  // entry rests until the next renewal or logout, so it can outlive its
+  // token's expiry in a browser that stops renewing.
   clearStaleRenewPublication();
   renewInFlight = (async () => {
     const manager = getUserManager();

@@ -250,8 +250,8 @@ graph LR
 
 | Threat | Mitigation |
 |--------|------------|
-| **XSS in the Vue frontend** | Tokens in JS memory only; `oidc-client-ts` does not write to `localStorage`. CSP via `CSP_CONNECT_SRC` restricts outbound script sources. |
-| **Stolen refresh token** | The frontend never stores refresh tokens (Authorization Code + PKCE + silent iframe). Stolen `access_token` has the short lifespan configured by `KEYCLOAK_ACCESS_TOKEN_LIFESPAN`. |
+| **XSS in the Vue frontend** | Tokens live in JS memory and in `oidc-client-ts`'s per-tab `sessionStorage` store; the cross-tab silent-renew handoff additionally publishes the renewed token set in the same-origin `localStorage` entry `genie.renew.user` (see [Frontend auth flow](../frontend/auth-flow/)). CSP via `CSP_CONNECT_SRC` restricts outbound script sources. |
+| **Stolen refresh token** | The frontend stores the token set only in memory, in the per-tab `sessionStorage` store, and in that cross-tab handoff entry — which rests on disk until the renewal-driven cleanup drops it at the next renew entry once the access token it carries has expired (and until logout). A stolen `access_token` has the short lifespan configured by `KEYCLOAK_ACCESS_TOKEN_LIFESPAN`; a refresh token taken from that entry is usable for longer, so the entry is a credential at rest for the duration of the access token's life. |
 | **Compromised user with admin role** | All admin actions audit-logged to ArangoDB `ingestion_log` and VictoriaLogs. `realm_access.roles` is the only authz source — no other privilege escalation path. |
 | **Compromised OPEA service** | Cannot reach Keycloak admin endpoints (it only does JWKS read + ingestion write); cannot read other services' tokens (each service has its own audience). Blast radius limited to its own contract surface. |
 | **Misconfigured Kong** | Each service still validates JWT — Kong cannot bypass auth by mis-routing. |

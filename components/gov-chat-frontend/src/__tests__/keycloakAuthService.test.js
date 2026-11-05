@@ -812,6 +812,46 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
   });
 
+  // The cleanup reads the entry and then removes the key — two storage
+  // operations. A holder that publishes a FRESH handoff between them must
+  // not have it deleted by the cleanup's stale judgement (#1535 review).
+  it('a publication published while the cleanup judges the previous one survives (#1535 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    const spent = createMockUser({
+      access_token: 'spent-pub',
+      expires_at: Math.floor(Date.now() / 1000) - 10
+    });
+    const spentRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: spent });
+    const fresh = createMockUser({ access_token: 'fresh-pub' });
+    const freshRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: fresh });
+    window.localStorage.setItem(RENEW_USER_KEY, spentRaw);
+    const realGetItem = Storage.prototype.getItem;
+    let firstRead = true;
+    const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
+      if (key !== RENEW_USER_KEY) return realGetItem.call(this, key);
+      if (firstRead) {
+        firstRead = false;
+        // A holder publishes a FRESH handoff right after the cleanup's read:
+        // the cleanup still sees the spent entry, the disk already holds the
+        // fresh one.
+        window.localStorage.setItem(RENEW_USER_KEY, freshRaw);
+        return spentRaw;
+      }
+      return realGetItem.call(this, key);
+    });
+    try {
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
+      await keycloakAuthService.signinSilent();
+      spy.mockRestore();
+      // The fresh handoff is still on disk — the cleanup judged the previous
+      // entry, not this one.
+      expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('publication retention: the cleanup drops a publication whose token is spent, keeps one whose token is live (#1535)', async () => {
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-ok' }));

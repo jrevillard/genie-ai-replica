@@ -143,8 +143,9 @@ class ConnectivityService with WidgetsBindingObserver {
           ? results.first
           : ConnectivityResult.none;
       _updateHardwareStatus(result);
-      _resetRungIfReachable();
-      _scheduleWatchdog();
+      if (_resetRungIfReachable()) {
+        _scheduleWatchdog();
+      }
     });
 
     // 3. Start the watchdog (Reliability backup)
@@ -184,11 +185,16 @@ class ConnectivityService with WidgetsBindingObserver {
   /// Drops the watchdog back to its fast cadence when the latest sample
   /// shows the device reachable. Runs after every fresh sample — a poll, a
   /// connectivity event or the app coming back — so the drop rule lives in
-  /// this one method.
-  void _resetRungIfReachable() {
-    if (_isNetworkHardwareAvailable) {
+  /// this one method. Returns whether the cadence changed, so the caller
+  /// re-arms only then: re-arming on every event would let an event storm
+  /// postpone the poll indefinitely, and a no-op event would reset the
+  /// countdown without any news.
+  bool _resetRungIfReachable() {
+    if (_isNetworkHardwareAvailable && _pollRung != 0) {
       _pollRung = 0;
+      return true;
     }
+    return false;
   }
 
   /// Climbs one rung up the ladder after a watchdog check found the device
@@ -205,8 +211,9 @@ class ConnectivityService with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       debugPrint('[Connectivity] App resumed. Restarting the watchdog.');
       _appBackgrounded = false;
-      _scheduleWatchdog();
-      unawaited(recheckConnectivity());
+      // Sample first, then arm: scheduling before the check would arm the
+      // timer with the stale (possibly 60s) rung.
+      unawaited(_recheckAndRearm());
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
@@ -215,6 +222,12 @@ class ConnectivityService with WidgetsBindingObserver {
       _monitorTimer?.cancel();
       _monitorTimer = null;
     }
+  }
+
+  /// Takes a fresh sample and arms the watchdog on the cadence it implies.
+  Future<void> _recheckAndRearm() async {
+    await recheckConnectivity();
+    _scheduleWatchdog();
   }
 
   /// Forces a fresh check of the hardware status.
@@ -250,6 +263,7 @@ class ConnectivityService with WidgetsBindingObserver {
       _resetRungIfReachable();
     } catch (e) {
       debugPrint('[Connectivity] Recheck failed: $e');
+      return false;
     } finally {
       _isChecking = false;
     }
@@ -332,6 +346,7 @@ class ConnectivityService with WidgetsBindingObserver {
   }
 
   void _emitStatus() {
+    if (_statusController.isClosed) return;
     final bool status = isOnline;
     debugPrint(
       '[Connectivity] Emitting final status: $status (Hardware: $_isNetworkHardwareAvailable, UserOverride: $_userOfflineOverride)',

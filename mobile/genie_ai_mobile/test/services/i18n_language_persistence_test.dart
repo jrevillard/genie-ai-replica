@@ -2,8 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../helpers/settle_preference_writes.dart';
-
 /// The language the user picks must survive a restart: the app reads the
 /// choice back from the device storage at startup, before the first frame.
 /// These tests pin that contract at the storage boundary — the same place
@@ -13,10 +11,9 @@ void main() {
 
   setUp(() async {
     service = I18nService();
-    service.changeLanguage('en');
-    // The write of the previous state is asynchronous: let it land before
-    // the storage is cleared, or it would seed the next test.
-    await settlePreferenceWrites();
+    // The write must land before the storage is cleared, or it would seed
+    // the next test.
+    await service.changeLanguage('en');
     SharedPreferences.setMockInitialValues({});
     // Reading the storage back also resets the "the device holds a language
     // choice" flag, which a fresh device does not hold.
@@ -28,8 +25,7 @@ void main() {
   });
 
   test('a language the user selected is stored on the device', () async {
-    service.changeLanguage('es');
-    await settlePreferenceWrites();
+    await service.changeLanguage('es');
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(I18nService.languagePreferenceKey), 'es');
@@ -68,8 +64,7 @@ void main() {
   });
 
   test('a device that stored nothing can be seeded again', () async {
-    service.changeLanguage('es');
-    await settlePreferenceWrites();
+    await service.changeLanguage('es');
 
     // A storage cleared behind the app's back (app data wiped) leaves the
     // device without a choice: the account copy may seed it again.
@@ -85,9 +80,23 @@ void main() {
 
     expect(service.currentLocale.languageCode, 'fr');
 
-    await settlePreferenceWrites();
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(I18nService.languagePreferenceKey), isNull);
+  });
+
+  test('an explicit pick of the active language claims the device', () async {
+    // The account copy applied 'fr' in memory only (not stored, not claimed).
+    service.applyAccountLanguage('fr');
+
+    // Confirming the same language in the selector is still an explicit
+    // pick: it must be stored and claim the device.
+    await service.changeLanguage('fr');
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(I18nService.languagePreferenceKey), 'fr');
+
+    service.applyAccountLanguage('de');
+    expect(service.currentLocale.languageCode, 'fr');
   });
 
   test('the account copy keeps applying until the device makes a choice', () {

@@ -89,8 +89,14 @@ class I18nService extends ChangeNotifier {
   /// Changes the language and notifies listeners to rebuild the app.
   ///
   /// The choice is also stored on the device so it survives a restart;
-  /// [restoreLanguage] reads it back at startup.
-  void changeLanguage(String languageCode) {
+  /// [restoreLanguage] reads it back at startup. Every explicit pick is
+  /// stored and claims the device — including a pick of the language that
+  /// is already active (a dropdown fires for it too), which the account
+  /// copy must never override afterwards.
+  ///
+  /// The returned future completes once the choice is stored; callers that
+  /// do not care about the write may ignore it.
+  Future<void> changeLanguage(String languageCode) async {
     debugPrint("[I18N SERVICE] changeLanguage called with: $languageCode");
 
     if (!_isSupported(languageCode)) {
@@ -98,10 +104,9 @@ class I18nService extends ChangeNotifier {
       return;
     }
 
-    if (_applyLocale(languageCode)) {
-      _hasStoredLanguage = true;
-      unawaited(_persistLanguage(languageCode));
-    }
+    _applyLocale(languageCode);
+    _hasStoredLanguage = true;
+    await _persistLanguage(languageCode);
   }
 
   /// Applies the language recorded on the account, when the device has not

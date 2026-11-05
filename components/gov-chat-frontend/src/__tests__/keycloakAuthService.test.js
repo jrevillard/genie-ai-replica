@@ -898,6 +898,10 @@ describe('cross-tab renew lease (#80800)', () => {
       const user = await keycloakAuthService.signinSilent();
       expect(user.access_token).toBe('adopted-callback-token');
       expect(mockSigninSilent).not.toHaveBeenCalled();
+      // Parity order with the granted path: the timer re-arm (oidc's load)
+      // happens BEFORE the app callbacks fire — a granted renew arms the
+      // timers inside the grant, before oidc raises userLoaded.
+      expect(mockEventsLoad.mock.invocationCallOrder[0]).toBeLessThan(cb.mock.invocationCallOrder[0]);
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'adopted-callback-token' }));
     } finally {
       keycloakAuthService.removeAccessTokenUpdatedCallback(cb);
@@ -946,6 +950,19 @@ describe('cross-tab renew lease (#80800)', () => {
     const second = await keycloakAuthService.signinSilent();
     expect(second.access_token).toBe('own-grant-after');
     expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a corrupt (at-less) publication is dropped at renew entry like a non-parsing one (#1521 review)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // The grant fails so nothing republishes the slot — only the entry
+    // cleanup can empty it.
+    mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+    // Valid JSON, no usable `at` — the TTL can never judge it, so it would
+    // keep its minted tokens at rest forever.
+    window.localStorage.setItem(USER_KEY, JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) }));
+    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
+    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
   });
 
   it("an owner-less (old-build) publication is adoptable — it can never be this tab's own (#1521)", async () => {

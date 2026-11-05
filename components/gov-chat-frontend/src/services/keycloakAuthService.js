@@ -157,7 +157,10 @@ function clearStaleRenewPublication() {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
-    if (entry && typeof entry.at === 'number' && Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
+    // A valid-JSON entry without a usable `at` is corruption like a
+    // non-parsing one — it can never be TTL-judged, so it would otherwise
+    // keep its minted tokens at rest forever (#1521 review).
+    if (!entry || typeof entry.at !== 'number' || Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
       clearRenewPublication();
     }
   } catch {
@@ -177,9 +180,12 @@ function clearStaleRenewPublication() {
  * and the holder withdraws its own entry before any new grant
  * (runRawGrantAndPublish), so an entry on disk is the holder's LATEST
  * settled publication. An owner-LESS entry can never be this tab's own —
- * this tab's publications always carry its tab id — so it is an older
- * build's handoff (rolling-deploy mixed-version window) and is adopted
- * exactly like a tab-stamped one.
+ * this tab's publications always carry its tab id while the page lives (a
+ * reload re-parents the tab's pre-reload publication as foreign; adopting
+ * it re-serves the tokens the reloaded tab already holds — benign, and
+ * bounded to one renew inside the TTL) — so it is an older build's handoff
+ * (rolling-deploy mixed-version window) and is adopted exactly like a
+ * tab-stamped one.
  * CONSUMES the offer (#1521 review): a successful read records the stamp
  * in lastAdoptedAt, so this is a one-shot per publication — tryAdoptPublication
  * is its only caller; a second reader would silently burn the adoption. */
@@ -197,7 +203,7 @@ function readPublishedRenew() {
     if (!raw) return null;
     const entry = JSON.parse(raw);
     if (!entry || !entry.user || entry.tab === RENEW_TAB_ID) return null;
-    if (entry.at === lastAdoptedAt) return null;
+    if (typeof entry.at !== 'number' || entry.at === lastAdoptedAt) return null;
     const exp = entry.user.expires_at;
     if (typeof exp !== 'number' || exp * 1000 <= Date.now() + 5000) return null;
     lastAdoptedAt = entry.at; // this exact publication is never adoptable again
@@ -233,12 +239,16 @@ async function adoptPublishedUser(manager, user) {
   } catch {
     /* keep the rehydrated user even if the store write fails */
   }
-  onUserLoaded(rehydrated);
+  // ORDER (parity with the granted path — #1521 review): oidc arms the
+  // timers in load() BEFORE raising userLoaded, so a throwing app callback
+  // there cannot skip the re-arm. Same order here: events.load first,
+  // then the module's user-loaded body.
   try {
     await manager.events.load(rehydrated, false); // re-arm oidc's one-shot renew timers
   } catch {
-    /* the re-arm is best-effort — the adopted user is already served */
+    /* the re-arm is best-effort — the adopted user is still served below */
   }
+  onUserLoaded(rehydrated);
   return rehydrated;
 }
 
@@ -298,17 +308,6 @@ async function tryTakeLock(fn) {
   return navigator.locks.request(RENEW_LOCK_NAME, { ifAvailable: true }, async (lock) => (lock ? fn() : null));
 }
 
-/** PRIMARY cross-tab mechanism (#80864): the Web Locks API — the only
- * genuinely atomic cross-tab claim. ORDERING (round 23, review of the
- * free-lock arm): a waiter can arrive AFTER the holder finished — the lock
- * is free again, and its first `ifAvailable` probe would run a fresh grant
- * with THIS tab's now-rotated-away refresh token while a perfectly good
- * publication sits unread. So the publication is consulted BEFORE the first
- * lock attempt (the ownership gate keeps THIS tab's own publication
- * inadmissible, and admits another tab's — #1521); only a miss falls
- * through to taking the lock. Past the TTL with no publication the holder
- * is wedged — bounded degradation: renew without the lock, the same trade
- * the stale-lease takeover always made (a renew wedged >20s went nowhere). */
 /** One gate-and-adopt step, shared by both renewal paths (#1521 review):
  * the idiom lives once — the next arm added to readPublishedRenew must not
  * have to be paired with an adopt call at four sites. Null when the gate
@@ -318,6 +317,18 @@ async function tryAdoptPublication(manager) {
   return adopted ? adoptPublishedUser(manager, adopted) : null;
 }
 
+/** PRIMARY cross-tab mechanism (#80864): the Web Locks API — the only
+ * genuinely atomic cross-tab claim. ORDERING (round 23, review of the
+ * free-lock arm): a waiter can arrive AFTER the holder finished — the lock
+ * is free again, and its first `ifAvailable` probe would run a fresh grant
+ * with THIS tab's now-rotated-away refresh token while a perfectly good
+ * publication sits unread. So the publication is consulted BEFORE the first
+ * lock attempt (tryAdoptPublication above; the ownership gate keeps THIS
+ * tab's own publication inadmissible, and admits another tab's — #1521);
+ * only a miss falls through to taking the lock. Past the TTL with no
+ * publication the holder is wedged — bounded degradation: renew without
+ * the lock, the same trade the stale-lease takeover always made (a renew
+ * wedged >20s went nowhere). */
 async function renewViaWebLock(manager, startedAt) {
   const renewOnce = () => runRawGrantAndPublish(manager);
   const adoptedFirst = await tryAdoptPublication(manager);

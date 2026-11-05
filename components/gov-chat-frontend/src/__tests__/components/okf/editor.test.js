@@ -12,9 +12,9 @@ const { gateStoreDispatch } = require('../../helpers/gatedStore');
 // dashboard's domain-filter regression test pins that contract with a
 // canned tree (no network in jsdom). isBuilding mirrors the real semantics
 // (conversion non-terminal) so the dashboard's building-poll test can drive it.
-jest.mock('@/services/okfRepoOps', () => ({
-  __esModule: true,
-  default: {
+jest.mock('@/services/okfRepoOps', () => {
+  // BOTH spellings: components import .default; others use the named exports.
+  const impl = {
     loadSubjectAreaOptions: jest.fn().mockResolvedValue([
       { value: 'Water Supply', label: 'Water Supply' },
       { value: 'Health Services', label: 'Health Services' },
@@ -29,9 +29,13 @@ jest.mock('@/services/okfRepoOps', () => ({
         r.lifecycle_state === 'publish' &&
         (r.rag_drain_active === true || !!(r.rag_ingestion && r.rag_ingestion.status === 'draining'))
     ),
-    friendlyLifecycleError: (code, message) => message || String(code)
-  }
-}));
+    friendlyLifecycleError: (code, message) => message || String(code),
+    // The REAL pure predicate — FrontmatterPanel's #932 marker computes from
+    // it, and a stub would decide the pill on nothing.
+    isLabelsStale: jest.requireActual('@/services/okfRepoOps').isLabelsStale
+  };
+  return { __esModule: true, default: impl, ...impl };
+});
 
 function fakeStore() {
   const dispatched = [];

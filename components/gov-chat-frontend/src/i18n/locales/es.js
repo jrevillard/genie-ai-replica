@@ -2024,6 +2024,7 @@ export default {
           'Hecho — todas las entidades marcadas de {n} concepto(s) quedan como revisadas y conservadas. Las marcas de PII se retiran.',
         done_redact: 'Hecho — el contenido marcado de {n} concepto(s) se sustituye por el aviso de redacción.',
         done_remove: 'Hecho — el contenido marcado de {n} concepto(s) se elimina.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Ocultar todo el contenido marcado',
           remove: 'Eliminar todo el contenido marcado',
@@ -2894,7 +2895,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Crear la página de fuentes y enlazar {n} página(s)',
@@ -3076,7 +3076,9 @@ export default {
       title: 'Etiquetas de frontmatter — de qué trata este repositorio',
       help: 'Las etiquetas describen qué contiene este repositorio y — igual de importante — qué NO contiene (la lista de prohibidas). Ellas deciden qué consultas se enrutan a este repositorio. Pulse Refresh para redactarlas desde el corpus, o edite las fichas de abajo. Publicar exige ≥3 temas + ≥1 prohibida.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Etiquetas obsoletas — vuelva a ingestar para aplicarlas',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'El LLM no devolvió etiquetas. Pruebe de nuevo cuando crezca el corpus.',
       suggestCoverage:
         'Derivado de {sampled} de {total} conceptos, repartidos en {labels} etiquetas de la jerarquía del conocimiento.',
@@ -3106,7 +3108,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Etiquetas obsoletas — vuelva a ingestar para aplicarlas'
       },
       tab: {
         head: 'Head',

@@ -495,6 +495,28 @@ class TestInvoke:
         invoke_env["db"].aql.execute.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"traversal_max_returned": "3 LIMIT 1"},
+            {"traversal_score_threshold": "0.5 RETURN 1 //"},
+            {"search_start": "chunk::graphs:OKF_A_v1,OKF_evil` FOR leet IN @@c FILTER leet.x == 1"},
+        ],
+    )
+    async def test_fanout_path_bad_request_value_rejected_400(self, invoke_env, overrides):
+        """The fan-out legs wrap every extraction in except-Exception →
+        zero-hit-leg, so a bad traversal value or a crafted carrier name must
+        be refused at the REQUEST ingress — before any leg runs — or the 400
+        would surface as a 200 with empty results on the multi-graph path."""
+        invoke_env["db"].aql.execute = MagicMock()
+        kwargs = {"enable_traversal": True, "search_start": "chunk::graphs:OKF_A_v1"}
+        kwargs.update(overrides)
+        with pytest.raises(HTTPException) as exc_info:
+            await invoke_env["retriever"].invoke(create_mock_input(**kwargs))
+        assert exc_info.value.status_code == 400
+        invoke_env["db"].aql.execute.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):
         """Summarizer path on vLLM context overflow: skip the chunk (keep original page_content)
         instead of bubbling a 500 to chatqna. Fail-loud mirrors the reranker+dataprep pattern.

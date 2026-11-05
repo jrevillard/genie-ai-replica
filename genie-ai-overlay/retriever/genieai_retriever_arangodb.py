@@ -1346,6 +1346,18 @@ class GenieaiArangoRetriever(OpeaComponent):
             input_dict["_exclude_legacy"] = _exclude_legacy
             span.set_attribute("okf.fanout.exclude_legacy", _exclude_legacy)
 
+            # Request-scoped validation at the INGRESS, before either path
+            # dispatches (#501): the fan-out legs wrap every extraction in an
+            # except-Exception → zero-hit-leg, so a 400 raised inside a leg
+            # would surface as a 200 with empty results, not the refusal the
+            # contract promises. Both the carrier graph names and the numeric
+            # traversal parameters are validated here once; the downstream
+            # checks (_extract_for_graph, invoke_fanout) stay as
+            # defense-in-depth for direct callers.
+            for _carrier_graph in _encoded_graphs:
+                _validate_graph_name(_carrier_graph, "request carrier")
+            _coerce_traversal_params(input_dict)
+
             # Emitted UNCONDITIONALLY, above the `if _encoded_labels:` branch
             # below. Putting it inside that branch would set nothing at all on
             # every label-free query -- most production traffic, and precisely

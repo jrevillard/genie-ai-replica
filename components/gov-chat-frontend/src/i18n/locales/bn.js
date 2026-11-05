@@ -752,7 +752,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen পোর্টাল',
-    taxFiling: 'ট্যাক্স ফাইলিং সিস্টেম',
     idApplication: 'আইডি আবেদন',
     businessReg: 'ব্যবসা নিবন্ধন',
     drivingLicense: 'ড্রাইভিং লাইসেন্স'

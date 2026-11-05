@@ -749,7 +749,6 @@ export default {
   },
   services: {
     eCitizen: 'Портал eCitizen',
-    taxFiling: 'Система подачи налогов',
     idApplication: 'Заявка на ID',
     businessReg: 'Регистрация бизнеса',
     drivingLicense: 'Водительские права'

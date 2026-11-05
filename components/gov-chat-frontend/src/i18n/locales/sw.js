@@ -751,7 +751,6 @@ export default {
   },
   services: {
     eCitizen: 'Lango la eCitizen',
-    taxFiling: 'Mfumo wa Kutuma Kodi',
     idApplication: 'Maombi ya Kitambulisho',
     businessReg: 'Usajili wa Biashara',
     drivingLicense: 'Leseni ya Udereva'

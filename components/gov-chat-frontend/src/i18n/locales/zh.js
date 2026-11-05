@@ -740,7 +740,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen 门户',
-    taxFiling: '报税系统',
     idApplication: 'ID 申请',
     businessReg: '业务注册',
     drivingLicense: '驾照'

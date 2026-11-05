@@ -753,7 +753,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal ea eCitizen',
-    taxFiling: 'Sistimi ya ho Kenya Lekgetho',
     idApplication: 'Kopo ya ID',
     businessReg: 'Ngwadisong ya Kgwebo',
     drivingLicense: 'Laesense ya ho Kganna'

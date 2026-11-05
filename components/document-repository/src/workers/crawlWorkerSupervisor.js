@@ -41,14 +41,9 @@ let stopping = false;
 
 const spawn = () => {
   try {
-    // Eval-spawn: run crawlWorker.js's start() inside the thread.
-    const w = new Worker(
-      `
-      const { start } = require('${workerPath.replace(/\\/g, '/')}');
-      start();
-    `,
-      { eval: true }
-    );
+    // crawlWorker.js self-starts when loaded as a worker thread (its
+    // !isMainThread guard) — same direct-path pattern as pageProcessor.
+    const w = new Worker(workerPath);
     // Construction succeeded — only now does a worker exist to report on.
     worker = w;
     spawnedAt = Date.now();
@@ -68,16 +63,20 @@ const spawn = () => {
   }
 };
 
+// The one place restart timers are created; stop() is the one place they are
+// cleared. A callback already dequeued in the same tick as stop() may still
+// fire once — onExit's stopping gate makes that harmless.
+const scheduleTimer = (delay, onFire) => {
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    onFire();
+  }, delay);
+};
+
 const scheduleRestart = () => {
   const delay = RESTART_BASE_DELAY_MS * 2 ** (consecutiveFailures - 1);
   logger.error(`Respawning Crawl Worker in ${delay}ms (attempt ${consecutiveFailures}/${RESTART_MAX_ATTEMPTS})`);
-  // No `stopping` re-check here: onExit is the single respawn gate, and stop()
-  // clears this timer before it can fire. A callback already dequeued in the
-  // same tick as stop() may still spawn once — harmless during shutdown.
-  restartTimer = setTimeout(() => {
-    restartTimer = null;
-    spawn();
-  }, delay);
+  scheduleTimer(delay, spawn);
 };
 
 const onExit = (code) => {
@@ -101,18 +100,17 @@ const onExit = (code) => {
 
   if (consecutiveFailures > RESTART_MAX_ATTEMPTS) {
     state.gaveUp = true;
+    // Not terminal: after a long cooldown, try again. The startup zombie
+    // requeue in crawlWorker recovers whatever job the dead run held.
     logger.error(
       `Crawl Worker failed ${consecutiveFailures} times in a row — giving up; re-arming in ${REARM_COOLDOWN_MS / 60000} min`,
       { lastExitCode: code, restarts: state.restarts }
     );
-    // Not terminal: after a long cooldown, try again. The startup zombie
-    // requeue in crawlWorker recovers whatever job the dead run held.
-    restartTimer = setTimeout(() => {
-      restartTimer = null;
+    scheduleTimer(REARM_COOLDOWN_MS, () => {
       consecutiveFailures = 0;
       state.gaveUp = false;
       spawn();
-    }, REARM_COOLDOWN_MS);
+    });
     return;
   }
 

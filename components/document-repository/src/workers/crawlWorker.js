@@ -7,7 +7,7 @@
 const fs = require('fs').promises;
 const fsStandard = require('fs'); // Required for createWriteStream
 const path = require('path');
-const { Worker } = require('worker_threads');
+const { Worker, isMainThread } = require('worker_threads');
 const os = require('os');
 
 // Shared libraries
@@ -84,6 +84,7 @@ const requeueZombieJobs = async () => {
     logger.error(`[CRAWL-WORKER] Zombie requeue skipped, DB unavailable: ${error.message}`);
     return;
   }
+  const jobCol = db.collection('crawl_job');
   try {
     // Single-flight worker: a job still 'Crawling' when it starts has no live
     // owner, and the poll loop only picks 'Pending' — so leftover jobs are
@@ -98,7 +99,7 @@ const requeueZombieJobs = async () => {
         if (job.kill_requested) {
           // The operator already asked for this crawl to die — do not restart
           // it; finalize it as Killed.
-          await db.collection('crawl_job').update(job._key, {
+          await jobCol.update(job._key, {
             status: 'Killed',
             error_message: 'Crawl worker restarted mid-crawl after kill request',
             finished_at: new Date().toISOString()
@@ -107,7 +108,7 @@ const requeueZombieJobs = async () => {
           logger.warn(`[CRAWL-WORKER] Finalized killed zombie job ${job._key}`);
           continue;
         }
-        await db.collection('crawl_job').update(job._key, { status: 'Pending' });
+        await updateJobStatus(db, job._key, 'Pending');
         await fileService.addCrawlLog(job.file_id, 'WARN', 'System', 'Crawl worker restarted mid-crawl; job requeued.');
         logger.warn(`[CRAWL-WORKER] Requeued zombie job ${job._key} (was Crawling at startup)`);
       } catch (jobError) {
@@ -444,5 +445,11 @@ const updateJobProgress = async (db, key, count) => {
     // Ignore update errors
   }
 };
+
+// When loaded AS a worker thread, run. A plain require (tests, the main
+// thread) does nothing.
+if (!isMainThread) {
+  start();
+}
 
 module.exports = { start, requeueZombieJobs };

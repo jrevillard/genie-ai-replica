@@ -4,7 +4,7 @@
 // such a job starved forever. The requeue must set it back to 'Pending' and
 // leave a WARN in the crawl log so the restart is visible to the operator.
 
-jest.mock('worker_threads', () => ({ Worker: jest.fn() }));
+jest.mock('worker_threads', () => ({ Worker: jest.fn(), isMainThread: true }));
 
 const { dbService } = require('../../../__tests__/__mocks__/shared-lib');
 const fileService = require('../../../services/fileService');

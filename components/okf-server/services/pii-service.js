@@ -11,6 +11,7 @@
 
 const { aql } = require('arangojs');
 const nodeCrypto = require('node:crypto');
+const { createJobRegistry } = require('./job-registry');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -1054,10 +1055,9 @@ async function repoBulkAction(repo_id, payload, actor, opts = {}) {
 // A bulk PII action over a large flagged set is minutes of sequential DB
 // writes in one request; the editor held a single busy token over the whole
 // thing with zero feedback. The job wraps repoBulkAction and reports
-// processed-of-total per concept, the same 202+poll contract as the suggest
-// job (in-memory registry; single-replica service, same class).
-const bulkPiiJobs = new Map();
-const BULK_PII_JOB_CAP = 100;
+// processed-of-total per concept, on the SHARED createJobRegistry (the
+// suggest job in frontmatter-service uses the same one).
+const bulkPiiJobs = createJobRegistry({ prefix: 'bp' });
 
 /** Validate + arm. Throws the SAME piiError repoBulkAction throws for a bad
  * action, so the arm route answers 400 before any job exists. */
@@ -1066,31 +1066,15 @@ function startRepoBulkPiiJob(repo_id, payload, actor) {
   if (!REPO_BULK_ACTION_ENUM.includes(action)) {
     throw piiError('VALIDATION_ERROR', "action must be one of 'redact'|'remove'|'accept'", 400);
   }
-  const id = `bp${Date.now()}-${nodeCrypto.randomUUID().slice(0, 6)}`;
-  const job = {
-    job_id: id,
-    repo_id,
-    action,
-    status: 'running',
-    total: 0,
-    processed: 0,
-    started_at: new Date().toISOString()
-  };
-  bulkPiiJobs.set(id, job);
-  if (bulkPiiJobs.size > BULK_PII_JOB_CAP) {
-    for (const [k, v] of bulkPiiJobs) {
-      if (bulkPiiJobs.size <= BULK_PII_JOB_CAP) break;
-      if (v.status !== 'running') bulkPiiJobs.delete(k);
-    }
-  }
-  // fire-and-forget worker; every outcome lands ON the job. onProgress only
-  // moves forward (a stale poll must never show a lower number).
+  const job = bulkPiiJobs.create({ repo_id, action, total: 0, processed: 0 });
+  // fire-and-forget worker; every outcome lands ON the job (single producer,
+  // constant total, monotonic processed — plain assignments).
   (async () => {
     try {
       const out = await repoBulkAction(repo_id, payload, actor, {
         onProgress: (p) => {
-          if (p.total > job.total) job.total = p.total;
-          if (p.processed > job.processed) job.processed = p.processed;
+          job.total = p.total;
+          job.processed = p.processed;
         }
       });
       job.result = out;
@@ -1103,7 +1087,7 @@ function startRepoBulkPiiJob(repo_id, payload, actor) {
       logger.info('PII repo bulk job settled', {
         repo_id,
         action,
-        job_id: id,
+        job_id: job.job_id,
         status: job.status,
         total: job.total,
         processed: job.processed
@@ -1114,8 +1098,7 @@ function startRepoBulkPiiJob(repo_id, payload, actor) {
 }
 
 function getRepoBulkPiiJob(id) {
-  const job = bulkPiiJobs.get(id);
-  return job ? { ...job } : null;
+  return bulkPiiJobs.get(id);
 }
 
 /** REDACT THE WHOLE FILE (David, 2026-09-09): when flagged entities dominate

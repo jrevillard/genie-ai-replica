@@ -2760,12 +2760,12 @@ export default {
         this.lastRunSummary && this.lastRunSuiteKey === suiteKey
           ? { passed: this.lastRunSummary.positive_passed, total: this.lastRunSummary.positive_total }
           : null;
-      this._suiteRunT0 = Date.now();
+      const t0 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
         suiteKey
       });
-      this.legTiming('suite-run', this._suiteRunT0 || Date.now(), { suite: suiteKey });
+      this.legTiming('suite-run', t0, { suite: suiteKey });
       if (!res.ok) {
         this.busy = null;
         this.error = res.message || this.translate('okf.testingLab.error.run', 'Suite run failed');

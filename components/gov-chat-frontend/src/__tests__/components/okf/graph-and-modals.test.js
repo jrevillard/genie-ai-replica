@@ -21,8 +21,7 @@ jest.mock('@/services/repoOkfService', () => ({
     get: jest.fn(),
     getMetrics: jest.fn().mockResolvedValue(null),
     patchConcept: jest.fn().mockResolvedValue({ ok: true }),
-    bulkPiiAction: jest.fn().mockResolvedValue({ ok: true }),
-    // UX-4 (#1514): the editor drives the DETACHED bulk job now; same
+    // UX-4 (#1514): the editor drives the DETACHED bulk job; same
     // resolution shape, no poll (the mock resolves immediately).
     bulkPiiActionDetached: jest.fn().mockResolvedValue({ ok: true, action: 'accept', concepts_affected: 0 }),
     resplit: jest.fn(),

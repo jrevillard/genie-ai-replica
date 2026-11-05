@@ -222,7 +222,6 @@ export default {
       suggesting: false,
       // UX-4 (#1514): elapsed seconds while the suggest job runs — the honest
       // progress signal for a single long LLM call (see onSuggestTags).
-      suggestStartedAt: null,
       suggestElapsed: 0,
       suggestionError: null,
       // 1-8g-m — provenance of the current suggestion (see the coverage /
@@ -356,21 +355,28 @@ export default {
       }
       this.savedAt = null;
     },
+    // UX-4 (#1514): the suggest job is ONE sampled LLM call server-side
+    // (202 + poll inside the service) — there is no fractional progress to
+    // show honestly, so the bar is indeterminate and the elapsed ticker is
+    // what tells the curator the run is alive on a large repo (thinking
+    // models get minutes, not seconds). One stop helper; the run's finally
+    // and the unmount both call it.
+    _stopSuggestTicker() {
+      if (this._suggestTicker) {
+        clearInterval(this._suggestTicker);
+        this._suggestTicker = null;
+      }
+    },
     async onSuggestTags() {
       this.suggesting = true;
       this.suggestionError = null;
       this.suggestionCoverage = null;
       this.suggestionRejected = [];
-      // UX-4 (#1514): the suggest job is ONE sampled LLM call server-side
-      // (202 + poll inside the service) — there is no fractional progress to
-      // show honestly, so the bar is indeterminate and the elapsed ticker is
-      // what tells the curator the run is alive on a large repo (thinking
-      // models get minutes, not seconds).
-      this.suggestStartedAt = Date.now();
+      const startedAt = Date.now();
       this.suggestElapsed = 0;
-      if (this._suggestTicker) clearInterval(this._suggestTicker);
+      this._stopSuggestTicker();
       this._suggestTicker = setInterval(() => {
-        this.suggestElapsed = Math.round((Date.now() - this.suggestStartedAt) / 1000);
+        this.suggestElapsed = Math.round((Date.now() - startedAt) / 1000);
       }, 1000);
       try {
         const res = await suggestFrontmatter(this.repoId);
@@ -416,10 +422,7 @@ export default {
         this.$emit('error', { phase: 'suggest', error: e });
       } finally {
         this.suggesting = false;
-        if (this._suggestTicker) {
-          clearInterval(this._suggestTicker);
-          this._suggestTicker = null;
-        }
+        this._stopSuggestTicker();
       }
     },
     async onSave() {

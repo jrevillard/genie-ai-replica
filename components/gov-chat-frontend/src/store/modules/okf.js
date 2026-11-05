@@ -135,79 +135,26 @@ let fetchGeneration = 0;
 
 /**
  * THE bounded poll loop behind every Testing-Lab async action (round 16,
- * #80124 — this replaces seven near-identical for(;;)+setTimeout copies).
+ * #80124 — this replaced seven near-identical for(;;)+setTimeout copies).
+ * The loop itself now lives in services/pollJob.js (the UX-4 bulk-PII job
+ * nearly became the ninth copy, so the helper moved where services can use
+ * it too); this store wrapper injects ONLY the Lab's two abort envelopes —
+ * every other contract arm (deadline, transient tolerance, signal, done
+ * mapping) is the shared module's, byte-for-byte.
  *
- * Contract, distilled from those seven loops (do not "simplify" any arm away):
- *  - deadline: a UI horizon only. The server NEVER kills a healthy long job;
- *    the timeout envelope says so and the job keeps running server-side.
- *  - transient tolerance: a gateway blip (kong restart = 502) must not end
- *    tracking — the server-side job completes regardless (live 2026-10-18
- *    incident). Solid failure for 60 consecutive polls rethrows.
- *  - signal: the component's cancel token ({aborted}). Checked before every
- *    tick AND after every sleep, so an unmount stops the loop within one
- *    cadence — the loop the old copies never had: a closed Lab kept polling
- *    the API every 2s for up to the 24h horizon.
- *
- * @param {object} p
- * @param {() => Promise<object>} p.fetchDoc     one poll attempt → job doc
- * @param {number} [p.pollMs]                    cadence (default 2000)
- * @param {number} [p.deadlineMs]                UI horizon (default 24h)
- * @param {(doc: object) => boolean} [p.isRunning] keep-polling predicate
- * @param {(progress: object) => void} [p.onProgress] live progress tap
- * @param {{code: string, message: string}} p.timeout  horizon-exceeded envelope
- * @param {{code: string, message: string}} p.failed   failed-status envelope
- * @param {(doc: object) => object} p.done       terminal mapping (cancelled
- *        branches and result-vs-payload differences live HERE, per action)
- * @param {{aborted?: boolean}} [p.signal]       component cancel token
+ * @param {object} p  the services/pollJob.js parameter object
  * @returns {Promise<{ok: boolean, code?: string, message?: string, result?: *}>}
  */
-async function pollJob({
-  fetchDoc,
-  pollMs = 2000,
-  deadlineMs = 24 * 60 * 60 * 1000,
-  isRunning = (doc) => !doc || doc.status === 'running',
-  onProgress = null,
-  timeout,
-  failed,
-  done,
-  signal = null
-}) {
-  const deadline = Date.now() + deadlineMs;
-  let misses = 0;
-  for (;;) {
-    if (signal && signal.aborted) {
-      // The component went away — stop hammering the gateway. The job itself
-      // is untouched server-side; reopening the Lab re-adopts it.
-      return {
-        ok: false,
-        code: 'POLL_ABORTED',
-        message: LAB_ERROR_KEYS.pollAborted
-      };
-    }
-    if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
-    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.trackingStopped };
-    let doc;
-    try {
-      doc = await fetchDoc();
-      misses = 0;
-    } catch (err) {
-      if (++misses >= 60) throw err;
-      continue;
-    }
-    if (isRunning(doc)) {
-      if (onProgress && doc && doc.progress) onProgress(doc.progress);
-      continue;
-    }
-    if (doc && doc.status === 'failed') {
-      return {
-        ok: false,
-        code: (doc.error && doc.error.code) || failed.code,
-        message: (doc.error && doc.error.message) || failed.message
-      };
-    }
-    return done(doc);
-  }
+async function pollJob(p) {
+  const { pollJob: pollJobLoop } = require('@/services/pollJob');
+  return pollJobLoop({
+    ...p,
+    aborted: { code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.pollAborted },
+    abortedAfterSleep: { code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.trackingStopped },
+    // the Lab actions' onProgress callbacks read doc.progress — the shared
+    // loop hands them the whole doc and the wrapper keeps that contract
+    onProgress: p.onProgress ? (doc) => p.onProgress(doc && doc.progress) : null
+  });
 }
 
 /**

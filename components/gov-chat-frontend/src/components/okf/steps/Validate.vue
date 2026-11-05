@@ -174,14 +174,8 @@
            proposal's "Done" state (written at :106 in the old nesting) could
            never be seen for exactly that reason. Their lifetime must depend
            on the panel's own key (suggestFor / wireFor), never on the row's
-           existence.
-
-           #1510: each row used to also carry a Dismiss button that wrote
-           p.dismissed = true — a flag nothing in the codebase reads — so a
-           "dismissed" proposal reappeared on the next render. The affordance
-           is removed rather than wired: persistence would need a server-side
-           dismissed-identity contract, and Accept already gives the row its
-           definitive disposition (Done state). -->
+           existence. (#1510: the rows' dead Dismiss button was removed —
+           see that issue for why removal beat wiring persistence.) -->
 
       <div v-if="suggestFor && suggestion" class="okf-step-validate__suggestions">
         <!-- Title reuses the existing action key (no new i18n key: the 14 locale

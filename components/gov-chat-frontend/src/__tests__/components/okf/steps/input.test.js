@@ -25,9 +25,7 @@ jest.mock('@/services/repoOkfService', () => ({
     importConcepts: (...a) => mockImportConcepts(...a),
     listConcepts: (...a) => mockListConcepts(...a),
     deleteConcept: (...a) => mockDeleteConcept(...a),
-    bulkPiiAction: (...a) => mockBulkPiiAction(...a),
-    // UX-4 (#1514): the step drives the DETACHED bulk job now — same
-    // resolution shape, no poll (the mock resolves immediately).
+    // UX-4 (#1514): the step drives the DETACHED bulk job.
     bulkPiiActionDetached: (...a) => mockBulkPiiAction(...a)
   }
 }));

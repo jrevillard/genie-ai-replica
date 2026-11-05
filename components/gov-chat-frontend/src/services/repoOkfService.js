@@ -8,6 +8,7 @@
  */
 
 import httpService from './httpService';
+import { pollJob } from './pollJob';
 
 function notReady(reason) {
   const err = new Error('NOT_READY');
@@ -457,53 +458,58 @@ const repoOkfService = {
   },
 
   /**
-   * PII REPO BULK ACTION (David, 2026-09-12): redact | remove | accept
-   * applied to EVERY flagged concept of the repository in one decision
-   * (Files-view header controls). Scan-free on the server; stamps the scan
-   * marker so publish neither blocks nor re-scans. Returns
-   * {ok, action, concepts_affected}.
-   */
-  async bulkPiiAction(repoId, action) {
-    const res = await httpService.post(
-      `/okf/repos/${encodeURIComponent(repoId)}/pii-bulk`,
-      { action },
-      { timeout: 120000 }
-    );
-    return res && res.data ? res.data : { ok: false };
-  },
-
-  /**
    * UX-4 (#1514): the DETACHED bulk PII action. Arms the job (202), then
-   * polls until done/failed and returns the job's final shape. onProgress
-   * (optional) receives {total, processed} per poll so the editor can drive
-   * a real progress bar over a large flagged set. The arm answers the SAME
-   * validation/freeze errors the synchronous call answers (400 bad action,
-   * 409 drain-freeze via assertWritable).
+   * polls until done/failed on the SHARED pollJob loop (transient-tolerant,
+   * cancellable via `signal`, backoff after the first polls — a minutes-long
+   * job's majority of polls carry an unchanged counter). onProgress receives
+   * {total, processed} per poll so the editor can drive a real progress bar.
+   * The arm answers the SAME validation/freeze errors the synchronous call
+   * answers (400 bad action, 409 drain-freeze via assertWritable). Terminal
+   * contract: resolves the job result on done; THROWS on failed/timeout —
+   * {ok:false} on abort (the consumer went away; the server job continues).
    */
-  async bulkPiiActionDetached(repoId, action, { onProgress, pollMs = 1000, timeoutMs = 15 * 60 * 1000 } = {}) {
+  async bulkPiiActionDetached(repoId, action, { onProgress, signal, pollMs = 2000, timeoutMs = 15 * 60 * 1000 } = {}) {
     const base = `/okf/repos/${encodeURIComponent(repoId)}/pii-bulk`;
     const start = await httpService.post(`${base}/jobs`, { action });
     const job = start && start.data;
     const jobId = job && job.job_id;
     if (!jobId) return { ok: false };
-    if (typeof onProgress === 'function') onProgress({ total: Number(job.total || 0), processed: 0 });
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const res = await httpService.get(`${base}/jobs/${encodeURIComponent(jobId)}`);
-      const snap = res && res.data;
-      if (!snap) return { ok: false };
+    const report = (snap) => {
       if (typeof onProgress === 'function') {
-        onProgress({ total: Number(snap.total || 0), processed: Number(snap.processed || 0) });
+        onProgress({ total: Number((snap && snap.total) || 0), processed: Number((snap && snap.processed) || 0) });
       }
-      if (snap.status === 'done') return snap.result || { ok: true, action, concepts_affected: snap.processed };
-      if (snap.status === 'failed') {
-        const err = new Error(snap.error || 'bulk PII job failed');
-        err.bulkPiiJobFailed = true;
-        throw err;
-      }
-      if (Date.now() > deadline) throw new Error('bulk PII job did not finish in time');
-      await new Promise((r) => setTimeout(r, pollMs));
-    }
+    };
+    report(job);
+    const res = await pollJob({
+      fetchDoc: async () => {
+        const r = await httpService.get(`${base}/jobs/${encodeURIComponent(jobId)}`);
+        return r && r.data;
+      },
+      pollMs,
+      deadlineMs: timeoutMs,
+      isRunning: (doc) => !doc || doc.status === 'running',
+      onProgress: report,
+      timeout: { code: 'BULK_PII_TIMEOUT', message: 'bulk PII job did not finish in time' },
+      failed: { code: 'BULK_PII_FAILED', message: 'bulk PII job failed' },
+      // pollJob only taps onProgress for RUNNING docs — the terminal snapshot
+      // (processed = total) must also reach the bar, so done reports it.
+      done: (doc) => {
+        report(doc);
+        return doc.result || { ok: true, action, concepts_affected: doc.processed || 0 };
+      },
+      signal,
+      // 1s while the early progress matters, 5s once the run settles in —
+      // a 10-minute job goes from ~600 polls to ~130.
+      backoffAfter: 10,
+      backoffTo: 5000
+    });
+    // pollJob returns the done() mapping VERBATIM — the service's own
+    // {ok, action, concepts_affected} shape, ready to hand back.
+    if (res.ok) return res;
+    if (res.code === 'POLL_ABORTED') return { ok: false };
+    const err = new Error(res.message || 'bulk PII job failed');
+    err.code = res.code;
+    throw err;
   },
 
   /**

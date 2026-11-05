@@ -700,6 +700,10 @@ export default {
     // timer on the dead instance — the flag gates startConversionWatch and
     // waitForConversionTerminal, and every timer dies here.
     this._torndown = true;
+    // UX-4 (#1514): a detached bulk PII job's poll loop stops within one
+    // cadence on unmount (the server job itself continues; re-entering the
+    // editor re-arms a fresh view of it).
+    if (this._bulkPiiSignal) this._bulkPiiSignal.aborted = true;
     this.endLongAction();
     this.stopConversionWatch();
     clearTimeout(this._sourceNoteTimer);
@@ -1146,9 +1150,12 @@ export default {
         // UX-4 (#1514): the DETACHED job — the arm answers the same 409
         // drain-freeze / 400 the synchronous call did (assertWritable on the
         // arm route), and onProgress turns the long-action strip into a real
-        // processed-of-total bar over a large flagged set.
+        // processed-of-total bar over a large flagged set. The signal stops
+        // the client-side poll on unmount (the server job continues).
+        this._bulkPiiSignal = { aborted: false };
         const result = await repoOkfService.bulkPiiActionDetached(this.repoId, this.piiBulkAsk, {
-          onProgress: (p) => this.setLongProgress(p)
+          onProgress: (p) => this.setLongProgress(p),
+          signal: this._bulkPiiSignal
         });
         if (!result || !result.ok) {
           this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');

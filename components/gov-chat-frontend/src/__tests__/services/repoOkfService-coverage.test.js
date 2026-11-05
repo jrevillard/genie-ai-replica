@@ -337,12 +337,6 @@ describe('repoOkfService — PII surface', () => {
       {},
       { timeout: 120000 }
     );
-    await repoOkfService.bulkPiiAction('r1', 'accept');
-    expect(httpService.post).toHaveBeenLastCalledWith(
-      '/okf/repos/r1/pii-bulk',
-      { action: 'accept' },
-      { timeout: 120000 }
-    );
   });
 
   it('bulkPiiActionDetached arms the job, polls to done, and reports progress (#1514)', async () => {

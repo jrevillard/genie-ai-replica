@@ -390,8 +390,7 @@ export function isRedraining(repo) {
 export function isLabelsStale(repo) {
   if (!repo) return false;
   if (repo.lifecycle_state !== 'publish') return false;
-  if (repo.rag_drain_active === true) return false;
-  if (repo.rag_ingestion && repo.rag_ingestion.status === 'draining') return false;
+  if (isRedraining(repo)) return false;
   if (repo.ingested_at && repo.ingested_version === repo.version) return false;
   return !!(repo.rag_ingestion && repo.rag_ingestion.requested_at);
 }

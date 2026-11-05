@@ -1,4 +1,5 @@
 {{- $obs := .Values.observability | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
 {{- $obsTraces := $obs.traces | default dict -}}
 {{- if $obsTraces.enabled }}
 {{- /*
@@ -27,6 +28,14 @@ spec:
   retentionPeriod: {{ $obsTraces.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:
+    {{- /* Same chart-wide storage-class hook every PVC reads
+    (pluggable.storageClassName) — a venue that points the data tier at
+    a fast or tmpfs-backed StorageClass must reach the observability
+    tier too. Omitted when unset: the operator then creates the PVC
+    against the cluster default class. */ -}}
+    {{- with ($obsTraces.storageClassName | default $pluggable.storageClassName) }}
+    className: {{ . }}
+    {{- end }}
     resources:
       requests:
         storage: {{ $obsTraces.storageSize | quote }}

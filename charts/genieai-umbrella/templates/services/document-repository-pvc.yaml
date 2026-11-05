@@ -13,7 +13,7 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   accessModes: ["ReadWriteOnce"]
-  {{- with $pluggable.storageClassName }}
+  {{- with ($pvc.storageClassName | default $pluggable.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}
   resources:

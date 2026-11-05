@@ -3,6 +3,7 @@
  a cold cache). The chart equivalent is a PVC; an emptyDir would only
  cover pod restarts, not the reschedule that actually loses the data. */ -}}
 {{- if eq true (index (.Values.okf | default dict) "enabled") -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -20,4 +21,7 @@ spec:
   resources:
     requests:
       storage: {{ index (.Values.okf | default dict) "ragasCacheSize" | default "5Gi" }}
+  {{- with ((index (.Values.okf | default dict) "ragasCacheStorageClassName") | default $pluggable.storageClassName) }}
+  storageClassName: {{ . }}
+  {{- end }}
 {{- end -}}

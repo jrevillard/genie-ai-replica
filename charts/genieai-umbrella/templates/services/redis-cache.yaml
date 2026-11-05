@@ -159,7 +159,7 @@ spec:
   resources:
     requests:
       storage: {{ $svc.pvc.storageSize | default "5Gi" }}
-  {{- with $pluggable.storageClassName }}
+  {{- with ($pvc.storageClassName | default $pluggable.storageClassName) }}
   storageClassName: {{ . }}
   {{- end }}
 {{- end }}

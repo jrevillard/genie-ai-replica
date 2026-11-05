@@ -1425,6 +1425,18 @@ it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm
  * then rendered a confident empty state for a request that never ran.
  * ---------------------------------------------------------------------- */
 
+describe('#932: the labels-stale pill mirrors the edit-to-drain window', () => {
+  it('shows the pill only when the repo republished after a prior drain and has not re-drained', async () => {
+    const stale = { ...REPO, rag_ingestion: { status: 'completed', requested_at: '2026-11-05T00:00:00Z' } };
+    let w = await mountDialog({ repo: stale });
+    expect(w.text()).toContain('Labels stale — re-ingest to apply');
+    w.unmount();
+    // the suite's REPO carries no prior-drain record — never ingested, nothing stale
+    w = await mountDialog();
+    expect(w.text()).not.toContain('Labels stale — re-ingest to apply');
+  });
+});
+
 describe('poll cancel token (round 16, #80124)', () => {
   it('unmounting the Lab aborts the signal the explain poll carries', async () => {
     const w = await mountDialog(); // the suite's own factory

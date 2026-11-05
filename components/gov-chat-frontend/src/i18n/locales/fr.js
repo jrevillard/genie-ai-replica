@@ -2902,7 +2902,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Créer la page Sources et lier {n} page(s)',
@@ -3082,6 +3081,7 @@ export default {
       title: 'Tags de frontmatter — le sujet de ce dépôt',
       help: "Les tags décrivent ce que contient ce dépôt et — tout aussi important — ce qu'il ne contient PAS (la liste des interdits). Ils déterminent quelles requêtes routent vers ce dépôt. Cliquez sur Actualiser pour proposer une rédaction depuis le corpus, ou modifiez les puces ci-dessous. La publication exige ≥3 sujets + ≥1 interdit.",
       refresh: 'Refresh suggestions',
+      labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer',
       suggesting: 'Curating…',
       suggestEmpty: "Le LLM n'a renvoyé aucun tag. Réessayez une fois le corpus étoffé.",
       suggestCoverage:
@@ -3112,7 +3112,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer'
       },
       tab: {
         head: 'Head',

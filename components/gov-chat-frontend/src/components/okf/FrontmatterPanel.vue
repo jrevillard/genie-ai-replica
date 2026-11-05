@@ -48,6 +48,13 @@
       <h3 class="okf-fmp__title">
         {{ translate('okf.frontmatter.title', 'Frontmatter tags — what this repo is about') }}
       </h3>
+      <!-- #932 step-1 (operator ruling): the edit-to-drain window is never
+           silent. These tags are edited AFTER the last drain — the serving
+           chunks still carry the previous version's labels until the next
+           ingest applies them. -->
+      <DsPill v-if="labelsStale" variant="warning" class="okf-fmp__stale">
+        {{ translate('okf.frontmatter.labelsStale', 'Labels stale — re-ingest to apply') }}
+      </DsPill>
       <DsButton variant="ghost" small :disabled="suggesting || readOnly" @click="onSuggestTags">
         {{
           suggesting
@@ -155,6 +162,8 @@
 import { mapActions } from 'vuex';
 import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
+import DsPill from '../ds/Pill.vue';
+import { isLabelsStale } from '../../services/okfRepoOps';
 import { getFrontmatter, suggestFrontmatter } from '../../services/frontmatterService';
 
 // Frontmatter shape keys, in display order. The server's
@@ -177,7 +186,7 @@ function emptyShape() {
 
 export default {
   name: 'FrontmatterPanel',
-  components: { DsButton },
+  components: { DsButton, DsPill },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -220,6 +229,15 @@ export default {
     };
   },
   computed: {
+    // #932 step-1: the edit-to-drain window, made visible. The repo doc
+    // comes from the store (upsertRepo keeps it current after lifecycle
+    // transitions); a repoId the store has not seen yet — or a mount whose
+    // store does not carry the okf module (bare test harnesses) — simply
+    // yields null and the marker stays off.
+    labelsStale() {
+      const repoById = this.$store.getters['okf/repoById'];
+      return isLabelsStale(typeof repoById === 'function' ? repoById(this.repoId) : null);
+    },
     canSave() {
       // Save is allowed when the shape has any content. We send the
       // whole shape on every save (the server merges it), so the only
@@ -424,12 +442,20 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .okf-fmp__title {
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+}
+/* #932: the stale marker sits between title and actions; shrink+wrap keeps
+   the narrow wizard Curate column from pushing the Refresh button out. */
+.okf-fmp__stale {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 .okf-fmp__help {
   margin: 0;

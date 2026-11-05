@@ -16,19 +16,23 @@
 const { mount } = require('@vue/test-utils');
 const Vuex = require('vuex');
 
-jest.mock('@/services/okfRepoOps', () => ({
-  __esModule: true,
-  default: {
+jest.mock('@/services/okfRepoOps', () => {
+  // BOTH spellings: components import .default; others use the named exports.
+  const impl = {
     loadSubjectAreaOptions: jest.fn().mockResolvedValue([]),
     isBuilding: () => false,
     isRedraining: () => false,
+    // The REAL pure predicate — FrontmatterPanel's #932 marker computes from
+    // it, and a stub would decide the pill on nothing.
+    isLabelsStale: jest.requireActual('@/services/okfRepoOps').isLabelsStale,
     friendlyLifecycleError: (code, message) => message || String(code),
     lifecycle: jest.fn().mockResolvedValue({ ok: true }),
     deleteRepo: jest.fn().mockResolvedValue({ status: 'deleted' }),
     listVersions: jest.fn().mockResolvedValue([]),
     exportRepoZip: jest.fn().mockResolvedValue('x.zip')
-  }
-}));
+  };
+  return { __esModule: true, default: impl, ...impl };
+});
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
   default: {

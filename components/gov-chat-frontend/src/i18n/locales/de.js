@@ -2906,7 +2906,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Die Quellen-Seite erstellen und {n} Seite(n) verlinken',
@@ -3090,6 +3089,7 @@ export default {
       title: 'Frontmatter-Tags — worum es in diesem Repository geht',
       help: 'Tags beschreiben, was dieses Repository enthält — und ebenso wichtig, was es NICHT enthält (die Liste der verbotenen Themen). Sie entscheiden, welche Abfragen zu diesem Repository routen. Klicken Sie auf Aktualisieren, um aus dem Korpus zu entwerfen, oder bearbeiten Sie die Chips unten. Publish erfordert ≥3 Themen-Tags + ≥1 verbotenes Tag.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Labels veraltet — zum Anwenden neu einlesen',
       suggesting: 'Curating…',
       suggestEmpty: 'Das LLM hat keine Tags zurückgegeben. Versuchen Sie es erneut, wenn der Korpus gewachsen ist.',
       suggestCoverage: 'Abgeleitet aus {sampled} von {total} Konzepten, über {labels} Labels der Wissenshierarchie.',
@@ -3119,7 +3119,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Labels veraltet — zum Anwenden neu einlesen'
       },
       tab: {
         head: 'Head',

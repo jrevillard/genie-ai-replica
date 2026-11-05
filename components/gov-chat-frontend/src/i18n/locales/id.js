@@ -2877,7 +2877,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Buat halaman Sumber dan tautkan {n} halaman',
@@ -3056,6 +3055,7 @@ export default {
       title: 'Tag frontmatter — apa isi repositori ini',
       help: 'Tag menggambarkan apa yang terkandung dalam repositori ini dan — sama pentingnya — apa yang TIDAK dikandungnya (daftar terlarang). Tag menentukan kueri mana yang dirute ke repositori ini. Klik Segarkan untuk menyusun draf dari korpus, atau edit chip di bawah. Publish memerlukan ≥3 topik + ≥1 terlarang.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Label sudah kedaluwarsa — ingest ulang untuk menerapkannya',
       suggesting: 'Curating…',
       suggestEmpty: 'LLM tidak mengembalikan tag. Coba lagi setelah korpus bertambah.',
       suggestCoverage: 'Diturunkan dari {sampled} dari {total} konsep, pada {labels} label hierarki pengetahuan.',
@@ -3085,7 +3085,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Label sudah kedaluwarsa — ingest ulang untuk menerapkannya'
       },
       tab: {
         head: 'Head',

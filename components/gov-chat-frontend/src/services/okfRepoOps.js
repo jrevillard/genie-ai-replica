@@ -369,6 +369,33 @@ export function isRedraining(repo) {
   return !!(repo.rag_ingestion && repo.rag_ingestion.status === 'draining');
 }
 
+/** #932 step-1 (operator ruling, 2026-11-05): the edit-to-drain window,
+ * made visible. TRUE while the current bundle version has never completed a
+ * drain AND a drain has happened before — i.e. the frontmatter labels the
+ * curator sees were edited after the last drain, and the drained chunk
+ * labels still carry the previous version until the next ingest applies
+ * them ("labels stale — re-ingest to apply").
+ *
+ * Semantics per transition (lifecycle-service.js):
+ *   publish mints a new version and resets ingested_at/ingested_version to
+ *   null; the drain settle sets ingested_version = version. So the current
+ *   version is live iff ingested_at is set AND ingested_version === version.
+ *   A prior drain is evidenced by the persistent rag_ingestion record
+ *   (status completed/failed/cancelled keeps requested_at) — without it the
+ *   labels were never in RAG and there is nothing stale, so a fresh repo
+ *   under curation stays marker-free. While a drain is RUNNING the
+ *   Ingesting… chip owns the window (isRedraining), so this returns false —
+ *   the application is already in flight, not pending.
+ *   Retracted/unpublished repos are out of the publish lane entirely. */
+export function isLabelsStale(repo) {
+  if (!repo) return false;
+  if (repo.lifecycle_state !== 'publish') return false;
+  if (repo.rag_drain_active === true) return false;
+  if (repo.rag_ingestion && repo.rag_ingestion.status === 'draining') return false;
+  if (repo.ingested_at && repo.ingested_version === repo.version) return false;
+  return !!(repo.rag_ingestion && repo.rag_ingestion.requested_at);
+}
+
 // ─── Lifecycle (David, 2026-08-28) ───────────────────────────────────────────
 // Lifecycle transitions go through the store's okfRepoOps.lifecycle()
 // (store/modules/okf.js) — the single transition surface. Six thin wrappers
@@ -574,6 +601,7 @@ export default {
   labelOptionsForDomain,
   isBuilding,
   isRedraining,
+  isLabelsStale,
   buildConceptPayload,
   addConcept,
   appendToIndexToc,

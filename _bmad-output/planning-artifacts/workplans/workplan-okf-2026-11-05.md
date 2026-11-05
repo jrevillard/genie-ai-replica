@@ -29,14 +29,19 @@ the ORDER and the cross-stream slots.
    QueryInspector trio + every dialog the dashboard hosts. **WITHOUT BREAKING ANY
    FEATURES** — the Jest admin suite + Playwright admin surface prove it.
 3. **UX-3 — the folded Validate-step items** (David confirmed the fold):
-   - #947 — Validate-step review-surface pass (its ruling: folded into the
-     standing UX-onboarding pass; this pass IS that pass's first slice).
    - #1510 — Validate Dismiss button writes `p.dismissed`, nothing reads it:
      remove the button (i18n ×14) OR wire dismissal persistence — decided at
      build time per the issue's own ruling.
-   - #932 — marker-first affordance: "labels stale — re-ingest to apply" on
-     concepts; partial-relabel mode only on RAGAS evidence; respects the
+   - #932 — marker-first affordance: "labels stale — re-ingest to apply" in
+     the Testing Lab / frontmatter surfaces (the ruling's step 1); the
+     partial-relabel mode stays evidence-gated (RAGAS) and respects the
      drain-freeze rule (the issue's ruling, unchanged).
+   - #947 — Domain Templates (NOT a Validate surface — the earlier workplan
+     draft mislabeled it): folded into this pass CONDITIONALLY per the
+     triage ruling ("the UX-onboarding pass confirms the repeated-setup
+     pain first; templates are built inside it if confirmed"). The pass
+     performs the assessment and records it on the issue; templates are
+     built only on confirmed pain.
 4. **UX-4 — progress bars for the four long-running Studio operations on
    LARGE repositories** (David, 2026-11-05: "must include progress bars like
    all other longer running curation operations"). The reference pattern

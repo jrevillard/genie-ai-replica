@@ -2834,7 +2834,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Sources page dada ani page {n} link',
@@ -3010,6 +3009,7 @@ export default {
       title: 'Frontmatter tagu — nying repo ka kuma',
       help: 'Tagu kuma repo kono koo ani — maa o koto — a koo ti ke (forbidden listo). U decide querylu minnu route nying repo. Refresh klik ka corpus kono draft, wala chipu juu dada. Publish lafiya-le: topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
+      labelsStale: "Labels — Ingest nyiningo miroolu n'i la",
       suggesting: 'Curating…',
       suggestEmpty: 'LLMoo tagu ti jaabi. Corpus damina koto a ñining tugung.',
       suggestCoverage: 'E qaqeeqeeq na {sampled} na {total} idee, ni {labels} wooqee hidin hibrid.',
@@ -3039,7 +3039,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: "Labels — Ingest nyiningo miroolu n'i la"
       },
       tab: {
         head: 'Head',

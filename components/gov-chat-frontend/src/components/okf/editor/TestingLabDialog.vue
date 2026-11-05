@@ -62,6 +62,12 @@
         <DsPill v-else variant="danger">
           {{ translate('okf.testingLab.badge.missing', 'no head') }}
         </DsPill>
+        <!-- #932 step-1: the vectorized head these results were built on
+             predates the current bundle — the frontmatter labels were edited
+             after the last drain, and the next ingest re-materializes them. -->
+        <DsPill v-if="labelsStale" variant="warning">
+          {{ translate('okf.testingLab.badge.labelsStale', 'Labels stale — re-ingest to apply') }}
+        </DsPill>
       </span>
     </p>
 
@@ -1355,7 +1361,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
-import { translateLabError } from '../../../services/okfRepoOps';
+import { translateLabError, isLabelsStale } from '../../../services/okfRepoOps';
 import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
@@ -1534,6 +1540,12 @@ export default {
     },
     serving() {
       return !!(this.repo && this.repo.ingested_at);
+    },
+    // #932 step-1: the head these results were built on predates the current
+    // bundle (labels edited after the last drain) — pure function over the
+    // repo prop, same expression the FrontmatterPanel marker uses.
+    labelsStale() {
+      return isLabelsStale(this.repo);
     },
     head() {
       return (this.repo && this.repo.head && this.repo.head.vector && this.repo.head) || null;

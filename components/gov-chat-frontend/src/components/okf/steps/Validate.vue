@@ -166,15 +166,22 @@
         </li>
       </ul>
 
-      <!-- REMEDY PANELS AT PANEL LEVEL (!1075 / Story 10.8).
-           These live OUTSIDE the issue v-for on purpose. Every remedy here
-           cures the issue it belongs to, and each one calls refresh() — so a
-           panel nested inside its issue row is destroyed by its own success,
-           one interaction before the curator can see the result. The accepted
+      <!-- REMEDY PANELS AT PANEL LEVEL (!1075 / Story 10.8). These live
+           OUTSIDE the issue v-for on purpose. Every remedy here cures the
+           issue it belongs to, and each one calls refresh() — so a panel
+           nested inside its issue row is destroyed by its own success, one
+           interaction before the curator can see the result. The accepted
            proposal's "Done" state (written at :106 in the old nesting) could
-           never be seen for exactly that reason. Their lifetime must depend on
-           the panel's own key (suggestFor / wireFor), never on the row's
-           existence. -->
+           never be seen for exactly that reason. Their lifetime must depend
+           on the panel's own key (suggestFor / wireFor), never on the row's
+           existence.
+
+           #1510: each row used to also carry a Dismiss button that wrote
+           p.dismissed = true — a flag nothing in the codebase reads — so a
+           "dismissed" proposal reappeared on the next render. The affordance
+           is removed rather than wired: persistence would need a server-side
+           dismissed-identity contract, and Accept already gives the row its
+           definitive disposition (Done state). -->
 
       <div v-if="suggestFor && suggestion" class="okf-step-validate__suggestions">
         <!-- Title reuses the existing action key (no new i18n key: the 14 locale
@@ -202,9 +209,6 @@
             <template v-else>
               <DsButton variant="primary" small :disabled="acceptBusy" @click="onAcceptLink(p)">
                 {{ translate('okf.validation.action.accept', 'Accept') }}
-              </DsButton>
-              <DsButton variant="ghost" small @click="p.dismissed = true">
-                {{ translate('okf.validation.action.dismiss', 'Dismiss') }}
               </DsButton>
             </template>
           </li>

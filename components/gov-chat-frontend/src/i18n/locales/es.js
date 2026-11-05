@@ -2894,7 +2894,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Crear la página de fuentes y enlazar {n} página(s)',
@@ -3076,6 +3075,7 @@ export default {
       title: 'Etiquetas de frontmatter — de qué trata este repositorio',
       help: 'Las etiquetas describen qué contiene este repositorio y — igual de importante — qué NO contiene (la lista de prohibidas). Ellas deciden qué consultas se enrutan a este repositorio. Pulse Refresh para redactarlas desde el corpus, o edite las fichas de abajo. Publicar exige ≥3 temas + ≥1 prohibida.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Etiquetas obsoletas — vuelva a ingestar para aplicarlas',
       suggesting: 'Curating…',
       suggestEmpty: 'El LLM no devolvió etiquetas. Pruebe de nuevo cuando crezca el corpus.',
       suggestCoverage:
@@ -3106,7 +3106,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Etiquetas obsoletas — vuelva a ingestar para aplicarlas'
       },
       tab: {
         head: 'Head',

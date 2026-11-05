@@ -2791,7 +2791,6 @@ export default {
       action: {
         suggestLinks: '建议链接',
         accept: '接受',
-        dismiss: '忽略',
         delete: '删除',
         working: '处理中…',
         wireCreate: '创建 Sources 页面并链接 {n} 个页面',
@@ -2962,6 +2961,7 @@ export default {
       title: 'Frontmatter 标签——此仓库是关于什么的',
       help: '标签描述此仓库包含什么——以及同样重要的是——不包含什么（禁用列表）。它们决定哪些查询路由到此仓库。点击“刷新”从语料库起草，或在下方编辑标签。发布要求 ≥3 个主题标签 + ≥1 个禁用标签。',
       refresh: '刷新建议',
+      labelsStale: '标签已过期 — 重新摄取后生效',
       suggesting: '正在整理…',
       suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
@@ -2991,7 +2991,8 @@ export default {
       badge: {
         present: '头向量就绪',
         stale: '头向量过期',
-        missing: '无头向量'
+        missing: '无头向量',
+        labelsStale: '标签已过期 — 重新摄取后生效'
       },
       tab: {
         head: '头向量',

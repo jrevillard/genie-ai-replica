@@ -487,8 +487,9 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     expect(response.body).toEqual(gaugeData);
   });
 
-  // DW-113: verify locale query param propagates end-to-end to service
-  it('should propagate locale query parameter to service', async () => {
+  // The gauge's week-axis labels are period keys the client translates, so the
+  // endpoint does not localize anything and takes no locale.
+  it('should not forward a locale to the gauge service', async () => {
     analyticsService.getSatisfactionGaugeData.mockResolvedValue(gaugeData);
 
     const response = await authGet(
@@ -496,7 +497,7 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(analyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2025-01-01', '2025-01-31', 'fr');
+    expect(analyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
   });
 
   it('should return 400 when startDate/endDate missing', async () => {

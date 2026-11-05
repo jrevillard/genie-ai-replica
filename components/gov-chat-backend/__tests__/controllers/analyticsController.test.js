@@ -236,8 +236,9 @@ describe('AnalyticsController', () => {
       const { req, res } = mockReqRes({}, { startDate: '2026-01-01', endDate: '2026-01-31', locale: 'fr' });
       await controller.getSatisfactionGauge(req, res);
       expect(res.json).toHaveBeenCalledWith({ currentValue: 85, target: 85 });
-      // DW-113: verify locale is propagated from req.query to service
-      expect(mockAnalyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2026-01-01', '2026-01-31', 'fr');
+      // The gauge's week-axis labels are period keys the client translates, so
+      // the endpoint does not localize anything and takes no locale.
+      expect(mockAnalyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2026-01-01', '2026-01-31');
     });
 
     it('should return 500 on service error', async () => {

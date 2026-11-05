@@ -235,7 +235,10 @@ describe('the script stays out of the auto-executed migrations directory', () =>
     const fs = require('fs');
     const path = require('path');
     const dir = path.join(__dirname, '../scripts/migrations');
-    const MARKERS = ['report-husk-user-docs', 'HUSK_MATCHER_AQL', 'HUSK_REMOVAL_AQL'];
+    // The identifiers a migration would carry if it required or copied the
+    // script, plus the signature's own AQL fragment — a migration that
+    // INLINED the husk query without importing it would carry that one.
+    const MARKERS = ['report-husk-user-docs', 'HUSK_MATCHER_AQL', 'HUSK_REMOVAL_AQL', 'MINUS(ATTRIBUTES(u)'];
     const offenders = fs
       .readdirSync(dir)
       .filter((file) => /^\d{3}-.*\.js$/.test(file))

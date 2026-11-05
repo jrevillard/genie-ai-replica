@@ -179,14 +179,6 @@ workflow:
   stage: test
   variables:
     NODE_ENV: test
-    # sharp's install downloads libvips + its native binary from GitHub release
-    # assets, which are unreachable from the CI runner container (connection
-    # resets with "socket hang up"). Mirror both to npmmirror (verified reachable
-    # from the runner). CI-only: local devs keep the default hosts. Inert for
-    # components that do not install sharp; pinned here so every job that runs
-    # npm ci against the same lockfile resolves binaries from the same hosts.
-    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
-    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   artifacts:
     when: always
     expire_in: 7 days
@@ -3122,8 +3114,13 @@ docs:validate:
 
 test:backend:
   extends: .test_node
-  # The sharp mirror hosts live on the .test_node template (every node test
-  # job runs npm ci against the same lockfile).
+  # sharp's install downloads libvips + its native binary from GitHub release
+  # assets, which are unreachable from the CI runner container (connection
+  # resets with "socket hang up"). Mirror both to npmmirror (verified reachable
+  # from the runner). CI-only: local devs keep the default hosts.
+  variables:
+    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
+    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
     # shared/lib must install too — backend requires shared/lib/victorialogs-transport
     # which requires winston-transport. Without shared/lib/node_modules, the test
@@ -3179,6 +3176,10 @@ test:backend:
 test:backend-arango:
   extends: .test_node
   services:
+    # The engine version TRACKS the production pin (docker-compose.yaml and
+    # components/arangodb/compose.yaml): the gate proves the AQL against
+    # the engine that will run it, so a production bump must bump this tag
+    # too — the two production pin files are in the changes filter below.
     - name: arangodb/arangodb:3.12.4
       alias: arangodb
       variables:
@@ -3214,14 +3215,16 @@ test:backend-arango:
       junit: components/gov-chat-backend/reports/jest-husk-arango.xml
   rules:
     # MR pipelines: the gate matters when the script, its suite, the driver
-    # version or the job itself changes — nothing else can move the AQL's
-    # semantics, so other backend MRs skip it.
+    # version, the engine pin or the job itself changes — nothing else can
+    # move the AQL's semantics, so other backend MRs skip it.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/gov-chat-backend/scripts/report-husk-user-docs.js"
         - "components/gov-chat-backend/__tests__/integration/husk-report.db.test.js"
         - "components/gov-chat-backend/package.json"
         - "components/gov-chat-backend/package-lock.json"
+        - "docker-compose.yaml"
+        - "components/arangodb/compose.yaml"
         - ".gitlab-ci.yml"
       when: on_success
     # Branch pipelines (main / release/*): run it on every push, like every

@@ -428,6 +428,19 @@ describe('Swagger Configuration', () => {
         // control character must be rejected before the URL is built.
         expect(swaggerOptions.definition.servers[0].url).toBe('/');
       });
+      withApiUrl('https://gov.example.com/gov\u0001', ({ swaggerOptions }) => {
+        // The same class, outside the whitespace: WHATWG parsing STRIPS a
+        // trailing C0 control (\u0001 here), so the parsed URL would be
+        // 'https://gov.example.com/gov' while the served value is the raw
+        // string — a control byte in the served document, in a form the
+        // parser never validated.
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
+      withApiUrl('https://gov.example.com/gov"quote', ({ swaggerOptions }) => {
+        // WHATWG parsing percent-encodes the quote; the raw string is
+        // served, so the served base would differ from the validated one.
+        expect(swaggerOptions.definition.servers[0].url).toBe('/');
+      });
       withApiUrl('HTTP://gov.example.com', ({ swaggerOptions }) => {
         // Uppercase scheme is a legal absolute URL — accepted verbatim.
         expect(swaggerOptions.definition.servers[0].url).toBe('HTTP://gov.example.com');

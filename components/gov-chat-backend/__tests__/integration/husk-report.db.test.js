@@ -41,6 +41,10 @@ const {
   HUSK_REMOVAL_AQL,
   ALL_DOCS_AQL
 } = require('../../scripts/report-husk-user-docs');
+// The app's own field vocabulary: the corpus carries a document per class
+// so the claim "an app field disqualifies the document" is checked against
+// the fields the app ACTUALLY writes, not against hand-copied names.
+const { USER_PREFERENCE_FIELDS, GOV_PROFILE_SECTIONS } = require('../../constants/jit-fields');
 
 // The suite waits for the database to answer (the CI service container is
 // RUNNING long before ArangoDB serves): the wait's own budget must fit
@@ -89,15 +93,15 @@ const CORPUS = [
   // field: it must disqualify the document exactly like any other.
   { _key: 'underscore-field', createdAt: '2025-01-01T00:00:00.000Z', _internalFlag: true },
   // A legacy account carrying a CLIENT PREFERENCE field (the app's own
-  // vocabulary: USER_PREFERENCE_FIELDS in constants/jit-fields.js). Such a
-  // document is a real account, not a husk — the deletion wave must never
-  // take a user's display preferences with it.
-  { _key: 'legacy-with-preference', theme: 'dark', createdAt: '2025-01-01T00:00:00.000Z' },
+  // vocabulary: USER_PREFERENCE_FIELDS). Such a document is a real
+  // account, not a husk — the deletion wave must never take a user's
+  // display preferences with it.
+  { _key: 'legacy-with-preference', [USER_PREFERENCE_FIELDS[0]]: 'dark', createdAt: '2025-01-01T00:00:00.000Z' },
   // A document carrying a GOV-PROFILE SECTION (the other app vocabulary:
   // GOV_PROFILE_SECTIONS) — profile data, so never a husk either.
   {
     _key: 'legacy-with-profile-section',
-    civilRegistration: { id: 'CR-1' },
+    [GOV_PROFILE_SECTIONS[0]]: { id: 'CR-1' },
     createdAt: '2025-01-01T00:00:00.000Z'
   }
 ];

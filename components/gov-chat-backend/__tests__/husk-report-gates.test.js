@@ -392,6 +392,11 @@ describe('main safety wiring', () => {
     // the husk listing (stdout), the lookalike listing (stdout, sample
     // truncated SERVER-side) and the divergence listing (stderr). A cap or
     // wording that drifts between them is the bug this pin guards.
+    //
+    // The two stdout listings are given DIFFERENT totals on purpose: with the
+    // same total they emit the same elision line, and an assertion on that
+    // line would still pass if ONE of the two listings stopped eliding (or
+    // stopped listing altogether) — the pin would be blind to the removal.
     const husks = Array.from({ length: 60 }, (_, i) => ({ ...huskDoc, _key: `h-${i}`, _id: `users/h-${i}` }));
     const lookalikes = Array.from({ length: 50 }, (_, i) => ({
       _key: `l-${i}`,
@@ -400,20 +405,37 @@ describe('main safety wiring', () => {
     const db = fakeDb({
       husks,
       allDocs: husks,
-      lookalikeCount: 60,
+      lookalikeCount: 75,
       lookalikes
     });
     await runMain(db);
     const stdout = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
-    // The husk listing caps at 50 and elides the rest...
-    expect(stdout.split('\n').filter((l) => l.includes('husk _key='))).toHaveLength(50);
+    // The husk listing caps at 50 and elides the rest — with ITS own count.
+    const huskLines = stdout.split('\n').filter((l) => l.includes('husk _key='));
+    expect(huskLines).toHaveLength(50);
     expect(stdout).toContain('... and 10 more (not listed)');
-    // ...and the lookalike listing does the same, even though its sample
-    // arrives already truncated (the count is the number of ALL lookalikes).
-    expect(stdout.split('\n').filter((l) => l.includes('lookalike _key='))).toHaveLength(50);
-    expect(stdout).toContain('... and 10 more (not listed)');
-    // The server-side slice honours the same cap, so raising it really does
-    // surface more lookalikes instead of silently eliding them.
-    expect(db.lookalikeCalls()[0].bind.sampleLimit).toBe(50);
+    // The husk line keeps its full shape (the listing is not degraded to a
+    // bare key while it is being unified).
+    expect(huskLines[0]).toContain('createdAt=');
+    expect(huskLines[0]).toContain('attributes=');
+    // The lookalike listing caps at 50 too and elides the rest — with a
+    // DIFFERENT count, so the two elision lines cannot be confused. Its
+    // sample arrives already truncated (the count is the number of ALL
+    // lookalikes).
+    const lookalikeLines = stdout.split('\n').filter((l) => l.includes('lookalike _key='));
+    expect(lookalikeLines).toHaveLength(50);
+    expect(stdout).toContain('... and 25 more (not listed)');
+    expect(lookalikeLines[0]).toContain('createdAt=');
+  });
+
+  it('couples the lookalike server-side slice to the configured cap (issue #1507)', async () => {
+    // The lookalike sample is truncated SERVER-side by the SLICE in
+    // LEGACY_LOOKALIKE_AQL. If that slice kept the DEFAULT cap while the
+    // client-side listing honoured the override, raising HUSK_SAMPLE_LIMIT
+    // would elide the extra lookalikes server-side — silently, with the
+    // operator seeing fewer entries than they asked for.
+    const db = fakeDb({});
+    await runMain(db, [], { ...gateEnv, HUSK_SAMPLE_LIMIT: '200' });
+    expect(db.lookalikeCalls()[0].bind.sampleLimit).toBe(200);
   });
 });

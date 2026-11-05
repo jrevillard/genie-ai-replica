@@ -2415,7 +2415,7 @@ export default {
       autocorrect:
         'La autocorrección solo toca el frontmatter (títulos, tipos, estructura) — nunca su contenido escrito. Las propuestas se muestran antes de cambiar nada; al aplicar, las correcciones se escriben de inmediato y puede revisar el resultado en Curate.',
       handoff:
-        'El ritual del ciclo de vida (enviar → aprobar → publicar) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
+        'El ritual del ciclo de vida (enviar → aprobar → publicar → Ingestar) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
       lifecycle:
         'El contrato de seis pasos: borrador → revisión → aprobado → publicado (emitir + empaquetar) → ingestado (en servicio en RAG) → retirado (de vuelta a edición). El contenido solo se vuelve citable tras la ingesta — y solo el contenido revisado puede publicarse.',
       labelsAuto:
@@ -2542,7 +2542,7 @@ export default {
       },
       draft: {
         notReady:
-          'Los borradores no pueden guardarse en el servidor en esta sesión — se conservan solo en este navegador. La página y el servidor pueden tener versiones distintas; recargue la página.'
+          'Los borradores no pueden guardarse en el servidor en esta sesión — permanecen solo en esta pestaña del navegador y se pierden si se cierra o recarga la pestaña. La página y el servidor pueden tener versiones distintas.'
       },
       mode: {
         basic: 'Básico',
@@ -2775,7 +2775,7 @@ export default {
         frozen:
           'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: Enviar para revisión → Aprobar → Publicar → Ingerir. El asistente se detiene aquí por diseño.',
+          'Siguiente: en el panel de Studio esta tarjeta tiene UN solo botón para todo el ciclo de vida — cambia de etiqueta en cada paso: {submit} → {approve} → {publish} → {ingest}. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },

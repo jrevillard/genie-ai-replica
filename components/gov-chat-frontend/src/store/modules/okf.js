@@ -216,6 +216,9 @@ const getters = {
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
+  // #1056 — the session latch that says "the draft endpoint is not
+  // available here"; surfaces the degraded-draft state to the curator.
+  draftsUnavailable: (state) => state.draftsUnavailable === true,
   selection: (state) => state.selection,
   error: (state) => state.error
 };

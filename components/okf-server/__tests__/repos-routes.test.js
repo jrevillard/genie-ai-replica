@@ -1213,7 +1213,9 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
   test('the apply audit row names the concept scope and the fields (#1066)', async () => {
     // result.changes is per-CONCEPT; the old description printed that count as
     // "N change(s) across the repository" and an operator read 17 concepts as
-    // 17 tag edits and re-ran the LLM tag suggestion as a precaution.
+    // 17 tag edits and re-ran the LLM tag suggestion as a precaution. The
+    // FAILED concept is planned, not applied — it must not be counted, or the
+    // row contradicts itself ("2 concept(s) ... 1 concept(s) FAILED").
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({
       changes: [
@@ -1227,6 +1229,10 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
         {
           concept_id: 'conceptB',
           changes: [{ field: 'title', before: null, after: 'Other', reason: 'MISSING_TITLE' }]
+        },
+        {
+          concept_id: 'conceptC',
+          changes: [{ field: 'title', before: null, after: 'Third', reason: 'MISSING_TITLE' }]
         }
       ],
       warnings: [],
@@ -1244,8 +1250,31 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
       expect.objectContaining({
         action: 'repo.autocorrect',
         description:
-          'Applied frontmatter autocorrect — 2 concept(s), 3 frontmatter field change(s) (title, type)' +
+          'Applied frontmatter autocorrect — 2 concept(s) applied, 3 frontmatter field change(s) (title, type)' +
           ', 1 concept(s) FAILED and reported to the client'
+      })
+    );
+  });
+
+  test('the apply audit row carries no empty field list when nothing changed (#1066)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [],
+      warnings: [],
+      applied: 0,
+      failed: 0,
+      failures: [],
+      total_concepts: 7
+    });
+    await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.autocorrect',
+        description: 'Applied frontmatter autocorrect — 0 concept(s) applied, 0 frontmatter field change(s)'
       })
     );
   });

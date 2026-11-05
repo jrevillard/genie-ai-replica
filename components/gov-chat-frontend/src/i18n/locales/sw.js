@@ -2396,7 +2396,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha → Meza) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2522,7 +2522,7 @@ export default {
       },
       draft: {
         notReady:
-          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zimehifadhiwa kwenye kivinjari hiki tu. Ukurasa na seva vinaweza kuwa na toleo tofauti; pakia upya ukurasa.'
+          'Rasimu haziwezi kuhifadhiwa kwenye seva katika kipindi hiki — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa na seva vinaweza kuwa na toleo tofauti.'
       },
       mode: {
         basic: 'Msingi',
@@ -2754,7 +2754,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: wasilisha kwa uhakiki → idhinisha → chapisha → injesti. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — hubadilisha jina lake kila hatua: {submit} → {approve} → {publish} → {ingest}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },

@@ -2402,7 +2402,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup (kirim → setujui → publikasikan) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup (kirim → setujui → publikasikan → Serap) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2528,7 +2528,7 @@ export default {
       },
       draft: {
         notReady:
-          'Draf tidak dapat disimpan di server dalam sesi ini — hanya disimpan di browser ini. Halaman dan server mungkin memiliki versi yang berbeda; muat ulang halaman.'
+          'Draf tidak dapat disimpan di server dalam sesi ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman dan server mungkin memiliki versi yang berbeda.'
       },
       mode: {
         basic: 'Dasar',
@@ -2759,7 +2759,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: Kirim untuk ditinjau → Setujui → Terbitkan → Serap. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — labelnya berubah di setiap langkah: {submit} → {approve} → {publish} → {ingest}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },

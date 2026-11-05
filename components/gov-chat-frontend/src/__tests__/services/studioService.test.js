@@ -107,8 +107,18 @@ describe('studioService', () => {
       expect(mockPut).toHaveBeenCalledWith('/okf/repos/r-1/draft', body, { silent: true });
     });
 
-    it('404 maps to NOT_READY', async () => {
+    it('404 REPO_NOT_FOUND is NOT a NOT_READY — a deleted repo must not arm the session latch', async () => {
+      // #1056: the store turns a NOT_READY into the SESSION-GLOBAL
+      // draftsUnavailable latch, which pushes every later save of every repo
+      // to local-only and blames a version mismatch. A repo deleted under the
+      // curator is a definitive answer, not a missing endpoint.
       mockPut.mockRejectedValue(httpError(404, 'REPO_NOT_FOUND'));
+      await expect(studioService.saveDraft('r-1', {})).rejects.not.toMatchObject({ code: 'NOT_READY' });
+      await expect(studioService.saveDraft('r-1', {})).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('any OTHER 404 maps to NOT_READY', async () => {
+      mockPut.mockRejectedValue(httpError(404, 'NOT_FOUND'));
       await expect(studioService.saveDraft('r-1', {})).rejects.toMatchObject({ code: 'NOT_READY' });
     });
   });

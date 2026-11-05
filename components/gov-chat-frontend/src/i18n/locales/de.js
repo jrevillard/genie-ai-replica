@@ -2424,7 +2424,7 @@ export default {
       autocorrect:
         'Auto-Fix fasst nur das Frontmatter an (Titel, Typen, Struktur) — nie Ihren geschriebenen Inhalt. Vorschläge werden angezeigt, bevor sich etwas ändert; das Anwenden schreibt die Korrekturen sofort, und Sie können das Ergebnis in Curate prüfen.',
       handoff:
-        'Der Lifecycle-Ritus (submit → approve → publish) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
+        'Der Lifecycle-Ritus (submit → approve → publish → Aufnehmen) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
       lifecycle:
         'Der Sechs-Schritte-Vertrag: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (zurück zur Bearbeitung). Inhalt wird erst nach dem Ingest zitierfähig — und nur geprüfter Inhalt kann veröffentlicht werden.',
       labelsAuto:
@@ -2551,7 +2551,7 @@ export default {
       },
       draft: {
         notReady:
-          'Entwürfe können in dieser Sitzung nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser. Seite und Server können unterschiedliche Versionen haben; laden Sie die Seite neu.'
+          'Entwürfe können in dieser Sitzung nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite und Server können unterschiedliche Versionen haben.'
       },
       mode: {
         basic: 'Standard',
@@ -2788,7 +2788,7 @@ export default {
         frozen:
           'Dieses Repository ist im Einsatz — hier eine schreibgeschützte Zusammenfassung. Öffnen Sie den Editor, um Versionen zu verwalten oder zurückzuziehen.',
         ritual:
-          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — er beschriftet sich bei jedem Schritt neu: Zur Prüfung einreichen → Genehmigen → Veröffentlichen → Injizieren. Der Assistent endet hier bewusst.',
+          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — er beschriftet sich bei jedem Schritt neu: {submit} → {approve} → {publish} → {ingest}. Der Assistent endet hier bewusst.',
         openDashboard: 'Open the Dashboard'
       }
     },

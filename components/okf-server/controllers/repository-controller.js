@@ -1429,7 +1429,13 @@ async function autocorrectRepo(req, res, next) {
       // bare "N change(s)" mislabels the concept count as a change count and
       // sent an operator re-running the (unrelated) tag suggestion. Name the
       // scope and the fields actually touched — tags are never autocorrected.
-      const conceptChanges = Array.isArray(result.changes) ? result.changes : [];
+      // The FAILED concepts are excluded from both counts: they were planned,
+      // not applied, and counting them made the row contradict itself ("2
+      // concept(s) ... 1 concept(s) FAILED" read as three touched concepts).
+      const failedIds = new Set((result.failures || [] || []).map((f) => f.concept_id));
+      const conceptChanges = (Array.isArray(result.changes) ? result.changes : []).filter(
+        (c) => !failedIds.has(c.concept_id)
+      );
       const fieldCount = conceptChanges.reduce((n, c) => n + ((c.changes && c.changes.length) || 0), 0);
       const fields = [...new Set(conceptChanges.flatMap((c) => (c.changes || []).map((ch) => ch.field)))].sort();
       auditService
@@ -1442,11 +1448,10 @@ async function autocorrectRepo(req, res, next) {
           description:
             'Applied frontmatter autocorrect — ' +
             conceptChanges.length +
-            ' concept(s), ' +
+            ' concept(s) applied, ' +
             fieldCount +
-            ' frontmatter field change(s) (' +
-            fields.join(', ') +
-            ')' +
+            ' frontmatter field change(s)' +
+            (fields.length ? ' (' + fields.join(', ') + ')' : '') +
             (result.failed > 0 ? `, ${result.failed} concept(s) FAILED and reported to the client` : ''),
           details: { changes: result.changes, warnings: result.warnings }
         })

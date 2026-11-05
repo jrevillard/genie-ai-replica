@@ -2412,7 +2412,7 @@ export default {
       autocorrect:
         'A correção automática toca apenas no frontmatter (títulos, tipos, estrutura) — nunca no conteúdo que você escreveu. As propostas são exibidas antes de qualquer mudança; aplicar grava as correções imediatamente e você pode revisar o resultado em Curate.',
       handoff:
-        'O ritual do ciclo de vida (submit → approve → publish) fica deliberadamente fora deste assistente: aprovações pertencem ao fluxo de governança no painel e no editor, onde versões e estado de serving são gerenciados.',
+        'O ritual do ciclo de vida (submit → approve → publish → Ingerir) fica deliberadamente fora deste assistente: aprovações pertencem ao fluxo de governança no painel e no editor, onde versões e estado de serving são gerenciados.',
       lifecycle:
         'O contrato de seis etapas: draft → review → approved → published (criação da versão + pacote) → ingested (serving no RAG) → retracted (de volta à edição). O conteúdo só se torna citável depois do ingest — e somente conteúdo revisado pode ser publicado.',
       labelsAuto:
@@ -2539,7 +2539,7 @@ export default {
       },
       draft: {
         notReady:
-          'Os rascunhos não podem ser salvos no servidor nesta sessão — ficam apenas neste navegador. A página e o servidor podem ter versões diferentes; recarregue a página.'
+          'Os rascunhos não podem ser salvos no servidor nesta sessão — ficam apenas nesta aba do navegador e são perdidos se a aba for fechada ou recarregada. A página e o servidor podem ter versões diferentes.'
       },
       mode: {
         basic: 'Básico',
@@ -2772,7 +2772,7 @@ export default {
         frozen:
           'Este repositório está em serving — um resumo somente leitura aqui. Abra o Editor para gerenciar versões ou fazer retract.',
         ritual:
-          'A seguir: no painel do Studio este cartão tem UM único botão para todo o ciclo de vida — ele muda de rótulo a cada passo: submit para revisão → aprovar → publish → ingerir. O assistente para aqui por decisão de projeto.',
+          'A seguir: no painel do Studio este cartão tem UM único botão para todo o ciclo de vida — ele muda de rótulo a cada passo: {submit} → {approve} → {publish} → {ingest}. O assistente para aqui por decisão de projeto.',
         openDashboard: 'Open the Dashboard'
       }
     },

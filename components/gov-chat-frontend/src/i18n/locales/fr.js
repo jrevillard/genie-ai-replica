@@ -2422,7 +2422,7 @@ export default {
       autocorrect:
         "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        "Le rituel de cycle de vie (soumettre → approuver → publier) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
+        "Le rituel de cycle de vie (soumettre → approuver → publier → Ingérer) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
         "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
@@ -2549,7 +2549,7 @@ export default {
       },
       draft: {
         notReady:
-          'Les brouillons ne peuvent pas être enregistrés sur le serveur dans cette session — ils sont conservés uniquement dans ce navigateur. La page et le serveur peuvent être de versions différentes ; rechargez la page.'
+          "Les brouillons ne peuvent pas être enregistrés sur le serveur dans cette session — ils restent uniquement dans cet onglet du navigateur et sont perdus si l'onglet est fermé ou rechargé. La page et le serveur peuvent être de versions différentes."
       },
       mode: {
         basic: 'Base',
@@ -2784,7 +2784,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : Soumettre pour validation → Approuver → Publier → Ingérer. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — il change de libellé à chaque étape : {submit} → {approve} → {publish} → {ingest}. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },

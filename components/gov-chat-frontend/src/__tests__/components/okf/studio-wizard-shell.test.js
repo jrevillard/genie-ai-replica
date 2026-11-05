@@ -215,27 +215,4 @@ describe('Amendment A slice 1 — the wizard shell contract', () => {
     expect(wrapper.vm.clonedFromLabel).toBe('Cloned from Source Repo');
     wrapper.unmount();
   });
-
-  it('#1056: a healthy session renders NO degraded-draft notice', async () => {
-    const wrapper = mountWizard({ ...DRAFT }, buildStore());
-    await wrapper.vm.$nextTick();
-    expect(wrapper.find('.okf-wizard__draft-notice').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('#1056: the NOT_READY latch surfaces the degraded-draft notice in the wizard', async () => {
-    // The fallback used to be silent: draftsUnavailable armed → saves stay
-    // in-memory → a refresh loses the curation state, and the curator is
-    // never told. The wizard must say so (party-neutral — a 404 alone cannot
-    // tell an older server from a stale page).
-    const store = buildStore();
-    const wrapper = mountWizard({ ...DRAFT }, store);
-    await wrapper.vm.$nextTick();
-    store.commit('okf/setDraftsUnavailable');
-    await wrapper.vm.$nextTick();
-    const notice = wrapper.find('.okf-wizard__draft-notice');
-    expect(notice.exists()).toBe(true);
-    expect(notice.text()).toContain('reload the page');
-    wrapper.unmount();
-  });
 });

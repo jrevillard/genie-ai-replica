@@ -49,14 +49,7 @@
       }}</DsStatusTag>
       <DsStatusTag :variant="checklistVariants.frontmatter">{{ frontmatterLabel }}</DsStatusTag>
     </div>
-    <p class="okf-step__ritual">
-      {{
-        translate(
-          'okf.steps.publish.ritual',
-          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: Submit for review → Approve → Publish → Ingest. The wizard stops here by design.'
-        )
-      }}
-    </p>
+    <p class="okf-step__ritual">{{ lifecycleRitual }}</p>
     <!-- Story 6-1c (2026-10-17): SECURE — the wizard/editor parity rule.
          Restriction + grants are configuration (acl.restricted / Keycloak
          scopes), never a lifecycle transition, so the D4 "no publishing in
@@ -146,6 +139,20 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
+    // #1068: the ritual line names the four lifecycle steps through the SAME
+    // translated labels the dashboard button renders (okf.lifecycle.*), so
+    // the copy can never name a button the operator cannot find — the drift
+    // that made a hand-translated ritual useless in 12 of 14 locales.
+    lifecycleRitual() {
+      return this.translate(
+        'okf.steps.publish.ritual',
+        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {submit} → {approve} → {publish} → {ingest}. The wizard stops here by design.'
+      )
+        .replace('{submit}', this.translate('okf.lifecycle.submit', 'Submit for review'))
+        .replace('{approve}', this.translate('okf.lifecycle.approve', 'Approve'))
+        .replace('{publish}', this.translate('okf.lifecycle.publish', 'Publish'))
+        .replace('{ingest}', this.translate('okf.lifecycle.ingest', 'Ingest'));
+    },
     // B8 (Amendment A): the checklist reads the LIVE repo doc — never the
     // dead draft shapes. Each item is a real readiness signal.
     repo() {

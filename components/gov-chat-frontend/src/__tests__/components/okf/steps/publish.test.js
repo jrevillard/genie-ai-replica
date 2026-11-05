@@ -16,6 +16,7 @@
 const { mount } = require('@vue/test-utils');
 const Vuex = require('vuex');
 const OkfStepPublish = require('@/components/okf/steps/Publish.vue').default;
+const en = require('@/i18n/locales/en.js').default;
 
 const mockFetchMetrics = jest.fn();
 const mockGetFrontmatter = jest.fn();
@@ -46,6 +47,9 @@ function mountPublish(repo) {
     props: { draft: { repo_id: 'r1', name: 'R' }, expert: false },
     global: {
       stubs: { DsStatusTag: true },
+      // The REAL English locale tree: the assertions below then cover the
+      // copy that ships, not the inline translate() fallback.
+      mocks: { $i18n: { messages: { en }, locale: 'en' } },
       plugins: [
         new Vuex.Store({
           modules: {
@@ -117,8 +121,26 @@ it('a non-frozen repo without approved frontmatter stays gated (Story 1.6)', asy
 it('#1068: the hand-off names the four-click lifecycle (one dashboard button)', () => {
   // The lifecycle is ONE contextual button relabelling itself four times;
   // the step must say so or the operator hunts for four buttons that do not
-  // exist. The mounted text carries the translate() fallback (no i18n tree
-  // in this suite), so this asserts the shipped default copy verbatim.
+  // exist. The suite mounts the REAL en locale tree, so this asserts the
+  // shipped copy.
   const w = mountPublish({ repo_id: 'r1', name: 'R', ingested_at: 't' });
   expect(w.text()).toContain('Submit for review → Approve → Publish → Ingest');
+});
+
+it('#1068: the shipped ritual interpolates the lifecycle labels the dashboard renders', () => {
+  // The labels come from okf.lifecycle.* — the SAME keys the dashboard button
+  // renders. A hand-translated ritual named buttons that do not exist in 12
+  // of 14 locales; the placeholders make that impossible.
+  const ritual = en.okf.steps.publish.ritual;
+  expect(ritual).toContain('{submit}');
+  expect(ritual).toContain('{approve}');
+  expect(ritual).toContain('{publish}');
+  expect(ritual).toContain('{ingest}');
+  const filled = ritual
+    .replace('{submit}', en.okf.lifecycle.submit)
+    .replace('{approve}', en.okf.lifecycle.approve)
+    .replace('{publish}', en.okf.lifecycle.publish)
+    .replace('{ingest}', en.okf.lifecycle.ingest);
+  expect(filled).toContain(`${en.okf.lifecycle.submit} → ${en.okf.lifecycle.approve}`);
+  expect(filled).toContain(`${en.okf.lifecycle.publish} → ${en.okf.lifecycle.ingest}`);
 });

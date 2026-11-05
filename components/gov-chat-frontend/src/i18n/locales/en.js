@@ -3186,7 +3186,7 @@ export default {
       autocorrect:
         'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'The lifecycle ritual (submit → approve → publish → Ingest) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
@@ -3347,7 +3347,7 @@ export default {
       },
       draft: {
         notReady:
-          'Drafts cannot be stored on the server in this session — they are kept in this browser only. The page and the server may be different versions; reload the page.'
+          'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
       },
       mode: {
         basic: 'Basic',
@@ -3576,7 +3576,7 @@ export default {
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
         ritual:
-          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: Submit for review → Approve → Publish → Ingest. The wizard stops here by design.',
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — it relabels itself at every step: {submit} → {approve} → {publish} → {ingest}. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },

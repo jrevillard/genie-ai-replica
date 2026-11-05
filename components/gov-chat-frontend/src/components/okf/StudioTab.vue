@@ -38,6 +38,20 @@
          every repository is grounded by. Read-only for non-admins (the
          posture must be visible to everyone), editable for tools-admin. -->
     <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
+    <!-- #1056: the NOT_READY fallback used to be silent — when the draft
+         endpoint is not available in this session, saves stay in-memory and a
+         refresh loses the curation state. Say so, party-neutrally, at the TAB
+         level: the zip-import path lands on the dashboard without ever
+         entering the wizard, so a wizard-only surface would stay quiet for it. -->
+    <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" role="status">
+      {{
+        translate(
+          'okf.studio.draft.notReady',
+          'Drafts cannot be stored on the server in this session — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page and the server may be different versions.'
+        )
+      }}
+    </p>
+)
 
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
@@ -259,7 +273,7 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['isExpert']),
+    ...mapGetters('okf', ['isExpert', 'draftsUnavailable']),
     // D-B honesty: the selected classification mode's real meaning.
     classHint() {
       const key =
@@ -784,6 +798,15 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+.okf-studio-tab__draft-notice {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--fg);
+  font-size: var(--text-sm);
 }
 .okf-studio-tab__divider {
   border: none;

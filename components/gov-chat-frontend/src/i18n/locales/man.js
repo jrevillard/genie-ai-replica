@@ -2362,7 +2362,7 @@ export default {
       autocorrect:
         'Auto-fix frontmatter waa dinda (title, type, structure) — i la kono dada bee ti. Proposalu yitandi kaben haya ti yailama; apply bɛ fixu write saaying ani Curate kono fatala etale be run.',
       handoff:
-        'Lifecycle ritual (submit → approve → publish) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
+        'Lifecycle ritual (submit → approve → publish → A mara) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
       lifecycle:
         'Step-naa kontratoo: draft → review → approved → published (mint + bundle) → ingested (RAG serving) → retracted (edit murung). Koo cite be run ingest koto waa — ani review kono koo waa publish be run.',
       labelsAuto:
@@ -2488,7 +2488,7 @@ export default {
       },
       draft: {
         notReady:
-          'Draft ko rej kōjparok ilo server ilo session in — rem̦ōj pād ijin browser in. Page im server rej bar ālik; baak page in.'
+          'Draft ko rej kōjparok ilo server ilo session in — rem̦ōj pād ijin browser tab in in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart. Page im server rej bar ālik.'
       },
       mode: {
         basic: 'Sabu',
@@ -2718,7 +2718,7 @@ export default {
         frozen:
           'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — enaj relabel ilo every step: Submit for review → Approve → Publish → Ingest. Wizardoo jang a ban o wajibya la.',
+          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — enaj relabel ilo every step: {submit} → {approve} → {publish} → {ingest}. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },

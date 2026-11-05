@@ -2411,7 +2411,7 @@ export default {
       autocorrect:
         'Tokiso ea boikemelo e khoma frontmatter feela (ditlohoho, mefuta, sebopeho) — e sa khohong mongolo oa hao. Dikhothaletso di bontshwa pele ho se seng le se seng se fetoha; ho di sebedisa ho ngola ditokiso hang-hang mme o ka hlahloba sephetho ho Curate.',
       handoff:
-        'Mokete oa lifecycle (submit → approve → publish) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
+        'Mokete oa lifecycle (submit → approve → publish → Ho ja) o ikemiseditse ho ba kantle ho wizard ena: ditumello di kohlehela mokgweng oa bosamaisi dashboard le ho editor, moo mefuta le boemo ba serving di laolwang kateng.',
       lifecycle:
         "Konteraka ea mehato e mengataro: draft → review → approved → published (mint + bundle) → ingested (serving ho RAG) → retracted (khutla ho edit). Litaba li fetoha tsa ho qotsoa ka mor'a ingest feela — mme litaba tse hlahlojoeng feela di ka phatlalatsoa.",
       labelsAuto:
@@ -2538,7 +2538,7 @@ export default {
       },
       draft: {
         notReady:
-          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li bolokiloe mona sebakeng feela. Leqephe le seva li ka be le mefuta e fapaneng; tsosolosa leqephe.'
+          'Li-draft ha li khone ho bolokoa lehlakoreng la seva seseng ena — li dula feela tabeng ena ya sebakengodi ebe li lahleha ha tab e koahelwa kapa ea hloekisoa. Leqephe le seva li ka be le mefuta e fapaneng.'
       },
       mode: {
         basic: 'Pele',
@@ -2770,7 +2770,7 @@ export default {
         frozen:
           'Repo ena e sebeletsa — kakaretso ea ho bala feela mona. Bula Editor ho laola mefuta kapa ho etsa retract.',
         ritual:
-          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — e fetola lebitso ea sona sehlateng se seng le se seng: submit bakeng sa tlhahlobo → amohela → publish → kenya. Wizard e ema mona ka boithaopo.',
+          'E latelang: dashboard ea Studio, karata ena e na le konopo e le NNGWE bakeng sa bophelo bo felletseng — e fetola lebitso ea sona sehlateng se seng le se seng: {submit} → {approve} → {publish} → {ingest}. Wizard e ema mona ka boithaopo.',
         openDashboard: 'Open the Dashboard'
       }
     },

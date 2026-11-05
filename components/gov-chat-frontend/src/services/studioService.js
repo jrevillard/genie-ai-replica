@@ -16,7 +16,8 @@
  * never an Error — hence `err.data?.error` for the backend code):
  *   404 REPO_NOT_FOUND  the repo is gone / soft-deleted / foreign → getDraft
  *                       resolves to null (the dashboard drops the card);
- *                       NOT a NOT_READY signal,
+ *                       saveDraft RETHROWS it as-is (a deleted repo is not a
+ *                       missing endpoint); NOT a NOT_READY signal,
  *   404 anything else   the endpoint is not reachable from this session.
  *                       THIS PAGE always calls the current path, so for a
  *                       bundle built after #1056 a 404 here means the SERVER
@@ -87,6 +88,14 @@ const studioService = {
       const res = await httpService.put(`/okf/repos/${encodeURIComponent(repoId)}/draft`, body, { silent: true });
       return res && res.data ? res.data : { ok: true };
     } catch (err) {
+      // REPO_NOT_FOUND is a DEFINITIVE answer, not a missing endpoint: the
+      // repo was deleted (or soft-deleted) under the curator. It must NOT
+      // become a NOT_READY — that arms the SESSION-GLOBAL draftsUnavailable
+      // latch, which would push every later save of every repo to local-only
+      // and blame a version mismatch the operator cannot act on (#1056).
+      if (err && err.status === 404 && backendErrorCode(err) === 'REPO_NOT_FOUND') {
+        throw err;
+      }
       if (err && (err.status === 404 || err.status === 501)) {
         const err_not_ready = new Error('NOT_READY');
         err_not_ready.code = 'NOT_READY';

@@ -3189,23 +3189,16 @@ test:backend-arango:
     # jest-junit's env options override the package.json ones: the report
     # of THIS job must not overwrite the backend suite's report name.
     JEST_JUNIT_OUTPUT_NAME: "jest-husk-arango.xml"
+    # The sibling test:backend pins these for THIS lockfile (sharp's
+    # release assets); the two jobs run the same npm ci, so they must run
+    # it with the same hosts.
+    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
+    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
     # Only the backend: this suite loads the script and the driver, nothing
-    # from shared/lib.
+    # from shared/lib. No cache: npm ci replaces node_modules wholesale, so
+    # a restored tree would be downloaded and deleted unused.
     - cd "$CI_PROJECT_DIR/components/gov-chat-backend" && npm ci
-  cache:
-    # The SAME entry as the sibling test:backend job — same package-lock,
-    # same node_modules (716 MB). A separate prefix would store a second
-    # copy of it on every runner.
-    - key:
-        files:
-          - components/gov-chat-backend/package-lock.json
-        prefix: test-backend
-      paths:
-        - components/gov-chat-backend/node_modules/
-      fallback_keys:
-        - "test-backend-$CI_DEFAULT_BRANCH"
-        - "test-backend-"
   script:
     # before_script and script share one shell: the cd is repeated with an
     # absolute path so the script's working directory never depends on it.
@@ -3222,8 +3215,9 @@ test:backend-arango:
     reports:
       junit: components/gov-chat-backend/reports/jest-husk-arango.xml
   rules:
-    # The gate matters when the script, its suite, the driver version or the
-    # job itself changes — nothing else can move the AQL's semantics.
+    # MR pipelines: the gate matters when the script, its suite, the driver
+    # version or the job itself changes — nothing else can move the AQL's
+    # semantics, so other backend MRs skip it.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/gov-chat-backend/scripts/report-husk-user-docs.js"
@@ -3232,6 +3226,9 @@ test:backend-arango:
         - "components/gov-chat-backend/package-lock.json"
         - ".gitlab-ci.yml"
       when: on_success
+    # Branch pipelines (main / release/*): run it on every push, like every
+    # sibling test job — the AQL that decides what the deletion wave
+    # removes must be green on the ref that ships it, whatever moved.
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 

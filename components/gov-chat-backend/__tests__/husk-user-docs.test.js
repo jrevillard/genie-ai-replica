@@ -226,7 +226,23 @@ describe('the script stays out of the auto-executed migrations directory', () =>
   // into that directory under a matching name it would abort the migration
   // init (it exports no up(db)), and a renamed copy would run its removal
   // query on every deployment (issue #1501).
-  it('is not under scripts/migrations/', () => {
-    expect(require.resolve('../scripts/report-husk-user-docs')).not.toMatch(/scripts[\\/]migrations[\\/]/);
+  //
+  // The guard scans the migration FILES, not the script's own location: a
+  // moved script fails this suite at require time anyway, while a copied
+  // one (a 042-husk-report.js referencing the removal query) leaves the
+  // script where it is and would only show up here.
+  it('no migration file references the husk report', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../scripts/migrations');
+    const MARKERS = ['report-husk-user-docs', 'HUSK_MATCHER_AQL', 'HUSK_REMOVAL_AQL'];
+    const offenders = fs
+      .readdirSync(dir)
+      .filter((file) => /^\d{3}-.*\.js$/.test(file))
+      .filter((file) => {
+        const source = fs.readFileSync(path.join(dir, file), 'utf8');
+        return MARKERS.some((marker) => source.includes(marker));
+      });
+    expect(offenders).toEqual([]);
   });
 });

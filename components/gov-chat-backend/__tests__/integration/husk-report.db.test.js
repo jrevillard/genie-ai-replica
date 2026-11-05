@@ -153,10 +153,18 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     await waitForServer(120000);
     const { Database } = require('arangojs');
     // The database is created over the HTTP API (arangojs 8's Database
-    // binds to an existing one) and dropped in afterAll. A database left
-    // behind by an interrupted run is dropped first: the test must be
-    // repeatable.
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
+    // binds to an existing one; the same pattern the sibling suite uses)
+    // and dropped in afterAll. A database left behind by an interrupted
+    // run is dropped first: the test must be repeatable, and a drop that
+    // silently failed would surface later as an opaque duplicate error —
+    // so the drop result is checked and names the remedy.
+    const dropped = await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
+    if (!dropped.ok && dropped.status !== 404) {
+      throw new Error(
+        `dropping a stale ${DB_NAME} failed (HTTP ${dropped.status}) — remove it by hand ` +
+          `on ${TEST_URL} and re-run this suite.`
+      );
+    }
     const created = await fetch(`${TEST_URL}/_api/database`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },

@@ -3349,6 +3349,11 @@ test:okf-server:
       changes:
         - "components/okf-server/**/*"
         - "components/shared/**/*"
+        # The cross-boundary route contract test reads the frontend service
+        # sources — without these paths a frontend-only repoint of a URL
+        # never runs the guard, which is exactly the drift it exists to
+        # catch (the frontend repointed alone).
+        - "components/gov-chat-frontend/src/services/**"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

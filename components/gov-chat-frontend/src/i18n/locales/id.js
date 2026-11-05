@@ -2425,7 +2425,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup (kirim → setujui → publikasikan) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup ({chain}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2550,7 +2550,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
+        notReady:
+          'Draf tidak dapat disimpan di server saat ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman atau server mungkin tidak sinkron.',
+        repoGone:
+          'Repositori ini tidak lagi tersedia di server — perubahan Anda hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang.'
       },
       mode: {
         basic: 'Dasar',
@@ -2758,7 +2761,7 @@ export default {
           'Tinjauan akhir sebelum Anda menyerahkan: setiap file di bawah, markdown dan labelnya — persis seperti yang akan dikutip asisten.',
         noRepo: 'Belum ada repositori — tinjauan file muncul di sini setelah repositori ada.',
         ritualOutside:
-          'Ritual tinjauan — kirim untuk ditinjau, persetujuan peninjau, publikasikan — terjadi di Editor dan dasbor Studio, bukan di sini. Buka Editor untuk menyelesaikannya.',
+          'Ritual peninjauan terjadi di editor dan dasbor Studio, satu tombol pada satu waktu — tidak di sini. Buka editor untuk menyelesaikan.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2771,7 +2774,7 @@ export default {
         frontmatterOk: 'Tag frontmatter disetujui',
         frontmatterServing: 'Tag frontmatter ditetapkan',
         title: 'Amankan dan Selesaikan',
-        hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
+        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
@@ -2781,7 +2784,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: kirim untuk persetujuan di dasbor Studio → pemberi persetujuan menerima → publikasikan dari dasbor atau editor. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — {chain}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3085,6 +3088,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Kirim untuk ditinjau',
       approve: 'Setujui',
       publish: 'Publikasikan',

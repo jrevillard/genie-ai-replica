@@ -2420,7 +2420,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha ({chain}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2545,7 +2545,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
+        notReady:
+          'Rasimu haziwezi kuhifadhiwa kwenye seva kwa sasa — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa au seva zinaweza kuwa nje ya ulandanishi.',
+        repoGone:
+          'Ghala hili si tayari haipatikani kwenye seva — mabadiliko yako yatabaki kwenye kichupo kiki cha kivinjari tu na hupotea kikichupo kikifungwa au kupakiwa upya.'
       },
       mode: {
         basic: 'Msingi',
@@ -2754,7 +2757,7 @@ export default {
           'Tazama la mwisho kabla ya kuhamisha: kila faili hapa chini, markdown yake na lebo zake — hasa kama msaidizi atakavyozitaja.',
         noRepo: 'Bado hakuna hazina — ukaguzi wa faili utaonekana hapa mara hazina ikianza kuwepo.',
         ritualOutside:
-          'Mtaratibu wa ukaguzi — wasilisha kwa ukaguzi, idhini ya mkaguzi, chapisha — unafanyika kwenye Mhariri na dashibodi ya Studio, si hapa. Fungua Mhariri ukamilishe.',
+          'Taratibu wa ukaguzi hufanyika kwenye mhariri na dashibodi ya Studio, kitufe kimoja kwa hatua moja — si hapa. Fungua mhariri ili ukamilishe.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2767,7 +2770,7 @@ export default {
         frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
         frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
-        hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
+        hint: 'Ghala hili la OKF limekuwa tayari kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na kwenye mhariri, kitufe kimoja kwa wakati mmoja.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',
@@ -2777,7 +2780,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: wasilisha kwa idhini kwenye dashibodi ya Studio → muidhinishaji anakubali → chapisha kutoka kwenye dashibodi au mhariri. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — {chain}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3081,6 +3084,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Wasilisha kwa ukaguzi',
       approve: 'Idhinisha',
       publish: 'Chapisha',

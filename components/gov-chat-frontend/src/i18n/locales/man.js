@@ -2386,7 +2386,7 @@ export default {
       autocorrect:
         'Auto-fix frontmatter waa dinda (title, type, structure) — i la kono dada bee ti. Proposalu yitandi kaben haya ti yailama; apply bɛ fixu write saaying ani Curate kono fatala etale be run.',
       handoff:
-        'Lifecycle ritual (submit → approve → publish) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
+        'Lifecycle ritual ({chain}) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
       lifecycle:
         'Step-naa kontratoo: draft → review → approved → published (mint + bundle) → ingested (RAG serving) → retracted (edit murung). Koo cite be run ingest koto waa — ani review kono koo waa publish be run.',
       labelsAuto:
@@ -2511,7 +2511,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
+        notReady:
+          'Draft ko rej kōjparok ilo server pād io — rem̦ōj pād ijin browser tab in in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart. Page kapa server rej bar ālik.',
+        repoGone:
+          'Ta-e polokelo cha tsa Mov tsa seva — ny goll dy goll dy hene dy tia tabeng browser tab in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart.'
       },
       mode: {
         basic: 'Sabu',
@@ -2718,7 +2721,7 @@ export default {
           'Hand-off kaben etoo labang: fayilu bee juu kono, a markdown ani a labelu — assistantoo cite cogo min la o waa.',
         noRepo: 'Repository ti je saaying — repository kelen na, fayil reviewoo jang na wuli.',
         ritualOutside:
-          'Review ritual — submit for review, reviewer approval, publish — Editor ani Studio dashboard kono ke, jang ti. Editoroo aade ka a ban ke.',
+          'Review ritual ej run editor im Studio dashboard la, button tok ba mis tok — noon ilo ni. Komałoktok editor in nan kōnono.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2731,7 +2734,7 @@ export default {
         frontmatterOk: 'Frontmatter tagu approved waa',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Sigura i kaba',
-        hint: 'Nying repository review a ready. Publish jang ti abada ke — dashboard kono approval lafiya submit, koto dashboard wala editor kono approve ani publish.',
+        hint: 'Kono kakwōn in redy dy review. Publish noon elhinn jer myr — lifecycle ej runs dashboard ani editor, button tok ba mis tok.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
         labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
         topicsOk: 'Un ko em̦ōj etale',
@@ -2741,7 +2744,7 @@ export default {
         frozen:
           'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Noo: Studio dashboard kono approval submit → approver dingo accept → dashboard wala editor kono publish. Wizardoo jang a ban o wajibya la.',
+          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — {chain}. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3039,6 +3042,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'A dii juube ma',
       approve: 'Song',
       publish: 'A ke',

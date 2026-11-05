@@ -38,11 +38,6 @@
          every repository is grounded by. Read-only for non-admins (the
          posture must be visible to everyone), editable for tools-admin. -->
     <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
-    <!-- #1056: the NOT_READY fallback used to be silent — when the draft
-         endpoint is not available in this session, saves stay in-memory and a
-         refresh loses the curation state. Say so, party-neutrally, at the TAB
-         level: the zip-import path lands on the dashboard without ever
-         entering the wizard, so a wizard-only surface would stay quiet for it. -->
     <!-- The degraded-draft notice lives at the TAB level: the zip-import
          path lands on the dashboard without ever entering the wizard, so a
          wizard-only surface would stay quiet for it. The live region exists

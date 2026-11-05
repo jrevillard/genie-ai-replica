@@ -20,6 +20,7 @@
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -61,13 +62,24 @@ export default {
       loading: false,
       error: null,
       chartOptions: null,
-      chartSeries: [],
       isMobile: false
     };
   },
   computed: {
     isI18nReady() {
       return typeof this.$t === 'function';
+    },
+    /**
+     * The series handed to the chart: the period keys translated into their
+     * display text. A computed keeps the array identity stable between
+     * chart rebuilds (resize, theme change), so the chart does not redraw
+     * its whole series on every one of those.
+     */
+    chartSeries() {
+      return this.chartData.map((category) => ({
+        ...category,
+        data: (category.data || []).map((point) => ({ ...point, x: translatePeriodLabel(point.x, this.$i18n) }))
+      }));
     }
   },
   watch: {
@@ -279,8 +291,6 @@ export default {
       const textColor = theme.textColor;
       const backgroundColor = theme.backgroundColor;
       const borderColor = theme.borderColor;
-
-      this.chartSeries = this.chartData;
 
       const getColorScale = () => {
         const poorText = this.translate('analytics.ratings.poor', 'Poor');

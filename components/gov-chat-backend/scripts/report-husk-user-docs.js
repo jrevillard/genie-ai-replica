@@ -297,10 +297,13 @@ async function runReport(db, gated, total, husks, allDocs) {
 // gated.collection, never the arangojs handle it also holds under `collection`.
 async function runDelete(db, collectionName, husks) {
   console.log(`--delete given: removing ${husks.length} husk documents...`);
-  // A rejection here can mean the removal DID reach ArangoDB and execute and
-  // only the response was lost (ECONNRESET, timeout) — so this path reports
-  // the same unknown-outcome honesty as the missing-stats branch below: the
-  // operator must verify with a dry run, never assume nothing happened.
+  // A rejection here is ambiguous in BOTH directions: the request may have
+  // reached ArangoDB and executed with only the response lost (ECONNRESET,
+  // timeout) — or it may never have reached the server at all (ECONNREFUSED,
+  // auth). The lead therefore states the one thing true in both cases — the
+  // outcome is unknown — and defers the removal possibility to a conditional
+  // clause; asserting "documents were removed" would be as dishonest as the
+  // ABORT wording this script used to print (issue #1505).
   let removalCursor;
   try {
     removalCursor = await db.query(HUSK_REMOVAL_AQL, {
@@ -309,10 +312,14 @@ async function runDelete(db, collectionName, husks) {
     });
   } catch (err) {
     console.error(
-      'REMOVED an unknown number of documents — the removal query failed before its ' +
-        `outcome was known (${err.message}) and may still have executed server-side. ` +
-        'Verify with a dry run: re-run the report to see what remains.'
+      'REMOVAL OUTCOME UNKNOWN — the removal query failed before its outcome was known ' +
+        `(${err && err.message ? err.message : err}); if the request reached the server, an ` +
+        'unknown number of documents may have been removed. Verify with a dry run: ' +
+        're-run the report to see what remains.'
     );
+    if (err && err.stack) {
+      console.error(err.stack);
+    }
     process.exitCode = 1;
     return;
   }

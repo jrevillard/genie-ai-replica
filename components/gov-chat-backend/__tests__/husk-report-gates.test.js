@@ -28,7 +28,7 @@ const gateEnv = { ARANGO_PASSWORD: 'pw', ARANGO_DB: 'genie-ai' };
 // A database double that answers every query the script makes and records
 // which AQL statements ran. `husks`/`allDocs` drive the divergence cross-check;
 // `writesExecuted` is what the removal's stats report carries back.
-function fakeDb({ husks = [], allDocs = [], writesExecuted = 0 } = {}) {
+function fakeDb({ husks = [], allDocs = [], writesExecuted = 0, removalError = null } = {}) {
   const executed = [];
   const query = jest.fn(async (aql, bind) => {
     executed.push({ aql, bind });
@@ -39,6 +39,9 @@ function fakeDb({ husks = [], allDocs = [], writesExecuted = 0 } = {}) {
       return { all: async () => allDocs };
     }
     if (aql === HUSK_REMOVAL_AQL) {
+      if (removalError) {
+        throw removalError; // the removal query rejects (e.g. lost response)
+      }
       return writesExecuted === null
         ? {} // a removal result with no stats — the honest-answer-unknown case
         : { extra: { stats: { writesExecuted } } };
@@ -228,31 +231,34 @@ describe('main safety wiring', () => {
     expect(stderr).toContain('... and 10 more under-matched (not listed)');
   });
 
-  it('says the removal MAY have executed when the removal query itself rejects (lost response ≠ nothing happened)', async () => {
-    // A rejection after the request reached ArangoDB (ECONNRESET, timeout)
-    // can leave documents removed with no stats at all — the same
-    // unknown-outcome honesty as the missing-stats branch (issue #1505).
-    const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc] });
-    db.query = jest.fn(async (aql) => {
-      if (aql === HUSK_REMOVAL_AQL) {
-        throw new Error('socket hang up');
-      }
-      if (aql === HUSK_MATCHER_AQL) {
-        return { all: async () => [huskDoc] };
-      }
-      if (aql === ALL_DOCS_AQL) {
-        return { all: async () => [huskDoc] };
-      }
-      return { next: async () => ({ count: 0, sample: [] }) };
+  it('says the removal outcome is UNKNOWN when the removal query itself rejects (lost response ≠ nothing happened)', async () => {
+    // A rejection is ambiguous in both directions: the request may have
+    // executed server-side with only the response lost, or never reached
+    // the server. The lead must be honest in BOTH cases (issue #1505).
+    const db = fakeDb({
+      husks: [huskDoc],
+      allDocs: [huskDoc],
+      removalError: new Error('socket hang up')
     });
     await runMain(db, ['--delete', '--yes']);
     expect(process.exitCode).toBe(1);
     const message = stderrText(errorSpy);
-    expect(message).toMatch(/^REMOVED an unknown number/);
+    expect(message).toMatch(/^REMOVAL OUTCOME UNKNOWN/);
+    expect(message).toContain('may have been removed');
     expect(message).toContain('socket hang up');
     expect(message).toContain('dry run');
     expect(message).not.toContain('ABORT');
+    expect(db.removalCalls()).toHaveLength(1);
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done.'));
+  });
+
+  it('renders a usable cause when the removal query rejects with a non-Error value', async () => {
+    // `${err.message}` on a non-Error rejection prints 'undefined' — the
+    // cause line must fall back to the value itself.
+    const db = fakeDb({ husks: [huskDoc], allDocs: [huskDoc], removalError: 'boom' });
+    await runMain(db, ['--delete', '--yes']);
+    expect(process.exitCode).toBe(1);
+    expect(stderrText(errorSpy)).toContain('(boom)');
   });
 
   it('lists every entry with NO elision line when divergence length equals SAMPLE_LIMIT exactly (boundary pin)', async () => {

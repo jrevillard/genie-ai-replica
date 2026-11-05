@@ -111,9 +111,10 @@ function releaseRenewLease() {
  * RETENTION (round 23, review of #80876): the entry carries the full minted
  * tokens, so it must not outlive the handoff — clearStaleRenewPublication()
  * bounds its disk lifetime to one renew window (RENEW_LEASE_TTL_MS) instead
- * of forever. Concurrent waiters are safe: cleanup only removes entries the
- * TTL has already made stale (the adopted tokens' own expiry check is
- * stricter than the TTL). */
+ * of forever. The trade (#1521 review): a waiter starting more than one TTL
+ * after the holder's publish finds the entry already wiped and grants on its
+ * own (already-rotated) token — the handoff window is one TTL wide, which
+ * renew timers sit well inside; before round 23 the entry lived forever. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -130,6 +131,19 @@ function publishRenewedUser(user) {
 function clearRenewPublication() {
   try {
     window.localStorage.removeItem(RENEW_USER_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Clear THIS tab's publication only (#1521 review): a foreign tab's entry
+ * may be the only valid handoff another waiter can adopt — never touch it.
+ * Used by the grant tail, whose own publication is exactly what its grant
+ * invalidates. */
+function clearOwnRenewPublication() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_USER_KEY);
+    if (raw && (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(RENEW_USER_KEY);
   } catch {
     /* best-effort */
   }
@@ -158,8 +172,12 @@ function clearStaleRenewPublication() {
  * predates that renew — re-serving it would skip the actual refresh. A
  * DIFFERENT tab's publication is the handoff itself and needs no recency
  * bound beyond the TTL cleanup: the waiter may legitimately start AFTER the
- * holder finished, and the entry is always the holder's LATEST publication
- * (each renew overwrites the key). */
+ * holder finished, and the holder clears its own entry before any new grant
+ * (runRawGrantAndPublish), so an entry on disk is the holder's LATEST
+ * settled publication. Owner-less entries (an older build publishing
+ * without a tab id) are treated as this tab's own — during a rolling
+ * deploy's mixed-version window the handoff to an old-build holder degrades
+ * to per-tab grants, the pre-#1521 behavior, until every tab reloads. */
 function readPublishedRenew() {
   try {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
@@ -194,8 +212,16 @@ async function adoptPublishedUser(manager, user) {
 /** The RAW grant (#80941) — manager.signinSilent is the WRAPPED module
  * function; calling it here would recurse into this very lease. Shared by
  * every renewal tail (round 23: the grant+publish tail was pasted three
- * times; one paste is how the next poll-semantics change lands everywhere). */
+ * times; one paste is how the next poll-semantics change lands everywhere).
+ * CLEAR-BEFORE-GRANT (#1521 review): the grant rotates THIS tab's refresh
+ * token away from the one its previous publication carries
+ * (refresh_token_max_reuse=0) — drop that publication FIRST, so a waiter
+ * starting mid-grant finds no handoff, waits under the lock/lease, and
+ * adopts the FRESH publication instead of a token being rotated away. Only
+ * this tab's own entry — a foreign tab's may be another waiter's only
+ * valid handoff. */
 async function runRawGrantAndPublish(manager) {
+  clearOwnRenewPublication();
   const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
   if (user) currentUser = user;
   publishRenewedUser(user);
@@ -218,9 +244,8 @@ async function tryTakeLock(fn) {
  * lock attempt (the ownership gate keeps THIS tab's own publication
  * inadmissible, and admits another tab's — #1521); only a miss falls
  * through to taking the lock. Past the TTL with no publication the holder
- * is wedged — bounded
- * degradation: renew without the lock, the same trade the stale-lease
- * takeover always made (a renew wedged >20s went nowhere). */
+ * is wedged — bounded degradation: renew without the lock, the same trade
+ * the stale-lease takeover always made (a renew wedged >20s went nowhere). */
 async function renewViaWebLock(manager, startedAt) {
   const renewOnce = () => runRawGrantAndPublish(manager);
   const adoptedFirst = readPublishedRenew();

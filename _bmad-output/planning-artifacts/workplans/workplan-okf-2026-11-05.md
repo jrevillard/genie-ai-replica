@@ -1,7 +1,8 @@
 # Unified OKF workplan — 2026-11-05
 
-Adapted after the PRD-issue triage (see memory `project_okf-prd-issue-triage-2026-11-05`)
-and David's two priority UX directions (this session). Three streams, one execution
+Adapted after the PRD-issue triage (the rulings live on the GitLab issues — **#1409**
+is the umbrella, the `prd::okf-server` issues carry the per-issue rulings) and
+David's two priority UX directions (this session). Three streams, one execution
 order. Sources of truth stay where they live: the CSR waves in
 `_bmad-output/specs/spec-okf-chat-source-resolution/remediation-plan.md` (waves) +
 the PRD; the triage rulings on the GitLab issues themselves; this file only pins

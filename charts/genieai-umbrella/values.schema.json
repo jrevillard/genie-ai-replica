@@ -455,6 +455,11 @@
           "type": "string",
           "description": "Optional registry prefix that WINS over the top-level imageRegistry when set (the factory and the migrations Job read it first); empty = the top-level imageRegistry applies. Exists for operators following the Helm global.* convention — the chart's own overlays set the top-level key."
         },
+        "progressDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The progress deadline every Deployment the chart renders carries. Kubernetes defaults spec.progressDeadlineSeconds to 600s and that clock starts when the DEPLOYMENT is created, not when the pod runs: on a first install the pod is created minutes later (multi-GB images still pulling) and inherits only what is left of the window. Past it the Deployment reports ProgressDeadlineExceeded, Helm declares the release failed and uninstalls it, deleting the resources the next attempt needs. Per-service override: services.<svc>.progressDeadlineSeconds."
+        },
         "imagePullSecrets": {
           "type": "array",
           "items": {

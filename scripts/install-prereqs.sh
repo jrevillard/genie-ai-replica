@@ -42,6 +42,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
+# The operator's CPU. Upstream ships requests 300m / limits 700m: on a
+# node close to its CPU quota the operator is throttled for most of its
+# periods and never finishes booting (it dies on a connection timeout to
+# the API server), which leaves the Keycloak CR permanently not Ready and
+# blocks every release that waits for it. The requests are what the
+# scheduler RESERVES — too high and the pod cannot land on a busy node.
+# 500m/1000m is the floor that boots on a 1-CPU-constrained node.
+KC_OPERATOR_CPU_REQUEST="${KC_OPERATOR_CPU_REQUEST:-500m}"
+KC_OPERATOR_CPU_LIMIT="${KC_OPERATOR_CPU_LIMIT:-1000m}"
 # CHART version, not the operator version: cloudnative-pg chart 0.22.0
 # ships operator 1.24.0 (the two numberings diverged at 1.0). The chart
 # only needs a CRD that serves `postgresql.cnpg.io/v1`, which 1.24.0 does
@@ -206,8 +215,10 @@ spec:
           resources:
             requests:
               memory: 1Gi
+              cpu: ${KC_OPERATOR_CPU_REQUEST}
             limits:
               memory: 2Gi
+              cpu: ${KC_OPERATOR_CPU_LIMIT}
           startupProbe:
             failureThreshold: 30
           env:

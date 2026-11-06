@@ -41,6 +41,7 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 4 }}
 spec:
   replicas: {{ $replicas }}
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" $ctx.Values "service" $svcName) }}
 {{- $selectorLabels := include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) }}
   selector:
     matchLabels:

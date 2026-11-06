@@ -251,6 +251,7 @@ describe('ServiceCategoryService', () => {
 
     it('should throw ValidationError when nameEN is missing', async () => {
       await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('rejects entries that use the read shape {lang, text} before mutating', async () => {
@@ -265,6 +266,8 @@ describe('ServiceCategoryService', () => {
 
       // no mutation at all: the EN upsert and the REMOVE must not run
       expect(mockDb.query).not.toHaveBeenCalled();
+      // ... and the parent document must not be renamed either
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('should reject a null translation entry before mutating anything', async () => {
@@ -275,6 +278,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('should accept valid entries and trim the language code', async () => {
@@ -370,6 +374,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('rejects duplicate language codes that differ only in case or whitespace', async () => {
@@ -383,6 +388,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('Duplicate languageCode');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('preserves existing translations when the payload omits the translations field', async () => {
@@ -414,6 +420,7 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow("must not include 'EN'");
       // no mutation at all: validation must reject before the upsert runs
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
   });
 
@@ -920,6 +927,7 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateCategoryWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
         'nameEN is required'
       );
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('should reject entries that use the read shape {lang, text} before mutating', async () => {
@@ -933,6 +941,7 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow('unexpected shape');
 
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('rejects non-string translation values before mutating', async () => {
@@ -943,6 +952,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('rejects duplicate language codes that differ only in case or whitespace', async () => {
@@ -956,6 +966,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('Duplicate languageCode');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('preserves existing translations when the payload omits the translations field', async () => {

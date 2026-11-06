@@ -2,6 +2,39 @@ const express = require('express');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
+/**
+ * Answers a failed service-category request.
+ *
+ * A typed client error (statusCode below 500 — the 404 of an unknown id,
+ * the 400 of a malformed payload) is an EXPECTED OUTCOME, not a fault: it
+ * is logged ONCE, at warn grade and without a stack, and answered here —
+ * the service layer stays silent for it, so a client probing ids produces
+ * one line per probe instead of a pair of error-grade lines. A genuine
+ * fault keeps its error-grade log with the stack and is handed to the
+ * global error middleware, which renders the 500.
+ *
+ * The response is byte-for-byte what the global error middleware would
+ * have rendered for the same error: the typed status code, and the typed
+ * error's own body when it carries one.
+ *
+ * @param {Object} res - The Express response.
+ * @param {Function} next - The Express next callback.
+ * @param {Error} error - The caught error.
+ * @param {String} context - Log context naming the failed operation.
+ * @param {Number} durationMs - Time spent on the request.
+ */
+function respondWithFailure(res, next, error, context, durationMs) {
+  if (error.statusCode && error.statusCode < 500) {
+    logger.warn(`${context}: ${error.message}`, { durationMs });
+    if (error.body && typeof error.body === 'object') {
+      return res.status(error.statusCode).json(error.body);
+    }
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+  logger.error(`${context}: ${error.message}`, { stack: error.stack, durationMs });
+  return next(error);
+}
+
 module.exports = (serviceCategoryService) => {
   // One router PER factory call. A module-level router would be mutated on
   // every factory call: the second mount would stack its routes onto the
@@ -53,13 +86,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error getting all categories with services: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      // Typed errors (NotFoundError/ValidationError/...) carry their own
-      // status code — the global error middleware renders them.
-      next(error);
+      return respondWithFailure(res, next, error, 'Error getting all categories with services', Date.now() - start);
     }
   });
 
@@ -103,11 +130,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} detailed categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error getting all detailed categories: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(res, next, error, 'Error getting all detailed categories', Date.now() - start);
     }
   });
 
@@ -163,11 +186,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      logger.error(`Error getting category ${req.params.categoryId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error getting category ${req.params.categoryId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -217,11 +242,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${translations.length} translations for category ${categoryId} in ${Date.now() - start}ms`);
       res.json(translations);
     } catch (error) {
-      logger.error(`Error getting translations for category ${req.params.categoryId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error getting translations for category ${req.params.categoryId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -258,11 +285,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${translations.length} translations for service ${serviceId} in ${Date.now() - start}ms`);
       res.json(translations);
     } catch (error) {
-      logger.error(`Error getting translations for service ${req.params.serviceId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error getting translations for service ${req.params.serviceId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -342,11 +371,7 @@ module.exports = (serviceCategoryService) => {
       );
       res.json(results);
     } catch (error) {
-      logger.error(`Error searching categories and services: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(res, next, error, 'Error searching categories and services', Date.now() - start);
     }
   });
 
@@ -405,10 +430,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category created successfully in ${Date.now() - start}ms`);
       res.status(201).json(result);
     } catch (error) {
-      logger.error(`Error creating category: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-      // Typed errors (ValidationError/NotFoundError/...) carry their own
-      // status code — the global error middleware renders them.
-      return next(error);
+      return respondWithFailure(res, next, error, 'Error creating category', Date.now() - start);
     }
   });
 
@@ -449,11 +471,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category ${req.params.categoryId} deleted successfully in ${Date.now() - start}ms`);
       res.json({ message: `Category ${req.params.categoryId} deleted successfully` });
     } catch (error) {
-      logger.error(`Error deleting category ${req.params.categoryId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error deleting category ${req.params.categoryId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -490,13 +514,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
       res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
     } catch (error) {
-      logger.error(`Error deleting service ${req.params.serviceId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      // The service raises a typed NotFoundError for an unknown id — the
-      // global middleware renders it 404.
-      next(error);
+      return respondWithFailure(res, next, error, `Error deleting service ${req.params.serviceId}`, Date.now() - start);
     }
   });
 
@@ -562,11 +580,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service created successfully for category ${categoryId} in ${Date.now() - start}ms`);
       res.status(201).json(newService);
     } catch (error) {
-      logger.error(`Error creating service for category ${req.params.categoryId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      return next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error creating service for category ${req.params.categoryId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -632,11 +652,13 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category ${categoryId} updated successfully in ${Date.now() - start}ms`);
       res.status(200).json(result);
     } catch (error) {
-      logger.error(`Error updating category ${req.params.categoryId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      return next(error);
+      return respondWithFailure(
+        res,
+        next,
+        error,
+        `Error updating category ${req.params.categoryId}`,
+        Date.now() - start
+      );
     }
   });
 
@@ -702,11 +724,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service ${serviceId} updated successfully in ${Date.now() - start}ms`);
       res.status(200).json(result);
     } catch (error) {
-      logger.error(`Error updating service ${req.params.serviceId}: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      return next(error);
+      return respondWithFailure(res, next, error, `Error updating service ${req.params.serviceId}`, Date.now() - start);
     }
   });
 

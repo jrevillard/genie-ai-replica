@@ -496,6 +496,34 @@ describe('error-path status contract', () => {
 });
 
 // ============================================================
+// Logging contract (#1462): an expected 404 is an outcome, not a
+// fault — it is logged ONCE, at warn grade, without a stack, and
+// never at error grade.
+// ============================================================
+describe('expected 404 logging contract', () => {
+  const { logger } = require('../../shared-lib');
+
+  it('logs an unknown service id once at warn grade, never at error grade', async () => {
+    const notFoundError = new Error('Service not found');
+    notFoundError.statusCode = 404;
+    serviceCategoryService.deleteService.mockRejectedValue(notFoundError);
+
+    const response = await authDelete('/api/service-categories/services/nonexistent');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ message: 'Service not found' });
+    // One line, at warn grade ...
+    const warnCalls = logger.warn.mock.calls.filter((call) => String(call[0]).includes('Service not found'));
+    expect(warnCalls).toHaveLength(1);
+    // ... and no stack on it (a stack is what makes an expected outcome
+    // expensive to read).
+    expect(warnCalls[0][1] || {}).not.toHaveProperty('stack');
+    // ... and nothing at error grade.
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================
 // Factory statefulness: each factory call returns its OWN router,
 // routing to ITS service instance (a module-level router would stack
 // both mounts' routes on one router whose handlers close over the

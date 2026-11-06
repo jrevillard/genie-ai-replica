@@ -318,6 +318,28 @@ spec:
           port: 8080
         - protocol: TCP
           port: {{ $servicesRedisCache.port | default 6379 }}
+    {{- /* External HTTPS API egress: the backend dials public APIs
+    directly (weather: api.open-meteo.com — WeatherService). NetworkPolicy
+    peers cannot express a domain, and the upstream sits behind a DNS
+    round-robin pool, so this is a port-scoped ipBlock over 80/443 — the
+    same approximation the document-repository crawler and the ClamAV
+    signature-update rules use. Empty list = allow every IPv4 destination
+    on the HTTP(S) ports, matching the compose deployment's unrestricted
+    network (#1631). */}}
+    - to:
+        {{- range $cidr := $svcBackend.externalApiCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr }}
+        {{- end }}
+        {{- if not $svcBackend.externalApiCIDRs }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
         # OTLP exporter: required for the observability pipeline. Without
         # this port the default-deny policy drops all traces at the source.
         - protocol: TCP

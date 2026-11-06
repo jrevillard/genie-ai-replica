@@ -82,7 +82,7 @@ afterAll(() => {
 
 const { createApp } = require('../../index');
 const request = require('supertest');
-const AppError = require('../../middleware/errors').AppError;
+const { AppError, NotFoundError } = require('../../middleware/errors');
 const { createValidToken } = require('../fixtures/tokens');
 const { createMockUser } = require('../fixtures/users');
 
@@ -202,7 +202,6 @@ describe('GET /api/service-categories/categories/:categoryId (AC12)', () => {
   });
 
   it('should return 404 when category not found', async () => {
-    const { NotFoundError } = require('../../middleware/errors');
     serviceCategoryService.getCategoryWithServices.mockRejectedValue(new NotFoundError('Category not found'));
 
     const response = await authGet('/api/service-categories/categories/nonexistent');
@@ -337,7 +336,6 @@ describe('DELETE /api/service-categories/services/:serviceId (AC16)', () => {
   });
 
   it('should return 404 when service not found', async () => {
-    const { NotFoundError } = require('../../middleware/errors');
     serviceCategoryService.deleteService.mockRejectedValue(new NotFoundError('Service not found'));
 
     const response = await authDelete('/api/service-categories/services/nonexistent');
@@ -502,7 +500,6 @@ describe('expected 404 logging contract', () => {
   const { logger } = require('../../shared-lib');
 
   it('logs an unknown service id once at warn grade, never at error grade', async () => {
-    const { NotFoundError } = require('../../middleware/errors');
     serviceCategoryService.deleteService.mockRejectedValue(new NotFoundError('Service not found'));
 
     const response = await authDelete('/api/service-categories/services/nonexistent');

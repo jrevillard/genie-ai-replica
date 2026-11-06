@@ -17,6 +17,15 @@
  *
  * Environment variables (from .env):
  *   ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
+ *
+ * Translation rows are written with the locale normalized to UPPERCASE
+ * (`trim().toUpperCase()`), the same form the application write path stores
+ * (service-category-service.js `_normalizeLocale`). The stored `languageCode`
+ * and the `_key` suffix are that one normalized value, so a seeded row is the
+ * row the application's UPSERT (keyed on `_key`) updates — its `createdAt`,
+ * and the synthetic age this script gives it, survive the first admin edit. A
+ * raw locale would write a DIFFERENT document: the edit would insert a second
+ * row with a fresh createdAt and the GC pass would delete the seeded one.
  */
 
 const { Database, aql } = require('arangojs');
@@ -572,11 +581,8 @@ class SeedRunner {
         ['fr', 'nameFR'],
         ['sw', 'nameSW']
       ]) {
-        // The application write path stores the UPPERCASED locale and keys
-        // the row `${ownerKey}_${LOCALE}` — service-category-service.js
-        // `_normalizeLocale`. A raw locale writes a DIFFERENT document: the
-        // next admin edit re-inserts the row with a fresh createdAt and the
-        // GC pass deletes this one.
+        // The locale is normalized ONCE and used by the query and by the
+        // write below (see the file header).
         const locale = lang.trim().toUpperCase();
         const tKey = `${currentCatKey}_${locale}`;
         const tExists = await this.db
@@ -752,11 +758,8 @@ class SeedRunner {
         ['fr', frTranslations],
         ['sw', swTranslations]
       ]) {
-        // The application write path stores the UPPERCASED locale and keys
-        // the row `${ownerKey}_${LOCALE}` — service-category-service.js
-        // `_normalizeLocale`. A raw locale writes a DIFFERENT document: the
-        // next admin edit re-inserts the row with a fresh createdAt and the
-        // GC pass deletes this one.
+        // The locale is normalized ONCE and used by the query and by the
+        // write below (see the file header).
         const locale = lang.trim().toUpperCase();
         const tKey = `${svc._key}_${locale}`;
         const tExists = await this.db

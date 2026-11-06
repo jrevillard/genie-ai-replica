@@ -6,7 +6,7 @@ section: "architecture"
 mode: explanation
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-05
 ---
 
 # Trust Boundaries & Security Architecture
@@ -134,7 +134,9 @@ sequenceDiagram
     Vue->>Vue: clear in-memory tokens
 ```
 
-### 3.1 Why in-memory only?
+### 3.1 Why in-memory (mostly)?
+
+The token set lives in JS memory, with two documented disk footprints: `oidc-client-ts`'s per-tab user store (`sessionStorage`) and the cross-tab silent-renew handoff (`localStorage`, `genie.renew.user`) — see the [Frontend auth flow](../frontend/auth-flow/) and the threat summary in section 6. The reasons the storage options were ranked as they are:
 
 | Storage | XSS theft risk | Survives page reload |
 |---------|----------------|----------------------|
@@ -250,8 +252,8 @@ graph LR
 
 | Threat | Mitigation |
 |--------|------------|
-| **XSS in the Vue frontend** | Tokens in JS memory only; `oidc-client-ts` does not write to `localStorage`. CSP via `CSP_CONNECT_SRC` restricts outbound script sources. |
-| **Stolen refresh token** | The frontend never stores refresh tokens (Authorization Code + PKCE + silent iframe). Stolen `access_token` has the short lifespan configured by `KEYCLOAK_ACCESS_TOKEN_LIFESPAN`. |
+| **XSS in the Vue frontend** | Tokens live in JS memory and in `oidc-client-ts`'s per-tab `sessionStorage` store; the cross-tab silent-renew handoff additionally publishes the renewed token set in the same-origin `localStorage` entry `genie.renew.user` (see [Frontend auth flow](../frontend/auth-flow/)). CSP via `CSP_CONNECT_SRC` restricts outbound script sources. |
+| **Stolen refresh token** | The frontend stores the token set in memory, in the per-tab `sessionStorage` store, and in the cross-tab handoff entry `genie.renew.user` (`localStorage`) — which rests on disk until the renewal-driven cleanup drops it (at the next renew entry once the access token it carries has expired) or until logout. A stolen `access_token` has the short lifespan configured by `KEYCLOAK_ACCESS_TOKEN_LIFESPAN`; a **refresh token lifted from that entry outlives it** and remains usable for the realm's SSO session (idle and max — see [Keycloak admin guide](../../configure/keycloak-admin-guide/)), which is what actually bounds a stolen refresh token. The entry is therefore a credential at rest for the SSO session's lifetime, and lowering the access-token TTL does not shorten that window. |
 | **Compromised user with admin role** | All admin actions audit-logged to ArangoDB `ingestion_log` and VictoriaLogs. `realm_access.roles` is the only authz source — no other privilege escalation path. |
 | **Compromised OPEA service** | Cannot reach Keycloak admin endpoints (it only does JWKS read + ingestion write); cannot read other services' tokens (each service has its own audience). Blast radius limited to its own contract surface. |
 | **Misconfigured Kong** | Each service still validates JWT — Kong cannot bypass auth by mis-routing. |

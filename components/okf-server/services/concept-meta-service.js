@@ -516,6 +516,51 @@ async function deleteConceptMeta(repo_id, concept_id) {
   return doc;
 }
 
+/** THE CONCEPT-DOCUMENT CEILING — the repo's over-ceiling concepts.
+ *
+ * The publish gate's backstop (the plan's §7): "no oversized concept may
+ * persist by any path". A concept can reach the corpus by an import that
+ * predates the ceiling, by a re-ingest of a legacy document, or by a future
+ * write path that bypasses the editor's guard — so the PUBLISH boundary
+ * checks the corpus itself.
+ *
+ * The query lives HERE, beside the other `okf_concepts_meta` reads, because
+ * this module owns that collection. The publish path used to query it
+ * directly, which put a second, differently-shaped AQL call in the middle of
+ * the transition — and the lifecycle suite's mock queue is positional, so an
+ * extra query there silently shifted every later expectation.
+ *
+ * `FILTER m.body != null` matters: a row with no body has `LENGTH(null)`,
+ * which compares as null rather than as a number.
+ *
+ * @param {string} repo_id
+ * @param {number} ceiling the effective ceiling in characters
+ * @param {number} limit how many offenders to name
+ * @returns {Promise<{count: number, offenders: Array<{concept_id: string, chars: number}>}>}
+ */
+async function listOverCeiling(repo_id, ceiling, limit = 10) {
+  if (!repo_id || !Number.isFinite(ceiling) || ceiling <= 0) return { count: 0, offenders: [] };
+  const db = await getDb();
+  const countRows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.body != null ' +
+        'FILTER LENGTH(m.body) > @ceiling COLLECT WITH COUNT INTO n RETURN n',
+      { rid: repo_id, ceiling }
+    )
+  ).all();
+  const count = countRows[0] || 0;
+  if (!count) return { count: 0, offenders: [] };
+  const rows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.body != null ' +
+        'FILTER LENGTH(m.body) > @ceiling LIMIT @limit ' +
+        'RETURN { concept_id: m.concept_id, chars: LENGTH(m.body) }',
+      { rid: repo_id, ceiling, limit }
+    )
+  ).all();
+  return { count, offenders: rows || [] };
+}
+
 /** Count a repo's meta rows at a given index_status (bundle completion
  * check — the internal controller asks "are any concepts still parsed?"). */
 async function countByIndexStatus(repo_id, index_status) {
@@ -1283,6 +1328,8 @@ module.exports = {
   contentHash,
   dedupeLinksForStorage,
   countByIndexStatus,
+  // The concept-document ceiling — the publish gate's backstop (the plan's §7).
+  listOverCeiling,
   // Bundle manifest (Story: multi-domain discovery + author structural graph)
   writeManifest,
   readManifest,

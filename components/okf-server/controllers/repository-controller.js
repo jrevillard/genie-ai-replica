@@ -12,6 +12,7 @@ const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
 const scopeAuthzService = require('../services/scope-authz-service');
 const { getMeter } = require('../shared-lib/metrics');
+const { logger } = require('../shared-lib/logger');
 const {
   createSchema,
   updateSchema,
@@ -26,6 +27,11 @@ const conformanceService = require('../services/conformance-service');
 const typeInference = require('../services/type-inference-service');
 const crawlConversionService = require('../services/crawl-conversion-service');
 const producerService = require('../services/producer-service'); // Story 7.7 documents import
+// The concept-document ceiling (the plan's §4 single authority). The editor
+// save is one of the three paths that enforce it — the import path splits,
+// the editor refuses, the publish gate refuses — so all three read the SAME
+// number from this module (never a local copy).
+const { maxConceptDocChars, conceptTooLargeError } = require('../services/concept-ceiling');
 // Review !622 round 9, #78670: the suite/studio/head handlers call these
 // modules — required ONCE here instead of inside every handler (61
 // in-handler requires). The services never require this controller, so
@@ -927,7 +933,16 @@ async function getConcept(req, res, next) {
         message: `Concept '${concept_id}' not found in repo '${repo_id}'`
       });
     }
-    res.status(200).json(concept);
+    // THE CONCEPT-DOCUMENT CEILING rides this read (the plan's §8: "advise
+    // the curator"). It is the SERVER's number — the editor shows it, so the
+    // advice the curator reads while typing cannot contradict the refusal
+    // they get for going over it. A frontend copy of the ceiling would be a
+    // second derivation of the same fact, and the two would drift.
+    //
+    // Additive: the response is the meta row plus this one field. No client
+    // writes a concept row back wholesale (the PATCH is field-scoped), so
+    // nothing can persist the synthetic field into the stored doc.
+    res.status(200).json({ ...concept, max_doc_chars: maxConceptDocChars() });
   } catch (err) {
     next(err);
   }
@@ -1109,6 +1124,48 @@ async function redactWholeFilePii(req, res, next) {
 }
 
 /**
+ * THE CONCEPT-DOCUMENT CEILING — the editor save's guard (R11).
+ *
+ * Contextual Retrieval truncates a document's context to a budget derived from
+ * the serving model's window, so a document over the ceiling has its deep
+ * chunks embedded against a description of its start — a silent quality loss
+ * the curator never sees. The import path already SPLITS such a document;
+ * the editor path must REFUSE one instead (a PATCH is one curator's live
+ * edit, and rewriting it into N new ids and titles they never chose is worse
+ * than a clear error).
+ *
+ * The refusal is 409 CONCEPT_TOO_LARGE — the same code the import path and
+ * the publish gate use, so the curator recognises it wherever it appears. It
+ * names the concept, the size, the ceiling and the remedy.
+ *
+ * @param {string} concept_id the concept being written
+ * @param {string} body the body about to be written (already parsed out of
+ *   the markdown where the caller sends markdown)
+ * @throws {ConceptTooLargeError} 409 when the body is over the ceiling
+ */
+function assertWithinConceptCeiling(concept_id, body) {
+  const text = typeof body === 'string' ? body : '';
+  const ceiling = maxConceptDocChars();
+  if (text.length <= ceiling) {
+    return;
+  }
+  logger.info('[OKF-PATCH] concept-document ceiling refused an editor save', {
+    concept_id,
+    chars: text.length,
+    ceiling
+  });
+  throw conceptTooLargeError({
+    label: `concept "${concept_id}"`,
+    chars: text.length,
+    ceiling,
+    remedy:
+      'The editor does not split a save in place — split it into smaller concepts, ' +
+      "or raise OKF_MAX_CONCEPT_DOC_CHARS if the served model's context window allows " +
+      'a larger document.'
+  });
+}
+
+/**
  * Story #978 — PATCH /api/okf/repos/:repo_id/concepts/:concept_id.
  * THREE mutually-exclusive body modes (labels write-through, 2026-09-05):
  *  - { markdown }  full markdown — frontmatter + body replaced (legacy)
@@ -1162,9 +1219,32 @@ async function patchConcept(req, res, next) {
         repo_id,
         path: `${concept_id}.md` // path determines concept_id (unchanged on patch)
       });
+      // THE CONCEPT-DOCUMENT CEILING (R11 — the archived ceiling test plan's
+      // requirement, never implemented until now). A PATCH is one curator's
+      // live edit: silently rewriting it into N new concept ids and titles
+      // they never chose is worse than a clear refusal, so the editor does
+      // NOT split here — it refuses, and the refusal names the size, the
+      // ceiling and the remedy.
+      //
+      // The ceiling governs the BODY, not the markdown: the import path
+      // measures `raw.body`, and the frontmatter is metadata the ceiling does
+      // not describe. The parsed body is therefore what is measured — a large
+      // frontmatter block with a small body passes.
+      //
+      // Deliberately NOT exempt for the `index` concept (the plan's own
+      // instruction): its markdown carries the repository frontmatter YAML, and
+      // that document is still a concept document.
+      assertWithinConceptCeiling(concept_id, parsed.body);
       updated = await conceptMetaService.patchConceptMeta(repo_id, concept_id, parsed);
     } else {
       mode = hasFrontmatter ? 'frontmatter' : 'body';
+      // A body patch replaces the body wholesale — the same ceiling applies.
+      // A FRONTMATTER-only patch leaves the body untouched, so it cannot push
+      // a document over the limit and is not gated here (the stored body is
+      // checked by the publish gate instead).
+      if (hasBody) {
+        assertWithinConceptCeiling(concept_id, payload.body);
+      }
       updated = await conceptMetaService.patchConceptFields(
         repo_id,
         concept_id,

@@ -84,13 +84,13 @@ export default createStore({
 
 **Key features:**
 
-- **One root-level persistence plugin** — only `chatHistory/*` mutations are observed; auth tokens never touch `localStorage`.
+- **One root-level persistence plugin** — only `chatHistory/*` mutations are observed; the auth token set is not persisted by it (the auth service keeps its own two documented disk footprints — see [Auth Flow](/docs/frontend/auth-flow/)).
 - **Replace on boot** — the plugin uses `store.replaceState({...store.state, chatHistory: parsedData})` so the rest of the default state (auth) is preserved.
 - **Failure is non-fatal** — JSON parse errors and quota errors are logged but do not break the app.
 
 ## Module 1: Authentication — `src/store/modules/auth.js`
 
-Handles Keycloak OIDC via the `keycloakAuthService` wrapper. Tokens live in memory only — never `localStorage`. After intentional logout the store blocks silent re-login via a `genie_post_logout` session flag (see [Auth Flow](/docs/frontend/auth-flow/)).
+Handles Keycloak OIDC via the `keycloakAuthService` wrapper. Tokens live in memory, with two documented disk footprints of the auth service itself (`sessionStorage` for the per-tab oidc store, `localStorage` for the cross-tab renew handoff) — see [Auth Flow](/docs/frontend/auth-flow/). After intentional logout the store blocks silent re-login via a `genie_post_logout` session flag (see [Auth Flow](/docs/frontend/auth-flow/)).
 
 ### Namespacing
 
@@ -309,11 +309,11 @@ The auth getters (`accessToken`, `currentUser`, `isAuthenticated`) and the chatH
 
 | Service | File | Responsibility |
 |---------|------|----------------|
-| `keycloakAuthService` | `src/services/keycloakAuthService.js` | `oidc-client-ts` `UserManager` wrapper. In-memory token storage; silent renew; `/callback` processing; logout redirect. |
+| `keycloakAuthService` | `src/services/keycloakAuthService.js` | `oidc-client-ts` `UserManager` wrapper. Token storage in memory plus the per-tab and cross-tab-handoff footprints; silent renew; `/callback` processing; logout redirect. |
 | `chatHistoryService` | `src/services/chatHistoryService.js` | Folder + conversation CRUD against the backend BFF. `moveConversation(chatId, fromFolderId, toFolderId)`, `getFolder(folderId)`, `getUserFolders()`. |
 | `httpService` | `src/services/httpService.js` | Axios client with 401 retry and auth headers. |
 
-The auth store **never** touches `localStorage`; the `keycloakAuthService` keeps tokens in memory and uses `sessionStorage` only for the `genie_post_logout` block-flag. The chatHistory store does the opposite: it is persisted to `localStorage` via the plugin, but the underlying service calls the backend for anything user-visible.
+The auth store itself **never** touches `localStorage`; the `keycloakAuthService` keeps tokens in memory and adds two documented footprints of its own — the per-tab oidc store in `sessionStorage` and the cross-tab renew handoff in `localStorage` (`genie.renew.user`) — plus the `genie_post_logout` block-flag. The chatHistory store does the opposite: it is persisted to `localStorage` via the plugin, but the underlying service calls the backend for anything user-visible.
 
 ## Data flow
 

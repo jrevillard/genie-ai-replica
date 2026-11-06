@@ -2070,6 +2070,9 @@ export default {
       saved: 'Gespeichert',
       saving: 'Wird gespeichert…',
       unsaved: 'Ungespeicherte Änderungen',
+      ceiling: '{chars} / {ceiling} Zeichen',
+      ceilingOver:
+        'Über dem Limit — das Speichern wird abgelehnt. Teilen Sie dieses Konzept oder erhöhen Sie OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Gerendert',
         source: 'Quelle'
@@ -2686,6 +2689,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import fehlgeschlagen — prüfen Sie die Dateien und versuchen Sie es erneut.',
         skippedEmpty: '{n} leere Datei(en) übersprungen.',
+        splitReport: '{n} Datei(en) wurden geteilt, um die Größenbeschränkung einzuhalten: {files}',
+        splitFile: '{file} ({parts} Teile)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

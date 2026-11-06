@@ -333,19 +333,28 @@ HUGGING_FACE_HUB_TOKEN=
 # CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
 #                                      #   context ONLY for the embedding — keeps label precision
 #                                      #   while propagating the subject via vectors.
-# OKF_MAX_CONCEPT_DOC_CHARS=250000    # okf-server: max characters in ONE concept document. An
+# OKF_MAX_CONCEPT_DOC_CHARS=250000    # okf-server: max characters in ONE concept document BODY. An
 #                                      #   import whose document exceeds this SPLITS it into
 #                                      #   several concepts (losslessly, on heading boundaries)
 #                                      #   rather than storing it degraded — a document past the
 #                                      #   budget has its deep chunks embedded against a
 #                                      #   description of its start. The first part keeps the
 #                                      #   original concept_id so existing links still resolve.
+#                                      #   The Studio editor REFUSES an over-ceiling save (409,
+#                                      #   nothing written) and the publish gate REFUSES before it
+#                                      #   mints a version — no oversized document persists by any
+#                                      #   path. If a document cannot be split without losing
+#                                      #   content, the import is rejected with CONCEPT_TOO_LARGE
+#                                      #   naming the section.
 #                                      #   Must stay in step with the document-context budget
 #                                      #   above, which follows the window the endpoint serves at
 #                                      #   runtime. The ceiling here is a STATIC literal — raise it
-#                                      #   by hand when the served window changes. If a document
-#                                      #   cannot be split without losing content, the import is
-#                                      #   rejected with CONCEPT_TOO_LARGE naming the section.
+#                                      #   by hand when the served window changes. MEASURED on the
+#                                      #   default 65536-token window: the derived per-chunk budget
+#                                      #   is ~219700 chars, BELOW this default — so a concept at
+#                                      #   the ceiling has its document context truncated (logged in
+#                                      #   the ingestion log). On a 4096- or 2048-token window there
+#                                      #   is no room for a document context at all.
 # VLLM_MAX_MODEL_LEN                   # the serving model's context window (vLLM --max-model-len).
 #                                      #   Set by env.t4 (2048), env.rtx6000 (65536) or the compose
 #                                      #   default (65536). Pure vLLM memory knob — dataprep does
@@ -1137,6 +1146,13 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # KEYCLOAK_SUPPORTED_LOCALES=
 
 # Access token lifespan in seconds (default: 300 = 5 minutes)
+# It also sets how long the browser's cross-tab renewal handoff (the
+# localStorage entry `genie.renew.user`) keeps a renewed token set: the
+# entry is dropped at the NEXT renewal entry once the access token it
+# carries has expired (and until logout), so it can rest a while past the
+# token's expiry in a browser that stops renewing. Raising this value
+# extends how long a full token set rests in each browser tab (a
+# credential-at-rest window for a same-origin script).
 # KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
 
 # =============================================================================

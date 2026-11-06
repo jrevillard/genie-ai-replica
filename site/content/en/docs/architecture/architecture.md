@@ -140,7 +140,7 @@ graph TB
 
 | Service | Auth Method | Notes |
 |---------|-------------|-------|
-| Frontend (Vue 3) | Keycloak OIDC | oidc-client-ts, tokens in-memory only |
+| Frontend (Vue 3) | Keycloak OIDC | oidc-client-ts, tokens in memory plus the per-tab and cross-tab-handoff footprints |
 | Backend (Node.js) | Keycloak JWT (JWKS) | Validates every request, performs JIT user provisioning, forwards Bearer token to upstream services |
 | Document Repository | Keycloak JWT (JWKS) | Independent JWKS validation |
 | OPEA ChatQnA | Keycloak JWT (JWKS) | Validates forwarded Bearer token independently; extracts user info from JWT payload |
@@ -931,7 +931,7 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 | D2 | Token passthrough to OPEA | The original user's Bearer token is forwarded to ChatQnA, which independently validates it via JWKS and extracts user identity from the JWT payload. No shared trust boundary. |
 | D3 | JWT validation at service boundary | Each service (Backend, Document Repository, ChatQnA) validates tokens independently against Keycloak JWKS. No shared trust boundary at the gateway. |
 | D4 | JIT user provisioning | ArangoDB user records are created or updated on every login. Keeps the application database in sync with the identity provider without requiring separate user management. |
-| D5 | In-memory token storage | The frontend stores tokens in JavaScript memory only (no localStorage or sessionStorage). Mitigates token theft via XSS. |
+| D5 | In-memory token storage | The frontend keeps tokens in JavaScript memory, with two documented disk footprints of the auth service: the per-tab oidc store (`sessionStorage`) and the cross-tab silent-renew handoff (`localStorage`). Mitigates token theft via XSS, but the handoff is a credential at rest for the SSO session's lifetime — see [Trust Boundaries](./trust-boundaries/). |
 | D6 | Dataprep service account | Dataprep authenticates via Keycloak client_credentials grant with a dedicated service account, separate from user tokens. |
 | D7 | Gateway architecture | NGINX terminates TLS and proxies all traffic to Kong. Kong provides CORS and rate limiting. Both are required in the current configuration — Kong cannot be bypassed. |
 | D8 | `/api/me` singleton resource | After Keycloak migration, the frontend has no access to ArangoDB `_key` (only OIDC claims). A singleton `/api/me` resource eliminates the need for path-based user IDs. User resolution happens via JWT middleware (`req.user._key`). The `_key` never leaves the backend. |

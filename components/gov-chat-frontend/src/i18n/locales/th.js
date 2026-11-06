@@ -2031,6 +2031,8 @@ export default {
       saved: 'บันทึกแล้ว',
       saving: 'กำลังบันทึก…',
       unsaved: 'การเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
+      ceiling: '{chars} / {ceiling} อักขระ',
+      ceilingOver: 'เกินขีดจำกัด — การบันทึกจะถูกปฏิเสธ แยกแนวคิดนี้ หรือเพิ่ม OKF_MAX_CONCEPT_DOC_CHARS',
       view: {
         rendered: 'เรนเดอร์แล้ว',
         source: 'ต้นฉบับ'
@@ -2633,6 +2635,8 @@ export default {
         fsBusy: 'กำลังนำเข้าไฟล์ของคุณ…',
         fsFailed: 'การนำเข้าล้มเหลว — ตรวจสอบไฟล์แล้วลองใหม่',
         skippedEmpty: 'ข้ามไฟล์ว่าง {n} รายการ',
+        splitReport: 'แยกไฟล์ {n} รายการเพื่อให้อยู่ในขนาดสูงสุด: {files}',
+        splitFile: '{file} ({parts} ส่วน)',
         noneSelected: 'ยังไม่ได้เลือกแหล่งที่มา',
         selectedN: 'เลือกแล้ว: {n}',
         moreN: ' +อีก {n} รายการ',

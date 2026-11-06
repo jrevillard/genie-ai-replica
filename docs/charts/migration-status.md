@@ -135,6 +135,19 @@ contractual evidence — a fresh clone does not carry them.)
   by `KC_OPERATOR_CPU_REQUEST` / `KC_OPERATOR_CPU_LIMIT` (300m / 1000m):
   the request stays low so the pod still lands on a busy node, the limit
   is what the JVM gets to use.
+  Three review rounds shaped the final shape: the first shipped five
+  concrete per-service entries that silently defeated the chart-wide
+  knob (an overlay can set a per-service key, never remove it, and the
+  template reads the service key before the chart-wide one), the second
+  reverted the default to 900s for reading the reference venue as an
+  outlier, and the third restored 1800s once the venue was recognized
+  as the REFERENCE (0.2.163): the laptop overlay carries no override
+  any more — the chart default is calibrated on it — and the slower
+  forge venue keeps 2400s under its 3600s install timeout. The guard
+  cases pin the template type guard on a schema-less service (the
+  fixture renders no OPEA deployment otherwise, so the key was read by
+  nobody), and a cleared (`null`) knob falls back to the default VALUE,
+  not just to a render that succeeds.
 - **The vendored dependency tarballs no longer block a rebase** — the
   branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
   replay recreated them as untracked files and the merge refused to

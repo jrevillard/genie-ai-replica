@@ -12,42 +12,6 @@ const {
 // a handler only on an exact match — so both read the constant.
 const STREAM_ROUTE = '**/queries/stream**';
 
-/**
- * Answer the app's stream POST with an error status.
- *
- * Only the POST carries a stream: a CORS preflight (the cross-origin
- * posture) must reach the network — answered with the error body it fails
- * the handshake and the browser never delivers the POST. The mocked
- * response carries the CORS header a cross-origin reader needs, or the
- * browser drops it and the app renders a transport failure instead of the
- * injected status.
- */
-async function mockStreamError(page, { status, error, message }) {
-  const body = JSON.stringify({ error, message });
-  await page.route(STREAM_ROUTE, async (route) => {
-    try {
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        status,
-        contentType: 'application/json',
-        headers: { 'access-control-allow-origin': '*' },
-        body,
-      });
-    } catch (failure) {
-      // The context can close while a request is still in flight, and that
-      // race must not fail the spec. Every other failure surfaces — a
-      // swallowed one fails the spec later, with a cause that points
-      // nowhere (tests/e2e/CLAUDE.md: no swallowing).
-      if (!/has been closed/i.test(failure?.message || '')) {
-        throw failure;
-      }
-    }
-  });
-}
-
 // A failed turn ends with the answer card's error block, and that card
 // is the turn's completion signal: the app renders it only once the
 // stream has closed. It is also the surface the old assertions missed —
@@ -55,6 +19,13 @@ async function mockStreamError(page, { status, error, message }) {
 // (the error fallback) are rendered by no component, so neither half of
 // the old assertion could ever pass on its own and the error was never
 // really observed. Every test below waits on the card instead.
+//
+// One spec, one claim: the app cannot tell a 502 from a 503 from a 500.
+// The client turns every non-2xx into the same error and the store maps
+// every 5xx to the same branch (`refused` is the 4xx case alone), so one
+// server error is enough to own it — the refusal branch, the idle
+// timeout and the server error frames have their own owners in the store
+// tests, and a dropped connection has one in chat-conversation.spec.js.
 test.describe('RAG error handling', () => {
   let page;
   let context;
@@ -75,10 +46,39 @@ test.describe('RAG error handling', () => {
   });
 
   test('displays error message when backend returns error', async () => {
-    await mockStreamError(page, {
-      status: 503,
+    // The backend answers the stream with a server error.
+    //
+    // Only the POST carries a stream: a CORS preflight (the cross-origin
+    // posture) must reach the network — answered with the error body it
+    // fails the handshake and the browser never delivers the POST. The
+    // mocked response carries the CORS header a cross-origin reader
+    // needs, or the browser drops it and the app renders a transport
+    // failure instead of the injected status.
+    const body = JSON.stringify({
       error: 'SERVICE_UNAVAILABLE',
       message: 'RAG pipeline is temporarily unavailable',
+    });
+    await page.route(STREAM_ROUTE, async (route) => {
+      try {
+        if (route.request().method() !== 'POST') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' },
+          body,
+        });
+      } catch (failure) {
+        // The context can close while a request is still in flight, and
+        // that race must not fail the spec. Every other failure surfaces
+        // — a swallowed one fails the spec later, with a cause that
+        // points nowhere (tests/e2e/CLAUDE.md: no swallowing).
+        if (!/has been closed/i.test(failure?.message || '')) {
+          throw failure;
+        }
+      }
     });
 
     await sendMessage(page, 'First attempt will fail');
@@ -111,43 +111,5 @@ test.describe('RAG error handling', () => {
     await textarea.fill('Can still type after error');
     const value = await textarea.inputValue();
     expect(value).toBe('Can still type after error');
-  });
-
-  test('displays error when network connection fails', async () => {
-    // Simulate network failure with error response (more reliable than abort for fetch+ReadableStream)
-    await mockStreamError(page, {
-      status: 502,
-      error: 'BAD_GATEWAY',
-      message: 'Network connection failed',
-    });
-
-    await sendMessage(page, 'This should fail with network error');
-
-    // The failed turn ends with the error card — see the describe
-    // comment for why that card is the wait.
-    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
-
-    // Verify the chat is not stuck
-    const textarea = page.locator('[data-testid="composer-field"]');
-    await expect(textarea).toBeVisible({ timeout: 5000 });
-  });
-
-  test('displays error when RAG pipeline returns internal error', async () => {
-    // Intercept with a 500 error
-    await mockStreamError(page, {
-      status: 500,
-      error: 'INTERNAL_ERROR',
-      message: 'An internal error occurred in the RAG pipeline',
-    });
-
-    await sendMessage(page, 'Trigger internal error');
-
-    // The failed turn ends with the error card — see the describe
-    // comment for why that card is the wait.
-    await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
-
-    // Input should be usable again
-    const textarea = page.locator('[data-testid="composer-field"]');
-    await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 });

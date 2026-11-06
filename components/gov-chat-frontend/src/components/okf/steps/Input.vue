@@ -111,6 +111,9 @@
     </div>
     <p v-if="fsBusy" class="okf-step__note">{{ translate('okf.steps.input.fsBusy', 'Importing your files…') }}</p>
     <p v-if="fsError" class="okf-step__error">{{ fsError }}</p>
+    <p v-if="fsSplitNote" class="okf-step__note" role="status" data-test-id="okf-input-split-note">
+      {{ fsSplitNote }}
+    </p>
 
     <p v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__note">{{ selectionSummary }}</p>
     <label v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__cls">
@@ -253,6 +256,12 @@ export default {
       classification: (this.draft && this.draft.classification) || 'heuristics',
       fsBusy: false,
       fsError: '',
+      // What the server DID to an oversized picked file. The import path
+      // splits a document over the concept ceiling losslessly and reports it
+      // (`split_documents`); the wizard USED to discard that answer, so a
+      // curator who picked a 260 000-character page watched it become four
+      // topics and was never told why.
+      fsSplitNote: '',
       inputError: '',
       addOpen: false,
       // T2 workbench state
@@ -591,6 +600,7 @@ export default {
       if (!picked.length) return;
       this.fsBusy = true;
       this.fsError = '';
+      this.fsSplitNote = '';
       try {
         const existing = this.concepts.map((c) => c.concept_id);
         const taken = new Set(existing);
@@ -612,9 +622,11 @@ export default {
           // same slug, silently defeating the documented slug-merge (A3/F13).
           concepts.push(payload);
         }
-        if (concepts.length) await repoOkfService.importConcepts(this.repoId, concepts);
+        let imported = null;
+        if (concepts.length) imported = await repoOkfService.importConcepts(this.repoId, concepts);
         await this.refreshConcepts();
         this.writeBack();
+        this.fsSplitNote = this.splitNoteFrom(imported);
         if (skipped) {
           this.fsError = this.translate('okf.steps.input.skippedEmpty', '{n} empty file(s) skipped.').replace(
             '{n}',
@@ -628,6 +640,34 @@ export default {
         this.fsBusy = false;
         if (evt && evt.target) evt.target.value = '';
       }
+    },
+    /**
+     * Turn the import's `split_documents` report into one line the curator
+     * reads: which file became how many concepts.
+     *
+     * The server is the ONLY thing that knows this — the wizard does not
+     * measure a file against the ceiling, because the ceiling is
+     * OKF_MAX_CONCEPT_DOC_CHARS and it is the server that enforces it. So the
+     * note is rendered from the server's own answer, never from a local
+     * copy of the rule.
+     */
+    splitNoteFrom(result) {
+      const splits = (result && result.split_documents) || [];
+      if (!Array.isArray(splits) || splits.length === 0) return '';
+      const files = splits
+        .map((s) =>
+          this.translate('okf.steps.input.splitFile', '{file} ({parts} parts)')
+            .replace('{file}', String(s.from))
+            .replace('{parts}', String(s.into))
+        )
+        .join(', ');
+      // The fallbacks stay INLINE and the call stays on ONE line: the i18n
+      // contract test extracts okf.* keys per line, and the locale-consistency
+      // guard only recognises a translate() whose fallback is a quoted literal.
+      // A hoisted constant would drop this key out of BOTH guards silently.
+      return this.translate('okf.steps.input.splitReport', '{n} file(s) split to fit the size limit: {files}')
+        .replace('{n}', String(splits.length))
+        .replace('{files}', files);
     },
     onConceptCreated() {
       this.refreshConcepts();

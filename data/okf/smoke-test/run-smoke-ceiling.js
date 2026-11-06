@@ -274,7 +274,71 @@ async function main() {
     ? pass('the refused publish stored no version')
     : fail('the refused publish stored a version: ' + JSON.stringify(vlist).slice(0, 200));
 
-  // ── 5. Cleanup ────────────────────────────────────────────────────────────
+  // ── 5. The import SPLITS an over-ceiling document, AND REPORTS IT ─────────
+  // The wizard reads `split_documents` from this answer and tells the
+  // curator which file became how many concepts. If the server did not
+  // report the split, a curator who picked a 260 000-character page would
+  // watch it become several topics with no explanation at all — the split
+  // would be invisible.
+  //
+  // A SEPARATE repository: the publish property above asserts on the FIRST
+  // repo's concept set, and a split import must not be able to explain (or
+  // mask) its refusal.
+  const splitRepo = await call('POST', '/api/okf/repos', {
+    name: REPO_NAME + '-split',
+    domain: DOMAIN,
+    acl: { required_scopes: ['okf:t:smoke:admin'] },
+    lifecycle_state: 'draft'
+  });
+  if (splitRepo.status !== 201 || !splitRepo.body.repo_id) {
+    fail('setup: the split repo could not be created → ' + splitRepo.status);
+  } else {
+    const splitId = splitRepo.body.repo_id;
+    const sections = [];
+    for (let i = 0; i < 6; i += 1) {
+      sections.push('## Section ' + i + '\n\n' + 'lorem ipsum dolor sit amet '.repeat(1852));
+    }
+    const bigBody = sections.join('\n\n');
+    const bigImp = await call('POST', `/api/okf/repos/${splitId}/import`, {
+      concepts: [
+        { path: 'big.md', frontmatter: { type: 'topic', title: 'Big', sources: [] }, body: bigBody }
+      ]
+    });
+    const splits = (bigImp.body && bigImp.body.split_documents) || [];
+    const entry = splits.find((s) => s && s.from === 'big.md');
+    if (entry && entry.into > 1) {
+      pass(
+        'the import split the over-ceiling document and REPORTED it → ' +
+          entry.into +
+          ' parts (' +
+          entry.chars +
+          ' characters)'
+      );
+    } else {
+      fail(
+        'the import did not report the split: ' +
+          JSON.stringify(splits).slice(0, 200) +
+          ' (status ' +
+          bigImp.status +
+          ')'
+      );
+    }
+    // …and the parts really landed as separate concepts.
+    const landed = await aql(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.path LIKE "big%" RETURN m.concept_id',
+      { r: splitId }
+    );
+    landed.length > 1
+      ? pass('  the parts landed as ' + landed.length + ' concepts')
+      : fail('  the split did not produce separate concepts: ' + JSON.stringify(landed));
+
+    const delSplit = await call('DELETE', `/api/okf/repos/${splitId}`);
+    delSplit.status === 200 || delSplit.status === 202 || delSplit.status === 204
+      ? pass('cleanup: the split repo removed (' + delSplit.status + ')')
+      : fail('cleanup: the split repo delete → ' + delSplit.status);
+  }
+
+  // ── 6. Cleanup ────────────────────────────────────────────────────────────
   // The delete is a SOFT delete: the server answers 202 with a purge date and
   // `status: "deleted"`. 409 is a refusal (the repo is still serving) — which
   // this phase never reaches, so it is a FAIL, not an accepted outcome.

@@ -2664,6 +2664,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Impor gagal — periksa file dan coba lagi.',
         skippedEmpty: '{n} file kosong dilewati.',
+        splitReport: '{n} file dipecah agar sesuai batas ukuran: {files}',
+        splitFile: '{file} ({parts} bagian)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

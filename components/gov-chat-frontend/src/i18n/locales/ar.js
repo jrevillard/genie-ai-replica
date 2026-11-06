@@ -2628,6 +2628,8 @@ export default {
         fsBusy: 'استيراد ملفاتك…',
         fsFailed: 'فشل الاستيراد — تحقق من الملفات وأعد المحاولة.',
         skippedEmpty: 'تم تخطي {n} ملفًا فارغًا.',
+        splitReport: 'تم تقسيم {n} ملف لملاء حد الحجم: {files}',
+        splitFile: '{file} ({parts} أجزاء)',
         noneSelected: 'لم تُحدد أي مصادر بعد.',
         selectedN: 'المحدد: {n}',
         moreN: ' +{n} أخرى',

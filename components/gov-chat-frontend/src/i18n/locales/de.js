@@ -2689,6 +2689,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import fehlgeschlagen — prüfen Sie die Dateien und versuchen Sie es erneut.',
         skippedEmpty: '{n} leere Datei(en) übersprungen.',
+        splitReport: '{n} Datei(en) wurden geteilt, um die Größenbeschränkung einzuhalten: {files}',
+        splitFile: '{file} ({parts} Teile)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

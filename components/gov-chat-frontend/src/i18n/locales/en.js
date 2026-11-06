@@ -3483,6 +3483,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import failed — check the files and retry.',
         skippedEmpty: '{n} empty file(s) skipped.',
+        splitReport: '{n} file(s) were split to fit the size limit: {files}',
+        splitFile: '{file} ({parts} parts)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

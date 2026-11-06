@@ -2675,6 +2675,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import o hlolehile — hlahloba difaele o leke hape.',
         skippedEmpty: 'Difaele tse {n} tse se nang letho di fetisoa.',
+        splitReport: 'Ho ile {n} faele ho fihlela boholo ba lekaba: {files}',
+        splitFile: '{file} ({parts} maf pieces)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

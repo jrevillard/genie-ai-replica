@@ -2659,6 +2659,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Uingizaji umeshindwa — angalia faili kisha ujaribu tena.',
         skippedEmpty: 'Faili {n} tupu zimepuuzwa.',
+        splitReport: 'Faili {n} ziligawwa ili kuzingatia ukingo wa ukubwa: {files}',
+        splitFile: '{file} ({parts} vipande)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

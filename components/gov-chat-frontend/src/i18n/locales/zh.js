@@ -2586,6 +2586,8 @@ export default {
         fsBusy: '正在导入您的文件…',
         fsFailed: '导入失败——请检查文件后重试。',
         skippedEmpty: '已跳过 {n} 个空文件。',
+        splitReport: '已拆分 {n} 个文件以符合大小限制：{files}',
+        splitFile: '{file}（{parts} 部分）',
         noneSelected: '尚未选择任何来源。',
         selectedN: '已选择：{n}',
         moreN: ' 另有 {n} 个',

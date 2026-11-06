@@ -2678,6 +2678,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'A importação falhou — verifique os arquivos e tente novamente.',
         skippedEmpty: '{n} arquivo(s) vazio(s) ignorado(s).',
+        splitReport: '{n} arquivo(s) foram divididos para respeitar o limite de tamanho: {files}',
+        splitFile: '{file} ({parts} partes)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

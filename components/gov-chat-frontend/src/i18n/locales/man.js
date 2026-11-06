@@ -2625,6 +2625,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import filita — fayilolu etale ka ñining tugung.',
         skippedEmpty: 'Fayil kongolu {n} skip benta.',
+        splitReport: 'Vaas y {n} fayil farraagh er dy — {files}',
+        splitFile: '{file} ({parts} pairtoid)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

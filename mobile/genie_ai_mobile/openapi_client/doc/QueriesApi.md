@@ -31,10 +31,9 @@ Searches queries based on various criteria with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final limit = 56; // int | Number of queries per page
 final offset = 56; // int | Offset for pagination
 final sessionId = sessionId_example; // String | Filter by session ID
@@ -92,10 +91,9 @@ Creates a new query and records it in analytics. Supports single-message or full
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final apiQueriesPostRequest = ApiQueriesPostRequest(); // ApiQueriesPostRequest | 
 
 try {
@@ -137,10 +135,9 @@ Marks a query as answered and updates response time
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | ID of the query to update.
 final apiQueriesQueryIdResponsetimePatchRequest = ApiQueriesQueryIdResponsetimePatchRequest(); // ApiQueriesQueryIdResponsetimePatchRequest | 
 
@@ -184,10 +181,9 @@ Creates a new conversation based on an existing query
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | Query ID
 final apiChatQueryQueryIdConversationPostRequest = ApiChatQueryQueryIdConversationPostRequest(); // ApiChatQueryQueryIdConversationPostRequest | 
 
@@ -231,10 +227,9 @@ Retrieves all conversations associated with a specific query
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | Query ID
 
 try {
@@ -276,10 +271,9 @@ Adds user feedback to a query and records it in analytics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | Query ID
 final apiQueriesQueryIdFeedbackPostRequest = ApiQueriesQueryIdFeedbackPostRequest(); // ApiQueriesQueryIdFeedbackPostRequest | 
 
@@ -323,10 +317,9 @@ Retrieves a query by its unique identifier
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | Query ID
 
 try {
@@ -368,10 +361,9 @@ Creates a link between a query and an existing message
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | Query ID
 final messageId = messageId_example; // String | Message ID
 final apiQueriesQueryIdLinkMessageIdPostRequest = ApiQueriesQueryIdLinkMessageIdPostRequest(); // ApiQueriesQueryIdLinkMessageIdPostRequest | 
@@ -417,10 +409,9 @@ Updates the response time of a specific query.
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final queryId = queryId_example; // String | ID of the query to update.
 final apiQueriesQueryIdResponsetimePatchRequest = ApiQueriesQueryIdResponsetimePatchRequest(); // ApiQueriesQueryIdResponsetimePatchRequest | 
 
@@ -464,10 +455,9 @@ Creates a query and streams the LLM response as SSE events. Events: chunk, metad
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = QueriesApi();
+final api_instance = QueriesApi(api_client);
 final apiQueriesStreamPostRequest = ApiQueriesStreamPostRequest(); // ApiQueriesStreamPostRequest | 
 
 try {

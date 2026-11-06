@@ -8,7 +8,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 |----------|-------------|-------------|
 | [00-clean-start.md](00-clean-start.md) | Common setup: deploy stack, create test user, get tokens | Phase 0 |
 | [epic1-keycloak-foundation.md](epic1-keycloak-foundation.md) | Keycloak foundation: login redirect, JIT provisioning, external IdP | Phases A–E |
-| [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token headers, JWKS refresh, multi-realm, OPEA, error display | Phases F–K |
+| [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token forwarding to OPEA, Swagger OAuth2, JWKS refresh, multi-realm, OPEA continuity, error display | Phases F–K |
 | [epic3-session-lifecycle-gdpr.md](epic3-session-lifecycle-gdpr.md) | Session management, user lifecycle, GDPR erasure | Phases L–N |
 
 ## Prerequisites
@@ -17,7 +17,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 - Admin access to Keycloak (`KEYCLOAK_ADMIN_PASSWORD` from `.env`)
 - Tools: `curl`, `python3`, `jq`, `npx` (Node.js 18+)
 - Playwright: run `npm install` at project root, then `npx playwright install chromium`
-- Phase F requires `DEPLOY_OPEA=1` (OPEA services must be running for header injection tests)
+- Phase F runs backend-side verification without OPEA; the token-forwarding tests (F.2, F.5, F.8) require `DEPLOY_OPEA=1`
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Phase J requires Keycloak service account credentials (`KC_DATAPREP_CLIENT_ID`, `KC_DATAPREP_CLIENT_SECRET`) in `.env`
 - Phase I requires `KEYCLOAK_ADDITIONAL_REALMS=["genie2"]` in `.env` — additional realms must be created **before** backend starts (Phase 0, Step 0.6)
@@ -57,9 +57,38 @@ Each step follows this format:
 | Variable | Description | Defined in |
 |----------|-------------|------------|
 | `$TOKEN` | Keycloak master admin token | Phase 0 |
-| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
+| `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | acquired per test (ROPC pattern: 00-clean-start Step 0.8) |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
 | `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
+| `$KC_EMAIL` | `testuser`'s address as the venue's Keycloak account holds it — captured in M.1/M.2, reused by the Phase N recreates | Phase M |
+| `$ORIGINAL_EMAIL` | Address captured before the M.4 email change; restored by M.5 | Phase M |
+
+### Resolving test accounts
+
+Never key a fixture account (`testuser`, `testadmin`, `testplain`) by its
+**email**: the venue-fixture contract (`convergeUser` in
+`tests/e2e/helpers/keycloak-admin.js`) deliberately never rewrites a fixture
+account's email, so a venue provisioned before the fixtures module keeps the
+original address and an email-keyed lookup finds nothing. Resolve accounts by:
+
+- **username** — Keycloak Admin API: `GET /auth/admin/realms/genie/users?username=testuser&exact=true`
+  (without `exact=true` the `username` param is a substring match and can
+  resolve the wrong account)
+- **own profile** — `GET /api/me` with the user's own token returns the raw
+  ArangoDB document, `_key` included
+- **`iss_sub`** — for direct ArangoDB queries: JIT provisioning keys the user
+  document by `iss_sub` (`<issuer>#<subject>`). Decode the session token's
+  payload (`iss` + `sub` claims) and query
+  `db.users.firstExample({iss_sub: '<iss>#<sub>'})`. This is the account's
+  stable identity while it exists: the email is venue-dependent, and every
+  phase logs in first, which also migrates legacy documents missing
+  `iss_sub`. **GDPR erasure nullifies `iss_sub` together with the PII
+  fields** — after erasure, the `_key` saved before the erasure is the only
+  handle on the document.
+
+Email-keyed lookups are acceptable only for accounts the phase itself created
+with a known email (e.g. `field=exactEmail` on `/api/admin/users/search`) —
+their address is deterministic because the phase wrote it.
 
 ### URL Convention
 
@@ -70,7 +99,7 @@ Each step follows this format:
 ## Phase Execution Order
 
 ```
-Phase 0 (setup) → F (token passthrough) → G (Swagger OAuth2) → H (JWKS refresh) → I (multi-realm) → J (OPEA continuity) → K (auth errors) → L (session management) → M (user lifecycle) → N (GDPR compliance)
+Phase 0 (setup) → F (token forwarding to OPEA) → G (Swagger OAuth2) → H (JWKS refresh) → I (multi-realm) → J (OPEA continuity) → K (auth errors) → L (session management) → M (user lifecycle) → N (GDPR compliance)
 ```
 
 **Important**: Phase K mutates realm settings and scales Keycloak to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L.

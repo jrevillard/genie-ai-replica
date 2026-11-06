@@ -74,7 +74,13 @@ time guessing what is wrong.
 
 - The OpenAPI JSON (`GET /api-docs.json`) — a programmatic copy of all the
   schemas below, refreshed on every BFF restart. Useful for client code
-  generation and contract tests.
+  generation and contract tests. Its `servers[0].url` is **relative** (`/`):
+  the base comes from wherever you fetch the spec, and Swagger UI's
+  Try-it-out therefore targets the origin the docs page is served from
+  (same-origin, in dev and behind the gateway) — no per-deployment
+  configuration. A client generator must be given a host of its own. The
+  document-repository spec (the `/api/files` endpoints are served by that
+  service, not by the BFF) follows the same relative default.
 
 ## Verify your setup
 
@@ -616,16 +622,23 @@ keyed `${sourceKey}_${languageCode}` (e.g. `name_en`, `name_fr`). The
 translation schema is documented in the i18n section of `CHANGELOG.md`
 and in [ArangoDB collections](/docs/reference/arangodb-collections/).
 
-### 8. Service routes (`/api/services`)
+### 8. Service routes (`/api/services`) — DEPRECATED, redirects
 
 **Route file**: `routes/service-routes.js` **Mount**: `/api/services`
 (Kong `service-route`) **Auth required**: **Yes**.
 
-| Method | Path                      | Auth | Description                      |
-| ------ | ------------------------- | ---- | -------------------------------- |
-| GET    | `/categories`             | Yes  | Flat list of all services        |
-| GET    | `/categories/:categoryId` | Yes  | Services under one category      |
-| GET    | `/search`                 | Yes  | Full-text search across services |
+Deprecated since the duplicate-prefix consolidation (#442): these three
+GET routes used to carry their own handlers; the canonical implementation
+lives under `/api/service-categories` (section 7). The routes are **301
+redirects** to the canonical paths now — the query string is preserved —
+so existing clients and the Kong `/api/services` route keep working. New
+clients MUST call the canonical `/api/service-categories` paths.
+
+| Method | Path                      | Auth | Redirects to                              |
+| ------ | ------------------------- | ---- | ----------------------------------------- |
+| GET    | `/categories`             | Yes  | `/api/service-categories/categories`      |
+| GET    | `/categories/:categoryId` | Yes  | `/api/service-categories/categories/:id`  |
+| GET    | `/search`                 | Yes  | `/api/service-categories/search`          |
 
 ### 9. Translation routes (`/api/translate`)
 

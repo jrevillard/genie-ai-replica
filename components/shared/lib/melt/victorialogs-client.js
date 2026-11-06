@@ -177,8 +177,14 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    * @param {import('./types').LogQuery} query
    * @returns {Promise<import('./types').VictoriaLogsRow[]>}
    */
-  async query({ q, start, end, limit, fields }) {
+  async query({ q, start, end, limit, offset, fields }) {
     await this._ensureHealth();
+
+    // limit=0 is a page-size clamp, never "unbounded" — VL reads limit=0 as
+    // NO limit and would stream the entire matching window. A caller asking
+    // for a zero-row page gets one without a round-trip; a caller that
+    // wants everything must say so explicitly (omit limit), not pass 0.
+    if (limit === 0) return [];
 
     // VL's `/select/logsql/query` endpoint expects the LogsQL expression
     // in the `query` URL parameter — NOT `q`. Earlier revisions of this
@@ -194,6 +200,10 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     const projectedQ = safeFields.length > 0 ? `${q} | fields ${safeFields.join(',')}` : q;
     const params = { query: projectedQ, start, end };
     if (limit !== undefined && limit !== null) params.limit = limit;
+    // `offset` is VL's own pagination arg: it skips the <offset> matching
+    // rows with the biggest `_time` values on the selected range, so
+    // `offset=0,1000,2000…` walks the whole result set.
+    if (offset !== undefined && offset !== null) params.offset = offset;
 
     // VL serves `/select/logsql/query` as `application/stream+json`
     // (one JSON object per line — JSONL). Axios auto-parser only fires for

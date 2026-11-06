@@ -60,6 +60,9 @@ jest.mock('@/services/okfRepoOps', () => {
       !!repo &&
       repo.lifecycle_state === 'publish' &&
       (repo.rag_drain_active === true || !!(repo.rag_ingestion && repo.rag_ingestion.status === 'draining')),
+    // The REAL pure predicate (no copy to drift) — FrontmatterPanel's #932
+    // marker computes from it.
+    isLabelsStale: jest.requireActual('@/services/okfRepoOps').isLabelsStale,
     // Subject Areas load from the Knowledge Hierarchy — canned for the
     // dashboard mount (no network in jsdom).
     loadSubjectAreaOptions: jest.fn().mockResolvedValue([{ value: 'Water Supply', label: 'Water Supply' }])
@@ -85,6 +88,18 @@ function buildStore() {
 function flush() {
   return new Promise((r) => setTimeout(r, 0));
 }
+
+// The bundle download runs through the authenticated client (a browser
+// navigation to the protected route carries no Authorization header and
+// answers 401) — the service is mocked here so the test asserts the CALL,
+// not the network.
+const mockDownloadFile = jest.fn();
+jest.mock('@/services/documentFileService', () => ({
+  __esModule: true,
+  default: { downloadFile: (...args) => mockDownloadFile(...args) }
+}));
+
+const { eventBus } = require('@/eventBus');
 
 async function seedRepos(store, repos) {
   repoOkfService.list.mockResolvedValueOnce(repos);
@@ -891,5 +906,97 @@ describe('OkfVersionsDialog — the versions panel', () => {
       }
     });
     expect(wrapper.vm.canPublish).toBe(false);
+  });
+
+  // W6 / EPIC-6 / CAP-5 — the repository → ARTIFACT direction. The bundle
+  // zip is a machine artifact with its own labeled view in Document
+  // Management; the version row is where the steward reaches it.
+  describe('W6 — the "View artifact" link', () => {
+    function mountWithVersions(versions) {
+      const store = buildStore();
+      mockOpsVersions.mockResolvedValueOnce(versions);
+      const push = jest.fn().mockResolvedValue();
+      const wrapper = mount(OkfVersionsDialog, {
+        global: { mocks: { $store: store, $router: { push }, $route: { query: {} } }, stubs: STUBS },
+        props: {
+          visible: true,
+          repo: { repo_id: 'r-1', name: 'Demo', lifecycle_state: 'publish', version: 18 }
+        }
+      });
+      return { wrapper, push };
+    }
+
+    const WITH_BUNDLE = [
+      {
+        bundle_version: 18,
+        okf_tag: 'okf:v18',
+        trigger: 'publish',
+        concept_count: 2,
+        bundle_file_id: 'bundle-18',
+        bundle_file_name: 'kenya-v18.zip'
+      }
+    ];
+    const WITHOUT_BUNDLE = [
+      { bundle_version: 17, okf_tag: 'okf:v17', trigger: 'publish', concept_count: 2, bundle_file_id: null }
+    ];
+
+    it('the bundle cell offers "View artifact" and it deep-links to the artifacts view', async () => {
+      const { wrapper, push } = mountWithVersions(WITH_BUNDLE);
+      await flush();
+      const button = wrapper.findAll('button').filter((b) => /view artifact/i.test(b.text()));
+      expect(button.length).toBeGreaterThan(0);
+      await button[0].trigger('click');
+      expect(push).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/admin',
+          query: expect.objectContaining({ tab: 'documents', view: 'artifacts', file: 'bundle-18' })
+        })
+      );
+    });
+
+    it('a version with NO bundle offers no artifact link (nothing to view)', async () => {
+      const { wrapper } = mountWithVersions(WITHOUT_BUNDLE);
+      await flush();
+      const button = wrapper.findAll('button').filter((b) => /view artifact/i.test(b.text()));
+      expect(button.length).toBe(0);
+      expect(wrapper.text()).toContain('zip missing');
+    });
+
+    it('the method itself refuses a row with no bundle (the guard is not only the template)', () => {
+      const push = jest.fn();
+      const { wrapper } = mountWithVersions(WITH_BUNDLE);
+      wrapper.vm.$router = { push };
+      wrapper.vm.viewArtifact({ bundle_version: 17, bundle_file_id: null });
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    // The bundle download runs through the AUTHENTICATED client: doc-repo's
+    // download route sits behind `authenticateToken` and is not on the
+    // public-path list, so a browser navigation (no Authorization header)
+    // answers 401 TOKEN_INVALID. Verified live against the running stack.
+    it('the bundle download goes through the service, not a bare link', async () => {
+      mockDownloadFile.mockResolvedValue({ blob: { size: 1 }, fileName: 'kenya-v18.zip' });
+      const { wrapper } = mountWithVersions(WITH_BUNDLE);
+      await flush();
+      // No anchor to the protected route in the dialog.
+      expect(wrapper.find('a[href*="/download"]').exists()).toBe(false);
+      const button = wrapper.findAll('button').filter((b) => /download zip/i.test(b.text()));
+      expect(button.length).toBeGreaterThan(0);
+      await button[0].trigger('click');
+      await flush();
+      expect(mockDownloadFile).toHaveBeenCalledWith('bundle-18');
+    });
+
+    it('a failed download is REPORTED, never silent', async () => {
+      mockDownloadFile.mockRejectedValue({ status: 401, data: { error: 'TOKEN_INVALID' } });
+      const emit = jest.spyOn(eventBus, '$emit');
+      const { wrapper } = mountWithVersions(WITH_BUNDLE);
+      await flush();
+      await wrapper.vm.downloadBundle({ bundle_file_id: 'bundle-18' });
+      await flush();
+      expect(emit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+      expect(wrapper.vm.downloading).toBe(null);
+      emit.mockRestore();
+    });
   });
 });

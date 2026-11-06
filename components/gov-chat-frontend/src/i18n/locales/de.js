@@ -469,6 +469,9 @@ export default {
       saveError: 'Fehler beim Speichern des Hierarchieelements.',
       loadError: 'Fehler beim Laden der Wissenshierarchie.',
       loadTranslationsError: 'Fehler beim Laden der Übersetzungen.',
+      translationsLoadFailedNotice:
+        'Übersetzungen konnten nicht geladen werden. Die Bearbeitung der Übersetzungen und das Speichern bleiben deaktiviert, bis sie geladen sind.',
+      retryTranslations: 'Wiederholen',
       translationsNotLoaded: 'Übersetzungen nicht geladen – vor dem Speichern neu laden.',
       confirmCancelTitle: 'Ungespeicherte Änderungen',
       confirmCancelEdit: 'Sie haben ungespeicherte Änderungen, die verloren gehen. Möchten Sie wirklich wechseln?',
@@ -485,6 +488,13 @@ export default {
       duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
     },
     documents: {
+      viewDocuments: 'Dokumente',
+      viewArtifacts: 'Artefakte',
+      deleteRefuseBundle:
+        '{count} OKF-Artefakt(e) werden vom Repository-Lebenszyklus verwaltet und können hier nicht gelöscht werden.',
+      deleteRefuseMixed:
+        '{blocked} Datei(en) sind noch ingestiert – bitte zuerst zurückziehen. {bundles} OKF-Artefakt(e) werden vom Repository-Lebenszyklus verwaltet und können hier nicht gelöscht werden.',
+      artifactsParked: 'OKF-Artefakte erscheinen, wenn die OKF-Funktion für diese Installation aktiviert ist.',
       title: 'Dokumentenverwaltung',
       addLink: 'Von Link hinzufügen',
       uploadFiles: 'Dateien hochladen',
@@ -757,7 +767,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen-Portal',
-    taxFiling: 'Steuererklärungssystem',
     idApplication: 'ID-Antrag',
     businessReg: 'Geschäftsregistrierung',
     drivingLicense: 'Führerschein'
@@ -986,6 +995,8 @@ export default {
       'Sind Sie sicher, dass Sie Ihr Konto löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
     processing: 'Verarbeitung...',
     userDataReset: 'Ihre Profildaten wurden erfolgreich zurückgesetzt.',
+    userDataResetFilesFailed:
+      'Ihre Profildaten wurden zurückgesetzt, aber einige gespeicherte Dateien konnten nicht entfernt werden. Bitte kontaktieren Sie einen Administrator.',
     failedToResetUserData: 'Fehler beim Zurücksetzen Ihrer Profildaten. Bitte versuchen Sie es später erneut.',
     unableToLoadUser: 'Benutzerinformationen konnten nicht geladen werden. Bitte versuchen Sie es erneut.',
     retry: 'Wiederholen',
@@ -1000,6 +1011,8 @@ export default {
     deleteAccountTitle: 'Konto löschen',
     delete: 'Löschen',
     accountDeleted: 'Ihr Konto wurde gelöscht.',
+    accountDeletedFilesFailed:
+      'Ihr Konto wurde gelöscht, aber einige gespeicherte Dateien konnten nicht entfernt werden. Bitte kontaktieren Sie einen Administrator.',
     failedToDeleteAccount: 'Fehler beim Löschen Ihres Kontos. Bitte versuchen Sie es später erneut.'
   },
   userProfile: {
@@ -1443,6 +1456,7 @@ export default {
     alt: 'Hochladen'
   },
   details: {
+    bundleBadge: 'Vom OKF-Lebenszyklus verwaltet',
     crawl: {
       seconds: 'Sekunden',
       autoRefreshEvery: 'Auto-Aktualisierung alle',
@@ -1560,6 +1574,75 @@ export default {
       'Warum Uploads für RAG wichtig sind: Jedes hochgeladene Dokument kann zu kuratiertem, gelabeltem Wissen werden — fokussierte, gut strukturierte Dokumente werden deutlich genauer abgerufen als eine lange Einzeldatei.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF-Artefakte',
+      lead: 'Ein Artefakt pro veröffentlichter Version.',
+      empty: 'Noch keine OKF-Artefakte.',
+      loadFailed: 'Die OKF-Artefakte konnten nicht gelesen werden.',
+      downloadFailed: 'Die OKF-Artefakte konnten nicht heruntergeladen werden.',
+      column: {
+        artifact: 'Artefakt',
+        repository: 'Repository',
+        actions: 'Aktionen',
+        state: 'Status'
+      },
+      openRepo: 'Repository öffnen',
+      unknownVersion: 'unbekannte Version'
+    },
+    retrieval: {
+      title: 'Abruf-Haltung',
+      refresh: 'Aktualisieren',
+      loading: 'Wird gelesen…',
+      engaged: 'Grounding aktiv',
+      notEngaged: 'Trägt nicht bei',
+      servingCount: '{n} Graph(en) im Betrieb',
+      sourceLabel: 'Quelle',
+      invalidValue: 'Gib eine ganze Zahl zwischen {min} und {max} ein.',
+      source: {
+        database: 'Verwaltete Zeile',
+        'env-defaults': 'Umgebungs-Standardwert'
+      },
+      revision: 'Revision',
+      updatedAt: 'Geändert',
+      updatedBy: 'Von',
+      modeLabel: 'Modus',
+      mode: {
+        legacy: 'Alt',
+        okf_only: 'Nur OKF',
+        hybrid: 'Hybrid'
+      },
+      consequence: {
+        legacy: 'OKF-Grounding ist aus — Antworten kommen nur aus dem Freitext-Pfad.',
+        unknown: 'Unbekannter Modus.',
+        okf_only: 'Nur OKF-Graphen begründen die Antworten — Freitext-Kontext wird nicht herangezogen.',
+        hybrid: 'OKF-Graphen begründen die Antworten, und der Freitext-Kontext trägt weiterhin bei.'
+      },
+      warnZeroServing:
+        'okf_only ohne Graphen im Betrieb — der OKF-Beitrag ist null. Bitte zuerst ein Repository veröffentlichen und einlesen.',
+      servingList: 'Graphen im Betrieb',
+      advanced: 'Erweiterte Limits',
+      save: 'Speichern',
+      revert: 'Zurücksetzen',
+      cancel: 'Abbrechen',
+      confirm: 'Anwenden',
+      confirmTitle: 'Abruf-Haltung ändern?',
+      confirmLead:
+        'Dies ist eine globale Einstellung — sie ändert, wie jede Anfrage verankert wird, innerhalb von etwa 30 Sekunden.',
+      readFailed: 'Die Abruf-Haltung konnte nicht gelesen werden.',
+      nothingToSave: 'Es gibt nichts zu speichern.',
+      saveFailed: 'Die Änderung wurde abgelehnt.',
+      audit: 'Änderungsverlauf',
+      auditLoading: 'Verlauf wird geladen…',
+      auditEmpty: 'Noch keine Änderungen aufgezeichnet.',
+      auditFailed: 'Der Änderungsverlauf konnte nicht gelesen werden.',
+      limit: {
+        max_fanout_graphs: 'Graphen pro Anfrage',
+        spine_max_hops: 'Spine-Sprünge',
+        extracted_hop_cap: 'Extrahierte Sprünge',
+        candidate_cap_per_graph: 'Kandidaten pro Graph',
+        candidate_cap_global: 'Kandidaten pro Anfrage'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Einige Dateien werden noch verarbeitet (indiziert). Öffnen Sie dieses Repository im Editor — die Dateiliste zeigt, welche; die Aufnahme wiederholt sich automatisch. Veröffentlichen Sie erneut, sobald jede Datei als indiziert erscheint.',
@@ -1605,6 +1688,8 @@ export default {
       title: 'Modellkonfigurationen',
       add: 'Neue Konfiguration',
       hint: 'Benannte Remote-Modell-Endpunkte für Bewertung und Generierung — jede OpenAI-kompatible Oberfläche (OpenAI, ein LiteLLM-Gateway, vLLM, Gemini-kompatibel, Ollama) oder Anthropic direkt. Genau EINE Konfiguration kann aktiv sein; ohne aktive gilt das konfigurierte Standardmodell der Deployment-Umgebung. Schlüssel werden serverseitig gespeichert und nie angezeigt.',
+      gateWarning:
+        'Die OKF-LLM-Beine, die der Opt-in der Bereitstellung folgen (Themenverknüpfungen, CSV-Themen, Manifest-Zusammenfassungen), sind AUS: In dieser Bereitstellung ist kein VLLM_ENDPOINT gesetzt. Eine benannte Konfiguration aktiviert sie nicht — setzen Sie VLLM_ENDPOINT auf dem Server, um sie einzuschalten.',
       name: 'Name',
       provider: 'Anbieter',
       providerOpenai: 'OpenAI-kompatibel (OpenAI, LiteLLM, vLLM…)',
@@ -1683,6 +1768,7 @@ export default {
       ingestCompleted: 'ingeniert',
       bundleMissing: 'Zip fehlt',
       bundleDownload: 'Zip herunterladen',
+      viewArtifact: 'Artefakt anzeigen',
       bundle: 'Paket',
       col: {
         ingest: 'Ingest',
@@ -2021,6 +2107,7 @@ export default {
           'Fertig — jede markierte Entität auf {n} Konzept(en) ist als geprüft und beibehalten markiert. Die PII-Flags sind entfernt.',
         done_redact: 'Fertig — der markierte Inhalt auf {n} Konzept(en) ist durch den Schwärzungshinweis ersetzt.',
         done_remove: 'Fertig — der markierte Inhalt auf {n} Konzept(en) ist entfernt.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Alle markierten Inhalte schwärzen',
           remove: 'Alle markierten Inhalte entfernen',
@@ -2364,7 +2451,7 @@ export default {
       autocorrect:
         'Auto-Fix fasst nur das Frontmatter an (Titel, Typen, Struktur) — nie Ihren geschriebenen Inhalt. Vorschläge werden angezeigt, bevor sich etwas ändert; das Anwenden schreibt die Korrekturen sofort, und Sie können das Ergebnis in Curate prüfen.',
       handoff:
-        'Der Lifecycle-Ritus (submit → approve → publish) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
+        'Der Lifecycle-Ritus ({chain}) liegt bewusst außerhalb dieses Assistenten: Freigaben gehören in den Governance-Fluss auf dem Dashboard und im Editor, wo Versionen und Serving-Status verwaltet werden.',
       lifecycle:
         'Der Sechs-Schritte-Vertrag: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (zurück zur Bearbeitung). Inhalt wird erst nach dem Ingest zitierfähig — und nur geprüfter Inhalt kann veröffentlicht werden.',
       labelsAuto:
@@ -2490,7 +2577,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Entwürfe können serverseitig noch nicht gespeichert werden; lokal gespeichert.'
+        notReady:
+          'Entwürfe können derzeit nicht auf dem Server gespeichert werden — sie bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird. Seite oder Server können nicht synchron sein.',
+        repoGone:
+          'Dieses Repository ist auf dem Server nicht mehr verfügbar — Ihre Änderungen bleiben nur in diesem Browser-Tab und gehen verloren, wenn der Tab geschlossen oder neu geladen wird.'
       },
       mode: {
         basic: 'Standard',
@@ -2704,7 +2794,7 @@ export default {
           'Letzter Blick vor der Übergabe: jede Datei unten, ihr Markdown und ihre Labels — exakt so, wie der Assistent sie zitieren wird.',
         noRepo: 'Noch kein Repository — die Dateiprüfung erscheint hier, sobald ein Repository existiert.',
         ritualOutside:
-          'Der Prüf-Ritus — zur Überprüfung einreichen, Freigabe durch die prüfende Person, Veröffentlichen — findet im Editor und auf dem Studio-Dashboard statt, nicht hier. Öffnen Sie den Editor zum Abschluss.',
+          'Der Review-Ritus findet im Editor und im Studio-Dashboard statt, jeweils ein Schritt pro Schaltfläche — nicht hier. Öffnen Sie den Editor, um abzuschließen.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2717,7 +2807,7 @@ export default {
         frontmatterOk: 'Frontmatter-Tags genehmigt',
         frontmatterServing: 'Frontmatter-Tags gesetzt',
         title: 'Absichern und fertigstellen',
-        hint: 'Dieses Repository ist bereit zur Prüfung. Die Veröffentlichung erfolgt hier nie — reichen Sie es auf dem Dashboard zur Freigabe ein und veröffentlichen Sie dann über das Dashboard oder den Editor.',
+        hint: 'Dieses Repository ist bereit zur Prüfung. Veröffentlicht wird hier nie — der Lebenszyklus läuft im Dashboard und im Editor, jeweils ein Schritt pro Schaltfläche.',
         nameOk: 'Repository-Name festgelegt',
         labelsOk: 'Labels ausgewählt',
         topicsOk: 'Themen überprüft',
@@ -2727,7 +2817,7 @@ export default {
         frozen:
           'Dieses Repository ist im Einsatz — hier eine schreibgeschützte Zusammenfassung. Öffnen Sie den Editor, um Versionen zu verwalten oder zurückzuziehen.',
         ritual:
-          'Weiter: auf dem Studio-Dashboard zur Freigabe einreichen → eine prüfende Person nimmt an → über das Dashboard oder den Editor veröffentlichen. Der Assistent endet hier bewusst.',
+          'Weiter: auf dem Studio-Dashboard hat diese Karte EINEN Button für den gesamten Lebenszyklus — {chain}. Der Assistent endet hier bewusst.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2900,7 +2990,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Die Quellen-Seite erstellen und {n} Seite(n) verlinken',
@@ -3037,6 +3126,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Zur Überprüfung einreichen',
       approve: 'Genehmigen',
       publish: 'Veröffentlichen',
@@ -3084,7 +3174,9 @@ export default {
       title: 'Frontmatter-Tags — worum es in diesem Repository geht',
       help: 'Tags beschreiben, was dieses Repository enthält — und ebenso wichtig, was es NICHT enthält (die Liste der verbotenen Themen). Sie entscheiden, welche Abfragen zu diesem Repository routen. Klicken Sie auf Aktualisieren, um aus dem Korpus zu entwerfen, oder bearbeiten Sie die Chips unten. Publish erfordert ≥3 Themen-Tags + ≥1 verbotenes Tag.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Labels veraltet — zum Anwenden neu einlesen',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'Das LLM hat keine Tags zurückgegeben. Versuchen Sie es erneut, wenn der Korpus gewachsen ist.',
       suggestCoverage: 'Abgeleitet aus {sampled} von {total} Konzepten, über {labels} Labels der Wissenshierarchie.',
       suggestFailed: 'Suggest failed.',
@@ -3113,7 +3205,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Labels veraltet — zum Anwenden neu einlesen'
       },
       tab: {
         head: 'Head',

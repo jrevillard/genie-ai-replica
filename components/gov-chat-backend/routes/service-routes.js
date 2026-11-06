@@ -1,19 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { logger } = require('../shared-lib');
 
-module.exports = (serviceCategoryService) => {
-  if (!serviceCategoryService || typeof serviceCategoryService.getAllCategoriesWithServices !== 'function') {
-    logger.error('Invalid serviceCategoryService provided to service-routes');
-    throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
-  }
-  logger.debug('service-routes initialized with serviceCategoryService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(
-      (m) => m !== 'constructor'
-    )
-  });
+const CANONICAL_PREFIX = '/api/service-categories';
 
+module.exports = () => {
   router.use(keycloakAuthMiddleware.authenticate);
 
   /**
@@ -44,23 +35,6 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/categories', async (req, res) => {
-    const start = Date.now();
-    try {
-      const locale = req.query.locale || 'en';
-      logger.info(`Fetching all service categories with services, locale: ${locale}`);
-      const categories = await serviceCategoryService.getAllCategoriesWithServices(locale);
-      logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
-      res.json(categories);
-    } catch (error) {
-      logger.error(`Error fetching all categories with services: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      res.status(500).json({ message: error.message });
-    }
-  });
-
   /**
    * @swagger
    * "/api/services/categories/{categoryId}":
@@ -119,23 +93,6 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/categories/:categoryId', async (req, res, next) => {
-    const start = Date.now();
-    try {
-      const locale = req.query.locale || 'en';
-      logger.info(`Fetching category ${req.params.categoryId} with services, locale: ${locale}`);
-      const category = await serviceCategoryService.getCategoryWithServices(req.params.categoryId, locale);
-      logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
-      res.json(category);
-    } catch (error) {
-      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      next(error);
-    }
-  });
-
   /**
    * @swagger
    * "/api/services/search":
@@ -199,27 +156,18 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/search', async (req, res) => {
-    const start = Date.now();
-    try {
-      const { query, locale = 'en' } = req.query;
-      if (!query) {
-        logger.warn('Search query missing in /services/search');
-        return res.status(400).json({ message: 'Search query is required' });
-      }
-      logger.info(`Searching services with query: "${query}", locale: ${locale}`);
-      const results = await serviceCategoryService.searchCategoriesAndServices(query, locale);
-      logger.info(
-        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`
-      );
-      res.json(results);
-    } catch (error) {
-      logger.error(`Error searching categories and services: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      res.status(500).json({ message: error.message });
-    }
+
+  // Deprecated duplicates (#442): these three GET routes used to carry their
+  // own handlers; the canonical implementations live under
+  // /api/service-categories (service-category-routes.js) and are what the
+  // frontend calls. The routes stay as 301 redirects so existing clients —
+  // and the Kong /api/services route — keep working. req.url is the
+  // mount-relative path (query string included), so the target is the
+  // canonical path with the same query. The @swagger annotations above stay
+  // so the OpenAPI spec (and the generated mobile client) keep declaring
+  // these paths.
+  router.get(['/categories', '/categories/:categoryId', '/search'], (req, res) => {
+    res.redirect(301, CANONICAL_PREFIX + req.url);
   });
 
   return router;

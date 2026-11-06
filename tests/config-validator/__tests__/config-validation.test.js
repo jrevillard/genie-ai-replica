@@ -43,6 +43,26 @@ const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.ym
 const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
+// The extension shape set Playwright's default testMatch accepts — one
+// fragment shared by the executed-spec selection, the walk's JS-file gate
+// and the import-path pin so the three cannot drift.
+const JS_EXT_SRC = '[cm]?[jt]sx?';
+
+// Pure selection of the executed files from a directory listing — the
+// units below pin the boundary and the testMatch shapes on synthetic
+// listings, the real-tree pin anchors them to the actual invocation.
+const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
+
+// The module-path matcher the import-path pin runs over spec sources,
+// built once: the basename is matched (not the 'helpers/' prefix, and
+// not a longer module name merely ending in the same fragment), the
+// extension is optional, and both require() and ESM `from` spellings
+// are in the net — whatever spelling imports the module mixes the
+// credential paths just the same.
+const importPathRe = (moduleName) =>
+  new RegExp('(?:require\\(\\s*|from\\s+)([\'"`])(?:[^\'"`]*/)?' + moduleName + '(\\.' + JS_EXT_SRC + ')?\\1');
+
 describe('Configuration Validation Suite', () => {
   let envParsed;
   let composeVars;
@@ -704,7 +724,6 @@ describe('Configuration Validation Suite', () => {
     };
 
     test('both guard knobs are piped in the okf-server compose block with an empty default (code default applies)', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       for (const name of Object.keys(GUARD_KNOBS)) {
@@ -784,7 +803,6 @@ describe('Configuration Validation Suite', () => {
   // verdict=unknown with an honest note (never a fake score).
   describe('Story 1-8g: OKF corpus-probe rerank endpoint plumbing', () => {
     test('OKF_RERANK_ENDPOINT is piped in the okf-server compose block with an empty default', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_ENDPOINT=\$\{OKF_RERANK_ENDPOINT:-\}/);
@@ -796,7 +814,6 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('OKF_RERANK_TOKEN is piped in the okf-server compose block with an empty default', () => {
-      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=\$\{OKF_RERANK_TOKEN:-\}/);
@@ -1062,9 +1079,9 @@ describe('Configuration Validation Suite', () => {
   // cosmetic.
   describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
     const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
-    const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
+    const blockStart = composeLines.findIndex((l) => /^ {2}dataprep-arango-service:/.test(l));
     let blockEnd = blockStart + 1;
-    while (blockEnd < composeLines.length && !/^  [a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
+    while (blockEnd < composeLines.length && !/^ {2}[a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
     const dataprepBlock = composeLines.slice(blockStart, blockEnd).join('\n');
 
     const composeDefaults = {};
@@ -1234,7 +1251,7 @@ describe('Configuration Validation Suite', () => {
         // Block ends at the next line indented exactly 2 spaces (the next
         // top-level key) — body lines are 4+ so /\n  \S/ skips them.
         const rest = composeText.slice(start + 10);
-        const next = rest.match(/\n  \S/);
+        const next = rest.match(/\n {2}\S/);
         const block = composeText.slice(start, next ? start + 10 + next.index : undefined);
         expect(block).toMatch(/profiles: \["okf"\]/);
         expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
@@ -2363,7 +2380,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // the anchor check instead of silently escaping it). The npx spelling is
   // the contract: a first invocation in another spelling fails loudly below,
   // and script text that merely MENTIONS the invocation (an echo, say) is
-  // captured too — loud, conservative over-capture.
+  // captured too — loud, conservative over-capture. The canonical list is
+  // coverage-shaped, not the runner's matcher: how an entry selects a test
+  // file lives in scanTargets below, which mirrors Playwright's unanchored
+  // regex arg matching.
   const executedPaths = () => {
     const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
     expect(invocations.length).toBeGreaterThan(0);
@@ -2644,16 +2664,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return findings;
   };
 
-  // The spec files the invocation executes: real files under the executed
-  // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
-  // directory boundary, a sibling `X-v2/` is not covered — an exact entry
-  // stays exact). Playwright's default testMatch glob
+  // The spec files the invocation executes: real files selected by the
+  // executed targets through scanTargets (the runner's own arg semantics,
+  // mirrored there). Playwright's default testMatch glob
   // `*.(spec|test).?(c|m)[jt]s?(x)`: optional c|m module prefix, then j or
   // t, then a REQUIRED s (the trailing ? quantifies only the x), then
-  // optional x — the selection regex below mirrors that shape set exactly
-  // (the config test pins that the default is still in force), so every
-  // spelling Playwright would run counts as executed and none it would
-  // not.
+  // optional x — the selection regex (EXECUTED_SPEC_RE, module top)
+  // mirrors that shape set exactly (the config test pins that the
+  // default is still in force), so every spelling Playwright would run
+  // counts as executed and none it would not.
   const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
@@ -2662,22 +2681,39 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  // The extension shape set Playwright's default testMatch accepts — one
-  // fragment shared by the executed-spec selection and the walk's JS-file
-  // gate so the two cannot drift.
-  const JS_EXT_SRC = '[cm]?[jt]sx?';
-
-  // Pure selection of the executed files from a directory listing — the
-  // units below pin the boundary and the testMatch shapes on synthetic
-  // listings, the real-tree pin above anchors them to the actual invocation.
-  const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
-  const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
-  const scanTargets = (files, executedGlobs) =>
-    files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => isCovered(executedGlobs, f));
+  // How an invocation target selects a test file — EXACTLY as the runner
+  // selects it. Every Playwright CLI arg becomes an UNANCHORED case-
+  // insensitive regex (forceRegExp in the runner's util) tested against the
+  // test file path: the file executes whenever its path CONTAINS the arg's
+  // text. No anchors, no escaping — the arg is the regex. So the canonical
+  // `X/**/*` entry (a trailing-slash dir arg, whose slash the canonical
+  // form folded into the glob) selects every path CONTAINING `X/` — the
+  // unfold below restores that slash, which IS the directory boundary a
+  // plain prefix match would lose (…/chatbot/ does not match
+  // …/chatbot-v2/…) — and an exact entry selects every path containing it
+  // verbatim: a basename sibling does NOT contain the arg text and is not
+  // executed, while a nested tail-duplicate
+  // (…/helpers/tests/e2e/theme-runtime-config.spec.js) does and is.
+  // Modeling the containment instead of assuming "exact file" keeps the
+  // executed set never narrower than the runner's. The `g` flag the runner
+  // adds is dead weight for a boolean .test and carries a lastIndex trap on
+  // a precompiled regex — 'i' alone matches identically.
+  const scanTargets = (files, executedGlobs) => {
+    const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
+    return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
+  };
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
-    const uncovered = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED].filter((p) => !isCovered(anchorPaths, p));
+    // Per-file demands on top of the glob entries: a file the runner would
+    // execute OUTSIDE the directories the exact/dir entries name (the
+    // unanchored matching above reaches beyond the subtree) must still find
+    // its anchor entry, or a train touching it skips e2e silently.
+    const uncovered = [
+      ...EXECUTED_GLOBS,
+      ...EXECUTED_SPECS.map((f) => toAnchorPath(f, false)),
+      ...DERIVED_CONSUMED
+    ].filter((p) => !isCovered(anchorPaths, p));
     // The diff names every uncovered path, not just the first.
     expect(uncovered).toEqual([]);
   });
@@ -2695,6 +2731,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
       'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
   });
@@ -2783,6 +2820,28 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
     test('a sibling directory beyond the glob boundary is not executed', () => {
       expect(scanTargets(['tests/e2e/chatbot-v2/x.spec.js', 'tests/e2e/chatbotless.spec.js'], GLOBS)).toEqual([]);
+    });
+
+    // The runner matches args as UNANCHORED regex over the test path — the
+    // units pin the containment both ways: a path containing an exact arg's
+    // text (a nested tail-duplicate) executes, while a basename sibling
+    // (which does NOT contain the arg's text contiguously) does not. The
+    // dir entry is the same containment with the restored trailing slash —
+    // the slash IS the directory boundary.
+    test('an exact arg executes a path containing its text (nested tail-duplicate)', () => {
+      expect(scanTargets(['tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js'], GLOBS)).toEqual([
+        'tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js'
+      ]);
+    });
+
+    test('a basename sibling does not contain the exact arg text and is not executed', () => {
+      expect(scanTargets(['tests/e2e/documents/theme-runtime-config.spec.js'], GLOBS)).toEqual([]);
+    });
+
+    test('a dir arg executes a contained path carrying the restored trailing slash', () => {
+      expect(scanTargets(['tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'], GLOBS)).toEqual([
+        'tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'
+      ]);
     });
   });
 
@@ -3286,6 +3345,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
 // "simplification" that re-grows a bash path beside the helper fails this
 // pin instead of silently reintroducing a second mechanism.
 describe('the venue-fixture provisioning in .e2e_web_base', () => {
+  // Required, not grepped, for the role pins. CONSTRAINT: this module must
+  // stay dependency-free — the config:validate CI job installs ONLY this
+  // component's node_modules, so a require of @playwright/test or a
+  // sibling helper here would fail this job with module-not-found far
+  // from the edit that caused it.
+  const FIXTURES_PATH = path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js');
+  const { E2E_FIXTURES } = require(FIXTURES_PATH);
+  const e2eRoot = path.join(ROOT, 'tests/e2e');
   let content;
 
   beforeAll(() => {
@@ -3293,6 +3360,20 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   });
 
   const sectionOf = (job) => gitlabSection(content, job);
+
+  // The one tree walker the tests/e2e source-scan pins share: visit(path,
+  // source) per file matching extRe, pruning whole skipPaths entries.
+  const walkE2eFiles = (dir, skipPaths, extRe, visit) => {
+    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, name.name);
+      if (skipPaths && skipPaths.has(entryPath)) continue;
+      if (name.isDirectory()) {
+        walkE2eFiles(entryPath, skipPaths, extRe, visit);
+      } else if (extRe.test(name.name)) {
+        visit(entryPath, fs.readFileSync(entryPath, 'utf-8'));
+      }
+    }
+  };
 
   test('the job provisions the venue fixtures through the shared script', () => {
     const section = sectionOf('.e2e_web_base');
@@ -3318,21 +3399,21 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   });
 
   test('the fixtures module is the single definition of the venue users', () => {
-    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    const fixtures = fs.readFileSync(FIXTURES_PATH, 'utf-8');
     expect(fixtures).toContain("username: 'testuser'");
     // The CI venue's email domain (e2e.test) is the fixture contract. The
     // docs-side agreement is asserted in the credentials test below,
     // against the module-derived address.
     expect(fixtures).toContain("email: 'testuser@e2e.test'");
-    // The admin realm role is part of the pinned fixture contract (parity
-    // with the former inline CI assignment; its disposition is #1402). It
-    // is asserted INSIDE the testuser entry ([^}] cannot cross the
-    // object's closing brace), so dropping testuser's own role line fails
-    // even though testadmin's identical-looking entry would satisfy a
-    // bare containment check.
-    expect(fixtures).toMatch(/username: 'testuser',[^}]*realmRoles: \['admin'\]/);
-    expect(fixtures).toContain("username: 'testadmin'");
     expect(fixtures).toContain("username: 'testplain'");
+    // The realm-role contract, asserted on the PARSED fixture data (not a
+    // source regex, which a nested object or a key reorder evades):
+    // testadmin is the ONLY role-carrying fixture — the documents suites
+    // drive ADMIN_ONLY surfaces as testadmin; testuser does NOT (#1402:
+    // the parity role had no consumer) and no other fixture has a
+    // consumer to justify a role either.
+    expect(E2E_FIXTURES.filter((f) => 'realmRoles' in f).map((f) => f.username)).toEqual(['testadmin']);
+    expect(E2E_FIXTURES.find((f) => f.username === 'testadmin').realmRoles).toEqual(['admin']);
   });
 
   test('the venue credentials are derived, never re-sourced', () => {
@@ -3340,7 +3421,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // derives from the definition, so a new fixture's password is scanned
     // without touching this pin. A password-less fixture entry is named,
     // not silently scanned for the literal "undefined".
-    const { E2E_FIXTURES } = require(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'));
     const fixturePasswords = E2E_FIXTURES.map((f) => f.password);
     const passwordless = E2E_FIXTURES.filter((f) => !f.password).map((f) => f.username);
     if (passwordless.length > 0) {
@@ -3349,16 +3429,15 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     expect(fixturePasswords.length).toBeGreaterThanOrEqual(3);
     // The credential accessors and the derived login credentials live in
     // the fixtures module — beside the data they read.
-    const fixtures = fs.readFileSync(path.join(ROOT, 'tests/e2e/helpers/e2e-fixtures.js'), 'utf-8');
+    const fixtures = fs.readFileSync(FIXTURES_PATH, 'utf-8');
     expect(fixtures).toContain("credentialsOf('testuser')");
     expect(fixtures).toContain("credentialsOf('testadmin')");
     expect(fixtures).toContain("credentialsOf('testplain')");
-    // The role-less fixture's DEFINING contract: it must carry no
-    // realmRoles key at all — a granted role makes the provisioning
-    // script take the assign branch and skip its effective-role
-    // assertion, silently turning the authz spec's 403 half into an
-    // admin session.
-    expect(fixtures).not.toMatch(/username: 'testplain',[^}]*realmRoles/);
+    // The role-less fixtures' DEFINING contract (asserted on the parsed
+    // data in the test above): they carry no realmRoles key at all — an
+    // undeclared ADMIN grant is stripped-and-asserted by the provisioning
+    // script, but a role DECLARED on a fixture is trusted and assigned,
+    // so the pin is the guard that keeps the declaration out.
     // The shell docs' manual payloads must agree with the fixture
     // credentials — convergeUser deliberately never rewrites the email,
     // and it resets the password on the already-exists path, so a
@@ -3368,9 +3447,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const testuser = E2E_FIXTURES.find((f) => f.username === 'testuser');
     const docChecks = [
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
+      // 00-clean-start.md carries the password literal too (payload
+      // credentials, ROPC verification curl, credentials bullet) —
+      // #1407: it stays pinned beside the epic docs.
+      ['docs/e2e-tests/00-clean-start.md', testuser.password],
       ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
       ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password],
+      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
@@ -3397,7 +3480,6 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
         }
       }
     };
-    const e2eRoot = path.join(ROOT, 'tests/e2e');
     const exclusions = new Set([
       // epic2's two self-created fixture users (genie2's testuser2,
       // k1's noroles-e2e) legitimately carry their own password literals;
@@ -3405,20 +3487,178 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
-      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js'), // THE single source
+      path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
-    const walkJs = (dir, label, skipPaths) => {
-      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-        const entryPath = path.join(dir, name.name);
-        if (skipPaths && skipPaths.has(entryPath)) continue;
-        if (name.isDirectory()) {
-          walkJs(entryPath, `${label}/${name.name}`, skipPaths);
-        } else if (name.name.endsWith('.js')) {
-          assertNoFixturePassword(`${label}/${name.name}`, fs.readFileSync(entryPath, 'utf-8'));
-        }
+    walkE2eFiles(e2eRoot, exclusions, /\.(js|cjs|mjs)$/, (entryPath, source) => {
+      assertNoFixturePassword(`tests/e2e${entryPath.slice(e2eRoot.length)}`, source);
+    });
+  });
+
+  // #1422: the do-not-mix half of the credential import-path convention
+  // (tests/e2e/CLAUDE.md § Fixtures) is executable: a spec that needs only
+  // credentials requires them from helpers/e2e-fixtures.js, and a spec
+  // that also logs in takes them from the same helpers/chatbot.js require
+  // as loginViaUI — never both in one file. This pin asserts exactly that
+  // half: a spec carrying BOTH requires fails here.
+  // Scope limit, stated so the pin is not mistaken for full enforcement:
+  // the other half ("a spec that needs credentials takes them from a
+  // sanctioned path") is NOT enforceable by this check, because requiring
+  // NEITHER path is legitimate — a spec may need no venue credential at
+  // all (pure UI or config specs, the ragas suite, epic2's realm-local
+  // specs). Telling a credential-taking spec from a credential-free one
+  // from the source alone would need a per-file classification this pin
+  // deliberately does not attempt.
+  test('a spec file never mixes the two sanctioned credential paths', () => {
+    const violations = [];
+    let walked = 0;
+    // The file filter is the EXECUTED_SPEC_RE itself, not a narrower
+    // '.spec.js' literal: whatever Playwright would execute is in the
+    // pin's net, under the same shape the executed-set pin enforces.
+    // Positive control: the detector really detects. Without this, a
+    // one-character regex slip would silence the pin into a vacuous
+    // pass forever — the walked floor below proves only that files were
+    // visited, not that detection works (the sibling executed-set units
+    // pin their shapes on synthetic listings; same discipline here).
+    const mixedSource = "require('../helpers/e2e-fixtures');\nrequire('./helpers/chatbot');";
+    if (!(importPathRe('e2e-fixtures').test(mixedSource) && importPathRe('chatbot').test(mixedSource))) {
+      throw new Error(
+        'the import-path detector no longer matches a synthetic mixed file — fix the matcher, not the suite'
+      );
+    }
+    if (importPathRe('e2e-fixtures').test("require('./provision-e2e-fixtures');")) {
+      throw new Error('the import-path detector matches a longer module name (provision-e2e-fixtures) as e2e-fixtures');
+    }
+    if (importPathRe('e2e-fixtures').test("import { credentialsOf } from '../helpers/e2e-fixtures';") === false) {
+      throw new Error('the import-path detector misses an ESM from-import');
+    }
+    walkE2eFiles(e2eRoot, null, EXECUTED_SPEC_RE, (entryPath, source) => {
+      walked += 1;
+      // Commented-out requires are not imports — of either spelling —:
+      // a refactor leftover must not fail a file whose live imports are
+      // clean.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+      const fromFixtures = importPathRe('e2e-fixtures').test(code);
+      const fromChatbot = importPathRe('chatbot').test(code);
+      if (fromFixtures && fromChatbot) {
+        violations.push(path.relative(e2eRoot, entryPath));
       }
-    };
-    walkJs(path.join(ROOT, 'tests/e2e'), 'tests/e2e', exclusions);
+    });
+    // The walk must have actually visited the suite: a broken walker
+    // (wrong root, dead filter) would pass the check below vacuously.
+    // The floor is deliberately low — a suite that legitimately shrinks
+    // under it should RAISE-or-REMOVE this guard consciously, never
+    // silently: the message then says the walker is broken, and it lies
+    // only when nobody revisited the number.
+    if (walked < 20) {
+      throw new Error(
+        `the import-path walk visited only ${walked} spec files — the walker is broken, not the suite clean`
+      );
+    }
+    if (violations.length > 0) {
+      throw new Error(
+        'spec file(s) mix the two credential import paths (require helpers/e2e-fixtures AND ' +
+          'helpers/chatbot in one file): ' +
+          violations.join(', ') +
+          ' — take credentials from ' +
+          'helpers/e2e-fixtures.js alone, or from the same helpers/chatbot.js require as loginViaUI ' +
+          '(tests/e2e/CLAUDE.md § Fixtures)'
+      );
+    }
+  });
+
+  // #1334: every provisioning call routes through the shared kc_curl helper
+  // — one capture path (status trailer + body + curl exit code captured
+  // OUTSIDE the command substitution) so the transient-classifier drift that
+  // produced #1289 round 1 cannot regrow. The retry loops classify CURL_RC
+  // inline; a status captured over a truncated body must stay distinguishable
+  // from a clean answer.
+  test('the shared kc_curl helper owns every provisioning capture', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('kc_curl() {');
+    // The section's $(curl capture sites are an exact, enumerated set: the
+    // kc_curl capture plus the nginx reachability probe (deliberately raw:
+    // different timeout/contract, fire-and-forget). Any third site re-grows
+    // the #1289 drift class this pin exists for; a deleted site (the helper
+    // losing its own capture) is equally visible — and the ROPC probe now
+    // routes through kc_curl, so a hand-rolled capture there fails this pin.
+    const curlCaptureLines = section.split('\n').filter((l) => l.includes('$(curl'));
+    expect(curlCaptureLines).toHaveLength(2);
+    // The kc_curl capture: bounded timeout flags inline — a helper that
+    // drops them reintroduces the #1289 stall class through every routed
+    // call — and the rc check OUTSIDE the command substitution: an inside
+    // form (`... "$@" || CURL_RC=$?)`) ends the line with the
+    // substitution's closing paren and every transport failure looks like
+    // a clean exit again.
+    const kcCapture = curlCaptureLines.filter(
+      (l) => l.includes('KC_RAW=$(curl -sk --connect-timeout 5 --max-time 10') && l.endsWith(') || CURL_RC=$?')
+    );
+    expect(kcCapture).toHaveLength(1);
+  });
+
+  // #1319: a definitive 401 OAuth rejection cannot heal on retry and every
+  // failed attempt feeds Keycloak's brute-force protector — the loop must
+  // fail fast instead of burning the readiness budget on a dead end.
+  test('the readiness loop fails fast on a definitive token rejection', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('definitively rejected');
+    expect(section).toContain('Check KEYCLOAK_ADMIN_PASSWORD');
+    // The threshold itself is pinned: a drift to a larger value would
+    // silently restore the burn-the-budget behavior the fail-fast exists
+    // to remove.
+    expect(section).toContain('[ "$TOKEN_REJECT_RUN" -ge 3 ]');
+  });
+
+  // #1320: the admin token is acquired by the loop itself — a 401 on the
+  // client lookup is a definitive authentication failure of that token, not
+  // a readiness condition. Pin the fail-fast (no silent re-acquisition).
+  test('a 401 on the client lookup fails instead of retrying a dead token', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('rejected during the genie-app client lookup');
+    expect(section).toContain('failing instead of retrying with a dead token');
+  });
+});
+
+// #1330: the CI e2e realm's email-verification posture is the compose
+// default (KEYCLOAK_VERIFY_EMAIL:-true → configs/keycloak/genie-realm.yaml
+// verifyEmail), asserted at provisioning time by the fixture-health gate
+// (fresh accounts ship emailVerified + no required actions). The deploy-job
+// rewrite that "guarded" the posture was dead code — the env template
+// carries the line commented, so its grep never matched. The template must
+// KEEP the knob commented: an uncommented line would flip the CI realm
+// posture silently, with no test observing the change.
+describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
+  test('the env template keeps KEYCLOAK_VERIFY_EMAIL commented out', () => {
+    const parsed = parseEnvTemplate(ENV_FILE);
+    // No active definition — the compose default is the single source of
+    // the e2e posture.
+    expect(parsed.variables.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(0);
+    // The knob stays documented (commented) so operators can see it exists.
+    expect(parsed.documented.filter((v) => v.name === 'KEYCLOAK_VERIFY_EMAIL')).toHaveLength(1);
+  });
+
+  test('the deploy job carries no KEYCLOAK_VERIFY_EMAIL rewrite', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    // Only the explanatory comment may mention the var — any rewrite
+    // machinery (loop entry, sed arm) is forbidden outright.
+    const lines = content.split('\n').filter((l) => l.includes('KEYCLOAK_VERIFY_EMAIL'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\s*#/);
+  });
+
+  test('compose pins the default posture the e2e suite runs', () => {
+    // Through the shared compose parser, not a raw-text grep: the parser
+    // already resolves ${VAR:-default} forms and skips comment lines, so
+    // the pin asserts the semantic (a default of true) rather than one
+    // spelling of it.
+    expect(parseComposeEnvVars(COMPOSE_FILE)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'KEYCLOAK_VERIFY_EMAIL',
+          default: 'true',
+          hasDefault: true
+        })
+      ])
+    );
   });
 });
 

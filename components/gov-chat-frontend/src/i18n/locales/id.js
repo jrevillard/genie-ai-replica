@@ -467,6 +467,9 @@ export default {
       saveError: 'Gagal menyimpan item hierarki.',
       loadError: 'Gagal memuat hierarki pengetahuan.',
       loadTranslationsError: 'Gagal memuat terjemahan.',
+      translationsLoadFailedNotice:
+        'Terjemahan gagal dimuat. Penyuntingan terjemahan dan penyimpanan dinonaktifkan sampai dimuat.',
+      retryTranslations: 'Coba lagi',
       translationsNotLoaded: 'Terjemahan tidak dimuat — muat ulang sebelum menyimpan.',
       confirmCancelTitle: 'Perubahan Belum Disimpan',
       confirmCancelEdit:
@@ -484,6 +487,12 @@ export default {
       duplicateLangError: 'Ditemukan bahasa duplikat dalam terjemahan. Harap hapus.'
     },
     documents: {
+      viewDocuments: 'Dokumen',
+      viewArtifacts: 'Artefak',
+      deleteRefuseBundle: '{count} artefak OKF dikelola oleh siklus hidup repositori dan tidak dapat dihapus di sini.',
+      deleteRefuseMixed:
+        '{blocked} file masih di-ingest — cabut 먼저. {bundles} artefak OKF dikelola oleh siklus hidup repositori dan tidak dapat dihapus di sini.',
+      artifactsParked: 'Artefak OKF muncul saat fitur OKF diaktifkan untuk deployment ini.',
       title: 'Manajemen Dokumen',
       addLink: 'Tambah dari Tautan',
       uploadFiles: 'Unggah File',
@@ -753,7 +762,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal eCitizen',
-    taxFiling: 'Sistem Pelaporan Pajak',
     idApplication: 'Aplikasi KTP',
     businessReg: 'Pendaftaran Usaha',
     drivingLicense: 'Surat Izin Mengemudi'
@@ -980,6 +988,8 @@ export default {
     },
     processing: 'Memproses...',
     userDataReset: 'Data profil Anda berhasil diatur ulang.',
+    userDataResetFilesFailed:
+      'Data profil Anda telah diatur ulang, tetapi beberapa file tersimpan tidak dapat dihapus. Silakan hubungi administrator.',
     failedToResetUserData: 'Gagal mengatur ulang data profil Anda. Silakan coba lagi nanti.',
     unableToLoadUser: 'Tidak dapat memuat informasi pengguna. Silakan coba lagi.',
     retry: 'Coba Lagi',
@@ -996,6 +1006,8 @@ export default {
       'Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini bersifat permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus.',
     delete: 'Hapus',
     accountDeleted: 'Akun Anda telah dihapus.',
+    accountDeletedFilesFailed:
+      'Akun Anda telah dihapus, tetapi beberapa file yang tersimpan tidak dapat dihapus. Silakan hubungi administrator.',
     failedToDeleteAccount: 'Gagal menghapus akun Anda. Silakan coba lagi nanti.'
   },
   userProfile: {
@@ -1436,6 +1448,7 @@ export default {
     alt: 'Unggah'
   },
   details: {
+    bundleBadge: 'Dikelola oleh siklus hidup OKF',
     crawl: {
       seconds: 'detik',
       autoRefreshEvery: 'Penyegaran otomatis setiap',
@@ -1552,6 +1565,74 @@ export default {
       'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang.'
   },
   okf: {
+    artifacts: {
+      title: 'Artefak OKF',
+      lead: 'Satu artefak per versi yang dipublikasikan.',
+      empty: 'Belum ada artefak OKF.',
+      loadFailed: 'Artefak OKF tidak dapat dibaca.',
+      downloadFailed: 'Artefak OKF tidak dapat diunduh.',
+      column: {
+        artifact: 'Artefak',
+        repository: 'Repositori',
+        actions: 'Tindakan',
+        state: 'Status'
+      },
+      openRepo: 'Buka repositori',
+      unknownVersion: 'versi tidak diketahui'
+    },
+    retrieval: {
+      title: 'Postur retrieval',
+      refresh: 'Segarkan',
+      loading: 'Membaca…',
+      engaged: 'Grounding aktif',
+      notEngaged: 'Tidak berkontribusi',
+      servingCount: '{n} graf yang melayani',
+      sourceLabel: 'Sumber',
+      invalidValue: 'Masukkan bilangan bulat antara {min} dan {max}.',
+      source: {
+        database: 'Baris yang dikelola',
+        'env-defaults': 'Nilai bawaan lingkungan'
+      },
+      revision: 'Revisi',
+      updatedAt: 'Diperbarui',
+      updatedBy: 'Oleh',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Lama',
+        okf_only: 'Hanya OKF',
+        hybrid: 'Hibrida'
+      },
+      consequence: {
+        legacy: 'Grounding OKF dimatikan — jawaban hanya datang dari jalur teks bebas.',
+        unknown: 'Mode tidak dikenal.',
+        okf_only: 'Hanya graf OKF yang menjadi dasar jawaban — konteks teks bebas tidak ditanyakan.',
+        hybrid: 'Graf OKF menjadi dasar jawaban, dan konteks teks bebas tetap berkontribusi.'
+      },
+      warnZeroServing:
+        'okf_only tanpa graf yang melayani — kontribusi OKF nol. Terbitkan dan ingest repositori terlebih dahulu.',
+      servingList: 'Graf yang melayani',
+      advanced: 'Batas lanjutan',
+      save: 'Simpan',
+      revert: 'Kembalikan',
+      cancel: 'Batal',
+      confirm: 'Terapkan',
+      confirmTitle: 'Ubah postur retrieval?',
+      confirmLead: 'Ini adalah pengaturan global — mengubah cara setiap kueri ditopang, dalam sekitar 30 detik.',
+      readFailed: 'Tidak dapat membaca postur retrieval.',
+      nothingToSave: 'Tidak ada yang perlu disimpan.',
+      saveFailed: 'Perubahan ditolak.',
+      audit: 'Riwayat perubahan',
+      auditLoading: 'Memuat riwayat…',
+      auditEmpty: 'Belum ada perubahan yang tercatat.',
+      auditFailed: 'Tidak dapat membaca riwayat perubahan.',
+      limit: {
+        max_fanout_graphs: 'Graf per kueri',
+        spine_max_hops: 'Lompatan tulang punggung',
+        extracted_hop_cap: 'Lompatan terekstrak',
+        candidate_cap_per_graph: 'Kandidat per graf',
+        candidate_cap_global: 'Kandidat per kueri'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Beberapa berkas masih diproses (diindekskan). Buka repositori ini di editor — daftar berkas menunjukkan yang mana, dan ingestion mencoba ulang otomatis. Publikasikan kembali setelah setiap berkas berstatus terindeks.',
@@ -1594,6 +1675,8 @@ export default {
       title: 'Konfigurasi model',
       add: 'Konfigurasi baru',
       hint: 'Endpoint model jarak jauh bernama untuk penjurian dan generasi — permukaan apa pun yang kompatibel dengan OpenAI (OpenAI, gateway LiteLLM, vLLM, Gemini-compat, Ollama) atau Anthropic langsung. Tepat SATU konfigurasi dapat aktif; tanpa yang aktif, model default terkonfigurasi deployment digunakan. Kunci disimpan di sisi server dan tidak pernah ditampilkan.',
+      gateWarning:
+        'Kaki LLM OKF yang mengikuti aktivasi opsional pada deployment (tautan topik, topik CSV, ringkasan manifes) sedang MATI: deployment ini tidak memiliki VLLM_ENDPOINT. Konfigurasi bernama tidak mengaktifkannya — setel VLLM_ENDPOINT di server untuk mengaktifkannya.',
       name: 'Nama',
       provider: 'Penyedia',
       providerOpenai: 'Kompatibel OpenAI (OpenAI, LiteLLM, vLLM…)',
@@ -1672,6 +1755,7 @@ export default {
       ingestCompleted: 'terintegrasi',
       bundleMissing: 'zip hilang',
       bundleDownload: 'Unduh zip',
+      viewArtifact: 'Lihat artefak',
       bundle: 'Bundel',
       col: {
         ingest: 'Ingest',
@@ -2007,6 +2091,7 @@ export default {
           'Selesai — setiap entitas yang ditandai ditandai sebagai telah ditinjau-dan-disimpan pada {n} konsep. Penanda PII dibersihkan.',
         done_redact: 'Selesai — konten yang ditandai pada {n} konsep diganti dengan pemberitahuan redaksi.',
         done_remove: 'Selesai — konten yang ditandai pada {n} konsep dihapus.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Redaksi semua konten yang ditandai',
           remove: 'Hapus semua konten yang ditandai',
@@ -2343,7 +2428,7 @@ export default {
       autocorrect:
         'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'Ritual siklus hidup (kirim → setujui → publikasikan) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
+        'Ritual siklus hidup ({chain}) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
         'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
@@ -2468,7 +2553,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
+        notReady:
+          'Draf tidak dapat disimpan di server saat ini — hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang. Halaman atau server mungkin tidak sinkron.',
+        repoGone:
+          'Repositori ini tidak lagi tersedia di server — perubahan Anda hanya ada di tab browser ini dan hilang jika tab ditutup atau dimuat ulang.'
       },
       mode: {
         basic: 'Dasar',
@@ -2676,7 +2764,7 @@ export default {
           'Tinjauan akhir sebelum Anda menyerahkan: setiap file di bawah, markdown dan labelnya — persis seperti yang akan dikutip asisten.',
         noRepo: 'Belum ada repositori — tinjauan file muncul di sini setelah repositori ada.',
         ritualOutside:
-          'Ritual tinjauan — kirim untuk ditinjau, persetujuan peninjau, publikasikan — terjadi di Editor dan dasbor Studio, bukan di sini. Buka Editor untuk menyelesaikannya.',
+          'Ritual peninjauan terjadi di editor dan dasbor Studio, satu tombol pada satu waktu — tidak di sini. Buka editor untuk menyelesaikan.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2689,7 +2777,7 @@ export default {
         frontmatterOk: 'Tag frontmatter disetujui',
         frontmatterServing: 'Tag frontmatter ditetapkan',
         title: 'Amankan dan Selesaikan',
-        hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
+        hint: 'Repositori ini siap ditinjau. Publikasi tidak pernah terjadi di sini — siklus hidup berjalan di dasbor dan editor, satu tombol pada satu waktu.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
@@ -2699,7 +2787,7 @@ export default {
         frozen:
           'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Berikutnya: kirim untuk persetujuan di dasbor Studio → pemberi persetujuan menerima → publikasikan dari dasbor atau editor. Wisaya berhenti di sini dengan sengaja.',
+          'Berikutnya: di dasbor Studio kartu ini punya SATU tombol untuk seluruh siklus hidup — {chain}. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2871,7 +2959,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Buat halaman Sumber dan tautkan {n} halaman',
@@ -3004,6 +3091,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Kirim untuk ditinjau',
       approve: 'Setujui',
       publish: 'Publikasikan',
@@ -3050,7 +3138,9 @@ export default {
       title: 'Tag frontmatter — apa isi repositori ini',
       help: 'Tag menggambarkan apa yang terkandung dalam repositori ini dan — sama pentingnya — apa yang TIDAK dikandungnya (daftar terlarang). Tag menentukan kueri mana yang dirute ke repositori ini. Klik Segarkan untuk menyusun draf dari korpus, atau edit chip di bawah. Publish memerlukan ≥3 topik + ≥1 terlarang.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Label sudah kedaluwarsa — ingest ulang untuk menerapkannya',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM tidak mengembalikan tag. Coba lagi setelah korpus bertambah.',
       suggestCoverage: 'Diturunkan dari {sampled} dari {total} konsep, pada {labels} label hierarki pengetahuan.',
       suggestFailed: 'Suggest failed.',
@@ -3079,7 +3169,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Label sudah kedaluwarsa — ingest ulang untuk menerapkannya'
       },
       tab: {
         head: 'Head',

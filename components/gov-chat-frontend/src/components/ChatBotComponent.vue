@@ -57,11 +57,11 @@
       <!-- The conversation header: names the open conversation and closes
            it. The close button runs startNewChat, whose confirm guards
            unsaved changes; saved history is never removed by closing. -->
-      <div class="conversation-header">
+      <div class="conversation-header" data-testid="conversation-header">
         <span class="conversation-header__title" data-testid="conversation-header-title">
           {{ conversationTitle }}
         </span>
-        <div class="conversation-header__actions">
+        <div class="conversation-header__actions" data-testid="conversation-header-actions">
           <button
             v-if="openMessages.length > 0"
             type="button"
@@ -98,11 +98,11 @@
         </button>
       </div>
       <!-- Context Panel for selected tree nodes -->
-      <div v-if="selectedContextItems.length > 0" class="context-panel">
+      <div v-if="selectedContextItems.length > 0" class="context-panel" data-testid="context-panel">
         <div class="context-header">
           <span class="context-title">{{ translate('chatbot.queryContext') }}</span>
         </div>
-        <div class="context-items">
+        <div class="context-items" data-testid="context-items">
           <DsPill v-for="(item, index) in selectedContextItems" :key="index">
             <span>{{ item.service }}</span>
             <DsButton
@@ -117,12 +117,13 @@
         </div>
       </div>
       <!-- The scrollable chat window -->
-      <div ref="chatWindow" class="chat-window" aria-live="polite">
+      <div ref="chatWindow" class="chat-window" data-testid="chat-window" aria-live="polite">
         <div
           v-for="(msg, index) in openMessages"
           :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
           class="chat-message"
           :class="msg.sender"
+          :data-testid="`chat-message-${msg.sender}`"
         >
           <div
             v-if="msg.sender === 'bot'"
@@ -135,7 +136,9 @@
           </div>
           <div v-else class="message-avatar message-avatar--user" data-testid="user-avatar">
             <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="" />
-            <span v-else-if="userInitials" class="message-avatar__initials">{{ userInitials }}</span>
+            <span v-else-if="userInitials" class="message-avatar__initials" data-testid="message-avatar-initials">{{
+              userInitials
+            }}</span>
             <span v-else class="message-avatar__silhouette" aria-hidden="true"><User :size="18" /></span>
           </div>
           <div class="message-wrapper">
@@ -151,8 +154,12 @@
                   <span>{{ translate('chatbot.retry', 'Retry') }}</span>
                 </button>
               </div>
-              <div v-else class="message-bubble">
-                <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
+              <div v-else class="message-bubble" data-testid="message-bubble-bot">
+                <div
+                  v-if="msg.isStreaming && !msg.content"
+                  class="streaming-indicator"
+                  data-testid="streaming-indicator"
+                >
                   <DsSpinner size="sm" />
                   <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
                 </div>
@@ -173,7 +180,7 @@
                   <ChevronUp v-if="msg.sourcesOpen" :size="16" aria-hidden="true" />
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
-                <div v-show="msg.sourcesOpen" class="answer-sources__list">
+                <div v-show="msg.sourcesOpen" class="answer-sources__list" data-testid="answer-sources-list">
                   <button
                     v-for="(d, di) in msg.sources"
                     :key="d.id"
@@ -192,7 +199,7 @@
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-              <div v-if="msg.isGrounded === false" class="answer-warning" role="note">
+              <div v-if="msg.isGrounded === false" class="answer-warning" data-testid="answer-warning" role="note">
                 <AlertTriangle :size="15" aria-hidden="true" />
                 <span>{{
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
@@ -269,17 +276,21 @@
                 </span>
               </div>
             </div>
-            <div v-else class="message-bubble">
+            <div v-else class="message-bubble" data-testid="message-bubble-user">
               <span>{{ msg.content }}</span>
             </div>
-            <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
+            <span class="message-time" data-testid="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted" class="quick-help-overlay">
+      <div
+        v-if="showQuickHelp && selectedContextItems.length === 0 && !conversationStarted"
+        class="quick-help-overlay"
+        data-testid="quick-help-overlay"
+      >
         <!-- The banner is a real element so its height can grow with the
              heading + subtitle inside it (a content-aware box), and the
              heading reads as sitting inside the artwork instead of below
@@ -287,14 +298,18 @@
              off, the banner has no special styling and the layout is
              identical to the legacy version: heading + subtitle stack
              above the composer / grid as ordinary block-flow children. -->
-        <div class="quick-help-banner">
-          <div class="quick-help-content">
-            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading">
+        <div class="quick-help-banner" data-testid="quick-help-banner">
+          <div class="quick-help-content" data-testid="quick-help-content">
+            <i18n-t keypath="chatbot.whatCanIHelp" tag="h2" class="quick-help-heading" data-testid="quick-help-heading">
               <template #brandwordmark>
-                <span :class="brandWordmarkClass">{{ brandName }}</span>
+                <span :class="brandWordmarkClass" :data-wordmark="brandWordmarkClass ? 'true' : 'false'">{{
+                  brandName
+                }}</span>
               </template>
             </i18n-t>
-            <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
+            <p class="quick-help-subtitle" data-testid="quick-help-subtitle">
+              {{ translate('chatbot.quickHelpSubtitle') }}
+            </p>
           </div>
         </div>
 
@@ -303,13 +318,18 @@
              at the chat-input slot under v-else, so the two positions
              share exactly one composer instance, never two. The leading
              slot carries the entry's chat-bubble icon; the parent
-             gives it the localised title as accessible name. -->
-        <div v-if="composerEntry" class="quick-help-composer">
+             gives it the localised title as accessible name, falling
+             back to the id (the loader's gate guarantees it) when no
+             title resolves — #1382's prescribed fallback, chosen over
+             the placeholder (the accname computation's LAST resort,
+             invisible until focus) so a screen-reader user hears the
+             configured identity, not a generic invite. -->
+        <div v-if="composerEntry" class="quick-help-composer" data-testid="quick-help-composer">
           <ChatComposer
             v-model="newMessage"
             input-id="welcome-composer-input"
             :placeholder="translate('chatbot.composerPlaceholder')"
-            :accessible-name="composerEntry.service"
+            :accessible-name="quickHelpCardTitle(composerEntry) || composerEntry.id"
             :tint="composerEntry.styles"
             :show-actions="true"
             :attach-title="translate('chatbot.composerAttachTitle')"
@@ -319,7 +339,21 @@
             @send="handleWelcomeSend"
           >
             <template #leading>
+              <!-- The broken card's face, the grid's doctrine: a broken
+                   entry is a VISIBLE failure, not one the user discovers
+                   at the first refused send. quickHelpCardBroken already
+                   splits the halves — the scope half waits for the
+                   hierarchy, the title half (a configuration fact) does
+                   not. -->
+              <AlertTriangle
+                v-if="composerBrokenFace"
+                class="composer-leading-mark config-error-icon"
+                :size="22"
+                aria-hidden="true"
+                data-testid="welcome-composer-error-icon"
+              />
               <Sparkles
+                v-else
                 class="composer-leading-mark"
                 :size="22"
                 aria-hidden="true"
@@ -327,13 +361,19 @@
               />
             </template>
           </ChatComposer>
+          <!-- The tile's own caption, below the composer: the diagnosis
+               the operator reads (the missing title first, then the
+               scope) — the same assembly the grid card shows. -->
+          <div v-if="composerBrokenFace" class="quick-help-error-caption" data-testid="welcome-composer-error-caption">
+            {{ quickHelpCardCaption(composerEntry) }}
+          </div>
         </div>
 
         <!-- The grid waits for the hierarchy: a button carries a scope,
              and the hierarchy is what names it. A button rendered before
              the hierarchy is known cannot say whether its scope is valid
              — and a click it cannot answer is a dead click. -->
-        <div v-if="quickHelpScopeSettled" class="quick-help-grid">
+        <div v-if="quickHelpScopeSettled" class="quick-help-grid" data-testid="quick-help-grid">
           <DsCard
             v-for="button in tileButtons"
             :key="button.id"
@@ -342,6 +382,9 @@
             :hoverable="!quickHelpCardBroken(button)"
             class="quick-help-item"
             :class="{ 'just-chat': !button.category, 'config-error': quickHelpCardBroken(button) }"
+            data-testid="quick-help-item"
+            :data-scope="button.category ? 'scoped' : 'just-chat'"
+            :data-state="quickHelpCardBroken(button) ? 'config-error' : 'ok'"
             :style="buttonTintStyle(button)"
             @click="selectQuickHelpOption(button)"
           >
@@ -349,6 +392,7 @@
               v-if="quickHelpCardBroken(button)"
               class="quick-help-icon config-error-icon"
               aria-hidden="true"
+              data-testid="quick-help-error-icon"
             />
             <img v-else class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
             <div class="quick-help-text">{{ button.service }}</div>
@@ -363,7 +407,7 @@
         </div>
       </div>
       <!-- Input Area -->
-      <div v-else class="chat-input">
+      <div v-else class="chat-input" data-testid="chat-input">
         <ChatComposer
           v-model="newMessage"
           input-id="chat-composer-input"
@@ -710,10 +754,6 @@ export default {
       serviceCategoriesStatus: 'loading',
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
-      // The button ids whose non-boolean "hidden" flag was already reported
-      // (one console warning per button per session — the apply re-runs on
-      // mount and on every locale switch).
-      quickHelpHiddenReported: [],
       // The in-flight load of the Quick Help configuration. A restore that
       // runs while it is pending must wait for it, otherwise the tag of a
       // saved conversation is looked up in an empty button list.
@@ -931,6 +971,17 @@ export default {
     // same field, so both sides agree on the routing by construction.
     composerEntry() {
       return this.quickHelpButtons.find((b) => b && b.placement === 'composer') || null;
+    },
+    // The broken composer entry's visible face. The gate is the same
+    // quickHelpCardBroken verdict the grid card renders, and it already
+    // splits its halves correctly: the SCOPE half reports nothing while
+    // the hierarchy is loading, and the TITLE half is a configuration
+    // fact the hierarchy has nothing to do with — it can break the face
+    // the moment the config lands. False when no composer entry is
+    // mounted at all.
+    composerBrokenFace() {
+      const entry = this.composerEntry;
+      return !!entry && this.quickHelpCardBroken(entry);
     },
     // The grid keeps every entry whose placement is not the composer —
     // again, the explicit field, not a heuristic from category / action
@@ -1445,13 +1496,17 @@ export default {
     },
 
     // The card's title, or null when it carries none. An EMPTY title is
-    // no title: the card renders a blank label, and the press gate
-    // refuses it (selectQuickHelpOption) — a silent dead tap. The
-    // mobile twin reads the same fact from the parsed button's own
-    // 'resolvedTitle'; the web's mapped button carries the resolved
-    // title in `service`.
+    // no title — and so is a WHITESPACE-ONLY one: it renders a blank
+    // label and reads as nothing, so the trim is what keeps the press
+    // gate, the caption assembly and the composer's accessible-name
+    // fallback honest. The mobile twin reads the same fact from the
+    // parsed button's own 'resolvedTitle'; the web's mapped button
+    // carries the resolved title in `service`.
     quickHelpCardTitle(button) {
-      return (button && button.service) || null;
+      // The String() coercion: resolveConfigText passes non-string
+      // config values through (a numeric title reaches this as a
+      // number), and this method is read on every tile's render.
+      return String((button && button.service) || '').trim() || null;
     },
 
     // The card's DISPLAY verdict — the twin of the press gate. The
@@ -1889,27 +1944,11 @@ export default {
       // A button that declares no label contributes no label of its own: the
       // request is then scoped by the category label alone, which the backend
       // resolves against the live hierarchy like any other label.
-      // The hidden flag is a BOOLEAN (#1208). A hand-edited configuration
-      // that writes it as a string says nothing about what the operator
-      // meant — and the flag's TRUTHINESS decides: "false" is a
-      // non-empty string, so the card DISAPPEARS. The mobile reads the
-      // flag the same way (the parity is deliberate), so the web does
-      // not change what the flag does — it REPORTS the typo, because a
-      // card that silently vanishes leaves no trace of the
-      // configuration mistake that hid it. The report is its own pass:
-      // the filter below stays a pure filter. One report per button per
-      // session: the apply re-runs on mount and on every locale switch,
-      // and a typo must not turn into N identical console lines.
-      buttons.forEach((button) => {
-        if (button.hidden == null || typeof button.hidden === 'boolean') return;
-        if (this.quickHelpHiddenReported.includes(button.id)) return;
-        this.quickHelpHiddenReported.push(button.id);
-        // The button is NAMED in the report by its id — the identity the
-        // loader's gate guarantees every button carries.
-        console.warn(
-          `[ChatBotComponent] Quick Help button "${button.id}" — the "hidden" flag must be a boolean, got ${typeof button.hidden} (${JSON.stringify(button.hidden)}); the value's truthiness decided (${button.hidden ? 'hidden' : 'shown'})`
-        );
-      });
+      // The hidden flag is a BOOLEAN (#1208): its TRUTHINESS decides —
+      // "false" is a non-empty string, so the card DISAPPEARS (the mobile
+      // reads it the same way; the parity is deliberate). A mistyped
+      // flag is reported by the loader's shape report, never here
+      // (validateQuickHelpButtons, #1361): this stays a pure filter.
       // The id is the button's IDENTITY — the conversation tag carries
       // it, the restore resolves it, the grid's verdict keys on it. The
       // loader's gate (validateQuickHelpButtons) has already refused any
@@ -2090,34 +2129,40 @@ export default {
           // tile path arms the same shape; a gate keyed on scope alone
           // dropped the prompt silently.
           Boolean(entry.hiddenPrompt));
+      // The same card the grid refuses as a dead tile refuses the
+      // composer send too: a BROKEN entry (no title, or a scope the
+      // tree cannot verify) used to fall through to the just-chat
+      // branch here and leave the typed question unfiltered while the
+      // same entry routed to the grid refused itself — a verdict that
+      // depended on placement (#1382). One verdict, both mounts. A
+      // scope the hierarchy cannot EN-name yet stays refused on the
+      // declaring path, as before (#1263). The entry null-guard stays:
+      // handleWelcomeSend is bound only inside the v-if="composerEntry"
+      // welcome mount today, but the scope machinery below dereferences
+      // the button without a null guard — a future second binding gets
+      // the just-chat degrade, not a TypeError.
+      if (
+        entry &&
+        (this.quickHelpCardBroken(entry) || (entryDeclaresScope && !this.quickHelpScopeIsNameable(entry.category)))
+      ) {
+        // The caption is computed HERE, on the refusing path only: it
+        // is the tile's own caption assembly (the missing title first,
+        // then the scope), and a healthy entry pays nothing for it.
+        const caption = this.quickHelpCardCaption(entry);
+        // A hierarchy still ON ITS WAY is not a configuration problem:
+        // the unavailable caption would point the operator at the
+        // wrong thing. The loading copy says what is happening — the
+        // CHAT's own copy, not the admin panel's (the toast is read by
+        // the person whose question was held, not by an operator).
+        notificationService.error(
+          caption ||
+            (this.serviceCategoriesStatus === 'loading'
+              ? this.translate('chatbot.loading', '')
+              : this.translate('chatbot.quickHelpScopeUnavailable', ''))
+        );
+        return;
+      }
       if (entryDeclaresScope) {
-        // The composer card renders BEFORE the hierarchy settles (the grid
-        // waits for it), so the same gate selectQuickHelpOption enforces
-        // has to run here too: a broken card, or a scope the tree cannot
-        // EN-name yet, installs nothing and sends nothing — the query
-        // would leave unfiltered while the chip promised the card's scope.
-        // The TITLE gate comes with it (#1263): an entry with no title
-        // installs a chip with a blank label and an empty accessible
-        // name, and the query leaves while the chip promises a scope
-        // nobody can read. The tile path refuses the same card.
-        if (this.quickHelpCardBroken(entry) || !this.quickHelpScopeIsNameable(entry.category)) {
-          // The caption is computed HERE, on the refusing path only: it
-          // is the tile's own caption assembly (the missing title first,
-          // then the scope), and a healthy entry pays nothing for it.
-          const caption = this.quickHelpCardCaption(entry);
-          // A hierarchy still ON ITS WAY is not a configuration problem:
-          // the unavailable caption would point the operator at the
-          // wrong thing. The loading copy says what is happening — the
-          // CHAT's own copy, not the admin panel's (the toast is read by
-          // the person whose question was held, not by an operator).
-          notificationService.error(
-            caption ||
-              (this.serviceCategoriesStatus === 'loading'
-                ? this.translate('chatbot.loading', '')
-                : this.translate('chatbot.quickHelpScopeUnavailable', ''))
-          );
-          return;
-        }
         // The entry's OWN declared labels and category ride along: the
         // entry is a Quick Help card like any tile, and hardcoding an
         // empty scope here sent its query unfiltered while the chip
@@ -2260,10 +2305,12 @@ export default {
         // scope's labels for ones nobody chose. A single unambiguous
         // button is re-installed; anything else re-installs the CATEGORY
         // itself, which is the scope the chip actually showed. A BROKEN
-        // button is never re-installed: it would block every subsequent
-        // send, and removing the chip again would re-add the same broken
-        // button — the user could not recover from here.
-        if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
+        // card is never re-installed — the quickHelpCardBroken verdict
+        // the grid card and the composer render: a missing title would
+        // come back as a chip with a blank label, and removing the chip
+        // again would re-add the same broken card — the user could not
+        // recover from here.
+        if (quickHelpOption && this.quickHelpCardBroken(quickHelpOption)) {
           this.currentCategoryId = null;
         } else if (quickHelpOption) {
           this.$store.commit('conversation/setContextItems', [quickHelpContextItem(quickHelpOption)]);
@@ -4179,6 +4226,14 @@ export default {
 .quick-help-composer .chat-composer {
   --composer-width: var(--qh-composer-ratio);
   margin-inline: auto;
+}
+
+/* The broken entry's caption sits UNDER the bar, aligned WITH it: the
+   same ratio and the same centering — a full-width caption would hang
+   past the bar's left edge on both sides. */
+.quick-help-composer .quick-help-error-caption {
+  width: var(--qh-composer-ratio);
+  margin: var(--space-xs) auto 0;
 }
 
 /* The welcome composer's leading mark is the reference's sparkles, drawn

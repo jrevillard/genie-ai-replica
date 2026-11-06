@@ -292,9 +292,10 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 
 This payload matches the venue fixture defined in
 `tests/e2e/helpers/e2e-fixtures.js`. On the already-exists path the
-provisioning script below resets the account's password and asserts its
+provisioning script below resets the account's password, asserts its
 login-visible state (enabled, verified, no required action — failing
-loudly on drift instead of repairing it) and assigns its realm roles.
+loudly on drift instead of repairing it), assigns its declared realm
+roles, and strips an admin role the fixture does not declare (logged).
 The email is deliberately NOT rewritten (the login reads the username,
 not the email), so an account created with a previous fixture revision
 keeps its old address.
@@ -304,10 +305,12 @@ keeps its old address.
 All three venue users are provisioned through one script over the
 `ensureUser` helper (`tests/e2e/helpers/keycloak-admin.js`):
 
-- `testuser` — the primary login user (the chat suites). Carries
-  the `admin` realm role in parity with the former inline CI assignment;
-  the documents suites themselves authenticate as `testadmin`.
-- `testadmin` — the admin-surface login (`tests/e2e/admin/`).
+- `testuser` — the primary login user (the chat suites). Carries no
+  realm role (#1402: the former parity admin role had no consumer);
+  the provisioning script strips the role from any account that
+  still carries it.
+- `testadmin` — the admin-surface login (`tests/e2e/admin/`), carrying
+  the `admin` realm role.
 - `testplain` — carries **no role granting admin access** — the non-admin
   side of the `requireAdmin` contract.
 
@@ -326,11 +329,14 @@ node tests/e2e/provision-e2e-fixtures.js
 ```
 
 The script is safe to re-run: an existing account is converged (password
-reset, role assignment, and the admin-granting role removed from the
-role-less fixture) instead of failing. It DOES fail loudly on an account
-the realm left in a broken login state (disabled, unverified, or carrying
-a required action) — that is a realm configuration problem, and the error
-names it.
+reset, role assignment, and the admin-granting role removed from every
+fixture that does not declare it) instead of failing. It DOES fail loudly
+on an account the realm left in a broken login state (disabled,
+unverified, or carrying a required action), and on an account that still
+holds the `admin` realm role AFTER a strip attempt — i.e. the role is
+granted through the realm default-roles composite or a group, not as a
+direct mapping. Either way it is a realm configuration problem, and the
+error names it.
 
 **Test admin credentials** (documents and admin suites):
 - Username: `testadmin`

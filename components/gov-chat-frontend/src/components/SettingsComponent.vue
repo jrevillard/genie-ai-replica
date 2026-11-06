@@ -165,7 +165,12 @@
               </div>
 
               <div class="management-col">
-                <DsButton variant="danger" class="full-width" @click="confirmDeleteAccount">
+                <DsButton
+                  variant="danger"
+                  class="full-width"
+                  data-test-id="settings-delete-account-tile"
+                  @click="confirmDeleteAccount"
+                >
                   {{ translate('settings.deleteAccount', 'Delete my account') }}
                 </DsButton>
                 <p class="description-text danger-text">
@@ -217,6 +222,7 @@ import LanguageSelector from '@/components/LanguageSelector.vue';
 import DsButton from '@/components/ds/Button.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
+import { RESET_PRESERVED_KEYS } from '@/utils/displayPrefKeys';
 
 export default {
   name: 'SettingsComponent',
@@ -514,16 +520,48 @@ export default {
     async resetUserData() {
       try {
         this.isLoading = true;
-        await userService.resetUserData();
-        notificationService.success(
-          this.translate('settings.userDataReset', 'Your profile data has been successfully reset.')
-        );
+        const response = await userService.resetUserData();
+        if (response && response.filesDeletionFailed === true) {
+          notificationService.warning(
+            this.translate(
+              'settings.userDataResetFilesFailed',
+              'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.'
+            )
+          );
+        } else {
+          notificationService.success(
+            this.translate('settings.userDataReset', 'Your profile data has been successfully reset.')
+          );
+        }
         await this.fetchUserData();
-        const themeValue = localStorage.getItem('theme');
-        const langValue = localStorage.getItem('userLocale');
-        localStorage.clear();
-        if (themeValue) localStorage.setItem('theme', themeValue);
-        if (langValue) localStorage.setItem('userLocale', langValue);
+        // The reset has committed and the outcome is already announced; a
+        // local-preferences failure must not surface as a failed reset.
+        try {
+          // Kill any in-flight generation first: an aborted stream keeps
+          // committing chunks into the store, which would repopulate the
+          // fresh state below with the wiped conversation's tail.
+          this.$store.dispatch('conversation/abortStream');
+          // Drop the in-session store state BEFORE the storage wipe: the
+          // chat-history and conversation subscriptions re-persist on the
+          // next mutation, so a surviving in-memory history would write the
+          // wiped data straight back. The commits here leave only the fresh
+          // default state for them to write.
+          this.$store.commit('chatHistory/RESET');
+          // conversation/RESET also replaces the sessionStorage payload
+          // synchronously (the subscription owns that key).
+          this.$store.commit('conversation/RESET');
+          const preserved = {};
+          for (const key of RESET_PRESERVED_KEYS) {
+            const value = localStorage.getItem(key);
+            if (value !== null) preserved[key] = value;
+          }
+          localStorage.clear();
+          for (const [key, value] of Object.entries(preserved)) {
+            localStorage.setItem(key, value);
+          }
+        } catch (storageError) {
+          console.error('[SETTINGS] Error clearing local preferences:', storageError);
+        }
       } catch (e) {
         console.error('[SETTINGS] Error resetting user data:', e);
         notificationService.error(
@@ -546,7 +584,17 @@ export default {
     async deleteAccount() {
       try {
         this.isLoading = true;
-        await userService.deleteAccount();
+        const response = await userService.deleteAccount();
+        // Surface before the logout redirect: the notification must still be
+        // visible while the account is gone, the files may not be.
+        if (response && response.filesDeletionFailed === true) {
+          notificationService.warning(
+            this.translate(
+              'settings.accountDeletedFilesFailed',
+              'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.'
+            )
+          );
+        }
         await this.$store.dispatch('logout');
       } catch (e) {
         console.error('[SETTINGS] Error deleting account:', e);

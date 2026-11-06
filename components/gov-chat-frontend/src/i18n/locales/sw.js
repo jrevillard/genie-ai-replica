@@ -467,6 +467,9 @@ export default {
       saveError: 'Imeshindwa kuhifadhi kipengee cha uongozi.',
       loadError: 'Imeshindwa kupakia uongozi wa maarifa.',
       loadTranslationsError: 'Imeshindwa kupakia tafsiri.',
+      translationsLoadFailedNotice:
+        'Tafsiri hazikuweza kupakiwa. Kuhariri tafsiri na kuhifadhi zimezimwa hadi zipakiwe.',
+      retryTranslations: 'Jaribu tena',
       translationsNotLoaded: 'Tafsiri hazijapakiwa — pakia upya kabla ya kuhifadhi.',
       confirmCancelTitle: 'Mabadiliko Yasiyohifadhiwa',
       confirmCancelEdit: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kughairi?',
@@ -483,6 +486,13 @@ export default {
       duplicateLangError: 'Lugha zinazojirudia zimepatikana kwenye tafsiri. Tafadhali ziondoe.'
     },
     documents: {
+      viewDocuments: 'Nyaraka',
+      viewArtifacts: 'Vipakiti',
+      deleteRefuseBundle:
+        'Vipakiti {count} vya OKF vinavyotendewa na mzunguko wa maisha ya ghala na haviwezi kufutwa hapa.',
+      deleteRefuseMixed:
+        'Faili {blocked} bado zimeingizwa — rudisha kwanza. Vipakiti {bundles} vya OKF vinavyotendewa na mzunguko wa maisha ya ghala na haviwezi kufutwa hapa.',
+      artifactsParked: 'Vipakiti vya OKF huonekana wakati kipengele cha OKF kimewashwa kwa utumezi huu.',
       title: 'Usimamizi wa Nyaraka',
       addLink: 'Ongeza kutoka kwa Kiungo',
       uploadFiles: 'Pakia Faili',
@@ -751,7 +761,6 @@ export default {
   },
   services: {
     eCitizen: 'Lango la eCitizen',
-    taxFiling: 'Mfumo wa Kutuma Kodi',
     idApplication: 'Maombi ya Kitambulisho',
     businessReg: 'Usajili wa Biashara',
     drivingLicense: 'Leseni ya Udereva'
@@ -979,6 +988,8 @@ export default {
     confirmDeleteAccount: 'Je, una uhakika unataka kufuta akaunti yako? Kitendo hiki hakiwezi kutenduliwa.',
     processing: 'Inachakata...',
     userDataReset: 'Data yako ya wasifu imewekwa upya kwa mafanikio.',
+    userDataResetFilesFailed:
+      'Data yako ya wasifu imewekwa upya, lakini baadhi ya faili zilizohifadhiwa hazikuweza kufutwa. Tafadhali wasiliana na msimamizi.',
     failedToResetUserData: 'Imeshindwa kuweka upya data yako ya wasifu. Tafadhali jaribu tena.',
     unableToLoadUser: 'Imeshindwa kupakia taarifa za mtumiaji. Tafadhali jaribu tena.',
     retry: 'Jaribu tena',
@@ -993,6 +1004,8 @@ export default {
     deleteAccountTitle: 'Futa Akaunti',
     delete: 'Futa',
     accountDeleted: 'Akaunti yako imefutwa.',
+    accountDeletedFilesFailed:
+      'Akaunti yako imefutwa, lakini baadhi ya faili zilizohifadhiwa hazikuweza kufutwa. Tafadhali wasiliana na msimamizi.',
     failedToDeleteAccount: 'Imeshindwa kufuta akaunti yako. Tafadhali jaribu tena baadaye.'
   },
   userProfile: {
@@ -1431,6 +1444,7 @@ export default {
     alt: 'Pakia'
   },
   details: {
+    bundleBadge: 'Inatendewa na mzunguko wa maisha wa OKF',
     crawl: {
       seconds: 'sekunde',
       autoRefreshEvery: 'Kujisasisha kiotomatiki kila',
@@ -1547,6 +1561,74 @@ export default {
       'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu.'
   },
   okf: {
+    artifacts: {
+      title: 'Vipakiti vya OKF',
+      lead: 'Kipindi kimoja kwa kila toleo lililochapishwa.',
+      empty: 'Hakuna vipakiti vya OKF bado.',
+      loadFailed: 'Imeshindwa kusoma vipakiti vya OKF.',
+      downloadFailed: 'Imeshindwa kupakua vipakiti vya OKF.',
+      column: {
+        artifact: 'Kipindi',
+        repository: 'Ghala',
+        actions: 'Vitendo',
+        state: 'Hali'
+      },
+      openRepo: 'Fungua ghala',
+      unknownVersion: 'toleo lisilojulikana'
+    },
+    retrieval: {
+      title: 'Hali ya u retrieval',
+      refresh: 'Onyesha Upya',
+      loading: 'Inasoma…',
+      engaged: 'Grounding iko hai',
+      notEngaged: 'Haichangii',
+      servingCount: 'Grafu {n} zinazohudumia',
+      sourceLabel: 'Chanzo',
+      invalidValue: 'Weka namba kamili kati ya {min} na {max}.',
+      source: {
+        database: 'Safu inayosimamiwa',
+        'env-defaults': 'Thamani chaguo-msingi ya mazingira'
+      },
+      revision: 'Revisheni',
+      updatedAt: 'Imesasishwa',
+      updatedBy: 'Na',
+      modeLabel: 'Hali',
+      mode: {
+        legacy: 'Zamani',
+        okf_only: 'OKF pekee',
+        hybrid: 'Changanyiko'
+      },
+      consequence: {
+        legacy: 'Grounding ya OKF imezimwa — majibu yanatoka kwenye njia ya maandishi huria pekee.',
+        unknown: 'Hali isiyojulikana.',
+        okf_only: 'Grafu za OKF pekee ndio zinazobainisha majibu — muktadha wa maandishi huria hautafumiwi.',
+        hybrid: 'Grafu za OKF zinazobainisha majibu, na muktadha wa maandishi huria bado unachangia.'
+      },
+      warnZeroServing:
+        'okf_only bila grafu zinazohudumia — mchango wa OKF ni zero. Chapisha na ingiza repositori kwanza.',
+      servingList: 'Grafu zinazohudumia',
+      advanced: 'Mipaka ya juu',
+      save: 'Hifadhi',
+      revert: 'Rudisha',
+      cancel: 'Ghairi',
+      confirm: 'Tumia',
+      confirmTitle: 'Badilisha hali ya u retrieval?',
+      confirmLead: 'Hii ni mpangilio wa kimakutani — hubadilisha jinsi kila swali linavyotumika, ndani ya sekunde 30.',
+      readFailed: 'Haiwezi kusoma hali ya u retrieval.',
+      nothingToSave: 'Hakuna kitu cha kuhifadhi.',
+      saveFailed: 'Mabadiliko yalizitishwa.',
+      audit: 'Historia ya mabadiliko',
+      auditLoading: 'Inapakia historia…',
+      auditEmpty: 'Hakuna mabadiliko yaliyorekodiwa bado.',
+      auditFailed: 'Haiwezi kusoma historia ya mabadiliko.',
+      limit: {
+        max_fanout_graphs: 'Grafu kwa swali',
+        spine_max_hops: 'Mipaka ya uti wa kati',
+        extracted_hop_cap: 'Mipaka iliyotolewa',
+        candidate_cap_per_graph: 'Wagombezi kwa grafu',
+        candidate_cap_global: 'Wagombezi kwa swali'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Baadhi ya faili bado zinachakatwa (kuwekwa kwenye faharasa). Fungua hazina hii kwenye kihariri — orodha ya faili inaonyesha zipi, na kumeza kunajaribu tena kiotomatiki. Chapisha tena faili zikionyesha zimeingizwa.',
@@ -1588,6 +1670,8 @@ export default {
       title: 'Mipangilio ya modeli',
       add: 'Mipangilio mpya',
       hint: 'Viungo vya modeli za mbali vilivyopewa majina kwa uamuzi na uzalishaji — kioleso chochote kinacholingana na OpenAI (OpenAI, lango la LiteLLM, vLLM, Gemini-compat, Ollama) au Anthoric moja kwa moja. Mipangilio MOJA tu inaweza kuwa hai; bila iliyo hai, modeli chaguo-msingi iliyowekwa ya utumaji inatumika. Funguo huhifadhiwa upande wa seva na hazioneshwi kamwe.',
+      gateWarning:
+        'Miguu ya LLM ya OKF inayofuata uwezeshaji wa deployment (viungo vya mada, mada za CSV, muhtasari wa manifesto) imezimwa: deployment hii hana VLLM_ENDPOINT. Mipangilio iliyoitwa haiuisi — weka VLLM_ENDPOINT kwenye seva ili kuiwasilisha.',
       name: 'Jina',
       provider: 'Mtoa huduma',
       providerOpenai: 'Inalingana na OpenAI (OpenAI, LiteLLM, vLLM…)',
@@ -1666,6 +1750,7 @@ export default {
       ingestCompleted: 'imeingizwa',
       bundleMissing: 'zip imepotea',
       bundleDownload: 'Pakua zip',
+      viewArtifact: 'Ona kipindi',
       bundle: 'Kifurushi',
       col: {
         ingest: 'Kuingiza',
@@ -2000,6 +2085,7 @@ export default {
           'Imekamilika — kila kitambulisho kilichowekewa alama kimeitiwa alama ya kukaguliwa na kuhifadhiwa kwenye dhana {n}. Alama za PII zimeondolewa.',
         done_redact: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yamebadilishwa na taarifa ya kuficha.',
         done_remove: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yameondolewa.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Kinga maelezo yote yaliyowekewa alama',
           remove: 'Ondoa maudhui yote yaliyowekewa alama',
@@ -2337,7 +2423,7 @@ export default {
       autocorrect:
         'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
+        'Mtaratibu wa mzunguko wa maisha ({chain}) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
         'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
@@ -2462,7 +2548,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
+        notReady:
+          'Rasimu haziwezi kuhifadhiwa kwenye seva kwa sasa — zinabaki kwenye kichupo hiki cha kivinjari tu na hupotea kichupo kikifungwa au kupakiwa upya. Ukurasa au seva zinaweza kuwa nje ya ulandanishi.',
+        repoGone:
+          'Ghala hili si tayari haipatikani kwenye seva — mabadiliko yako yatabaki kwenye kichupo kiki cha kivinjari tu na hupotea kikichupo kikifungwa au kupakiwa upya.'
       },
       mode: {
         basic: 'Msingi',
@@ -2671,7 +2760,7 @@ export default {
           'Tazama la mwisho kabla ya kuhamisha: kila faili hapa chini, markdown yake na lebo zake — hasa kama msaidizi atakavyozitaja.',
         noRepo: 'Bado hakuna hazina — ukaguzi wa faili utaonekana hapa mara hazina ikianza kuwepo.',
         ritualOutside:
-          'Mtaratibu wa ukaguzi — wasilisha kwa ukaguzi, idhini ya mkaguzi, chapisha — unafanyika kwenye Mhariri na dashibodi ya Studio, si hapa. Fungua Mhariri ukamilishe.',
+          'Taratibu wa ukaguzi hufanyika kwenye mhariri na dashibodi ya Studio, kitufe kimoja kwa hatua moja — si hapa. Fungua mhariri ili ukamilishe.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2684,7 +2773,7 @@ export default {
         frontmatterOk: 'Lebo za frontmatter zimeidhinishwa',
         frontmatterServing: 'Lebo za frontmatter zimewekwa',
         title: 'Linda na Kamilisha',
-        hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
+        hint: 'Ghala hili la OKF limekuwa tayari kwa ukaguzi. Kuchapisha hakufanyiki hapa — mzunguko wa maisha unafanyika kwenye dashibodi na kwenye mhariri, kitufe kimoja kwa wakati mmoja.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',
@@ -2694,7 +2783,7 @@ export default {
         frozen:
           'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Ifuatayo: wasilisha kwa idhini kwenye dashibodi ya Studio → muidhinishaji anakubali → chapisha kutoka kwenye dashibodi au mhariri. Kielekezi husimama hapa kwa makusudi.',
+          'Ifuatayo: kwenye dashibodi ya Studio kadi hii ina kitufe KIMOJA kwa mzunguko mzima — {chain}. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2867,7 +2956,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Unda ukurasa wa Vyanzo na uunganishe kurasa {n}',
@@ -2999,6 +3087,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Wasilisha kwa ukaguzi',
       approve: 'Idhinisha',
       publish: 'Chapisha',
@@ -3045,7 +3134,9 @@ export default {
       title: 'Lebo za frontmatter — hazina hii inahusu nini',
       help: 'Lebo zinaeleza kile ambacho hazina hii ina na — kwa umuhimu sawa — kile ambacho haina (orodha ya zilizozuiwa). Zinaamua maswali gani yanaelekezwa kwenye hazina hii. Bofya Refresh kupanga rasimu kutoka kwenye korpus, au hariri lebo hapa chini. Kuchapisha kunahitaji topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Lebo zimepitwa na wakati — ingiza tena ili zitumike',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLM haikurudisha lebo zozote. Jaribu tena baada ya korpus kukua.',
       suggestCoverage: 'Imetokana na {sampled} kati ya {total} dhana, katika {labels} lebo za mpangilio wa maarifa.',
       suggestFailed: 'Suggest failed.',
@@ -3074,7 +3165,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Lebo zimepitwa na wakati — ingiza tena ili zitumike'
       },
       tab: {
         head: 'Head',

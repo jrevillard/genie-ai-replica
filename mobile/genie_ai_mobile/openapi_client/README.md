@@ -40,10 +40,9 @@ Please follow the [installation procedure](#installation--usage) and then run th
 ```dart
 import 'package:openapi/api.dart';
 
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = AdminApi();
+final api_instance = AdminApi(api_client);
 
 try {
     api_instance.apiAdminDatabaseOperationsBackupPost();
@@ -195,6 +194,8 @@ Class | Method | HTTP request | Description
  - [ApiDatabaseBackupPost200Response](doc//ApiDatabaseBackupPost200Response.md)
  - [ApiDatabaseOptimizePost200Response](doc//ApiDatabaseOptimizePost200Response.md)
  - [ApiDatabaseOptimizePost200ResponseResultsInner](doc//ApiDatabaseOptimizePost200ResponseResultsInner.md)
+ - [ApiMeDeletePost200Response](doc//ApiMeDeletePost200Response.md)
+ - [ApiMeResetDataPost200Response](doc//ApiMeResetDataPost200Response.md)
  - [ApiQueriesGet200Response](doc//ApiQueriesGet200Response.md)
  - [ApiQueriesGet200ResponsePagination](doc//ApiQueriesGet200ResponsePagination.md)
  - [ApiQueriesGet200ResponseQueriesInner](doc//ApiQueriesGet200ResponseQueriesInner.md)

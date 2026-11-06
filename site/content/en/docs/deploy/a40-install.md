@@ -170,7 +170,7 @@ Press `Ctrl+C` to exit `watch`.
 Ubuntu 22.04's `nodejs` package is ancient (12.x). Install Node.js 22 from
 NodeSource instead — the GENIE.AI frontend/backend Dockerfiles build on
 `node:22-alpine` and `node:22-slim` (the project canonical runtime). CI
-itself uses `node:20-alpine`, so Node 20+ on the host works for any local
+itself uses `node:22-alpine`, so Node 22+ on the host works for any local
 lint/test runs.
 
 ```bash

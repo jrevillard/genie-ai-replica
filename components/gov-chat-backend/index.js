@@ -191,7 +191,10 @@ function formatTimestamps(obj) {
 const ROUTE_CONFIGS = [
   { file: 'user-routes', paths: ['/api/me'], serviceName: 'userProfileService', keycloakAuth: true },
   { file: 'query-routes', paths: ['/api/queries', '/api/query'], serviceName: 'queryService', keycloakAuth: true },
-  { file: 'service-routes', paths: ['/api/services'], serviceName: 'serviceCategoryService', keycloakAuth: true },
+  // #442: the /api/services routes are compatibility redirects to
+  // /api/service-categories — they need no service, so none is injected
+  // (a redirect must not depend on a service that could fail to load).
+  { file: 'service-routes', paths: ['/api/services'], serviceName: null, keycloakAuth: true },
   {
     file: 'chat-history-routes',
     paths: ['/api/chat-history', '/api/chat'],
@@ -960,7 +963,11 @@ async function startApp() {
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
-      logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+      // Path only: the process cannot know the public base nginx fronts it
+      // with, and a localhost URL would be unreachable in every deployed
+      // topology (only nginx 80/443 is exposed). The port is on the line
+      // above.
+      logger.info('API Documentation available at: /api-docs');
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)
     if (typeof server.setTimeout === 'function') {

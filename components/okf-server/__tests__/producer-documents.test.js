@@ -32,6 +32,7 @@ jest.mock('../config', () => ({
 }));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
+const { captureEnv } = require('./fixtures/env');
 const { authedAxios } = require('../services/service-token');
 const { ingestRepoConcepts, runImportCuration } = require('../services/ingest-service');
 const { Readable } = require('stream');
@@ -87,6 +88,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   producer.live.delete(RID);
   programQuery();
+});
+
+// A test that closes the LLM opt-in must not close it for the next one.
+const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
+afterEach(() => {
+  restoreEndpoint();
 });
 
 // ── segmentation + cross-file linking (pure) ────────────────────────────────
@@ -344,6 +351,47 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const repoDoc = await mockDb.collection('okf_repositories').document(RID);
     expect(repoDoc.conversion.status).toBe('done');
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
+  });
+
+  it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
+    // The gate is closed (no VLLM_ENDPOINT): the topics leg degrades. The
+    // import still lands, but the operator must SEE it — the conversion
+    // report carries the fact and the file's ingestion log carries the
+    // reason.
+    delete process.env.VLLM_ENDPOINT;
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        return Promise.resolve({ data: Readable.from([Buffer.from('Region,Amount\nNorth,100\nSouth,200\n')]) });
+      }
+      const fid = s.split('/api/files/')[1];
+      return Promise.resolve({
+        data: { file: { file_id: fid, file_name: 'market.csv', size: 100, dataprep: { status: 'Pending' } } }
+      });
+    });
+
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
+
+    const perFile = repoDoc.conversion.per_file;
+    expect(perFile).toHaveLength(1);
+    expect(perFile[0].status).toBe('imported'); // the import still lands
+    expect(perFile[0].topics_source).toBe('fallback-no-endpoint');
+    expect(perFile[0].warning).toMatch(/no LLM engine is configured/);
+
+    const mirror = authedAxios.post.mock.calls.find((c) => String(c[0]).endsWith('/api/files/f1/ingestion-log'));
+    expect(mirror).toBeTruthy();
+    expect(mirror[1].level).toBe('WARN');
+    expect(mirror[1].message).toMatch(/no LLM engine is configured/);
   });
 
   it('B1/B5: terminal summary.created counts CONTENT topics only — the index concept is excluded', async () => {

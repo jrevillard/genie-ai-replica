@@ -337,12 +337,44 @@ describe('repoOkfService — PII surface', () => {
       {},
       { timeout: 120000 }
     );
-    await repoOkfService.bulkPiiAction('r1', 'accept');
-    expect(httpService.post).toHaveBeenLastCalledWith(
-      '/okf/repos/r1/pii-bulk',
-      { action: 'accept' },
-      { timeout: 120000 }
+  });
+
+  it('bulkPiiActionDetached arms the job, polls to done, and reports progress (#1514)', async () => {
+    const updates = [];
+    httpService.post.mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp1', status: 'running', total: 4 }));
+    httpService.get
+      .mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp1', status: 'running', total: 4, processed: 2 }))
+      .mockResolvedValueOnce(
+        ok({
+          repo_id: 'r1',
+          job_id: 'bp1',
+          status: 'done',
+          total: 4,
+          processed: 4,
+          result: { ok: true, action: 'accept', concepts_affected: 4 }
+        })
+      );
+    const out = await repoOkfService.bulkPiiActionDetached('r1', 'accept', {
+      onProgress: (p) => updates.push(p),
+      pollMs: 1
+    });
+    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/pii-bulk/jobs', { action: 'accept' });
+    expect(httpService.get).toHaveBeenCalledWith('/okf/repos/r1/pii-bulk/jobs/bp1');
+    expect(out).toEqual({ ok: true, action: 'accept', concepts_affected: 4 });
+    // progress flows to the caller: the arm total, the mid-run snapshot, the final
+    expect(updates).toEqual([
+      { total: 4, processed: 0 },
+      { total: 4, processed: 2 },
+      { total: 4, processed: 4 }
+    ]);
+  });
+
+  it('bulkPiiActionDetached throws when the job fails', async () => {
+    httpService.post.mockResolvedValueOnce(ok({ repo_id: 'r1', job_id: 'bp2', status: 'running', total: 1 }));
+    httpService.get.mockResolvedValueOnce(
+      ok({ repo_id: 'r1', job_id: 'bp2', status: 'failed', total: 1, processed: 0, error: 'boom' })
     );
+    await expect(repoOkfService.bulkPiiActionDetached('r1', 'redact', { pollMs: 1 })).rejects.toThrow('boom');
   });
 
   it('scanConceptPii builds the one-concept scan body; startRepoPiiScan arms; getRepoPiiScan polls', async () => {
@@ -442,5 +474,49 @@ describe('repoOkfService — Step-7 validation + citations + topic links', () =>
     expect(repoOkfService.acceptLink).toBe(acceptLink);
     expect(repoOkfService.startTopicLinks).toBe(startTopicLinks);
     expect(repoOkfService.getTopicLinkRun).toBe(getTopicLinkRun);
+  });
+});
+
+// Story 10.7 (#995) — the retrieval governance posture (ADR-okf-039). GLOBAL,
+// not per-repo: the read-model is per-caller (the serving view follows the
+// caller's scopes) while the config posture stays global.
+describe('repoOkfService — the retrieval posture (Story 10.7)', () => {
+  it('getRetrievalConfig GETs /okf/retrieval-config (no /api prefix) and unwraps the body', async () => {
+    const body = { config: { mode: 'hybrid' }, source: 'database', engaged: true };
+    httpService.get.mockResolvedValueOnce(ok(body));
+    expect(await repoOkfService.getRetrievalConfig()).toEqual(body);
+    expect(httpService.get.mock.calls[0][0]).toBe('/okf/retrieval-config');
+    expect(httpService.get.mock.calls[0][0].startsWith('/api/')).toBe(false);
+  });
+
+  it('getRetrievalConfig degrades to null on an empty body (no crash in the card)', async () => {
+    httpService.get.mockResolvedValueOnce({});
+    expect(await repoOkfService.getRetrievalConfig()).toBeNull();
+  });
+
+  it('putRetrievalConfig PUTs the patch to /okf/retrieval-config', async () => {
+    httpService.put.mockResolvedValueOnce(ok({ ok: true, config: { revision: 4 } }));
+    const out = await repoOkfService.putRetrievalConfig({ mode: 'hybrid' });
+    expect(httpService.put).toHaveBeenCalledWith('/okf/retrieval-config', { mode: 'hybrid' });
+    expect(out).toEqual({ ok: true, config: { revision: 4 } });
+  });
+
+  it('putRetrievalConfig returns null on an empty body', async () => {
+    httpService.put.mockResolvedValueOnce({});
+    expect(await repoOkfService.putRetrievalConfig({ mode: 'legacy' })).toBeNull();
+  });
+
+  it('getRetrievalConfigAudit GETs the audit route with the limit and unwraps {rows}', async () => {
+    httpService.get.mockResolvedValueOnce(ok({ rows: [{ ts: '2026-11-05T09:00:00Z' }] }));
+    const rows = await repoOkfService.getRetrievalConfigAudit(25);
+    expect(httpService.get.mock.calls[0][0]).toBe('/okf/retrieval-config/audit?limit=25');
+    expect(rows).toEqual([{ ts: '2026-11-05T09:00:00Z' }]);
+  });
+
+  it('getRetrievalConfigAudit degrades to [] when the server sends no rows (never undefined)', async () => {
+    httpService.get.mockResolvedValueOnce(ok({}));
+    expect(await repoOkfService.getRetrievalConfigAudit()).toEqual([]);
+    httpService.get.mockResolvedValueOnce(ok({ rows: 'not-an-array' }));
+    expect(await repoOkfService.getRetrievalConfigAudit()).toEqual([]);
   });
 });

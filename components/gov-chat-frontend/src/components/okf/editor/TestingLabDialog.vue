@@ -62,6 +62,12 @@
         <DsPill v-else variant="danger">
           {{ translate('okf.testingLab.badge.missing', 'no head') }}
         </DsPill>
+        <!-- #932 step-1: the vectorized head these results were built on
+             predates the current bundle — the frontmatter labels were edited
+             after the last drain, and the next ingest re-materializes them. -->
+        <DsPill v-if="labelsStale" variant="warning">
+          {{ translate('okf.testingLab.badge.labelsStale', 'Labels stale — re-ingest to apply') }}
+        </DsPill>
       </span>
     </p>
 
@@ -1355,7 +1361,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
-import { translateLabError } from '../../../services/okfRepoOps';
+import { translateLabError, isLabelsStale } from '../../../services/okfRepoOps';
 import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
@@ -1534,6 +1540,12 @@ export default {
     },
     serving() {
       return !!(this.repo && this.repo.ingested_at);
+    },
+    // #932 step-1: the head these results were built on predates the current
+    // bundle (labels edited after the last drain) — pure function over the
+    // repo prop, same expression the FrontmatterPanel marker uses.
+    labelsStale() {
+      return isLabelsStale(this.repo);
     },
     head() {
       return (this.repo && this.repo.head && this.repo.head.vector && this.repo.head) || null;
@@ -2365,16 +2377,29 @@ export default {
       this.$emit('changed', { frontmatter: true });
       await this.loadFrontmatterHistory();
     },
+    /** UX-5 (#1516): structured per-leg timing. The ±tag-apply slowness
+     * ruling is explicit — INSTRUMENT FIRST (which leg eats the wall clock),
+     * then optimize THAT leg; the UI detachment is the fallback. These logs
+     * are the measurement points: save vs rebuild vs suite re-run vs advise,
+     * per repo, milliseconds, ready to read from the browser console on a
+     * live Lab session. */
+    legTiming(leg, startedAtMs, extra = {}) {
+      const ms = Date.now() - startedAtMs;
+      console.debug('[okf-lab-timing]', { repo: this.repo && this.repo.repo_id, leg, ms, ...extra });
+      return ms;
+    },
     /** 1-8c: add ONE suggested tag to the repo's forbidden tags (the
      * shared two-write save), then offer the rebuild + re-run. */
     async onTeachTag(tag) {
       if (!tag || this.isTaught(tag) || this.busy !== null) return;
       this.busy = 'save-tag';
       this.error = '';
+      const t0 = Date.now();
       const res = await this.$store.dispatch('okf/saveFrontmatter', {
         repoId: this.repo.repo_id,
         shape: this.buildFrontmatterShape([tag])
       });
+      this.legTiming('teach-tag-save', t0);
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
@@ -2390,10 +2415,12 @@ export default {
       if (!pending.length || this.busy !== null) return;
       this.busy = 'save-tag';
       this.error = '';
+      const t0 = Date.now();
       const res = await this.$store.dispatch('okf/saveFrontmatter', {
         repoId: this.repo.repo_id,
         shape: this.buildFrontmatterShape(pending)
       });
+      this.legTiming('teach-all-save', t0, { tags: pending.length });
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
@@ -2510,10 +2537,12 @@ export default {
       // in the error strip; the re-run runs inline, not via guard chains.
       this.busy = 'advisor-apply';
       this.error = '';
+      const t0 = Date.now();
       const save = await this.$store.dispatch('okf/saveFrontmatter', {
         repoId: this.repo.repo_id,
         shape: this.buildFrontmatterShape(addTags, removeTags)
       });
+      this.legTiming('advisor-save', t0, { add: addTags.length, remove: removeTags.length });
       if (!save || !save.ok) {
         this.busy = null;
         this.error =
@@ -2526,7 +2555,9 @@ export default {
       this.advisorExtraRemove = [];
       this.advisorNarrowPairs = [];
       this.$emit('changed', { frontmatter: true });
+      const t1 = Date.now();
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      this.legTiming('advisor-rebuild', t1);
       if (!reb || !reb.ok) {
         this.busy = null;
         this.error =
@@ -2546,10 +2577,13 @@ export default {
         );
         return;
       }
+      const t2 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
         suiteKey: this.suite.suite_key
       });
+      this.legTiming('advisor-rerun', t2);
+      this.legTiming('advisor-total', t0);
       this.busy = null;
       if (!res || !res.ok) {
         this.error =
@@ -2726,10 +2760,12 @@ export default {
         this.lastRunSummary && this.lastRunSuiteKey === suiteKey
           ? { passed: this.lastRunSummary.positive_passed, total: this.lastRunSummary.positive_total }
           : null;
+      const t0 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
         suiteKey
       });
+      this.legTiming('suite-run', t0, { suite: suiteKey });
       if (!res.ok) {
         this.busy = null;
         this.error = res.message || this.translate('okf.testingLab.error.run', 'Suite run failed');
@@ -2911,7 +2947,9 @@ export default {
       }
       this.busy = 'rebuild-rerun';
       this.error = '';
+      const t0 = Date.now();
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      this.legTiming('rebuild-rerun-rebuild', t0);
       this.busy = null;
       if (!reb.ok) {
         this.error = reb.message || this.translate('okf.testingLab.error.rebuild', 'Head rebuild failed');

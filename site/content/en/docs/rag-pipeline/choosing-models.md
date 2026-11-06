@@ -826,7 +826,7 @@ While this guide focuses on LLM and model selection, the following non-AI compon
 |-----------|---------|---------------|
 | **ArangoDB** | Graph + vector database | Stores documents, embeddings, knowledge graph. Performance directly affects retrieval latency. |
 | **Kong API Gateway** | Routes and secures traffic | All user requests pass through Kong. Misconfiguration blocks the entire application. |
-| **Redis** | Caching layer | Caches translation results. Reduces load on translation vLLM. |
+| **Redis** | Caching layer | Caches translation results and carries the provisioning invalidation pub/sub. Reduces load on translation vLLM. |
 | **Docling** | PDF/document extraction | Converts PDFs, DOCX, etc. into text chunks. Quality of extraction directly affects RAG quality. |
 | **Nginx** | Reverse proxy / SSL termination | External entry point. CSP and CORS must be configured correctly. |
 | **Node.js Backend** | Business logic | Handles auth, sessions, document management, and orchestrates OPEA services. |

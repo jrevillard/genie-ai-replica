@@ -25,7 +25,9 @@
 //     (the grid would render while the hierarchy is still on its way — the
 //      hierarchy is HELD in that test, and the config's application is
 //      waited for first, so the window is real and observed)
-//   - drop the 'config-error' class from .quick-help-item       -> test 2 fails
+//   - drop the :data-state binding from .quick-help-item        -> test 2 fails
+//     (the broken card is identified by its declared state, not by
+//      a class — so the mutation is the state binding)
 //   - drop the .config-error-icon                               -> test 2 fails
 //   - remove the BROKEN-card guard in selectQuickHelpOption     -> test 2 fails
 //     (the send-time guard would still block the QUERY — checkContextConfig
@@ -189,7 +191,7 @@ async function stubConfiguration(page) {
  * then real and observable, instead of a race against a fast stub.
  */
 async function stubHierarchy(page, gate = null) {
-  await page.route('**/api/services/categories*', async (route) => {
+  await page.route('**/api/service-categories/categories*', async (route) => {
     try {
       if (gate) {
         await gate;
@@ -258,13 +260,13 @@ test.describe('Quick Help scope states', () => {
 
     // The configuration is applied (the composer is there) and the hierarchy
     // has not answered: the grid must not exist.
-    await expect(page.locator('.quick-help-grid')).toHaveCount(0);
+    await expect(page.locator('[data-testid="quick-help-grid"]')).toHaveCount(0);
 
     // Once the hierarchy lands, the grid appears — with its cards in it.
     release();
-    const grid = page.locator('.quick-help-grid');
+    const grid = page.locator('[data-testid="quick-help-grid"]');
     await expect(grid).toBeVisible({ timeout: 20000 });
-    expect(await page.locator('.quick-help-item').count()).toBeGreaterThan(0);
+    expect(await page.locator('[data-testid="quick-help-item"]').count()).toBeGreaterThan(0);
 
     await ctx.close();
   });
@@ -274,12 +276,12 @@ test.describe('Quick Help scope states', () => {
   }) => {
     const { ctx, page } = await openWelcome(browser);
 
-    const broken = page.locator('.quick-help-item.config-error');
+    const broken = page.locator('[data-testid="quick-help-item"][data-state="config-error"]');
     const brokenCount = await broken.count();
     expect(brokenCount, 'the spec serves three broken cards').toBe(3);
 
     // The broken card says so: the icon and the caption naming the problem.
-    await expect(broken.first().locator('.config-error-icon')).toBeVisible();
+    await expect(broken.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
     const caption = broken.first().locator('[data-testid="quick-help-error-caption"]');
     await expect(caption).toBeVisible();
     expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
@@ -301,7 +303,7 @@ test.describe('Quick Help scope states', () => {
     // item is selected) is still there. This is the assertion that tells
     // the tile guard apart from the send-time guard — the send-time guard
     // blocks the query but leaves the chip installed.
-    await expect(page.locator('.quick-help-banner')).toBeVisible();
+    await expect(page.locator('[data-testid="quick-help-banner"]')).toBeVisible();
 
     await ctx.close();
   });
@@ -315,7 +317,7 @@ test.describe('Quick Help scope states', () => {
     // half of the configuration to fix. A caption that always named the
     // category (or always the label) would send the operator to the wrong
     // place.
-    const gone = page.locator('.quick-help-item.config-error').filter({ hasText: 'Category gone' });
+    const gone = page.locator('[data-testid="quick-help-item"][data-state="config-error"]').filter({ hasText: 'Category gone' });
     expect(await gone.count(), 'the card whose category is gone is broken').toBe(1);
 
     const goneCaption = gone.first().locator('[data-testid="quick-help-error-caption"]');
@@ -327,7 +329,7 @@ test.describe('Quick Help scope states', () => {
     // WHICH label to fix.
     expect(goneText, 'the caption does not blame a label that is still there').not.toContain('No Such Service');
 
-    const labelGone = page.locator('.quick-help-item.config-error').filter({ hasText: 'Label gone' });
+    const labelGone = page.locator('[data-testid="quick-help-item"][data-state="config-error"]').filter({ hasText: 'Label gone' });
     expect(await labelGone.count(), 'the card whose label is gone is broken').toBe(1);
 
     const labelCaption = labelGone.first().locator('[data-testid="quick-help-error-caption"]');
@@ -357,10 +359,10 @@ test.describe('Quick Help scope states', () => {
     // this exact card shape, and by the error-card test above for the
     // broken-scope shape — so repeating it here would kill no mutation of
     // the TITLE gate this card exists to pin.
-    const card = page.locator('.quick-help-item.config-error.just-chat');
+    const card = page.locator('[data-testid="quick-help-item"][data-state="config-error"][data-scope="just-chat"]');
     await expect(card).toHaveCount(1);
 
-    await expect(card.first().locator('.config-error-icon')).toBeVisible();
+    await expect(card.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
     const caption = card.first().locator('[data-testid="quick-help-error-caption"]');
     await expect(caption).toBeVisible();
     const captionText = (await caption.innerText()).trim();
@@ -376,10 +378,10 @@ test.describe('Quick Help scope states', () => {
     // The CONTROL. A spec that stubs every card to "broken" would pass even
     // if the app rendered every card as an error — and a spec that only
     // asserts "nothing was sent" would pass even if NOTHING ever worked.
-    const healthy = page.locator('.quick-help-item').filter({ hasText: 'Healthy card' });
+    const healthy = page.locator('[data-testid="quick-help-item"]').filter({ hasText: 'Healthy card' });
     expect(await healthy.count(), 'the healthy card is rendered').toBe(1);
     expect(
-      await healthy.first().locator('.config-error-icon').count(),
+      await healthy.first().locator('[data-testid="quick-help-error-icon"]').count(),
       'a card whose scope names fine is not an error card'
     ).toBe(0);
 

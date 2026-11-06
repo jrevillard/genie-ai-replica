@@ -298,6 +298,21 @@ to heuristics).
 | `OKF_CURATION_TIMEOUT_MS` | `30000` | Per-call timeout for a curation LLM call. |
 | `OKF_CURATION_LANES` | `4` | Parallel curation calls. Lower on a shared GPU. |
 
+### A closed opt-in is reported, not hidden
+
+With `VLLM_ENDPOINT` unset, the legs that follow the deployment opt-in are
+OFF: topic links, CSV topics and the manifest summary. A **named model
+configuration** (the Admin Dashboard's *Models* tab) does not enable them —
+it serves the services its own checkboxes name — so the tab warns when a
+configuration is active while the opt-in is closed, and `VLLM_ENDPOINT` is
+what turns those legs on.
+
+An import whose CSV topics leg degraded is recorded rather than silent: the
+conversion report's per-file entry carries the topic source and a warning,
+and the source document's ingestion log mirrors the reason (see
+[Ingestion log](/docs/operate/ingestion-log/)). The file still imports — the
+concepts carry the filename slug as their topic.
+
 ### Whole-corpus topic-link authoring
 
 The import pass (and the editor's Step 7 *Cross-link topics*) authors the

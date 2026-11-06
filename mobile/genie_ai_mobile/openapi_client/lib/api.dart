@@ -86,6 +86,8 @@ part 'model/api_chat_query_query_id_conversation_post_request.dart';
 part 'model/api_database_backup_post200_response.dart';
 part 'model/api_database_optimize_post200_response.dart';
 part 'model/api_database_optimize_post200_response_results_inner.dart';
+part 'model/api_me_delete_post200_response.dart';
+part 'model/api_me_reset_data_post200_response.dart';
 part 'model/api_queries_get200_response.dart';
 part 'model/api_queries_get200_response_pagination.dart';
 part 'model/api_queries_get200_response_queries_inner.dart';

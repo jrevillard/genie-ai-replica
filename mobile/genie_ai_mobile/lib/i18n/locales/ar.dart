@@ -548,6 +548,10 @@ const Map<String, dynamic> arLocale = {
     "confirmChange": "تأكيد التغيير",
     "processing": "جاري المعالجة...",
     "userDataReset": "تم إعادة تعيين بيانات ملفك الشخصي بنجاح.",
+    "userDataResetFilesFailed":
+        "تم إعادة تعيين بيانات ملفك الشخصي، لكن تعذّر إزالة بعض الملفات المخزنة. يرجى الاتصال بالمسؤول.",
+    "accountDeletedFilesFailed":
+        "تم حذف حسابك، لكن تعذّر إزالة بعض الملفات المخزنة. يرجى الاتصال بالمسؤول.",
     "failedToResetUserData":
         "فشل إعادة تعيين بيانات ملفك الشخصي. يرجى المحاولة لاحقاً.",
     "changingEmailTo": "تغيير بريدك الإلكتروني إلى",

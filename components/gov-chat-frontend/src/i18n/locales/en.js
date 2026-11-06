@@ -466,6 +466,9 @@ export default {
       saveError: 'Failed to save hierarchy item.',
       loadError: 'Failed to load knowledge hierarchy.',
       loadTranslationsError: 'Failed to load translations.',
+      translationsLoadFailedNotice:
+        'Translations could not be loaded. Editing the translations and saving stay disabled until they load.',
+      retryTranslations: 'Retry',
       translationsNotLoaded: 'Translations not loaded — reload before saving.',
       confirmCancelTitle: 'Unsaved Changes',
       confirmCancelEdit: 'You have unsaved changes. Are you sure you want to cancel?',
@@ -482,6 +485,12 @@ export default {
       duplicateLangError: 'Duplicate languages found in translations. Please remove them.'
     },
     documents: {
+      viewDocuments: 'Documents',
+      viewArtifacts: 'Artifacts',
+      deleteRefuseBundle: '{count} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+      deleteRefuseMixed:
+        '{blocked} file(s) are still ingested — retract them first. {bundles} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+      artifactsParked: 'OKF artifacts appear when the OKF feature is enabled for this deployment.',
       title: 'Document Management',
       addLink: 'Add from Link',
       uploadFiles: 'Upload Files',
@@ -749,7 +758,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen Portal',
-    taxFiling: 'Tax Filing System',
     idApplication: 'ID Application',
     businessReg: 'Business Registration',
     drivingLicense: 'Driving License'
@@ -974,6 +982,8 @@ export default {
     },
     processing: 'Processing...',
     userDataReset: 'Your profile data has been successfully reset.',
+    userDataResetFilesFailed:
+      'Your profile data has been reset, but some stored files could not be removed. Please contact an administrator.',
     failedToResetUserData: 'Failed to reset your profile data. Please try again later.',
     unableToLoadUser: 'Unable to load user information. Please try again.',
     retry: 'Retry',
@@ -990,6 +1000,8 @@ export default {
       'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.',
     delete: 'Delete',
     accountDeleted: 'Your account has been deleted.',
+    accountDeletedFilesFailed:
+      'Your account has been deleted, but some stored files could not be removed. Please contact an administrator.',
     failedToDeleteAccount: 'Failed to delete your account. Please try again later.'
   },
   userProfile: {
@@ -1429,6 +1441,7 @@ export default {
     alt: 'Upload'
   },
   details: {
+    bundleBadge: 'Managed by the OKF lifecycle',
     crawl: {
       seconds: 'seconds',
       autoRefreshEvery: 'Auto-refresh every',
@@ -1544,6 +1557,74 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF artifacts',
+      lead: 'One artifact per published version.',
+      empty: 'No OKF artifacts yet.',
+      loadFailed: 'Could not read the OKF artifacts.',
+      downloadFailed: 'Could not download the OKF artifact.',
+      column: {
+        artifact: 'Artifact',
+        repository: 'Repository',
+        actions: 'Actions',
+        state: 'Status'
+      },
+      openRepo: 'Open repository',
+      unknownVersion: 'unknown version'
+    },
+    retrieval: {
+      title: 'Retrieval posture',
+      refresh: 'Refresh',
+      loading: 'Reading…',
+      engaged: 'Grounding active',
+      notEngaged: 'Not contributing',
+      servingCount: '{n} serving graph(s)',
+      sourceLabel: 'Source',
+      invalidValue: 'Enter a whole number between {min} and {max}.',
+      source: {
+        database: 'Governed row',
+        'env-defaults': 'Environment default'
+      },
+      revision: 'Revision',
+      updatedAt: 'Updated',
+      updatedBy: 'By',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Legacy',
+        okf_only: 'OKF only',
+        hybrid: 'Hybrid'
+      },
+      consequence: {
+        legacy: 'OKF grounding is off — answers come from the free-form path only.',
+        unknown: 'Unknown mode.',
+        okf_only: 'Only OKF graphs ground the answers — free-form context is not consulted.',
+        hybrid: 'OKF graphs ground the answers, and free-form context still contributes.'
+      },
+      warnZeroServing:
+        'okf_only with zero serving graphs — OKF contribution is zero. Publish and ingest a repository first.',
+      servingList: 'Serving graphs',
+      advanced: 'Advanced limits',
+      save: 'Save',
+      revert: 'Revert',
+      cancel: 'Cancel',
+      confirm: 'Apply',
+      confirmTitle: 'Change the retrieval posture?',
+      confirmLead: 'This is a global setting — it changes how every query is grounded, within about 30 seconds.',
+      readFailed: 'Could not read the retrieval posture.',
+      nothingToSave: 'There is nothing to save.',
+      saveFailed: 'The change was refused.',
+      audit: 'Change history',
+      auditLoading: 'Loading history…',
+      auditEmpty: 'No changes recorded yet.',
+      auditFailed: 'Could not read the change history.',
+      limit: {
+        max_fanout_graphs: 'Graphs per query',
+        spine_max_hops: 'Spine hops',
+        extracted_hop_cap: 'Extracted hops',
+        candidate_cap_per_graph: 'Candidates per graph',
+        candidate_cap_global: 'Candidates per query'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.',
@@ -1585,6 +1666,8 @@ export default {
       title: 'Model configurations',
       add: 'New configuration',
       hint: 'Named remote-model endpoints for judging and generation — any OpenAI-compatible surface (OpenAI, a LiteLLM gateway, vLLM, Gemini-compat, Ollama) or Anthropic direct. Exactly one configuration can be active; when none is, the deployment’s configured default model is used. Keys are stored server-side and never displayed.',
+      gateWarning:
+        'The OKF LLM legs that follow the deployment opt-in (topic links, CSV topics, manifest summaries) are OFF: this deployment has no VLLM_ENDPOINT. A named configuration does not enable them — set VLLM_ENDPOINT on the server to turn them on.',
       name: 'Name',
       provider: 'Provider',
       providerOpenai: 'OpenAI-compatible (OpenAI, LiteLLM, vLLM…)',
@@ -1663,7 +1746,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Labels stale — re-ingest to apply'
       },
       tab: {
         head: 'Head',
@@ -2420,6 +2504,7 @@ export default {
       ingestCompleted: 'ingested',
       bundleMissing: 'zip missing',
       bundleDownload: 'Download zip',
+      viewArtifact: 'View artifact',
       bundle: 'Bundle',
       col: {
         ingest: 'Ingest',
@@ -2811,6 +2896,7 @@ export default {
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -3126,7 +3212,7 @@ export default {
       autocorrect:
         'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'The lifecycle ritual ({chain}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
@@ -3286,7 +3372,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Drafts cannot be saved server-side yet; saved locally.'
+        notReady:
+          'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.',
+        repoGone:
+          'This repository is no longer available on the server — your changes stay in this browser tab only and are lost if the tab is closed or reloaded.'
       },
       mode: {
         basic: 'Basic',
@@ -3493,7 +3582,7 @@ export default {
           'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'The review ritual happens in the Editor and the Studio dashboard, one button at a time — not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -3506,7 +3595,7 @@ export default {
         frontmatterOk: 'Frontmatter tags approved',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Secure and Finish',
-        hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
+        hint: 'This repository is ready for review. Publishing never happens here — the lifecycle runs on the dashboard and in the editor, one button at a time.',
         nameOk: 'Repository name set',
         labelsOk: 'Labels selected',
         topicsOk: 'Topics reviewed',
@@ -3515,7 +3604,7 @@ export default {
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — {chain}. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -3684,7 +3773,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Create the Sources page and link {n} page(s)',
@@ -3746,6 +3834,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Submit for review',
       approve: 'Approve',
       publish: 'Publish',
@@ -3792,7 +3881,9 @@ export default {
       title: 'Frontmatter tags — what this repo is about',
       help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
       refresh: 'Refresh suggestions',
+      labelsStale: 'Labels stale — re-ingest to apply',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestCoverage: 'Derived from {sampled} of {total} concepts across {labels} knowledge-hierarchy labels.',
       suggestFailed: 'Suggest failed.',

@@ -45,7 +45,7 @@ const store = createStore({
       store.subscribe((mutation, state) => {
         if (mutation.type.startsWith('chatHistory/')) {
           try {
-            if (mutation.type === 'chatHistory/CLEAR_FOLDERS') {
+            if (mutation.type === 'chatHistory/CLEAR_FOLDERS' || mutation.type === 'chatHistory/RESET') {
               localStorage.removeItem('chatHistory');
             } else {
               localStorage.setItem('chatHistory', JSON.stringify(state.chatHistory));

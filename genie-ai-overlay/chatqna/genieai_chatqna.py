@@ -880,6 +880,35 @@ TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 TRANSLATION_MSG_OVERHEAD_CHARS = 20
 
 
+def _is_blank_message_content(content: object) -> bool:
+    """True when a message's content is blank text.
+
+    The request model permits multimodal content — a list of typed parts —
+    so a content value is only blank when it is a string with nothing but
+    whitespace; a list always carries its own parts and is never treated as
+    blank (and never handed to string methods).
+    """
+    return isinstance(content, str) and not content.strip()
+
+
+def _refuse_oversized_query(history: str) -> None:
+    """Refuse a single-message query over the translation character budget.
+
+    One check for both language paths: the budget decides the single-message
+    contract, not the language the query is written in — an oversized query
+    is refused (the caller answers 422) whatever it says, instead of passing
+    whole in English and failing later at the embedder with a less
+    actionable error, or being refused only when it is not English
+    (issue #1366). The check runs before the language map so the refusal
+    cannot depend on the registry's health.
+    """
+    max_translation_chars = _get_max_translation_chars()
+    if len(history) + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+        raise TranslationInputTooLongError(
+            f"the query is {len(history)} characters, over the {max_translation_chars}-character translation budget"
+        )
+
+
 def _select_history_within_budget(history: list, max_translation_chars: int, path: str) -> list:
     """The messages of ``history`` that fit the character budget.
 
@@ -945,6 +974,13 @@ def _translation_input_too_long_error(message: str) -> HTTPException:
     One body for every translation surface that can refuse an input (the
     query path and the reply path): the caller consumes both, so the shape
     lives in one place.
+
+    Counter rule for any surface raising this: a refusal that fires BEFORE
+    the orchestrate-span metrics block records itself on
+    ``chat_requests_total`` right where it refuses (query path); one that
+    fires AFTER that block adds a refusal record too, because the turn was
+    already counted with the successful pipeline's attrs (reply path). A
+    surface that skips its record is invisible as a refusal on the counter.
     """
     return HTTPException(
         status_code=422,
@@ -954,6 +990,38 @@ def _translation_input_too_long_error(message: str) -> HTTPException:
             "abstained": True,
             "abstention_reason": "translation_input_too_long",
         },
+    )
+
+
+def _chat_request_metric_attrs(
+    response_type: str,
+    abstained: str,
+    error: str,
+    retrieval_source: str,
+    abstention_reason: str = "",
+) -> dict:
+    """Single builder for the chat_requests_total / chat_rag_duration_seconds
+    attribute contract (response_type / abstained / error / retrieval_source /
+    abstention_reason).
+
+    Callers own the ``retrieval_source`` rule. Two derivations exist and they
+    agree by construction today: the pre-span failure sites (the translation
+    refusals and the condense 503) read ``chat_request.search_type`` with a
+    ``similarity_score_threshold`` fallback because ``retriever_parameters``
+    is not built yet at that point in the request, while the in-span paths
+    read ``retriever_parameters.search_type`` — which is itself built from
+    ``chat_request.search_type`` with the same fallback — behind a ``hybrid``
+    getattr fallback for a parms object that lacks the field. The next
+    attribute added to the counter lands here, once.
+    """
+    return sanitize_attributes(
+        {
+            "response_type": response_type,
+            "abstained": abstained,
+            "error": error,
+            "retrieval_source": retrieval_source,
+            "abstention_reason": abstention_reason,
+        }
     )
 
 
@@ -4030,25 +4098,29 @@ class ChatQnAService:
             ``(text, status)``. The text is safe to hand to the embedder:
             the translated English history, or — when the translation could
             not run — the flattened source-language history. A history whose
-            newest message alone exceeds the whole budget is no exception:
-            the newest message's tail is kept (truncated to the budget), so
-            the query carries the end of the turn instead of an empty
-            string; the only empty text is an empty history. The
+            newest message alone exceeds the whole char budget is no
+            exception: the newest message's tail is kept (truncated to the
+            budget), so the query carries the end of the turn instead of an
+            empty string; the only empty text is an empty history. The
             status tells the caller which one it was:
             ``"translated"`` when the history came back in English,
             ``"fallback_timeout"`` when the translation service timed out,
             and ``"fallback_error"`` when it failed or refused for any other
-            reason (window too tight, unreadable language map, blank input,
+            reason (unreadable language map, blank input,
             empty completion, an empty history). The history is normalized for the
             retriever and never shown to the user, so the turn is not failed
             on a fallback — but the fallback is never silent: the caller
             stamps the status on the ``chatqna.orchestrate`` span and into
             the response metadata, so a degraded translation service is
             visible where the retrieval quality it degrades is diagnosed.
-            A single-message history is the exception: it IS the retrieval
-            query, so a prompt that does not fit the translation window is
-            refused with a raised error (the caller answers 422) rather than
-            embedded untranslated.
+            A translation-window overflow is NOT a fallback, in either
+            shape: the newest message in the history is still the retrieval
+            query, so an untranslated fallback would be embedded into the
+            English space and retrieve the wrong documents. The single-
+            message string raises before the language map (the refusal must
+            not depend on the registry's health); the flattened list
+            history raises from the translation seam. The caller answers
+            422 on both.
             The passthrough cases never reach this method: the caller
             classifies them itself (``"passthrough_english"`` when the
             history is established English, ``"passthrough_unknown_language"``
@@ -4069,7 +4141,7 @@ class ChatQnAService:
                 return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
             flattened_history_string = _flatten_history_string(messages_to_process)
-            if not any(message.get("content", "").strip() for message in messages_to_process):
+            if all(_is_blank_message_content(message.get("content", "")) for message in messages_to_process):
                 # A history of blank messages would only harvest the model's
                 # junk reply as the embedded query, and there is no content
                 # to translate. The flattened string alone cannot be checked:
@@ -4078,24 +4150,13 @@ class ChatQnAService:
                 logger.warning("History translation asked for blank messages; reporting it as a fallback.")
                 return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
-        # The single-message shape's budget runs before the language map: an
-        # oversized query is refused even when the map cannot name English —
-        # the refusal must not depend on the registry's health.
         if isinstance(history, str):
             if not history.strip():
                 # An empty prompt would only harvest the model's junk reply
                 # as the embedded query, and there is nothing to translate.
                 logger.warning("History translation asked for an empty message; reporting it as a fallback.")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR
-            max_translation_chars = _get_max_translation_chars()
-            if len(history) + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
-                # The same budget the list shape applies, checked before the
-                # request: an oversized query is refused instead of being
-                # sent whole to the translation model.
-                raise TranslationInputTooLongError(
-                    f"the query is {len(history)} characters, over the "
-                    f"{max_translation_chars}-character translation budget"
-                )
+            _refuse_oversized_query(history)
 
         # The target steers the prompt, so it is resolved against the language
         # map — ONCE, for both shapes of the history. The target is English:
@@ -4164,9 +4225,10 @@ class ChatQnAService:
                 f"in original language. Error: {e}"
             )
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
-        except TranslationInputTooLongError as e:
-            logger.warning(f"History translation refused: {e}")
-            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        # A TranslationInputTooLongError is NOT caught here: a prompt that
+        # does not fit the translation window refuses the turn in either
+        # shape (the newest message in the history is still the query), and
+        # the caller's single handler logs, counts and answers 422.
         except TranslationFailedError as e:
             logger.error(f"History translation failed: {e}")
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
@@ -4600,7 +4662,6 @@ class ChatQnAService:
         # embedded as it is.
         history_language = detected_language or original_language
 
-        translated_history_string = ""
         # What the embedder will be fed: a translated query, the English
         # source passed through, or — when the history translator fell back —
         # the untranslated source language. The fallback does not fail the
@@ -4610,75 +4671,105 @@ class ChatQnAService:
         # degraded translation microservice shows up where the retrieval
         # quality it degrades is diagnosed (issue #1026).
         query_translation_status = None
-        if history_language and history_language.strip() != "EN":
-            if logflag:
-                logger.debug(
-                    f"Original language detected: {history_language}. Proceeding with translation of chat history."
-                )
-            try:
+        try:
+            if history_language and history_language.strip() != "EN":
+                if logflag:
+                    logger.debug(
+                        f"Original language detected: {history_language}. Proceeding with translation of chat history."
+                    )
                 translated_history_string, query_translation_status = await self._get_translated_history_string(
                     full_chat_history, source_lang_code=history_language.lower()
                 )
-            except TranslationInputTooLongError as _e_trans_overflow:
-                # The query does not fit the translation window: fail loud
-                # with the same 422 the answer path returns, instead of
-                # embedding an untranslated query into the English space
-                # and retrieving the wrong documents. The raise happens
-                # before the orchestrate-span metrics block, so the failed
-                # turn would otherwise be invisible to the dashboards — it
-                # is counted here, like the other error paths. No RAG ran,
-                # so there is no RAG duration to record. ``abstained``
-                # mirrors the refusal body (no document backed an answer);
-                # ``error`` is true because the turn failed, like the other
-                # fail-loud paths.
-                logger.warning(
-                    f"Translation overflow at handle_request boundary: "
-                    f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
-                )
-                chat_requests_total.add(
-                    1,
-                    sanitize_attributes(
-                        {
-                            "response_type": "streaming" if chat_request.stream else "sync",
-                            "abstained": "true",
-                            "error": "true",
-                            "retrieval_source": getattr(chat_request, "search_type", None)
-                            or "similarity_score_threshold",
-                            "abstention_reason": "translation_input_too_long",
-                        }
-                    ),
-                )
-                raise _translation_input_too_long_error(
-                    "The query exceeded the maximum input size for this "
-                    "deployment. Please shorten your message and try again."
-                ) from _e_trans_overflow
-        else:
-            # A passthrough is only "English" when something actually
-            # established English: the request named it (and the code was
-            # not refused), or detection concluded it. A fabricated fallback
-            # — no language given and none detected, a crashed detection, a
-            # refused request code — is reported as unknown, so the runbook
-            # filter cannot mistake an arbitrary-language query for an
-            # English one.
-            english_established = detected_language == "EN" or (
-                original_language == "EN" and not language_refused and bool(raw_language and raw_language.strip())
-            )
-            query_translation_status = (
-                QUERY_TRANSLATION_PASSTHROUGH_ENGLISH if english_established else QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN
-            )
-            # Already English, or no source language to translate from:
-            # flatten without translation. Same recipe as the translator's
-            # flatten, so the two differ only in the words — and the same
-            # budget, so the retriever sees the same turns of the
-            # conversation whichever language the query is written in.
-            if isinstance(full_chat_history, str):
-                translated_history_string = full_chat_history
             else:
-                max_translation_chars = _get_max_translation_chars()
-                messages_to_process = _select_history_within_budget(
-                    full_chat_history, max_translation_chars, "passthrough"
+                # A passthrough is only "English" when something actually
+                # established English: the request named it (and the code was
+                # not refused), or detection concluded it. A fabricated fallback
+                # — no language given and none detected, a crashed detection, a
+                # refused request code — is reported as unknown, so the runbook
+                # filter cannot mistake an arbitrary-language query for an
+                # English one.
+                english_established = detected_language == "EN" or (
+                    original_language == "EN" and not language_refused and bool(raw_language and raw_language.strip())
                 )
-                translated_history_string = _flatten_history_string(messages_to_process)
+                query_translation_status = (
+                    QUERY_TRANSLATION_PASSTHROUGH_ENGLISH
+                    if english_established
+                    else QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN
+                )
+                # Already English, or no source language to translate from:
+                # flatten without translation. Same recipe as the translator's
+                # flatten, so the two differ only in the words — and the same
+                # budget, so the retriever sees the same turns of the
+                # conversation whichever language the query is written in.
+                if isinstance(full_chat_history, str):
+                    # The budget does not care about the language (issue
+                    # #1366): an oversized query gets the same refusal on the
+                    # English path as the translation path gives it.
+                    if not full_chat_history.strip():
+                        # Same as the translation path's blank guard: an
+                        # established-English blank must not report the
+                        # healthy passthrough_english label. A blank with NO
+                        # established language keeps the documented
+                        # passthrough_unknown_language.
+                        if english_established:
+                            # Log parity with the translation path's blank
+                            # guard: a blank-input burst must look the same
+                            # in the Docker logs on both language paths.
+                            logger.warning(
+                                "History translation asked for an empty message; reporting it as a fallback."
+                            )
+                            query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
+                        translated_history_string = full_chat_history
+                    else:
+                        _refuse_oversized_query(full_chat_history)
+                        translated_history_string = full_chat_history
+                else:
+                    max_translation_chars = _get_max_translation_chars()
+                    messages_to_process = _select_history_within_budget(
+                        full_chat_history, max_translation_chars, "passthrough"
+                    )
+                    # Same as the translation path's blank guard: an
+                    # all-blank history must not report the healthy
+                    # passthrough_english label the translation path answers
+                    # with fallback_error for the identical history. A
+                    # history with NO established language keeps the
+                    # documented passthrough_unknown_language — already a
+                    # degraded value on the runbook filter.
+                    if english_established and all(
+                        _is_blank_message_content(message.get("content", "")) for message in messages_to_process
+                    ):
+                        logger.warning("History translation asked for blank messages; reporting it as a fallback.")
+                        query_translation_status = QUERY_TRANSLATION_FALLBACK_ERROR
+                    translated_history_string = _flatten_history_string(messages_to_process)
+        except TranslationInputTooLongError as _e_trans_overflow:
+            # The query does not fit the translation window: fail loud
+            # with the same 422 the answer path returns, instead of
+            # embedding an untranslated query into the English space
+            # and retrieving the wrong documents. The raise happens
+            # before the orchestrate-span metrics block, so the failed
+            # turn would otherwise be invisible to the dashboards — it
+            # is counted here, like the other error paths. No RAG ran,
+            # so there is no RAG duration to record. ``abstained``
+            # mirrors the refusal body (no document backed an answer);
+            # ``error`` is true because the turn failed, like the other
+            # fail-loud paths.
+            logger.warning(
+                f"Translation overflow at handle_request boundary: "
+                f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
+            )
+            chat_requests_total.add(
+                1,
+                _chat_request_metric_attrs(
+                    response_type="streaming" if chat_request.stream else "sync",
+                    abstained="true",
+                    error="true",
+                    retrieval_source=getattr(chat_request, "search_type", None) or "similarity_score_threshold",
+                    abstention_reason="translation_input_too_long",
+                ),
+            )
+            raise _translation_input_too_long_error(
+                "The input exceeded the maximum size for this deployment. Please shorten it and try again."
+            ) from _e_trans_overflow
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")
@@ -4743,15 +4834,11 @@ class ChatQnAService:
                     genie_params["condense_raw_query"] = last_translated_message_content
                 except HTTPException:
                     _condense_duration = time.time() - _condense_start
-                    _condense_err_attrs = sanitize_attributes(
-                        {
-                            "response_type": "streaming" if chat_request.stream else "sync",
-                            "abstained": "false",
-                            "abstention_reason": "",
-                            "error": "true",
-                            "retrieval_source": getattr(chat_request, "search_type", None)
-                            or "similarity_score_threshold",
-                        }
+                    _condense_err_attrs = _chat_request_metric_attrs(
+                        response_type="streaming" if chat_request.stream else "sync",
+                        abstained="false",
+                        error="true",
+                        retrieval_source=getattr(chat_request, "search_type", None) or "similarity_score_threshold",
                     )
                     chat_requests_total.add(1, _condense_err_attrs)
                     chat_rag_duration_seconds.record(_condense_duration, _condense_err_attrs)
@@ -4904,14 +4991,12 @@ class ChatQnAService:
                 can split a spike into stale scopes vs an over-rejecting
                 reranker.
                 """
-                return sanitize_attributes(
-                    {
-                        "response_type": "streaming" if chat_request.stream else "sync",
-                        "abstained": abstained,
-                        "error": error,
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                        "abstention_reason": abstention_reason,
-                    }
+                return _chat_request_metric_attrs(
+                    response_type="streaming" if chat_request.stream else "sync",
+                    abstained=abstained,
+                    error=error,
+                    retrieval_source=getattr(retriever_parameters, "search_type", "hybrid"),
+                    abstention_reason=abstention_reason,
                 )
 
             try:
@@ -5162,6 +5247,15 @@ class ChatQnAService:
                 f"Translation overflow at handle_request boundary: "
                 f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
             )
+            # The turn was already counted by the orchestrate-span block above,
+            # with the attrs of the successful pipeline run. This second record
+            # attributes the refusal itself — without it a reply-translation
+            # overflow is invisible as a refusal on the counter (the query-path
+            # site cannot double count because it raises before that block).
+            # The in-span _chat_attrs rule is the right one here:
+            # retriever_parameters is built at this point, and a streamed
+            # request returned before reaching this code.
+            chat_requests_total.add(1, _chat_attrs("true", "true", "translation_input_too_long"))
             raise _translation_input_too_long_error(
                 "The translated reply exceeded the language model's input "
                 "context window. Please reduce the conversation length or "

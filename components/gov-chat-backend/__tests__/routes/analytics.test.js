@@ -369,6 +369,44 @@ describe('POST /api/analytics/events (AC6)', () => {
     expect(response.body).toEqual({ message: 'eventType is required' });
   });
 
+  it('should return 400 when the body arrives under the legacy `data` key', async () => {
+    const response = await authPost('/api/analytics/events', {
+      eventType: 'pageView',
+      data: { page: '/home' }
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("Unknown field 'data'");
+    // No silent empty payload stored.
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('should report the missing eventType before the legacy `data` key when both are wrong', async () => {
+    const response = await authPost('/api/analytics/events', {
+      data: { page: '/home' }
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: 'eventType is required' });
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('should return 401 (not 400) for a legacy `data` body from a token with no iss_sub claim', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({
+      ...mockUser,
+      iss_sub: undefined
+    });
+
+    const response = await authPost('/api/analytics/events', {
+      eventType: 'pageView',
+      data: { page: '/home' }
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
   it('should return 401 when user has no iss_sub claim', async () => {
     userProvisioningService.provisionUser.mockResolvedValue({
       ...mockUser,
@@ -449,8 +487,9 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     expect(response.body).toEqual(gaugeData);
   });
 
-  // DW-113: verify locale query param propagates end-to-end to service
-  it('should propagate locale query parameter to service', async () => {
+  // The gauge's week-axis labels are period keys the client translates, so the
+  // endpoint does not localize anything and takes no locale.
+  it('should not forward a locale to the gauge service', async () => {
     analyticsService.getSatisfactionGaugeData.mockResolvedValue(gaugeData);
 
     const response = await authGet(
@@ -458,7 +497,7 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(analyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2025-01-01', '2025-01-31', 'fr');
+    expect(analyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
   });
 
   it('should return 400 when startDate/endDate missing', async () => {

@@ -20,9 +20,13 @@ router.get('/', ctrl.listRepos);
 router.get('/:repo_id', ctrl.getRepo);
 
 // Story 10.5 — the wizard's resumable curation draft. ALL THREE verbs live
-// under `/:repo_id/draft`; the retired `/:repo_id/studio_drafts` path shape is
-// never registered (the endpoint was never deployed, so no client depends on
-// it — an alias would be dead code). Express `/:repo_id` matches exactly one
+// under `/:repo_id/draft`. The retired client path was the TOP-LEVEL
+// `/okf/studio_drafts/:repo_id` (repo id LAST — the pre-3f1c733ba
+// studioService PUT/DELETE'd there, while its GET already used
+// `/:repo_id/draft`). No okf-server version ever served that path, so no
+// client ever had a working server-side draft to preserve and no compat
+// alias is registered; the negative guard in repos-routes.test.js pins both
+// retired shapes as absent. Express `/:repo_id` matches exactly one
 // segment, so it can never swallow this two-segment path; the only other
 // parametrised two-segment routes (`/routing-testsuite/:suite_key`,
 // `/concepts/:concept_id`) have literal prefixes that cannot collide.
@@ -75,6 +79,13 @@ router.get('/:repo_id/pii-scan/:scan_key', requireRepoScope('repo_id', 'read'), 
 // REPO BULK PII ACTION (David, 2026-09-12): Redact / Remove / Accept applied
 // to EVERY flagged concept in one steward decision (Files-view header).
 // Scan-free; stamps the scan marker so publish neither blocks nor re-scans.
+// UX-4 (#1514): the DETACHED pair below is what the editor UI drives — a
+// large flagged set is minutes of sequential writes, and the poll reports
+// processed-of-total for the progress bar. The synchronous POST stays for
+// API compat (operator scripts). Same assertWritable drain-freeze gate on
+// both arm paths.
+router.post('/:repo_id/pii-bulk/jobs', requireRepoScope('repo_id', 'admin'), ctrl.startRepoBulkPii);
+router.get('/:repo_id/pii-bulk/jobs/:job_id', requireRepoScope('repo_id', 'read'), ctrl.getRepoBulkPiiJob);
 router.post('/:repo_id/pii-bulk', requireRepoScope('repo_id', 'admin'), ctrl.repoBulkPii);
 
 // Concept IMPORT (Story 2.9.1 — ADR-021; renamed from /ingest, David
@@ -395,6 +406,8 @@ router.post('/:repo_id/resplit', requireRepoScope('repo_id', 'admin'), ctrl.resp
 // Story #978 — Editor "Autocorrect" action. Scans all concepts and applies
 // frontmatter-only autocorrect rules. Admin-scope. dry_run=true returns the
 // planned changes without applying; dry_run=false applies atomically.
+// dry_run DEFAULTS TO TRUE when the body omits it — a body-less request is a
+// scan, not an apply (and writes no audit row).
 router.post('/:repo_id/autocorrect', requireRepoScope('repo_id', 'admin'), ctrl.autocorrectRepo);
 
 // RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the drain's

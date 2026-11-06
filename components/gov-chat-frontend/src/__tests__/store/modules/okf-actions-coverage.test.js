@@ -897,13 +897,20 @@ describe('modelConfig actions', () => {
     });
     const store = buildStore();
     const res = await store.dispatch('okf/modelConfigList');
-    expect(res).toEqual({ ok: true, configs: [{ key: 'a' }], env_judge: { model: 'g' }, env_pick: null });
+    expect(res).toEqual({
+      ok: true,
+      configs: [{ key: 'a' }],
+      env_judge: { model: 'g' },
+      env_pick: null,
+      deployment_opt_in: null
+    });
     modelConfigService.list.mockResolvedValueOnce(null);
     expect(await store.dispatch('okf/modelConfigList')).toEqual({
       ok: true,
       configs: [],
       env_judge: null,
-      env_pick: null
+      env_pick: null,
+      deployment_opt_in: null
     });
   });
 

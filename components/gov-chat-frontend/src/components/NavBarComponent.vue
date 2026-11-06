@@ -18,14 +18,19 @@
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </router-link>
         <!-- Title from GENIE.AI config - Hide on mobile -->
-        <router-link to="/dashboard" class="brand-name hide-on-mobile" :class="brandWordmarkClass">{{
-          config.app.title
-        }}</router-link>
+        <router-link
+          to="/dashboard"
+          class="brand-name hide-on-mobile"
+          :class="brandWordmarkClass"
+          data-test-id="nav-brand-name"
+          :data-wordmark="brandWordmarkClass ? 'true' : 'false'"
+          >{{ config.app.title }}</router-link
+        >
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
           <!-- Language Selector for Mobile -->
-          <div class="language-select-container mobile-language-select">
+          <div class="language-select-container mobile-language-select" data-test-id="nav-language-select-mobile">
             <language-selector />
           </div>
 
@@ -33,6 +38,7 @@
           <DsButton
             variant="ghost"
             class="icon-btn mobile-btn"
+            data-test-id="nav-icon-btn-analytics-mobile"
             aria-label="Analytics"
             :disabled="!isAdmin"
             :class="{ 'disabled-btn': !isAdmin }"
@@ -52,13 +58,14 @@
               <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
               <path d="M22 12A10 10 0 0 0 12 2v10z" />
             </svg>
-            <span class="tooltip">{{ $t('nav.analytics') }}</span>
+            <span class="tooltip" data-test-id="nav-tooltip-analytics-mobile">{{ $t('nav.analytics') }}</span>
           </DsButton>
 
           <!-- Admin button for Mobile -->
           <DsButton
             variant="ghost"
             class="icon-btn admin-btn mobile-btn"
+            data-test-id="nav-icon-btn-administration-mobile"
             aria-label="Administration"
             :disabled="!isAdmin"
             :class="{ 'disabled-btn': !isAdmin }"
@@ -79,12 +86,13 @@
               <line x1="3" y1="9" x2="21" y2="9" />
               <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
-            <span class="tooltip">{{ $t('nav.administration') }}</span>
+            <span class="tooltip" data-test-id="nav-tooltip-administration-mobile">{{ $t('nav.administration') }}</span>
           </DsButton>
 
           <DsButton
             variant="ghost"
             class="icon-btn mobile-btn"
+            data-test-id="nav-icon-btn-settings-mobile"
             aria-label="Settings"
             @click="$router.push('/settings')"
           >
@@ -104,12 +112,13 @@
                 d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
               />
             </svg>
-            <span class="tooltip">{{ $t('nav.settings') }}</span>
+            <span class="tooltip" data-test-id="nav-tooltip-settings-mobile">{{ $t('nav.settings') }}</span>
           </DsButton>
 
           <DsButton
             variant="ghost"
             class="icon-btn user-btn mobile-btn"
+            data-test-id="nav-icon-btn-user-profile-mobile"
             aria-label="User profile"
             @click="$router.push('/profile')"
           >
@@ -127,11 +136,17 @@
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-            <span class="tooltip">{{ $t('nav.userProfile') }}</span>
+            <span class="tooltip" data-test-id="nav-tooltip-user-profile-mobile">{{ $t('nav.userProfile') }}</span>
           </DsButton>
 
           <!-- ADDED: Logout button for mobile -->
-          <DsButton variant="ghost" class="icon-btn logout-btn mobile-btn" aria-label="Log out" @click="handleLogout">
+          <DsButton
+            variant="ghost"
+            class="icon-btn logout-btn mobile-btn"
+            data-test-id="nav-icon-btn-logout-mobile"
+            aria-label="Log out"
+            @click="handleLogout"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -147,7 +162,7 @@
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span class="tooltip">{{ $t('nav.logout') }}</span>
+            <span class="tooltip" data-test-id="nav-tooltip-logout-mobile">{{ $t('nav.logout') }}</span>
           </DsButton>
         </div>
       </div>
@@ -156,7 +171,7 @@
       <div class="nav-main desktop-only"></div>
 
       <!-- Right section with language and user controls - Only visible on desktop -->
-      <div class="nav-right desktop-only">
+      <div class="nav-right desktop-only" data-test-id="nav-right">
         <!-- The assistant's reachability, visible on every page: online is a
              quiet pill, offline turns danger and carries the explanation. -->
         <span
@@ -175,7 +190,7 @@
           <span class="nav-status__dot" aria-hidden="true"></span>
           {{ status.online ? $t('nav.statusOnline') : $t('nav.statusOffline') }}
         </span>
-        <div class="language-select-container">
+        <div class="language-select-container" data-test-id="nav-language-select">
           <language-selector />
         </div>
 
@@ -183,6 +198,7 @@
         <DsButton
           variant="ghost"
           class="icon-btn"
+          data-test-id="nav-icon-btn-analytics"
           aria-label="Analytics"
           :disabled="!isAdmin"
           :class="{ 'disabled-btn': !isAdmin }"
@@ -202,14 +218,14 @@
             <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
             <path d="M22 12A10 10 0 0 0 12 2v10z" />
           </svg>
-          <span class="tooltip">{{ $t('nav.analytics') }}</span>
+          <span class="tooltip" data-test-id="nav-tooltip-analytics">{{ $t('nav.analytics') }}</span>
         </DsButton>
 
         <!-- Admin button for Desktop -->
         <DsButton
           variant="ghost"
           class="icon-btn admin-btn"
-          data-test-id="nav-admin-button-desktop"
+          data-test-id="nav-icon-btn-administration"
           aria-label="Administration"
           :disabled="!isAdmin"
           :class="{ 'disabled-btn': !isAdmin }"
@@ -230,10 +246,16 @@
             <line x1="3" y1="9" x2="21" y2="9" />
             <line x1="9" y1="21" x2="9" y2="9" />
           </svg>
-          <span class="tooltip">{{ $t('nav.administration') }}</span>
+          <span class="tooltip" data-test-id="nav-tooltip-administration">{{ $t('nav.administration') }}</span>
         </DsButton>
 
-        <DsButton variant="ghost" class="icon-btn" aria-label="Settings" @click="$router.push('/settings')">
+        <DsButton
+          variant="ghost"
+          class="icon-btn"
+          data-test-id="nav-icon-btn-settings"
+          aria-label="Settings"
+          @click="$router.push('/settings')"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -250,10 +272,16 @@
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
             />
           </svg>
-          <span class="tooltip">{{ $t('nav.settings') }}</span>
+          <span class="tooltip" data-test-id="nav-tooltip-settings">{{ $t('nav.settings') }}</span>
         </DsButton>
 
-        <DsButton variant="ghost" class="icon-btn user-btn" aria-label="User profile" @click="$router.push('/profile')">
+        <DsButton
+          variant="ghost"
+          class="icon-btn user-btn"
+          data-test-id="nav-icon-btn-user-profile"
+          aria-label="User profile"
+          @click="$router.push('/profile')"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -268,11 +296,17 @@
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          <span class="tooltip">{{ $t('nav.userProfile') }}</span>
+          <span class="tooltip" data-test-id="nav-tooltip-user-profile">{{ $t('nav.userProfile') }}</span>
         </DsButton>
 
         <!-- ADDED: Logout button -->
-        <DsButton variant="ghost" class="icon-btn logout-btn" aria-label="Log out" @click="handleLogout">
+        <DsButton
+          variant="ghost"
+          class="icon-btn logout-btn"
+          data-test-id="nav-icon-btn-logout"
+          aria-label="Log out"
+          @click="handleLogout"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -288,7 +322,7 @@
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          <span class="tooltip">{{ $t('nav.logout') }}</span>
+          <span class="tooltip" data-test-id="nav-tooltip-logout">{{ $t('nav.logout') }}</span>
         </DsButton>
       </div>
     </header>

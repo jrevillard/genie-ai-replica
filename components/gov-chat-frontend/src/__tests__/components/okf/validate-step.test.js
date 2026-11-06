@@ -140,6 +140,22 @@ describe('OkfStepValidate — orphan link suggestions (#1036 Class A)', () => {
     await settle(w);
     expect(w.text()).toContain('No suggestions — link it manually in the editor.');
   });
+
+  it('#1510: proposal rows offer Accept and no Dismiss (the dead affordance is gone)', async () => {
+    const { w } = mountValidate({
+      'okf/fetchValidation': orphanReport,
+      'okf/suggestLinks': () => ({
+        ok: true,
+        result: { concept_id: 'lonely', proposals: [{ to_concept_id: 'who-pen', label: 'PEN package', title: 'PEN' }] }
+      })
+    });
+    await settle(w);
+    await w.find('.okf-step-validate__issue-actions button').trigger('click');
+    await settle(w);
+    const buttons = w.findAll('.okf-step-validate__sug-row button');
+    expect(buttons.some((b) => b.text() === 'Accept')).toBe(true);
+    expect(buttons.some((b) => b.text() === 'Dismiss')).toBe(false);
+  });
 });
 
 describe('OkfStepValidate — remedy panels outlive the issue they cure (!1075 / Story 10.8)', () => {

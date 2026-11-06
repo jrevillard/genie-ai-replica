@@ -35,7 +35,7 @@
       {{
         translate(
           'okf.steps.publish.hint',
-          'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.'
+          'This repository is ready for review. Publishing never happens here — the lifecycle runs on the dashboard and in the editor, one button at a time.'
         )
       }}
     </p>
@@ -49,14 +49,7 @@
       }}</DsStatusTag>
       <DsStatusTag :variant="checklistVariants.frontmatter">{{ frontmatterLabel }}</DsStatusTag>
     </div>
-    <p class="okf-step__ritual">
-      {{
-        translate(
-          'okf.steps.publish.ritual',
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.'
-        )
-      }}
-    </p>
+    <p class="okf-step__ritual">{{ lifecycleRitual }}</p>
     <!-- Story 6-1c (2026-10-17): SECURE — the wizard/editor parity rule.
          Restriction + grants are configuration (acl.restricted / Keycloak
          scopes), never a lifecycle transition, so the D4 "no publishing in
@@ -70,14 +63,7 @@
       <DsButton variant="secondary" small @click="$emit('dashboard')">
         {{ translate('okf.steps.publish.openDashboard', 'Open the Dashboard') }}
       </DsButton>
-      <DsInfoTip
-        :text="
-          translate(
-            'okf.glossary.handoff',
-            'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
-          )
-        "
-      />
+      <DsInfoTip :text="handoffTip" />
     </div>
     <!-- Story 1-8 (2026-10-08): read-only head status + the Testing Lab.
          Publishing builds the vectorized head from the tags; this card tells
@@ -146,6 +132,40 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
+    // The ritual line names the lifecycle steps through the SAME translated
+    // labels the dashboard button renders (okf.lifecycle.*), so the copy
+    // cannot name a button the operator cannot find. The chain is built ONCE
+    // (one order, one separator) and interpolated into both sentences as a
+    // single {chain} token.
+    lifecycleChain() {
+      // The separator is a locale string: RTL locales mirror the arrow (an
+      // arrow glyph is not bidi-mirrored, so a hardcoded '→' would invert
+      // the perceived step order in Arabic).
+      const separator = this.translate('okf.lifecycle.chainArrow', ' → ');
+      return [
+        this.translate('okf.lifecycle.submit', 'Submit for review'),
+        this.translate('okf.lifecycle.approve', 'Approve'),
+        this.translate('okf.lifecycle.publish', 'Publish'),
+        this.translate('okf.lifecycle.ingest', 'Ingest')
+      ].join(separator);
+    },
+    lifecycleRitual() {
+      return this.translate(
+        'okf.steps.publish.ritual',
+        'Next: on the Studio dashboard this card has ONE button for the whole lifecycle — {chain}. The wizard stops here by design.',
+        { chain: this.lifecycleChain }
+      );
+    },
+    // The hand-off tooltip names the same four steps, same labels — a tip
+    // that listed three of them (or hand-translated ones) contradicted the
+    // ritual right above it.
+    handoffTip() {
+      return this.translate(
+        'okf.glossary.handoff',
+        'The lifecycle ritual ({chain}) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        { chain: this.lifecycleChain }
+      );
+    },
     // B8 (Amendment A): the checklist reads the LIVE repo doc — never the
     // dead draft shapes. Each item is a real readiness signal.
     repo() {

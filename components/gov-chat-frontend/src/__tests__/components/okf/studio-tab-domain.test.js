@@ -8,73 +8,9 @@
  * chosen domain rides the import payload.
  */
 
-jest.mock('@/services/repoOkfService', () => ({
-  __esModule: true,
-  default: { list: jest.fn().mockResolvedValue([]), get: jest.fn(), getMetrics: jest.fn() }
-}));
-jest.mock('@/services/conceptService', () => ({
-  __esModule: true,
-  default: { listForRepo: jest.fn().mockResolvedValue([]), get: jest.fn(), update: jest.fn() }
-}));
-jest.mock('@/services/studioService', () => ({
-  __esModule: true,
-  default: {
-    saveDraft: jest.fn().mockRejectedValue({ status: 404 }),
-    getDraft: jest.fn().mockRejectedValue({ status: 404 })
-  }
-}));
-jest.mock('@/services/crawlerToOkfService', () => ({
-  __esModule: true,
-  default: { convertCrawlToOkf: jest.fn() }
-}));
-
-const mockLoad = jest.fn().mockResolvedValue([
-  { value: 'Water Supply', label: 'Water Supply' },
-  { value: 'Health Services', label: 'Health Services' }
-]);
-const mockCreateRepo = jest.fn().mockResolvedValue({ repo_id: 'r1', name: 'bundle', domain: 'Water Supply' });
-const mockImportZip = jest.fn().mockResolvedValue({ ok: true });
-
-jest.mock('@/services/okfRepoOps', () => {
-  // BOTH surfaces: components import .default; the store requires the
-  // NAMESPACE (no .default) — named exports must exist at top level too.
-  const impl = {
-    loadSubjectAreaOptions: (...a) => mockLoad(...a),
-    createRepo: (...a) => mockCreateRepo(...a),
-    importZipIntoRepo: (...a) => mockImportZip(...a)
-  };
-  return { __esModule: true, default: impl, ...impl };
-});
-
-const Vuex = require('vuex');
-const { mount } = require('@vue/test-utils');
-const okfModule = require('@/store/modules/okf').default;
-const OkfStudioTab = require('@/components/okf/StudioTab.vue').default;
-
-// A REAL Vuex store (mapGetters needs _modulesNamespaceMap) with the okf
-// module; dispatch is spied so assertions see the exact payloads.
-function buildStore() {
-  const store = new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
-  });
-  const dispatch = jest.spyOn(store, 'dispatch');
-  return { store, dispatch };
-}
-
-function mountTab(store) {
-  return mount(OkfStudioTab, {
-    global: {
-      plugins: [store],
-      stubs: {
-        OkfStudioDashboard: true,
-        OkfStudioWizard: true,
-        OkfRepoEditorShell: true,
-        OkfNarrative: true,
-        DsModeSwitch: true
-      }
-    }
-  });
-}
+// The StudioTab rig (mock battery + store + mount) is shared —
+// src/__tests__/helpers/studioTab.js.
+const { buildStore, mountTab, mockImportZip } = require('../../helpers/studioTab');
 
 function zipPickEvent(name) {
   return {

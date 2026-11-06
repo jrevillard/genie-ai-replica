@@ -65,7 +65,7 @@ describe('the hierarchy fetch is bounded at the HTTP client', () => {
 
     expect(axios.get).toHaveBeenCalledTimes(1);
     const [url, config] = axios.get.mock.calls[0];
-    expect(url).toContain('services/categories');
+    expect(url).toContain('service-categories/categories');
     // The BOUND — the whole point of the call. Without it axios waits
     // forever and the grid never renders.
     expect(config.timeout).toBe(15000);

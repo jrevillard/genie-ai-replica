@@ -206,6 +206,35 @@ async function downloadToBuffer(fileId, cap) {
   });
 }
 
+/** Append a line to a SOURCE file's ingestion log — the operator-visible
+ * channel for a document import (the admin's file view shows it). The
+ * conversion report carries the same fact, but the report is a record; the
+ * ingestion log is where the operator looks. Non-fatal by design: a failed
+ * mirror never aborts an import.
+ *
+ * Distinct from the worker's bundle mirror (workers/ingestWorker.js), which
+ * resolves the repo's BUNDLE zip and keys per-concept progress on it — that
+ * one cannot carry a per-source-file entry. */
+async function mirrorIngestionLog(fileId, message) {
+  try {
+    await authedAxios.post(
+      `${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}/ingestion-log`,
+      { level: 'WARN', stage: 'OKF topics', message },
+      { timeout: 10000 }
+    );
+  } catch (err) {
+    // The diagnosis travels IN the message string: the winston console
+    // formatter strips metadata fields, so a mirror failure logged as
+    // metadata would be invisible in the log stream.
+    const status = err && err.response && err.response.status;
+    const body = err && err.response && err.response.data ? JSON.stringify(err.response.data).substring(0, 200) : '';
+    logger.warn(
+      `Ingestion-log mirror failed (non-fatal): [${fileId}] status=${status || 'n/a'} err=${err.message}` +
+        `${body ? ' body=' + body : ''}`
+    );
+  }
+}
+
 /** Extract text (or structured drafts) from a document buffer by extension. */
 async function convertDocument(buffer, ext, meta) {
   if (ext === '.pdf') {
@@ -521,7 +550,32 @@ async function runDocumentsConversion(job) {
         // reports "imported" with nothing in the repo.
         if (lower === '.xlsx' || lower === '.csv') {
           allDrafts.push(...converted.concepts);
-          perFile.push({ file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length });
+          const entry = { file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length };
+          // The topics leg states WHY it degraded (the fallback owner owns
+          // the vocabulary); the importer copies that reason into the import
+          // report and into the file's ingestion log. The import lands
+          // anyway, but the operator must see the degradation.
+          const topics = converted.topics;
+          if (topics && topics.reason) {
+            entry.topics_source = topics.source;
+            // Phrased as the decision taken, not as an import outcome: the
+            // ingestion log is append-only, so a warning that asserts
+            // completion would survive a later failed flush as a lie. And
+            // the two degradation shapes differ: a leg that degraded still
+            // carries a fallback topic, a summariser that threw carries
+            // none — the sentence says which.
+            const hasFallbackTopic = Array.isArray(topics.topics) && topics.topics.length > 0;
+            const warning = hasFallbackTopic
+              ? `Topics degraded — ${topics.reason}. The concepts carry a fallback topic instead of an LLM-derived one.`
+              : `Topics degraded — ${topics.reason}. No topic was applied to the concepts.`;
+            entry.warning = warning;
+            // NOT awaited: the mirror is best-effort (the same channel and the
+            // same call the ingest worker fires without await — workers/ingestWorker.js),
+            // and a doc-repo round trip per file has no business on the import's
+            // critical path. The conversion report above carries the same fact.
+            mirrorIngestionLog(file_id, `[${repo_id}] ${warning}`);
+          }
+          perFile.push(entry);
         } else {
           const baseSlug = slugify(String(meta.file_name).replace(/\.[^.]+$/, '')) || `document-${perFile.length + 1}`;
           const title =

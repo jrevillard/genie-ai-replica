@@ -424,9 +424,43 @@ const keycloakAuthService = {
       if (error.response && error.response.status === 403) {
         return { active: false, disabled: true };
       }
-      // 401 is ambiguous: expired token OR disabled user — don't take destructive action
+      // 401 is ambiguous: expired token OR disabled user — don't take destructive
+      // action unless the response names the reason. Live-realm probe (issue #1476,
+      // Keycloak 26.8.0, 2026-11-04): a DISABLED user's userinfo answers 401 —
+      // WWW-Authenticate: Bearer error="invalid_token", error_description="User
+      // disabled" — not 403. A matching WWW-Authenticate is the confirmed-disable
+      // answer (same contract as the 403 branch above); anything else (expired
+      // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
-        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
+        const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
+        if (typeof wwwAuthenticate === 'string') {
+          // Require BOTH the challenge code and the description: a challenge
+          // that merely carries the phrase is not proof, and the middleware
+          // acts destructively on a confirmed disable (soft-deletes the
+          // account). Live-realm probe (Keycloak 26.8.0, 2026-11-04) answers
+          // both together; a mismatch falls back to the ambiguous null.
+          const disabled =
+            /error="invalid_token"/i.test(wwwAuthenticate) &&
+            /error_description="user disabled"/i.test(wwwAuthenticate);
+          if (disabled) {
+            return { active: false, disabled: true };
+          }
+          // Still ambiguous. When a WWW-Authenticate was present but named no
+          // reason we act on, log it — the generic "may be expired" alone
+          // would hide that the header simply did not match. Control
+          // characters stripped and the value bounded: a challenge is
+          // server-controlled log input.
+          const printable = [...wwwAuthenticate]
+            .filter((char) => {
+              const code = char.codePointAt(0);
+              return code >= 0x20 && code !== 0x7f;
+            })
+            .join('');
+          const headerNote = ` (WWW-Authenticate: ${printable.slice(0, 200)})`;
+          logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+          return null;
+        }
+        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null');
         return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)

@@ -135,79 +135,26 @@ let fetchGeneration = 0;
 
 /**
  * THE bounded poll loop behind every Testing-Lab async action (round 16,
- * #80124 — this replaces seven near-identical for(;;)+setTimeout copies).
+ * #80124 — this replaced seven near-identical for(;;)+setTimeout copies).
+ * The loop itself now lives in services/pollJob.js (the UX-4 bulk-PII job
+ * nearly became the ninth copy, so the helper moved where services can use
+ * it too); this store wrapper injects ONLY the Lab's two abort envelopes —
+ * every other contract arm (deadline, transient tolerance, signal, done
+ * mapping) is the shared module's, byte-for-byte.
  *
- * Contract, distilled from those seven loops (do not "simplify" any arm away):
- *  - deadline: a UI horizon only. The server NEVER kills a healthy long job;
- *    the timeout envelope says so and the job keeps running server-side.
- *  - transient tolerance: a gateway blip (kong restart = 502) must not end
- *    tracking — the server-side job completes regardless (live 2026-10-18
- *    incident). Solid failure for 60 consecutive polls rethrows.
- *  - signal: the component's cancel token ({aborted}). Checked before every
- *    tick AND after every sleep, so an unmount stops the loop within one
- *    cadence — the loop the old copies never had: a closed Lab kept polling
- *    the API every 2s for up to the 24h horizon.
- *
- * @param {object} p
- * @param {() => Promise<object>} p.fetchDoc     one poll attempt → job doc
- * @param {number} [p.pollMs]                    cadence (default 2000)
- * @param {number} [p.deadlineMs]                UI horizon (default 24h)
- * @param {(doc: object) => boolean} [p.isRunning] keep-polling predicate
- * @param {(progress: object) => void} [p.onProgress] live progress tap
- * @param {{code: string, message: string}} p.timeout  horizon-exceeded envelope
- * @param {{code: string, message: string}} p.failed   failed-status envelope
- * @param {(doc: object) => object} p.done       terminal mapping (cancelled
- *        branches and result-vs-payload differences live HERE, per action)
- * @param {{aborted?: boolean}} [p.signal]       component cancel token
+ * @param {object} p  the services/pollJob.js parameter object
  * @returns {Promise<{ok: boolean, code?: string, message?: string, result?: *}>}
  */
-async function pollJob({
-  fetchDoc,
-  pollMs = 2000,
-  deadlineMs = 24 * 60 * 60 * 1000,
-  isRunning = (doc) => !doc || doc.status === 'running',
-  onProgress = null,
-  timeout,
-  failed,
-  done,
-  signal = null
-}) {
-  const deadline = Date.now() + deadlineMs;
-  let misses = 0;
-  for (;;) {
-    if (signal && signal.aborted) {
-      // The component went away — stop hammering the gateway. The job itself
-      // is untouched server-side; reopening the Lab re-adopts it.
-      return {
-        ok: false,
-        code: 'POLL_ABORTED',
-        message: LAB_ERROR_KEYS.pollAborted
-      };
-    }
-    if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
-    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.trackingStopped };
-    let doc;
-    try {
-      doc = await fetchDoc();
-      misses = 0;
-    } catch (err) {
-      if (++misses >= 60) throw err;
-      continue;
-    }
-    if (isRunning(doc)) {
-      if (onProgress && doc && doc.progress) onProgress(doc.progress);
-      continue;
-    }
-    if (doc && doc.status === 'failed') {
-      return {
-        ok: false,
-        code: (doc.error && doc.error.code) || failed.code,
-        message: (doc.error && doc.error.message) || failed.message
-      };
-    }
-    return done(doc);
-  }
+async function pollJob(p) {
+  const { pollJob: pollJobLoop } = require('@/services/pollJob');
+  return pollJobLoop({
+    ...p,
+    aborted: { code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.pollAborted },
+    abortedAfterSleep: { code: 'POLL_ABORTED', message: LAB_ERROR_KEYS.trackingStopped },
+    // the Lab actions' onProgress callbacks read doc.progress — the shared
+    // loop hands them the whole doc and the wrapper keeps that contract
+    onProgress: p.onProgress ? (doc) => p.onProgress(doc && doc.progress) : null
+  });
 }
 
 /**
@@ -269,6 +216,12 @@ const getters = {
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
+  // The session latch: the draft endpoint is not available on this server.
+  // ONE degraded state, ONE notice. A repo that is gone (REPO_NOT_FOUND) is
+  // NOT a session state — it is that repo's own outcome, reported to the
+  // caller (the wizard surfaces it); arming the latch for it would push
+  // every OTHER repo's saves to local-only behind a notice nobody can act on.
+  draftsUnavailable: (state) => state.draftsUnavailable === true,
   selection: (state) => state.selection,
   error: (state) => state.error
 };
@@ -287,6 +240,9 @@ const mutations = {
   // hammered once per step change.
   setDraftsUnavailable(state) {
     state.draftsUnavailable = true;
+  },
+  clearDraftsUnavailable(state) {
+    state.draftsUnavailable = false;
   },
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
@@ -397,20 +353,41 @@ const actions = {
    *   { ok: true, draft: null }    the repo exists but has no draft yet, or
    *                                the repo is gone (REPO_NOT_FOUND resolves to
    *                                null in studioService) — NOT an error,
-   *   { ok: false, code: 'NOT_READY' } the endpoint is missing on this server
-   *                                (an older backend); flags the session so
-   *                                later saves do not hammer it.
+   *   { ok: false, code: 'NOT_READY' } the endpoint is not available on this
+   *                                server; flags the session so later saves
+   *                                do not hammer it.
    *
    * draftsUnavailable is set ONLY on a genuine NOT_READY — never on a
    * null draft, which is the normal first-open case.
    */
   async fetchDraft({ commit, state }, { repoId, force = false } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId required' };
-    if (!force && state.drafts[repoId]) {
+    // While the session latch is armed, the CACHED draft proves nothing about
+    // the endpoint: the server may have been upgraded (or the routing gap
+    // that answered 404 closed) since it was fetched. Probe the server
+    // instead — that probe is what recovers the latch, so the cache must not
+    // short-circuit it.
+    const latched = state.draftsUnavailable === true;
+    if (!force && !latched && state.drafts[repoId]) {
       return { ok: true, draft: state.drafts[repoId], cached: true };
     }
     try {
       const draft = await studioService.getDraft(repoId);
+      if (latched) {
+        // The endpoint ANSWERED: the 404 that armed the latch was a routing
+        // gap, not a missing route — recover. A null draft is an answer too
+        // (the repo has no draft yet, or is gone — a REPO_NOT_FOUND 404 still
+        // means the route exists), so the recovery must not sit behind the
+        // null-draft early return.
+        commit('clearDraftsUnavailable');
+        // Keep the LOCAL draft: while the latch was armed, saves went
+        // local-only, so the local copy is the fresher one. The server's
+        // copy predates it and must not overwrite the curator's work.
+        if (state.drafts[repoId]) return { ok: true, draft: state.drafts[repoId] };
+        if (!draft) return { ok: true, draft: null };
+        commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
+        return { ok: true, draft };
+      }
       if (!draft) return { ok: true, draft: null };
       // The wire draft is FLAT — commit it verbatim. A server that echoes a
       // stale/other repo_id would corrupt the map key, so trust the id we asked for.
@@ -418,9 +395,12 @@ const actions = {
       return { ok: true, draft };
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
-        // The endpoint does not exist on this server. Flag the session so
-        // saveDraft stops re-hammering it; the wizard keeps working off the
-        // in-memory draft exactly as it did before Story 10.5.
+        // The endpoint is not available on this server (the server may be
+        // older than this page, or the page older than the server — a 404
+        // alone cannot tell the two apart, so the message stays party-neutral).
+        // Flag the session so saveDraft stops re-hammering it; the wizard
+        // keeps working off the in-memory draft exactly as it did before
+        // Story 10.5.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
       }
@@ -471,9 +451,18 @@ const actions = {
     } catch (err) {
       if (err && err.code === 'NOT_READY') {
         // Only reachable against a server WITHOUT the endpoint — flag it so
-        // the session stops re-hammering a route that does not exist.
+        // the session stops re-hammering a route it cannot reach.
         commit('setDraftsUnavailable');
         return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      }
+      if (err && err.code === 'REPO_NOT_FOUND') {
+        // Definitive answer (typed by studioService's classifier — the ONE
+        // owner of what a 404 means): THIS repo is gone. It must NOT arm
+        // the session latch — that would push every OTHER repo's saves to
+        // local-only behind a notice that blames a version mismatch. The
+        // local draft stays (committed above); the caller surfaces the
+        // repo-scoped outcome.
+        return { ok: false, code: 'REPO_NOT_FOUND', message: err.message };
       }
       return {
         ok: false,
@@ -1996,7 +1985,11 @@ const actions = {
         ok: true,
         configs: Array.isArray(envelope && envelope.configs) ? envelope.configs : [],
         env_judge: (envelope && envelope.env_judge) || null,
-        env_pick: (envelope && envelope.env_pick) || null
+        env_pick: (envelope && envelope.env_pick) || null,
+        // The deployment opt-in for the OKF LLM legs — the service owns the
+        // normalisation (null when the server does not say), so the panel
+        // warns only on a state it actually knows.
+        deployment_opt_in: (envelope && envelope.deployment_opt_in) ?? null
       };
     } catch (err) {
       return { ok: false, code: (err && err.code) || 'MODEL_CONFIG_LIST_FAILED', message: err.message };

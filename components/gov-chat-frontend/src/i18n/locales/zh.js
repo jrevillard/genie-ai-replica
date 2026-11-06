@@ -464,6 +464,8 @@ export default {
       saveError: '保存层级项失败。',
       loadError: '加载知识层级失败。',
       loadTranslationsError: '加载翻译失败。',
+      translationsLoadFailedNotice: '无法加载翻译。在加载成功之前，翻译编辑和保存均不可用。',
+      retryTranslations: '重试',
       translationsNotLoaded: '翻译未加载 — 保存前请重新加载。',
       confirmCancelTitle: '未保存的更改',
       confirmCancelEdit: '您有未保存的更改。确定要取消吗？',
@@ -478,6 +480,12 @@ export default {
       duplicateLangError: '翻译中发现重复语言。请移除它们。'
     },
     documents: {
+      viewDocuments: '文档',
+      viewArtifacts: '构件',
+      deleteRefuseBundle: '{count} 个 OKF 构件由知识库生命周期管理，无法在此删除。',
+      deleteRefuseMixed:
+        '{blocked} 个文件仍在摄取中——请先撤回。{bundles} 个 OKF 构件由知识库生命周期管理，无法在此删除。',
+      artifactsParked: '当此部署启用 OKF 功能时，将显示 OKF 构件。',
       title: '文档管理',
       addLink: '从链接添加',
       uploadFiles: '上传文件',
@@ -740,7 +748,6 @@ export default {
   },
   services: {
     eCitizen: 'eCitizen 门户',
-    taxFiling: '报税系统',
     idApplication: 'ID 申请',
     businessReg: '业务注册',
     drivingLicense: '驾照'
@@ -957,6 +964,7 @@ export default {
     },
     processing: '处理中...',
     userDataReset: '您的资料数据已成功重置。',
+    userDataResetFilesFailed: '您的资料数据已重置，但部分存储的文件无法删除。请联系管理员。',
     failedToResetUserData: '重置您的资料数据失败。请稍后再试。',
     unableToLoadUser: '无法加载用户信息。请重试。',
     retry: '重试',
@@ -971,6 +979,7 @@ export default {
     confirmDeleteAccount: '您确定要删除您的账户吗？此操作是永久性的，无法撤销。您的所有数据将被清除。',
     delete: '删除',
     accountDeleted: '您的账户已被删除。',
+    accountDeletedFilesFailed: '账户已删除，但部分存储文件无法删除。请联系管理员。',
     failedToDeleteAccount: '删除账户失败。请稍后重试。'
   },
   userProfile: {
@@ -1403,6 +1412,7 @@ export default {
     alt: '上传'
   },
   details: {
+    bundleBadge: '由 OKF 生命周期管理',
     crawl: {
       seconds: '秒',
       autoRefreshEvery: '自动刷新间隔',
@@ -1513,6 +1523,73 @@ export default {
       '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
   okf: {
+    artifacts: {
+      title: 'OKF 构件',
+      lead: '每个已发布版本对应一个构件。',
+      empty: '尚无 OKF 构件。',
+      loadFailed: '无法读取 OKF 构件。',
+      downloadFailed: '无法下载 OKF 构件。',
+      column: {
+        artifact: '构件',
+        repository: '知识库',
+        actions: '操作',
+        state: '状态'
+      },
+      openRepo: '打开知识库',
+      unknownVersion: '未知版本'
+    },
+    retrieval: {
+      title: '检索态势',
+      refresh: '刷新',
+      loading: '读取中…',
+      engaged: '接地已启用',
+      notEngaged: '未参与',
+      servingCount: '{n} 个服务中的图',
+      sourceLabel: '来源',
+      invalidValue: '请输入 {min} 到 {max} 之间的整数。',
+      source: {
+        database: '受管记录',
+        'env-defaults': '环境默认值'
+      },
+      revision: '版本',
+      updatedAt: '更新于',
+      updatedBy: '更新者',
+      modeLabel: '模式',
+      mode: {
+        legacy: '传统',
+        okf_only: '仅 OKF',
+        hybrid: '混合'
+      },
+      consequence: {
+        legacy: 'OKF 接地已关闭——答案仅来自自由文本路径。',
+        unknown: '未知模式。',
+        okf_only: '仅由 OKF 图为答案提供依据——不查询自由文本上下文。',
+        hybrid: '由 OKF 图为答案提供依据，同时自由文本上下文仍然参与。'
+      },
+      warnZeroServing: 'okf_only 且没有任何服务中的图——OKF 贡献为零。请先发布并摄取一个仓库。',
+      servingList: '服务中的图',
+      advanced: '高级限制',
+      save: '保存',
+      revert: '还原',
+      cancel: '取消',
+      confirm: '应用',
+      confirmTitle: '要更改检索态势吗？',
+      confirmLead: '这是全局设置——它会在约 30 秒内改变每个查询的接地方式。',
+      readFailed: '无法读取检索态势。',
+      nothingToSave: '没有需要保存的内容。',
+      saveFailed: '更改被拒绝。',
+      audit: '变更历史',
+      auditLoading: '正在加载历史…',
+      auditEmpty: '尚无变更记录。',
+      auditFailed: '无法读取变更历史。',
+      limit: {
+        max_fanout_graphs: '每次查询的图数',
+        spine_max_hops: '主干跳数',
+        extracted_hop_cap: '抽取跳数',
+        candidate_cap_per_graph: '每个图的候选数',
+        candidate_cap_global: '每次查询的候选数'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         '部分文件仍在处理（索引）中。在编辑器中打开此仓库 — 文件列表会显示是哪些文件，系统会自动重试摄取。当每个文件都显示为已索引后，再重新发布。',
@@ -1550,6 +1627,8 @@ export default {
       title: '模型配置',
       add: '新建配置',
       hint: '用于评判和生成的命名远程模型端点——任何 OpenAI 兼容接口（OpenAI、LiteLLM 网关、vLLM、Gemini 兼容、Ollama）或 Anthropic 直连。同一时间只能有一个配置处于激活状态；无激活配置时使用部署环境配置的默认模型。密钥仅存储在服务端，绝不显示。',
+      gateWarning:
+        '遵循部署可选启用的 OKF LLM 功能（主题链接、CSV 主题、清单摘要）已关闭：此部署未设置 VLLM_ENDPOINT。命名配置不会启用它们 — 请在服务器上设置 VLLM_ENDPOINT 以启用。',
       name: '名称',
       provider: '提供商',
       providerOpenai: 'OpenAI 兼容（OpenAI、LiteLLM、vLLM…）',
@@ -1627,6 +1706,7 @@ export default {
       ingestCompleted: '已摄入',
       bundleMissing: '缺少 zip',
       bundleDownload: '下载 zip',
+      viewArtifact: '查看构件',
       bundle: '捆绑包',
       col: {
         ingest: '摄入',
@@ -1949,6 +2029,7 @@ export default {
         done_accept: '完成——{n} 个概念上的每个被标记实体均已设为“已核对并保留”。PII 标记已清除。',
         done_redact: '完成——{n} 个概念上的被标记内容已替换为遮盖提示。',
         done_remove: '完成——{n} 个概念上的被标记内容已移除。',
+        progress: '正在应用… {done}/{total}',
         title: {
           redact: '遮盖所有标记内容',
           remove: '移除所有标记内容',
@@ -2272,7 +2353,7 @@ export default {
       autocorrect:
         '自动修复只触及 frontmatter（标题、类型、结构）——绝不会改动您撰写的内容。任何更改之前都会先展示提案；应用后会立即写入修复，您可以在策展步骤中查看结果。',
       handoff:
-        '生命周期仪式（提交 → 批准 → 发布）有意设在此向导之外：审批属于仪表盘和编辑器中的治理流程，版本与服务状态在那里管理。',
+        '生命周期仪式（{chain}）有意设在此向导之外：审批属于仪表盘和编辑器中的治理流程，版本与服务状态在那里管理。',
       lifecycle:
         '六步契约：草稿 → 审查 → 已批准 → 已发布（铸造 + 打包）→ 已摄取（在 RAG 中服务）→ 已撤回（回到编辑）。内容只有在摄取后才可被引用——且只有经过复核的内容才能发布。',
       labelsAuto: '标签从知识层级自动分配——L2 服务限定在此仓库的主题领域内。请在策展步骤中逐主题复核和调整。',
@@ -2395,7 +2476,9 @@ export default {
         }
       },
       draft: {
-        notReady: '草稿暂不支持服务端保存；现已保存在本地。'
+        notReady:
+          '目前无法将草稿保存到服务器 — 草稿仅保留在此浏览器标签页中，关闭或重新加载该标签页后会丢失。页面或服务器可能不同步。',
+        repoGone: '该知识库在服务器上已不可用 — 您的更改仅保留在此浏览器标签页中，关闭或重新加载该标签页后会丢失。'
       },
       mode: {
         basic: '基础',
@@ -2599,8 +2682,7 @@ export default {
         labelsSet: '在策展步骤中按主题设置',
         browserHint: '移交前的最后浏览：下方每个文件、其 markdown 及标签——与助手引用它们的形态完全一致。',
         noRepo: '尚无仓库——创建仓库后，文件复核会显示在这里。',
-        ritualOutside:
-          '复核仪式——提交审查、审核者批准、发布——在编辑器和 Studio 仪表盘中进行，而非此处。请打开编辑器完成后续操作。',
+        ritualOutside: '审核仪式在编辑器和 Studio 仪表盘上进行，每次只需点击一个按钮 — 不在此处。打开编辑器以完成。',
         versions: '版本',
         logs: '操作日志',
         rename: '重命名',
@@ -2613,7 +2695,7 @@ export default {
         frontmatterOk: 'frontmatter 标签已批准',
         frontmatterServing: '已设置 frontmatter 标签',
         title: '安全设置并完成',
-        hint: '此知识库已准备就绪，可供审查。这里从不进行发布——请在仪表盘上提交审批，然后从仪表盘或编辑器批准并发布。',
+        hint: '此知识库已可审核。此处从不发布 — 生命周期在仪表盘和编辑器中进行，每次只需点击一个按钮。',
         nameOk: '知识库名称已设定',
         labelsOk: '标签已选定',
         topicsOk: '主题已审核',
@@ -2621,7 +2703,7 @@ export default {
         topicsServing: '主题服务中',
         noTopics: '尚无主题——请返回策展步骤生成或撰写它们。',
         frozen: '此仓库正在提供服务——此处为只读摘要。请打开编辑器管理版本或执行撤回。',
-        ritual: '下一步：在 Studio 仪表盘提交审批 → 批准人接受 → 从仪表盘或编辑器发布。向导有意在此止步。',
+        ritual: '下一步：在 Studio 仪表盘上，这张卡片在整个生命周期中只有一个按钮 — {chain}。向导有意在此止步。',
         openDashboard: '打开仪表盘'
       }
     },
@@ -2787,7 +2869,6 @@ export default {
       action: {
         suggestLinks: '建议链接',
         accept: '接受',
-        dismiss: '忽略',
         delete: '删除',
         working: '处理中…',
         wireCreate: '创建 Sources 页面并链接 {n} 个页面',
@@ -2913,6 +2994,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: '提交审核',
       approve: '批准',
       publish: '发布',
@@ -2958,7 +3040,9 @@ export default {
       title: 'Frontmatter 标签——此仓库是关于什么的',
       help: '标签描述此仓库包含什么——以及同样重要的是——不包含什么（禁用列表）。它们决定哪些查询路由到此仓库。点击“刷新”从语料库起草，或在下方编辑标签。发布要求 ≥3 个主题标签 + ≥1 个禁用标签。',
       refresh: '刷新建议',
+      labelsStale: '标签已过期 — 重新摄取后生效',
       suggesting: '正在整理…',
+      suggestingElapsed: '正在整理… {s}s',
       suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
       suggestFailed: '建议失败。',
@@ -2987,7 +3071,8 @@ export default {
       badge: {
         present: '头向量就绪',
         stale: '头向量过期',
-        missing: '无头向量'
+        missing: '无头向量',
+        labelsStale: '标签已过期 — 重新摄取后生效'
       },
       tab: {
         head: '头向量',

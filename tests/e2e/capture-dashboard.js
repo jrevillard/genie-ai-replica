@@ -106,7 +106,7 @@ const audit = () => {
       corner: await probeAsset('--visual-corner')
     };
 
-    const cards = [...document.querySelectorAll('.quick-help-item')].map((el) => {
+    const cards = [...document.querySelectorAll('[data-testid="quick-help-item"]')].map((el) => {
       const style = getComputedStyle(el);
       return {
         text: el.textContent.trim().slice(0, 40),
@@ -118,27 +118,27 @@ const audit = () => {
       };
     });
 
-    const overlay = document.querySelector('.quick-help-overlay');
+    const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
     const overlayBefore = overlay ? getComputedStyle(overlay, '::before') : null;
     const overlayAfter = overlay ? getComputedStyle(overlay, '::after') : null;
-    const sidebar = document.querySelector('.sidebar:not(.collapsed)');
+    const sidebar = document.querySelector('[data-testid="sidebar"][data-collapsed="false"]');
     const sidebarBefore = sidebar ? getComputedStyle(sidebar, '::before') : null;
-    const heading = document.querySelector('.quick-help-heading');
-    const subtitle = document.querySelector('.quick-help-subtitle');
-    const brandName = document.querySelector('.brand-name');
+    const heading = document.querySelector('[data-testid="quick-help-heading"]');
+    const subtitle = document.querySelector('[data-testid="quick-help-subtitle"]');
+    const brandName = document.querySelector('[data-test-id="nav-brand-name"]');
 
     // The navbar's controls do not all read --navbar-fg: several are pinned
     // to --accent-fg, which is a different token. Recording the computed ink
     // of one of each is what proves the bar stays readable when the band
     // changes value, rather than only proving the band did.
     const inkOf = (el) => (el ? getComputedStyle(el).color : null);
-    const navBar = document.querySelector('.nav-bar');
+    const navBar = document.querySelector('[data-test-id="nav-bar"]');
     const navBarInk = navBar
       ? {
           bar: inkOf(navBar),
           brandName: inkOf(brandName),
-          iconButton: inkOf(navBar.querySelector('.icon-btn')),
-          languageSelect: inkOf(navBar.querySelector('.language-select-container'))
+          iconButton: inkOf(navBar.querySelector('[data-test-id^="nav-icon-btn-"]')),
+          languageSelect: inkOf(navBar.querySelector('[data-test-id^="nav-language-select"]'))
         }
       : null;
 
@@ -146,7 +146,7 @@ const audit = () => {
     // welcome heading — and only for the GENIE.AI brand. Every occurrence is
     // recorded, so a regression at either call site shows up as a shorter list
     // rather than a silently absent entry.
-    const wordmarks = [...document.querySelectorAll('.brand-wordmark')].map((el) => {
+    const wordmarks = [...document.querySelectorAll('[data-wordmark="true"]')].map((el) => {
       const style = getComputedStyle(el);
       return {
         text: el.textContent.trim(),
@@ -181,7 +181,7 @@ const audit = () => {
         brand: rootStyle.getPropertyValue('--brand').trim(),
         accent: rootStyle.getPropertyValue('--accent').trim()
       },
-      overlay: surface('.quick-help-overlay'),
+      overlay: surface('[data-testid="quick-help-overlay"]'),
       overlayBefore: overlayBefore
         ? {
             width: overlayBefore.width,
@@ -211,7 +211,7 @@ const audit = () => {
             opacity: sidebarBefore.opacity
           }
         : null,
-      navBar: surface('.nav-bar'),
+      navBar: surface('[data-test-id="nav-bar"]'),
       navBarInk,
       brandName: brandName
         ? {
@@ -230,7 +230,7 @@ const audit = () => {
         ? {
             tag: heading.tagName,
             text: heading.textContent.trim(),
-            brandSlotCount: heading.querySelectorAll('.brand-wordmark').length,
+            brandSlotCount: heading.querySelectorAll('[data-wordmark="true"]').length,
             leakedMarkup: /[<>{}]/.test(heading.textContent)
           }
         : null,
@@ -269,12 +269,12 @@ const audit = () => {
         const page = await context.newPage();
 
         await loginViaUI(page);
-        await page.waitForSelector('.quick-help-overlay', { timeout: 30000 });
+        await page.waitForSelector('[data-testid="quick-help-overlay"]', { timeout: 30000 });
         // The splash shows on the first authenticated load (5s display + 1s
         // fade) and covers the page while it is up — a capture before it is
         // gone photographs the splash, not the banner. Detached is the hard
         // requirement: a splash still mounted at the timeout is a failure.
-        await page.waitForSelector('.splash-screen', { state: 'detached', timeout: 15000 });
+        await page.waitForSelector('[data-test-id="splash-screen"]', { state: 'detached', timeout: 15000 });
         // The banner's entrance animation and the compositing of its masked
         // layer must both be finished before a pixel is sampled.
         await waitForBannerSettled(page);
@@ -292,19 +292,18 @@ const audit = () => {
           // collapse the sidebar would otherwise be misnamed and write
           // the open state's geometry as evidence.
           openOverlayWidth = await page.evaluate(
-            () => document.querySelector('.quick-help-overlay').getBoundingClientRect().width
+            () => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width
           );
 
           // The collapse controls: each panel carries an edge handle
-          // whose button toggles it — `.side-bar .sidebar-handle__button`
-          // on the left, `.sidebar .sidebar-handle__button` on the
-          // right. The navbar's hamburger is gone, and the handle's
-          // aria-label is just "Collapse" / "Réduire" in the user's
-          // locale — no "sidebar" word — so any aria-label pattern
-          // that demands the word never matches. Use the class names,
-          // the same ones the sidebar spec uses.
-          const left = await page.$('.side-bar .sidebar-handle__button');
-          const right = await page.$('.sidebar .sidebar-handle__button');
+          // whose button toggles it — the left panel's handle button on
+          // the left, the right panel's on the right. The navbar's
+          // hamburger is gone, and the handle's aria-label is just
+          // "Collapse" / "Réduire" in the user's locale — no "sidebar"
+          // word — so any aria-label pattern that demands the word
+          // never matches. Use the declared handles instead.
+          const left = await page.$('[data-testid="side-bar"] [data-testid="sidebar-handle-button-left"]');
+          const right = await page.$('[data-testid="sidebar"] [data-testid="sidebar-handle-button-right"]');
           const wantBoth = sidebar.collapsed === 'both';
           if (wantBoth && (!left || !right)) {
             throw new Error(
@@ -325,10 +324,10 @@ const audit = () => {
           // landing is observed, not timed. A click that widens nothing
           // fails here instead of writing a misnamed capture.
           const overlayWidth = () =>
-            page.evaluate(() => document.querySelector('.quick-help-overlay').getBoundingClientRect().width);
+            page.evaluate(() => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width);
           const waitWiderThan = (prev) =>
             page.waitForFunction(
-              (w) => document.querySelector('.quick-help-overlay').getBoundingClientRect().width > w + 1,
+              (w) => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width > w + 1,
               prev,
               { timeout: 15000 }
             );
@@ -345,12 +344,9 @@ const audit = () => {
           // with gutters), so a state labelled "collapsed" that did not
           // collapse the sidebar would still read the open width.
           collapsedOverlayWidth = await page.evaluate(
-            () => document.querySelector('.quick-help-overlay').getBoundingClientRect().width
+            () => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width
           );
           if (collapsedOverlayWidth <= openOverlayWidth + 1) {
-            const leftState = await page.evaluate(
-              () => document.querySelector('.sidebar:not(.collapsed)')?.classList.contains('sidebar') ?? null
-            );
             throw new Error(
               `Capture ${theme}-${viewport.label}-${sidebar.label}: ` +
                 `overlay did not widen (open=${openOverlayWidth}px, ` +

@@ -33,6 +33,32 @@
       </DsButton>
     </nav>
 
+    <!-- Story 10.7 (#995): the live retrieval posture — GLOBAL governance,
+         so it sits above the per-repo kanban: it is what every query on
+         every repository is grounded by. Read-only for non-admins (the
+         posture must be visible to everyone), editable for tools-admin. -->
+    <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
+    <!-- The degraded-draft notice lives at the TAB level: the zip-import
+         path lands on the dashboard without ever entering the wizard, so a
+         wizard-only surface would stay quiet for it. The live region exists
+         before the notice appears — a v-if-inserted status element is
+         commonly not announced.
+         ONE cause, ONE copy: the SESSION-WIDE latch — the draft endpoint
+         is not served by this server at all, so no draft of any repo can
+         be stored. A repo that is gone has its own repo-scoped notice in
+         the wizard (StudioWizard.vue) — naming it here would report one
+         repo's failure as a session-wide version mismatch. -->
+    <div class="okf-studio-tab__draft-live" aria-live="polite">
+      <p v-if="draftsUnavailable" class="okf-studio-tab__draft-notice" data-test-id="studio-draft-notice">
+        {{
+          translate(
+            'okf.studio.draft.notReady',
+            'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.'
+          )
+        }}
+      </p>
+    </div>
+
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
     <DsDialog
@@ -197,6 +223,7 @@ import DsInfoTip from '../ds/InfoTip.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
+import OkfRetrievalCard from './RetrievalCard.vue';
 // #80931: the create-failure message is the SHARED composer (same as the
 // wizard's Entry step — one tested owner).
 import { describeCreateFailure } from './steps/failureMessages';
@@ -215,6 +242,7 @@ export default {
     OkfNarrative,
     OkfStudioDashboard,
     OkfStudioWizard,
+    OkfRetrievalCard,
     OkfRepoEditorShell
   },
   mixins: [translateMixin],
@@ -251,7 +279,7 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['isExpert']),
+    ...mapGetters('okf', ['isExpert', 'draftsUnavailable']),
     // D-B honesty: the selected classification mode's real meaning.
     classHint() {
       const key =
@@ -776,6 +804,18 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+.okf-studio-tab__draft-live:empty {
+  display: none;
+}
+.okf-studio-tab__draft-notice {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  font-size: var(--text-sm);
 }
 .okf-studio-tab__divider {
   border: none;

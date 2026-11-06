@@ -91,7 +91,7 @@ The admin console path is **Users** (left menu). The four lifecycle actions belo
 2. Edit fields on the **Details**, **Attributes**, **Email**, or other tabs.
 3. **Save**.
 
-Changes propagate to GENIE.AI on the user's next login (JIT provisioning rewrites the ArangoDB document on the first request after the in-memory cache expires — TTL 60 s; see `user-provisioning-service.js:19`).
+Changes propagate to GENIE.AI on the user's next login: JIT provisioning rewrites the ArangoDB document on the first authenticated request. A cached provisioning result is revalidated against the token's claims before it is served, so an edit is not held back by the 60-second provisioning cache (`user-provisioning-service.js`).
 
 ### 2.3 Disable a user
 

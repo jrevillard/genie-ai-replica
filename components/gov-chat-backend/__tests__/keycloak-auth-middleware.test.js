@@ -324,7 +324,12 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
-    expect(mockProvisionUser).toHaveBeenCalledWith(decodedPayload);
+    // The auth context rides along so the provisioner's reactivation gate
+    // (#1438) can consult Keycloak with the very token that was verified
+    expect(mockProvisionUser).toHaveBeenCalledWith(decodedPayload, {
+      token: 'valid-token',
+      issuer: 'http://localhost:8080/realms/genie'
+    });
     expect(next).toHaveBeenCalled();
     // Verify JWT authentication fields, NOT ArangoDB internal fields
     expect(req.user.iss_sub).toBe('http://localhost:8080/realms/genie#12345678');

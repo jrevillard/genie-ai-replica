@@ -89,11 +89,19 @@ class CurrentUserApi {
   /// Delete user account (GDPR right to erasure)
   ///
   /// Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
-  Future<void> apiMeDeletePost() async {
+  Future<ApiMeDeletePost200Response?> apiMeDeletePost() async {
     final response = await apiMeDeletePostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiMeDeletePost200Response',) as ApiMeDeletePost200Response;
+    
+    }
+    return null;
   }
 
   /// Get current user profile
@@ -207,7 +215,7 @@ class CurrentUserApi {
 
   /// Reset user profile data
   ///
-  /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+  /// Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
   ///
   /// Note: This method returns the HTTP [Response].
   Future<Response> apiMeResetDataPostWithHttpInfo() async {
@@ -237,11 +245,19 @@ class CurrentUserApi {
 
   /// Reset user profile data
   ///
-  /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
-  Future<void> apiMeResetDataPost() async {
+  /// Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
+  Future<ApiMeResetDataPost200Response?> apiMeResetDataPost() async {
     final response = await apiMeResetDataPostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiMeResetDataPost200Response',) as ApiMeResetDataPost200Response;
+    
+    }
+    return null;
   }
 }

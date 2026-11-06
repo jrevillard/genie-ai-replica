@@ -20,7 +20,8 @@
  * the curation legs can never disagree again. */
 /** The ONE base-completion rule: strip the trailing slashes and tell
  * whether the base already carries a version segment. Both URL builders
- * below read it — the rule must never exist twice. */
+ * below read it, and the model cache reads it for its failure-signature
+ * keys — the rule must never exist twice. */
 function normalizedBase(base) {
   const b = String(base || '').replace(/\/+$/, '');
   return { base: b, versioned: /\/v\d+$/.test(b) };
@@ -39,4 +40,4 @@ function openAiModelsUrl(base) {
   return versioned ? `${b}/models` : `${b}/v1/models`;
 }
 
-module.exports = { openAiChatUrl, openAiModelsUrl };
+module.exports = { normalizedBase, openAiChatUrl, openAiModelsUrl };

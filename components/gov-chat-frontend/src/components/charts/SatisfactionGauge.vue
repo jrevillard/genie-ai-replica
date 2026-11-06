@@ -36,7 +36,7 @@
       <h3>
         {{ translate('analytics.gauge.historical', 'Historical Trends') }}
       </h3>
-      <div v-for="(item, index) in computedHistoricalData" :key="index" class="trend-item">
+      <div v-for="(item, index) in translatedHistoricalData" :key="index" class="trend-item">
         <span class="label">{{ item.label }}</span>
         <span class="value">{{ item.value.toFixed(2) }}%</span>
         <div class="progress" :style="{ width: `${item.value}%` }"></div>
@@ -71,6 +71,7 @@
 import { nextTick } from 'vue';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { SATISFACTION_PERIOD_KEYS, periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -157,40 +158,24 @@ export default {
       data = data.filter((item) => item && typeof item.value === 'number' && item.value >= 0);
       if (!data.length) {
         // Fallback data if historicalData is empty
-        data = [
-          {
-            label: 'Current',
-            value: this.actualSatisfactionValue || 0,
-            periodStart: new Date().toISOString(),
-            periodEnd: new Date().toISOString()
-          },
-          {
-            label: 'Last Week',
-            value: 0,
-            periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-            periodEnd: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            label: '2 Weeks Ago',
-            value: 0,
-            periodStart: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-            periodEnd: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            label: '3 Weeks Ago',
-            value: 0,
-            periodStart: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
-            periodEnd: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            label: '4 Weeks Ago',
-            value: 0,
-            periodStart: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
-            periodEnd: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
-          }
-        ];
+        data = SATISFACTION_PERIOD_KEYS.map((label, index) => {
+          const stamp = new Date(Date.now() - index * 7 * 24 * 60 * 60 * 1000).toISOString();
+          return {
+            label,
+            value: index === 0 ? this.actualSatisfactionValue || 0 : 0,
+            periodStart: stamp,
+            periodEnd: stamp
+          };
+        });
       }
       return data;
+    },
+    // The historical entries with their period labels translated
+    translatedHistoricalData() {
+      return this.computedHistoricalData.map((item) => ({
+        ...item,
+        label: translatePeriodLabel(item.label, this.$i18n)
+      }));
     },
     // Compute change percentage for indicator
     computedChangeIndicator() {
@@ -326,11 +311,7 @@ export default {
       this.error = null;
 
       try {
-        const data = await analyticsService.getSatisfactionGauge(
-          this.period,
-          this.selectedDate,
-          this.$i18n ? this.$i18n.locale : null
-        );
+        const data = await analyticsService.getSatisfactionGauge(this.period, this.selectedDate);
 
         if (data && typeof data.currentValue === 'number') {
           this.satisfactionValue = data.currentValue;

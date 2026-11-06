@@ -148,15 +148,18 @@ async function nameTaken(db, name, exceptKey) {
   return rows.some((k) => k !== exceptKey);
 }
 
+// The actor is the SHARED controller shape {sub, name, source_ip} from
+// controllers/actor-from.js — the shape the actorFrom helper produces for
+// every OKF controller. The stored field names are unchanged.
 function audit(action, doc, opts, description) {
   return auditService.writeAudit({
-    actor: (opts.actor && opts.actor.user_id) || 'system',
+    actor: (opts.actor && opts.actor.sub) || 'system',
     actor_name: (opts.actor && opts.actor.name) || null,
     action: `model_config.${action}`,
     repo_id: 'model-configs',
     description,
     details: { config_key: doc && doc._key, name: doc && doc.name },
-    source_ip: opts.source_ip || null
+    source_ip: (opts.actor && opts.actor.source_ip) || null
   });
 }
 
@@ -176,7 +179,17 @@ async function listConfigs(opts = {}) {
     // The list is readable by every OKF user (the RAGAS judge picker needs
     // it); `opts.includeKeyHint` is false for a caller without tools-admin,
     // so a fragment of a provider credential never reaches a curator.
-    return { configs: rows.map((d) => mask(d, opts)), env_judge: envJudge, env_pick: ENV_PICK };
+    // The deployment opt-in rides along: a named configuration does NOT
+    // enable the legs that follow the opt-in (topic links, CSV topics,
+    // manifest summary) — those need VLLM_ENDPOINT. The panel warns when a
+    // configuration is active while the gate is closed.
+    const deploymentOptIn = !!modelCache.optedInVllmBase();
+    return {
+      configs: rows.map((d) => mask(d, opts)),
+      env_judge: envJudge,
+      env_pick: ENV_PICK,
+      deployment_opt_in: deploymentOptIn
+    };
   });
 }
 
@@ -204,8 +217,8 @@ async function createConfig(payload = {}, opts = {}) {
       active: false, // created INACTIVE — activation is an explicit act
       created_at: now,
       updated_at: now,
-      created_by: (opts.actor && opts.actor.user_id) || 'system',
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      created_by: (opts.actor && opts.actor.sub) || 'system',
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     await db.collection(COLLECTION).save(doc);
     span.setAttribute('okf.model_config.name', doc.name);
@@ -247,7 +260,7 @@ async function updateConfig(key, payload = {}, opts = {}) {
     const patch = {
       ...clean,
       updated_at: new Date().toISOString(),
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     if (payload.default_model !== undefined) {
       patch.default_model =
@@ -285,8 +298,8 @@ async function copyConfig(key, opts = {}) {
       active: false,
       created_at: now,
       updated_at: now,
-      created_by: (opts.actor && opts.actor.user_id) || 'system',
-      updated_by: (opts.actor && opts.actor.user_id) || 'system'
+      created_by: (opts.actor && opts.actor.sub) || 'system',
+      updated_by: (opts.actor && opts.actor.sub) || 'system'
     };
     await db.collection(COLLECTION).save(doc);
     span.setAttribute('okf.model_config.name', name);

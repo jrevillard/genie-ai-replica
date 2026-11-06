@@ -343,17 +343,16 @@ class LogsService {
    * Fetch logs for a time window, returning the canonical envelope.
    *
    * VL path is the only path: issues a LogSQL query via
-   * `VictoriaLogsClient.query` and slices the result for the
-   * requested offset/limit window. Outages from VL are surfaced
+   * `VictoriaLogsClient.query`, paginated at the source (VL-native
+   * `offset`/`limit`) for the requested window. Outages from VL are surfaced
    * as a typed `VlUnavailableError` (503 `vl_unreachable`) so
    * the route layer renders the standard `{error, message}` envelope.
    *
-   * Note on pagination: VictoriaLogs' `/_internal/logsql/query` endpoint
-   * accepts only a `limit` parameter — there is **no native offset**. The
-   * adapter passes `limit = limit + offset` (the "window") and this
-   * method then slices `[offset, offset + limit)` client-side. Wide
-   * ranges therefore download the full window every call; an explicit
-   * `q` filter and a tight window are how we keep the payload bounded.
+   * Note on pagination: the page is fetched straight from VL — the
+   * adapter's native `offset`/`limit` args select exactly the requested
+   * page, so no `limit + offset` window is downloaded and sliced
+   * client-side. An explicit `q` filter and a tight window keep the
+   * payload bounded.
    *
    * Envelope shape — reviewers will reject future drift from this contract:
    * ```
@@ -448,18 +447,22 @@ class LogsService {
       }
       const safeQ = filterParts.length === 0 ? '*' : filterParts.join(' AND ');
       const client = await this._getVlClient();
-      const window = limitN + offsetN;
       // Run the page fetch + the total-count fetch in parallel — both
       // hit the same VL query body so the cost is one extra round-trip,
       // and the `total` envelope field must reflect VL's match count
       // (not the row slice) for pagination to tell "fits one page"
       // from "truncated".
       //
+      // The page itself is VL-native: `offset` + `limit` select exactly
+      // the requested window at the source, so no `limit + offset` block
+      // is downloaded and re-sliced here.
+      //
       // The count() call is wrapped in a try-catch (not just
       // `.catch()`) so a SYNC throw — e.g. `client.count` is undefined
       // because a test mock didn't stub it — doesn't propagate before
       // the promise chain attaches. A missing total is less critical
-      // than a missing page; fall back to the page length.
+      // than a missing page; the fallback below never reports a number
+      // that can read as "one full page, nothing more" (#1152).
       const countPromise = (async () => {
         try {
           return await client.count({ q: safeQ, start: startIso, end: endIso });
@@ -468,11 +471,11 @@ class LogsService {
         }
       })();
       const [rows, totalRaw] = await Promise.all([
-        client.query({ q: safeQ, start: startIso, end: endIso, limit: window }),
+        client.query({ q: safeQ, start: startIso, end: endIso, limit: limitN, offset: offsetN }),
         countPromise
       ]);
-      const pageRows = Array.isArray(rows) ? rows.slice(offsetN, offsetN + limitN) : [];
-      const total = typeof totalRaw === 'number' ? totalRaw : Array.isArray(rows) ? rows.length : 0;
+      const pageRows = Array.isArray(rows) ? rows.slice(0, limitN) : [];
+      const total = LogsService._totalFallback(totalRaw, pageRows, limitN, offsetN);
       return {
         logs: pageRows,
         total,
@@ -1079,17 +1082,20 @@ class LogsService {
       const endIso = options.endDate ? `${options.endDate}T23:59:59.999Z` : this._defaultEndIso(options.dateRange);
 
       const client = await this._getVlClient();
-      const window = limitN + offsetN;
       // Run query + count in parallel — VL match count drives the `total`
-      // envelope field (not the row slice length, which only reflects the
-      // downloaded window and would under-report when offset > 0). Same
-      // `q` body hits the same VL query plan, so the second call is the
-      // only extra round-trip.
+      // envelope field (not the page length, which only reflects the
+      // fetched page). Same `q` body hits the same VL query plan, so the
+      // second call is the only extra round-trip.
+      //
+      // The page itself is VL-native: `offset` + `limit` select exactly
+      // the requested window at the source — no `limit + offset` block is
+      // downloaded and re-sliced here.
       //
       // count() is wrapped in try-catch so a SYNC throw (e.g. an older
       // adapter version where `client.count` is undefined) doesn't tear
-      // down the page fetch — fall back to the row slice so the UI still
-      // renders what it has.
+      // down the page fetch — the fallback below keeps the UI rendering,
+      // but never reports a number that can read as "one full page,
+      // nothing more" (#1152).
       const countPromise = (async () => {
         try {
           return await client.count({ q, start: startIso, end: endIso });
@@ -1102,23 +1108,50 @@ class LogsService {
           q,
           start: startIso,
           end: endIso,
-          // Honour the caller's window exactly — VL filters at the
-          // source so the round-trip is already the post-filter page.
-          limit: window
+          // Honour the caller's page exactly — VL filters AND paginates at
+          // the source, so the round-trip is the post-filter page.
+          limit: limitN,
+          offset: offsetN
         }),
         countPromise
       ]);
-      const allRows = Array.isArray(rows) ? rows : [];
-      const pageRows = allRows.slice(offsetN, offsetN + limitN);
+      const pageRows = Array.isArray(rows) ? rows.slice(0, limitN) : [];
+      const total = LogsService._totalFallback(countResult, pageRows, limitN, offsetN);
       return {
         logs: pageRows,
-        total: typeof countResult === 'number' ? countResult : allRows.length,
+        total,
         limit: limitN,
         offset: offsetN
       };
     } catch (err) {
       LogsService._vlOrThrow(err);
     }
+  }
+
+  /**
+   * The `total` envelope value when the VL count query is unavailable
+   * (#1152). With native paging, a SHORT non-empty page (< limit rows) is
+   * provably the last page, so `offset + pageLen` is the exact total. A
+   * FULL page proves nothing about what follows it — reporting exactly
+   * `limit` there is what made a full first page render a green "no more
+   * pages" indicator during a partial VL outage, so report a LOWER BOUND
+   * one past the fetched window instead: the pager keeps a next page
+   * enabled, and the next fetch resolves the truth. An EMPTY page at
+   * offset proves only that at most `offset` rows exist — an upper bound,
+   * reported as `offset` (the pager's end-of-list state, which is correct:
+   * there is nothing past this offset).
+   *
+   * @param {number|null} countRaw - the count result, or null when unavailable
+   * @param {Array} pageRows - the fetched page (already capped at limitN)
+   * @param {number} limitN - clamped page size
+   * @param {number} offsetN - clamped page offset
+   * @returns {number} the envelope `total`
+   * @private
+   */
+  static _totalFallback(countRaw, pageRows, limitN, offsetN) {
+    if (typeof countRaw === 'number') return countRaw;
+    if (pageRows.length === 0) return offsetN;
+    return pageRows.length < limitN ? offsetN + pageRows.length : offsetN + pageRows.length + 1;
   }
 
   /**

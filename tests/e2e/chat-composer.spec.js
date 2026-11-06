@@ -7,9 +7,11 @@
 //       screen has its composer inside the welcome panel (between
 //       the banner and the grid); the chat view has the same
 //       component at the chat-input slot. v-if/v-else keeps the
-//       second one out of the DOM entirely, so a single source-of-
-//       truth selector — `page.locator('.chat-composer').count()`
-//       — returns exactly 1 in both states.
+//       second one out of the DOM entirely, so each state names its
+//       one mounted composer by handle: `welcome-composer` counts 1 on
+//       the welcome screen (0 in the chat view), `chat-composer` counts
+//       1 in the chat view (0 on the welcome screen) — the two counts
+//       are the source of truth, never both 1.
 //
 //   (B) The composer IS the just-chat config entry. The runtime
 //       config carries a placement field whose only valid values
@@ -44,6 +46,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const { openWelcomeScreen } = require('./helpers/welcome');
+const { QUICK_HELP_GRID_ITEM } = require('./helpers/layout');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
@@ -105,30 +108,30 @@ test.describe('chat-composer mounted state', () => {
     const { ctx, page } = await freshSignedIn(browser);
     // Land on the chat view fresh — the welcome screen renders first.
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
     // The composer mounts once the runtime config's buttons are known —
     // hold for it, exactly one, before reading anything else.
-    await expect(page.locator('.chat-composer'), 'welcome screen composer count').toHaveCount(1);
+    await expect(page.locator('[data-testid="welcome-composer"]'), 'welcome screen composer count').toHaveCount(1);
 
-    const welcome = page.locator('.chat-composer[data-testid="welcome-composer"]');
+    const welcome = page.locator('[data-testid="welcome-composer"]');
     await expect(welcome).toBeVisible();
     // The composer lives between the banner and the grid, so the
     // banner must come before the composer in DOM order, the
     // composer before the grid.
     const bannerTop = await page
-      .locator('.quick-help-banner')
+      .locator('[data-testid="quick-help-banner"]')
       .evaluate((el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
     const composerCenterY = await welcome.evaluate(
       (el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
     );
-    const gridTop = await page.locator('.quick-help-grid').evaluate((el) => el.getBoundingClientRect().top);
+    const gridTop = await page.locator('[data-testid="quick-help-grid"]').evaluate((el) => el.getBoundingClientRect().top);
     expect(
       bannerTop < composerCenterY && composerCenterY < gridTop,
       `banner(${bannerTop}) < composer(${composerCenterY}) < grid(${gridTop})`
     ).toBe(true);
 
     // One composer root, one textarea, in the welcome screen.
-    const textareaCount = await page.locator('.chat-composer textarea').count();
+    const textareaCount = await page.locator('[data-testid="composer-field"]').count();
     expect(textareaCount, 'welcome screen textarea count').toBe(1);
 
     await ctx.close();
@@ -137,7 +140,7 @@ test.describe('chat-composer mounted state', () => {
   test('chat view has exactly one composer (the v-else slot)', async ({ browser }) => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.chat-composer', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
 
     // Welcome screen → chat view: type something into the welcome composer
     // and press Enter. The composer slot is replaced by the chat-view composer.
@@ -149,10 +152,10 @@ test.describe('chat-composer mounted state', () => {
     // The welcome composer is now out of the DOM; the chat-view composer is in.
     await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
     await expect(page.locator('[data-testid="welcome-composer"]')).toHaveCount(0);
-    const composerCount = await page.locator('.chat-composer').count();
+    const composerCount = await page.locator('[data-testid="chat-composer"]').count();
     expect(composerCount, 'chat view composer count').toBe(1);
 
-    const textareaCount = await page.locator('.chat-composer textarea').count();
+    const textareaCount = await page.locator('[data-testid="composer-field"]').count();
     expect(textareaCount, 'chat view textarea count').toBe(1);
 
     await ctx.close();
@@ -175,12 +178,12 @@ test.describe('composer send pathway', () => {
 
     // Welcome screen disappears; chat view appears with the typed text as a user message.
     await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
-    await expect(page.locator('.chat-message.user')).toContainText(probe, { timeout: 10000 });
+    await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
 
     // "Just Chat" is not a knowledge domain — no context chip is fabricated
     // for it. A pill here would present plain free chat as a filtered query.
     const pills = await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.context-panel .context-items > *'));
+      const items = Array.from(document.querySelectorAll('[data-testid="context-items"] > *'));
       return items.map((el) => el.textContent.trim());
     });
     expect(pills.length, `no just-chat pill expected (got ${JSON.stringify(pills)})`).toBe(0);
@@ -202,7 +205,7 @@ test.describe('composer send pathway', () => {
     await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
     // No user message was appended.
-    await expect(page.locator('.chat-message.user')).toHaveCount(0);
+    await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
     // The textarea still contains the probe (plus a newline the browser may have appended).
     await page.waitForFunction(
       (expected) => {
@@ -225,7 +228,7 @@ test.describe('composer send pathway', () => {
     await welcomeField.press('Enter');
 
     // No user message, welcome composer still present.
-    await expect(page.locator('.chat-message.user')).toHaveCount(0);
+    await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
     await ctx.close();
@@ -238,14 +241,14 @@ test.describe('grid after placement extraction', () => {
   test('grid holds eight tiles; just-chat is not among them', async ({ browser }) => {
     const { ctx, page } = await freshSignedIn(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-grid .quick-help-item', { timeout: 15000 });
+    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     // The Living Intelligence entrance animation mounts the tiles over
     // ~650 ms — the count assertion waits out the whole entrance.
-    await expect(page.locator('.quick-help-grid .quick-help-item')).toHaveCount(8);
+    await expect(page.locator(QUICK_HELP_GRID_ITEM)).toHaveCount(8);
 
     // The "just chat" string is the entry's localised title. A tile that
     // still carries it would mean the placement filter bypassed the grid.
-    const tiles = page.locator('.quick-help-grid .quick-help-item');
+    const tiles = page.locator(QUICK_HELP_GRID_ITEM);
     const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
     const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
     expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(false);
@@ -311,10 +314,12 @@ test.describe('config / composer identity', () => {
       /--composer-tint-outline:\s*#?[0-9a-f]+/i
     );
 
-    // Accessible name: aria-label on the composer root OR the leading
-    // image alt. Either is acceptable evidence.
-    const ariaLabel = await composerRoot.getAttribute('aria-label');
-    expect(ariaLabel, `composer aria-label (got ${ariaLabel})`).toBeTruthy();
+    // Accessible name: aria-label on the FIELD — the wrapper div is
+    // role-less, so a generic element's aria-label never reaches the
+    // accessibility tree. The field is what assistive tech reads; the
+    // data-testid is the handle the composer declares on it.
+    const ariaLabel = await page.locator('[data-testid="composer-field"]').getAttribute('aria-label');
+    expect(ariaLabel, `composer field aria-label (got ${ariaLabel})`).toBeTruthy();
 
     await ctx.close();
   });
@@ -331,10 +336,7 @@ test.describe('config / composer identity', () => {
       await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
       // The background is derived from the composer's tint; wait for the
       // tint to land before reading the computed paint.
-      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute(
-        'style',
-        /--composer-tint:/i
-      );
+      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute('style', /--composer-tint:/i);
 
       const bg = await page.evaluate(() => {
         const el = document.querySelector('[data-testid="welcome-composer"]');
@@ -426,7 +428,7 @@ test.describe('visual-layer off', () => {
     await welcomeField.press('Enter');
 
     await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
-    await expect(page.locator('.chat-message.user')).toContainText(probe, { timeout: 10000 });
+    await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
     // Restore for any downstream test that expects the default layer.
     await page.evaluate(() => {
       document.documentElement.dataset.visual = 'on';
@@ -489,17 +491,14 @@ test.describe('composer field', () => {
       .poll(
         () =>
           page.evaluate(
-            () =>
-              getComputedStyle(
-                document.querySelector('[data-testid="welcome-composer"].chat-composer')
-              ).boxShadow
+            () => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow
           ),
         { timeout: 5000 }
       )
       .not.toBe('none');
 
     const rings = await page.evaluate(() => {
-      const pill = document.querySelector('[data-testid="welcome-composer"].chat-composer');
+      const pill = document.querySelector('[data-testid="welcome-composer"]');
       const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
       const p = pill ? getComputedStyle(pill) : null;
       const t = ta ? getComputedStyle(ta) : null;
@@ -609,11 +608,11 @@ async function measureWelcomeBar(page) {
       const r = el.getBoundingClientRect();
       return { x: +r.x.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1) };
     };
-    const grid = document.querySelector('.quick-help-grid');
-    const wrapper = document.querySelector('.quick-help-composer');
-    const bar = document.querySelector('.quick-help-composer .chat-composer');
+    const grid = document.querySelector('[data-testid="quick-help-grid"]');
+    const wrapper = document.querySelector('[data-testid="quick-help-composer"]');
+    const bar = document.querySelector('[data-testid="quick-help-composer"] [data-testid="welcome-composer"]');
     const field = document.querySelector('[data-testid="welcome-composer"] textarea');
-    const overlay = document.querySelector('.quick-help-overlay');
+    const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
     const ostyle = overlay ? getComputedStyle(overlay) : null;
     const g = rect(grid);
     const b = rect(bar);
@@ -862,7 +861,7 @@ test.describe('welcome bar measure', () => {
           const padL = parseFloat(cs.paddingLeft) || 0;
           const padR = parseFloat(cs.paddingRight) || 0;
           const contentW = fieldRect.width - padL - padR;
-          const bar = document.querySelector('.quick-help-composer .chat-composer');
+          const bar = document.querySelector('[data-testid="quick-help-composer"] [data-testid="welcome-composer"]');
           const barRect = bar ? bar.getBoundingClientRect() : null;
           return {
             lang: document.documentElement.lang,

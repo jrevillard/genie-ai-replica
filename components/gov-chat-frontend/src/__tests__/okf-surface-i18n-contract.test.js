@@ -26,6 +26,9 @@ const SURFACES = [
   'src/components/okf/Narrative.vue',
   'src/components/okf/FrontmatterPanel.vue',
   'src/components/okf/LabelEditor.vue',
+  'src/components/okf/RetrievalCard.vue',
+  // W6 / EPIC-6 / CAP-5 — the artifacts view (its okf.artifacts.* leaves).
+  'src/components/okf/ArtifactsView.vue',
   'src/components/okf/piiReview.js',
   'src/components/okf/editor/',
   'src/components/okf/steps/',

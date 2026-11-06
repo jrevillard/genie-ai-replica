@@ -113,7 +113,7 @@ For the GPU-specific layer, see [GPU Deployment](/docs/deploy/gpu/).
   See [GPU Deployment](/docs/deploy/gpu/) and
   [NVIDIA A40 Install Guide](/docs/deploy/a40-install/).
 - **Node.js 22+** — required for JavaScript tooling. Docker images use
-  `node:22`; CI lint+test jobs run on `node:20-alpine`.
+  `node:22`; CI lint+test jobs run on `node:22-alpine`.
 
 ## Step 3: Install Docker on every host
 
@@ -255,7 +255,7 @@ Generate each secret with: `python3 -c "import secrets; print(secrets.token_urls
 | `POSTGRES_PASSWORD` | PostgreSQL superuser | PostgreSQL root password (also used by Kong migrations) |
 | `KONG_DB_PASSWORD` | Kong | Kong's dedicated PG user password (composed into Kong as `KONG_PG_PASSWORD`) |
 | `ARANGO_PASSWORD` | ArangoDB | ArangoDB root password (knowledge-base storage) |
-| `TRANSLATION_CACHE_PASSWORD` | Redis | Redis cache password (translation cache) |
+| `TRANSLATION_CACHE_PASSWORD` | Redis | Redis cache password (translation cache and provisioning invalidation pub/sub) |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak | Keycloak master admin console password |
 | `KEYCLOAK_DB_PASSWORD` | Keycloak | Keycloak dedicated PG user password |
 | `KEYCLOAK_CLIENT_SECRET` | Keycloak | OIDC client secret for `genie-app` |
@@ -345,9 +345,9 @@ defaults.
 | `TRANSLATION_BATCHES` | number | no | `5` | Translation batch size |
 | `TRANSLATION_CACHE` | string | no | `on` (compose) / `off` (code) | Enable/disable translation cache (`on` to enable) |
 | `TRANSLATION_CACHE_PATH` | string | no | (legacy, unused) | Reserved file-based cache path. Current code uses Redis only; set to anything or leave unset |
-| `TRANSLATION_CACHE_HOST` | string | no | `redis-cache` (compose) / `localhost` (code) | Redis cache host |
-| `TRANSLATION_CACHE_PORT` | number | no | `6379` | Redis port |
-| `TRANSLATION_CACHE_PASSWORD` | secret | yes | `<set-me>` | Redis cache password |
+| `TRANSLATION_CACHE_HOST` | string | no | `redis-cache` (compose) / `localhost` (code) | Redis cache host (translation cache and provisioning invalidation pub/sub) |
+| `TRANSLATION_CACHE_PORT` | number | no | `6379` | Redis port (shared by the translation cache and the provisioning invalidation pub/sub) |
+| `TRANSLATION_CACHE_PASSWORD` | secret | yes | `<set-me>` | Redis cache password (shared by the translation cache and the provisioning invalidation pub/sub) |
 
 #### ArangoDB (knowledge base)
 

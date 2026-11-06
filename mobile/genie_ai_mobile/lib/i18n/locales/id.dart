@@ -552,6 +552,10 @@ const Map<String, dynamic> idLocale = {
     "confirmChange": "Konfirmasi Perubahan",
     "processing": "Memproses...",
     "userDataReset": "Data profil Anda telah berhasil disetel ulang.",
+    "userDataResetFilesFailed":
+        "Data profil Anda telah disetel ulang, tetapi beberapa file tersimpan tidak dapat dihapus. Silakan hubungi administrator.",
+    "accountDeletedFilesFailed":
+        "Akun Anda telah dihapus, tetapi beberapa file yang tersimpan tidak dapat dihapus. Silakan hubungi administrator.",
     "failedToResetUserData":
         "Gagal menyetel ulang data profil Anda. Silakan coba lagi nanti.",
     "changingEmailTo": "Mengubah email Anda menjadi",

@@ -648,7 +648,7 @@ describe('compose non-root contract (#1227)', () => {
     // the CHOWN/cap_drop invariants with zero behavioral change.
     const flowCaps = composeText
       .replace('  cap_drop:\n    - ALL\n  cap_add:\n', '  cap_drop: [ALL]\n  cap_add: [CHOWN, DAC_OVERRIDE]\n')
-      .replace(/    # CHOWN \(the chown itself\)[\s\S]*?- DAC_OVERRIDE\n/, '');
+      .replace(/ {4}# CHOWN \(the chown itself\)[\s\S]*?- DAC_OVERRIDE\n/, '');
     expect(flowCaps).not.toBe(composeText);
     expect(validateComposeNonRoot(flowCaps).violations).toEqual([]);
   });
@@ -664,7 +664,7 @@ describe('compose non-root contract (#1227)', () => {
         "    restart_policy:\n      # bounded self-heal (the one-shot rule's blessed form): a transient",
         '    # restart_policy deleted'
       )
-      .replace(/      condition: on-failure\n      delay: 30s\n      max_attempts: 60\n\nservices:/, '\nservices:');
+      .replace(/ {6}condition: on-failure\n {6}delay: 30s\n {6}max_attempts: 60\n\nservices:/, '\nservices:');
     expect(policyDeleted).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(policyDeleted);
     expect(v1.some((v) => v.includes('x-chown-init:') && v.includes('max_attempts bound'))).toBe(true);
@@ -949,7 +949,7 @@ describe('compose non-root contract (#1227)', () => {
       'services:',
       '  kong:',
       '    user: "1001:1001"',
-      '    volumes: ["${DATA_DIR:-./data}/logs:/var/log", "/mnt/a\"b/x:/x"]',
+      '    volumes: ["${DATA_DIR:-./data}/logs:/var/log", "/mnt/a"b/x:/x"]',
       ''
     ].join('\n');
     const { violations: ve } = validateComposeNonRoot(escapedQuote);
@@ -1261,7 +1261,7 @@ describe('compose non-root contract (#1227)', () => {
     const rest = compose.slice(start + 1);
     // next EXACTLY-2-space key (a 4-space line matches a naive indexOf('\n  '));
     // slice(1) keeps the header line out of ^'s reach in /m mode
-    const next = rest.slice(1).search(/^  (?=\S)/m);
+    const next = rest.slice(1).search(/^ {2}(?=\S)/m);
     const block = next === -1 ? rest : rest.slice(0, next + 1);
     const cmdLine = block.split('\n').find((l) => l.trim().startsWith('command:'));
     expect(cmdLine).toBeDefined();
@@ -1280,7 +1280,7 @@ describe('compose non-root contract (#1227)', () => {
     for (const spelling of ['*.crt', '*.cer', '*.pem']) {
       const arm = widenArms.find((s) => s.includes(`-name '${spelling}'`));
       expect(arm).toBeDefined();
-      expect(arm).toContain(`! -name '*key*'`);
+      expect(arm).toContain("! -name '*key*'");
     }
 
     // no other 0644-widening arm may exist (the catch-all inversion shape)

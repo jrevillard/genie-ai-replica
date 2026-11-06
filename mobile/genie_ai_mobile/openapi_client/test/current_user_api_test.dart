@@ -30,7 +30,7 @@ void main() {
     //
     // Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
     //
-    //Future apiMeDeletePost() async
+    //Future<ApiMeDeletePost200Response> apiMeDeletePost() async
     test('test apiMeDeletePost', () async {
       // TODO
     });
@@ -55,9 +55,9 @@ void main() {
 
     // Reset user profile data
     //
-    // Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+    // Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
     //
-    //Future apiMeResetDataPost() async
+    //Future<ApiMeResetDataPost200Response> apiMeResetDataPost() async
     test('test apiMeResetDataPost', () async {
       // TODO
     });

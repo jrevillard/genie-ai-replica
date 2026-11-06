@@ -153,8 +153,12 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           "createdAt": userMap['createdAt'] ?? "",
         };
 
+        // The language is client-authoritative like the theme and the font
+        // scale: the account copy only seeds a device that never made a
+        // choice of its own (applyAccountLanguage ignores it once the
+        // device holds one).
         if (userMap['language'] != null) {
-          I18nService().changeLanguage(userMap['language']);
+          I18nService().applyAccountLanguage(userMap['language']);
         }
         // Theme and fontSize are client-authoritative — applied immediately
         // on user change, not overwritten from server on subsequent fetches.
@@ -195,15 +199,9 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        final tokens = ThemeManager().tokens;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: tokens.surface,
-            content: Text(
-              tr("settings.cannotOpenAccountConsole"),
-              style: TextStyle(color: tokens.fg),
-            ),
-          ),
+        _showSettingsSnackBar(
+          ScaffoldMessenger.of(context),
+          "settings.cannotOpenAccountConsole",
         );
       }
     }
@@ -231,9 +229,24 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           variant: DsButtonVariant.danger,
           onPressed: () async {
             Navigator.pop(context);
+            // Captured before any await: the outcome SnackBar must render
+            // even if the user navigates away mid-deletion (the widget's own
+            // context would be defunct by then).
+            final messenger = ScaffoldMessenger.of(context);
             try {
-              await _userService.deleteAccount();
+              final response = await _userService.deleteAccount();
               await ref.read(authProvider.notifier).logout();
+              // Shown AFTER the logout, on the root messenger: a SnackBar
+              // fired before the logout would expire (its default duration)
+              // while the Keycloak end-session round trip was still running,
+              // and the user would land on the login screen with no
+              // indication that files may remain on disk.
+              if (response['filesDeletionFailed'] == true) {
+                _showSettingsSnackBar(
+                  messenger,
+                  "settings.accountDeletedFilesFailed",
+                );
+              }
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
@@ -242,18 +255,14 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 );
               }
             } catch (e) {
-              if (mounted) {
-                final tokens = ThemeManager().tokens;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: tokens.surface,
-                    content: Text(
-                      tr("accountDeletionFailed"),
-                      style: TextStyle(color: tokens.fg),
-                    ),
-                  ),
-                );
-              }
+              // The captured root messenger, not ScaffoldMessenger.of(context):
+              // the user may have navigated away while the request was in
+              // flight — the outcome must still surface (same shape as the
+              // reset flow's catch below).
+              _showSettingsSnackBar(
+                messenger,
+                "settings.accountDeletionFailed",
+              );
             }
           },
         ),
@@ -269,23 +278,68 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       content: Text(tr("settings.confirmResetUserData")),
       actions: [
         DsButton(
+          key: const Key('settings_reset_cancel_button'),
           label: tr("settings.cancel"),
           variant: DsButtonVariant.ghost,
           onPressed: () => Navigator.pop(context),
         ),
         DsButton(
+          key: const Key('settings_reset_confirm_button'),
           label: tr("settings.reset"),
           variant: DsButtonVariant.primary,
           onPressed: () async {
             Navigator.pop(context);
+            // Captured before any await: the outcome SnackBars must render
+            // even if the user navigates away mid-reset (the widget's own
+            // context would be defunct by then).
+            final messenger = ScaffoldMessenger.of(context);
             setState(() {
               _isLoading = true;
             });
-            await _userService.resetUserData();
-            _fetchUserData();
+            try {
+              final response = await _userService.resetUserData();
+              if (response['filesDeletionFailed'] == true) {
+                _showSettingsSnackBar(
+                  messenger,
+                  "settings.userDataResetFilesFailed",
+                );
+              }
+              if (!mounted) return;
+              await _fetchUserData();
+            } catch (e) {
+              debugPrint("[SETTINGS] Error resetting user data: $e");
+              _showSettingsSnackBar(
+                messenger,
+                "settings.failedToResetUserData",
+              );
+            } finally {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            }
           },
         ),
       ],
+    );
+  }
+
+  /// Shows a themed SnackBar with a translated settings message on the
+  /// given messenger. The reset-outcome notifications use the same
+  /// surface-on-fg style as the screen's other SnackBars; the messenger is
+  /// captured by the caller before any await so a mid-reset navigation
+  /// cannot lose the message.
+  void _showSettingsSnackBar(
+    ScaffoldMessengerState messenger,
+    String messageKey,
+  ) {
+    final tokens = ThemeManager().tokens;
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.surface,
+        content: Text(tr(messageKey), style: TextStyle(color: tokens.fg)),
+      ),
     );
   }
 
@@ -655,7 +709,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               _buildActionBtnCard(
                 tr("settings.resetUserData"),
                 tr("settings.resetUserDataDesc"),
-                isOnline ? _showResetDataWorkflow : null,
+                isOnline && !_isLoading ? _showResetDataWorkflow : null,
                 key: const Key('settings_reset_data_button'),
                 overrideColor: tokens.danger,
               ),

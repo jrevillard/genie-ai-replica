@@ -1,13 +1,14 @@
 // lib/services/connectivity_service.dart
 import 'dart:async';
 import 'dart:io'; // ADDED: For InternetAddress.lookup fallback
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 /// Abstract connectivity provider for dependency injection.
 /// Allows unit tests to substitute a fake for the platform-backed [Connectivity].
 abstract class ConnectivityProvider {
   Future<List<ConnectivityResult>> checkConnectivity();
+  Stream<List<ConnectivityResult>> get onConnectivityChanged;
 }
 
 /// Production provider wrapping the real [Connectivity] plugin.
@@ -17,13 +18,17 @@ class RealConnectivityProvider implements ConnectivityProvider {
   @override
   Future<List<ConnectivityResult>> checkConnectivity() =>
       _connectivity.checkConnectivity();
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      _connectivity.onConnectivityChanged;
 }
 
 /// Default DNS lookup function used when none is injected.
 Future<List<InternetAddress>> _defaultDnsLookup(String host) =>
     InternetAddress.lookup(host);
 
-class ConnectivityService {
+class ConnectivityService with WidgetsBindingObserver {
   static ConnectivityService? _instance;
   factory ConnectivityService() =>
       _instance ??= ConnectivityService._internal();
@@ -47,13 +52,15 @@ class ConnectivityService {
     Future<List<InternetAddress>> Function(String)? dnsLookup,
   }) => ConnectivityService._internal(provider: provider, dnsLookup: dnsLookup);
 
-  /// Reset the singleton for test isolation.
+  /// Reset the singleton for test isolation. The previous instance is
+  /// disposed, so its timer and its subscriptions do not leak into the
+  /// tests that follow.
   @visibleForTesting
   static void resetForTesting() {
+    _instance?.dispose();
     _instance = null;
   }
 
-  final Connectivity _connectivity = Connectivity();
   final ConnectivityProvider _provider;
   final Future<List<InternetAddress>> Function(String) _dnsLookupFn;
 
@@ -71,6 +78,35 @@ class ConnectivityService {
   // Polling timer for reliability
   Timer? _monitorTimer;
 
+  /// Watchdog cadence, from the fastest to the slowest. The watchdog uses
+  /// the fastest rung while the device is reachable and climbs the ladder
+  /// while it is not: a device that stays offline then pays a DNS lookup
+  /// every 15, 30 and 60 seconds instead of every 5.
+  static const List<Duration> _pollLadder = [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+    Duration(seconds: 60),
+  ];
+
+  /// Index of the rung the watchdog currently waits on.
+  int _pollRung = 0;
+
+  /// Whether the app is currently in the background. The watchdog has no
+  /// work to do there, and nothing it does may re-arm the timer.
+  bool _appBackgrounded = false;
+
+  /// Whether the service was disposed. A poll that was in flight when the
+  /// service was disposed must not schedule the next one.
+  bool _disposed = false;
+
+  /// Whether init() already ran. A second call must not add a second
+  /// lifecycle observer or a second stream subscription.
+  bool _initialized = false;
+
+  /// The connectivity stream subscription, cancelled on dispose.
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
   /// Exposes the monitor timer for test assertions.
   @visibleForTesting
   Timer? get monitorTimer => _monitorTimer;
@@ -87,11 +123,18 @@ class ConnectivityService {
   /// Initialize listeners. Should be called at app startup.
   Future<void> init() async {
     debugPrint('[Connectivity] Init called. Starting service...');
+    if (_initialized) return;
+    _initialized = true;
+
+    // 0. Watch the app lifecycle: the watchdog has no work to do while the
+    // app sits in the background.
+    WidgetsBinding.instance.addObserver(this);
+
     // 1. Get initial hardware state
     await recheckConnectivity();
 
     // 2. Listen for Stream changes (Immediate reaction)
-    _connectivity.onConnectivityChanged.listen((
+    _connectivitySubscription = _provider.onConnectivityChanged.listen((
       List<ConnectivityResult> results,
     ) {
       debugPrint('[Connectivity] Stream Event: $results');
@@ -100,35 +143,103 @@ class ConnectivityService {
           ? results.first
           : ConnectivityResult.none;
       _updateHardwareStatus(result);
+      if (_resetRungIfReachable()) {
+        _scheduleWatchdog();
+      }
     });
 
-    // 3. Start Periodic Polling (Reliability backup)
-    // Checks every 5 seconds to catch any missed events or stuck states
-    _startMonitoring();
+    // 3. Start the watchdog (Reliability backup)
+    // Catches any missed event or stuck state, on a cadence that slows
+    // down while the device stays unreachable.
+    _scheduleWatchdog();
 
     debugPrint(
       '[Connectivity] Service Initialized. Online: $isOnline (Hardware: $_isNetworkHardwareAvailable, Override: $_userOfflineOverride)',
     );
   }
 
-  void _startMonitoring() {
-    debugPrint('[Connectivity] Starting watchdog timer (5s interval)...');
+  /// Schedules the next watchdog check on the current rung of the ladder.
+  ///
+  /// Never arms a timer once the app is in the background or the service is
+  /// disposed — a poll or a stream event that was in flight when either
+  /// happened must not restart the watchdog.
+  void _scheduleWatchdog() {
+    if (_disposed || _appBackgrounded) return;
     _monitorTimer?.cancel();
-    _monitorTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      // FIX: Use recheckConnectivity() because it includes the DNS fallback.
+    final Duration interval = _pollLadder[_pollRung];
+    debugPrint(
+      '[Connectivity] Watchdog scheduled in ${interval.inSeconds}s...',
+    );
+    _monitorTimer = Timer(interval, () async {
+      // Use recheckConnectivity() because it includes the DNS fallback.
       // The previous simple check was forcing the app offline when the plugin
       // falsely reported "none" (common on Android).
-      await recheckConnectivity();
+      final bool ran = await recheckConnectivity();
+      if (ran) {
+        _climbPollRung();
+      }
+      _scheduleWatchdog();
     });
+  }
+
+  /// Drops the watchdog back to its fast cadence when the latest sample
+  /// shows the device reachable. Runs after every fresh sample — a poll, a
+  /// connectivity event or the app coming back — so the drop rule lives in
+  /// this one method. Returns whether the cadence changed, so the caller
+  /// re-arms only then: re-arming on every event would let an event storm
+  /// postpone the poll indefinitely, and a no-op event would reset the
+  /// countdown without any news.
+  bool _resetRungIfReachable() {
+    if (_isNetworkHardwareAvailable && _pollRung != 0) {
+      _pollRung = 0;
+      return true;
+    }
+    return false;
+  }
+
+  /// Climbs one rung up the ladder after a watchdog check found the device
+  /// unreachable. Only the watchdog climbs, and only on its own sample —
+  /// a check the concurrency guard skipped carries no evidence.
+  void _climbPollRung() {
+    if (!_isNetworkHardwareAvailable && _pollRung < _pollLadder.length - 1) {
+      _pollRung++;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[Connectivity] App resumed. Restarting the watchdog.');
+      _appBackgrounded = false;
+      // Sample first, then arm: scheduling before the check would arm the
+      // timer with the stale (possibly 60s) rung.
+      unawaited(_recheckAndRearm());
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      debugPrint('[Connectivity] App backgrounded. Pausing the watchdog.');
+      _appBackgrounded = true;
+      _monitorTimer?.cancel();
+      _monitorTimer = null;
+    }
+  }
+
+  /// Takes a fresh sample and arms the watchdog on the cadence it implies.
+  Future<void> _recheckAndRearm() async {
+    await recheckConnectivity();
+    _scheduleWatchdog();
   }
 
   /// Forces a fresh check of the hardware status.
   /// Uses DNS fallback if hardware reports offline but internet might be available.
-  Future<void> recheckConnectivity() async {
+  ///
+  /// Returns whether a check actually ran — false when another check was
+  /// already in flight and this one was skipped.
+  Future<bool> recheckConnectivity() async {
     // Prevent overlapping checks (e.g. Watchdog + Manual Toggle firing at once)
     if (_isChecking) {
       // debugPrint('[Connectivity] Check already in progress. Skipping.');
-      return;
+      return false;
     }
     _isChecking = true;
 
@@ -149,11 +260,14 @@ class ConnectivityService {
       }
 
       _updateHardwareStatus(result);
+      _resetRungIfReachable();
     } catch (e) {
       debugPrint('[Connectivity] Recheck failed: $e');
+      return false;
     } finally {
       _isChecking = false;
     }
+    return true;
   }
 
   /// Attempts DNS lookup as a fallback when hardware reports offline.
@@ -232,6 +346,7 @@ class ConnectivityService {
   }
 
   void _emitStatus() {
+    if (_statusController.isClosed) return;
     final bool status = isOnline;
     debugPrint(
       '[Connectivity] Emitting final status: $status (Hardware: $_isNetworkHardwareAvailable, UserOverride: $_userOfflineOverride)',
@@ -241,7 +356,15 @@ class ConnectivityService {
 
   void dispose() {
     debugPrint('[Connectivity] Disposing service.');
+    _disposed = true;
     _monitorTimer?.cancel();
+    _monitorTimer = null;
+    unawaited(_connectivitySubscription?.cancel());
+    _connectivitySubscription = null;
+    if (_initialized) {
+      WidgetsBinding.instance.removeObserver(this);
+      _initialized = false;
+    }
     if (!_statusController.isClosed) {
       _statusController.close();
     }

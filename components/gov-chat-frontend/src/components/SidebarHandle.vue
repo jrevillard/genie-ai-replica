@@ -9,6 +9,7 @@
     :aria-label="ariaLabel"
     tabindex="0"
     class="sidebar-handle"
+    :data-testid="`sidebar-handle-${side}`"
     :class="[
       `sidebar-handle--${side}`,
       { 'sidebar-handle--collapsed': collapsed, 'sidebar-handle--dragging': isDragging }
@@ -21,6 +22,7 @@
     <button
       type="button"
       class="sidebar-handle__button"
+      :data-testid="`sidebar-handle-button-${side}`"
       :aria-label="collapsed ? expandLabel : collapseLabel"
       :aria-expanded="!collapsed"
       @click.stop="onCollapseClick"

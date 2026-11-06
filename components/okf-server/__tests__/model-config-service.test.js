@@ -20,6 +20,7 @@ jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn(async () => 
 // so tests never leave the process.
 jest.mock('axios', () => ({ post: jest.fn() }));
 
+const { captureEnv } = require('./fixtures/env');
 const svc = require('../services/model-config-service');
 const axios = require('axios');
 const { __mockDb } = require('../shared-lib/db-connection-service');
@@ -63,6 +64,26 @@ beforeEach(() => {
 });
 
 describe('model-config lifecycle', () => {
+  // Pin the actor CONTRACT (issue #1188): the service consumes the SHARED
+  // controller actor {sub, name, source_ip} — not the retired local
+  // user_id variant. Audit rows carry the sub, the display name, and the
+  // request IP read from the actor itself.
+  test('audit rows carry sub + actor_name + source_ip from the shared actor', async () => {
+    const auditService = require('../services/audit-service');
+    await svc.createConfig(
+      { name: 'Pin', provider: 'openai', base_url: 'http://gw:4000/v1/', api_key: 'sk-pin-0001' },
+      { actor: { sub: 'u1', name: 'U One', source_ip: '10.1.1.1' } }
+    );
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'u1', actor_name: 'U One', source_ip: '10.1.1.1' })
+    );
+    // a bare sub without name/ip degrades to nulls, never undefined
+    await svc.updateConfig(Object.values(store())[0]._key, { name: 'Pin 2' }, { actor: { sub: 'u1' } });
+    expect(auditService.writeAudit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ actor: 'u1', actor_name: null, source_ip: null })
+    );
+  });
+
   test('create stores the key server-side and every read path MASKS it', async () => {
     const c = await svc.createConfig(
       {
@@ -72,7 +93,7 @@ describe('model-config lifecycle', () => {
         api_key: 'sk-secret-1234',
         default_model: 'gpt-4o'
       },
-      { actor: { user_id: 'u1' } }
+      { actor: { sub: 'u1', name: 'U One', source_ip: '10.1.1.1' } }
     );
     expect(c.has_api_key).toBe(true);
     expect(c.api_key_hint).toBe('••••1234');
@@ -131,7 +152,7 @@ describe('model-config lifecycle', () => {
       { name: 'A', provider: 'anthropic', base_url: 'https://api.anthropic.com', api_key: 'sk-ant-0001' },
       {}
     );
-    const renamed = await svc.updateConfig(c._key, { name: 'Anthropic direct' }, { actor: { user_id: 'u2' } });
+    const renamed = await svc.updateConfig(c._key, { name: 'Anthropic direct' }, { actor: { sub: 'u2' } });
     expect(renamed.name).toBe('Anthropic direct');
     expect(store()[c._key].api_key).toBe('sk-ant-0001'); // no api_key in patch → kept
     await svc.updateConfig(c._key, { api_key: 'sk-ant-9999' }, {});
@@ -528,5 +549,23 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     process.env.VLLM_MODEL_ID = 'plain/spelling-pin';
     expect(svc.judgeFidelity(null).model).toBeNull();
     delete process.env.VLLM_MODEL_ID;
+  });
+});
+
+describe('listConfigs envelope — the deployment opt-in rides along', () => {
+  const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
+
+  afterEach(() => {
+    restoreEndpoint();
+  });
+
+  test('deployment_opt_in is false with no endpoint and true with one', async () => {
+    // The panel warns when a named configuration is active while the legs
+    // that follow the deployment opt-in are OFF — the server owns that
+    // state, so it states it (the browser never sees the env).
+    delete process.env.VLLM_ENDPOINT;
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(false);
+    process.env.VLLM_ENDPOINT = 'https://gpu.example:444/llm';
+    expect((await svc.listConfigs()).deployment_opt_in).toBe(true);
   });
 });

@@ -44,6 +44,12 @@ router.use('/model-configs', require('./model-config-routes'));
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.
 router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);
+// Story 10.7 (#995): the governance AUDIT TRAIL read for the Studio card.
+// The config's own audit rows live in okf_audit_logs under the '_system'
+// pseudo-repo (AUDIT_REPO) — unreachable through the per-repo logs route
+// (it pre-gates on a real repo). Tools-admin only: it names WHO changed the
+// global posture and WHEN.
+router.get('/retrieval-config/audit', requireRole('tools-admin'), retrievalConfigController.getRetrievalConfigAudit);
 
 // Frontmatter (Story 1.6, 2026-10-07): read-by-default for the BFF/retriever
 // hot path; the write paths (PATCH / GET suggest) require write scope, which

@@ -466,6 +466,9 @@ export default {
       saveError: 'Filiyata jukuto feng mara to.',
       loadError: 'Filiyata longo jukutol looti to.',
       loadTranslationsError: 'Filiyata tradiksion looti to.',
+      translationsLoadFailedNotice:
+        "Cha dod yn load yn cherrinagh. Ta cur sheese yn chaghlaa er y laa oo dysgagh, shaghley derrey t'ad laoit.",
+      retryTranslations: 'Aa-chood',
       translationsNotLoaded: 'Tradiksion looti fili — looti ree adel savar.',
       confirmCancelTitle: 'Yailama-mang-mara',
       confirmCancelEdit: 'I la yailamawol ti mara folo. I lafiya la a bula le ti?',
@@ -480,6 +483,13 @@ export default {
       duplicateLangError: 'Kango kilin-kilin naata tradiksion to. A bong banta.'
     },
     documents: {
+      viewDocuments: 'Peba ko',
+      viewArtifacts: 'Artefek',
+      deleteRefuseBundle:
+        '{count} OKF artefek tught l jehe ayr daa ny rea er, as nad eh erinney ayd oo hent dy goll dy hon.',
+      deleteRefuseMixed:
+        '{blocked} feil tgorree les mayd, tarry nish. {bundles} OKF artefek tught l jehe ayr daa ny rea er, as nad eh erinney ayd oo hent dy goll dy hon.',
+      artifactsParked: 'Dy OKF artefacts ta goll myr, dy goll dy OKF shoh ayd er dy deployment shoh.',
       title: 'Dokuuma Lataramoo',
       addLink: 'A kafu linkoo la',
       uploadFiles: 'Fayilolu Yele',
@@ -746,7 +756,6 @@ export default {
   },
   services: {
     eCitizen: 'Portal an eCitizen',
-    taxFiling: 'Jooyaa Lataramoo',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
     drivingLicense: 'Moto Bula-Laisins'
@@ -964,6 +973,8 @@ export default {
     },
     processing: 'A ka baara...',
     userDataReset: 'I la moo-kibaroo fitita benta.',
+    userDataResetFilesFailed:
+      'I la moo-kibaroo fitita benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.',
     failedToResetUserData: 'Moo-kibaroo fiti mang ben. I si a ñining tugung.',
     unableToLoadUser: 'Moo kibaro looti mang ben. I si a ñining tugung.',
     retry: 'Ñining tugung',
@@ -980,6 +991,7 @@ export default {
       'I lafiya la ka i la akaanti kpalan le ti? Nye nungo in maan, nying si tɛna kurun. I la datha bee yɛrɛ kpalan.',
     delete: 'Kpalan',
     accountDeleted: 'I la akaanti ye kpalan don.',
+    accountDeletedFilesFailed: 'I la kaunti fitita benta, koma kabaata kumoy mana faga ben. A nyoofa yelamasaaying.',
     failedToDeleteAccount: 'Akaanti kpalan ma ɲin. I si ñining tugung hake.'
   },
   userProfile: {
@@ -1420,6 +1432,7 @@ export default {
     alt: 'Yele'
   },
   details: {
+    bundleBadge: 'Ta goll l jehe ayr daa ny rea er OKF',
     crawl: {
       seconds: 'seconds',
       autoRefreshEvery: 'Auto-refresh bera kungo',
@@ -1533,6 +1546,73 @@ export default {
       'Elego mun na a maa RAG la: dokuuma kili-kili min i yelata, a be run ka ke kibaro curated, labeled ye — dokuudu focused, dada kumbalu soto jaabi faama ju be dokuuma warayaa kili bolo.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF artefacts',
+      lead: 'Yn artefek gys un gys locafo.',
+      empty: 'Cha nel artafek OKF etirree.',
+      loadFailed: "Naa'mod goll dy gollad et rea as arragh.",
+      downloadFailed: "Naa'mod goll dy gollad et koba as arragh.",
+      column: {
+        artifact: 'Artefek',
+        repository: 'Jikin kakwōn',
+        actions: 'Kewol',
+        state: 'Cokoyaa'
+      },
+      openRepo: 'Jikin kakwōn aigh',
+      unknownVersion: 'Locaa gynnydd'
+    },
+    retrieval: {
+      title: 'Gbangbang njeng',
+      refresh: 'Kurandi',
+      loading: 'Ndeŋ…',
+      engaged: 'Dingir e neng yeeɲi',
+      notEngaged: 'E fɔ e la',
+      servingCount: 'Graf {n} nemma',
+      sourceLabel: 'Gbelegele',
+      invalidValue: 'Ɲa wa kɛsɛ nn-digit kɔfɛ {min} ni {max}.',
+      source: {
+        database: 'Row bɛ naɲɩi',
+        'env-defaults': 'Default ka environment'
+      },
+      revision: 'Opir-i',
+      updatedAt: 'Jɔɔrɩ',
+      updatedBy: 'Nin',
+      modeLabel: 'MODO',
+      mode: {
+        legacy: 'Fafan',
+        okf_only: 'OKF fɔlɔ',
+        hybrid: 'Fɔlɔ nɛnɛ'
+      },
+      consequence: {
+        legacy: 'Dingir OKF e jenɩ — koj answers bɛ fɔ ka kandeɩe fɔlɔ yɔlɔ.',
+        unknown: 'Mokhetho o tsebetseng.',
+        okf_only: 'Graf OKF fɔlɔ ye n bai answers — kandeɩe fɔlɔ yɔlɔ ma fɔ.',
+        hybrid: 'Graf OKF ye n bai answers, nɛnɛ kandeɩe fɔlɔ yɔlɔ di bɛ to bɔ.'
+      },
+      warnZeroServing: 'okf_only nɛnɛ graf 0 di nemma — OKF ye 0. Ɲeɲɩe ɲinɩ bɛ bɔ kaɲɩ, bɔ kaɲɩ kɛnɩɲɩ.',
+      servingList: 'Graf di nemma',
+      advanced: 'Kɛbɛkɛrɛw',
+      save: 'Bɛ',
+      revert: 'Kɛsɛ',
+      cancel: 'Kabo',
+      confirm: 'Ɲɛ',
+      confirmTitle: 'Sɛnɩna gbangbang njeng?',
+      confirmLead: 'Ena ye ɲɛcɛ wullɔ — e nɔ ka bɔ koAnswers bɛɛ fɔɲɛw, bɔ 30 sɔnɔ kɔnɔ.',
+      readFailed: 'An fɔ ka bɔ gbangbang njeng.',
+      nothingToSave: 'Foy to foy mɛn na.',
+      saveFailed: 'A bɛɛ.',
+      audit: 'Iɲiɲɛri dɔw',
+      auditLoading: 'Iɲiɲɛri dɔw bɛɛ…',
+      auditEmpty: 'Fɔlɔw, kɔnɔ ɲiɲɛri ɲɔ.',
+      auditFailed: 'An fɔ ka bɔ iɲiɲɛri dɔw.',
+      limit: {
+        max_fanout_graphs: 'Graf ka sɔnsogɔ',
+        spine_max_hops: 'Hop ka spine',
+        extracted_hop_cap: 'Hop bɛ minɛ',
+        candidate_cap_per_graph: 'Candidate ka graf',
+        candidate_cap_global: 'Candidate ka sɔnsogɔ'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         'I filew fan be kɛ ka jɔ (indexing). Kɔnɔkow ye repository ini a la editor kɔnɔ — filew lisiti be jira fila minnu ye, an ingestion be to na kɛ o ye automatic. Publish kɔ a la filew sila ye indexed i diya.',
@@ -1570,6 +1650,8 @@ export default {
       title: 'Model configurations',
       add: 'New configuration',
       hint: 'Endpoint konfigurasion toh-namalu judging ani generation la baara — OpenAI-compatible surface kili-kili sila (OpenAI, LiteLLM gateway, vLLM, Gemini-compat, Ollama) wala Anthropic direct. Konfigurasion kili dingo waa be run ka active ke; ni kelen ti active, deployment ka default modeloo na baara ke. Keyolu server kono marata ani a ti yitandi abada.',
+      gateWarning:
+        'Ta LLM pairt-churryd OKF aagh daal dy goll re daa-boot yn cheer daa yn laa as y goll dy chionn-laa (ceealinkey topiko, topico CSV, coimpipee manifesht) : cha nel VLLM_ENDPOINT ayns y deployment stiagh. Ta re ny hesh ayns ta yn laa as y loaigh y chur lesh daa. Co soor ey y h-yn deaey daa VLLM_ENDPOINT er y server as y h-yn goll dy baynt ne.',
       name: 'Name',
       provider: 'Provider',
       providerOpenai: 'OpenAI-compatible endpoint (OpenAI, LiteLLM, vLLM…)',
@@ -1647,6 +1729,7 @@ export default {
       ingestCompleted: 'ingested',
       bundleMissing: 'zip missing',
       bundleDownload: 'Download zip',
+      viewArtifact: 'War artefek',
       bundle: 'Bulo',
       col: {
         ingest: 'Ingest',
@@ -1974,6 +2057,7 @@ export default {
         done_accept: 'Benta — entity flagta bee {n} concept kono reviewed-and-kept markta. PII flagu bee clear.',
         done_redact: 'Benta — kono flagta {n} concept kono redaction notice la replaced benta.',
         done_remove: 'Benta — kono flagta {n} concept kono fitita.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
           remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
@@ -2305,7 +2389,7 @@ export default {
       autocorrect:
         'Auto-fix frontmatter waa dinda (title, type, structure) — i la kono dada bee ti. Proposalu yitandi kaben haya ti yailama; apply bɛ fixu write saaying ani Curate kono fatala etale be run.',
       handoff:
-        'Lifecycle ritual (submit → approve → publish) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
+        'Lifecycle ritual ({chain}) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
       lifecycle:
         'Step-naa kontratoo: draft → review → approved → published (mint + bundle) → ingested (RAG serving) → retracted (edit murung). Koo cite be run ingest koto waa — ani review kono koo waa publish be run.',
       labelsAuto:
@@ -2430,7 +2514,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
+        notReady:
+          'Draft ko rej kōjparok ilo server pād io — rem̦ōj pād ijin browser tab in in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart. Page kapa server rej bar ālik.',
+        repoGone:
+          'Ta-e polokelo cha tsa Mov tsa seva — ny goll dy goll dy hene dy tia tabeng browser tab in, im rej lōmar ilo tab eo ej kōnono ak wōjkeok ak restart.'
       },
       mode: {
         basic: 'Sabu',
@@ -2637,7 +2724,7 @@ export default {
           'Hand-off kaben etoo labang: fayilu bee juu kono, a markdown ani a labelu — assistantoo cite cogo min la o waa.',
         noRepo: 'Repository ti je saaying — repository kelen na, fayil reviewoo jang na wuli.',
         ritualOutside:
-          'Review ritual — submit for review, reviewer approval, publish — Editor ani Studio dashboard kono ke, jang ti. Editoroo aade ka a ban ke.',
+          'Review ritual ej run editor im Studio dashboard la, button tok ba mis tok — noon ilo ni. Komałoktok editor in nan kōnono.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2650,7 +2737,7 @@ export default {
         frontmatterOk: 'Frontmatter tagu approved waa',
         frontmatterServing: 'Frontmatter tags set',
         title: 'Sigura i kaba',
-        hint: 'Nying repository review a ready. Publish jang ti abada ke — dashboard kono approval lafiya submit, koto dashboard wala editor kono approve ani publish.',
+        hint: 'Kono kakwōn in redy dy review. Publish noon elhinn jer myr — lifecycle ej runs dashboard ani editor, button tok ba mis tok.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
         labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
         topicsOk: 'Un ko em̦ōj etale',
@@ -2660,7 +2747,7 @@ export default {
         frozen:
           'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Noo: Studio dashboard kono approval submit → approver dingo accept → dashboard wala editor kono publish. Wizardoo jang a ban o wajibya la.',
+          'Noo: Studio dashboard kono card ej juon button tok ilo lifecycle eo eḷōk — {chain}. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2829,7 +2916,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Sources page dada ani page {n} link',
@@ -2959,6 +3045,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'A dii juube ma',
       approve: 'Song',
       publish: 'A ke',
@@ -3005,7 +3092,9 @@ export default {
       title: 'Frontmatter tagu — nying repo ka kuma',
       help: 'Tagu kuma repo kono koo ani — maa o koto — a koo ti ke (forbidden listo). U decide querylu minnu route nying repo. Refresh klik ka corpus kono draft, wala chipu juu dada. Publish lafiya-le: topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
+      labelsStale: "Labels — Ingest nyiningo miroolu n'i la",
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: 'LLMoo tagu ti jaabi. Corpus damina koto a ñining tugung.',
       suggestCoverage: 'E qaqeeqeeq na {sampled} na {total} idee, ni {labels} wooqee hidin hibrid.',
       suggestFailed: 'Suggest failed.',
@@ -3034,7 +3123,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: "Labels — Ingest nyiningo miroolu n'i la"
       },
       tab: {
         head: 'Head',

@@ -9,16 +9,15 @@
  */
 const E2E_FIXTURES = [
   {
-    // The primary login user (loginViaUI's default). Carries the admin
-    // realm role in parity with the deleted inline CI assignment; no Playwright
-    // spec or docs phase exercises it (the documents suites authenticate as
-    // testadmin) — see #1402 before removing or relying on it.
+    // The primary login user (loginViaUI's default). Carries no realm
+    // role: no Playwright spec or docs phase drives an ADMIN_ONLY surface
+    // as testuser (the documents suites authenticate as testadmin) — the
+    // former parity admin role was removed in #1402.
     username: 'testuser',
     email: 'testuser@e2e.test',
     firstName: 'Test',
     lastName: 'User',
-    password: 'TestPass123!',
-    realmRoles: ['admin']
+    password: 'TestPass123!'
   },
   {
     // The documents/admin-surface login. Carries the admin realm role: the

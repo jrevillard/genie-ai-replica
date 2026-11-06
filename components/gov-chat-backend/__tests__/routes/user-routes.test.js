@@ -271,7 +271,12 @@ describe('GET /api/me/context', () => {
 // ============================================================
 describe('POST /api/me/reset-data', () => {
   it('should return 200 on successful reset', async () => {
-    userProfileService.resetUserData.mockResolvedValue({ resetFields: ['chatHistory'] });
+    userProfileService.resetUserData.mockResolvedValue({
+      userKey: 'user-123',
+      fieldsPreserved: 12,
+      filesDeletionFailed: false,
+      success: true
+    });
 
     const response = await authPost('/api/me/reset-data', {});
 
@@ -288,6 +293,71 @@ describe('POST /api/me/reset-data', () => {
     expect(response.status).toBe(500);
     expect(response.body.success).toBe(false);
   });
+
+  it('should not trust statusCode from non-AppError errors', async () => {
+    // Only typed AppErrors map their own status — any other object carrying a
+    // statusCode property (http-errors style, a wrapped driver error) is 500.
+    const fake = new Error('upstream said so');
+    fake.statusCode = 403;
+    userProfileService.resetUserData.mockRejectedValue(fake);
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+  });
+
+  it('should not leak internal driver error text on unexpected failures', async () => {
+    // A raw driver error (e.g. an ArangoDB write-write conflict racing the
+    // atomic reset) must not surface its internal message to the client.
+    userProfileService.resetUserData.mockRejectedValue(new Error('write write conflict, retries exceeded'));
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('Failed to reset user data');
+  });
+
+  it('should return 404 when the user no longer exists (NotFoundError)', async () => {
+    // Stale _key between authentication and reset (user hard-deleted
+    // mid-session) — a NotFoundError from the service must surface as 404,
+    // not as the generic 500, and must not log error-grade (alerting noise
+    // for an ordinary 404 condition).
+    const { NotFoundError } = require('../../middleware/errors');
+    const { logger } = require('../../shared-lib');
+    userProfileService.resetUserData.mockRejectedValue(new NotFoundError('User with ID user-123 not found'));
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('not found');
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  // #1442 contract pin: both clients read the TOP-LEVEL filesDeletionFailed
+  // flag from the reset-data response body. The route spreads the service
+  // result — if that spread ever becomes nested/enveloped or the key is
+  // renamed, every client warning branch becomes unreachable while this
+  // test goes red.
+  it.each([
+    ['failed cleanup', true],
+    ['clean reset', false]
+  ])('should surface filesDeletionFailed as a top-level boolean (%s)', async (_name, flag) => {
+    userProfileService.resetUserData.mockResolvedValue({
+      userKey: 'user-123',
+      fieldsPreserved: 12,
+      filesDeletionFailed: flag,
+      success: true
+    });
+
+    const response = await authPost('/api/me/reset-data', {});
+
+    expect(response.status).toBe(200);
+    expect(typeof response.body.filesDeletionFailed).toBe('boolean');
+    expect(response.body.filesDeletionFailed).toBe(flag);
+    expect(response.body.fieldsPreserved).toBe(12);
+  });
 });
 
 // ============================================================
@@ -295,24 +365,44 @@ describe('POST /api/me/reset-data', () => {
 // ============================================================
 describe('POST /api/me/delete', () => {
   it('should return 200 on successful GDPR delete', async () => {
-    keycloakProxyService.deleteUser.mockResolvedValue(undefined);
+    keycloakProxyService.deleteUser.mockResolvedValue({ filesDeletionFailed: false });
 
     const response = await authPost('/api/me/delete', {});
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true, message: 'Account deleted' });
+    expect(response.body).toEqual({ success: true, message: 'Account deleted', filesDeletionFailed: false });
     expect(keycloakProxyService.deleteUser).toHaveBeenCalled();
   });
 
-  it('should return 404 when user not found in Keycloak', async () => {
-    const error = new Error('User not found');
-    error.status = 404;
-    keycloakProxyService.deleteUser.mockRejectedValue(error);
+  // #1460 contract pin: both clients read the TOP-LEVEL filesDeletionFailed
+  // flag from the delete response body. If that key is ever renamed, nested or
+  // dropped, every client warning branch becomes unreachable while this test
+  // goes red.
+  it('should surface filesDeletionFailed as a top-level boolean when uploads cleanup failed', async () => {
+    keycloakProxyService.deleteUser.mockResolvedValue({ filesDeletionFailed: true });
+
+    const response = await authPost('/api/me/delete', {});
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true, message: 'Account deleted', filesDeletionFailed: true });
+  });
+
+  it('should return 404 when the user record has vanished (NotFoundError)', async () => {
+    // Stale _key between authentication and deletion (account hard-deleted
+    // mid-session) — a typed NotFoundError from the service must surface as
+    // 404, not as the generic 500, and must not log error-grade (alerting
+    // noise for an ordinary 404 condition).
+    const { NotFoundError } = require('../../middleware/errors');
+    const { logger } = require('../../shared-lib');
+    keycloakProxyService.deleteUser.mockRejectedValue(new NotFoundError('User user-123 not found'));
 
     const response = await authPost('/api/me/delete', {});
 
     expect(response.status).toBe(404);
     expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('not found');
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 
   it('should return 500 on service error', async () => {
@@ -322,6 +412,8 @@ describe('POST /api/me/delete', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.success).toBe(false);
+    // Internal driver text must not reach the client
+    expect(response.body.message).toBe('Failed to delete account');
   });
 });
 

@@ -39,6 +39,7 @@ import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 import 'package:genie_ai_mobile/components/settings/about_screen.dart';
+import 'package:genie_ai_mobile/utils/service_selection_context.dart';
 
 /// DEBUG ONLY: Bypasses TLS validation for local development with self-signed
 /// certificates. Tree-shaken in release builds — unused when kDebugMode is false.
@@ -77,8 +78,14 @@ void main() async {
     return;
   }
 
-  // Initialize Connectivity (Online/Offline)
-  await ConnectivityService().init();
+  // Restore the language the user last selected on this device, before the
+  // first frame: the app opens in that language instead of falling back to
+  // English. A stored language this deployment does not serve is ignored.
+  // Both startups steps are independent — wait for the two together.
+  await Future.wait([
+    I18nService().restoreLanguage(),
+    ConnectivityService().init(),
+  ]);
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -346,7 +353,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen> {
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
 
@@ -359,13 +366,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    // 1. Observe lifecycle for App Resume -> Recheck Connectivity
-    WidgetsBinding.instance.addObserver(this);
-
-    // 2. Initialize current state
+    // Initialize current state. Connectivity is rechecked on app resume by
+    // ConnectivityService itself — the UI only follows its stream.
     _isOnline = ConnectivityService().isOnline;
 
-    // 3. Listen to Connectivity Stream for Sync Trigger
+    // Listen to Connectivity Stream for Sync Trigger
     _connectivitySubscription = ConnectivityService().isOnlineStream.listen((
       isOnline,
     ) {
@@ -387,17 +392,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _connectivitySubscription?.cancel();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      debugPrint("[MAIN] App resumed. Rechecking connectivity...");
-      ConnectivityService().recheckConnectivity();
-    }
   }
 
   void _updateRelatedDocuments(List<dynamic> docs) {
@@ -411,28 +407,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _onServiceSelected(Map<String, dynamic> service) {
-    final String name = service['name'] ?? 'Unknown Service';
-    final String id = service['category_id'] ?? service['id'] ?? '';
-    // BOTH spellings travel to the chat: display (name) and the EN wire
-    // labels (the SSOT the retriever filters on).
-    final String categoryNameEn = service['categoryNameEn']?.toString() ?? '';
-    final List<String> serviceLabelsEn =
-        (service['serviceLabelsEn'] as List<dynamic>? ?? const <dynamic>[])
-            .map((e) => e.toString())
-            .where((e) => e.isNotEmpty)
-            .toList();
-    // How many services were picked: a picked service with no EN
-    // translation contributes no label, and the chat must refuse the
-    // send instead of quietly narrowing the query to the category.
-    final int serviceCount =
-        (service['serviceCount'] as num?)?.toInt() ?? serviceLabelsEn.length;
-    debugPrint("[MAIN] Service Selected: $name (ID: $id)");
+    final context = categoryContextFromSelection(service);
+    debugPrint(
+      "[MAIN] Service Selected: ${context.categoryName} "
+      "(ID: ${context.categoryId})",
+    );
     _chatBotKey.currentState?.setCategoryContext(
-      id,
-      name,
-      categoryNameEn: categoryNameEn,
-      serviceLabelsEn: serviceLabelsEn,
-      serviceCount: serviceCount,
+      context.categoryId,
+      context.categoryName,
+      categoryNameEn: context.categoryNameEn,
+      serviceLabelsEn: context.serviceLabelsEn,
+      serviceCount: context.serviceCount,
     );
   }
 

@@ -1,6 +1,6 @@
 const { logger } = require('../shared-lib');
 const nodeCrypto = require('crypto'); // For generating cache key
-const Redis = require('ioredis'); // For Redis cache
+const { createRedisCacheClient } = require('./redis-cache-client');
 
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
@@ -33,11 +33,6 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 // yes on every deployment and make the rule unsatisfiable.
 const gpuNodeHost = process.env.GPU_NODE_HOST || '';
 
-// --- Get Redis cache settings from env ---
-const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
-const redisPort = parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379;
-const redisPassword = process.env.TRANSLATION_CACHE_PASSWORD || null;
-
 /**
  * @class TranslationService
  * @description A proxy service for on-the-fly text translation using pluggable backends (CPU or GPU).
@@ -61,22 +56,14 @@ class TranslationService {
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
 
     if (cacheEnabled) {
-      logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${redisHost}:${redisPort}`);
-
-      // Initialize Redis Client
-      this.cacheClient = new Redis({
-        host: redisHost,
-        port: redisPort,
-        password: redisPassword,
-        // Optional: Add retry logic
-        retryStrategy(times) {
-          const delay = Math.min(times * 500, 2000);
-          return delay;
-        },
-        maxRetriesPerRequest: 3,
-        // Prevent hanging if Redis is down on startup
-        enableOfflineQueue: false
-      });
+      // Initialize Redis Client — shared contract with the provisioning
+      // invalidation clients (same Redis instance, same resilience options).
+      // The factory resolves the endpoint, so the logged endpoint below is
+      // read back from the client that actually dialled it.
+      this.cacheClient = createRedisCacheClient();
+      logger.info(
+        `[TRANSLATION-CONFIG] Cache connecting to Redis at ${this.cacheClient.options.host}:${this.cacheClient.options.port}`
+      );
 
       this.cacheClient.on('error', (err) => {
         logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);

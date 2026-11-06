@@ -26,10 +26,9 @@ Returns a sanitized subset of user data for OPEA AI context enrichment. User is 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     api_instance.apiMeContextGet();
@@ -57,7 +56,7 @@ void (empty response body)
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiMeDeletePost**
-> apiMeDeletePost()
+> ApiMeDeletePost200Response apiMeDeletePost()
 
 Delete user account (GDPR right to erasure)
 
@@ -66,13 +65,13 @@ Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete wit
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
-    api_instance.apiMeDeletePost();
+    final result = api_instance.apiMeDeletePost();
+    print(result);
 } catch (e) {
     print('Exception when calling CurrentUserApi->apiMeDeletePost: $e\n');
 }
@@ -83,7 +82,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiMeDeletePost200Response**](ApiMeDeletePost200Response.md)
 
 ### Authorization
 
@@ -92,7 +91,7 @@ void (empty response body)
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -106,10 +105,9 @@ Returns the full profile of the authenticated user. User is resolved from the JW
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
     api_instance.apiMeGet();
@@ -146,10 +144,9 @@ Self-service profile update. JIT fields (email, name) forwarded to Keycloak Acco
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 final data = data_example; // String | JSON string containing user profile data
 final files = [/path/to/file.txt]; // List<MultipartFile> | Files to upload (optional)
 
@@ -183,22 +180,22 @@ void (empty response body)
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiMeResetDataPost**
-> apiMeResetDataPost()
+> ApiMeResetDataPost200Response apiMeResetDataPost()
 
 Reset user profile data
 
-Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
+Resets the authenticated user's profile data while preserving the account identity fields (email, name, roles, issuer/subject) and creation date.
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = CurrentUserApi();
+final api_instance = CurrentUserApi(api_client);
 
 try {
-    api_instance.apiMeResetDataPost();
+    final result = api_instance.apiMeResetDataPost();
+    print(result);
 } catch (e) {
     print('Exception when calling CurrentUserApi->apiMeResetDataPost: $e\n');
 }
@@ -209,7 +206,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiMeResetDataPost200Response**](ApiMeResetDataPost200Response.md)
 
 ### Authorization
 
@@ -218,7 +215,7 @@ void (empty response body)
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

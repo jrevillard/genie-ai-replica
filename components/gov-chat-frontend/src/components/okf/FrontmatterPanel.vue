@@ -48,6 +48,13 @@
       <h3 class="okf-fmp__title">
         {{ translate('okf.frontmatter.title', 'Frontmatter tags — what this repo is about') }}
       </h3>
+      <!-- #932 step-1 (operator ruling): the edit-to-drain window is never
+           silent. These tags are edited AFTER the last drain — the serving
+           chunks still carry the previous version's labels until the next
+           ingest applies them. -->
+      <DsPill v-if="labelsStale" variant="warning" class="okf-fmp__stale">
+        {{ translate('okf.frontmatter.labelsStale', 'Labels stale — re-ingest to apply') }}
+      </DsPill>
       <DsButton variant="ghost" small :disabled="suggesting || readOnly" @click="onSuggestTags">
         {{
           suggesting
@@ -56,6 +63,12 @@
         }}
       </DsButton>
     </header>
+    <!-- UX-4 (#1514): the suggest job is one long LLM call — the bar is
+         indeterminate on purpose; the elapsed ticker is the "alive" signal. -->
+    <div v-if="suggesting" class="okf-fmp__suggest-progress">
+      <DsProgress :value="1" :max="1" indeterminate variant="accent" size="sm" :aria-label="suggestProgressLabel" />
+      <span class="okf-fmp__suggest-elapsed">{{ suggestProgressLabel }}</span>
+    </div>
     <p v-if="!compact" class="okf-fmp__help">
       {{
         translate(
@@ -155,6 +168,9 @@
 import { mapActions } from 'vuex';
 import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
+import DsPill from '../ds/Pill.vue';
+import DsProgress from '../ds/Progress.vue';
+import { isLabelsStale } from '../../services/okfRepoOps';
 import { getFrontmatter, suggestFrontmatter } from '../../services/frontmatterService';
 
 // Frontmatter shape keys, in display order. The server's
@@ -177,7 +193,7 @@ function emptyShape() {
 
 export default {
   name: 'FrontmatterPanel',
-  components: { DsButton },
+  components: { DsButton, DsPill, DsProgress },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -204,6 +220,9 @@ export default {
       shape: emptyShape(),
       addDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
       suggesting: false,
+      // UX-4 (#1514): elapsed seconds while the suggest job runs — the honest
+      // progress signal for a single long LLM call (see onSuggestTags).
+      suggestElapsed: 0,
       suggestionError: null,
       // 1-8g-m — provenance of the current suggestion (see the coverage /
       // rejected notes above the footer).
@@ -220,6 +239,23 @@ export default {
     };
   },
   computed: {
+    // #932 step-1: the edit-to-drain window, made visible. The repo doc
+    // comes from the store (upsertRepo keeps it current after lifecycle
+    // transitions); a repoId the store has not seen yet — or a mount whose
+    // store does not carry the okf module (bare test harnesses) — simply
+    // yields null and the marker stays off.
+    labelsStale() {
+      const repoById = this.$store.getters['okf/repoById'];
+      return isLabelsStale(typeof repoById === 'function' ? repoById(this.repoId) : null);
+    },
+    // UX-4 (#1514): "Curating… {n}s" — the elapsed readout beside the
+    // indeterminate bar (a single LLM call has no fractional progress).
+    suggestProgressLabel() {
+      return this.translate('okf.frontmatter.suggestingElapsed', 'Curating… {s}s').replace(
+        '{s}',
+        String(this.suggestElapsed)
+      );
+    },
     canSave() {
       // Save is allowed when the shape has any content. We send the
       // whole shape on every save (the server merges it), so the only
@@ -241,6 +277,13 @@ export default {
       handler(id) {
         if (id) this.loadFrontmatter();
       }
+    }
+  },
+  beforeUnmount() {
+    // UX-4 (#1514): an unmount mid-suggest must not leak the ticker.
+    if (this._suggestTicker) {
+      clearInterval(this._suggestTicker);
+      this._suggestTicker = null;
     }
   },
   methods: {
@@ -312,11 +355,29 @@ export default {
       }
       this.savedAt = null;
     },
+    // UX-4 (#1514): the suggest job is ONE sampled LLM call server-side
+    // (202 + poll inside the service) — there is no fractional progress to
+    // show honestly, so the bar is indeterminate and the elapsed ticker is
+    // what tells the curator the run is alive on a large repo (thinking
+    // models get minutes, not seconds). One stop helper; the run's finally
+    // and the unmount both call it.
+    _stopSuggestTicker() {
+      if (this._suggestTicker) {
+        clearInterval(this._suggestTicker);
+        this._suggestTicker = null;
+      }
+    },
     async onSuggestTags() {
       this.suggesting = true;
       this.suggestionError = null;
       this.suggestionCoverage = null;
       this.suggestionRejected = [];
+      const startedAt = Date.now();
+      this.suggestElapsed = 0;
+      this._stopSuggestTicker();
+      this._suggestTicker = setInterval(() => {
+        this.suggestElapsed = Math.round((Date.now() - startedAt) / 1000);
+      }, 1000);
       try {
         const res = await suggestFrontmatter(this.repoId);
         const suggested = (res && res.suggested) || null;
@@ -361,6 +422,7 @@ export default {
         this.$emit('error', { phase: 'suggest', error: e });
       } finally {
         this.suggesting = false;
+        this._stopSuggestTicker();
       }
     },
     async onSave() {
@@ -424,12 +486,37 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .okf-fmp__title {
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+}
+/* #932: the stale marker sits between title and actions; shrink+wrap keeps
+   the narrow wizard Curate column from pushing the Refresh button out. */
+.okf-fmp__stale {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+/* UX-4 (#1514): the suggest progress row — bar and elapsed readout. */
+.okf-fmp__suggest-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-xs) 0 0;
+}
+.okf-fmp__suggest-progress :deep(.ds-progress) {
+  flex: 1;
+  min-width: 0;
+}
+.okf-fmp__suggest-elapsed {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .okf-fmp__help {
   margin: 0;

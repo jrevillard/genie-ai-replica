@@ -18,7 +18,8 @@ jest.mock(
     },
     dbService: {
       getConnection: (...args) => mockGetConnection(...args)
-    }
+    },
+    erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey
   }),
   { virtual: true }
 );
@@ -26,6 +27,17 @@ jest.mock(
 // Mock arangojs aql template tag
 jest.mock('arangojs', () => ({
   aql: jest.fn((strings, ...values) => ({ _aql: true, strings, values }))
+}));
+
+// markUserAsDeleted evicts the cache, which now broadcasts over Redis
+// (#1443) — mock the client so no suite opens a real connection handle
+jest.mock('ioredis', () => require('./mocks/ioredis'));
+
+// Reactivation gate: these tests exercise the enabled path, so Keycloak
+// always confirms the account (the fail-closed branches live in
+// __tests__/services/user-provisioning-service.test.js)
+jest.mock('../services/keycloak-auth-service', () => ({
+  checkUserStatusInKeycloak: jest.fn().mockResolvedValue({ active: true, disabled: false })
 }));
 
 const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
@@ -47,10 +59,15 @@ describe('userProvisioningService', () => {
     // Legacy migration query is conditional (only runs when email is present).
     // Use mockResolvedValue (reusable) for legacy so tests without email skip it.
     const noLegacyCursor = { next: jest.fn().mockResolvedValue(undefined) };
+    const noTombstoneCursor = { next: jest.fn().mockResolvedValue(undefined) };
+    const noRecheckCursor = { next: jest.fn().mockResolvedValue(undefined) };
     mockQuery
+      .mockResolvedValueOnce(noTombstoneCursor) // erasure tombstone: no match
       .mockResolvedValueOnce(noLegacyCursor) // legacy migration: no legacy user (consumed when email present)
       .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
-      .mockResolvedValue(mockCursor); // upsert: returns { new, old }
+      .mockResolvedValueOnce(mockCursor) // upsert: returns { new, old } (per-test next())
+      .mockResolvedValueOnce(noRecheckCursor) // post-INSERT re-check: no match
+      .mockResolvedValue(mockCursor); // default for any further query
   });
 
   describe('provisionUser', () => {
@@ -62,6 +79,7 @@ describe('userProvisioningService', () => {
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
         name: 'Test User',
+        emailVerified: false,
         roles: ['user', 'admin'],
         active: true,
         deleted: false,
@@ -77,7 +95,7 @@ describe('userProvisioningService', () => {
 
       const result = await userProvisioningService.provisionUser(decoded);
 
-      expect(mockQuery).toHaveBeenCalledTimes(3); // legacy + soft-delete + upsert
+      expect(mockQuery).toHaveBeenCalledTimes(5); // tombstone + legacy + soft-delete + upsert + INSERT re-check
       expect(mockCursor.next).toHaveBeenCalledTimes(1);
       expect(result).toEqual(newUser);
     });
@@ -110,11 +128,43 @@ describe('userProvisioningService', () => {
       // Verify the UPSERT uses UPDATE (not REPLACE) — updateDoc is the 3rd interpolated value
       // aql`UPSERT { iss_sub: ${issSub} } INSERT ${newDoc} UPDATE ${updateDoc} IN users`
       // values: [issSub, newDoc, updateDoc]
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       const upsertValues = upsertCall.values;
       const updateDoc = upsertValues[2]; // 3rd interpolated value
       expect(updateDoc).toBeDefined();
       expect(updateDoc.createdAt).toBeUndefined();
+    });
+
+    it('should write sub in both the INSERT and UPDATE docs unconditionally', async () => {
+      // The UPDATE doc is built solely from the decoded JWT — the stored doc
+      // does not influence it, so the write is unconditional (idempotent —
+      // the iss_sub match guarantees identity). The sub-less fixture stands
+      // for a doc that had lost (or never gained) the field.
+      const existingUserWithoutSub = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        email: 'updated@example.com',
+        name: 'Updated Name',
+        roles: ['user'],
+        active: true,
+        deleted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z'
+      };
+      mockCursor.next.mockResolvedValue({ new: existingUserWithoutSub, old: { _key: 'users/789' } });
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
+      };
+
+      await userProvisioningService.provisionUser(decoded);
+
+      const upsertCall = mockQuery.mock.calls[3][0];
+      expect(upsertCall.values[1].sub).toBe(mockJwtPayload.sub); // INSERT doc
+      const updateDoc = upsertCall.values[2]; // 3rd interpolated value
+      expect(updateDoc.sub).toBe(mockJwtPayload.sub);
     });
 
     it('should preserve custom fields (personalIdentification, theme) during UPSERT on re-login', async () => {
@@ -150,7 +200,7 @@ describe('userProvisioningService', () => {
       // createdAt also preserved
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // Verify updateDoc does NOT contain custom fields — UPDATE only merges listed fields
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.personalIdentification).toBeUndefined();
       expect(updateDoc.theme).toBeUndefined();
@@ -179,10 +229,13 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result.email).toBe('newemail@example.com');
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.email).toBe('newemail@example.com');
     });
@@ -222,9 +275,12 @@ describe('userProvisioningService', () => {
       // Second query (upsert) returns the reactivated user
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) }) // check finds deleted user
-        .mockResolvedValue(mockCursor); // upsert returns reactivated user
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
+        .mockResolvedValue(mockCursor); // default
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
       const decoded = {
@@ -232,14 +288,18 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result).not.toBeNull();
       expect(result.deleted).toBe(false);
       expect(result.deletedAt).toBeNull();
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // UPSERT should have been called after legacy + soft-delete check
-      expect(mockQuery).toHaveBeenCalledTimes(3);
+      // (+ unconditional post-UPSERT re-check)
+      expect(mockQuery).toHaveBeenCalledTimes(5); // tombstone + legacy + soft-delete + upsert + re-check
     });
 
     it('should update JIT fields from JWT when re-activating soft-deleted user', async () => {
@@ -268,8 +328,11 @@ describe('userProvisioningService', () => {
 
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
@@ -280,12 +343,15 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      const result = await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(result.email).toBe('newemail@example.com');
       expect(result.name).toBe('New Name');
       // Verify updateDoc includes re-activation fields
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.deleted).toBe(false);
       expect(updateDoc.deletedAt).toBeNull();
@@ -308,8 +374,11 @@ describe('userProvisioningService', () => {
 
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValueOnce(mockCursor) // upsert returns reactivated user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // post-UPSERT re-check: no match
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
@@ -317,12 +386,18 @@ describe('userProvisioningService', () => {
       const { logger } = require('../shared-lib');
       logger.info.mockClear();
 
-      await userProvisioningService.provisionUser(decoded);
+      await userProvisioningService.provisionUser(decoded, {
+        token: 'test-token',
+        issuer: 'http://localhost:8080/realms/genie'
+      });
 
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User re-activated'));
     });
 
     it('should throw error when ArangoDB query fails', async () => {
+      // Drop the default Once chain so the rejection is the effective behavior
+      mockQuery.mockReset();
+      mockCursor.next.mockReset();
       mockQuery.mockRejectedValue(new Error('Connection refused'));
 
       const decoded = {
@@ -368,7 +443,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       const upsertValues = upsertCall.values;
       expect(upsertValues[2].roles).toEqual(['super-admin']); // updateDoc
       expect(upsertValues[1].roles).toEqual(['super-admin']); // newDoc
@@ -399,7 +474,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[2][0];
+      const upsertCall = mockQuery.mock.calls[3][0];
       expect(upsertCall.values[1].name).toBe('testuser'); // newDoc
     });
 
@@ -407,6 +482,7 @@ describe('userProvisioningService', () => {
       // No email in decoded → legacy migration query is skipped (only 2 queries)
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
         .mockResolvedValue(mockCursor); // upsert: returns { new, old }
       const user = {
@@ -433,7 +509,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0]; // no email → no legacy lookup
       expect(upsertCall.values[1].email).toBeNull(); // newDoc
       expect(upsertCall.values[1].name).toBeNull(); // newDoc
       expect(upsertCall.values[1].roles).toEqual([]); // newDoc
@@ -443,6 +519,7 @@ describe('userProvisioningService', () => {
       // No email in decoded → legacy migration query is skipped (only 2 queries)
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // tombstone: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
         .mockResolvedValue(mockCursor); // upsert: returns { new, old }
       const user = {
@@ -469,7 +546,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0]; // no email → no legacy lookup
       expect(upsertCall.values[1].roles).toEqual([]); // newDoc
       expect(upsertCall.values[2].roles).toEqual([]); // updateDoc
     });
@@ -626,6 +703,30 @@ describe('userProvisioningService', () => {
       mockGetConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
 
       await expect(userProvisioningService.markUserAsDeleted(ISS_SUB)).rejects.toThrow('ArangoDB unreachable');
+    });
+  });
+  describe('invalidation pub/sub clients', () => {
+    it('creates the publisher with the shared contract and the subscriber with its overrides', async () => {
+      // #1477 — both clients come from the shared Redis cache-client factory;
+      // only the subscriber may diverge (offline queue on, no per-command
+      // retry cap) so its buffered subscribe survives a cold Redis start.
+      const MockRedis = require('ioredis');
+      MockRedis.mockClear();
+      MockRedis.instances.length = 0;
+
+      await userProvisioningService.initialize();
+
+      const clients = MockRedis.instances.map((instance) => instance.options);
+      const publisher = clients.find((options) => options.enableOfflineQueue === false);
+      const subscriber = clients.find((options) => options.enableOfflineQueue === true);
+
+      expect(publisher).toBeDefined();
+      expect(publisher.maxRetriesPerRequest).toBe(3);
+      expect(subscriber).toBeDefined();
+      expect(subscriber.maxRetriesPerRequest).toBeNull();
+      // Both clients dial the same server — only the resilience contract differs
+      expect(subscriber.host).toBe(publisher.host);
+      expect(subscriber.port).toBe(publisher.port);
     });
   });
 });

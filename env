@@ -38,7 +38,7 @@
 ARANGO_PASSWORD=
 
 # Redis cache password (translation service caching)
-# Used by: redis-cache, translation service
+# Used by: redis-cache, translation service, backend user-provisioning cache invalidation
 TRANSLATION_CACHE_PASSWORD=
 
 # PostgreSQL shared instance (API gateway + Keycloak)

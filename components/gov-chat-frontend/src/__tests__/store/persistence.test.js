@@ -38,7 +38,7 @@ function createPersistencePlugin() {
     store.subscribe((mutation, state) => {
       if (mutation.type.startsWith('chatHistory/')) {
         try {
-          if (mutation.type === 'chatHistory/CLEAR_FOLDERS') {
+          if (mutation.type === 'chatHistory/CLEAR_FOLDERS' || mutation.type === 'chatHistory/RESET') {
             localStorage.removeItem('chatHistory');
           } else {
             localStorage.setItem('chatHistory', JSON.stringify(state.chatHistory));
@@ -98,6 +98,16 @@ describe('Store persistence plugin (AC8)', () => {
     expect(localStorage.getItem('chatHistory')).not.toBeNull();
 
     store.commit('chatHistory/CLEAR_FOLDERS');
+    expect(localStorage.getItem('chatHistory')).toBeNull();
+  });
+
+  it('should remove localStorage on RESET', () => {
+    const store = createTestStore();
+
+    store.commit('chatHistory/ADD_FOLDER', { name: 'Work' });
+    expect(localStorage.getItem('chatHistory')).not.toBeNull();
+
+    store.commit('chatHistory/RESET');
     expect(localStorage.getItem('chatHistory')).toBeNull();
   });
 

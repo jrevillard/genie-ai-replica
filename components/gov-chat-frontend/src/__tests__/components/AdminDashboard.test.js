@@ -6,7 +6,7 @@
  * Covers: renders without errors, auth state from Vuex, tab navigation,
  * overview tab content, users tab content, and loading state.
  */
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState, createUnauthenticatedState } = require('../fixtures/store-state');
 const { realI18nMock } = require('../helpers/realI18n');
@@ -278,20 +278,38 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extra
       stubs: {
         DsButton: {
           template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-          props: ['disabled', 'variant', 'small', 'tag']
+          props: ['disabled', 'variant', 'small', 'tag'],
+          // The real primitive declares this emit — without it the listener
+          // is a fallthrough attr and a click fires the handler TWICE
+          // (emit + DOM bubble on the root).
+          emits: ['click']
         },
         DsTabs: {
-          template: '<div><slot /></div>',
+          // UX-1: the stub mirrors the REAL primitive's nav markup (button per
+          // tab, scoped #tab slot, update:modelValue) so the rack-navigation
+          // tests exercise the same surface the browser renders. Pane content
+          // rides the default slot as before.
+          template:
+            '<div><div class="ds-tabs__nav"><button v-for="(t, i) in tabs" :key="t.value ?? i" ' +
+            ":class=\"['ds-tabs__btn', { 'ds-tabs__btn--active': modelValue === (t.value ?? i) }]\" " +
+            '@click="$emit(\'update:modelValue\', t.value ?? i)">' +
+            '<slot name="tab" :tab="t" :index="i" :active="modelValue === (t.value ?? i)">{{ t.label }}</slot>' +
+            '</button></div><div class="ds-tabs__content"><slot /></div></div>',
           props: ['tabs', 'modelValue']
         },
         DsSpinner: true,
         DsStateDisplay: {
-          template: '<div><slot /></div>',
+          // Mirrors the real primitive: a message prop, the default slot
+          // and the #action slot (the sibling components put their Retry
+          // button there).
+          template:
+            '<div><p v-if="message">{{ message }}</p><slot /><div class="ds-state__action"><slot name="action" /></div></div>',
           props: ['type', 'message']
         },
         DsInput: {
-          template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          props: ['modelValue', 'type', 'placeholder']
+          template:
+            '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          props: ['modelValue', 'type', 'placeholder', 'disabled']
         },
         DsSelect: true,
         DsStatusTag: true,
@@ -357,15 +375,15 @@ describe('AdminDashboard', () => {
       ]);
     });
 
-    // David 2026-10-21: "the left sidebar menus need to be aligned with the
-    // tabs in the tab rack" — the Studio tab had NO sidebar entry (clicking it
-    // left the menu with no active item), and Settings listed users before
-    // security against the rack's order. The sidebar must navigate to every
-    // tab, in rack order.
+    // UX-1 (#1512, David 2026-11-05): the sidebar nav rail is GONE — its
+    // icons moved onto the rack buttons, which are now the ONLY nav surface.
+    // The old sidebar-mirror tests (David 2026-10-21 alignment + flag hiding)
+    // become rack assertions: the rack navigates to every tab in order and
+    // carries each tab's icon.
     // OKF feature flag (2026-10-21): OKF_ENABLED=0 parks the OKF surfaces —
-    // the Studio and Models tabs (rack + sidebar) disappear; Query Inspector
+    // the Studio and Models tabs disappear from the rack; Query Inspector
     // is platform tooling and STAYS (David's call).
-    it('OKF flag off hides Studio and Models from rack and sidebar, keeps Query Inspector', async () => {
+    it('OKF flag off hides Studio and Models from the rack, keeps Query Inspector', async () => {
       window.APP_CONFIG = { okfEnabled: '0' };
       try {
         const wrapper = createAdminDashboardWrapper(
@@ -382,16 +400,16 @@ describe('AdminDashboard', () => {
         expect(tabIds).not.toContain('models');
         expect(tabIds).toContain('queryInspector'); // platform tooling stays
         expect(tabIds).toHaveLength(8);
-        const linkText = wrapper.findAll('.sidebar .nav-link').map((l) => l.text());
-        expect(linkText.join(' | ')).not.toContain('OKF Studio');
-        expect(linkText.join(' | ')).not.toContain('admin.tabs.models');
-        expect(wrapper.findAll('.sidebar .nav-link')).toHaveLength(8);
+        const btnText = wrapper.findAll('.ds-tabs__btn').map((l) => l.text());
+        expect(btnText.join(' | ')).not.toContain('OKF Studio');
+        expect(btnText.join(' | ')).not.toContain('admin.tabs.models');
+        expect(wrapper.findAll('.ds-tabs__btn')).toHaveLength(8);
       } finally {
         delete window.APP_CONFIG;
       }
     });
 
-    it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
+    it('the rack is the only nav surface: every tab reachable in order, each carries its icon', async () => {
       // The heavy tab panels (Studio fetches repos on mount, Models fetches
       // configs, Inspector mounts its own store calls) are stubbed — this
       // test is about the NAVIGATION surface, not the panels' payloads.
@@ -404,12 +422,19 @@ describe('AdminDashboard', () => {
           QueryInspector: true
         }
       );
-      const links = wrapper.findAll('.sidebar .nav-link');
-      expect(links.length).toBe(wrapper.vm.tabs.length);
+      // the rail is really gone
+      expect(wrapper.find('.sidebar').exists()).toBe(false);
+      expect(wrapper.findAll('.nav-link').length).toBe(0);
+      const btns = wrapper.findAll('.ds-tabs__btn');
+      expect(btns.length).toBe(wrapper.vm.tabs.length);
+      // every rack button carries its icon (the sidebar's icons, relocated)
       for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {
-        await links[i].trigger('click');
+        expect(btns[i].text()).toContain(wrapper.vm.tabs[i].icon);
+        await btns[i].trigger('click');
         expect(wrapper.vm.activeTab).toBe(wrapper.vm.tabs[i].id);
       }
+      // the preserved spec handle rides the rack's logs tab now
+      expect(wrapper.find('[data-test-id="admin-logs-link"]').exists()).toBe(true);
     });
   });
 
@@ -3222,5 +3247,142 @@ describe('translation load-failure gate', () => {
     expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'B-nom' }]);
     expect(wrapper.vm.hierarchyForm._key).toBe('cat-b');
     wrapper.unmount();
+  });
+
+  // -----------------------------------------------------------------------
+  // #1400 — a FAILED translation load must not leave an editable dead-end:
+  // while the failure holds, the translation inputs and row buttons are
+  // disabled, a persistent inline notice explains why, and a Retry action
+  // re-invokes the load.
+  // -----------------------------------------------------------------------
+  describe('translation load-failure dead-end UI', () => {
+    // Stubs that render the disabled state the real primitives support.
+    const editableStubs = {
+      DsSelect: {
+        template: '<select :disabled="disabled"><slot /></select>',
+        props: ['modelValue', 'placeholder', 'disabled']
+      }
+    };
+
+    async function mountFailedEdit() {
+      const treeMock = require('../../services/serviceTreeService');
+      // Deterministic queue: mockClear (beforeEach) does not drain
+      // once-implementations, so reset and re-arm the base before queueing.
+      treeMock.getServiceTranslations.mockReset();
+      treeMock.getServiceTranslations.mockResolvedValue([]);
+      treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('load blip'));
+      const wrapper = createAdminDashboardWrapper({}, {}, editableStubs);
+      await wrapper.vm.showEditForm({ _key: 'svc-1', nameEN: 'Tax Filing' }, { _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.translationsLoadFailed).toBe(true);
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+      return { wrapper, treeMock };
+    }
+
+    it('a failed load disables the translation inputs and the add/remove row buttons', async () => {
+      const { wrapper } = await mountFailedEdit();
+
+      const selects = wrapper.findAll('.translation-lang-select');
+      expect(selects.length).toBeGreaterThan(0);
+      for (const select of selects) {
+        expect(select.attributes('disabled')).toBeDefined();
+      }
+      for (const input of wrapper.findAll('.translation-text-input')) {
+        expect(input.attributes('disabled')).toBeDefined();
+      }
+      for (const removeBtn of wrapper.findAll('.translation-delete-btn')) {
+        expect(removeBtn.attributes('disabled')).toBeDefined();
+      }
+      const addBtn = wrapper.findAll('button').find((b) => b.text().trim() === '+ Add Translation');
+      expect(addBtn).toBeTruthy();
+      expect(addBtn.attributes('disabled')).toBeDefined();
+      wrapper.unmount();
+    });
+
+    it('an editable form without a failure keeps the rows enabled and shows no notice', async () => {
+      const wrapper = createAdminDashboardWrapper({}, {}, editableStubs);
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration' }],
+        parentId: null
+      };
+      wrapper.vm.activeTab = 'hierarchy';
+      await wrapper.vm.$nextTick();
+
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeUndefined();
+      }
+      for (const input of wrapper.findAll('.translation-text-input')) {
+        expect(input.attributes('disabled')).toBeUndefined();
+      }
+      const addBtn = wrapper.findAll('button').find((b) => b.text().trim() === '+ Add Translation');
+      expect(addBtn.attributes('disabled')).toBeUndefined();
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('a failed load shows a persistent inline notice with a Retry action', async () => {
+      const { wrapper } = await mountFailedEdit();
+
+      const notice = wrapper.find('[data-test-id="hierarchy-translations-load-failed"]');
+      expect(notice.exists()).toBe(true);
+      expect(notice.text()).toContain('Translations could not be loaded');
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
+      expect(retryBtn).toBeTruthy();
+      wrapper.unmount();
+    });
+
+    it('Retry re-invokes the translation load and re-enables the form on success', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'Déclaration' }]);
+
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
+      await retryBtn.trigger('click');
+      await flushPromises();
+
+      expect(treeMock.getServiceTranslations).toHaveBeenCalledWith('svc-1');
+      expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'Déclaration' }]);
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(false);
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeUndefined();
+      }
+      wrapper.unmount();
+    });
+
+    it('an empty successful retry resets the rows to exactly one placeholder', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      // The failed load already pushed one placeholder row; a successful
+      // fetch with no non-EN translations must not append a second one.
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockResolvedValueOnce([]);
+
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
+      await retryBtn.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
+      wrapper.unmount();
+    });
+
+    it('a failed retry keeps the form disabled and the notice up', async () => {
+      const { wrapper, treeMock } = await mountFailedEdit();
+      treeMock.getServiceTranslations.mockClear();
+      treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('still down'));
+
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
+      await retryBtn.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(true);
+      for (const select of wrapper.findAll('.translation-lang-select')) {
+        expect(select.attributes('disabled')).toBeDefined();
+      }
+      wrapper.unmount();
+    });
   });
 });

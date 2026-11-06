@@ -37,4 +37,27 @@ function realI18nMock(i18n) {
   };
 }
 
-module.exports = { createRealEnI18n, realI18nMock };
+/**
+ * The shipped en catalogue, raw — what translateMixin walks
+ * (`messages[locale][key]`). A `$i18n` mock WITHOUT `messages` makes every
+ * translate() call fall back to the component's inline default, so a suite
+ * that wants to assert the SHIPPED copy needs this shape.
+ */
+function enMessages() {
+  return { en: require('../../i18n/locales/en.js').default };
+}
+
+/**
+ * A `$i18n` mock carrying the raw catalogue next to the delegating t() —
+ * for components that resolve strings through translateMixin.
+ */
+function realI18nMessagesMock(i18n) {
+  const instance = i18n || createRealEnI18n();
+  return {
+    locale: 'en',
+    t: (...args) => instance.global.t(...args),
+    messages: enMessages()
+  };
+}
+
+module.exports = { createRealEnI18n, realI18nMock, enMessages, realI18nMessagesMock };

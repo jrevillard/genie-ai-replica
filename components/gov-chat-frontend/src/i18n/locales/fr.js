@@ -469,6 +469,9 @@ export default {
       saveError: "Échec de l'enregistrement de l'élément de hiérarchie.",
       loadError: 'Échec du chargement de la hiérarchie des connaissances.',
       loadTranslationsError: 'Échec du chargement des traductions.',
+      translationsLoadFailedNotice:
+        "Impossible de charger les traductions. La modification des traductions et l'enregistrement restent désactivés jusqu'à leur chargement.",
+      retryTranslations: 'Réessayer',
       translationsNotLoaded: "Traductions non chargées — rechargez avant d'enregistrer.",
       confirmCancelTitle: 'Modifications non enregistrées',
       confirmCancelEdit:
@@ -486,6 +489,13 @@ export default {
       duplicateLangError: 'Langues en double trouvées dans les traductions. Veuillez les supprimer.'
     },
     documents: {
+      viewDocuments: 'Documents',
+      viewArtifacts: 'Artefacts',
+      deleteRefuseBundle:
+        '{count} artefact(s) OKF sont gérés par le cycle de vie du référentiel et ne peuvent pas être supprimés ici.',
+      deleteRefuseMixed:
+        '{blocked} fichier(s) sont encore ingérés — retirez-les d’abord. {bundles} artefact(s) OKF sont gérés par le cycle de vie du référentiel et ne peuvent pas être supprimés ici.',
+      artifactsParked: 'Les artefacts OKF apparaissent lorsque la fonctionnalité OKF est activée pour ce déploiement.',
       title: 'Gestion de documents',
       addLink: 'Ajouter depuis un lien',
       uploadFiles: 'Télécharger des fichiers',
@@ -757,7 +767,6 @@ export default {
   },
   services: {
     eCitizen: 'Portail eCitizen',
-    taxFiling: 'Système de déclaration fiscale',
     idApplication: "Demande de carte d'identité",
     businessReg: "Enregistrement d'entreprise",
     drivingLicense: 'Permis de conduire'
@@ -987,6 +996,8 @@ export default {
     },
     processing: 'Traitement en cours...',
     userDataReset: 'Vos données de profil ont été réinitialisées avec succès.',
+    userDataResetFilesFailed:
+      'Vos données de profil ont été réinitialisées, mais certains fichiers stockés n’ont pas pu être supprimés. Veuillez contacter un administrateur.',
     failedToResetUserData: 'Échec de la réinitialisation de vos données de profil. Veuillez réessayer plus tard.',
     unableToLoadUser: "Impossible de charger les informations de l'utilisateur. Veuillez réessayer.",
     user: 'Utilisateur',
@@ -1002,6 +1013,8 @@ export default {
       'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est permanente et ne peut pas être annulée. Toutes vos données seront effacées.',
     delete: 'Supprimer',
     accountDeleted: 'Votre compte a été supprimé.',
+    accountDeletedFilesFailed:
+      'Votre compte a été supprimé, mais certains fichiers stockés n’ont pas pu être supprimés. Veuillez contacter un administrateur.',
     failedToDeleteAccount: 'Échec de la suppression de votre compte. Veuillez réessayer plus tard.'
   },
   userProfile: {
@@ -1445,6 +1458,7 @@ export default {
     alt: 'Télécharger'
   },
   details: {
+    bundleBadge: 'Géré par le cycle de vie OKF',
     crawl: {
       seconds: 'secondes',
       autoRefreshEvery: 'Actualisation auto toutes',
@@ -1562,6 +1576,75 @@ export default {
       "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier."
   },
   okf: {
+    artifacts: {
+      title: 'Artefacts OKF',
+      lead: 'Un artefact par version publiée.',
+      empty: 'Aucun artefact OKF pour le moment.',
+      loadFailed: 'Impossible de lire les artefacts OKF.',
+      downloadFailed: 'Impossible de télécharger les artefacts OKF.',
+      column: {
+        artifact: 'Artefact',
+        repository: 'Référentiel',
+        actions: 'Actions',
+        state: 'Statut'
+      },
+      openRepo: 'Ouvrir le référentiel',
+      unknownVersion: 'version inconnue'
+    },
+    retrieval: {
+      title: 'Posture de récupération',
+      refresh: 'Actualiser',
+      loading: 'Lecture…',
+      engaged: 'Ancrage actif',
+      notEngaged: 'Ne contribue pas',
+      servingCount: '{n} graphe(s) en service',
+      sourceLabel: 'Source',
+      invalidValue: 'Saisissez un nombre entier entre {min} et {max}.',
+      source: {
+        database: 'Ligne gouvernée',
+        'env-defaults': 'Valeur par défaut de l’environnement'
+      },
+      revision: 'Révision',
+      updatedAt: 'Modifié',
+      updatedBy: 'Par',
+      modeLabel: 'Mode',
+      mode: {
+        legacy: 'Hérité',
+        okf_only: 'OKF uniquement',
+        hybrid: 'Hybride'
+      },
+      consequence: {
+        legacy: "L'ancrage OKF est désactivé — les réponses viennent uniquement du chemin libre.",
+        unknown: 'Mode inconnu.',
+        okf_only: 'Seuls les graphes OKF fondent les réponses — le contexte libre nest pas consulté.',
+        hybrid: 'Les graphes OKF fondent les réponses et le contexte libre contribue toujours.'
+      },
+      warnZeroServing:
+        'okf_only sans aucun graphe en service — la contribution OKF est nulle. Publiez et ingérez un dépôt.',
+      servingList: 'Graphes en service',
+      advanced: 'Limites avancées',
+      save: 'Enregistrer',
+      revert: 'Annuler les modifications',
+      cancel: 'Annuler',
+      confirm: 'Appliquer',
+      confirmTitle: 'Changer la posture de récupération ?',
+      confirmLead:
+        'C’est un paramètre global — il change la façon dont chaque requête est ancrée, en une trentaine de secondes.',
+      readFailed: 'Impossible de lire la posture de récupération.',
+      nothingToSave: 'Il n’y a rien à enregistrer.',
+      saveFailed: 'La modification a été refusée.',
+      audit: 'Historique des modifications',
+      auditLoading: 'Chargement de l’historique…',
+      auditEmpty: 'Aucune modification enregistrée.',
+      auditFailed: 'Impossible de lire l’historique des modifications.',
+      limit: {
+        max_fanout_graphs: 'Graphes par requête',
+        spine_max_hops: 'Sauts de la colonne vertébrale',
+        extracted_hop_cap: 'Sauts extraits',
+        candidate_cap_per_graph: 'Candidats par graphe',
+        candidate_cap_global: 'Candidats par requête'
+      }
+    },
     lifecycleErrors: {
       drainInProgress:
         "Certains fichiers sont encore en cours de traitement (indexation). Ouvrez ce dépôt dans l'éditeur — la liste des fichiers indique lesquels, et l'ingestion réessaie automatiquement. Republiez lorsque chaque fichier apparaît comme indexé.",
@@ -1605,6 +1688,8 @@ export default {
       title: 'Configurations de modèle',
       add: 'Nouvelle configuration',
       hint: "Points de terminaison de modèles distants nommés pour le jugement et la génération — toute surface compatible OpenAI (OpenAI, une passerelle LiteLLM, vLLM, Gemini-compat, Ollama) ou Anthropic direct. Une seule configuration peut être active ; sans aucune, le modèle par défaut configuré du déploiement s'applique. Les clés sont stockées côté serveur et jamais affichées.",
+      gateWarning:
+        'Les branches LLM d’OKF qui suivent l’activation du déploiement (liens de sujets, sujets CSV, résumés de manifeste) sont DÉSACTIVÉES : ce déploiement n’a pas de VLLM_ENDPOINT. Une configuration nommée ne les active pas — définissez VLLM_ENDPOINT sur le serveur pour les activer.',
       name: 'Nom',
       provider: 'Fournisseur',
       providerOpenai: 'Compatible OpenAI (OpenAI, LiteLLM, vLLM…)',
@@ -1684,6 +1769,7 @@ export default {
       ingestCompleted: 'ingéré',
       bundleMissing: 'zip manquant',
       bundleDownload: 'Télécharger le zip',
+      viewArtifact: "Voir l'artefact",
       bundle: 'Ensemble',
       col: {
         ingest: 'Ingestion',
@@ -2022,6 +2108,7 @@ export default {
           'Terminé — chaque entité signalée est marquée vérifiée-et-conservée sur {n} concept(s). Les drapeaux PII sont levés.',
         done_redact: 'Terminé — le contenu signalé sur {n} concept(s) est remplacé par la mention de caviardage.',
         done_remove: 'Terminé — le contenu signalé sur {n} concept(s) est supprimé.',
+        progress: 'Applying… {done}/{total}',
         title: {
           redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
@@ -2362,7 +2449,7 @@ export default {
       autocorrect:
         "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        "Le rituel de cycle de vie (soumettre → approuver → publier) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
+        "Le rituel de cycle de vie ({chain}) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
         "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
@@ -2488,7 +2575,10 @@ export default {
         }
       },
       draft: {
-        notReady: 'Les brouillons ne peuvent pas encore être enregistrés côté serveur ; enregistrés localement.'
+        notReady:
+          "Les brouillons ne peuvent pas être enregistrés sur le serveur pour le moment — ils restent uniquement dans cet onglet du navigateur et sont perdus si l'onglet est fermé ou rechargé. La page ou le serveur peuvent être désynchronisés.",
+        repoGone:
+          "Ce référentiel n'est plus disponible sur le serveur — vos modifications restent uniquement dans cet onglet du navigateur et sont perdues si l'onglet est fermé ou rechargé."
       },
       mode: {
         basic: 'Base',
@@ -2700,7 +2790,7 @@ export default {
           "Dernier coup d'œil avant la remise : chaque fichier ci-dessous, son markdown et ses libellés — exactement comme l'assistant les citera.",
         noRepo: "Aucun dépôt pour le moment — la revue des fichiers apparaît ici dès qu'un dépôt existe.",
         ritualOutside:
-          "Le rituel de revue — soumission pour revue, approbation du réviseur, publication — se fait dans l'éditeur et le tableau de bord Studio, pas ici. Ouvrez l'éditeur pour terminer.",
+          "Le rituel de revue se déroule dans l'éditeur et sur le tableau de bord Studio, un bouton à la fois — pas ici. Ouvrez l'éditeur pour terminer.",
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2713,7 +2803,7 @@ export default {
         frontmatterOk: 'Balises frontmatter approuvées',
         frontmatterServing: 'Balises frontmatter définies',
         title: 'Sécuriser et terminer',
-        hint: "Ce référentiel est prêt pour examen. La publication n'a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l'approbation et la publication se font depuis le tableau de bord ou l'éditeur.",
+        hint: "Ce référentiel est prêt pour la revue. La publication n'a jamais lieu ici — le cycle de vie se déroule sur le tableau de bord et dans l'éditeur, un bouton à la fois.",
         nameOk: 'Nom du référentiel défini',
         labelsOk: 'Libellés sélectionnés',
         topicsOk: 'Sujets examinés',
@@ -2723,7 +2813,7 @@ export default {
         frozen:
           "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          "Ensuite : soumettre pour approbation sur le tableau de bord Studio → un approbateur accepte → publier depuis le tableau de bord ou l'éditeur. L'assistant s'arrête ici volontairement.",
+          "Ensuite : sur le tableau de bord Studio, cette carte n'a qu'UN seul bouton pour tout le cycle de vie — {chain}. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2896,7 +2986,6 @@ export default {
       action: {
         suggestLinks: 'Suggest links',
         accept: 'Accept',
-        dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
         wireCreate: 'Créer la page Sources et lier {n} page(s)',
@@ -3029,6 +3118,7 @@ export default {
       }
     },
     lifecycle: {
+      chainArrow: ' → ',
       submit: 'Soumettre pour examen',
       approve: 'Approuver',
       publish: 'Publier',
@@ -3076,7 +3166,9 @@ export default {
       title: 'Tags de frontmatter — le sujet de ce dépôt',
       help: "Les tags décrivent ce que contient ce dépôt et — tout aussi important — ce qu'il ne contient PAS (la liste des interdits). Ils déterminent quelles requêtes routent vers ce dépôt. Cliquez sur Actualiser pour proposer une rédaction depuis le corpus, ou modifiez les puces ci-dessous. La publication exige ≥3 sujets + ≥1 interdit.",
       refresh: 'Refresh suggestions',
+      labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer',
       suggesting: 'Curating…',
+      suggestingElapsed: 'Curating… {s}s',
       suggestEmpty: "Le LLM n'a renvoyé aucun tag. Réessayez une fois le corpus étoffé.",
       suggestCoverage:
         'Dérivé de {sampled} concepts sur {total}, répartis sur {labels} étiquettes de la hiérarchie de connaissances.',
@@ -3106,7 +3198,8 @@ export default {
       badge: {
         present: 'head ready',
         stale: 'head stale',
-        missing: 'no head'
+        missing: 'no head',
+        labelsStale: 'Libellés obsolètes — ré-ingérer pour les appliquer'
       },
       tab: {
         head: 'Head',

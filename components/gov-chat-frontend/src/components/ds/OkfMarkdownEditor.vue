@@ -116,6 +116,7 @@
           :value="localValue"
           :readonly="readonly"
           class="ds-okf-md__textarea"
+          data-test-id="okf-md-body"
           :aria-label="sourceAriaLabel"
           @input="onTextarea"
         />

@@ -295,3 +295,48 @@ them is an unchecked key.
 - **The 229 multi-line `translate(` calls invisible to the i18n contract extractor** — a gap in
   the guard, not in the keys. Worth a separate sweep; it is a guard-strengthening change, not a
   product change.
+
+---
+
+## Live verification (the local build, 2026-11-06)
+
+The slice was deployed to the running local build (the tree synced to the branch, `okf-server` +
+`frontend` rebuilt and recreated) and proven against real services, not only by unit tests.
+
+### The smoke harness — `data/okf/smoke-test/run-smoke-ceiling.js`
+
+A dedicated script in the harness family (it needs no fixture corpus; it creates and removes its
+own repository and leaves no residue). **17/17 PASS, exit 0:**
+
+| Property | Result |
+|---|---|
+| The concept read carries the server's ceiling | `max_doc_chars=250000` |
+| An over-ceiling body → **409 CONCEPT_TOO_LARGE** | refused |
+| The refusal names the size / the ceiling / a remedy | 250001 characters · 250000-character ceiling · a remedy |
+| **The refused save wrote NOTHING** | the body is byte-identical afterwards |
+| A body UNDER the ceiling still saves | 200 |
+| Publishing a repo holding an over-ceiling concept → **409 CONCEPT_TOO_LARGE** | refused |
+| The refusal names the offending concept | `legacy-oversized` |
+| **The refused publish minted NOTHING** | version still `null`; no version stored |
+
+The legacy corpus row (written straight into `okf_concepts_meta`) is the case the publish gate
+exists for: a document imported before the ceiling existed.
+
+### The harness is itself verified to bite
+
+Pointed at a ceiling the server does not enforce (`OKF_MAX_CONCEPT_DOC_CHARS=100` for the harness
+only — the server kept its full 250000 guard), it fails **6 assertions** and exits 1, including:
+
+- `FAIL an over-ceiling body → 200 … (expected 409 CONCEPT_TOO_LARGE)`
+- `FAIL the refused publish BURNED a version: null → 1`
+
+A smoke script that cannot fail is not a smoke script.
+
+### The four security questions, answered from the code
+
+| Question | Answer |
+|---|---|
+| Is the new AQL bind-parameterised? | Yes — `@rid`, `@ceiling`, `@limit`; no value is interpolated into the query text. |
+| Can the ceiling check be used as an oracle by an unauthorized caller? | No — `patchConcept` authorizes (`repoService.getById(..., {authz})` + `assertWritable`) **before** the ceiling check, and `transitionLifecycle` authorizes before `transition` (where the publish gate lives). |
+| Is the server's refusal message an XSS vector? | No — it renders through Vue's `{{ }}` interpolation (escaped); there is no `v-html` anywhere in `components/okf/`. |
+| Does the refusal leak anything? | No — it names the concept id, its size and the ceiling: all facts about a concept the caller is already authorized to read. `max_doc_chars` is a number. |

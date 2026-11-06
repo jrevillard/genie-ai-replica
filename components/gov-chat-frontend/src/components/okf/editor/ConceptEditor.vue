@@ -8,7 +8,7 @@
   parent can refresh the row.
 -->
 <template>
-  <div class="okf-ce">
+  <div class="okf-ce" data-test-id="okf-concept-editor">
     <div class="okf-ce__toolbar">
       <div class="okf-ce__view-toggle" role="tablist" :aria-label="translate('okf.editor.viewToggle', 'Editor view')">
         <DsButton :variant="view === 'source' ? 'primary' : 'secondary'" small @click="view = 'source'">
@@ -26,11 +26,21 @@
 
       <span class="okf-ce__path">{{ pathLabel }}</span>
 
-      <span class="okf-ce__save-status" :class="{ 'okf-ce__save-status--dirty': dirty }">
+      <span
+        class="okf-ce__save-status"
+        :class="{ 'okf-ce__save-status--dirty': dirty }"
+        data-test-id="okf-concept-save-status"
+      >
         {{ saveStatusLabel }}
       </span>
 
-      <DsButton variant="primary" small :disabled="readOnly || !dirty || saving" @click="saveNow">
+      <DsButton
+        variant="primary"
+        small
+        data-test-id="okf-concept-save"
+        :disabled="readOnly || !dirty || saving"
+        @click="saveNow"
+      >
         {{ translate('okf.editor.save', 'Save') }}
       </DsButton>
     </div>

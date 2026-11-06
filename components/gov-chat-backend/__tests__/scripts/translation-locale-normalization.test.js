@@ -18,6 +18,10 @@
  * rows the seed produced and asserts the application targets exactly those
  * rows (same `_key`) — which is what makes the UPSERT an UPDATE (createdAt
  * preserved) instead of an INSERT.
+ *
+ * The seed's existence probe is pinned too: a row already held for an owner
+ * and locale must be recognized whatever case it was stored in, so a rerun
+ * does not add a SECOND row for the same owner and locale.
  */
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
@@ -107,6 +111,22 @@ function createMemoryDb() {
     };
   }
 
+  /**
+   * The seed's existence probe: "does this owner already have a translation
+   * for this locale?". Mirrors the AQL exactly — `LOWER(d.languageCode) ==
+   * <bound locale>` compares the FOLDED column against the bound value
+   * LITERALLY, so a probe that binds the uppercase locale (or drops the
+   * folding) genuinely does not match a lowercase row.
+   */
+  function findTranslation(rows, ownerField, values, text) {
+    const [owner, locale] = values;
+    const folded = text.includes('LOWER(d.languageCode)');
+    const row = rows.find(
+      (r) => r[ownerField] === owner && (folded ? String(r.languageCode).toLowerCase() : r.languageCode) === locale
+    );
+    return row ? row._key : null;
+  }
+
   async function query(template) {
     const text = template.strings.join(' ');
     queries.push({ text, values: template.values });
@@ -122,10 +142,10 @@ function createMemoryDb() {
       return cursor(null);
     }
     if (text.includes('FOR d IN serviceCategoryTranslations')) {
-      return cursor(null);
+      return cursor(findTranslation(saved.serviceCategoryTranslations, 'serviceCategoryId', template.values, text));
     }
     if (text.includes('FOR d IN serviceTranslations')) {
-      return cursor(null);
+      return cursor(findTranslation(saved.serviceTranslations, 'serviceId', template.values, text));
     }
     if (text.includes('FOR d IN services FILTER d.nameEN')) {
       return cursor(null);
@@ -232,6 +252,32 @@ describe('seed scripts write the locale the application reads back', () => {
     );
     expect(seededEnglishRow).toBeDefined();
     expect(boundDocs.map((doc) => doc._key)).toContain(seededEnglishRow._key);
+  });
+
+  it('seed-synthetic-data.js does not add a second row for a locale already held in another case', async () => {
+    // The application writes UPPERCASE rows (`owner_FR`). A database that
+    // already holds one must not gain a SECOND row for the same owner and
+    // locale when the seed runs: the existence probe has to recognize the
+    // row whatever case it was stored in.
+    db.saved.serviceCategoryTranslations.push({
+      _key: '1_FR',
+      serviceCategoryId: '1',
+      languageCode: 'FR',
+      translation: 'existing french row',
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z'
+    });
+
+    const { SeedRunner } = require('../../scripts/seed-synthetic-data');
+    const runner = new SeedRunner(db, { knowledge: true });
+    await runner.seedKnowledge();
+
+    const frenchRows = db.saved.serviceCategoryTranslations.filter(
+      (row) => row.serviceCategoryId === '1' && row.languageCode.toUpperCase() === 'FR'
+    );
+    expect(frenchRows.length).toBe(1);
+    // untouched, not overwritten by a second row
+    expect(frenchRows[0].translation).toBe('existing french row');
   });
 
   it('create-translations.js writes translation rows the application write path targets', async () => {

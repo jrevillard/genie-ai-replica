@@ -125,7 +125,9 @@ def _resp_list(override, default):
     return override
 
 
-def base_rules(client_resp=None, token_resp=None, ropc_resp=None, realm_clients_resp=None):
+def base_rules(
+    client_resp=None, token_resp=None, ropc_resp=None, realm_clients_resp=None
+):
     """The scripted endpoints of the reduced readiness block, overridable
     per scenario. An endpoint the block stops calling leaves an unused rule
     (harmless); an endpoint that appears without a rule makes the stub exit 97 and the
@@ -398,7 +400,10 @@ def scenarios_list():
                     "status": "200",
                     "body": json.dumps(
                         [
-                            {"clientId": "admin-cli", "directAccessGrantsEnabled": True},
+                            {
+                                "clientId": "admin-cli",
+                                "directAccessGrantsEnabled": True,
+                            },
                             {
                                 "clientId": "genie-proxy-client",
                                 "secret": "harness-fixture-not-a-credential",

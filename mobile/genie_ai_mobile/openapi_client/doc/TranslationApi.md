@@ -23,10 +23,9 @@ Translates the text content within a markdown string from a specified source lan
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = TranslationApi();
+final api_instance = TranslationApi(api_client);
 final apiTranslateMarkdownPostRequest = ApiTranslateMarkdownPostRequest(); // ApiTranslateMarkdownPostRequest | 
 
 try {
@@ -68,10 +67,9 @@ Translates an array of text strings from a specified source language to a specif
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = TranslationApi();
+final api_instance = TranslationApi(api_client);
 final apiTranslatePostRequest = ApiTranslatePostRequest(); // ApiTranslatePostRequest | 
 
 try {

@@ -45,10 +45,54 @@ void main() {
       expect(resolveConfigText(['a', 'b'], 'en'), 'a,b');
     });
 
-    test('0 and false resolve to no text; a truthy number keeps its form', () {
-      expect(resolveConfigText(0, 'en'), '');
-      expect(resolveConfigText(false, 'en'), '');
-      expect(resolveConfigText(42, 'en'), '42');
+    test('a numeric list element renders in the web number form', () {
+      // The web's array join stringifies every element with String(),
+      // so a numeric element renders '5' there where a raw Dart
+      // toString would render '5.0'.
+      expect(resolveConfigText([5.0], 'en'), '5');
+    });
+
+    test('a map element renders as the web object default', () {
+      // The web's template renders any object as '[object Object]';
+      // Dart's own toString would write a Dart map literal.
+      expect(
+        resolveConfigText([
+          {'a': 1},
+        ], 'en'),
+        '[object Object]',
+      );
+    });
+
+    test('a nested list joins recursively like the web', () {
+      // The web's array toString joins recursively ('1,2,a'); Dart's
+      // own toString of the inner list would write '[1, 2],a'.
+      expect(
+        resolveConfigText([
+          [1.0, 2],
+          'a',
+        ], 'en'),
+        '1,2,a',
+      );
+    });
+
+    test(
+      '0 and false resolve to no text; a truthy number renders in the web form',
+      () {
+        expect(resolveConfigText(0, 'en'), '');
+        expect(resolveConfigText(false, 'en'), '');
+        expect(resolveConfigText(42, 'en'), '42');
+      },
+    );
+
+    // A number renders in the WEB's form: the web stringifies it with
+    // String(), which drops the '.0' Dart keeps ('5' there, '5.0' here).
+    test('a number renders in the web number form', () {
+      expect(resolveConfigText(5.0, 'en'), '5');
+      expect(resolveConfigText(5.5, 'en'), '5.5');
+      // A negative zero is FALSY on both platforms (the web's `value || ''`
+      // skips it), so it resolves to no text at all — the number form
+      // never comes into it.
+      expect(resolveConfigText(-0.0, 'en'), '');
     });
   });
 
@@ -122,6 +166,12 @@ void main() {
         }, 'en'),
         'Apply,Renew',
       );
+    });
+
+    // The locale-map title of the issue: a numeric title renders in the
+    // web's number form, wherever it sits in the map.
+    test('a numeric title renders in the web number form', () {
+      expect(resolveConfigText({'en': 5.0}, 'en'), '5');
     });
   });
 

@@ -115,7 +115,7 @@ Map<String, dynamic> parseQuickHelpButton(
     // it: the web's restore gates the category on its truthiness
     // (`if (button.category)`), which a stringified '0' would flip.
     'categoryRaw': btn['category'],
-    'category': _jsTagForm(btn['category']),
+    'category': jsFormOf(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
     'iconInlineSvg': iconInline && rawIconValue.trim().isNotEmpty
@@ -273,7 +273,12 @@ Color quickHelpCardBackgroundFor(
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
   if (labels is List<String>) return labels;
-  if (labels is List) return labels.map((label) => label.toString()).toList();
+  // Each element in the WEB's form (jsFormOf): the web renders a
+  // numeric label as '5', not Dart's '5.0'. A null element renders
+  // empty — the web's own array-join rule.
+  if (labels is List) {
+    return labels.map((label) => jsFormOf(label) ?? '').toList();
+  }
   if (labels is String && labels.isNotEmpty) return [labels];
   return const <String>[];
 }
@@ -628,40 +633,7 @@ bool restoredScopeTitleFollowsLocale({
 /// (raw truthiness + the web's serialization); every id consumer reads
 /// that one.
 String? quickHelpCategoryOf(Map<String, dynamic> button) =>
-    _jsTagForm(button['category']);
-
-/// The number as JAVASCRIPT serializes it — the form the web writes
-/// into a saved tag or a category reference; null for a null input.
-/// Dart's double toString differs from JS's Number.toString in TWO
-/// ways for the values the two platforms hold in common: an integral
-/// double in the plain range (below 1e21) gets a '.0' suffix (5.0 →
-/// '5.0', JS: '5'), and a negative zero prints '-0' where JS writes
-/// '0' — both normalized here (the digits themselves are identical at
-/// every magnitude: the int64 conversion is exact below 2^63; above it
-/// the plain-digit form is written straight from the double, which is
-/// what JS prints too). The exponential range (≥ 1e21) already matches
-/// unstripped. The band that stays unmatched is BY DECODE, not by this
-/// form: an integer LITERAL above 2^53 decodes to an imprecise double
-/// on the web but to the exact int64 here — the two platforms then
-/// disagree about the value itself, and a web-saved conversation
-/// carries the imprecise tag and misses this platform's index. A
-/// configuration with an id that large is not one the platforms can
-/// agree on at all: the tag FORM is the same on both platforms (each
-/// writes the string form at the conversation boundary, and each restore
-/// reads the string form), so what stays unmatched is the VALUE the two
-/// decoders produced — no boundary rule can close that band.
-String? _jsTagForm(dynamic raw) {
-  if (raw == null) return null;
-  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
-    // JS String(-0) is '0' — Dart prints '-0'.
-    if (raw == 0) return '0';
-    final plain = raw.toString();
-    // ≥ 1e21 prints exponential ('1e+21', matching JS, no suffix to
-    // strip); below it an integral double ends in '.0'.
-    return plain.endsWith('.0') ? plain.substring(0, plain.length - 2) : plain;
-  }
-  return raw.toString();
-}
+    jsFormOf(button['category']);
 
 /// The button's id as the TAG carries it — the string form of the id,
 /// null when the configuration declares NO id. The presence rule is the
@@ -681,7 +653,7 @@ String? quickHelpIdOf(Map<String, dynamic>? button) {
   // same saved conversation. Falling to the title (the rule below)
   // converges every save direction on the sidebar branch, on both.
   if (raw is! String && raw is! num && raw is! bool) return null;
-  return _jsTagForm(raw);
+  return jsFormOf(raw);
 }
 
 /// The category value [button] declares — the RAW config value, kept
@@ -845,10 +817,10 @@ class QuickHelpScopeResolver {
     for (final entry in enTree) {
       if (entry is! Map) continue;
       // The index speaks the form the config references resolve in (the
-      // web's serialization, _jsTagForm): a numeric catKey must index as
+      // web's serialization, jsFormOf): a numeric catKey must index as
       // the reference reads, or only this platform would render the card
       // broken.
-      final key = _jsTagForm(entry['catKey']);
+      final key = jsFormOf(entry['catKey']);
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
       final value = valueOf(entry);
@@ -1156,7 +1128,7 @@ class ConversationScopeResolver {
   /// [categoryKey].
   ConversationScope resolve({List<dynamic>? tags, String? categoryKey}) {
     // The tag side of the lookup speaks the SAME form the restore index
-    // keys: _jsTagForm, the web's serialization. A tags array can carry
+    // keys: jsFormOf, the web's serialization. A tags array can carry
     // the NUMBERS themselves (a hand-edited row: a JSON `5.0`, an id
     // above int64) — Dart's own toString ('5.0') would miss the index
     // entry the web's tag ('5') matches, and the scope would fall to the
@@ -1167,7 +1139,7 @@ class ConversationScopeResolver {
     // button index, so a hand-written null tag reads as one dead
     // sidebar tag instead of crashing the caption.
     final tagList = (tags ?? const <dynamic>[])
-        .map((tag) => _jsTagForm(tag) ?? 'null')
+        .map((tag) => jsFormOf(tag) ?? 'null')
         .toList();
     // The category the conversation was scoped by: read ONCE over the
     // whole tag list (the web's last-wins forEach), never per tag.

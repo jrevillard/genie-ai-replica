@@ -7,7 +7,7 @@ audience: "integrator, developer"
 mode: explanation
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-06
 ---
 
 This document describes how the GENIE.AI components fit together — service
@@ -918,7 +918,7 @@ sequenceDiagram
     Note right of K: NOT a backend callback<br/>OIDC client handles it directly
     K-->>C: 5. JWT (access + refresh)
 
-    Note over C: 6. Store token in JS memory<br/>(NEVER localStorage)
+    Note over C: 6. Store token in JS memory<br/>(disk copies: per-tab sessionStorage +<br/>the renew handoff entry in localStorage)
 
     C->>B: 7. API request with Bearer <jwt>
     B->>K: 8. Fetch JWKS (cached)

@@ -147,7 +147,16 @@ function releaseRenewLease() {
  * longer); logout wipes it, and any tab's next successful renew overwrites
  * the single key. The entry itself rests on disk until the next renewal
  * entry (the cleanup runs only there), so it can outlive its token's
- * expiry in a browser that stops renewing. */
+ * expiry in a browser that stops renewing.
+ * STAMP (round 23): the `at` stamp is LOAD-BEARING in one direction only —
+ * an OLDER build's cleanup requires its PRESENCE and drops a stamp-less
+ * publication as corrupt (and a PRE-#1535 build even judged the entry's
+ * AGE by it — `Date.now() - entry.at > RENEW_LEASE_TTL_MS` — the check
+ * #1535 replaced with the token-expiry bound; THIS build ages only the
+ * separate lease entry), so dropping the stamp here would kill the
+ * mixed-version handoff. No reader of THIS build keys on it (#1615:
+ * publishedTokenIsUsable judges the token alone). Writes carry the
+ * superset; reads require the subset. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -158,9 +167,9 @@ function publishRenewedUser(user) {
   }
 }
 
-/** One guarded wipe of the publication — round 25 (review): the same 4-line
- * try/removeItem was hand-rolled at three sites (logout + twice in
- * clearStaleRenewPublication); kept-in-sync-by-discipline twins drift. */
+/** One guarded wipe of the publication, shared by logout and the retention
+ * cleanup — round 25 (review): the same 4-line try/removeItem used to be
+ * hand-rolled at every call site; kept-in-sync-by-discipline twins drift. */
 function clearRenewPublication() {
   try {
     window.localStorage.removeItem(RENEW_USER_KEY);
@@ -175,10 +184,14 @@ function clearRenewPublication() {
  * (clearStaleRenewPublication — may it stay on disk?). A cleanup bounded
  * differently than the reader either wipes a handoff a reader could still
  * adopt or keeps an entry no reader can use.
- * A usable publication carries: the publisher's `at` stamp (a valid-JSON
- * entry without one is corruption — not a publication this build wrote,
- * #1521 review), the access token a reader needs (an entry without one is
- * readable by nobody, #1535 review), and an expiry that is still ahead.
+ * A usable publication carries the access token a reader needs (an entry
+ * without one is readable by nobody, #1535 review) and an expiry that is
+ * still ahead. The publisher's `at` stamp is deliberately NOT required
+ * (#1615): reads judge the token alone — the retention keys on the token's
+ * own expiry, so a stamp-less entry is judged like any other. Requiring
+ * the stamp HERE would make every handoff unreadable the day a writer
+ * drops it; the stamp's one remaining job (older builds' cleanups) is
+ * described in the STAMP note on publishRenewedUser.
  * The bound is the token's OWN expiry with the reader's 5 s margin — not
  * the lease takeover clock (RENEW_LEASE_TTL_MS), which answers a different
  * question (how long a dead holder's lease claim may be trusted) and was
@@ -191,7 +204,7 @@ function clearRenewPublication() {
  * MAX_PLAUSIBLE_EXPIRY_S reads as milliseconds stored as seconds:
  * corruption, not a token that lives for millennia (#1535 review). */
 function publishedTokenIsUsable(entry) {
-  if (!entry || typeof entry.at !== 'number') return false;
+  if (!entry) return false;
   const user = entry.user;
   if (!user || !user.access_token) return false;
   const exp = user.expires_at;
@@ -199,20 +212,29 @@ function publishedTokenIsUsable(entry) {
 }
 
 function clearStaleRenewPublication() {
+  // `raw` is declared outside the try — the READ itself stays inside (a
+  // storage-unavailable browser must not throw out of this best-effort
+  // cleanup) — so the single guarded removal at the bottom serves BOTH the
+  // judged path and the catch path (#1607): both judge the entry they READ,
+  // never whatever landed on disk since.
+  let raw = null;
   try {
-    const raw = window.localStorage.getItem(RENEW_USER_KEY);
+    raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
     if (publishedTokenIsUsable(entry)) return;
-    // Remove ONLY the entry that was judged: the key is re-read first, so a
-    // holder that published a fresh handoff between the read above and this
-    // removal keeps it. localStorage has no compare-and-swap, so a
-    // publication landing between THAT re-read and the removal is still lost
-    // — the window is what this narrows, not what it closes (#1535 review).
-    if (window.localStorage.getItem(RENEW_USER_KEY) === raw) clearRenewPublication();
   } catch {
     /* a corrupt entry is worse than a stale one — drop it */
-    clearRenewPublication();
+  }
+  // Remove ONLY the entry that was judged: the key is re-read first, so a
+  // holder that published a fresh handoff between the read above and this
+  // removal keeps it. localStorage has no compare-and-swap, so a
+  // publication landing between THAT re-read and the removal is still lost
+  // — the window is what this narrows, not what it closes (#1535 review).
+  try {
+    if (raw && window.localStorage.getItem(RENEW_USER_KEY) === raw) clearRenewPublication();
+  } catch {
+    /* storage unavailable — best-effort */
   }
 }
 

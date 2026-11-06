@@ -222,9 +222,32 @@ lane settings above.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OKF_MAX_CONCEPT_DOC_CHARS` | `250000` | Maximum characters in ONE concept document. An oversized source page is split losslessly against this ceiling at import (the "split families" the concept cap counts above). |
+| `OKF_MAX_CONCEPT_DOC_CHARS` | `250000` | Maximum characters in ONE concept document **body**. |
 
-This is the bound that actually protects the machine when
+The ceiling is enforced on every path that can write a concept body, so no
+oversized document can reach the corpus whichever way it arrives:
+
+| Path | What happens at the ceiling |
+|---|---|
+| **Import** | The document is split **losslessly**, on heading boundaries. The first part keeps the original `concept_id`, so existing links still resolve; the rest are suffixed. If a document cannot be split without losing content, the import is **rejected** with `CONCEPT_TOO_LARGE` naming the offending section — nothing is stored degraded. |
+| **Studio editor** | The save is **refused** (`409 CONCEPT_TOO_LARGE`) and **nothing is written**. The editor shows the live `characters / ceiling` count while the curator types, so the limit is visible before the save, and the refusal message names the size, the ceiling and the remedy. |
+| **Publish** | The publish is **refused** (`409 CONCEPT_TOO_LARGE`) *before* a version is minted, listing the offending concepts — a refused publish burns no version number and leaves no half-created bundle. |
+
+The ceiling governs the **body**, not the frontmatter: a concept with a large
+frontmatter and a small body passes, and the `index` concept is not exempt.
+
+**What to do when a document exceeds it.** Split it (the import path already
+does this losslessly), or raise the ceiling. Raise it only deliberately — it
+is a **static literal**, while the Contextual Retrieval document budget it is
+meant to track is **derived at runtime** from the window your model endpoint
+serves. On the default 65 536-token window the derived per-chunk budget
+measures ≈ 219 700 characters, which is *below* this 250 000 default: a
+concept at the ceiling therefore has its document context truncated on the
+default deployment (the truncation is recorded in the ingestion log). On a
+4 096- or 2 048-token window there is no room for a document context at all,
+and contextualization is skipped for every document.
+
+The ceiling is the bound that actually protects the machine when
 `OKF_INGEST_MAX_CONCEPTS` is raised — keep it at the default unless you have
 measured that your model window tolerates larger concepts.
 

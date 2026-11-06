@@ -2071,6 +2071,9 @@ export default {
       saved: 'Enregistré',
       saving: 'Enregistrement…',
       unsaved: 'Modifications non enregistrées',
+      ceiling: '{chars} / {ceiling} caractères',
+      ceilingOver:
+        'Au-delà de la limite — l’enregistrement sera refusé. Divisez ce concept ou augmentez OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Rendu',
         source: 'Source'
@@ -2685,6 +2688,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: "Échec de l'import — vérifiez les fichiers et réessayez.",
         skippedEmpty: '{n} fichier(s) vide(s) ignoré(s).',
+        splitReport: '{n} fichier(s) ont été divisés pour respecter la limite de taille : {files}',
+        splitFile: '{file} ({parts} parties)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

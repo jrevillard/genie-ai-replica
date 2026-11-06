@@ -746,6 +746,97 @@ describe('concept-meta-service.requeueFailedForReingest', () => {
   });
 });
 
+// ── THE CONCEPT-DOCUMENT CEILING — the publish gate's corpus read ──
+describe("concept-meta-service.listOverCeiling (the publish gate's backstop)", () => {
+  beforeEach(() => mockDb._reset());
+
+  // The query's SHAPE is the contract, so it is asserted, not just the value.
+  it('counts with COLLECT WITH COUNT, and reads the count as a SCALAR', async () => {
+    // MEASURED against the live ArangoDB (the local build, 2026-11-06):
+    //   FOR m IN okf_concepts_meta FILTER ... COLLECT WITH COUNT INTO n RETURN n
+    // returns a single row whose VALUE is the count — 9520 on the corpus,
+    // NOT the document {n: 9520}. `RETURN n` projects the collected VARIABLE,
+    // so `rows[0]` is the number itself.
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [
+        { concept_id: 'c1', chars: 300000 },
+        { concept_id: 'c2', chars: 260000 }
+      ]
+    });
+    const res = await conceptMeta.listOverCeiling('r1', 250000, 10);
+    expect(res.count).toBe(3);
+    expect(res.offenders).toHaveLength(2);
+
+    const [countAql, countBinds] = mockDb.query.mock.calls[0];
+    const aql = String(countAql);
+    expect(aql).toContain('m.repo_id == @rid');
+    expect(aql).toContain('LENGTH(m.body) > @ceiling');
+    // A row with no body has LENGTH(null), which compares as null rather
+    // than as a number — the filter must exclude those explicitly.
+    expect(aql).toContain('m.body != null');
+    expect(aql).toContain('COLLECT WITH COUNT INTO n RETURN n');
+    expect(countBinds).toEqual({ rid: 'r1', ceiling: 250000 });
+  });
+
+  // THE trap, pinned with the live measurement rather than an assumption.
+  //
+  // On an EMPTY corpus both AQL idioms return ONE row containing the scalar
+  // 0 — measured live on the local build, both
+  // `COLLECT WITH COUNT INTO n RETURN n` and
+  // `COLLECT AGGREGATE n = LENGTH(m) RETURN n` answered `[0]`.
+  //
+  // So the count is 0, which is FALSY, and the gate passes. The failure mode
+  // this guards against is a DOCUMENT-shaped row ({n: 0}), which is TRUTHY
+  // and would refuse EVERY publish in EVERY deployment: the corpus has no
+  // offenders, yet the gate would report one.
+  it('an empty corpus yields the scalar 0 — falsy, so the gate PASSES', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [0] });
+    const res = await conceptMeta.listOverCeiling('r1', 250000, 10);
+    // The critical assertion: the NUMBER 0, not a truthy {n: 0}.
+    expect(res.count).toBe(0);
+    expect(res.count).toBeFalsy();
+    expect(res.offenders).toEqual([]);
+    // Only ONE query ran — the offender listing is skipped when the count is 0.
+    expect(mockDb.query).toHaveBeenCalledTimes(1);
+  });
+
+  // The other shape the driver can hand back: no row at all. `rows[0] || 0`
+  // must still read as 0 rather than as undefined.
+  it('a cursor with NO rows reads as 0, not undefined', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    const res = await conceptMeta.listOverCeiling('r1', 250000, 10);
+    expect(res.count).toBe(0);
+    expect(res.offenders).toEqual([]);
+  });
+
+  it('names the offenders with their sizes, and honours the limit', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [42] });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [{ concept_id: 'c1', chars: 900000 }] });
+    const res = await conceptMeta.listOverCeiling('r1', 250000, 5);
+    expect(res.count).toBe(42);
+    expect(res.offenders[0]).toEqual({ concept_id: 'c1', chars: 900000 });
+    const [offenderAql, offenderBinds] = mockDb.query.mock.calls[1];
+    expect(String(offenderAql)).toContain('LIMIT @limit');
+    expect(offenderBinds).toEqual({ rid: 'r1', ceiling: 250000, limit: 5 });
+  });
+
+  it('a falsy repo or an unusable ceiling answers 0 without touching the db', async () => {
+    for (const args of [
+      ['', 250000],
+      ['r1', 0],
+      ['r1', -1],
+      ['r1', NaN],
+      [null, 250000]
+    ]) {
+      mockDb._reset();
+      const res = await conceptMeta.listOverCeiling(...args);
+      expect(res).toEqual({ count: 0, offenders: [] });
+      expect(mockDb.query).not.toHaveBeenCalled();
+    }
+  });
+});
+
 // ── AUTHOR-GRAPH LINK DEDUPE (2026-09-08 crawl audit) ──
 describe('dedupeLinksForStorage (2026-09-08 crawl audit)', () => {
   const { dedupeLinksForStorage } = require('../services/concept-meta-service');

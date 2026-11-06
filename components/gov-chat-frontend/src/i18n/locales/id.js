@@ -2054,6 +2054,8 @@ export default {
       saved: 'Tersimpan',
       saving: 'Menyimpan…',
       unsaved: 'Perubahan belum disimpan',
+      ceiling: '{chars} / {ceiling} karakter',
+      ceilingOver: 'Melebihi batas — penyimpanan akan ditolak. Bagi konsep ini atau naikkan OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Dirender',
         source: 'Sumber'
@@ -2662,6 +2664,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Impor gagal — periksa file dan coba lagi.',
         skippedEmpty: '{n} file kosong dilewati.',
+        splitReport: '{n} file dipecah agar sesuai batas ukuran: {files}',
+        splitFile: '{file} ({parts} bagian)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

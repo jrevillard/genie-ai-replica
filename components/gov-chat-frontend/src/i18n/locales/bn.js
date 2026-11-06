@@ -2047,6 +2047,9 @@ export default {
       saved: 'সংরক্ষিত',
       saving: 'সংরক্ষণ করা হচ্ছে…',
       unsaved: 'অসংরক্ষিত পরিবর্তন',
+      ceiling: '{chars} / {ceiling} অক্ষর',
+      ceilingOver:
+        'সীমা অতিক্রান্ত — সংরক্ষণ প্রত্যাখ্যান করা হবে। এই ধারণাটি ভাগ করুন বা OKF_MAX_CONCEPT_DOC_CHARS বাড়ান।',
       view: {
         rendered: 'রেন্ডার করা',
         source: 'উৎস'
@@ -2654,6 +2657,8 @@ export default {
         fsBusy: 'আপনার ফাইল আমদানি হচ্ছে…',
         fsFailed: 'আমদানি ব্যর্থ — ফাইলগুলো পরীক্ষা করে আবার চেষ্টা করুন।',
         skippedEmpty: '{n}টি ফাঁকা ফাইল বাদ পড়েছে।',
+        splitReport: 'আকারের সীমা মেনে চলতে {n}টি ফাইল বিভক্ত করা হয়েছে: {files}',
+        splitFile: '{file} ({parts}টি অংশ)',
         noneSelected: 'এখনো কোনো উৎস নির্বাচিত হয়নি।',
         selectedN: 'নির্বাচিত: {n}',
         moreN: ' +{n}টি আরও',

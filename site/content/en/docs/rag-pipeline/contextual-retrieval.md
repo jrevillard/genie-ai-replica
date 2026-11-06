@@ -129,14 +129,32 @@ the raw chunk). A missing `chunk_text` field indicates
 
 Documents are the unit, not chunks. Chunk text lives in the
 `<GRAPH>_SOURCE` collections; join it per document and compare the total
-against the budget (adjust `6000` to whatever your deployment's budget
-is):
+against the budget.
+
+**The budget is derived from the window your model endpoint actually
+serves**, so it is a property of your deployment, not a constant to copy from
+elsewhere. Measured on the shipped defaults (500-character chunks, `per_chunk`
+strategy):
+
+| Served context window | Derived document-context budget |
+|---|---|
+| 65 536 tokens (compose default, `env.rtx6000`) | ≈ **219 700 characters** |
+| 4 096 tokens | **no room** — the output reservation alone (512 × 16 tokens) exceeds the window |
+| 2 048 tokens (`env.t4`) | **no room** — the same |
+
+With no room the deployment **fails closed**: the document is not
+contextualised at all and its chunks are embedded raw, with an ERROR written
+to the ingestion log naming the knobs to lower. That is the T4 failure mode
+the derived budget exists to make visible — it was silent before.
+
+Substitute your deployment's derived budget for the value below (the default
+deployment's ≈ 219 700 is used here):
 
 ```aql
 FOR d IN `OKF_<your-graph>_SOURCE`
   COLLECT doc = d.file_id, cid = d.concept_id
   AGGREGATE total = SUM(LENGTH(d.chunk_text)), n = LENGTH(d)
-  FILTER total > 6000
+  FILTER total > 219700
   RETURN { doc: doc, concept: cid, chars: total, chunks: n }
   LIMIT 50
 ```

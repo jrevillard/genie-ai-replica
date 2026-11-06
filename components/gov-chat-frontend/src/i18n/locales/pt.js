@@ -2064,6 +2064,9 @@ export default {
       saved: 'Salvo',
       saving: 'Salvando…',
       unsaved: 'Alterações não salvas',
+      ceiling: '{chars} / {ceiling} caracteres',
+      ceilingOver:
+        'Acima do limite — a gravação será recusada. Divida este conceito ou aumente OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Renderizado',
         source: 'Fonte'
@@ -2675,6 +2678,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'A importação falhou — verifique os arquivos e tente novamente.',
         skippedEmpty: '{n} arquivo(s) vazio(s) ignorado(s).',
+        splitReport: '{n} arquivo(s) foram divididos para respeitar o limite de tamanho: {files}',
+        splitFile: '{file} ({parts} partes)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

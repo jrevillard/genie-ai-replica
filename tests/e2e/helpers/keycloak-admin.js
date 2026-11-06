@@ -19,18 +19,39 @@ function transientError(message) {
 const TRANSIENT_STATUSES = [408, 425, 429];
 
 /**
- * Fail with the verdict a status deserves: a 5xx or a 408/425/429 is a
- * failure a later attempt may survive (transient), anything else is a
- * real failure.
+ * Is this status a failure a later attempt may survive? A 5xx is an
+ * outage, a 408/425/429 is a rate-limited or retryable answer; anything
+ * else is a real failure.
+ * @param {number} status - The HTTP status
+ * @returns {boolean} True when a later attempt may survive the status
+ */
+function isTransientStatus(status) {
+  return status >= 500 || TRANSIENT_STATUSES.includes(status);
+}
+
+/**
+ * The error a status deserves: a 5xx or a 408/425/429 is a failure a
+ * later attempt may survive (transient), anything else is a real
+ * failure. The status travels with the error, so the caller can re-derive
+ * the verdict for its own operation.
+ * @param {string} message - The diagnosis
+ * @param {number} status - The HTTP status
+ * @returns {Error} The error — transient when the status is transient
+ */
+function statusError(message, status) {
+  const error = isTransientStatus(status) ? transientError(message) : new Error(message);
+  error.httpStatus = status;
+  return error;
+}
+
+/**
+ * Fail with the verdict a status deserves.
  * @param {string} message - The diagnosis
  * @param {number} status - The HTTP status
  * @throws {Error} The error — transient when the status is transient
  */
 function failWithStatus(message, status) {
-  if (status >= 500 || TRANSIENT_STATUSES.includes(status)) {
-    throw transientError(message);
-  }
-  throw new Error(message);
+  throw statusError(message, status);
 }
 
 /**
@@ -39,20 +60,29 @@ function failWithStatus(message, status) {
  * answered, just not with JSON). The verdict follows the server's state:
  * a 5xx is an outage a retry may survive, a 4xx is permanent, and a
  * rejection without a status is a transport break.
+ *
+ * Every verdict names what was being read — a rejection that carries a
+ * status names it too, so the reader never has to parse the URL out of
+ * the transport string.
  * @param {Error} err - The rejection
  * @param {string} what - What was being read, for the message
  * @returns {Error} The error to throw
  */
 function requestFailure(err, what) {
+  const subject = `Cannot reach the Keycloak admin API for ${what}`;
   if (err.status !== undefined) {
-    if (err.status >= 500 || TRANSIENT_STATUSES.includes(err.status)) {
-      const error = transientError(err.message);
+    if (isTransientStatus(err.status)) {
+      const error = transientError(`${subject}: ${err.message}`);
       error.httpStatus = err.status;
       return error;
     }
+    // A permanent refusal: the rejection keeps its own markers (the
+    // non-JSON body flag), so the caller can still tell a broken answer
+    // from a transport break.
+    err.message = `${subject}: ${err.message}`;
     return err;
   }
-  return transientError(`Cannot reach the Keycloak admin API for ${what}: ${err.message}`);
+  return transientError(`${subject}: ${err.message}`);
 }
 
 /**
@@ -63,6 +93,72 @@ function requestFailure(err, what) {
 function bodyText(res) {
   if (res.data === undefined || res.data === null) return '(no body)';
   return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+}
+
+// The payload shapes a read can expect: a LIST of representations, or a
+// single REPRESENTATION carrying the id its caller indexes.
+const ARRAY_PAYLOAD = 'array';
+const REPRESENTATION_PAYLOAD = 'representation';
+
+/**
+ * The verdict for a payload that does not carry the shape the read
+ * expected: an error body indexed as a list (or as a role) resolves an
+ * undefined entry instead of naming the cause.
+ * @param {string} what - What was being read, for the verdict
+ * @param {{data: *}} res - The response
+ * @param {string} shape - ARRAY_PAYLOAD or REPRESENTATION_PAYLOAD
+ * @throws {Error} The verdict — flagged as an invalid payload
+ */
+function assertPayloadShape(what, res, shape) {
+  // The verdict reads as a sentence, so the subject starts capitalized.
+  const subject = what.charAt(0).toUpperCase() + what.slice(1);
+  if (shape === ARRAY_PAYLOAD) {
+    if (!Array.isArray(res.data)) {
+      const error = new Error(`${subject} answered HTTP 200 with a non-array payload: ${bodyText(res)}`);
+      error.invalidPayload = true;
+      throw error;
+    }
+    return;
+  }
+  if (!res.data || typeof res.data !== 'object' || !res.data.id) {
+    const error = new Error(`${subject} answered HTTP 200 without a usable representation: ${bodyText(res)}`);
+    error.invalidPayload = true;
+    throw error;
+  }
+}
+
+/**
+ * Read one resource from the Keycloak admin API and verify the answer:
+ * a transport failure and a refused status each get the module's verdict,
+ * and the verdict names what was being read.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} path - The admin API path to read
+ * @param {string} what - What was being read, for the verdicts
+ * @param {object} [options] - What the read expects of the answer
+ * @param {number} [options.absentStatus] - The status the caller answers
+ *   itself (a 404 that means "not there", not "failed")
+ * @param {string} [options.shape] - The payload shape the answer must carry
+ * @returns {Promise<object>} The response, whose payload the caller reads
+ */
+async function readAdminApi(adminToken, path, what, options = {}) {
+  let res;
+  try {
+    res = await request('GET', path, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+  } catch (err) {
+    throw requestFailure(err, what);
+  }
+  if (options.absentStatus !== undefined && res.status === options.absentStatus) {
+    return res;
+  }
+  if (res.status !== 200) {
+    failWithStatus(`Cannot read ${what}: HTTP ${res.status} ${bodyText(res)}`, res.status);
+  }
+  if (options.shape) {
+    assertPayloadShape(what, res, options.shape);
+  }
+  return res;
 }
 
 // The account the create answered for is gone: a concurrent cleanup or an
@@ -99,45 +195,23 @@ const ACCOUNT_VANISHED_VERDICT = (missMessage, username, email) =>
  * @returns {Promise<object[]>} The matching user representations
  */
 async function findUsers(adminToken, realm, field, value) {
-  let searchRes;
   try {
-    searchRes = await request(
-      'GET',
+    // The status and the payload shape are checked like every other read: an
+    // expired admin token answers 401 with an error body, and indexing that
+    // body would resolve an undefined user instead of naming the cause.
+    const searchRes = await readAdminApi(
+      adminToken,
       `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}&exact=true`,
-      {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      }
+      `the user lookup of ${value} in realm ${realm}`,
+      { shape: ARRAY_PAYLOAD }
     );
+    return searchRes.data;
   } catch (err) {
-    // A transport-level failure (connection refused, timeout) is the same
-    // transient condition as the create's own: the retry budget must be
-    // allowed to save the provisioning.
-    const error = requestFailure(err, `the user lookup of ${value}`);
-    error.lookupFailed = true;
-    throw error;
+    // Every way the lookup fails says the same thing to the callers: the
+    // account's state is unknown, so no diagnosis about it is possible.
+    err.lookupFailed = true;
+    throw err;
   }
-
-  // The status and the payload shape are checked: an expired admin token
-  // answers 401 with an error body, and indexing that body would resolve
-  // an undefined user instead of naming the cause.
-  if (searchRes.status !== 200) {
-    // The status travels with the error: the caller decides what it means
-    // for its own operation (the retry budget re-derives the verdict).
-    const error = new Error(`User lookup for ${value} in realm ${realm} failed: HTTP ${searchRes.status}`);
-    error.lookupFailed = true;
-    error.httpStatus = searchRes.status;
-    throw error;
-  }
-  if (!Array.isArray(searchRes.data)) {
-    // A broken answer is a failed lookup, but Keycloak said nothing
-    // about a status: the marker that says so is `lookupFailed`, and
-    // `httpStatus` stays unset (a 200 there would read as a verdict).
-    const error = new Error(`User lookup for ${value} in realm ${realm} answered a non-array payload`);
-    error.lookupFailed = true;
-    error.invalidPayload = true;
-    throw error;
-  }
-  return searchRes.data;
 }
 
 /**
@@ -170,28 +244,23 @@ async function resolveUser(adminToken, realm, username) {
  *   exists)
  */
 async function findRealmRole(adminToken, realm, roleName) {
-  let res;
-  try {
-    res = await request('GET', `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-  } catch (err) {
-    // A transport-level failure is the same transient condition as the
-    // create's own: the retry budget must be allowed to save the run.
-    throw requestFailure(err, `the realm role ${roleName}`);
-  }
-  if (res.status === 200) {
-    // A 200 with no usable representation is a broken answer, not a role:
-    // the callers index role.id on it.
-    if (!res.data || typeof res.data !== 'object' || !res.data.id) {
-      throw new Error(
-        `The realm role ${roleName} of ${realm} answered HTTP 200 without a usable representation: ${bodyText(res)}`
-      );
+  const res = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/roles/${encodeURIComponent(roleName)}`,
+    `the realm role ${roleName} of ${realm}`,
+    {
+      // A 404 is not a failed read: the realm may simply carry no role of
+      // that name — the single-role endpoint answers 404 for a missing role
+      // as well as for a missing realm, and resolveRealmRoles tells the two
+      // apart with a realm read.
+      absentStatus: 404,
+      // A 200 with no usable representation is a broken answer, not a role:
+      // the callers index role.id on it.
+      shape: REPRESENTATION_PAYLOAD,
     }
-    return res.data;
-  }
+  );
   if (res.status === 404) return null;
-  failWithStatus(`Cannot read the realm role ${roleName} of ${realm}: HTTP ${res.status} ${bodyText(res)}`, res.status);
+  return res.data;
 }
 
 /**
@@ -217,22 +286,14 @@ async function resolveRealmRoles(adminToken, realm, roleNames) {
     // role is a plain "not granted here". Any other verdict is the
     // Keycloak's own — an expired admin token answers 401, and that must
     // not be reported as a missing realm.
-    let realmRes;
-    try {
-      realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      });
-    } catch (err) {
-      throw requestFailure(err, `the realm ${realm}`);
-    }
+    const realmRes = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm ${realm}`, {
+      absentStatus: 404,
+    });
     if (realmRes.status === 404) {
       // The realm itself is gone. The caller decides what that means: the
       // assignment side fails loudly (the venue must exist), the removal
       // side has nothing left to remove.
       return { roles, missing, realmMissing: true };
-    }
-    if (realmRes.status !== 200) {
-      failWithStatus(`Cannot read the realm ${realm}: HTTP ${realmRes.status} ${bodyText(realmRes)}`, realmRes.status);
     }
   }
   return { roles, missing, realmMissing: false };
@@ -384,12 +445,12 @@ async function removeRealmRoles(adminToken, realm, userId, roleNames) {
  * @returns {Promise<string[]>} The effective role names
  */
 async function effectiveRealmRoles(adminToken, realm, userId) {
-  const res = await request('GET', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  if (res.status !== 200 || !Array.isArray(res.data)) {
-    throw new Error(`Cannot read the effective realm roles of ${userId}: HTTP ${res.status} ${bodyText(res)}`);
-  }
+  const res = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`,
+    `the effective realm roles of ${userId}`,
+    { shape: ARRAY_PAYLOAD }
+  );
   return res.data.map((r) => r.name);
 }
 
@@ -714,18 +775,12 @@ async function rotateRealmKeys(adminToken, realm) {
   // with an error body that .map() would choke on without a verdict, and
   // a 200 with a non-array payload is a broken answer — reading it as an
   // empty key set would create the new key and demote nothing.
-  const keysRes = await request('GET', `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  if (keysRes.status !== 200) {
-    failWithStatus(
-      `Cannot read the existing key providers of ${realm}: HTTP ${keysRes.status} ${bodyText(keysRes)}`,
-      keysRes.status
-    );
-  }
-  if (!Array.isArray(keysRes.data)) {
-    throw new Error(`The key providers of ${realm} answered HTTP 200 with a non-array payload: ${bodyText(keysRes)}`);
-  }
+  const keysRes = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`,
+    `the existing key providers of ${realm}`,
+    { shape: ARRAY_PAYLOAD }
+  );
   const existingKeys = keysRes.data;
 
   // A re-run must not mint a second active rotated key: when the realm
@@ -788,13 +843,7 @@ async function rotateRealmKeys(adminToken, realm) {
  * @returns {Promise<object>} The realm representation
  */
 async function getRealmSettings(adminToken, realm) {
-  const res = await request('GET', `/auth/admin/realms/${realm}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-
-  if (res.status !== 200) {
-    throw new Error(`Failed to get realm settings for ${realm}: ${res.status} ${JSON.stringify(res.data)}`);
-  }
+  const res = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm settings of ${realm}`);
   return res.data;
 }
 
@@ -806,13 +855,21 @@ async function getRealmSettings(adminToken, realm) {
  * @returns {Promise<void>}
  */
 async function updateRealmSettings(adminToken, realm, settings) {
-  const res = await request('PUT', `/auth/admin/realms/${realm}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: settings,
-  });
+  let res;
+  try {
+    res = await request('PUT', `/auth/admin/realms/${realm}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: settings,
+    });
+  } catch (err) {
+    // A rejected request is the same verdict as on a read: the transport
+    // break names what was being written, and a status-carrying rejection
+    // keeps the retry classification the module's reads give it.
+    throw requestFailure(err, `the realm settings update of ${realm}`);
+  }
 
   if (res.status !== 204) {
-    throw new Error(`Failed to update realm settings: ${res.status} ${JSON.stringify(res.data)}`);
+    failWithStatus(`Failed to update the realm settings of ${realm}: HTTP ${res.status} ${bodyText(res)}`, res.status);
   }
 }
 

@@ -410,7 +410,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 500/);
+    expect(caught.message).toMatch(/Cannot read the user lookup of testadmin in realm genie: HTTP 500/);
     expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
     expect(caught.transient).toBe(true);
@@ -445,7 +445,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/answered a non-array payload/);
+    expect(caught.message).toMatch(/answered HTTP 200 with a non-array payload/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
   });
 });
@@ -525,7 +525,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 401/);
+    expect(caught.message).toMatch(/Cannot read the user lookup of testadmin in realm genie: HTTP 401/);
     expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
   });

@@ -149,11 +149,12 @@ function releaseRenewLease() {
  * entry (the cleanup runs only there), so it can outlive its token's
  * expiry in a browser that stops renewing.
  * STAMP (round 23): the `at` stamp is LOAD-BEARING in one direction only —
- * an OLDER build's cleanup judges an entry's age by it and drops a
- * stamp-less publication as corrupt, so dropping the stamp here would kill
- * the mixed-version handoff. No reader of THIS build keys on it (#1615:
- * publishedTokenIsUsable judges the token alone). Writes carry the
- * superset; reads require the subset. */
+ * an OLDER build's cleanup requires its PRESENCE and drops a stamp-less
+ * publication as corrupt (no build judges a PUBLICATION's age by it: the
+ * only `at`-based age check anywhere is the separate lease entry's), so
+ * dropping the stamp here would kill the mixed-version handoff. No reader
+ * of THIS build keys on it (#1615: publishedTokenIsUsable judges the
+ * token alone). Writes carry the superset; reads require the subset. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -190,9 +191,9 @@ function clearRenewPublication() {
  * READER would make a stamp-less handoff unreadable, and a future writer
  * that dropped the stamp would then silently reproduce the #1535
  * regression (the reader refusing every publication). The write keeps
- * stamping `at` (see publishRenewedUser): an OLDER build's cleanup judges
- * an entry's age by it and drops a stamp-less publication as corrupt, so
- * the stamp is what keeps the mixed-version handoff alive.
+ * stamping `at` (see publishRenewedUser): an OLDER build's cleanup
+ * requires the stamp's PRESENCE and drops a stamp-less publication as
+ * corrupt, so the stamp is what keeps the mixed-version handoff alive.
  * The bound is the token's OWN expiry with the reader's 5 s margin — not
  * the lease takeover clock (RENEW_LEASE_TTL_MS), which answers a different
  * question (how long a dead holder's lease claim may be trusted) and was

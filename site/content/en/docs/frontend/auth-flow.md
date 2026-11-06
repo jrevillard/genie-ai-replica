@@ -107,10 +107,10 @@ The callback is also where the `setInitialized` mutation fires (via the `try / f
 | Token | Where | Why |
 |-------|-------|-----|
 | Access token | `keycloakAuthService.currentUser.access_token` (in memory) and `oidc-client-ts`'s per-tab user store (`sessionStorage`); the cross-tab handoff entry (`localStorage`, `genie.renew.user`) carries it for the other tabs | XSS exposure: a stolen access token is short-lived (5 min by default) and limited to the API scopes. |
-| ID token | Same `currentUser` object and the same per-tab user store; the cross-tab handoff entry carries it as part of the renewed token set | The per-tab store is the browser's session storage; the handoff entry is the one `localStorage` footprint, and it is wiped at logout and by the cleanup at each renew entry. |
+| ID token | Same `currentUser` object and the same per-tab user store; the cross-tab handoff entry carries it as part of the renewed token set | The per-tab store is the browser's session storage; the handoff entry is the one `localStorage` footprint of the auth service itself (the `oidc.`-prefixed state keys in the row above belong to `oidc-client-ts`), and it is wiped at logout and by the cleanup at each renew entry. |
 | Refresh token | Same `currentUser` object and the same per-tab user store; rotated by Keycloak on every silent renew. The cross-tab handoff entry (`localStorage`, `genie.renew.user`) carries the renewed token set for the other tabs — wiped at logout and by the cleanup at each renew entry, which drops it once the access token it carries is no longer usable | RFC 6749 §10.4 — refresh tokens for SPAs SHOULD be sender-constrained or rotated; we rotate. The handoff is what keeps a second tab from spending a second grant on an already-rotated refresh token. |
 | Session cookie (Keycloak) | Browser-managed, HttpOnly | Set by Keycloak on the auth flow; the silent-renew iframe uses it. |
-| OIDC state / nonce | `oidc-client-ts`'s state store — the library default is the origin's `localStorage` (its `oidc.`-prefixed keys), written for the authorize round-trip | Persisted only for the redirect; the callback consumes it and removes it. |
+| OIDC state / nonce | `oidc-client-ts`'s state store — the library default is the origin's `localStorage` (its `oidc.`-prefixed keys), written for the authorize round-trip | Persisted for the redirect and removed when the callback consumes it; a round-trip that never reaches its callback leaves the entry until `clearStaleState` next runs (this app calls it at logout). |
 
 What the Vuex store exposes:
 

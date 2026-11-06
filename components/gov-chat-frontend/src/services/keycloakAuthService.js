@@ -167,11 +167,9 @@ function publishRenewedUser(user) {
   }
 }
 
-/** One guarded wipe of the publication — round 25 (review): the same 4-line
- * try/removeItem was hand-rolled at three sites when this was written
- * (logout + twice in clearStaleRenewPublication; wave W later collapsed the
- * cleanup's two arms into one removal, so it is two sites today);
- * kept-in-sync-by-discipline twins drift. */
+/** One guarded wipe of the publication, shared by logout and the retention
+ * cleanup — round 25 (review): the same 4-line try/removeItem used to be
+ * hand-rolled at every call site; kept-in-sync-by-discipline twins drift. */
 function clearRenewPublication() {
   try {
     window.localStorage.removeItem(RENEW_USER_KEY);

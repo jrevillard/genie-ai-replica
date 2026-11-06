@@ -1120,13 +1120,14 @@ describe('cross-tab renew lease (#80800)', () => {
     // never checked the stamp; the shared predicate must not either, or a
     // writer that dropped it would make every handoff unreadable.)
     const atLess = createMockUser({ access_token: 'at-less-pub' });
-    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ tab: 'holder-tab', user: atLess }));
+    const atLessRaw = JSON.stringify({ tab: 'holder-tab', user: atLess });
+    window.localStorage.setItem(RENEW_USER_KEY, atLessRaw);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
     const user = await keycloakAuthService.signinSilent();
     expect(user.access_token).toBe('at-less-pub'); // adopted, not re-granted
     expect(mockSigninSilent).not.toHaveBeenCalled();
     // and the live handoff stays on disk — the cleanup keeps what a reader can use
-    expect(window.localStorage.getItem(RENEW_USER_KEY)).not.toBeNull();
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(atLessRaw);
   });
 
   it('a non-parsing publication is dropped at renew entry like any corruption (#1521 review)', async () => {

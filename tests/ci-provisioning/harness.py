@@ -77,6 +77,12 @@ def token_body():
 
 GENIE_CLIENT = json.dumps([{"id": "client-1", "clientId": "genie-app"}])
 
+# The fixture's client-secret stand-in. NOT a credential: its only job is
+# to prove the probe never prints the listing it reads (the scenarios
+# forbid it in the output). One constant, so a typo in a forbid copy is a
+# NameError instead of a vacuously passing guard.
+FIXTURE_SECRET = "harness-fixture-not-a-credential"
+
 # The realm's client listing as the admin API returns it: the yaml-pinned
 # clients AND Keycloak's built-in realm clients, with their
 # direct-access-grant flags — the shape a healthy realm actually answers.
@@ -90,22 +96,22 @@ REALM_CLIENTS = json.dumps(
         {"clientId": "admin-cli", "directAccessGrantsEnabled": True},
         {
             "clientId": "genie-app",
-            "secret": "harness-fixture-not-a-credential",
+            "secret": FIXTURE_SECRET,
             "directAccessGrantsEnabled": False,
         },
         {
             "clientId": "genie-proxy-client",
-            "secret": "harness-fixture-not-a-credential",
+            "secret": FIXTURE_SECRET,
             "directAccessGrantsEnabled": False,
         },
         {
             "clientId": "dataprep-service-client",
-            "secret": "harness-fixture-not-a-credential",
+            "secret": FIXTURE_SECRET,
             "directAccessGrantsEnabled": False,
         },
         {
             "clientId": "okf-server",
-            "secret": "harness-fixture-not-a-credential",
+            "secret": FIXTURE_SECRET,
             "directAccessGrantsEnabled": False,
         },
         {"clientId": "account", "directAccessGrantsEnabled": False},
@@ -230,7 +236,7 @@ def scenarios_list():
                 "ROPC refusal verified",
                 "Direct-access grants verified across the genie realm's clients",
             ],
-            forbid=["harness-fixture-not-a-credential"],
+            forbid=[FIXTURE_SECRET],
         )
     )
 
@@ -285,7 +291,7 @@ def scenarios_list():
                 ]
             ),
             expect=["Keycloak ready", "Direct-access grants verified"],
-            forbid=["harness-fixture-not-a-credential"],
+            forbid=[FIXTURE_SECRET],
         )
     )
 
@@ -413,7 +419,7 @@ def scenarios_list():
                             },
                             {
                                 "clientId": "genie-proxy-client",
-                                "secret": "harness-fixture-not-a-credential",
+                                "secret": FIXTURE_SECRET,
                                 "directAccessGrantsEnabled": True,
                             },
                         ]
@@ -457,15 +463,7 @@ def scenarios_list():
             base_rules(
                 token_resp=[
                     {"status": "200", "body": token_body()},
-                    {
-                        "status": "401",
-                        "body": json.dumps(
-                            {
-                                "error": "invalid_grant",
-                                "error_description": "Invalid user credentials.",
-                            }
-                        ),
-                    },
+                    invalid_grant,
                 ]
             ),
             expect=["master admin token was rejected", "UNVERIFIED"],
@@ -491,7 +489,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
-            forbid=["harness-fixture-not-a-credential"],
+            forbid=[FIXTURE_SECRET],
             calls={"realm_clients": 2},
         )
     )

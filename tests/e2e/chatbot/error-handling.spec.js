@@ -6,7 +6,7 @@ const {
   waitForBotResponse,
   getLastBotMessage,
 } = require('../helpers/chatbot');
-const { runRouteAction } = require('../helpers/route');
+const { runRouteHandler } = require('../helpers/route');
 
 // One spelling for the stream endpoint inside this file: the route and
 // the unroute that removes it must be the same string — Playwright drops
@@ -59,22 +59,21 @@ test.describe('RAG error handling', () => {
       error: 'SERVICE_UNAVAILABLE',
       message: 'RAG pipeline is temporarily unavailable',
     });
-    await page.route(STREAM_ROUTE, async (route) => {
-      if (route.request().method() !== 'POST') {
-        await runRouteAction(page, async () => {
+    await page.route(
+      STREAM_ROUTE,
+      runRouteHandler(page, async (route) => {
+        if (route.request().method() !== 'POST') {
           await route.continue();
-        });
-        return;
-      }
-      await runRouteAction(page, async () => {
+          return;
+        }
         await route.fulfill({
           status: 503,
           contentType: 'application/json',
           headers: { 'access-control-allow-origin': '*' },
           body,
         });
-      });
-    });
+      })
+    );
 
     await sendMessage(page, 'First attempt will fail');
 

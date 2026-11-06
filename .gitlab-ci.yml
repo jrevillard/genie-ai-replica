@@ -467,6 +467,15 @@ workflow:
         STATUS=$(resp_status "$KC_RAW")
         BODY=$(resp_body "$KC_RAW")
       }
+      # The access_token extraction over KC_RAW, shared by every call site
+      # that mints a token through kc_curl: the capture contract (the -w
+      # trailer stripped with sed '$d', the member parsed with python3) is
+      # stated ONCE here — the #1334/#1289 churn was exactly this contract
+      # drifting between copies.
+      kc_access_token() {
+        printf '%s' "$KC_RAW" | sed '$d' \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true
+      }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
       # better path anyway); a hung nginx must fall through to the NGINX_IP
@@ -516,8 +525,7 @@ workflow:
           TOKEN_STATUS=$STATUS
           [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
           TOKEN_BODY=$BODY
-          ADMIN_TOKEN=$(printf '%s' "$KC_RAW" | sed '$d' \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
+          ADMIN_TOKEN=$(kc_access_token)
           # #1319: a 401 carrying an OAuth error body is a deterministic
           # credentials rejection — retrying cannot heal it, and every failed
           # attempt feeds Keycloak's brute-force protector (which can lock
@@ -798,16 +806,16 @@ workflow:
       # retries — it exits.
       ROPC_CLIENT_GRANTS=""
       ROPC_READBACK_REASON=""
+      UNVERIFIED_MSG="the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED"
       for i in 1 2 3; do
         kc_curl POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
           -d "client_id=admin-cli" -d "username=admin" \
           --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
-        ROPC_REALM_TOKEN=$(printf '%s' "$KC_RAW" | sed '$d' \
-          | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
+        ROPC_REALM_TOKEN=$(kc_access_token)
         if [ -z "$ROPC_REALM_TOKEN" ]; then
           case "$STATUS" in
             400|401|403)
-              echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS")) — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED."
+              echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS")) — ${UNVERIFIED_MSG}."
               exit 1
               ;;
           esac
@@ -821,7 +829,7 @@ workflow:
           fi
           case "$STATUS" in
             401|403)
-              echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS")) — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED."
+              echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS")) — ${UNVERIFIED_MSG}."
               exit 1
               ;;
           esac
@@ -831,7 +839,7 @@ workflow:
         { [ "$i" -lt 3 ] && sleep 5; } || true
       done
       if [ -z "$ROPC_CLIENT_GRANTS" ]; then
-        echo "ERROR: the realm client list could not be read back after 3 attempts (${ROPC_READBACK_REASON:-no attempt produced an answer}) — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED."
+        echo "ERROR: the realm client list could not be read back after 3 attempts ($ROPC_READBACK_REASON) — ${UNVERIFIED_MSG}."
         exit 1
       fi
       case "$ROPC_CLIENT_GRANTS" in
@@ -843,7 +851,7 @@ workflow:
           exit 1
           ;;
         *)
-          echo "ERROR: the genie realm client list could not be parsed (answer: '${ROPC_CLIENT_GRANTS:-empty}') — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED; failing rather than passing without a verdict"
+          echo "ERROR: the genie realm client list could not be parsed (answer: '$ROPC_CLIENT_GRANTS') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
           exit 1
           ;;
       esac

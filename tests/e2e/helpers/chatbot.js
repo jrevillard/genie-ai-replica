@@ -9,7 +9,7 @@ const {
   TEST_ADMIN_USER,
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
-const { runRouteAction } = require('./route');
+const { runRouteHandler } = require('./route');
 
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when
@@ -260,19 +260,18 @@ async function mockChatStream(page, chunks, metadata) {
   // The body is registration-invariant: chunks and metadata are literals at
   // every call site, so build the wire bytes once, not per interception.
   const body = sseBody(chunks, metadata);
-  await page.route('**/queries/stream**', async (route) => {
-    // Only the app's POST carries a stream; a preflight (cross-origin dev
-    // posture) or stray GET must reach the network, not a CORS-less 200.
-    if (route.request().method() !== 'POST') {
-      await runRouteAction(page, async () => {
+  await page.route(
+    '**/queries/stream**',
+    runRouteHandler(page, async (route) => {
+      // Only the app's POST carries a stream; a preflight (cross-origin dev
+      // posture) or stray GET must reach the network, not a CORS-less 200.
+      if (route.request().method() !== 'POST') {
         await route.continue();
-      });
-      return;
-    }
-    await runRouteAction(page, async () => {
+        return;
+      }
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
-    });
-  });
+    })
+  );
 }
 
 /**
@@ -281,17 +280,16 @@ async function mockChatStream(page, chunks, metadata) {
  * never rate need not install it.
  */
 async function ackFeedback(page) {
-  await page.route('**/feedback**', async (route) => {
-    if (route.request().method() === 'POST') {
-      await runRouteAction(page, async () => {
+  await page.route(
+    '**/feedback**',
+    runRouteHandler(page, async (route) => {
+      if (route.request().method() === 'POST') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-      });
-      return;
-    }
-    await runRouteAction(page, async () => {
+        return;
+      }
       await route.continue();
-    });
-  });
+    })
+  );
 }
 
 module.exports = {

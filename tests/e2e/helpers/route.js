@@ -1,5 +1,6 @@
 /**
- * Run a route action, tolerating ONLY the browser-target-closed race.
+ * Wrap a route handler so it tolerates ONLY the browser-target-closed
+ * race.
  *
  * A route handler outlives its own test: the browser context is closed
  * while a fulfilment is still in flight, and that fulfilment can no
@@ -11,6 +12,12 @@
  * carrying its own message instead of the app waiting forever for a
  * stream that never arrives and the spec dying on its own timeout with
  * nothing pointing at the mock.
+ *
+ * The wrapper sits at the REGISTRATION boundary — `page.route(url,
+ * runRouteHandler(page, async (route) => { ... }))` — because that is
+ * where the race crosses: one wrap covers every branch of the handler
+ * and any action added to it later, and the page is passed once, at the
+ * site that owns it (a route object cannot reach its own page).
  *
  * The discrimination needs BOTH signals, because neither alone is safe:
  *
@@ -31,7 +38,7 @@
  * error path (an unhandled rejection attributed to the running test).
  * That is Playwright's own model — `page.unrouteAll({ behavior:
  * 'ignoreErrors' })` is its alternative, and it swallows EVERY error,
- * which is exactly what this helper must not do. A rethrown error can
+ * which is exactly what this wrapper must not do. A rethrown error can
  * only originate while the target is alive, i.e. while the page's own
  * test is running or tearing down.
  */
@@ -58,19 +65,21 @@ function isTargetClosedError(error) {
 }
 
 /**
- * Await `action`, swallowing the error only when the browser target is
- * gone AND the error is the target-closed race. Any other error
- * propagates to the caller.
+ * Wrap `handler` for `page.route`: the handler runs unchanged, and an
+ * error it throws is swallowed only when the browser target is gone AND
+ * the error is the target-closed race. Any other error propagates.
  */
-async function runRouteAction(page, action) {
-  try {
-    return await action();
-  } catch (error) {
-    if (isTargetGone(page) && isTargetClosedError(error)) return undefined;
-    throw error;
-  }
+function runRouteHandler(page, handler) {
+  return async (route) => {
+    try {
+      return await handler(route);
+    } catch (error) {
+      if (isTargetGone(page) && isTargetClosedError(error)) return undefined;
+      throw error;
+    }
+  };
 }
 
 module.exports = {
-  runRouteAction
+  runRouteHandler
 };

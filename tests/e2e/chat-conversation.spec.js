@@ -5,7 +5,7 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
-const { runRouteAction } = require('./helpers/route');
+const { runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -347,11 +347,12 @@ test.describe('Conversation — status pill', () => {
     const pillFont = await pill.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(pillFont, 'the pill label is body-legible, not a footnote').toBeGreaterThanOrEqual(12);
     // A failed turn flips the pill to its offline explanation.
-    await page.route('**/queries/stream**', async (route) => {
-      await runRouteAction(page, async () => {
+    await page.route(
+      '**/queries/stream**',
+      runRouteHandler(page, async (route) => {
         await route.abort();
-      });
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('say something');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
@@ -458,20 +459,19 @@ test.describe('Conversation — answer card', () => {
     const streamReleased = new Promise((resolve) => {
       releaseStream = resolve;
     });
-    await page.route('**/queries/stream**', async (route) => {
-      if (route.request().method() !== 'POST') {
-        await runRouteAction(page, async () => {
+    await page.route(
+      '**/queries/stream**',
+      runRouteHandler(page, async (route) => {
+        if (route.request().method() !== 'POST') {
           await route.continue();
-        });
-        return;
-      }
-      await runRouteAction(page, async () => {
+          return;
+        }
         const resp = await route.fetch();
         const body = await resp.text();
         await streamReleased;
         await route.fulfill({ response: resp, body });
-      });
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // The card exists immediately (the thinking frame), before the answer
@@ -543,20 +543,21 @@ test.describe('Conversation — surface invariants', () => {
     });
     await ackFeedback(page);
     const body = sseBody(['The answer completes in the background.']);
-    await page.route('**/queries/stream**', async (route) => {
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
-      await streamReleased;
-      await runRouteAction(page, async () => {
+    await page.route(
+      '**/queries/stream**',
+      runRouteHandler(page, async (route) => {
+        if (route.request().method() !== 'POST') {
+          await route.continue();
+          return;
+        }
+        await streamReleased;
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
           body
         });
-      });
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.

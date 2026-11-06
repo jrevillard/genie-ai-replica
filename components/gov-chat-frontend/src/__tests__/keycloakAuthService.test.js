@@ -840,7 +840,6 @@ describe('cross-tab renew lease (#80800)', () => {
     try {
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
       await keycloakAuthService.signinSilent();
-      spy.mockRestore();
       // The fresh handoff is still on disk — the cleanup judged the entry it
       // read, not whatever landed after it.
       expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);

@@ -662,6 +662,16 @@ services:
     enabled: true
     replicas: null
     image: { repository: genie-ai-backend, tag: "main" }
+    # External HTTPS API egress (the backend dials public APIs directly:
+    # weather = api.open-meteo.com, WeatherService). NetworkPolicy peers
+    # cannot express a domain, so the rule is port-scoped over 80/443:
+    # pin resolved CIDRs here to restrict it, or leave empty for the
+    # compose-equivalent open egress on the HTTP(S) ports — the same
+    # convention services.documentRepository.crawlAllowedCIDRs sets one
+    # tier over. Empty by default: without this rule the backend cannot
+    # reach ANY external HTTPS API on a NetworkPolicy-enforced cluster
+    # (#1631).
+    externalApiCIDRs: []
     # One-shot migrations Job (post-install/post-upgrade hook) that
     # creates the ArangoDB collections; same registry/tag conventions
     # as the service images.

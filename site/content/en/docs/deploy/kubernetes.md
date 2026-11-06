@@ -313,6 +313,19 @@ the container can miss 2s on a CPU-saturated node and the pod is
 declared NotReady while the database answers. One value for all three
 probe specs.
 
+**External HTTPS egress (`services.backend.externalApiCIDRs`,
+`services.documentRepository.crawlAllowedCIDRs`)** — the backend dials
+public HTTPS APIs directly (the weather feature talks to
+api.open-meteo.com, whose DNS round-robin pool no `/32` pin can cover),
+and the document-repository crawler fetches arbitrary user-supplied
+URLs. NetworkPolicy peers cannot express a domain, so both rules are
+port-scoped `ipBlock`s over 80/443: pin resolved CIDRs in the list to
+restrict them, or leave empty (the default) for the compose-equivalent
+open egress on the HTTP(S) ports — compose, the reference venue, has no
+egress restriction at all. Without the backend rule every
+externally-backed backend feature is dead on a NetworkPolicy-enforced
+cluster.
+
 **`observability.grafana.version`** — the Grafana image the CR pins
 (default 12.4, the version docker-compose pins). Without it the
 grafana-operator substitutes its own default, and on v5.25.0 that default

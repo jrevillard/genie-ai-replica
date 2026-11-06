@@ -144,14 +144,20 @@ expect_render_contains() {
   echo "PASS: ${label} — rendered output carries the assertion"
 }
 
-# expect_doc_contains_all <label> <kind> [needle...] -- [flags...]
-#   The render must SUCCEED and the FIRST document of the given `kind`
+# expect_doc_contains_all <label> <kind[:name-substring]> [needle...] -- [flags...]
+#   The render must SUCCEED and the FIRST document matching the selector
 #   must carry EVERY needle. Render-global needles are blind when a
 #   value also appears in unrelated workloads (`cpu: 500m` matches the
 #   frontend and keycloak blocks too); scoping the search to one
-#   document makes each needle discriminate on its own.
+#   document makes each needle discriminate on its own. The selector is
+#   `kind` — first document of that kind — or `kind:name-substring` —
+#   first document of that kind whose `name:` carries the substring
+#   (the render carries one NetworkPolicy per service, so a bare kind
+#   would always land on whichever one renders first).
 expect_doc_contains_all() {
-  local label="$1" kind="$2"; shift 2
+  local label="$1" spec="$2"; shift 2
+  local kind="${spec%%:*}" namesub=""
+  [ "${spec}" != "${kind}" ] && namesub="${spec#*:}"
   local needles=()
   while [ "${1:-}" != "--" ]; do needles+=("$1"); shift; done
   shift
@@ -163,9 +169,20 @@ expect_doc_contains_all() {
     fails=$((fails + 1))
     return
   fi
-  doc="$(printf '%s' "${GUARD_OUTPUT}" | awk -v k="${kind}" '$0 == "kind: " k {f=1; next} f && $0 == "---" {exit} f')"
+  doc="$(printf '%s' "${GUARD_OUTPUT}" | awk -v k="${kind}" -v n="${namesub}" '
+    $0 == "---" {
+      if (f && (n == "" || matchname)) { printf "%s", buf; exit }
+      f=0; matchname=0; buf=""; next
+    }
+    $0 == "kind: " k { f=1 }
+    f {
+      buf = buf $0 "\n"
+      if (n != "" && index($0, "  name: ") == 1 && index($0, n) > 0) matchname=1
+    }
+    END { if (f && (n == "" || matchname)) printf "%s", buf }
+  ')"
   if [ -z "${doc}" ]; then
-    echo "FAIL: ${label} — the render carries no ${kind} document"
+    echo "FAIL: ${label} — the render carries no ${spec} document"
     fails=$((fails + 1))
     return
   fi
@@ -784,6 +801,19 @@ expect_doc_contains_all "the cluster-mode members carry the workload block" \
   "readinessProbeSpec:" \
   "cpu: 500m" \
   -- $(valid_flags) --set data.arangodb.mode=cluster
+
+# 31b. The backend dials public HTTPS APIs directly (weather = the
+#      visible casualty: api.open-meteo.com sits behind a DNS
+#      round-robin pool no /32 pin can cover). The 80/443 egress rule
+#      must render into the BACKEND NetworkPolicy specifically — the
+#      doc-scoped selector names it, because the render carries one
+#      NetworkPolicy per service and the document-repository crawler
+#      rule already puts port 443 in a different one.
+expect_doc_contains_all "the backend's external HTTPS egress reaches its own policy" \
+  "NetworkPolicy:backend" \
+  "port: 80" \
+  "port: 443" \
+  -- $(valid_flags)
 
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.

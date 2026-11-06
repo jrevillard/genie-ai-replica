@@ -23,10 +23,9 @@ Creates a full backup of the database
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = DatabaseOperationsApi();
+final api_instance = DatabaseOperationsApi(api_client);
 
 try {
     final result = api_instance.apiDatabaseBackupPost();
@@ -64,10 +63,9 @@ Performs database optimization including compacting collections
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = DatabaseOperationsApi();
+final api_instance = DatabaseOperationsApi(api_client);
 
 try {
     final result = api_instance.apiDatabaseOptimizePost();

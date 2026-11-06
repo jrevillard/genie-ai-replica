@@ -3261,7 +3261,7 @@ describe('translation load-failure gate', () => {
       DsSelect: {
         template: '<select :disabled="disabled"><slot /></select>',
         props: ['modelValue', 'placeholder', 'disabled']
-      },
+      }
     };
 
     async function mountFailedEdit() {

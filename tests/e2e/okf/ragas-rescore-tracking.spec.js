@@ -21,7 +21,7 @@
 //   cd C:/Dev/builds/main && npx playwright test --config=D:/ITU-Gitlab/playwright.config.js
 
 const { test, expect } = require('@playwright/test');
-const { getAdminToken } = require('../helpers/auth');
+const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 const { pinLocale } = require('../helpers/locale');
 
@@ -31,10 +31,17 @@ const USER = 'okf-rescore-e2e';
 const PW = 'RescoreE2ePass123!';
 
 test.describe('the RAGAS guide explains the output, and a re-score is a tracked run', () => {
+  // describe.configure covers the tests, the in-hook test.setTimeout
+  // covers beforeAll — see SESSION_MINT_TIMEOUT_MS in helpers/auth.js.
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let adminToken;
   let userId;
 
   test.beforeAll(async () => {
+    // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     adminToken = await getAdminToken();
     userId = await createUser(adminToken, REALM, {
       username: USER,

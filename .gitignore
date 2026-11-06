@@ -171,6 +171,9 @@ _bmad-worktrees/
 
 # Claude session temp state
 .claude/tmp/
+# Triage run scratch (the durable copy of each run's report lives in a
+# report::triage issue on the tracker — see .claude/rules/TRIAGE-POLICY.md)
+.claude/state/
 
 # Bash crash dumps
 bash.exe.stackdump

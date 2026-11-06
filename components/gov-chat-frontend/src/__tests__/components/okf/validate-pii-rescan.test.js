@@ -146,6 +146,12 @@ describe('OkfStepValidate — repo-wide PII re-scan (2026-10-12)', () => {
   // Round 19, #80774: a run wedged at 'running' (worker crash without
   // reaping) used to re-arm the 3s timer FOREVER. Past the 15-minute horizon
   // the poll stops with a readable timeout; the button releases.
+  //
+  // The 30s budget: advancing the fake clock by 15 minutes fires the 3s poll
+  // timer ~300 times, each awaiting a promise — on a loaded machine (a full
+  // suite run) that crosses jest's 5s default and the test FAILS on a
+  // timeout, not on its assertion. The assertion is unchanged; only the
+  // ceiling it is measured against moves.
   it('gives up with a readable timeout after 15 minutes of a wedged running run', async () => {
     const { w, dispatched } = mountStep([{ concept_id: 'c3', title: 'Three', pii_state: 'error' }], {
       'okf/startRepoPiiScan': () => ({ ok: true, result: { repo_id: 'r1', scan_key: 'sk1', status: 'running' } }),
@@ -168,7 +174,7 @@ describe('OkfStepValidate — repo-wide PII re-scan (2026-10-12)', () => {
     await jest.advanceTimersByTimeAsync(9000);
     await settle(w);
     expect(dispatched.filter((d) => d.type === 'okf/getRepoPiiScan').length).toBe(polls);
-  });
+  }, 30000);
 
   it('stops at a terminal state and renders the per-concept tally', async () => {
     let poll = 0;

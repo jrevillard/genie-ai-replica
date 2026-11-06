@@ -486,6 +486,13 @@ export default {
       duplicateLangError: 'Lugha zinazojirudia zimepatikana kwenye tafsiri. Tafadhali ziondoe.'
     },
     documents: {
+      viewDocuments: 'Nyaraka',
+      viewArtifacts: 'Vipakiti',
+      deleteRefuseBundle:
+        'Vipakiti {count} vya OKF vinavyotendewa na mzunguko wa maisha ya ghala na haviwezi kufutwa hapa.',
+      deleteRefuseMixed:
+        'Faili {blocked} bado zimeingizwa — rudisha kwanza. Vipakiti {bundles} vya OKF vinavyotendewa na mzunguko wa maisha ya ghala na haviwezi kufutwa hapa.',
+      artifactsParked: 'Vipakiti vya OKF huonekana wakati kipengele cha OKF kimewashwa kwa utumezi huu.',
       title: 'Usimamizi wa Nyaraka',
       addLink: 'Ongeza kutoka kwa Kiungo',
       uploadFiles: 'Pakia Faili',
@@ -1437,6 +1444,7 @@ export default {
     alt: 'Pakia'
   },
   details: {
+    bundleBadge: 'Inatendewa na mzunguko wa maisha wa OKF',
     crawl: {
       seconds: 'sekunde',
       autoRefreshEvery: 'Kujisasisha kiotomatiki kila',
@@ -1553,6 +1561,21 @@ export default {
       'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu.'
   },
   okf: {
+    artifacts: {
+      title: 'Vipakiti vya OKF',
+      lead: 'Kipindi kimoja kwa kila toleo lililochapishwa.',
+      empty: 'Hakuna vipakiti vya OKF bado.',
+      loadFailed: 'Imeshindwa kusoma vipakiti vya OKF.',
+      downloadFailed: 'Imeshindwa kupakua vipakiti vya OKF.',
+      column: {
+        artifact: 'Kipindi',
+        repository: 'Ghala',
+        actions: 'Vitendo',
+        state: 'Hali'
+      },
+      openRepo: 'Fungua ghala',
+      unknownVersion: 'toleo lisilojulikana'
+    },
     retrieval: {
       title: 'Hali ya u retrieval',
       refresh: 'Onyesha Upya',
@@ -1727,6 +1750,7 @@ export default {
       ingestCompleted: 'imeingizwa',
       bundleMissing: 'zip imepotea',
       bundleDownload: 'Pakua zip',
+      viewArtifact: 'Ona kipindi',
       bundle: 'Kifurushi',
       col: {
         ingest: 'Kuingiza',

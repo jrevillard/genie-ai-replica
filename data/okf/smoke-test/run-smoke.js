@@ -92,6 +92,10 @@
 //      ZERO per-concept files docs; bundle zip stored; worker drains to
 //      indexed; chunks carry concept_id + is_index on the root; mint SUCCEEDS
 //      with v1 (5 concepts + stored canonical hashes).
+//  17. ARTIFACTS VIEW SOURCE (W6 / EPIC-6 / CAP-5): the bundle zip is listed
+//      by `GET /api/files?is_bundle=true` and does NOT appear in the
+//      `is_bundle=false` document list — the two views never mix — and it
+//      carries its repo_id for the provenance pill.
 
 const fs = require('fs');
 const path = require('path');
@@ -850,6 +854,56 @@ async function ingestPhase(db) {
           '), is_bundle=true @ Pending (state machine: born Pending, settles post-drain)'
       )
     : fail('bundle zip file doc: ' + JSON.stringify(bundleDoc));
+
+  // ── W6 / EPIC-6 / CAP-5: the ARTIFACTS VIEW's data source ──────────────
+  // The admin dashboard's OKF artifacts view lists doc-repo's bundles through
+  // `GET /api/files?is_bundle=true` and labels every row with its
+  // provenance (the repository it came from + the version it was minted for).
+  // The filter must SEPARATE the artifacts from the documents — that
+  // separation is the whole point of the view: the bundle zips used to sit
+  // in the document list unlabeled, carrying a Delete affordance the server
+  // refuses (WS2 → 403 BUNDLE_PROTECTED for every caller but okf-service).
+  //
+  // The SERVICE token is used (re-mintable, never a 5-min TTL race) and the
+  // list is narrowed to the smoke repo (WP-C: the bundle zip is that repo's
+  // ONLY file doc — the concepts are content-only, never files docs).
+  const svcW6 = await serviceToken();
+  const listFor = async (isBundle) => {
+    const res = await call(
+      'GET',
+      DOCREPO + '/api/files?limit=50&repo_id=' + encodeURIComponent(INGEST_REPO) + '&is_bundle=' + isBundle,
+      svcW6
+    );
+    return res.status === 200 ? res.body.data || [] : null;
+  };
+  const bundledRows = await listFor('true');
+  const plainRows = await listFor('false');
+  if (!bundledRows) {
+    fail('artifacts view source: the is_bundle=true list read failed');
+  } else if (!plainRows) {
+    fail('artifacts view source: the is_bundle=false list read failed');
+  } else {
+    const bundleFileId = bundleDoc && bundleDoc.file_id;
+    const mine = bundledRows.filter((f) => f.file_id === bundleFileId);
+    mine.length === 1
+      ? pass('artifacts view source: the bundle is listed by is_bundle=true (' + bundleFileId + ')')
+      : fail(
+          'artifacts view source: the bundle is NOT in the is_bundle=true list: ' +
+            JSON.stringify(bundledRows.map((f) => f.file_id))
+        );
+    plainRows.some((f) => f.file_id === bundleFileId)
+      ? fail('artifacts view source: the bundle LEAKED into the is_bundle=false document list')
+      : pass(
+          'artifacts view source: the bundle does NOT appear in the document list (the two views never mix)'
+        );
+    // The provenance the view renders: the repository the artifact came
+    // from. (The VERSION is stamped by the mint phase — a bundle that
+    // carries none reads "unknown version", which the view renders as such
+    // rather than guessing a number.)
+    mine[0] && mine[0].repo_id === INGEST_REPO
+      ? pass('artifacts view source: the bundle carries its repository (repo_id) for the provenance pill')
+      : fail('artifacts view source: the bundle carries no repo_id: ' + JSON.stringify(mine[0]));
+  }
 
   // ── (iii) meta rows for EVERY bundle concept: parsed + graph-stamped ──
   const metaRows = await aqlAll(

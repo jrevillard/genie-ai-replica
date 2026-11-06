@@ -488,6 +488,13 @@ export default {
       duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
     },
     documents: {
+      viewDocuments: 'Dokumente',
+      viewArtifacts: 'Artefakte',
+      deleteRefuseBundle:
+        '{count} OKF-Artefakt(e) werden vom Repository-Lebenszyklus verwaltet und können hier nicht gelöscht werden.',
+      deleteRefuseMixed:
+        '{blocked} Datei(en) sind noch ingestiert – bitte zuerst zurückziehen. {bundles} OKF-Artefakt(e) werden vom Repository-Lebenszyklus verwaltet und können hier nicht gelöscht werden.',
+      artifactsParked: 'OKF-Artefakte erscheinen, wenn die OKF-Funktion für diese Installation aktiviert ist.',
       title: 'Dokumentenverwaltung',
       addLink: 'Von Link hinzufügen',
       uploadFiles: 'Dateien hochladen',
@@ -1449,6 +1456,7 @@ export default {
     alt: 'Hochladen'
   },
   details: {
+    bundleBadge: 'Vom OKF-Lebenszyklus verwaltet',
     crawl: {
       seconds: 'Sekunden',
       autoRefreshEvery: 'Auto-Aktualisierung alle',
@@ -1566,6 +1574,21 @@ export default {
       'Warum Uploads für RAG wichtig sind: Jedes hochgeladene Dokument kann zu kuratiertem, gelabeltem Wissen werden — fokussierte, gut strukturierte Dokumente werden deutlich genauer abgerufen als eine lange Einzeldatei.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF-Artefakte',
+      lead: 'Ein Artefakt pro veröffentlichter Version.',
+      empty: 'Noch keine OKF-Artefakte.',
+      loadFailed: 'Die OKF-Artefakte konnten nicht gelesen werden.',
+      downloadFailed: 'Die OKF-Artefakte konnten nicht heruntergeladen werden.',
+      column: {
+        artifact: 'Artefakt',
+        repository: 'Repository',
+        actions: 'Aktionen',
+        state: 'Status'
+      },
+      openRepo: 'Repository öffnen',
+      unknownVersion: 'unbekannte Version'
+    },
     retrieval: {
       title: 'Abruf-Haltung',
       refresh: 'Aktualisieren',
@@ -1745,6 +1768,7 @@ export default {
       ingestCompleted: 'ingeniert',
       bundleMissing: 'Zip fehlt',
       bundleDownload: 'Zip herunterladen',
+      viewArtifact: 'Artefakt anzeigen',
       bundle: 'Paket',
       col: {
         ingest: 'Ingest',

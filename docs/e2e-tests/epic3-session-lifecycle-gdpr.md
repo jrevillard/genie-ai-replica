@@ -367,13 +367,25 @@ curl -sk -X POST "https://localhost/api/me/reset-data" \
 ### Test M.7 — JIT Provisioning Updates Profile on Re-login
 
 ```bash
-# Update profile in Keycloak directly (simulating external change)
+# Update profile in Keycloak directly (simulating external change).
+# The PUT carries the COMPLETE user representation: GET it, merge the new
+# name, send it back. A partial PUT leaves every field it omits to
+# Keycloak's implicit "absent = keep" semantics.
 USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exact=true" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
+USER_PAYLOAD=$(curl -sk "https://localhost/auth/admin/realms/genie/users/${USER_ID}" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+u = json.load(sys.stdin)
+u['firstName'] = 'JIT'
+u['lastName'] = 'Test'
+json.dump(u, sys.stdout)
+") || { echo "FATAL: could not read the testuser representation from Keycloak"; exit 1; }
+
 curl -sk -X PUT "https://localhost/auth/admin/realms/genie/users/${USER_ID}" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"firstName":"JIT","lastName":"Test"}' -w "\nHTTP: %{http_code}\n"
+  -d "$USER_PAYLOAD" -w "\nHTTP: %{http_code}\n"
 # Expected: 204
 
 # Re-login triggers JIT provisioning (profile sync from Keycloak to ArangoDB)

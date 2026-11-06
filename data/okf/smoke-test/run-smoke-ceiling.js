@@ -90,10 +90,16 @@ async function main() {
   // A crashed prior run (token expiry mid-run) leaves the repo behind and
   // the next create 409s. Purge it first — and a repo in a non-deletable
   // state must be retracted before it can be deleted.
+  //
+  // The match is NAME **and DOMAIN** (#1596): this harness's repo lives in the
+  // 'smoke' domain, and a user repository that merely carries the same NAME in
+  // any other domain is not this harness's to purge. The name alone matched
+  // across every domain, so an operator running the harness soft-deleted a
+  // stranger's repo that happened to share the name.
   try {
     const stale = await call('GET', '/api/okf/repos?lifecycle=all');
     for (const it of (stale.body && (stale.body.items || stale.body.repos)) || []) {
-      if (it.name !== REPO_NAME) continue;
+      if (it.name !== REPO_NAME || it.domain !== DOMAIN) continue;
       let d = await call('DELETE', `/api/okf/repos/${it.repo_id}`);
       if (d.status === 409) {
         await call('POST', `/api/okf/repos/${it.repo_id}/lifecycle`, { action: 'retract' });

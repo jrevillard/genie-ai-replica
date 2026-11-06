@@ -13,7 +13,7 @@ the ORDER and the cross-stream slots.
 | Stream | Branch | Tracker | Scope |
 |---|---|---|---|
 | **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
-| **C — CSR waves resume** | `feat/okf-chat-source-w1` (pushed through `b2d4700aa`; W1–W5 done) | #1409 umbrella, !720 planning MR (awaiting David's review/merge order) | W6–W9 per the remediation plan |
+| **C — CSR waves resume** | `feat/okf-chat-source-w1` (pushed through `b2d4700aa`; W1–W5 done — **still unmerged, no MR**) | #1409 umbrella, !720 planning MR **MERGED to main 2026-11-06** (`b4cc40dbe`) | W6–W9 per the remediation plan |
 | **T — Triage-scheduled items** | slot into U/C per their rulings | the 12 open `prd::okf-server` issues | See Phase T |
 
 ## Phase U — Admin-Dashboard UX pass (FIRST)
@@ -90,9 +90,11 @@ the ORDER and the cross-stream slots.
 
 ## Phase C — CSR waves resume (after Phase U)
 
-- **W6 — artifacts view** — now lands INTO the new theme (the double-restyling
-  risk avoided by the ordering).
-- **W7 — retract-retention D3 reversal.**
+- **W6 — artifacts view** — **MERGED to main 2026-11-06** (MR !780, via merge
+  train 228; it landed INTO the new theme, so the double-restyling risk was
+  avoided by the ordering). Issue #1557 closed by the merge.
+- **W7 — retract-retention D3 reversal.** Not started. (Not the concept-document
+  ceiling slice — see the note below this list.)
 - **W8 — log purge + gate downgrade, SCOPE GREW per the #925 split ruling:**
   the delete flow also captures a **`deletion_reason`** (#925). The TTL sweep
   half stays parked pending the D3 revisit — out of scope here.
@@ -100,11 +102,11 @@ the ORDER and the cross-stream slots.
   time).
 
 > **NOT A CSR WAVE — the concept-document ceiling (curation half).** It ships on
-> its own branch (`feat/okf-concept-ceiling`, MR !788, issue **#1576**), because
-> it is the *ceiling initiative's* curation half and not a slice of the
-> chat-source remediation. Its story file is named
-> `_bmad-output/implementation-artifacts/csr-w7-concept-ceiling-story.md` — that
-> file's **own "W7" label is NOT this workplan's W7** (retract-retention D3
+> its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576** — green
+> and awaiting David's merge decision), because it is the *ceiling initiative's*
+> curation half and not a slice of the chat-source remediation. Its story file is
+> named `_bmad-output/implementation-artifacts/csr-w7-concept-ceiling-story.md` —
+> that file's **own "W7" label is NOT this workplan's W7** (retract-retention D3
 > reversal, above, still not started). The deferred curator-initiated split is
 > **#1577**; the ceiling-vs-document-budget drift found while documenting it is
 > **#1588**.

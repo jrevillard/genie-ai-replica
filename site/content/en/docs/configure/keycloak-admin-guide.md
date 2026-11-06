@@ -491,11 +491,11 @@ The realm defaults are configured via `genie-realm.yaml` and applied by `keycloa
 
 | Setting | Env var | Default | Notes |
 |---|---|---|---|
-| Access token lifespan (seconds) | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | `300` (5 min) | JWT expiry |
+| Access token lifespan (seconds) | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | `300` (5 min) | JWT expiry. Also bounds how long the browser's cross-tab renew handoff (`localStorage`, `genie.renew.user`) keeps a renewed token set at rest — see [Auth Flow](/docs/frontend/auth-flow/). It does NOT bound a stolen refresh token: that one lasts with the SSO session (rows below). |
 | SSO Session Max | (admin console: **Realm Settings → Sessions**) | 10 hours (Keycloak default) | Maximum session duration |
 | SSO Session Idle | (admin console) | 30 minutes (Keycloak default) | Idle expiration |
 
-Short access token lifetimes reduce the window for token theft. Long SSO sessions keep users signed in. Tune in **Realm Settings → Sessions** (SSO) and **Realm Settings → Tokens** (access token) — the env var only applies on next keycloak-config deploy.
+Short access token lifetimes reduce the window for token theft. Long SSO sessions keep users signed in — and they are also what a stolen refresh token lives on, so the SSO session rows below bound the refresh-token exposure, not the access-token lifespan. Tune in **Realm Settings → Sessions** (SSO) and **Realm Settings → Tokens** (access token) — the env var only applies on next keycloak-config deploy.
 
 ### 7.3 Audit trail
 

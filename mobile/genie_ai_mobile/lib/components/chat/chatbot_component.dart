@@ -1876,16 +1876,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// The category a saved conversation was asked in: its own field, or
   /// the edge the backend created for it.
   String? _conversationCategoryKey(Map<String, dynamic> conversation) {
-    final categoryId = conversation['categoryId'];
-    if (categoryId != null && categoryId.toString().isNotEmpty) {
-      return categoryId.toString();
+    // The key in the WEB's form (jsFormOf): the restored key must index
+    // the category the same serialized form the save wrote, so a
+    // numeric field value renders '5', not Dart's '5.0'.
+    final categoryId = jsFormOf(conversation['categoryId']);
+    if (categoryId != null && categoryId.isNotEmpty) {
+      return categoryId;
     }
     final categories = conversation['categories'];
     if (categories is List && categories.isNotEmpty) {
       final first = categories.first;
       if (first is Map) {
-        final key = first['_key'];
-        if (key != null && key.toString().isNotEmpty) return key.toString();
+        final key = jsFormOf(first['_key']);
+        if (key != null && key.isNotEmpty) return key;
       }
     }
     return null;

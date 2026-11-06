@@ -24,10 +24,9 @@ Retrieves a specific service category with its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServicesApi();
+final api_instance = ServicesApi(api_client);
 final categoryId = categoryId_example; // String | Category ID
 final locale = locale_example; // String | Language locale for category and service names
 
@@ -71,10 +70,9 @@ Retrieves all service categories with their associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServicesApi();
+final api_instance = ServicesApi(api_client);
 final locale = locale_example; // String | Language locale for category and service names
 
 try {
@@ -116,10 +114,9 @@ Searches for categories and services based on a query string
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServicesApi();
+final api_instance = ServicesApi(api_client);
 final query = query_example; // String | Search query
 final locale = locale_example; // String | Language locale for search results
 

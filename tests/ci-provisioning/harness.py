@@ -77,12 +77,14 @@ def token_body():
 
 GENIE_CLIENT = json.dumps([{"id": "client-1", "clientId": "genie-app"}])
 
-# The realm's client listing as the admin API returns it: every client with
-# its direct-access-grant flag. Only admin-cli carries the grant — Keycloak
-# provisions it with direct grants on in every realm, and the readiness loop
-# mints its admin token through it. The `secret` member is a FIXTURE STRING,
-# not a credential: its only job is to prove the probe never prints the
-# listing it reads (the scenarios forbid it in the output).
+# The realm's client listing as the admin API returns it: the yaml-pinned
+# clients AND Keycloak's built-in realm clients, with their
+# direct-access-grant flags — the shape a healthy realm actually answers.
+# Only admin-cli carries the grant: Keycloak provisions it with direct
+# grants on in every realm, and the readiness loop mints its admin token
+# through it. The `secret` member is a FIXTURE STRING, not a credential:
+# its only job is to prove the probe never prints the listing it reads
+# (the scenarios forbid it in the output).
 REALM_CLIENTS = json.dumps(
     [
         {"clientId": "admin-cli", "directAccessGrantsEnabled": True},
@@ -106,6 +108,11 @@ REALM_CLIENTS = json.dumps(
             "secret": "harness-fixture-not-a-credential",
             "directAccessGrantsEnabled": False,
         },
+        {"clientId": "account", "directAccessGrantsEnabled": False},
+        {"clientId": "account-console", "directAccessGrantsEnabled": False},
+        {"clientId": "broker", "directAccessGrantsEnabled": False},
+        {"clientId": "realm-management", "directAccessGrantsEnabled": False},
+        {"clientId": "security-admin-console", "directAccessGrantsEnabled": False},
     ]
 )
 
@@ -420,9 +427,81 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # The read-back's mint is a retrying call like every other one in
+            # this block: a transport-level mint failure retries, and the
+            # second attempt lands. The happy path must survive it.
+            "realm_readback_mint_retries",
+            0,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {"status": "000", "body": "", "rc": 7},
+                    {"status": "200", "body": token_body()},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            calls={"token": 3},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A credentials rejection on the read-back's mint is definitive
+            # (#1319): it never retries (every failed attempt feeds Keycloak's
+            # brute-force protector) and the job fails on it.
+            "realm_readback_mint_rejected",
+            1,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {
+                        "status": "401",
+                        "body": json.dumps(
+                            {
+                                "error": "invalid_grant",
+                                "error_description": "Invalid user credentials.",
+                            }
+                        ),
+                    },
+                ]
+            ),
+            expect=["master admin token was rejected", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
+            calls={"token": 2},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A transient 5xx on the listing itself retries the whole
+            # read-back — a flaky admin answer must not fail the job (and
+            # with it the suites).
+            "realm_client_listing_retries",
+            0,
+            base_rules(
+                realm_clients_resp=[
+                    {"status": "503", "body": "upstream overloaded"},
+                    {"status": "200", "body": REALM_CLIENTS},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            forbid=["harness-fixture-not-a-credential"],
+            calls={"realm_clients": 2},
+        )
+    )
+
+    scs.append(
+        scenario(
             # The listing is the ONLY thing that proves the other clients'
-            # posture: an unreadable answer leaves the invariant UNVERIFIED,
-            # and the job must fail on that — never pass without a verdict.
+            # posture: an answer the admin API refuses leaves the invariant
+            # UNVERIFIED, and the job must fail on that — never pass
+            # without a verdict.
             "realm_client_listing_unreadable_fails",
             1,
             base_rules(
@@ -431,8 +510,22 @@ def scenarios_list():
                     "body": json.dumps({"error": "HTTP 401 Unauthorized"}),
                 }
             ),
-            expect=["could not be read back", "UNVERIFIED"],
+            expect=["the realm client list was refused", "UNVERIFIED"],
             forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A 200 whose body is not a client list proves nothing: the
+            # parse must refuse it and the job must fail, not pass.
+            "realm_client_listing_unparseable_fails",
+            1,
+            base_rules(realm_clients_resp={"status": "200", "body": "not json"}),
+            expect=["could not be parsed", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 1},
         )
     )
 

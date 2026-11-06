@@ -264,7 +264,9 @@ async function mockChatStream(page, chunks, metadata) {
     // Only the app's POST carries a stream; a preflight (cross-origin dev
     // posture) or stray GET must reach the network, not a CORS-less 200.
     if (route.request().method() !== 'POST') {
-      await route.continue();
+      await runRouteAction(page, async () => {
+        await route.continue();
+      });
       return;
     }
     await runRouteAction(page, async () => {

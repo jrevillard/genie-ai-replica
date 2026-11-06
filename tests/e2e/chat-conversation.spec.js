@@ -449,15 +449,26 @@ test.describe('Conversation — answer card', () => {
   // first frame of the stream.
   test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    // Throttle the stream so the thinking frame is stable and observable —
-    // otherwise the answer may complete before the first read.
+    // Hold the stream until the thinking frame has been read — a fixed
+    // sleep is slow on a fast machine and flaky on a slow one, and the
+    // release promise is the same idiom the background-completion test
+    // below uses. The frame is then stable by construction, not by
+    // timing.
+    let releaseStream;
+    const streamReleased = new Promise((resolve) => {
+      releaseStream = resolve;
+    });
     await page.route('**/queries/stream**', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await runRouteAction(page, async () => {
+          await route.continue();
+        });
+        return;
+      }
       await runRouteAction(page, async () => {
         const resp = await route.fetch();
         const body = await resp.text();
-        await new Promise((r) => setTimeout(r, 800));
-        // The browser context may close while the throttle is still pending —
-        // the fulfilled stream would then outlive its test.
+        await streamReleased;
         await route.fulfill({ response: resp, body });
       });
     });
@@ -481,6 +492,8 @@ test.describe('Conversation — answer card', () => {
     expect(early.shadow, 'the card is elevated').toBe(true);
     expect(early.distinctFromGround, 'the card fills one step above the unified ground, not the same paint').toBe(true);
     expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
+    // The frame has been read: let the answer through.
+    releaseStream();
     await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     const late = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="answer-card"]');

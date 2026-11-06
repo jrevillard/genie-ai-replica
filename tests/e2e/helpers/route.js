@@ -12,9 +12,28 @@
  * stream that never arrives and the spec dying on its own timeout with
  * nothing pointing at the mock.
  *
- * The discrimination is on the TARGET state, not on the error text: a
- * message match would classify by wording, and the wording is
- * Playwright's, not ours.
+ * The discrimination needs BOTH signals, because neither alone is safe:
+ *
+ * - the TARGET state (`isTargetGone`): a closed target is necessary but
+ *   not sufficient — a mock defect can land at the same moment the spec
+ *   ends, and the state alone would swallow it;
+ * - the ERROR being Playwright's target-closed error: sufficient on its
+ *   own, but it also fires when the browser process dies, which is a
+ *   genuine failure a spec should see.
+ *
+ * Only their conjunction is the named race. The error check reads the
+ * constructor name and the message (the message form is the same
+ * discrimination `chatbot/error-handling.spec.js` has always used); if a
+ * Playwright upgrade changed both, the race would surface as a loud
+ * teardown failure — the acceptable direction to fail in.
+ *
+ * A rethrown error reaches the test through Playwright's route-handler
+ * error path (an unhandled rejection attributed to the running test).
+ * That is Playwright's own model — `page.unrouteAll({ behavior:
+ * 'ignoreErrors' })` is its alternative, and it swallows EVERY error,
+ * which is exactly what this helper must not do. A rethrown error can
+ * only originate while the target is alive, i.e. while the page's own
+ * test is running or tearing down.
  */
 
 /**
@@ -28,19 +47,30 @@ function isTargetGone(page) {
 }
 
 /**
+ * True when the error is Playwright's target-closed error — the shape
+ * both of its client-side close event and of the protocol answer a dead
+ * target produces.
+ */
+function isTargetClosedError(error) {
+  if (!error) return false;
+  if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
+  return typeof error.message === 'string' && /has been closed/i.test(error.message);
+}
+
+/**
  * Await `action`, swallowing the error only when the browser target is
- * gone. Any other error propagates to the caller.
+ * gone AND the error is the target-closed race. Any other error
+ * propagates to the caller.
  */
 async function runRouteAction(page, action) {
   try {
     return await action();
   } catch (error) {
-    if (isTargetGone(page)) return undefined;
+    if (isTargetGone(page) && isTargetClosedError(error)) return undefined;
     throw error;
   }
 }
 
 module.exports = {
-  isTargetGone,
   runRouteAction
 };

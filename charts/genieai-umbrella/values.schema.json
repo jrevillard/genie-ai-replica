@@ -35,6 +35,35 @@
           "properties": {
             "enabled": {
               "type": "boolean"
+            },
+            "resources": {
+              "type": "object",
+              "description": "The ArangoDB member's Kubernetes resources, applied to every server group (single mode: the single member; cluster mode: agents, dbservers and coordinators alike). The chart default is a cpu request only \u2014 a member with no request runs on the node's leftovers and its exec probes miss their window, flapping the pod NotReady while the database answers (#1606). No memory request and no limits by default: arangod self-sizes its heap, and a memory limit on a database is an OOMKill waiting for the first large query. The render rejects an override that carries no requests.cpu.",
+              "properties": {
+                "requests": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "limits": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                }
+              }
+            },
+            "probeTimeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Timeout in seconds the kube-arangodb operator writes into the member's exec liveness/readiness/startup probes (spec.<group>.probes.*.timeoutSeconds). Upstream default is 2s; spawning a process inside the container can miss 2s on a CPU-saturated node and the pod is declared NotReady while the database answers (#1606). One value for all three probe specs."
             }
           }
         },

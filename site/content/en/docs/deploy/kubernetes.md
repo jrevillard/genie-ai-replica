@@ -290,6 +290,29 @@ install restarts from scratch and can loop indefinitely. Raise it on a
 venue with slow disks or large images; a value below 1 second fails the
 render by name.
 
+**`data.arangodb.resources`** — the Kubernetes resources the ArangoDB
+member renders into the `ArangoDeployment` (kube-arangodb
+`ServerGroupSpec.resources`). The chart default is a cpu request only
+(`requests.cpu: 500m`): a member with no request runs on the node's
+leftovers, and its exec readiness probe — an in-container process spawn
+the kube-arangodb operator issues with a two-second timeout — then
+misses its window, so the pod flaps NotReady, the Service loses its
+endpoints and every ArangoDB client crash-loops, while the database
+itself answers fine. The request is the guaranteed share that keeps the
+probe answering. No memory request and no limits by default: arangod
+self-sizes its heap to the node, and a memory limit on a database is an
+OOMKill waiting for the first large query. The render rejects an
+override that drops the request. Cluster mode applies the same map to
+agents, dbservers and coordinators (eight members × the request) —
+size it for the mode.
+
+**`data.arangodb.probeTimeoutSeconds`** — the timeout (default 10s) the
+operator writes into the member's exec liveness/readiness/startup
+probes. Upstream kube-arangodb fixes it at 2s; spawning a process inside
+the container can miss 2s on a CPU-saturated node and the pod is
+declared NotReady while the database answers. One value for all three
+probe specs.
+
 **`observability.grafana.version`** — the Grafana image the CR pins
 (default 12.4, the version docker-compose pins). Without it the
 grafana-operator substitutes its own default, and on v5.25.0 that default

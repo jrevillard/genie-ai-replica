@@ -2,6 +2,23 @@
 {{- $data := .Values.data | default dict -}}
 {{- $arangodb := $data.arangodb | default dict -}}
 {{- $pluggable := .Values.pluggable | default dict -}}
+{{- /* Every server group (single, agents, dbservers, coordinators)
+carries the same resources map and probe timeout: a member with no
+request runs on the node's leftovers and its exec probes miss their
+window (#1606), and the operator's default 2s probe timeout is the
+second half of that failure. Values:
+data.arangodb.resources / data.arangodb.probeTimeoutSeconds. */ -}}
+{{- define "genieai-umbrella.arangoMemberWorkload" -}}
+    resources:
+      {{- toYaml .resources | nindent 6 }}
+    probes:
+      livenessProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+      readinessProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+      startupProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+{{- end -}}
 {{- if $arangodb.enabled -}}
 {{- /* Honor .Values.data.arangodb.mode ONLY — no auto-promotion.
        Switching mode requires a fresh uninstall+install (kube-arangodb
@@ -10,6 +27,20 @@
        only manages resources in the current render). See
        docs/charts/arangodb-mode-migration.md. */ -}}
 {{- $mode := $arangodb.mode | default "single" -}}
+{{- $memberResources := $arangodb.resources | default dict -}}
+{{- /* A member with NO cpu request is the exact pathology this knob
+exists to remove: it runs on the node's leftovers, the exec probes miss
+their window and the pod flaps NotReady while the database answers. An
+override that drops the request fails the render by name. */ -}}
+{{- if not (index ($memberResources.requests | default dict) "cpu") }}
+{{- fail "data.arangodb.resources.requests.cpu is required — a member with no cpu request gets the node's leftovers and its exec probes miss their window (issue #1606)" }}
+{{- end }}
+{{- /* int(): values.yaml numbers arrive as float64 and `lt` refuses a
+float64/int comparison. */ -}}
+{{- $probeTimeout := int ($arangodb.probeTimeoutSeconds | default 10) -}}
+{{- if lt $probeTimeout 1 -}}
+{{- fail (printf "data.arangodb.probeTimeoutSeconds must be at least 1 second (got %v)" $probeTimeout) }}
+{{- end }}
 {{- if eq $mode "single" -}}
 apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
@@ -44,6 +75,7 @@ spec:
       # NO --server.endpoint: `arangodb://` is not a valid endpoint scheme
       # (arangod accepts tcp:// / ssl://). The operator sets endpoint+advertising
       # itself from the CR; hand-rolling it here breaks pod startup.
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
     volumeClaimTemplate:
       spec:
         # Render storageClass ONLY when set: empty-string pins
@@ -103,6 +135,7 @@ spec:
       - --experimental-vector-index=true
     # Agency state MUST persist across restarts — on emptyDir every pod
     # reschedule loses the cluster configuration.
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
     volumeClaimTemplate:
       spec:
         {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
@@ -121,6 +154,7 @@ spec:
       # Vector indexes are required by the ingestion/retrieval pipeline
       # (flag name per ArangoDB 3.12.4; same flag as the single branch).
       - --experimental-vector-index=true
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
     volumeClaimTemplate:
       spec:
         {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
@@ -137,6 +171,7 @@ spec:
       # Vector indexes are required by the ingestion/retrieval pipeline
       # (flag name per ArangoDB 3.12.4; same flag as the single branch).
       - --experimental-vector-index=true
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
   auth:
     jwtSecretName: arango-jwt-secret
   # Plain HTTP — see the `Single` branch for the rationale.

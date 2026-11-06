@@ -99,12 +99,13 @@ function createMockUser(overrides = {}) {
 //    catches them), so the test stays GREEN while exercising the error path;
 //  - the localStorage state wiped, because the cross-tab renew protocol
 //    leaves its state there: the holder PUBLISHES the minted user under
-//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST (gate
-//    `entry.at >= startedAt`, millisecond resolution), so a surviving
-//    publication makes the next test's renew adopt the previous test's user
-//    instead of running its own grant (#1518 flake, reproducible locally
-//    too). The whole store is cleared, not just the two renew keys, so a
-//    coordination key added later cannot leak either.
+//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST — the
+//    reader admits any FOREIGN-tab publication (ownership gate + token
+//    usability; the adoptedTokens memo starts empty on a fresh module), so
+//    a surviving publication makes the next test's renew adopt the
+//    previous test's user instead of running its own grant (#1518 flake,
+//    reproducible locally too). The whole store is cleared, not just the
+//    two renew keys, so a coordination key added later cannot leak either.
 // jest.resetAllMocks() covers every mock, present and future — but it also
 // strips the factory implementations the unsubscribe assertions depend on, so
 // those are restored here. jest.restoreAllMocks() undoes a spy a failing test

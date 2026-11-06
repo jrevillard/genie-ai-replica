@@ -10,7 +10,7 @@ jest.mock('arangojs', () => ({
 
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
-const { dbService } = require('../../shared-lib');
+const { dbService, logger } = require('../../shared-lib');
 
 function createMockCollection() {
   return {
@@ -825,7 +825,6 @@ describe('ServiceCategoryService', () => {
     });
 
     it('stays silent for a typed 404 — the route layer owns that one log line', async () => {
-      const { logger } = require('../../shared-lib');
       mockServiceCategories.document.mockRejectedValue(
         Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
       );
@@ -833,18 +832,20 @@ describe('ServiceCategoryService', () => {
       await expect(service.getCategoryTranslations('ghost-cat')).rejects.toMatchObject({ statusCode: 404 });
 
       // An expected absence is not a fault: logging it here would double
-      // the line the route already writes.
-      expect(logger.error).not.toHaveBeenCalled();
+      // the line the route already writes. The assertion is scoped to this
+      // subject — another part of the path may legitimately log an error.
+      const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('ghost-cat'));
+      expect(errorCalls).toHaveLength(0);
     });
 
     it('logs a genuine fault at error grade, with its stack', async () => {
-      const { logger } = require('../../shared-lib');
       mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
 
       await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
 
-      expect(logger.error).toHaveBeenCalledTimes(1);
-      expect(logger.error.mock.calls[0][1]).toHaveProperty('stack');
+      const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('cat-1'));
+      expect(errorCalls).toHaveLength(1);
+      expect(errorCalls[0][1]).toHaveProperty('stack');
     });
 
     it('throws a ValidationError when categoryKey is missing', async () => {

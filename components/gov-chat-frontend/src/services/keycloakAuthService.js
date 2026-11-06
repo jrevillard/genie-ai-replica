@@ -150,11 +150,13 @@ function releaseRenewLease() {
  * expiry in a browser that stops renewing.
  * STAMP (round 23): the `at` stamp is LOAD-BEARING in one direction only —
  * an OLDER build's cleanup requires its PRESENCE and drops a stamp-less
- * publication as corrupt (no build judges a PUBLICATION's age by it: the
- * only `at`-based age check anywhere is the separate lease entry's), so
- * dropping the stamp here would kill the mixed-version handoff. No reader
- * of THIS build keys on it (#1615: publishedTokenIsUsable judges the
- * token alone). Writes carry the superset; reads require the subset. */
+ * publication as corrupt (and a PRE-#1535 build even judged the entry's
+ * AGE by it — `Date.now() - entry.at > RENEW_LEASE_TTL_MS` — the check
+ * #1535 replaced with the token-expiry bound; THIS build ages only the
+ * separate lease entry), so dropping the stamp here would kill the
+ * mixed-version handoff. No reader of THIS build keys on it (#1615:
+ * publishedTokenIsUsable judges the token alone). Writes carry the
+ * superset; reads require the subset. */
 function publishRenewedUser(user) {
   if (!user) return;
   try {
@@ -166,8 +168,10 @@ function publishRenewedUser(user) {
 }
 
 /** One guarded wipe of the publication — round 25 (review): the same 4-line
- * try/removeItem was hand-rolled at three sites (logout + twice in
- * clearStaleRenewPublication); kept-in-sync-by-discipline twins drift. */
+ * try/removeItem was hand-rolled at three sites when this was written
+ * (logout + twice in clearStaleRenewPublication; wave W later collapsed the
+ * cleanup's two arms into one removal, so it is two sites today);
+ * kept-in-sync-by-discipline twins drift. */
 function clearRenewPublication() {
   try {
     window.localStorage.removeItem(RENEW_USER_KEY);
@@ -210,9 +214,11 @@ function publishedTokenIsUsable(entry) {
 }
 
 function clearStaleRenewPublication() {
-  // The read is kept OUTSIDE the try so the catch arm can apply the same
-  // compare-before-remove guard as the path below (#1607): both arms judge
-  // the entry they READ, never whatever landed on disk since.
+  // `raw` is declared outside the try — the READ itself stays inside (a
+  // storage-unavailable browser must not throw out of this best-effort
+  // cleanup) — so the single guarded removal at the bottom serves BOTH the
+  // judged path and the catch path (#1607): both judge the entry they READ,
+  // never whatever landed on disk since.
   let raw = null;
   try {
     raw = window.localStorage.getItem(RENEW_USER_KEY);

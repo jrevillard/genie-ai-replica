@@ -259,6 +259,18 @@ The okf-server numbers moved because two gaps were closed rather than opened: `l
 (7 statements — a new public function with no test) and the import path's unsplittable branch
 (already uncovered at baseline, still uncovered). Both now have cases.
 
+**Re-measured when the wizard's split report was added** — the same tree-to-tree method (the
+branch's own work stashed, the same tree re-run, the work restored):
+
+| Component | Metric | Baseline | With the wizard slice | Δ |
+|---|---|---|---|---|
+| frontend | Lines | 89.0414% | **89.0443%** | +0.0029 |
+| frontend | Statements | 89.0015% | **89.0016%** | +0.0001 |
+| frontend | Branches | 76.1754% | **76.1925%** | +0.0171 |
+| frontend | Functions | 67.2185% | **67.2185%** | = |
+
+Up or equal on every metric. The suite is **138 suites / 3906 tests** green.
+
 ### Every new assertion was mutation-tested
 
 A test that cannot fail proves nothing, so each new assertion was checked by reverting the
@@ -306,7 +318,8 @@ The slice was deployed to the running local build (the tree synced to the branch
 ### The smoke harness — `data/okf/smoke-test/run-smoke-ceiling.js`
 
 A dedicated script in the harness family (it needs no fixture corpus; it creates and removes its
-own repository and leaves no residue). **17/17 PASS, exit 0:**
+own repository and leaves no residue). **20/20 PASS, exit 0** (17 in the first pass, 3 more when the
+wizard's split report was added):
 
 | Property | Result |
 |---|---|
@@ -318,6 +331,9 @@ own repository and leaves no residue). **17/17 PASS, exit 0:**
 | Publishing a repo holding an over-ceiling concept → **409 CONCEPT_TOO_LARGE** | refused |
 | The refusal names the offending concept | `legacy-oversized` |
 | **The refused publish minted NOTHING** | version still `null`; no version stored |
+| **The import splits an over-ceiling document AND reports it** | 300118 characters → **2 parts** |
+| The parts landed as separate concepts | 2 concepts |
+| The split repository cleaned up | 202 |
 
 The legacy corpus row (written straight into `okf_concepts_meta`) is the case the publish gate
 exists for: a document imported before the ceiling existed.
@@ -383,6 +399,80 @@ Two things the spec had to discover rather than assume:
 - the advisory's count is the body the editor would **write**, which carries the serializer's
   trailing newline — so the spec asserts the **invariant** (the count equals the editor's body
   length) rather than a hardcoded number.
+
+### §8's other half — the wizard reports the split
+
+§8 pairs the editor's advisory with the **wizard's** report, and only the first
+shipped in the first pass. The import path splits an oversized document
+losslessly and **reports** it — `split_documents` in the import answer
+(`ingest-service.js:785`, `from` / `into` / `chars` per document) — and the
+wizard threw that answer away. A curator who picked a 260 000-character page
+watched it turn into four topics in the tree with no explanation at any point:
+no note, no dialog, nothing. The split was real, lossless and correct, and
+invisible.
+
+What ships:
+
+- `Input.vue:114` — the note (`data-test-id="okf-input-split-note"`), naming
+  which file became how many concepts;
+- `Input.vue:629` — the import answer is kept and rendered;
+- `Input.vue:654` — `splitNoteFrom(result)`, which reads
+  `split_documents` and builds the line.
+
+The wizard measures **nothing** itself: the ceiling is the server's to enforce,
+and a second copy of the rule in the browser is a second thing to drift. An
+import that split nothing says nothing (no note, no noise).
+
+**An i18n trap worth naming.** Both keys are `.replace()`-consumed, and the
+locale-consistency guard only recognises a `translate()` whose **fallback is a
+quoted literal** (`localeConsistency.test.js:178-181`) — a hoisted module
+constant drops the key out of that guard **and** out of the per-line contract
+extractor (`okf-surface-i18n-contract.test.js:60-62`), silently, with every
+test green. The fallbacks are inline and each call stays on one line for
+exactly that reason. The keys are new in all 14 locales.
+
+### §10/§11 — the documentation, and the two numbers it got wrong
+
+The ceiling's plan ended with §10 (*"Fix the real defects found"*) and §11
+(*"Document for BOTH audiences"*). Both were open; both are closed.
+
+What was wrong — three surfaces told a deployer the wrong thing:
+
+- the ingestion guide and the install guide named **`doc_level`** as the
+  default `CONTEXTUAL_STRATEGY`. Compose (`docker-compose.yaml:2269`), the env
+  template (`env:328`) and the code (`genieai_dataprep_arangodb.py:729`) all
+  say `per_chunk`, and the guide described the disagreement at length while
+  contradicting itself two lines later;
+- the Contextual Retrieval guide told the reader to compare their documents
+  against a fixed **`6000`**-character budget — a number from before the budget
+  was derived from the window the endpoint actually serves.
+
+The measured values replace both (measured in the running container, not on
+paper — 254 prompt + 2106 batch + 8192 output tokens reserved):
+
+| Served context window | Derived document-context budget |
+|---|---|
+| 65 536 (compose default, `env.rtx6000`) | ≈ **219 700 characters** |
+| 4 096 | **no room** — the output reservation alone exceeds the window |
+| 2 048 (`env.t4`) | **no room** — the same |
+
+The plan's own table said "T4 → 3128 chars, RTX6000 → 11320". Both were stale:
+`env.rtx6000` serves 65 536 (not 4 096), and the shipped code reserves
+`512 × 16` output tokens (not 512), so a small window now has **no room at all**
+and fails closed rather than truncating to a small budget.
+
+**And the finding this produced.** The ceiling's default (250 000) sits **30 264
+characters above** the derived budget it is meant to track — so a concept at
+the ceiling is accepted by every write path and then has its document context
+truncated at ingestion. The `env` template says the two "must stay in step";
+they do not, and no config-validator check can make them, because the budget is
+discovered at runtime and the ceiling is a static literal. Filed as **#1588**
+with the measurement, the three options and the corpus impact of each.
+
+The same facts now live on the agent-facing surfaces (`CLAUDE.md` §Environment
+Variables, `.claude/rules/ENVIRONMENT.md`, the `env` template) and on the
+user-facing site (`configure/okf-variables.md`, `rag-pipeline/contextual-retrieval.md`,
+`rag-pipeline/ingestion.md`, `deploy/install-guide.md`).
 
 ### Two sub-threshold findings, filed rather than fixed here
 

@@ -378,7 +378,9 @@ class TranslationCreator {
     // application write path uses (service-category-service.js
     // `_normalizeLocale`).
     const validLang = lang.trim().toUpperCase();
-    if (!validLang || typeof validLang !== 'string' || validLang.trim() === '') {
+    // `trim()` already ran: an empty (or whitespace-only) code arrives here
+    // as '', and a non-string code threw on the trim itself.
+    if (!validLang) {
       throw new Error('Language code must be a non-empty string');
     }
     if (validLang === 'EN') {

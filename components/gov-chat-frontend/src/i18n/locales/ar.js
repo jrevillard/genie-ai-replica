@@ -468,6 +468,8 @@ export default {
       saveError: 'فشل حفظ عنصر الهرمية.',
       loadError: 'فشل تحميل هرمية المعرفة.',
       loadTranslationsError: 'فشل تحميل الترجمات.',
+      translationsLoadFailedNotice: 'تعذر تحميل الترجمات. يظل تعديل الترجمات والحفظ معطلين حتى يتم تحميلها.',
+      retryTranslations: 'إعادة المحاولة',
       translationsNotLoaded: 'لم يتم تحميل الترجمات — أعد التحميل قبل الحفظ.',
       confirmCancelTitle: 'تغييرات غير محفوظة',
       confirmCancelEdit: 'لديك تغييرات غير محفوظة سيتم فقدانها. هل أنت متأكد أنك تريد التبديل؟',

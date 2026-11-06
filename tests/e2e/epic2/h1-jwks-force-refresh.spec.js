@@ -34,29 +34,35 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
     const second = await rotateRealmKeys(adminToken, 'genie');
     expect(second.newKeyId).toBe(result.newKeyId);
 
-    const providers = await authRequest('GET', '/auth/admin/realms/genie/components?type=org.keycloak.keys.KeyProvider', {
+    const res = await authRequest('GET', '/auth/admin/realms/genie/components?type=org.keycloak.keys.KeyProvider', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    expect(providers.status).toBe(200);
+    expect(res.status).toBe(200);
+    const providers = res.data;
 
-    // Only the RSA signing keys were demoted: the realm's encryption, HMAC
-    // and AES providers survive the rotation.
+    // Only the RSA signing keys were demoted: every other provider of the
+    // realm — the HMAC, AES and encryption providers — keeps signing and
+    // encrypting what it signed and encrypted.
+    const demoted = new Set(result.oldKeyIds);
+    for (const provider of providers) {
+      if (provider.providerId === 'rsa' || provider.providerId === 'rsa-generated') continue;
+      expect(demoted.has(provider.id)).toBe(false);
+    }
     for (const id of result.oldKeyIds) {
-      const provider = providers.data.find((c) => c.id === id);
+      const provider = providers.find((c) => c.id === id);
       expect(provider).toBeTruthy();
       expect(['rsa', 'rsa-generated']).toContain(provider.providerId);
     }
-    for (const providerId of ['rsa-enc-generated', 'hmac-generated', 'aes-generated']) {
-      const provider = providers.data.find((c) => c.providerId === providerId);
-      expect(provider).toBeTruthy();
-      expect(result.oldKeyIds).not.toContain(provider.id);
-    }
 
-    // The realm keeps exactly one active rotated key.
-    const activeRotated = providers.data.filter(
-      (c) => c.name && c.name.startsWith('rsa-generated-rotated-') && c.config.active && c.config.active[0] === 'true'
+    // The realm keeps exactly one rotated key that signs.
+    const rotatedSigners = providers.filter(
+      (c) =>
+        c.name &&
+        c.name.startsWith('rsa-generated-rotated-') &&
+        (!c.config.enabled || c.config.enabled[0] !== 'false') &&
+        (!c.config.active || c.config.active[0] !== 'false')
     );
-    expect(activeRotated).toHaveLength(1);
+    expect(rotatedSigners).toHaveLength(1);
   });
 
   test('H.3 — old token succeeds via force-refresh after key rotation', async () => {

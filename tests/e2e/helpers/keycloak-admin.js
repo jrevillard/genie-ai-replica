@@ -594,6 +594,13 @@ async function ensureUser(adminToken, realm, userData) {
 // The key providers a signing rotation may demote. Keycloak 26 creates
 // four of them in a realm: rsa-generated (SIG), rsa-enc-generated (ENC),
 // hmac-generated (SIG) and aes-generated (ENC).
+//
+// The provider id is the only signal the components API carries: it
+// strips every config entry a provider does not declare, and the key
+// providers declare only priority, enabled, active and key size — the
+// use of a key is not in the answer. A realm that kept an old
+// rsa-generated provider configured for encryption therefore reads back
+// as a signing provider.
 const RSA_SIGNING_PROVIDER_IDS = new Set(['rsa', 'rsa-generated']);
 
 // The name prefix the rotation gives the key it mints.
@@ -604,12 +611,12 @@ const ROTATED_KEY_NAME_PREFIX = 'rsa-generated-rotated-';
  * values as lists of strings, one value per entry.
  * @param {object} component - The key provider component
  * @param {string} key - The config key
- * @returns {string} The value, or '' when the config does not carry it
+ * @returns {string} The value, or '' when the config carries no value
  */
 function configValue(component, key) {
   const raw = component.config && component.config[key];
-  if (Array.isArray(raw)) return raw[0] === undefined ? '' : raw[0];
-  return raw === undefined || raw === null ? '' : String(raw);
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === undefined || value === null ? '' : String(value);
 }
 
 /**
@@ -622,19 +629,20 @@ function configValue(component, key) {
  * @returns {boolean} True when the provider is an RSA signing key
  */
 function isRsaSigningKey(component) {
-  if (!RSA_SIGNING_PROVIDER_IDS.has(component.providerId)) return false;
-  // Keycloak records the use in the component config ('SIG'/'ENC'): a
-  // provider configured for encryption is no signer, whatever its id says.
-  return configValue(component, 'keyUse').toUpperCase() !== 'ENC';
+  return RSA_SIGNING_PROVIDER_IDS.has(component.providerId);
 }
 
 /**
- * Is this key provider the active one for its use?
+ * Is this key provider the active one for its use? Keycloak derives the
+ * key status from the two flags: a provider that carries neither is
+ * active and enabled, enabled=false is DISABLED (it never signs and is
+ * not published) and active=false is PASSIVE (published, but it does
+ * not sign).
  * @param {object} component - The key provider component
- * @returns {boolean} True when the provider is active
+ * @returns {boolean} True when the provider is the active one
  */
 function isActiveKey(component) {
-  return configValue(component, 'active') === 'true';
+  return configValue(component, 'enabled') !== 'false' && configValue(component, 'active') !== 'false';
 }
 
 /**
@@ -673,9 +681,16 @@ async function rotateRealmKeys(adminToken, realm) {
 
   // A re-run must not mint a second active rotated key: when the realm
   // already carries an active key a previous rotation minted, that key IS
-  // the rotation's key and the rotation continues from it.
+  // the rotation's key and the rotation continues from it. The candidate
+  // must be an RSA signing key: a provider that carries the rotated name
+  // but serves another purpose is not a signer, and adopting it would
+  // demote the realm's real signer.
   const reusableKey = existingKeys.find(
-    (k) => typeof k.name === 'string' && k.name.startsWith(ROTATED_KEY_NAME_PREFIX) && isActiveKey(k)
+    (k) =>
+      typeof k.name === 'string' &&
+      k.name.startsWith(ROTATED_KEY_NAME_PREFIX) &&
+      isRsaSigningKey(k) &&
+      isActiveKey(k)
   );
 
   let newKeyId;

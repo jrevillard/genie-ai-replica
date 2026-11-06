@@ -212,6 +212,11 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds — the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
             }
           }
         },
@@ -245,6 +250,11 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds — the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
             }
           }
         },
@@ -289,6 +299,11 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds — the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
             }
           }
         },
@@ -319,6 +334,11 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds — the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
             }
           }
         },
@@ -349,6 +369,11 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds — the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
             }
           }
         }

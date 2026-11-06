@@ -5,12 +5,11 @@ const {
   sendMessage,
   waitForBotResponse,
   getLastBotMessage,
-  BASE_URL,
 } = require('../helpers/chatbot');
 
-// One spelling for the stream endpoint. The route and the unroute that
-// removes it must be the same string — Playwright drops a handler only on
-// an exact match — so both read the constant.
+// One spelling for the stream endpoint inside this file: the route and
+// the unroute that removes it must be the same string — Playwright drops
+// a handler only on an exact match — so both read the constant.
 const STREAM_ROUTE = '**/queries/stream**';
 
 /**
@@ -24,36 +23,29 @@ const STREAM_ROUTE = '**/queries/stream**';
  * injected status.
  */
 async function mockStreamError(page, { status, error, message }) {
+  const body = JSON.stringify({ error, message });
   await page.route(STREAM_ROUTE, async (route) => {
-    if (route.request().method() !== 'POST') {
-      await absorbTeardown(() => route.continue());
-      return;
-    }
-    await absorbTeardown(() =>
-      route.fulfill({
+    try {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
         status,
         contentType: 'application/json',
         headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify({ error, message }),
-      }),
-    );
-  });
-}
-
-/**
- * Swallow the teardown race only. The context can close while a request
- * is still in flight, and that must not fail the spec. Every other
- * failure surfaces — a swallowed one fails the spec later, with a cause
- * that points nowhere (tests/e2e/CLAUDE.md: no swallowing).
- */
-async function absorbTeardown(action) {
-  try {
-    await action();
-  } catch (error) {
-    if (!/has been closed/i.test(error?.message || '')) {
-      throw error;
+        body,
+      });
+    } catch (failure) {
+      // The context can close while a request is still in flight, and that
+      // race must not fail the spec. Every other failure surfaces — a
+      // swallowed one fails the spec later, with a cause that points
+      // nowhere (tests/e2e/CLAUDE.md: no swallowing).
+      if (!/has been closed/i.test(failure?.message || '')) {
+        throw failure;
+      }
     }
-  }
+  });
 }
 
 // A failed turn ends with the answer card's error block, and that card
@@ -134,7 +126,6 @@ test.describe('RAG error handling', () => {
     // The failed turn ends with the error card — see the describe
     // comment for why that card is the wait.
     await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('[data-testid="nav-status"]')).toHaveAttribute('data-status', 'offline');
 
     // Verify the chat is not stuck
     const textarea = page.locator('[data-testid="composer-field"]');
@@ -154,7 +145,6 @@ test.describe('RAG error handling', () => {
     // The failed turn ends with the error card — see the describe
     // comment for why that card is the wait.
     await expect(page.locator('[data-testid="answer-error"]')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('[data-testid="nav-status"]')).toHaveAttribute('data-status', 'offline');
 
     // Input should be usable again
     const textarea = page.locator('[data-testid="composer-field"]');

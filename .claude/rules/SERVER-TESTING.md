@@ -79,7 +79,7 @@ curl -sk -X POST "<KEYCLOAK_URL>/admin/realms/<REALM>/users" \
   }'
 ```
 
-**WARNING:** `PUT` on a user is a **partial** update — the fields the payload omits are kept, and the credentials array is only touched when the payload carries one (Keycloak 26.x: `RepresentationToModel.createCredentials` acts only on a representation that has `credentials`). Send the fields you mean to change; at creation, always the full payload, where an omitted field is an omitted value.
+**`PUT` on a user is a partial update:** the fields the payload omits are kept, and the credentials array is touched only when the payload carries one. Send the fields you mean to change; at creation, send the full payload — there, an omitted field is an omitted value.
 
 ## Key Pitfalls
 

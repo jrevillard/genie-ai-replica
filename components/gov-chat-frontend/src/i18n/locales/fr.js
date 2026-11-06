@@ -2071,6 +2071,9 @@ export default {
       saved: 'Enregistré',
       saving: 'Enregistrement…',
       unsaved: 'Modifications non enregistrées',
+      ceiling: '{chars} / {ceiling} caractères',
+      ceilingOver:
+        'Au-delà de la limite — l’enregistrement sera refusé. Divisez ce concept ou augmentez OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Rendu',
         source: 'Source'

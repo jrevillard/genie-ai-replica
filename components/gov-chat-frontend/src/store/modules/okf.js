@@ -917,7 +917,19 @@ const actions = {
       return { ok: true, ...result };
     } catch (err) {
       commit('setError', err.message || 'patchConcept failed');
-      return { ok: false, code: 'PATCH_FAILED', message: err.message };
+      // KEEP THE SERVER'S ERROR CODE (the pattern every other action in this
+      // module already uses — see the draft-save action's
+      // `code: (err && err.data && err.data.error) || '…'`). Flattening every
+      // failure to PATCH_FAILED made the server's specific refusals
+      // invisible: a 409 CONCEPT_TOO_LARGE (the concept-document ceiling)
+      // reached the editor as a generic failure, and the curator was told
+      // "retry" — advice that cannot work, because retrying an over-ceiling
+      // save fails identically forever.
+      return {
+        ok: false,
+        code: (err && err.data && err.data.error) || 'PATCH_FAILED',
+        message: err.message
+      };
     }
   },
 

@@ -2066,6 +2066,9 @@ export default {
       saved: 'Guardado',
       saving: 'Guardando…',
       unsaved: 'Cambios sin guardar',
+      ceiling: '{chars} / {ceiling} caracteres',
+      ceilingOver:
+        'Supera el límite: el guardado se rechazará. Divida este concepto o aumente OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Renderizado',
         source: 'Fuente'

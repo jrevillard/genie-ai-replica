@@ -56,6 +56,10 @@ const graphLifecycle = require('./graph-lifecycle-service');
 const graphRetract = require('./graph-retract-service');
 const backingFileService = require('./backing-file-service');
 const conceptMetaService = require('./concept-meta-service');
+// The concept-document ceiling — the publish gate's authority (the plan's §7).
+// One module, one number: the import path, the editor save and this gate all
+// read the SAME ceiling, so a document accepted by one is accepted by all.
+const { maxConceptDocChars } = require('./concept-ceiling');
 
 const REPOS = 'okf_repositories';
 const META = 'okf_concepts_meta';
@@ -690,6 +694,51 @@ async function transition(repoId, action, actor, opts = {}) {
       if (!conceptCount) {
         throw new LifecycleError('PUBLISH_EMPTY', 'repository has no concepts — add content before publishing', 409);
       }
+      // THE CONCEPT-DOCUMENT CEILING — the publish gate (the plan's §7:
+      // "defence in depth, placed correctly … before mintVersion, alongside the
+      // existing count check — not after the frontmatter gate, which runs after
+      // the version is minted and the bundle stored and so rejects having
+      // already created state").
+      //
+      // WHY IT IS HERE AND NOT LATER: everything after this point creates
+      // state. `mintVersion` bumps repo.version; the export stores the bundle.
+      // A refusal AFTER the mint rejects having already burned a version
+      // number and stored a half-published artifact — the exact defect the
+      // plan names. A refusal HERE burns nothing.
+      //
+      // WHY IT EXISTS AT ALL when the editor already refuses an over-ceiling
+      // save: the editor is one write path. A concept can also reach the
+      // corpus by an import that predates the ceiling, by a re-ingest of a
+      // legacy document, or by a future path that bypasses the writer. This
+      // gate is the backstop that makes "no oversized concept may persist by
+      // any path" true of the PUBLISH boundary too.
+      const ceiling = maxConceptDocChars();
+      // The READ lives in concept-meta-service (the owner of the
+      // `okf_concepts_meta` collection). It is called from HERE, next to the
+      // concept-count check and before the mint.
+      const { count: oversized, offenders } = await conceptMetaService.listOverCeiling(repoId, ceiling, 10);
+      if (oversized) {
+        // Name the offenders — a bare count leaves the curator with nothing to
+        // act on. The list is capped so a pathological corpus cannot produce a
+        // 10 kB error body; the count in the message carries the full total.
+        const named = offenders.map((o) => `"${o.concept_id}" (${o.chars} characters)`).join(', ');
+        logger.info('[OKF-PUBLISH] step=ceiling gate refused the publish', {
+          repo_id: repoId,
+          oversized_count: oversized,
+          ceiling,
+          offenders: offenders.map((o) => o.concept_id)
+        });
+        throw new LifecycleError(
+          'CONCEPT_TOO_LARGE',
+          `${oversized} concept(s) in this repository are over the ${ceiling}-character ceiling: ${named}` +
+            (oversized > offenders.length ? `, and ${oversized - offenders.length} more` : '') +
+            '. Their context is truncated at ingestion, so their deep chunks are embedded against a ' +
+            'description of the start of the document. Split them into smaller concepts, or raise ' +
+            "OKF_MAX_CONCEPT_DOC_CHARS if the served model's context window allows a larger document.",
+          409
+        );
+      }
+      logger.info('[OKF-PUBLISH] step=ceiling gate passed', { repo_id: repoId, ceiling });
       // The mint is the REAL publish gate (PII-complete, all-indexed,
       // conformance-clean; 409 PUBLISH_GATE_BLOCKED / DRAIN_IN_PROGRESS pass
       // through untouched). It bumps repo.version to N.

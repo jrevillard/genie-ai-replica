@@ -2031,6 +2031,8 @@ export default {
       saved: 'บันทึกแล้ว',
       saving: 'กำลังบันทึก…',
       unsaved: 'การเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
+      ceiling: '{chars} / {ceiling} อักขระ',
+      ceilingOver: 'เกินขีดจำกัด — การบันทึกจะถูกปฏิเสธ แยกแนวคิดนี้ หรือเพิ่ม OKF_MAX_CONCEPT_DOC_CHARS',
       view: {
         rendered: 'เรนเดอร์แล้ว',
         source: 'ต้นฉบับ'

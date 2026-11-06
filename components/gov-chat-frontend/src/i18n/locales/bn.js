@@ -2047,6 +2047,9 @@ export default {
       saved: 'সংরক্ষিত',
       saving: 'সংরক্ষণ করা হচ্ছে…',
       unsaved: 'অসংরক্ষিত পরিবর্তন',
+      ceiling: '{chars} / {ceiling} অক্ষর',
+      ceilingOver:
+        'সীমা অতিক্রান্ত — সংরক্ষণ প্রত্যাখ্যান করা হবে। এই ধারণাটি ভাগ করুন বা OKF_MAX_CONCEPT_DOC_CHARS বাড়ান।',
       view: {
         rendered: 'রেন্ডার করা',
         source: 'উৎস'

@@ -2928,6 +2928,8 @@ export default {
       saved: 'Saved',
       saving: 'Saving…',
       unsaved: 'Unsaved changes',
+      ceiling: '{chars} / {ceiling} characters',
+      ceilingOver: 'Over the limit — the save will be refused. Split this concept, or raise OKF_MAX_CONCEPT_DOC_CHARS.',
       saveFailed: 'Save failed — retry',
       view: {
         rendered: 'Rendered',

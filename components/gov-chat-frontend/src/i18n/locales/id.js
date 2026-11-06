@@ -2054,6 +2054,8 @@ export default {
       saved: 'Tersimpan',
       saving: 'Menyimpan…',
       unsaved: 'Perubahan belum disimpan',
+      ceiling: '{chars} / {ceiling} karakter',
+      ceilingOver: 'Melebihi batas — penyimpanan akan ditolak. Bagi konsep ini atau naikkan OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Dirender',
         source: 'Sumber'

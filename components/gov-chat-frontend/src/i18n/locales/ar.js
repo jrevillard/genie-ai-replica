@@ -2029,6 +2029,8 @@ export default {
       saved: 'تم الحفظ',
       saving: 'يحفظ…',
       unsaved: 'تغييرات غير محفوظة',
+      ceiling: '{chars} / {ceiling} حرفًا',
+      ceilingOver: 'تجاوز الحد — سيُرفض الحفظ. قسّم هذا المفهوم أو ارفع OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'مُصيّر',
         source: 'المصدر'

@@ -2064,6 +2064,9 @@ export default {
       saved: 'Salvo',
       saving: 'Salvando…',
       unsaved: 'Alterações não salvas',
+      ceiling: '{chars} / {ceiling} caracteres',
+      ceilingOver:
+        'Acima do limite — a gravação será recusada. Divida este conceito ou aumente OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Renderizado',
         source: 'Fonte'

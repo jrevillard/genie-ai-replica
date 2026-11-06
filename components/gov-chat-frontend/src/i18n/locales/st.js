@@ -2060,6 +2060,8 @@ export default {
       saved: 'Bolokiloe',
       saving: 'Ho boloka…',
       unsaved: 'Liphetoho tse sa bolokoang',
+      ceiling: '{chars} / {ceiling} litso',
+      ceilingOver: 'Fetoe ka hodima — polokiso e tla hana. Karoholo khopha eo, kapa phakisa OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'E fanoe',
         source: 'Mohloli'

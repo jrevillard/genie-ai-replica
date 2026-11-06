@@ -1038,6 +1038,37 @@ describe('failure envelopes sweep', () => {
     });
   });
 
+  // THE CONCEPT-DOCUMENT CEILING — the store must KEEP the server's named
+  // code (and the server's message), not flatten it into PATCH_FAILED.
+  //
+  // Why this is load-bearing: the house HTTP envelope rejects
+  // {status, statusText, data, message} with the server's error code at
+  // `data.error` (httpService.handleResponseError). A 409 CONCEPT_TOO_LARGE
+  // arrives carrying the size, the ceiling and the remedy. Flattened to
+  // PATCH_FAILED, that message is lost and the editor can only say "retry" —
+  // advice that cannot work, because retrying an over-ceiling save fails
+  // identically forever.
+  it("patchConcept KEEPS the server's named code and message (CONCEPT_TOO_LARGE)", async () => {
+    const refusal = {
+      status: 409,
+      statusText: 'Conflict',
+      data: {
+        error: 'CONCEPT_TOO_LARGE',
+        message: 'concept "c1" is 300000 characters, over the 250000-character ceiling. Split it.'
+      },
+      message: 'concept "c1" is 300000 characters, over the 250000-character ceiling. Split it.'
+    };
+    repoOkfService.patchConcept.mockRejectedValueOnce(refusal);
+    const store = buildStore();
+    const res = await store.dispatch('okf/patchConcept', { repoId: 'r1', conceptId: 'c1', markdown: 'm' });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('CONCEPT_TOO_LARGE');
+    // The message survives too — it is the only place the curator learns
+    // the size, the ceiling and the remedy.
+    expect(res.message).toMatch(/300000 characters/);
+    expect(res.message).toMatch(/250000-character ceiling/);
+  });
+
   it('resplit / versions / validation / links / topic-links failures map their codes', async () => {
     const store = buildStore(EDITOR_SEED());
     conceptService.listForRepo.mockResolvedValue([]);

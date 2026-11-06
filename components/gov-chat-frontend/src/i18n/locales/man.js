@@ -2024,6 +2024,8 @@ export default {
       saved: 'A marata',
       saving: 'A bering mara…',
       unsaved: 'Oktak ko rejan̄in kōjparok',
+      ceiling: '{chars} / {ceiling} caractairí',
+      ceilingOver: 'Imalilo ndatok — dondok e a kaupa. Ndaɲɲaɲ dɔɔ, walla nɲɣiɲɣi OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'A keta',
         source: 'Asili'

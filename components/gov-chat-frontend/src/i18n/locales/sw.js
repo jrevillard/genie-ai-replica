@@ -2048,6 +2048,8 @@ export default {
       saved: 'Imehifadhiwa',
       saving: 'Inahifadhi…',
       unsaved: 'Mabadiliko ambayo hayajahifadhiwa',
+      ceiling: '{chars} / {ceiling} herufi',
+      ceilingOver: 'Imevuka kizingiti — uhifadhi utakatalizwa. Splitu dhana hili, au ongeza OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Imetolewa',
         source: 'Chanzo'

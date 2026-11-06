@@ -2070,6 +2070,9 @@ export default {
       saved: 'Gespeichert',
       saving: 'Wird gespeichert…',
       unsaved: 'Ungespeicherte Änderungen',
+      ceiling: '{chars} / {ceiling} Zeichen',
+      ceilingOver:
+        'Über dem Limit — das Speichern wird abgelehnt. Teilen Sie dieses Konzept oder erhöhen Sie OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Gerendert',
         source: 'Quelle'

@@ -1998,6 +1998,8 @@ export default {
       saved: '已保存',
       saving: '保存中…',
       unsaved: '未保存的更改',
+      ceiling: '{chars} / {ceiling} 个字符',
+      ceilingOver: '超出上限——保存将被拒绝。请拆分此概念，或提高 OKF_MAX_CONCEPT_DOC_CHARS。',
       view: {
         rendered: '已渲染',
         source: '源码'

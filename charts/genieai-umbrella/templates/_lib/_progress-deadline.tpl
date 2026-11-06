@@ -16,9 +16,11 @@ Precedence, same direction as every other knob here: the service's own
 the Kubernetes 600s fallback is exactly the value that breaks a cold
 start on a slow node.
 
-The default is 1800s, not 900s: the reference venue measured an 18-minute
-first install, most of it image pulls, so a 15-minute window would still
-trip on the very case this knob exists for.
+The default is 900s — sized for a NORMAL cold start (the images pull in
+minutes), not for a pathological venue: a cluster whose pulls take a
+quarter of an hour declares its own value, below its own Helm timeout
+(the deadline fires an uninstall, so it must never outlive the wait it
+sits in).
 
 The per-service keys are NOT declared in values.yaml on purpose: Helm
 merges chart values OVER overlay values, so a concrete per-service value
@@ -55,7 +57,7 @@ the raw value is read only where it exists. */ -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- $deadline := 1800 -}}
+{{- $deadline := 900 -}}
 {{- if $found -}}
 {{- /* A BOOLEAN or a string is a typo, not a deadline: `int true` is 1,
 which is a one-second progress window — the exact pathology this knob

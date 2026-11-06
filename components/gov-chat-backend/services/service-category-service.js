@@ -186,9 +186,10 @@ class ServiceCategoryService {
    * removed by the GC pass.
    *
    * When `translations` is undefined or null the payload omits the field:
-   * the non-EN rows are left untouched and no GC pass runs. An explicit
-   * empty array is the clear-all — the upsert writes the EN row and the
-   * GC removes every other row of the owner.
+   * the non-EN rows are left untouched and no GC pass runs — the EN row
+   * is still upserted, it carries the payload's nameEN. An explicit empty
+   * array is the clear-all — the upsert writes the EN row and the GC
+   * removes every other row of the owner.
    *
    * The caller has already validated the entries (shape, duplicates, EN)
    * BEFORE any mutation — this helper must only ever see valid rows.
@@ -197,7 +198,8 @@ class ServiceCategoryService {
    * @param {String} ownerKey - The _key of the owning category or service.
    * @param {Array|null|undefined} translations - Validated {languageCode, translation}
    *   entries. `null` is accepted as a third spelling of "leave untouched":
-   *   like an omitted field, it writes no payload row and runs no GC pass.
+   *   like an omitted field, it writes no payload row (the English row
+   *   still is) and runs no GC pass.
    * @param {String} englishName - The English name (the payload's nameEN), stored as the EN row.
    */
   async _upsertTranslations(collection, fkField, ownerKey, translations, englishName) {
@@ -215,7 +217,7 @@ class ServiceCategoryService {
     `);
     logger.info(`Upserted ${docs.length} translations for ${fkField} ${ownerKey}`);
 
-    if (translations !== undefined && translations !== null) {
+    if (translations) {
       const keys = docs.map((doc) => doc._key);
       await this.db.query(aql`
         FOR trans IN ${collection}
@@ -315,8 +317,16 @@ class ServiceCategoryService {
    * fault, and the absence classifier exists precisely because "the HTTP
    * status is 404" does not mean "the row is not there".
    *
-   * A caller that is not this router (the analytics service) logs the error
-   * itself, so nothing is lost by staying silent here.
+   * The contract this leaves to the caller: a client error carries NO log
+   * line from the service, so whoever catches it must log it. The router
+   * does (one warn line, with the request context); the analytics service
+   * does (in its own catch block). A caller that swallowed the error
+   * instead would leave no trace — the service deliberately does not log
+   * it a second time, because the point of the split is ONE line per
+   * outcome.
+   *
+   * A genuine fault costs two error-grade lines today: this one and the
+   * global error middleware's. Which layer owns it is tracked at #1600.
    * @param {Error} error - The caught error.
    * @param {String} context - Log context of the failing operation.
    */

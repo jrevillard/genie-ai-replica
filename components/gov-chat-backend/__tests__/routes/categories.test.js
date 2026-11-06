@@ -512,23 +512,20 @@ describe('expected 404 logging contract', () => {
     // ... and no stack on it (a stack is what makes an expected outcome
     // expensive to read).
     expect(warnCalls[0][1] || {}).not.toHaveProperty('stack');
+    // ... and it carries the request context: the global error middleware
+    // never sees this error, so the route is the only place that can say
+    // WHICH client asked for WHICH id.
+    expect(warnCalls[0][1]).toMatchObject({ method: 'DELETE', statusCode: 404 });
+    expect(warnCalls[0][1].url).toContain('/api/service-categories/services/nonexistent');
     // ... and nothing at error grade for THIS failure (another part of the
-    // request may legitimately log an error of its own).
-    const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('Service not found'));
+    // request may legitimately log an error of its own). The filter reads
+    // the message AND the metadata: the global error middleware logs the
+    // message in its metadata, not in the line itself, so a filter on the
+    // line alone would miss it.
+    const errorCalls = logger.error.mock.calls.filter((call) =>
+      [String(call[0]), String((call[1] || {}).error || '')].some((part) => part.includes('Service not found'))
+    );
     expect(errorCalls).toHaveLength(0);
-  });
-
-  it('renders a typed error body verbatim, like the global middleware does', async () => {
-    const error = new NotFoundError('Service not found');
-    error.body = { error: 'service_unavailable', message: 'Service not found' };
-    serviceCategoryService.deleteService.mockRejectedValue(error);
-
-    const response = await authDelete('/api/service-categories/services/nonexistent');
-
-    expect(response.status).toBe(404);
-    // The body carries a shape the client reads; dropping it would change
-    // the response contract for that shape.
-    expect(response.body).toEqual({ error: 'service_unavailable', message: 'Service not found' });
   });
 });
 

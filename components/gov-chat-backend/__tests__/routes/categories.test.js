@@ -517,6 +517,19 @@ describe('expected 404 logging contract', () => {
     const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('Service not found'));
     expect(errorCalls).toHaveLength(0);
   });
+
+  it('renders a typed error body verbatim, like the global middleware does', async () => {
+    const error = new NotFoundError('Service not found');
+    error.body = { error: 'service_unavailable', message: 'Service not found' };
+    serviceCategoryService.deleteService.mockRejectedValue(error);
+
+    const response = await authDelete('/api/service-categories/services/nonexistent');
+
+    expect(response.status).toBe(404);
+    // The body carries a shape the client reads; dropping it would change
+    // the response contract for that shape.
+    expect(response.body).toEqual({ error: 'service_unavailable', message: 'Service not found' });
+  });
 });
 
 // ============================================================

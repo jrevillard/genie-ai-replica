@@ -41,6 +41,7 @@ let mockServices;
 let mockCategoryServices;
 let mockServiceCategoryTranslations;
 let mockServiceTranslations;
+let mockErrors;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -69,6 +70,10 @@ beforeEach(() => {
 
   jest.isolateModules(() => {
     service = require('../../services/service-category-service');
+    // The service is loaded in an isolated registry, so the error classes it
+    // sees are NOT the ones the outer registry holds: `instanceof` across
+    // the two boundaries is false. Capture them from inside the isolation.
+    mockErrors = require('../../middleware/errors');
   });
   service.initialized = false;
 });
@@ -309,6 +314,16 @@ describe('ServiceCategoryService', () => {
         expect(e.name).toBe('NotFoundError');
         expect(e.statusCode).toBe(404);
       }
+    });
+
+    it('re-throws an already-typed 404 untouched — the driver predicate must not claim it', async () => {
+      // A typed absence whose message the canonical predicate would also
+      // read as an absence: re-classifying it would rebuild the error and
+      // replace its message. It must reach the caller as it is.
+      const typed = new mockErrors.NotFoundError('no match');
+      mockServices.update.mockRejectedValue(typed);
+
+      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.toBe(typed);
     });
 
     // One contract, three shapes of the driver error: a missing row and the

@@ -346,10 +346,13 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
     throw new Error(`Roles not found in realm ${realm}: ${missingRoles.join(', ')}`);
   }
 
-  const assignRes = await request('POST', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: rolesToAssign,
-  });
+  const assignRes = await adminRequest(
+    'POST',
+    `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`,
+    adminToken,
+    `the assignment of the realm roles ${roleNames.join(', ')} to ${userId}`,
+    rolesToAssign
+  );
   if (assignRes.status !== 204 && assignRes.status !== 200) {
     failWithStatus(
       `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`,
@@ -420,6 +423,17 @@ async function createUser(adminToken, realm, userData) {
       try {
         owners = await findUsers(adminToken, realm, 'email', email);
       } catch (probeErr) {
+        if (probeErr.httpStatus !== undefined) {
+          // Keycloak answered: the probe's verdict is the cause (an expired
+          // admin token answers 401, a rate limit 429). createUser has no
+          // retry budget, so the failure stays a plain one — but it must
+          // name the status, or the caller cannot tell a rate limit from
+          // an expired admin token.
+          throw new Error(
+            `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
+              `could not run (HTTP ${probeErr.httpStatus})`
+          );
+        }
         throw new Error(
           `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
             `could not run: ${probeErr.message}`
@@ -455,12 +469,15 @@ async function removeRealmRoles(adminToken, realm, userId, roleNames) {
   if (realmMissing) return [];
   if (toRemove.length === 0) return [];
 
-  const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: toRemove,
-  });
+  const res = await adminRequest(
+    'DELETE',
+    `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm`,
+    adminToken,
+    `the removal of the realm roles of ${userId}`,
+    toRemove
+  );
   if (res.status !== 204) {
-    throw new Error(`Failed to remove the realm roles of ${userId}: HTTP ${res.status}`);
+    failWithStatus(`Failed to remove the realm roles of ${userId}: HTTP ${res.status}`, res.status);
   }
   return toRemove.map((r) => r.name);
 }
@@ -579,10 +596,13 @@ async function convergeUser(adminToken, realm, userData) {
     // Converge the password: an account carried over from an earlier
     // fixture revision keeps its old one, and the realm refuses direct
     // access grants, so nothing else can detect the drift.
-    const resetRes = await request('PUT', `/auth/admin/realms/${realm}/users/${user.id}/reset-password`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: { type: 'password', value: password, temporary: false },
-    });
+    const resetRes = await adminRequest(
+      'PUT',
+      `/auth/admin/realms/${realm}/users/${user.id}/reset-password`,
+      adminToken,
+      `the password convergence of ${username} (${user.id})`,
+      { type: 'password', value: password, temporary: false }
+    );
     if (resetRes.status === 404) {
       // The account was just looked up by its exact username: a 404 here
       // means it was deleted between that lookup and this reset — not a
@@ -739,9 +759,12 @@ function isActiveKey(component) {
  */
 async function createRotatedKey(adminToken, realm, realmId) {
   const rotatedKeyName = `${ROTATED_KEY_NAME_PREFIX}${Date.now()}`;
-  const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: {
+  const newKeyRes = await adminRequest(
+    'POST',
+    `/auth/admin/realms/${realm}/components`,
+    adminToken,
+    `the creation of the rotated key ${rotatedKeyName}`,
+    {
       name: rotatedKeyName,
       providerId: 'rsa-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
@@ -752,8 +775,8 @@ async function createRotatedKey(adminToken, realm, realmId) {
         active: ['true'],
         keySize: ['2048'],
       },
-    },
-  });
+    }
+  );
 
   if (newKeyRes.status !== 201) {
     failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);

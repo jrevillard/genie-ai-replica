@@ -1,7 +1,7 @@
 const express = require('express');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
-const { AppError, NotFoundError } = require('../middleware/errors');
+const { NotFoundError, isClientError } = require('../middleware/errors');
 
 /**
  * Answers a failed service-category request.
@@ -22,13 +22,18 @@ const { AppError, NotFoundError } = require('../middleware/errors');
  * The warn line carries the request context the global middleware would
  * have logged (method, url, ip, user agent): an expected 404 is still an
  * event somebody has to triage — which client asked for which id — and the
- * middleware never sees this error, so it cannot supply that context.
+ * middleware never sees this error, so it cannot supply that context. The
+ * `context` argument names the operation without the word "Error": an
+ * expected outcome is not an error by wording either, or a grep for it
+ * mixes the 404s with the genuine faults.
  *
  * A genuine fault is NOT logged here: it is handed over to the global
- * error middleware, which logs it at error grade with the stack. The
- * service logs it too, so a fault currently costs two error-grade lines
- * (the service's own and the middleware's) — settling the single owner
- * is a repo-wide decision, not one this router makes alone.
+ * error middleware, which logs it at error grade with the stack — with the
+ * request duration attached, which the middleware would otherwise not
+ * know. The service logs the fault too, so a fault currently costs two
+ * error-grade lines (the service's own and the middleware's) — settling
+ * the single owner is a repo-wide decision, not one this router makes
+ * alone.
  *
  * @param {Object} req - The Express request.
  * @param {Object} res - The Express response.
@@ -38,20 +43,25 @@ const { AppError, NotFoundError } = require('../middleware/errors');
  * @param {Number} durationMs - Time spent on the request.
  */
 function respondWithFailure(req, res, next, error, context, durationMs) {
-  if (error instanceof AppError && error.statusCode < 500) {
-    // An expected outcome is not an error: the line must not lead with
-    // "Error", or a grep for it mixes the 404s with the genuine faults.
-    const subject = context.replace(/^Error /, '');
-    logger.warn(`${subject}: ${error.message}`, {
+  if (isClientError(error)) {
+    logger.warn(`${context}: ${error.message}`, {
       statusCode: error.statusCode,
       durationMs,
       method: req.method,
       url: req.originalUrl || req.url,
       ip: req.ip,
-      userAgent: req.get('User-Agent') || 'none'
+      userAgent: req.get('User-Agent') || 'none',
+      // A race-classified absence carries the driver error that produced
+      // it (see _absenceOrRethrow): with it, the line says whether the row
+      // was ever there or vanished mid-flight. A probe of an unknown id
+      // has none.
+      ...(error.cause && error.cause.errorNum != null ? { driverErrorNum: error.cause.errorNum } : {})
     });
     return res.status(error.statusCode).json({ message: error.message });
   }
+  // The middleware logs the fault; the duration rides on the error, since
+  // the middleware has no other way to know how long the request took.
+  error.durationMs = durationMs;
   return next(error);
 }
 
@@ -106,14 +116,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      return respondWithFailure(
-        req,
-        res,
-        next,
-        error,
-        'Error getting all categories with services',
-        Date.now() - start
-      );
+      return respondWithFailure(req, res, next, error, 'Getting all categories with services', Date.now() - start);
     }
   });
 
@@ -157,7 +160,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} detailed categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      return respondWithFailure(req, res, next, error, 'Error getting all detailed categories', Date.now() - start);
+      return respondWithFailure(req, res, next, error, 'Getting all detailed categories', Date.now() - start);
     }
   });
 
@@ -213,14 +216,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      return respondWithFailure(
-        req,
-        res,
-        next,
-        error,
-        `Error getting category ${req.params.categoryId}`,
-        Date.now() - start
-      );
+      return respondWithFailure(req, res, next, error, `Getting category ${req.params.categoryId}`, Date.now() - start);
     }
   });
 
@@ -275,7 +271,7 @@ module.exports = (serviceCategoryService) => {
         res,
         next,
         error,
-        `Error getting translations for category ${req.params.categoryId}`,
+        `Getting translations for category ${req.params.categoryId}`,
         Date.now() - start
       );
     }
@@ -319,7 +315,7 @@ module.exports = (serviceCategoryService) => {
         res,
         next,
         error,
-        `Error getting translations for service ${req.params.serviceId}`,
+        `Getting translations for service ${req.params.serviceId}`,
         Date.now() - start
       );
     }
@@ -401,7 +397,7 @@ module.exports = (serviceCategoryService) => {
       );
       res.json(results);
     } catch (error) {
-      return respondWithFailure(req, res, next, error, 'Error searching categories and services', Date.now() - start);
+      return respondWithFailure(req, res, next, error, 'Searching categories and services', Date.now() - start);
     }
   });
 
@@ -460,7 +456,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category created successfully in ${Date.now() - start}ms`);
       res.status(201).json(result);
     } catch (error) {
-      return respondWithFailure(req, res, next, error, 'Error creating category', Date.now() - start);
+      return respondWithFailure(req, res, next, error, 'Creating category', Date.now() - start);
     }
   });
 
@@ -507,7 +503,7 @@ module.exports = (serviceCategoryService) => {
         res,
         next,
         error,
-        `Error deleting category ${req.params.categoryId}`,
+        `Deleting category ${req.params.categoryId}`,
         Date.now() - start
       );
     }
@@ -546,14 +542,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
       res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
     } catch (error) {
-      return respondWithFailure(
-        req,
-        res,
-        next,
-        error,
-        `Error deleting service ${req.params.serviceId}`,
-        Date.now() - start
-      );
+      return respondWithFailure(req, res, next, error, `Deleting service ${req.params.serviceId}`, Date.now() - start);
     }
   });
 
@@ -624,7 +613,7 @@ module.exports = (serviceCategoryService) => {
         res,
         next,
         error,
-        `Error creating service for category ${req.params.categoryId}`,
+        `Creating service for category ${req.params.categoryId}`,
         Date.now() - start
       );
     }
@@ -697,7 +686,7 @@ module.exports = (serviceCategoryService) => {
         res,
         next,
         error,
-        `Error updating category ${req.params.categoryId}`,
+        `Updating category ${req.params.categoryId}`,
         Date.now() - start
       );
     }
@@ -765,14 +754,7 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service ${serviceId} updated successfully in ${Date.now() - start}ms`);
       res.status(200).json(result);
     } catch (error) {
-      return respondWithFailure(
-        req,
-        res,
-        next,
-        error,
-        `Error updating service ${req.params.serviceId}`,
-        Date.now() - start
-      );
+      return respondWithFailure(req, res, next, error, `Updating service ${req.params.serviceId}`, Date.now() - start);
     }
   });
 

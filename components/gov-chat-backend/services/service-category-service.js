@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
-const { AppError, NotFoundError, ValidationError } = require('../middleware/errors');
+const { NotFoundError, ValidationError, isClientError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -332,7 +332,7 @@ class ServiceCategoryService {
    * @param {String} context - Log context of the failing operation.
    */
   _rethrowFailure(error, context) {
-    if (!(error instanceof AppError && error.statusCode < 500)) {
+    if (!isClientError(error)) {
       logger.error(`${context}: ${error.message}`, { stack: error.stack });
     }
     throw error;
@@ -363,11 +363,16 @@ class ServiceCategoryService {
     // must not re-grade it (its last-resort rule reads a bare message, so
     // a typed error that happened to carry the text "no match" would be
     // rebuilt and its real message lost).
-    if (error instanceof AppError && error.statusCode < 500) {
+    if (isClientError(error)) {
       throw error;
     }
     if (dbService._isExpectedAbsence(error)) {
-      throw new NotFoundError(`${label} ${key} not found`);
+      // The race verdict rides on the typed error: without it, "vanished
+      // between the check and the write" and "never existed" are
+      // indistinguishable in the logs.
+      const absence = new NotFoundError(`${label} ${key} not found`);
+      absence.cause = error;
+      throw absence;
     }
     this._rethrowFailure(error, context);
   }

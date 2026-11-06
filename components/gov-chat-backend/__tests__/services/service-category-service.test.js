@@ -719,6 +719,7 @@ describe('ServiceCategoryService', () => {
         // predicate the raw driver 404 would reach the client as a 500.
         expect(e.name).toBe('NotFoundError');
         expect(e.statusCode).toBe(404);
+        expect(e.cause).toMatchObject({ errorNum: 1202 });
       }
     });
 
@@ -769,6 +770,10 @@ describe('ServiceCategoryService', () => {
       } catch (e) {
         expect(e.name).toBe('NotFoundError');
         expect(e.statusCode).toBe(404);
+        // The race verdict rides on the typed error: "vanished between the
+        // check and the remove" must stay distinguishable from a probe of
+        // an id that never existed.
+        expect(e.cause).toMatchObject({ errorNum: 1202 });
       }
     });
   });

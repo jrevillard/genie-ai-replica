@@ -473,6 +473,22 @@ describe('POST /api/service-categories/init', () => {
 // the middleware from these paths.
 // ============================================================
 describe('error-path status contract', () => {
+  it('hands a genuine fault to the middleware with the request duration attached', async () => {
+    const { logger } = require('../../shared-lib');
+    serviceCategoryService.getAllCategoriesWithServices.mockRejectedValue(new AppError('gone wrong', 503));
+
+    const response = await authGet('/api/service-categories/categories');
+    expect(response.status).toBe(503);
+
+    // The middleware has no other way to know how long the request took:
+    // the duration rides on the error (its rawError dump carries it).
+    const faultLogs = logger.error.mock.calls.filter((call) => String(call[0]).startsWith('Error processing'));
+    expect(faultLogs).toHaveLength(1);
+    const rawError = JSON.parse(faultLogs[0][1].rawError);
+    expect(rawError).toHaveProperty('durationMs');
+    expect(typeof rawError.durationMs).toBe('number');
+  });
+
   it.each([
     ['GET', '/api/service-categories/categories', 'getAllCategoriesWithServices'],
     ['GET', '/api/service-categories/categories/detailed', 'getAdminAllCategoriesWithServices'],
@@ -554,6 +570,20 @@ describe('expected 404 logging contract', () => {
 
     expect(response.status).toBe(404);
     expectSingleWarnForSubject(subject);
+  });
+
+  it('a race-classified absence carries the driver error number in the warn metadata', async () => {
+    const error = new NotFoundError('Service svc-1 not found');
+    error.cause = Object.assign(new Error('document not found'), { errorNum: 1202 });
+    serviceCategoryService.deleteService.mockRejectedValue(error);
+
+    const response = await authDelete('/api/service-categories/services/svc-1');
+
+    expect(response.status).toBe(404);
+    const meta = expectSingleWarnForSubject('Service svc-1 not found');
+    // With it, the line says whether the row was ever there or vanished
+    // mid-flight; a probe of an unknown id has none.
+    expect(meta[1]).toMatchObject({ driverErrorNum: 1202 });
   });
 
   it('a typed 400 is one warn line too', async () => {

@@ -73,9 +73,15 @@ function createMemoryDb() {
   function collection(name) {
     return {
       name,
-      saved: saved[name],
       save: jest.fn(async (doc) => {
         saved[name].push(doc);
+        return doc;
+      }),
+      update: jest.fn(async (key, patch) => {
+        const doc = saved[name].find((d) => d._key === key);
+        if (doc) {
+          Object.assign(doc, patch);
+        }
         return doc;
       }),
       exists: jest.fn(async () => true),
@@ -90,15 +96,7 @@ function createMemoryDb() {
           throw error;
         }
         return doc;
-      }),
-      update: jest.fn(async (key, patch) => {
-        const doc = saved[name].find((d) => d._key === key);
-        if (doc) {
-          Object.assign(doc, patch);
-        }
-        return doc;
-      }),
-      remove: jest.fn(async () => ({}))
+      })
     };
   }
 

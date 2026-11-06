@@ -916,7 +916,14 @@ const actions = {
       }
       return { ok: true, ...result };
     } catch (err) {
-      commit('setError', err.message || 'patchConcept failed');
+      // A rejection can carry anything, including no error object at all.
+      // Reading `err.message` unguarded threw on such a rejection — inside
+      // the catch, so the dispatch REJECTED instead of answering "the save
+      // failed", and the editor was left with nothing. The guard the code
+      // below already used (`err && err.data && …`) is applied to the
+      // message as well, so both reads agree on what a failure is.
+      const message = (err && err.message) || 'patchConcept failed';
+      commit('setError', message);
       // KEEP THE SERVER'S ERROR CODE (the pattern every other action in this
       // module already uses — see the draft-save action's
       // `code: (err && err.data && err.data.error) || '…'`). Flattening every
@@ -928,7 +935,7 @@ const actions = {
       return {
         ok: false,
         code: (err && err.data && err.data.error) || 'PATCH_FAILED',
-        message: err.message
+        message
       };
     }
   },

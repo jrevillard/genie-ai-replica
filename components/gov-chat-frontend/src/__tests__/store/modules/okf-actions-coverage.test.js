@@ -1069,6 +1069,26 @@ describe('failure envelopes sweep', () => {
     expect(res.message).toMatch(/250000-character ceiling/);
   });
 
+  it('patchConcept answers PATCH_FAILED when the failure carries no code at all', async () => {
+    // Two shapes the server can refuse with: an envelope whose `data` names
+    // no code, and a rejection with no error object at all. Both must land
+    // on PATCH_FAILED — never on `undefined` (a code the editor does not
+    // recognise) — and neither may throw: reading `err.message` unguarded
+    // turned the second shape into a REJECTED dispatch, leaving the editor
+    // with nothing to show.
+    repoOkfService.patchConcept.mockRejectedValueOnce({ data: { message: 'no code here' }, message: 'no code here' });
+    const store = buildStore();
+    const noCode = await store.dispatch('okf/patchConcept', { repoId: 'r1', conceptId: 'c1', markdown: 'm' });
+    expect(noCode.ok).toBe(false);
+    expect(noCode.code).toBe('PATCH_FAILED');
+
+    repoOkfService.patchConcept.mockRejectedValueOnce(undefined);
+    const bare = await store.dispatch('okf/patchConcept', { repoId: 'r1', conceptId: 'c1', markdown: 'm' });
+    expect(bare.ok).toBe(false);
+    expect(bare.code).toBe('PATCH_FAILED');
+    expect(bare.message).toBe('patchConcept failed');
+  });
+
   it('resplit / versions / validation / links / topic-links failures map their codes', async () => {
     const store = buildStore(EDITOR_SEED());
     conceptService.listForRepo.mockResolvedValue([]);

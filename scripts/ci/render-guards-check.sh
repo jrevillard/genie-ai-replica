@@ -115,6 +115,35 @@ expect_ok() {
   echo "PASS: ${label} — render accepted"
 }
 
+# expect_render_contains <label> <needle> <flags...>
+#   The render must SUCCEED and its output must carry <needle> — the
+#   positive half the expect_fail/expect_ok pair cannot express: a gate
+#   or assertion whose branch stops rendering leaves every negative
+#   guard green.
+expect_render_contains() {
+  local label="$1" needle="$2"
+  shift 2
+  local matches
+  render_capture "$@"
+  if [ "${GUARD_RC}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render FAILED:"
+    printf '%s\n' "${GUARD_OUTPUT}" | head -6
+    fails=$((fails + 1))
+    return
+  fi
+  # grep -c, never -q: under pipefail, -q's early exit on the first
+  # match SIGPIPEs the 700 KB render's writer and the pipeline reports
+  # 141 — a match counted as a miss. -c reads the whole input. An empty
+  # count (a killed grep) FAILS the guard: no evidence is not a pass.
+  matches="$(printf '%s' "${GUARD_OUTPUT}" | grep -cF -- "${needle}")" || true
+  if [ "${matches:-0}" -lt 1 ]; then
+    echo "FAIL: ${label} — the render succeeded but does not contain: ${needle}"
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — rendered output carries the assertion"
+}
+
 # 1. The public hostname is deployment data: the issuer is unresolvable
 #    without it.
 expect_fail "ingress.host is required" \
@@ -149,6 +178,28 @@ expect_fail "a zero per-service progress deadline" \
 expect_fail "a boolean per-service progress deadline" \
   "progressDeadlineSeconds" \
   $(valid_flags) --set services.backend.progressDeadlineSeconds=true
+
+#     The template guard sits BEHIND the schema only for the services
+#     the schema types: the OPEA deployments read services.<name> at
+#     render time and are untyped. The OPEA tier is OFF in this fixture,
+#     so the case enables it — otherwise chatqna is not rendered at all
+#     and the key is read by nobody. This pins the TEMPLATE guard
+#     itself; the two cases above would stay green if the template
+#     guard were deleted outright.
+expect_fail "a boolean deadline on a schema-less service (template guard, not schema)" \
+  "of type bool" \
+  $(valid_flags) --set opea.enabled=true \
+  --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+  --set services.chatqna.progressDeadlineSeconds=true
+
+#     An explicit `null` clears the knob back to the default (the same
+#     cleared-knob convention the verifyEmail case pins). The needle
+#     names the VALUE, not just the field: the template's default
+#     literal and values.yaml's are two independent constants, and a
+#     drift between them ships green anywhere else.
+expect_render_contains "a cleared global progress deadline falls back to the default" \
+  "progressDeadlineSeconds: 1800" \
+  $(valid_flags) --set global.progressDeadlineSeconds=null
 
 # 3b. A CLEARED knob is not an "off" knob. Helm deletes a key an
 #     overlay sets to null, so the template reads it as absent — and
@@ -441,35 +492,6 @@ expect_fail "a clamav listener port the image cannot serve" \
 expect_fail "a clamav probe port that is not the listener's" \
   "services.clamav.probes.readiness.tcpSocket.port must equal services.clamav.port" \
   $(valid_flags) --set services.clamav.probes.readiness.tcpSocket.port=9999
-
-# expect_render_contains <label> <needle> <flags...>
-#   The render must SUCCEED and its output must carry <needle> — the
-#   positive half the expect_fail/expect_ok pair cannot express: a gate
-#   or assertion whose branch stops rendering leaves every negative
-#   guard green.
-expect_render_contains() {
-  local label="$1" needle="$2"
-  shift 2
-  local matches
-  render_capture "$@"
-  if [ "${GUARD_RC}" -ne 0 ]; then
-    echo "FAIL: ${label} — the render FAILED:"
-    printf '%s\n' "${GUARD_OUTPUT}" | head -6
-    fails=$((fails + 1))
-    return
-  fi
-  # grep -c, never -q: under pipefail, -q's early exit on the first
-  # match SIGPIPEs the 700 KB render's writer and the pipeline reports
-  # 141 — a match counted as a miss. -c reads the whole input. An empty
-  # count (a killed grep) FAILS the guard: no evidence is not a pass.
-  matches="$(printf '%s' "${GUARD_OUTPUT}" | grep -cF -- "${needle}")" || true
-  if [ "${matches:-0}" -lt 1 ]; then
-    echo "FAIL: ${label} — the render succeeded but does not contain: ${needle}"
-    fails=$((fails + 1))
-    return
-  fi
-  echo "PASS: ${label} — rendered output carries the assertion"
-}
 
 # expect_render_lacks <label> <needle> <flags...>
 expect_render_lacks() {

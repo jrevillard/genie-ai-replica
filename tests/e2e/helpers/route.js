@@ -24,9 +24,12 @@
  * - the TARGET state (`isTargetGone`): a closed target is necessary but
  *   not sufficient — a mock defect can land at the same moment the spec
  *   ends, and the state alone would swallow it;
- * - the ERROR being Playwright's target-closed error: sufficient on its
- *   own, but it also fires when the browser process dies, which is a
- *   genuine failure a spec should see.
+ * - the ERROR being Playwright's target-closed error: a mock defect is
+ *   never one, so an error-only check would still swallow every defect.
+ *   It also fires when the browser process dies — though Playwright
+ *   usually delivers the close events before an in-flight route call
+ *   rejects, so by then the state half is often already true too; a
+ *   crashed browser fails the spec on its other awaits either way.
  *
  * Only their conjunction is the named race. The error check reads the
  * constructor name and the message (the message form is the same

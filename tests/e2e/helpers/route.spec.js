@@ -121,10 +121,12 @@ test.describe('runRouteHandler', () => {
   });
 
   test('rethrows when the browser process died — not the named race', async () => {
-    // A browser crash produces the target-closed error while the page
-    // object still reports itself open. The state half of the
-    // discrimination must reject it: the app is unreachable and the
-    // spec should fail on that, not on a timeout.
+    // A browser crash produces the target-closed error; real Playwright
+    // usually delivers the close events first, so the conjunction swallows
+    // the crash like the named race and the spec fails on its other
+    // awaits. This spec models the narrow window BEFORE close-event
+    // delivery — the state half rejects the error there, which is the
+    // protection the header documents.
     const { page } = pageState();
     await expect(
       runOnce(page, async () => {

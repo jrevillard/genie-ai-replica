@@ -467,23 +467,18 @@ workflow:
         STATUS=$(resp_status "$KC_RAW")
         BODY=$(resp_body "$KC_RAW")
       }
-      # The access_token extraction over KC_RAW, shared by every call site
-      # that mints a token through kc_curl: the capture contract (the -w
-      # trailer stripped with sed '$d', the member parsed with python3) is
-      # stated ONCE here — the #1334/#1289 churn was exactly this contract
-      # drifting between copies.
-      kc_access_token() {
+      # The JSON-member extraction over KC_RAW, stated ONCE: the capture
+      # contract (the -w trailer stripped with sed '$d', the member parsed
+      # with python3) — the #1334/#1289 churn was exactly this contract
+      # drifting between copies. A definitive Keycloak rejection carries an
+      # `error` member, while a gateway interception page answers 401 with
+      # HTML that parses to nothing (#1319's classifier input).
+      kc_json_member() {
         printf '%s' "$KC_RAW" | sed '$d' \
-          | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true
+          | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('$1',''); print(v if isinstance(v,str) and v else '')" 2>/dev/null || true
       }
-      # The OAuth error member over KC_RAW, the same contract as
-      # kc_access_token: a definitive Keycloak rejection carries it, while a
-      # gateway interception page answers 401 with HTML that parses to
-      # nothing — the classifier that separates the two (#1319).
-      kc_error_detail() {
-        printf '%s' "$KC_RAW" | sed '$d' \
-          | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true
-      }
+      kc_access_token() { kc_json_member access_token; }
+      kc_error_detail() { kc_json_member error; }
       # The master admin token mint through admin-cli's password grant,
       # shared by the readiness loop and the realm client read-back: one
       # flag set for one contract. KC_URL and KC_PWD must be set before the
@@ -578,8 +573,14 @@ workflow:
           # #1334 round-6 class — may carry a status trailer over a cut
           # body, and a truncated answer is never read as a verdict (#1320);
           # it counts as transient noise and the budget rides it out. Other
-          # statuses reset the counter.
-          TOKEN_REJECT_DETAIL=$(kc_error_detail)
+          # statuses reset the counter. The parse spawn is skipped for
+          # answers that cannot qualify (a non-401 or a truncated capture) —
+          # up to 90 iterations would otherwise fork python for a verdict
+          # the classifier discards anyway; it stays the verdict authority.
+          TOKEN_REJECT_DETAIL=""
+          if [ "$TOKEN_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
+            TOKEN_REJECT_DETAIL=$(kc_error_detail)
+          fi
           if kc_is_definitive_rejection "$TOKEN_REJECT_DETAIL" 401; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else

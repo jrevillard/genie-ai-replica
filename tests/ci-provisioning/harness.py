@@ -456,6 +456,27 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # A mint answering HTTP 200 with JSON that carries no token
+            # member (an interception page speaking JSON) is transient noise:
+            # the 200 is outside the definitive status set, so the budget
+            # rides it out to the exhaustion verdict — never a definitive
+            # rejection, never a silent pass.
+            "realm_readback_mint_200_without_token",
+            1,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {"status": "200", "body": '{"spoofed": true}'},
+                ]
+            ),
+            expect=["could not be read back after 3 attempts", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
+            calls={"token": 4},
+        )
+    )
+
+    scs.append(
+        scenario(
             # The read-back's mint is a retrying call like every other one in
             # this block: a transport-level mint failure retries, and the
             # second attempt lands. The happy path must survive it.
@@ -518,7 +539,9 @@ def scenarios_list():
                 "Direct-access grants verified",
             ],
             forbid=[FIXTURE_SECRET],
-            calls={"realm_clients": 2},
+            # The token-keep contract: the listing retries re-use the minted
+            # token — readiness mint + one read-back mint, nothing more.
+            calls={"realm_clients": 2, "token": 2},
         )
     )
 
@@ -721,7 +744,9 @@ def scenarios_list():
                 "Direct-access grants verified",
             ],
             forbid=[FIXTURE_SECRET],
-            calls={"realm_clients": 2},
+            # The token-keep contract: the listing retries re-use the minted
+            # token — readiness mint + one read-back mint, nothing more.
+            calls={"realm_clients": 2, "token": 2},
         )
     )
 

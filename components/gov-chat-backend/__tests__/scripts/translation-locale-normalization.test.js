@@ -61,9 +61,9 @@ const COLLECTIONS = [
 ];
 
 /**
- * An in-memory stand-in for ArangoDB, just large enough for the seed
- * script's queries: `save` records the document, `query` answers the
- * existence checks the seed and the service issue. The AQL template is
+ * An in-memory stand-in for ArangoDB, just large enough for the queries
+ * the two scripts and the application write path issue: `save` records the
+ * document, `query` answers the existence checks. The AQL template is
  * inspected as text — the mocked `aql` returns the raw template parts.
  */
 function createMemoryDb() {
@@ -258,7 +258,9 @@ describe('seed scripts write the locale the application reads back', () => {
     // The application writes UPPERCASE rows (`owner_FR`). A database that
     // already holds one must not gain a SECOND row for the same owner and
     // locale when the seed runs: the existence probe has to recognize the
-    // row whatever case it was stored in.
+    // row whatever case it was stored in. Against a real database the
+    // second row is worse than a duplicate — the seed would save the same
+    // `_key` again and the database would reject it.
     db.saved.serviceCategoryTranslations.push({
       _key: '1_FR',
       serviceCategoryId: '1',

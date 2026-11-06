@@ -34,6 +34,13 @@
  * Playwright upgrade changed both, the race would surface as a loud
  * teardown failure — the acceptable direction to fail in.
  *
+ * The state half relies on an ordering Playwright's client guarantees:
+ * `Page._onClose` sets `_closed` BEFORE emitting the close event whose
+ * handler closes the scope that rejects the in-flight fulfilment, so by
+ * the time the catch below sees the race error, `isClosed()` reads true.
+ * If a Playwright upgrade ever reversed that, the race would escape as a
+ * loud teardown failure — loud again, never a silent pass.
+ *
  * A rethrown error reaches the test through Playwright's route-handler
  * error path (an unhandled rejection attributed to the running test).
  * That is Playwright's own model — `page.unrouteAll({ behavior:

@@ -114,6 +114,12 @@ REALM_CLIENTS = json.dumps(
             "secret": FIXTURE_SECRET,
             "directAccessGrantsEnabled": False,
         },
+        {"clientId": "genie-mobile", "directAccessGrantsEnabled": False},
+        {
+            "clientId": "grafana",
+            "secret": FIXTURE_SECRET,
+            "directAccessGrantsEnabled": False,
+        },
         {"clientId": "account", "directAccessGrantsEnabled": False},
         {"clientId": "account-console", "directAccessGrantsEnabled": False},
         {"clientId": "broker", "directAccessGrantsEnabled": False},
@@ -524,6 +530,89 @@ def scenarios_list():
             expect=["could not be parsed", "UNVERIFIED"],
             forbid=["Direct-access grants verified"],
             calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A TRUNCATED credentials rejection on the read-back's mint is
+            # transport noise, not a verdict (#1320/#1334): the status may
+            # sit over a truncated body. It must retry, never exit — the
+            # #1319 classifier needs a clean exit AND an OAuth error body.
+            "realm_readback_mint_truncated_401_retries",
+            0,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {
+                        "status": "401",
+                        "body": json.dumps(
+                            {
+                                "error": "invalid_grant",
+                                "error_description": "Invalid user credentials.",
+                            }
+                        ),
+                        "rc": 28,
+                    },
+                    {"status": "200", "body": token_body()},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            forbid=["master admin token was rejected"],
+            calls={"token": 3},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A gateway interception page answering the mint with a plain
+            # 401 HTML body carries no OAuth error member: the #1319
+            # classifier must read it as transient noise and retry, the
+            # way the readiness loop classifies its own token calls.
+            "realm_readback_mint_intercepted_401_retries",
+            0,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {"status": "401", "body": "<html>gateway interception</html>"},
+                    {"status": "200", "body": token_body()},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            forbid=["master admin token was rejected"],
+            calls={"token": 3},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # The listing arm applies the same rule: a truncated 401 answer
+            # is transport noise over a possibly-cut body — retry, never a
+            # definitive refusal.
+            "realm_client_listing_truncated_401_retries",
+            0,
+            base_rules(
+                realm_clients_resp=[
+                    {
+                        "status": "401",
+                        "body": json.dumps({"error": "HTTP 401 Unauthorized"}),
+                        "rc": 28,
+                    },
+                    {"status": "200", "body": REALM_CLIENTS},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            forbid=["the realm client list was refused"],
+            calls={"realm_clients": 2},
         )
     )
 

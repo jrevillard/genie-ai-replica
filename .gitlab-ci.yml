@@ -476,6 +476,14 @@ workflow:
         printf '%s' "$KC_RAW" | sed '$d' \
           | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true
       }
+      # The OAuth error member over KC_RAW, the same contract as
+      # kc_access_token: a definitive Keycloak rejection carries it, while a
+      # gateway interception page answers 401 with HTML that parses to
+      # nothing — the classifier that separates the two (#1319).
+      kc_error_detail() {
+        printf '%s' "$KC_RAW" | sed '$d' \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true
+      }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
       # better path anyway); a hung nginx must fall through to the NGINX_IP
@@ -540,8 +548,7 @@ workflow:
           # rejection. The parse only runs on a 401: other statuses reset.
           TOKEN_REJECT_DETAIL=""
           if [ "$TOKEN_STATUS" = "401" ]; then
-            TOKEN_REJECT_DETAIL=$(printf '%s' "$KC_RAW" | sed '$d' \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
+            TOKEN_REJECT_DETAIL=$(kc_error_detail)
           fi
           # DETAIL is reset unconditionally above and assigned only in the
           # 401 branch — non-empty ⟹ a definitive OAuth rejection answer.
@@ -813,26 +820,35 @@ workflow:
           --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
         ROPC_REALM_TOKEN=$(kc_access_token)
         if [ -z "$ROPC_REALM_TOKEN" ]; then
-          case "$STATUS" in
-            400|401|403)
-              echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS")) — ${UNVERIFIED_MSG}."
-              exit 1
-              ;;
-          esac
+          # A definitive credentials rejection is an OAuth error body over a
+          # CLEAN exit (#1319): a truncated answer (curl exit != 0 — the
+          # #1334 round-6 class) or a gateway interception page answering
+          # 401 without an OAuth error member is transient noise, and both
+          # retry exactly like the readiness loop classifies its own token
+          # calls. A truncated answer is never read as a verdict (#1320).
+          ROPC_MINT_DETAIL=$(kc_error_detail)
+          if [ "$CURL_RC" -eq 0 ] && [ -n "$ROPC_MINT_DETAIL" ]; then
+            echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}') — ${UNVERIFIED_MSG}."
+            exit 1
+          fi
           ROPC_READBACK_REASON="no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
         else
-          kc_curl GET "${KC_URL}/admin/realms/genie/clients" \
+          # max=-1: the admin API's default window would cap the listing,
+          # and the verdict below certifies the realm — it must certify
+          # everything it read, so the read asks for the full set.
+          kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
             -H "Authorization: Bearer $ROPC_REALM_TOKEN"
           if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
             ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); drift=sorted([c.get('clientId','?') for c in data if isinstance(c,dict) and c.get('directAccessGrantsEnabled') and c.get('clientId') not in allow]) if isinstance(data,list) else None; print('PARSE_ERROR' if drift is None else ('DRIFT:'+','.join(drift) if drift else 'OK'))" 2>/dev/null || echo "PARSE_ERROR")
             break
           fi
-          case "$STATUS" in
-            401|403)
-              echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS")) — ${UNVERIFIED_MSG}."
-              exit 1
-              ;;
-          esac
+          # Same definitive answer as the mint: an OAuth error body over a
+          # clean exit. Truncated or interception noise retries.
+          ROPC_LIST_DETAIL=$(kc_error_detail)
+          if [ "$CURL_RC" -eq 0 ] && [ -n "$ROPC_LIST_DETAIL" ]; then
+            echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}') — ${UNVERIFIED_MSG}."
+            exit 1
+          fi
           ROPC_READBACK_REASON="the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
         fi
         echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"

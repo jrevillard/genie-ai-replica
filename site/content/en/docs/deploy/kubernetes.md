@@ -276,8 +276,10 @@ Applied at PVC creation only: `storageClassName` is immutable on a bound
 PVC, so changing these values later does not migrate existing volumes.
 
 **`global.progressDeadlineSeconds`** — the progress window every Deployment
-the chart renders carries (default 900s), with a per-service override
-(`services.<svc>.progressDeadlineSeconds`) that wins. Kubernetes defaults
+the chart renders carries (default 1800s), with a per-service override
+(`services.<svc>.progressDeadlineSeconds`) that wins. The Envoy Gateway
+subchart's own Deployment is the subchart's to size — the umbrella
+cannot set it. Kubernetes defaults
 `spec.progressDeadlineSeconds` to 600s, and that clock starts when the
 DEPLOYMENT is created — not when the pod runs. On a first install the pod
 is created minutes later (multi-GB images still pulling) and inherits only

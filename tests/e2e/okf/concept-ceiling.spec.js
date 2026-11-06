@@ -32,7 +32,26 @@
 //     --config=D:/ITU-Gitlab/playwright.config.js tests/e2e/okf/concept-ceiling.spec.js
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL } = require('../helpers/chatbot');
+
+/**
+ * WHO LOGS IN.
+ *
+ * The Studio's repository list is scope-gated by okf-server ("OKF authz
+ * denied: no okf scope"), and the e2e fixture user (`testadmin`) carries the
+ * `admin` REALM role but no `okf_scopes` attribute — so the Studio renders
+ * EMPTY lanes for it and this spec has nothing to drive.
+ *
+ * The account the Studio actually works with is the deployment's own admin
+ * (`genie-admin`), which carries the `okf:*:*:admin` wildcard. Its
+ * credentials come from the environment (the local build's `.env` carries
+ * them; the Playwright config loads dotenv from the CWD, so running from
+ * the build tree picks them up).
+ */
+const ADMIN_USER = {
+  username: process.env.GENIE_ADMIN_USERNAME || 'genie-admin',
+  password: process.env.GENIE_ADMIN_PASSWORD || ''
+};
 
 /** The ceiling the stubbed server enforces. Small, so the over-ceiling state
  *  is reachable with a realistic amount of text. */
@@ -58,7 +77,10 @@ async function openEditor(page) {
   const patches = [];
 
   // The concept read — intercepted so the ceiling and the body are known.
-  await page.route(`**/api/okf/repos/*/concepts/${CONCEPT_ID}`, (route) => {
+  // The pattern matches ANY concept id (the LIST is a different URL — it has
+  // no trailing segment — so it is not intercepted, and the real repository's
+  // own concepts are what the curator sees in the tree).
+  await page.route('**/api/okf/repos/*/concepts/*', (route) => {
     if (route.request().method() === 'PATCH') {
       patches.push(route.request().postData());
       return route.fulfill({
@@ -77,7 +99,7 @@ async function openEditor(page) {
     });
   });
 
-  await loginViaUI(page, TEST_ADMIN_USER);
+  await loginViaUI(page, ADMIN_USER);
   await page.goto(`${BASE_URL}/admin?tab=studio`, { waitUntil: 'networkidle', timeout: 30000 });
 
   // The studio's repository list → the first repository card.
@@ -90,8 +112,9 @@ async function openEditor(page) {
   await expect(editorTab).toBeVisible({ timeout: 15000 });
   await editorTab.click();
 
-  // The concept list → the concept.
-  const row = page.locator(`[data-test-id="okf-concept-row-${CONCEPT_ID}"]`);
+  // The concept list → the first concept (WHICH concept is irrelevant: the
+  // read is intercepted, so the editor always opens the stub).
+  const row = page.locator('[data-test-id^="okf-concept-row-"]').first();
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.click();
 
@@ -109,10 +132,20 @@ test.describe('the concept-document ceiling in the concept editor', () => {
 
     const advisory = page.locator('[data-test-id="concept-ceiling"]');
     await expect(advisory).toBeVisible({ timeout: 15000 });
-    // The number is the SERVER's (the injected `max_doc_chars`), and the
-    // character count is the body's own length — 40 of 100.
-    await expect(advisory).toContainText('40');
+
+    // The character count is measured on the BODY the editor holds — not on
+    // the whole markdown (the frontmatter is metadata the ceiling does not
+    // describe). Derive it from the editor's own content rather than
+    // hardcoding a number: the assertion is the INVARIANT, and a hardcoded
+    // count would be a table written before the layout existed.
+    const markdown = await page.locator('[data-test-id="okf-md-body"]').inputValue();
+    const body = markdown.replace(/^---\n[\s\S]*?\n---\n?/, '');
+    expect(body.length, "the stub body must be the editor's body").toBeGreaterThan(0);
+
+    // The number on screen is the SERVER's ceiling (the injected
+    // `max_doc_chars`) and the body's own length.
     await expect(advisory).toContainText(String(CEILING));
+    await expect(advisory).toHaveText(`${body.length} / ${CEILING} characters`);
   });
 
   test('going OVER the ceiling turns the warning on BEFORE the save is refused', async ({ page }) => {

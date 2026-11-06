@@ -340,3 +340,58 @@ A smoke script that cannot fail is not a smoke script.
 | Can the ceiling check be used as an oracle by an unauthorized caller? | No — `patchConcept` authorizes (`repoService.getById(..., {authz})` + `assertWritable`) **before** the ceiling check, and `transitionLifecycle` authorizes before `transition` (where the publish gate lives). |
 | Is the server's refusal message an XSS vector? | No — it renders through Vue's `{{ }}` interpolation (escaped); there is no `v-html` anywhere in `components/okf/`. |
 | Does the refusal leak anything? | No — it names the concept id, its size and the ceiling: all facts about a concept the caller is already authorized to read. `max_doc_chars` is a number. |
+
+### The independent security review — no findings
+
+A separate reviewer read the whole diff against the six focus areas (AQL injection, bypass,
+information disclosure, `max_doc_chars` leakage, XSS, authorization) and **enumerated every
+writer of `okf_concepts_meta.body`** — including the paths this slice does not touch (PII
+remediate/redact/remove, llm-curation, topic-link authoring, conformance, the internal
+controller, the ingest worker, the clone). **No HIGH or MEDIUM finding met the ≥80 % bar.**
+Both new gates *narrow* the privilege model; neither adds an endpoint, a sink or an
+authorization gap.
+
+### The browser spec — `tests/e2e/okf/concept-ceiling.spec.js`
+
+The visible behaviour is verified in a real browser, not judged by eye. Three assertions:
+
+| Assertion | Result |
+|---|---|
+| the advisory carries the **server's** ceiling | the count is derived from the editor's own content, the ceiling from the injected `max_doc_chars` |
+| going OVER the ceiling turns the warning on **before** the save is refused | the warning pill appears while the curator is still typing |
+| a refused save shows the **server's message**, not "retry" | the size, the ceiling and the remedy render; "retry" does not |
+
+**Every assertion was mutation-tested** — the code broken, the spec watched to go red, the code
+reverted:
+
+| Mutation | Result |
+|---|---|
+| the advisory measures the whole markdown, and the warning never turns on | tests 1 and 2 **red**, test 3 **green** |
+| the editor drops the server's message and always says "retry" | test 3 **red**, tests 1 and 2 **green** |
+
+The isolation matters as much as the red: each mutation turns exactly the assertions that
+measure it, and no others.
+
+**Live result: 3/3 pass** against the local build.
+
+Two things the spec had to discover rather than assume:
+
+- the Studio's repository list is **scope-gated** (`OKF authz denied: no okf scope`) — the e2e
+  fixture user carries the `admin` realm role but no `okf_scopes`, so the Studio renders empty
+  lanes for it. The spec therefore logs in as the deployment's own admin (the `okf:*:*:admin`
+  wildcard), whose credentials come from the environment.
+- the advisory's count is the body the editor would **write**, which carries the serializer's
+  trailing newline — so the spec asserts the **invariant** (the count equals the editor's body
+  length) rather than a hardcoded number.
+
+### Two sub-threshold findings, filed rather than fixed here
+
+- **#1585** — a frontmatter-only patch re-serializes the body through `matter.stringify`, which
+  appends a trailing newline: a concept stored at **exactly** the ceiling becomes one character
+  over it, and the publish gate then refuses a document the curator never made too long. The
+  growth is **bounded** (+1 once, then stable — measured, not assumed). **Measured blast radius
+  today: ZERO** — the corpus has no row within 10 characters of the ceiling (the only
+  over-ceiling row is 259063, which needs a split regardless). The fix belongs in the shared
+  write path, so it gets its own slice rather than widening this one.
+- The ceiling governs the **body** only, by explicit design — a very large frontmatter with a
+  small body passes both gates. The repo-level frontmatter has its own separate bounds.

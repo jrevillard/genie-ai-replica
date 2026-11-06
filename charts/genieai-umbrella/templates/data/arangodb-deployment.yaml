@@ -35,6 +35,15 @@ override that drops the request fails the render by name. */ -}}
 {{- if not (index ($memberResources.requests | default dict) "cpu") }}
 {{- fail "data.arangodb.resources.requests.cpu is required — a member with no cpu request gets the node's leftovers and its exec probes miss their window (issue #1606)" }}
 {{- end }}
+{{- /* A zero request is no request: the guard reads the value as a
+string-or-number and rejects the exact zeros ("0", 0). Full k8s
+quantity parsing ("0m", "1m") is not the guard's job — a zero
+MILICORE value is a deliberate sizing decision, not the forgotten
+request this guard exists to catch. */ -}}
+{{- $cpuReq := index ($memberResources.requests | default dict) "cpu" }}
+{{- if eq (printf "%v" $cpuReq) "0" }}
+{{- fail "data.arangodb.resources.requests.cpu must be greater than zero — a zero request is no request: the member still gets the node's leftovers (issue #1606)" }}
+{{- end }}
 {{- /* int(): values.yaml numbers arrive as float64 and `lt` refuses a
 float64/int comparison. */ -}}
 {{- $probeTimeout := int ($arangodb.probeTimeoutSeconds | default 10) -}}

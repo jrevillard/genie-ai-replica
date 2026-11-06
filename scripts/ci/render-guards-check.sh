@@ -144,6 +144,45 @@ expect_render_contains() {
   echo "PASS: ${label} — rendered output carries the assertion"
 }
 
+# expect_doc_contains_all <label> <kind> [needle...] -- [flags...]
+#   The render must SUCCEED and the FIRST document of the given `kind`
+#   must carry EVERY needle. Render-global needles are blind when a
+#   value also appears in unrelated workloads (`cpu: 500m` matches the
+#   frontend and keycloak blocks too); scoping the search to one
+#   document makes each needle discriminate on its own.
+expect_doc_contains_all() {
+  local label="$1" kind="$2"; shift 2
+  local needles=()
+  while [ "${1:-}" != "--" ]; do needles+=("$1"); shift; done
+  shift
+  local doc misses=0 needle count
+  render_capture "$@"
+  if [ "${GUARD_RC}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render FAILED:"
+    printf '%s\n' "${GUARD_OUTPUT}" | head -6
+    fails=$((fails + 1))
+    return
+  fi
+  doc="$(printf '%s' "${GUARD_OUTPUT}" | awk -v k="${kind}" '$0 == "kind: " k {f=1; next} f && $0 == "---" {exit} f')"
+  if [ -z "${doc}" ]; then
+    echo "FAIL: ${label} — the render carries no ${kind} document"
+    fails=$((fails + 1))
+    return
+  fi
+  for needle in "${needles[@]}"; do
+    count="$(printf '%s' "${doc}" | grep -cF -- "${needle}")" || true
+    if [ "${count:-0}" -lt 1 ]; then
+      echo "FAIL: ${label} — the ${kind} document does not contain: ${needle}"
+      misses=1
+    fi
+  done
+  if [ "${misses}" -eq 1 ]; then
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — the ${kind} document carries every assertion"
+}
+
 # 1. The public hostname is deployment data: the issuer is unresolvable
 #    without it.
 expect_fail "ingress.host is required" \
@@ -694,28 +733,57 @@ expect_fail "an arango member with no cpu request" \
   "data.arangodb.resources" \
   $(valid_flags) --set data.arangodb.resources=null
 
+#     A zero request is no request either (the string "0" is truthy, so
+#     the presence guard alone would pass it). The --set path yields a
+#     NUMBER zero, which the presence guard already rejects; the file
+#     forces the STRING "0" the guard's second check exists for.
+zero_cpu="$(mktemp)"
+trap 'rm -f "${scalar_rows}" "${empty_row}" "${zero_cpu}"' EXIT
+cat > "${zero_cpu}" <<'YAML'
+data:
+  arangodb:
+    resources:
+      requests:
+        cpu: "0"
+YAML
+expect_fail "a zero arango cpu request" \
+  "must be greater than zero" \
+  $(valid_flags) -f "${zero_cpu}"
+
 #     A sub-second probe timeout is a typo, not a budget (the schema
 #     floors the key at 1; this catches whatever reaches the template).
 expect_fail "a sub-second arango probe timeout" \
   "probeTimeoutSeconds" \
   $(valid_flags) --set data.arangodb.probeTimeoutSeconds=0
 
-#     The member workload block itself must reach the CR: the three
-#     probe specs the operator reads (ServerGroupProbesSpec) and the
-#     chart's default cpu request. Without the needles a template
-#     regression that stopped rendering the block would leave every
-#     negative guard above green.
-expect_render_contains "the arango member probes carry their specs" \
+#     The member workload block itself must reach the CR — BOTH halves,
+#     pinned INSIDE the ArangoDeployment document (a render-global
+#     needle would be blind: `cpu: 500m` also matches the frontend and
+#     keycloak blocks elsewhere in the render, so a define that stopped
+#     rendering its resources half would leave every global needle
+#     green). The resources half is the #1606 fix; the probes half is
+#     the second one. No request → pod flaps; no probe override → 2s
+#     upstream timeout returns.
+expect_doc_contains_all "the arango member workload block reaches the CR" \
+  ArangoDeployment \
+  "resources:" \
+  "requests:" \
+  "cpu: 500m" \
+  "livenessProbeSpec:" \
   "readinessProbeSpec:" \
-  $(valid_flags)
-
-expect_render_contains "the arango member startup probe is wired" \
   "startupProbeSpec:" \
-  $(valid_flags)
-
-expect_render_contains "the arango member probes carry the chart default timeout" \
   "timeoutSeconds: 10" \
-  $(valid_flags)
+  -- $(valid_flags)
+
+#     The cluster-mode include sites (agents, dbservers, coordinators)
+#     share the define the single case pins — but a future edit could
+#     delete a call site while keeping the define, so one positive
+#     cluster render is pinned too.
+expect_doc_contains_all "the cluster-mode members carry the workload block" \
+  ArangoDeployment \
+  "readinessProbeSpec:" \
+  "cpu: 500m" \
+  -- $(valid_flags) --set data.arangodb.mode=cluster
 
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.

@@ -5,6 +5,7 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
+const { runRouteAction } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -347,11 +348,9 @@ test.describe('Conversation — status pill', () => {
     expect(pillFont, 'the pill label is body-legible, not a footnote').toBeGreaterThanOrEqual(12);
     // A failed turn flips the pill to its offline explanation.
     await page.route('**/queries/stream**', async (route) => {
-      try {
+      await runRouteAction(page, async () => {
         await route.abort();
-      } catch {
-        /* the context closed before the abort */
-      }
+      });
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('say something');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -453,16 +452,14 @@ test.describe('Conversation — answer card', () => {
     // Throttle the stream so the thinking frame is stable and observable —
     // otherwise the answer may complete before the first read.
     await page.route('**/queries/stream**', async (route) => {
-      try {
+      await runRouteAction(page, async () => {
         const resp = await route.fetch();
         const body = await resp.text();
         await new Promise((r) => setTimeout(r, 800));
         // The browser context may close while the throttle is still pending —
         // the fulfilled stream would then outlive its test.
         await route.fulfill({ response: resp, body });
-      } catch {
-        /* the context closed mid-throttle */
-      }
+      });
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -539,15 +536,13 @@ test.describe('Conversation — surface invariants', () => {
         return;
       }
       await streamReleased;
-      try {
+      await runRouteAction(page, async () => {
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
           body
         });
-      } catch {
-        /* the context closed before the fulfillment */
-      }
+      });
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');

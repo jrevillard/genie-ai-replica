@@ -9,6 +9,7 @@ const {
   TEST_ADMIN_USER,
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
+const { runRouteAction } = require('./route');
 
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when
@@ -266,11 +267,9 @@ async function mockChatStream(page, chunks, metadata) {
       await route.continue();
       return;
     }
-    try {
+    await runRouteAction(page, async () => {
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
-    } catch {
-      /* the context closed before the fulfillment */
-    }
+    });
   });
 }
 
@@ -282,18 +281,14 @@ async function mockChatStream(page, chunks, metadata) {
 async function ackFeedback(page) {
   await page.route('**/feedback**', async (route) => {
     if (route.request().method() === 'POST') {
-      try {
+      await runRouteAction(page, async () => {
         await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-      } catch {
-        /* the context closed before the fulfillment */
-      }
+      });
       return;
     }
-    try {
+    await runRouteAction(page, async () => {
       await route.continue();
-    } catch {
-      /* the context closed before the continuation */
-    }
+    });
   });
 }
 

@@ -759,6 +759,64 @@ workflow:
           exit 1
           ;;
       esac
+      # #1303 — the refusal above proves the posture of genie-app ONLY. The
+      # realm pins directAccessGrantsEnabled: false on six clients
+      # (genie-app, genie-proxy-client, dataprep-service-client, okf-server,
+      # the mobile client and the Grafana client), and a drift on any of the
+      # other five stays invisible to that probe: genie-proxy-client holds the
+      # admin-API proxy service account, so a realm that accepts a
+      # direct-access grant on it lets the holder of its secret mint a token
+      # as any user.
+      #
+      # The job cannot behaviour-probe those clients — they are confidential
+      # and their secret is not in the job, so a token request against them
+      # would fail on the secret, not on the grant. What the job CAN observe
+      # is the realm CONFIGURATION: the admin API returns each client's
+      # directAccessGrantsEnabled flag. So the probe reads the realm back and
+      # asserts the shape — no client outside the allowlist carries the
+      # direct-access grant. admin-cli is on the allowlist because Keycloak
+      # provisions it with direct grants on in every realm, and the readiness
+      # loop above mints its admin token through it.
+      #
+      # The admin listing carries the clients' secrets. Nothing here prints
+      # the raw answer: only the client ids and their grant flag are
+      # extracted, and the ids are printed only when they ARE the drift.
+      #
+      # A fresh admin token is minted for the read-back: the token the
+      # readiness loop acquired may already have expired (a master realm
+      # Access Token Lifespan shorter than the readiness wait is a known
+      # cause, #1320), and a 401 here would read as drift rather than as an
+      # expired token.
+      ROPC_REALM_TOKEN=""
+      kc_curl POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+        -d "client_id=admin-cli" -d "username=admin" \
+        --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
+      ROPC_REALM_TOKEN=$(printf '%s' "$KC_RAW" | sed '$d' \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
+      if [ -z "$ROPC_REALM_TOKEN" ]; then
+        echo "ERROR: no master admin token for the realm client read-back (HTTP $(http_label "$STATUS")) — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED."
+        exit 1
+      fi
+      kc_curl GET "${KC_URL}/admin/realms/genie/clients" \
+        -H "Authorization: Bearer $ROPC_REALM_TOKEN"
+      if [ "$STATUS" != "200" ] || [ "$CURL_RC" -ne 0 ]; then
+        echo "ERROR: the genie realm client list could not be read back (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC}) — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED."
+        exit 1
+      fi
+      ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); drift=sorted([c.get('clientId','?') for c in data if isinstance(c,dict) and c.get('directAccessGrantsEnabled') and c.get('clientId') not in allow]) if isinstance(data,list) else None; print('PARSE_ERROR' if drift is None else ('DRIFT:'+','.join(drift) if drift else 'OK'))" 2>/dev/null || echo "PARSE_ERROR")
+      case "$ROPC_CLIENT_GRANTS" in
+        OK)
+          echo "Direct-access grants verified across the genie realm's clients — none outside the allowlist (admin-cli) carries directAccessGrantsEnabled"
+          ;;
+        DRIFT:*)
+          echo "ERROR: genie realm ROPC posture drifted — these clients carry directAccessGrantsEnabled: ${ROPC_CLIENT_GRANTS#DRIFT:} — direct access grants must stay disabled on every client but admin-cli"
+          exit 1
+          ;;
+        *)
+          echo "ERROR: the genie realm client list could not be parsed (answer: '${ROPC_CLIENT_GRANTS:-empty}') — the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED; failing rather than passing without a verdict"
+          exit 1
+          ;;
+      esac
     # All three venue fixtures (testuser, testadmin, testplain) are
     # provisioned through ONE mechanism: the provisioning script
     # (tests/e2e/provision-e2e-fixtures.js) over the ensureUser helper —

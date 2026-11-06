@@ -55,6 +55,7 @@
 // nothing.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
+const { runRouteAction } = require('../helpers/route');
 
 // The live hierarchy this spec serves. The category 'Civil Registry' exists and
 // names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
@@ -192,7 +193,7 @@ async function stubConfiguration(page) {
  */
 async function stubHierarchy(page, gate = null) {
   await page.route('**/api/service-categories/categories*', async (route) => {
-    try {
+    await runRouteAction(page, async () => {
       if (gate) {
         await gate;
       }
@@ -201,9 +202,7 @@ async function stubHierarchy(page, gate = null) {
         contentType: 'application/json',
         body: JSON.stringify(HIERARCHY)
       });
-    } catch {
-      /* the context closed before the fulfillment */
-    }
+    });
   });
 }
 

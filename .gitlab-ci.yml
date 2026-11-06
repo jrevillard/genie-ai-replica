@@ -493,6 +493,18 @@ workflow:
           -d "client_id=admin-cli" -d "username=admin" \
           --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
       }
+      # True when the captured answer is a DEFINITIVE Keycloak rejection:
+      # an OAuth error body over a CLEAN exit on a definitive status
+      # (#1319). A truncated answer (curl exit != 0, the #1334 round-6
+      # class), an interception page answering 401 with HTML, and a
+      # transient status — even one carrying a JSON error body — are all
+      # noise that retries; a truncated answer is never read as a verdict
+      # (#1320). Takes the kc_error_detail output as its argument.
+      kc_is_definitive_rejection() {
+        [ "$CURL_RC" -eq 0 ] || return 1
+        case "$STATUS" in 400|401|403) ;; *) return 1 ;; esac
+        [ -n "$1" ]
+      }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
       # better path anyway); a hung nginx must fall through to the NGINX_IP
@@ -817,53 +829,69 @@ workflow:
       # transient answers retry: a credentials rejection is definitive
       # (#1319 — retrying cannot heal it and every failed attempt feeds
       # Keycloak's brute-force protector), and a drift verdict never
-      # retries — it exits.
+      # retries — it exits. A DEFINITIVE rejection (an OAuth error body over
+      # a clean exit on a definitive status) is counted like the readiness
+      # loop counts its own (#1319): three consecutive definitive answers
+      # fail the job, one is ridden out as a one-off proxy hiccup.
       ROPC_CLIENT_GRANTS=""
+      ROPC_REALM_TOKEN=""
       ROPC_READBACK_REASON=""
+      ROPC_DEFINITIVE_RUN=0
       UNVERIFIED_MSG="the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED"
       for i in 1 2 3; do
-        kc_mint_master_token
-        ROPC_REALM_TOKEN=$(kc_access_token)
+        # The token is minted only when the last attempt left none: a
+        # listing-only failure keeps the still-valid token instead of
+        # spending three admin logins on one flaky listing.
         if [ -z "$ROPC_REALM_TOKEN" ]; then
-          # A definitive credentials rejection is an OAuth error body over a
-          # CLEAN exit on a DEFINITIVE status (#1319): a truncated answer
-          # (curl exit != 0 — the #1334 round-6 class), a gateway
-          # interception page answering 401 with HTML, and a transient
-          # 429/5xx — even one carrying a JSON error body — are all noise
-          # that retries, exactly like the readiness loop classifies its
-          # own token calls. A truncated answer is never read as a verdict
-          # (#1320).
-          ROPC_MINT_DETAIL=$(kc_error_detail)
-          if [ "$CURL_RC" -eq 0 ] && [ -n "$ROPC_MINT_DETAIL" ]; then
-            case "$STATUS" in
-              400|401|403)
-                echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}') — ${UNVERIFIED_MSG}."
+          kc_mint_master_token
+          ROPC_REALM_TOKEN=$(kc_access_token)
+          if [ -z "$ROPC_REALM_TOKEN" ]; then
+            ROPC_MINT_DETAIL=$(kc_error_detail)
+            if kc_is_definitive_rejection "$ROPC_MINT_DETAIL"; then
+              ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
+              if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
+                echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}') on ${ROPC_DEFINITIVE_RUN} consecutive attempts — ${UNVERIFIED_MSG}."
                 exit 1
-                ;;
-            esac
+              fi
+              ROPC_READBACK_REASON="the master admin token was rejected (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')"
+            else
+              ROPC_DEFINITIVE_RUN=0
+              ROPC_READBACK_REASON="no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+            fi
+            echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+            { [ "$i" -lt 3 ] && sleep 5; } || true
+            continue
           fi
-          ROPC_READBACK_REASON="no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+        fi
+        # max=-1: the admin API's default window would cap the listing,
+        # and the verdict below certifies the realm — it must certify
+        # everything it read, so the read asks for the full set.
+        kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
+          -H "Authorization: Bearer $ROPC_REALM_TOKEN"
+        if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
+          # A client whose directAccessGrantsEnabled member is missing or
+          # not a boolean was never READ — Keycloak's default for a new
+          # client is the grant ON, so an unread client cannot be assumed
+          # disabled: UNREAD fails like any other no-verdict answer. The
+          # member must be exactly true to count as drift, exactly false to
+          # count as read.
+          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients is not None else None; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients is not None else []; print('PARSE_ERROR' if drift is None else ('EMPTY' if not clients else ('UNREAD:'+','.join(unread) if unread else ('DRIFT:'+','.join(drift) if drift else 'OK'))))" 2>/dev/null || echo "PARSE_ERROR")
+          break
+        fi
+        ROPC_LIST_DETAIL=$(kc_error_detail)
+        if kc_is_definitive_rejection "$ROPC_LIST_DETAIL"; then
+          # The listing refused a token this run minted seconds ago: the
+          # token is dead (the #1320 class) — drop it so the next attempt
+          # mints fresh.
+          ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
+          ROPC_REALM_TOKEN=""
+          if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
+            echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}') on ${ROPC_DEFINITIVE_RUN} consecutive attempts — ${UNVERIFIED_MSG}."
+            exit 1
+          fi
+          ROPC_READBACK_REASON="the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')"
         else
-          # max=-1: the admin API's default window would cap the listing,
-          # and the verdict below certifies the realm — it must certify
-          # everything it read, so the read asks for the full set.
-          kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
-            -H "Authorization: Bearer $ROPC_REALM_TOKEN"
-          if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
-            ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') and c.get('clientId') not in allow]) if clients is not None else None; print('PARSE_ERROR' if drift is None else ('EMPTY' if not clients else ('DRIFT:'+','.join(drift) if drift else 'OK')))" 2>/dev/null || echo "PARSE_ERROR")
-            break
-          fi
-          # Same definitive answer as the mint: an OAuth error body over a
-          # clean exit on a definitive status. Everything else retries.
-          ROPC_LIST_DETAIL=$(kc_error_detail)
-          if [ "$CURL_RC" -eq 0 ] && [ -n "$ROPC_LIST_DETAIL" ]; then
-            case "$STATUS" in
-              400|401|403)
-                echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}') — ${UNVERIFIED_MSG}."
-                exit 1
-                ;;
-            esac
-          fi
+          ROPC_DEFINITIVE_RUN=0
           ROPC_READBACK_REASON="the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
         fi
         echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
@@ -879,6 +907,10 @@ workflow:
           ;;
         EMPTY)
           echo "ERROR: the genie realm client list carries no client entries (answer: 'EMPTY') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+        UNREAD:*)
+          echo "ERROR: the genie realm client list omits the directAccessGrantsEnabled member for: ${ROPC_CLIENT_GRANTS#UNREAD:} — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
           exit 1
           ;;
         DRIFT:*)

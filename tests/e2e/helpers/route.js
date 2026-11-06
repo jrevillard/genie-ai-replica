@@ -45,9 +45,11 @@
  * error path (an unhandled rejection attributed to the running test).
  * That is Playwright's own model — `page.unrouteAll({ behavior:
  * 'ignoreErrors' })` is its alternative, and it swallows EVERY error,
- * which is exactly what this wrapper must not do. A rethrown error can
- * only originate while the target is alive, i.e. while the page's own
- * test is running or tearing down.
+ * which is exactly what this wrapper must not do. What a rethrow means
+ * is precisely what the conjunction decides: a defect on a live target
+ * (the owning test's window), or a defect that landed while the target
+ * happened to be closing — the pair of states the two halves exist to
+ * tell apart.
  */
 
 /**

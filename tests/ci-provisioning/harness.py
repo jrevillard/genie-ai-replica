@@ -433,7 +433,7 @@ def scenarios_list():
                 }
             ),
             expect=["genie realm ROPC posture drifted", "genie-proxy-client"],
-            forbid=["Direct-access grants verified"],
+            forbid=["Direct-access grants verified", FIXTURE_SECRET],
         )
     )
 
@@ -472,9 +472,13 @@ def scenarios_list():
                     invalid_grant,
                 ]
             ),
-            expect=["master admin token was rejected", "UNVERIFIED"],
+            expect=[
+                "master admin token was rejected",
+                "on 3 consecutive attempts",
+                "UNVERIFIED",
+            ],
             forbid=["Direct-access grants verified"],
-            calls={"token": 2},
+            calls={"token": 4},
         )
     )
 
@@ -514,9 +518,13 @@ def scenarios_list():
                     "body": json.dumps({"error": "HTTP 401 Unauthorized"}),
                 }
             ),
-            expect=["the realm client list was refused", "UNVERIFIED"],
+            expect=[
+                "the realm client list was refused",
+                "on 3 consecutive attempts",
+                "UNVERIFIED",
+            ],
             forbid=["Direct-access grants verified"],
-            calls={"realm_clients": 1},
+            calls={"realm_clients": 3},
         )
     )
 
@@ -650,6 +658,120 @@ def scenarios_list():
             ],
             forbid=["the realm client list was refused"],
             calls={"realm_clients": 2},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A client whose directAccessGrantsEnabled member is MISSING was
+            # never read — Keycloak's default for a new client is the grant
+            # ON, so an unread client cannot be assumed disabled. The probe
+            # must fail naming the client, never certify an unread realm.
+            "realm_client_listing_missing_member_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "200",
+                    "body": json.dumps(
+                        [
+                            {
+                                "clientId": "admin-cli",
+                                "directAccessGrantsEnabled": True,
+                            },
+                            {"clientId": "genie-app"},
+                        ]
+                    ),
+                }
+            ),
+            expect=[
+                "omits the directAccessGrantsEnabled member",
+                "genie-app",
+                "UNVERIFIED",
+            ],
+            forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A truncated 200 listing (status trusted over a cut body) is
+            # never parsed: the CURL_RC gate keeps it transient and the
+            # retry lands — the truncated_client_401_retries counterpart on
+            # the read-back listing.
+            "realm_client_listing_truncated_200_retries",
+            0,
+            base_rules(
+                realm_clients_resp=[
+                    {"status": "200", "body": REALM_CLIENTS, "rc": 28},
+                    {"status": "200", "body": REALM_CLIENTS},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            calls={"realm_clients": 2},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A clean 400 with an OAuth error body is a DEFINITIVE answer:
+            # three consecutive ones fail the job, naming the error.
+            "realm_client_listing_rejected_400_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "400",
+                    "body": json.dumps(
+                        {
+                            "error": "invalid_request",
+                            "error_description": "Malformed parameters.",
+                        }
+                    ),
+                }
+            ),
+            expect=[
+                "the realm client list was refused",
+                "on 3 consecutive attempts",
+                "UNVERIFIED",
+            ],
+            forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 3},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # ONE clean definitive rejection is ridden out like the
+            # readiness loop rides out a one-off proxy hiccup mimicking a
+            # 401 (#1319): the next mint lands and the job goes green.
+            "realm_readback_one_off_hiccup_retries",
+            0,
+            base_rules(
+                token_resp=[
+                    {"status": "200", "body": token_body()},
+                    {
+                        "status": "401",
+                        "body": json.dumps(
+                            {
+                                "error": "invalid_grant",
+                                "error_description": "Invalid user credentials.",
+                            }
+                        ),
+                    },
+                    {"status": "200", "body": token_body()},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            # The one-off rejection legitimately names itself in the retry
+            # reason; what must never appear is the DEFINITIVE verdict.
+            forbid=["on 3 consecutive attempts"],
+            calls={"token": 3},
         )
     )
 

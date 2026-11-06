@@ -316,11 +316,15 @@ describe('ServiceCategoryService', () => {
       }
     });
 
-    it('re-throws an already-typed 404 untouched — the driver predicate must not claim it', async () => {
-      // A typed absence whose message the canonical predicate would also
-      // read as an absence: re-classifying it would rebuild the error and
-      // replace its message. It must reach the caller as it is.
-      const typed = new mockErrors.NotFoundError('no match');
+    it.each([
+      ['a typed 404', 'NotFoundError'],
+      ['a typed 400', 'ValidationError']
+    ])('re-throws %s untouched — the driver predicate must not claim it', async (_, kind) => {
+      // A typed error whose message the canonical predicate would also read
+      // as an absence: re-classifying it would rebuild the error (a 400
+      // would even become a 404) and replace its message. It must reach
+      // the caller as it is.
+      const typed = new mockErrors[kind]('no match');
       mockServices.update.mockRejectedValue(typed);
 
       await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.toBe(typed);
@@ -701,6 +705,23 @@ describe('ServiceCategoryService', () => {
   });
 
   describe('deleteCategory', () => {
+    it('answers typed 404 when the category disappears between the check and the remove', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServiceCategories.remove.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.deleteCategory('cat-1');
+        throw new Error('should have thrown');
+      } catch (e) {
+        // The same race deleteService classifies: without the canonical
+        // predicate the raw driver 404 would reach the client as a 500.
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
+    });
+
     it('should delete category and related data', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
       mockServiceCategories.remove.mockResolvedValue({ _key: 'cat-1' });

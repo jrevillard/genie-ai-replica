@@ -14,8 +14,10 @@ const { AppError, NotFoundError } = require('../middleware/errors');
  * hierarchy is the discriminator, not a bare statusCode below 500: an
  * upstream error that happens to carry a 4xx status is a fault.
  *
- * The response is what the global error middleware would have rendered for
- * the same error: the typed status code and the typed error's message.
+ * The response is the typed status code and the typed error's message.
+ * The one middleware behaviour this does not reproduce is the verbatim
+ * forwarding of a typed error's own `body` — no error on these paths
+ * carries one today.
  *
  * The warn line carries the request context the global middleware would
  * have logged (method, url, ip, user agent): an expected 404 is still an
@@ -25,8 +27,8 @@ const { AppError, NotFoundError } = require('../middleware/errors');
  * A genuine fault is NOT logged here: it is handed over to the global
  * error middleware, which logs it at error grade with the stack. The
  * service logs it too, so a fault currently costs two error-grade lines
- * (the service's own and the middleware's) — the single-owner decision
- * is tracked at #1600.
+ * (the service's own and the middleware's) — settling the single owner
+ * is a repo-wide decision, not one this router makes alone.
  *
  * @param {Object} req - The Express request.
  * @param {Object} res - The Express response.
@@ -37,7 +39,10 @@ const { AppError, NotFoundError } = require('../middleware/errors');
  */
 function respondWithFailure(req, res, next, error, context, durationMs) {
   if (error instanceof AppError && error.statusCode < 500) {
-    logger.warn(`${context}: ${error.message}`, {
+    // An expected outcome is not an error: the line must not lead with
+    // "Error", or a grep for it mixes the 404s with the genuine faults.
+    const subject = context.replace(/^Error /, '');
+    logger.warn(`${subject}: ${error.message}`, {
       statusCode: error.statusCode,
       durationMs,
       method: req.method,

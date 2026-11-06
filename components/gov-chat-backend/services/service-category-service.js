@@ -326,7 +326,8 @@ class ServiceCategoryService {
    * outcome.
    *
    * A genuine fault costs two error-grade lines today: this one and the
-   * global error middleware's. Which layer owns it is tracked at #1600.
+   * global error middleware's. Settling which layer owns it is a
+   * repo-wide decision, not one this file makes alone.
    * @param {Error} error - The caught error.
    * @param {String} context - Log context of the failing operation.
    */
@@ -346,9 +347,11 @@ class ServiceCategoryService {
    * a 500. Every other failure is rethrown unchanged — a genuine fault is
    * logged, an expected client outcome is not (see _rethrowFailure).
    *
-   * An already-typed NotFoundError is rethrown as it is: it IS the expected
-   * absence (raised by _documentOr404), and the driver predicate must not
-   * classify it a second time.
+   * An already-typed client error is rethrown as it is: a typed NotFoundError
+   * IS the expected absence (raised by _documentOr404), and no typed error
+   * may be re-graded by the driver predicate — the predicate reads raw
+   * driver errors, and a typed error that happened to carry its text would
+   * be rebuilt with its real message lost.
    *
    * @param {Error} error - The caught error.
    * @param {String} label - Resource label ('Service', 'Category').
@@ -356,7 +359,11 @@ class ServiceCategoryService {
    * @param {String} context - Log context of the failing operation.
    */
   _absenceOrRethrow(error, label, key, context) {
-    if (error instanceof NotFoundError) {
+    // Any already-typed client error is the verdict: the driver predicate
+    // must not re-grade it (its last-resort rule reads a bare message, so
+    // a typed error that happened to carry the text "no match" would be
+    // rebuilt and its real message lost).
+    if (error instanceof AppError && error.statusCode < 500) {
       throw error;
     }
     if (dbService._isExpectedAbsence(error)) {
@@ -740,7 +747,9 @@ class ServiceCategoryService {
       logger.info(`Category deleted successfully: ${categoryKey}`);
       return result;
     } catch (error) {
-      this._rethrowFailure(error, `Error deleting category ${categoryKey}`);
+      // The same race deleteService classifies: the category can vanish
+      // between the caller's existence check and this remove.
+      this._absenceOrRethrow(error, 'Category', categoryKey, `Error deleting category ${categoryKey}`);
     }
   }
 

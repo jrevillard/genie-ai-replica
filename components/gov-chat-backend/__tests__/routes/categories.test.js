@@ -466,9 +466,11 @@ describe('POST /api/service-categories/init', () => {
 });
 
 // ============================================================
-// Error-path contract: the remaining catch blocks forward to the
-// global error middleware (which renders typed statusCode), instead
-// of answering a flat local 500.
+// Error-path contract: a GENUINE fault is handed to the global error
+// middleware, which renders the typed statusCode — the catch blocks
+// only answer a typed client error themselves (one warn line, see the
+// logging contract below). A 503 is the one status that still reaches
+// the middleware from these paths.
 // ============================================================
 describe('error-path status contract', () => {
   it.each([
@@ -492,12 +494,31 @@ describe('error-path status contract', () => {
 });
 
 // ============================================================
-// Logging contract (#1462): an expected 404 is an outcome, not a
-// fault — it is logged ONCE, at warn grade, without a stack, and
-// never at error grade.
+// Logging contract: an expected 404 is an outcome, not a fault — it is
+// logged ONCE, at warn grade, without a stack, and never at error grade.
 // ============================================================
 describe('expected 404 logging contract', () => {
   const { logger } = require('../../shared-lib');
+
+  // The filter reads the message AND the metadata: the global error
+  // middleware logs the message in its metadata, not in the line itself,
+  // so a filter on the line alone would miss it. Another part of the
+  // request may legitimately log an error of its own, so the subject
+  // scopes the assertion.
+  function logText(call) {
+    return `${String(call[0])} ${String((call[1] || {}).error || '')}`;
+  }
+
+  function expectSingleWarnForSubject(subject) {
+    // One line, at warn grade, without a stack (a stack is what makes an
+    // expected outcome expensive to read), and nothing at error grade.
+    const warnCalls = logger.warn.mock.calls.filter((call) => logText(call).includes(subject));
+    expect(warnCalls).toHaveLength(1);
+    expect(warnCalls[0][1] || {}).not.toHaveProperty('stack');
+    const errorCalls = logger.error.mock.calls.filter((call) => logText(call).includes(subject));
+    expect(errorCalls).toHaveLength(0);
+    return warnCalls[0];
+  }
 
   it('logs an unknown service id once at warn grade, never at error grade', async () => {
     serviceCategoryService.deleteService.mockRejectedValue(new NotFoundError('Service not found'));
@@ -506,26 +527,44 @@ describe('expected 404 logging contract', () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ message: 'Service not found' });
-    // One line, at warn grade ...
-    const warnCalls = logger.warn.mock.calls.filter((call) => String(call[0]).includes('Service not found'));
-    expect(warnCalls).toHaveLength(1);
-    // ... and no stack on it (a stack is what makes an expected outcome
-    // expensive to read).
-    expect(warnCalls[0][1] || {}).not.toHaveProperty('stack');
-    // ... and it carries the request context: the global error middleware
+    const meta = expectSingleWarnForSubject('Service not found');
+    // The line carries the request context: the global error middleware
     // never sees this error, so the route is the only place that can say
     // WHICH client asked for WHICH id.
-    expect(warnCalls[0][1]).toMatchObject({ method: 'DELETE', statusCode: 404 });
-    expect(warnCalls[0][1].url).toContain('/api/service-categories/services/nonexistent');
-    // ... and nothing at error grade for THIS failure (another part of the
-    // request may legitimately log an error of its own). The filter reads
-    // the message AND the metadata: the global error middleware logs the
-    // message in its metadata, not in the line itself, so a filter on the
-    // line alone would miss it.
-    const errorCalls = logger.error.mock.calls.filter((call) =>
-      [String(call[0]), String((call[1] || {}).error || '')].some((part) => part.includes('Service not found'))
+    expect(meta[1]).toMatchObject({ method: 'DELETE', statusCode: 404 });
+    expect(meta[1].url).toContain('/api/service-categories/services/nonexistent');
+    // ... and an expected outcome is not an error by wording either: the
+    // line must not lead with "Error", or a grep for it mixes the 404s
+    // with the genuine faults.
+    expect(String(meta[0]).startsWith('Error ')).toBe(false);
+  });
+
+  it.each([
+    ['GET', '/api/service-categories/categories/ghost-cat', 'getCategoryWithServices', 'Category ghost-cat not found'],
+    ['DELETE', '/api/service-categories/ghost-cat', 'deleteCategory', 'Category ghost-cat not found'],
+    ['PUT', '/api/service-categories/services/svc-1', 'updateServiceWithTranslations', 'Service svc-1 not found'],
+    ['GET', '/api/service-categories/cat-1/translations', 'getCategoryTranslations', 'Category cat-1 not found']
+  ])('%s %s: a typed client error is one warn line, never an error line', async (method, path, methodName, subject) => {
+    if (methodName === 'deleteCategory') {
+      serviceCategoryService.categoryExists.mockResolvedValue(true);
+    }
+    serviceCategoryService[methodName].mockRejectedValue(new NotFoundError(subject));
+
+    const response = await request(app)[method.toLowerCase()](path).set('Authorization', `Bearer ${validToken}`);
+
+    expect(response.status).toBe(404);
+    expectSingleWarnForSubject(subject);
+  });
+
+  it('a typed 400 is one warn line too', async () => {
+    serviceCategoryService.updateServiceWithTranslations.mockRejectedValue(
+      new (require('../../middleware/errors').ValidationError)('nameEN is required and must be a non-empty string')
     );
-    expect(errorCalls).toHaveLength(0);
+
+    const response = await authPut('/api/service-categories/services/svc-1', { nameEN: '' });
+
+    expect(response.status).toBe(400);
+    expectSingleWarnForSubject('nameEN is required');
   });
 });
 

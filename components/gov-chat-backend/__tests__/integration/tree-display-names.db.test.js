@@ -32,15 +32,16 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    dbService: { getConnection: jest.fn() }
+    // The service classifies an absence with the canonical predicate — the
+    // same function the production db-connection-service exposes. Mocking
+    // the connection without it would turn a missing row into a TypeError.
+    dbService: {
+      getConnection: jest.fn(),
+      _isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
+    }
   }),
   { virtual: true }
 );
-
-jest.mock('../../middleware/errors', () => ({
-  NotFoundError: class NotFoundError extends Error {},
-  ValidationError: class ValidationError extends Error {}
-}));
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || '';

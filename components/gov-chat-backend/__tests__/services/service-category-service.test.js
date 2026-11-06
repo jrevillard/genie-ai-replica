@@ -10,24 +10,7 @@ jest.mock('arangojs', () => ({
 
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
-jest.mock('../../middleware/errors', () => ({
-  NotFoundError: class NotFoundError extends Error {
-    constructor(msg) {
-      super(msg);
-      this.name = 'NotFoundError';
-      this.statusCode = 404;
-    }
-  },
-  ValidationError: class ValidationError extends Error {
-    constructor(msg) {
-      super(msg);
-      this.name = 'ValidationError';
-      this.statusCode = 400;
-    }
-  }
-}));
-
-const { dbService } = require('../../shared-lib');
+const { dbService, logger } = require('../../shared-lib');
 
 function createMockCollection() {
   return {
@@ -58,6 +41,7 @@ let mockServices;
 let mockCategoryServices;
 let mockServiceCategoryTranslations;
 let mockServiceTranslations;
+let mockErrors;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -86,6 +70,10 @@ beforeEach(() => {
 
   jest.isolateModules(() => {
     service = require('../../services/service-category-service');
+    // The service is loaded in an isolated registry, so the error classes it
+    // sees are NOT the ones the outer registry holds: `instanceof` across
+    // the two boundaries is false. Capture them from inside the isolation.
+    mockErrors = require('../../middleware/errors');
   });
   service.initialized = false;
 });
@@ -251,6 +239,7 @@ describe('ServiceCategoryService', () => {
 
     it('should throw ValidationError when nameEN is missing', async () => {
       await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('rejects entries that use the read shape {lang, text} before mutating', async () => {
@@ -265,6 +254,8 @@ describe('ServiceCategoryService', () => {
 
       // no mutation at all: the EN upsert and the REMOVE must not run
       expect(mockDb.query).not.toHaveBeenCalled();
+      // ... and the parent document must not be renamed either
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('should reject a null translation entry before mutating anything', async () => {
@@ -275,6 +266,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('should accept valid entries and trim the language code', async () => {
@@ -324,6 +316,20 @@ describe('ServiceCategoryService', () => {
       }
     });
 
+    it.each([
+      ['a typed 404', 'NotFoundError'],
+      ['a typed 400', 'ValidationError']
+    ])('re-throws %s untouched — the driver predicate must not claim it', async (_, kind) => {
+      // A typed error whose message the canonical predicate would also read
+      // as an absence: re-classifying it would rebuild the error (a 400
+      // would even become a 404) and replace its message. It must reach
+      // the caller as it is.
+      const typed = new mockErrors[kind]('no match');
+      mockServices.update.mockRejectedValue(typed);
+
+      await expect(service.updateServiceWithTranslations('svc-1', { nameEN: 'Test' })).rejects.toBe(typed);
+    });
+
     // One contract, three shapes of the driver error: a missing row and the
     // 3.12 simple-query miss are absences (typed 404), a missing collection
     // is a real fault that must not be reported as "no such document".
@@ -370,6 +376,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('rejects duplicate language codes that differ only in case or whitespace', async () => {
@@ -383,6 +390,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('Duplicate languageCode');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
 
     it('preserves existing translations when the payload omits the translations field', async () => {
@@ -414,6 +422,7 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow("must not include 'EN'");
       // no mutation at all: validation must reject before the upsert runs
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServices.update).not.toHaveBeenCalled();
     });
   });
 
@@ -696,6 +705,24 @@ describe('ServiceCategoryService', () => {
   });
 
   describe('deleteCategory', () => {
+    it('answers typed 404 when the category disappears between the check and the remove', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServiceCategories.remove.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      try {
+        await service.deleteCategory('cat-1');
+        throw new Error('should have thrown');
+      } catch (e) {
+        // The same race deleteService classifies: without the canonical
+        // predicate the raw driver 404 would reach the client as a 500.
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+        expect(e.cause).toMatchObject({ errorNum: 1202 });
+      }
+    });
+
     it('should delete category and related data', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
       mockServiceCategories.remove.mockResolvedValue({ _key: 'cat-1' });
@@ -743,6 +770,10 @@ describe('ServiceCategoryService', () => {
       } catch (e) {
         expect(e.name).toBe('NotFoundError');
         expect(e.statusCode).toBe(404);
+        // The race verdict rides on the typed error: "vanished between the
+        // check and the remove" must stay distinguishable from a probe of
+        // an id that never existed.
+        expect(e.cause).toMatchObject({ errorNum: 1202 });
       }
     });
   });
@@ -817,6 +848,30 @@ describe('ServiceCategoryService', () => {
       mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
 
       await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('stays silent for a typed 404 — the route layer owns that one log line', async () => {
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      await expect(service.getCategoryTranslations('ghost-cat')).rejects.toMatchObject({ statusCode: 404 });
+
+      // An expected absence is not a fault: logging it here would double
+      // the line the route already writes. The assertion is scoped to this
+      // subject — another part of the path may legitimately log an error.
+      const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('ghost-cat'));
+      expect(errorCalls).toHaveLength(0);
+    });
+
+    it('logs a genuine fault at error grade, with its stack', async () => {
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
+
+      const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('cat-1'));
+      expect(errorCalls).toHaveLength(1);
+      expect(errorCalls[0][1]).toHaveProperty('stack');
     });
 
     it('throws a ValidationError when categoryKey is missing', async () => {
@@ -920,6 +975,7 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateCategoryWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
         'nameEN is required'
       );
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('should reject entries that use the read shape {lang, text} before mutating', async () => {
@@ -933,6 +989,7 @@ describe('ServiceCategoryService', () => {
       ).rejects.toThrow('unexpected shape');
 
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('rejects non-string translation values before mutating', async () => {
@@ -943,6 +1000,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('unexpected shape');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('rejects duplicate language codes that differ only in case or whitespace', async () => {
@@ -956,6 +1014,7 @@ describe('ServiceCategoryService', () => {
         })
       ).rejects.toThrow('Duplicate languageCode');
       expect(mockDb.query).not.toHaveBeenCalled();
+      expect(mockServiceCategories.update).not.toHaveBeenCalled();
     });
 
     it('preserves existing translations when the payload omits the translations field', async () => {

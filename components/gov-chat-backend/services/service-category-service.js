@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
-const { NotFoundError, ValidationError } = require('../middleware/errors');
+const { NotFoundError, ValidationError, isClientError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -89,8 +89,7 @@ class ServiceCategoryService {
 
       return newService;
     } catch (error) {
-      logger.error(`Error creating service under category ${categoryKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, `Error creating service under category ${categoryKey}`);
     }
   }
 
@@ -127,7 +126,8 @@ class ServiceCategoryService {
       }
       const locale = this._normalizeLocale(trans.languageCode);
       // Same normalized code = same stored _key: the second entry would
-      // silently overwrite the first via overwrite:true.
+      // UPSERT onto the first row's key and silently replace it — hence
+      // the rejection.
       if (seenLocales.has(locale)) {
         throw new ValidationError(`Duplicate languageCode '${locale}' in translations`);
       }
@@ -185,17 +185,21 @@ class ServiceCategoryService {
    * kept under any other key is not matched by the UPDATE branch and is
    * removed by the GC pass.
    *
-   * When `translations` is undefined the payload omits the field: the
-   * non-EN rows are left untouched and no GC pass runs. An explicit
-   * empty array is the clear-all — the upsert writes the EN row and the
-   * GC removes every other row of the owner.
+   * When `translations` is undefined or null the payload omits the field:
+   * the non-EN rows are left untouched and no GC pass runs — the EN row
+   * is still upserted, it carries the payload's nameEN. An explicit empty
+   * array is the clear-all — the upsert writes the EN row and the GC
+   * removes every other row of the owner.
    *
    * The caller has already validated the entries (shape, duplicates, EN)
    * BEFORE any mutation — this helper must only ever see valid rows.
    * @param {Object} collection - The ArangoDB translation collection handle.
    * @param {String} fkField - The foreign-key field name ('serviceCategoryId' or 'serviceId').
    * @param {String} ownerKey - The _key of the owning category or service.
-   * @param {Array|undefined} translations - Validated {languageCode, translation} entries.
+   * @param {Array|null|undefined} translations - Validated {languageCode, translation}
+   *   entries. `null` is accepted as a third spelling of "leave untouched":
+   *   like an omitted field, it writes no payload row (the English row
+   *   still is) and runs no GC pass.
    * @param {String} englishName - The English name (the payload's nameEN), stored as the EN row.
    */
   async _upsertTranslations(collection, fkField, ownerKey, translations, englishName) {
@@ -261,11 +265,7 @@ class ServiceCategoryService {
       // raises a raw driver 404 (no statusCode — the global middleware
       // would render it a 500). Classify by the canonical predicate, the
       // same race deleteService classifies.
-      if (dbService._isExpectedAbsence(error)) {
-        throw new NotFoundError(`Service ${serviceKey} not found`);
-      }
-      logger.error(`Error updating service ${serviceKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._absenceOrRethrow(error, 'Service', serviceKey, `Error updating service ${serviceKey}`);
     }
   }
 
@@ -300,6 +300,78 @@ class ServiceCategoryService {
       throw new NotFoundError(`${label} ${key} not found`);
     }
     return document;
+  }
+
+  /**
+   * Rethrows a failure caught on a service-category path, logging it only
+   * when it is a genuine fault.
+   *
+   * A typed client error (an AppError below 500 — the 404 of an unknown id,
+   * the 400 of a malformed payload) is an EXPECTED OUTCOME, not a fault: it
+   * is NOT logged here — the route layer logs it once, at warn grade and
+   * without a stack, and answers it. Any other error is a genuine fault: it
+   * is logged at error grade, with its stack.
+   *
+   * The grading is `isClientError` (middleware/errors.js) — one predicate,
+   * so the layers cannot drift apart on what counts as an outcome.
+   *
+   * The contract this leaves to the caller: a client error carries NO log
+   * line from the service, so whoever catches it must log it. The router
+   * does (one warn line, with the request context); the analytics service
+   * does (in its own catch block). A caller that swallowed the error
+   * instead would leave no trace — the service deliberately does not log
+   * it a second time, because the point of the split is ONE line per
+   * outcome.
+   *
+   * A genuine fault costs two error-grade lines today: this one and the
+   * global error middleware's. Settling which layer owns it is a
+   * repo-wide decision, not one this file makes alone.
+   * @param {Error} error - The caught error.
+   * @param {String} context - Log context of the failing operation.
+   */
+  _rethrowFailure(error, context) {
+    if (!isClientError(error)) {
+      logger.error(`${context}: ${error.message}`, { stack: error.stack });
+    }
+    throw error;
+  }
+
+  /**
+   * Classifies a failure caught on a service-category path and rethrows it.
+   *
+   * An EXPECTED ABSENCE (the row is simply not there, per the canonical
+   * predicate) is re-raised as a typed NotFoundError: the raw driver 404
+   * carries no statusCode, so the global error middleware would render it
+   * a 500. Every other failure is rethrown unchanged — a genuine fault is
+   * logged, an expected client outcome is not (see _rethrowFailure).
+   *
+   * An already-typed client error (`isClientError`) is rethrown as it is:
+   * the driver predicate reads raw driver errors, and a typed error that
+   * happened to carry its text would be rebuilt with its real message
+   * lost — a 400 would even become a 404.
+   *
+   * @param {Error} error - The caught error.
+   * @param {String} label - Resource label ('Service', 'Category').
+   * @param {String} key - The _key of the resource.
+   * @param {String} context - Log context of the failing operation.
+   */
+  _absenceOrRethrow(error, label, key, context) {
+    // Any already-typed client error is the verdict: the driver predicate
+    // must not re-grade it (its last-resort rule reads a bare message, so
+    // a typed error that happened to carry the text "no match" would be
+    // rebuilt and its real message lost).
+    if (isClientError(error)) {
+      throw error;
+    }
+    if (dbService._isExpectedAbsence(error)) {
+      // The race verdict rides on the typed error: without it, "vanished
+      // between the check and the write" and "never existed" are
+      // indistinguishable in the logs.
+      const absence = new NotFoundError(`${label} ${key} not found`);
+      absence.cause = error;
+      throw absence;
+    }
+    this._rethrowFailure(error, context);
   }
 
   /**
@@ -449,8 +521,7 @@ class ServiceCategoryService {
 
       return categories;
     } catch (error) {
-      logger.error(`Error getting all categories with services: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, 'Error getting all categories with services');
     }
   }
 
@@ -561,8 +632,7 @@ class ServiceCategoryService {
       logger.info(`Admin categories with detailed services retrieved successfully: ${categories.length} categories`);
       return categories;
     } catch (error) {
-      logger.error(`Error getting all admin categories with services: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, 'Error getting all admin categories with services');
     }
   }
 
@@ -604,6 +674,10 @@ class ServiceCategoryService {
               SORT edge.order ASC
               RETURN serviceTranslation
         )
+        // An unknown id must answer 404, not a row of null fields: without
+        // this filter the projection emits exactly one shell row and the
+        // absence below never fires.
+        FILTER category != null
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
@@ -616,7 +690,8 @@ class ServiceCategoryService {
       const result = await cursor.next();
 
       if (!result) {
-        logger.warn(`Category ${categoryKey} not found`);
+        // No extra log line here: the typed NotFoundError below is logged
+        // once by the route layer, which is the layer that knows the request.
         throw new NotFoundError(`Category ${categoryKey} not found`);
       }
 
@@ -627,8 +702,7 @@ class ServiceCategoryService {
       logger.info(`Category with services retrieved successfully: ${categoryKey}`);
       return result;
     } catch (error) {
-      logger.error(`Error getting category ${categoryKey} with services: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, `Error getting category ${categoryKey} with services`);
     }
   }
 
@@ -679,8 +753,9 @@ class ServiceCategoryService {
       logger.info(`Category deleted successfully: ${categoryKey}`);
       return result;
     } catch (error) {
-      logger.error(`Error deleting category ${categoryKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      // The same race deleteService classifies: the category can vanish
+      // between the caller's existence check and this remove.
+      this._absenceOrRethrow(error, 'Category', categoryKey, `Error deleting category ${categoryKey}`);
     }
   }
 
@@ -727,11 +802,7 @@ class ServiceCategoryService {
       // A document deleted between the existence check and the remove
       // raises a raw driver 404 (no statusCode — the global middleware
       // would render it a 500). Classify by the canonical predicate.
-      if (dbService._isExpectedAbsence(error)) {
-        throw new NotFoundError(`Service ${serviceKey} not found`);
-      }
-      logger.error(`Error deleting service ${serviceKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._absenceOrRethrow(error, 'Service', serviceKey, `Error deleting service ${serviceKey}`);
     }
   }
 
@@ -846,8 +917,7 @@ class ServiceCategoryService {
       logger.info(`Found ${translations.length} translations for category ${categoryKey}`);
       return translations;
     } catch (error) {
-      logger.error(`Error fetching translations for category ${categoryKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, `Error fetching translations for category ${categoryKey}`);
     }
   }
 
@@ -886,8 +956,7 @@ class ServiceCategoryService {
       logger.info(`Found ${translations.length} translations for service ${serviceKey}`);
       return translations;
     } catch (error) {
-      logger.error(`Error fetching translations for service ${serviceKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, `Error fetching translations for service ${serviceKey}`);
     }
   }
 
@@ -929,8 +998,7 @@ class ServiceCategoryService {
 
       return newCategory;
     } catch (error) {
-      logger.error(`Error in createCategory: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._rethrowFailure(error, 'Error in createCategory');
     }
   }
 
@@ -975,11 +1043,7 @@ class ServiceCategoryService {
       // raises a raw driver 404 (no statusCode — the global middleware
       // would render it a 500). Classify by the canonical predicate, the
       // same race deleteService classifies.
-      if (dbService._isExpectedAbsence(error)) {
-        throw new NotFoundError(`Category ${categoryKey} not found`);
-      }
-      logger.error(`Error updating category ${categoryKey}: ${error.message}`, { stack: error.stack });
-      throw error;
+      this._absenceOrRethrow(error, 'Category', categoryKey, `Error updating category ${categoryKey}`);
     }
   }
 }

@@ -522,6 +522,7 @@ import {
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isStorableTurn, translateSources } from '../store/modules/conversation';
 import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -1167,6 +1168,11 @@ export default {
     // The badge of a source card, from the file's own extension — the
     // repository type label when the fetch landed, the name otherwise.
     fileBadge(doc) {
+      // An OKF concept is not a file: it has no extension and no size, so
+      // the extension fallback would render the first four characters of
+      // its name ("HADI" for "hadith nawawi 36"). The badge names the
+      // family the citation actually is.
+      if (isOkfConceptSource(doc)) return okfConceptBadge();
       return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
     },
 

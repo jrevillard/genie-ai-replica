@@ -249,6 +249,28 @@
                         </DsStateDisplay>
 
                         <div v-else>
+                          <DsStateDisplay
+                            v-if="translationsLoadFailed"
+                            type="error"
+                            data-test-id="hierarchy-translations-load-failed"
+                            :message="
+                              translate(
+                                'admin.hierarchy.translationsLoadFailedNotice',
+                                'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
+                              )
+                            "
+                          >
+                            <template #action>
+                              <DsButton
+                                variant="secondary"
+                                :small="true"
+                                data-test-id="hierarchy-translations-retry"
+                                @click="retryHierarchyTranslations"
+                              >
+                                {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
+                              </DsButton>
+                            </template>
+                          </DsStateDisplay>
                           <div
                             v-for="(translation, index) in hierarchyForm.translations"
                             :key="index"
@@ -258,6 +280,7 @@
                               v-model="translation.lang"
                               class="translation-lang-select"
                               :placeholder="translate('admin.hierarchy.selectLang', 'Select Language')"
+                              :disabled="translationsLoadFailed"
                             >
                               <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
                                 {{ lang.name }} ({{ lang.code }})
@@ -268,18 +291,25 @@
                               type="text"
                               class="translation-text-input"
                               :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
+                              :disabled="translationsLoadFailed"
                             />
                             <DsButton
                               variant="danger"
                               :small="true"
                               class="translation-delete-btn"
                               :aria-label="translate('admin.hierarchy.deleteTranslation', 'Delete Translation')"
+                              :disabled="translationsLoadFailed"
                               @click="removeTranslationRow(index)"
                             >
                               🗑️
                             </DsButton>
                           </div>
-                          <DsButton variant="secondary" :small="true" @click="addTranslationRow">
+                          <DsButton
+                            variant="secondary"
+                            :small="true"
+                            :disabled="translationsLoadFailed"
+                            @click="addTranslationRow"
+                          >
                             {{ translate('admin.hierarchy.addTranslation', '+ Add Translation') }}
                           </DsButton>
                         </div>
@@ -3113,16 +3143,24 @@ export default {
 
       // Step 2: Fetch the translations asynchronously
       this.invalidateTranslationsFetch();
+      await this.loadHierarchyTranslations(isCategory, item._key);
+    },
+
+    // The edit form's translation fetch, owned by the CURRENT form
+    // generation: populates the rows on success, or parks the form in the
+    // failed-load state (#1400). A superseded fetch (a newer showEditForm
+    // or a close) may neither populate, flag, nor unblock the newer form.
+    async loadHierarchyTranslations(isCategory, itemKey) {
       this.isTranslationsLoading = true;
       const loadSeq = this.hierarchyTranslationsSeq;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
           // Call the service method for categories
-          fetchedTranslations = await serviceTreeService.getCategoryTranslations(item._key);
+          fetchedTranslations = await serviceTreeService.getCategoryTranslations(itemKey);
         } else {
           // Call the service method for services
-          fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key);
+          fetchedTranslations = await serviceTreeService.getServiceTranslations(itemKey);
         }
 
         // A newer showEditForm superseded this fetch: neither its rows nor
@@ -3134,15 +3172,14 @@ export default {
         // Filter out the English ('en') translation from the results
         const filteredTranslations = fetchedTranslations.filter((t) => t.lang !== 'en');
 
-        // Step 3: Populate the form with the filtered data
-        if (filteredTranslations.length > 0) {
-          this.hierarchyForm.translations = filteredTranslations;
-        } else {
-          // If no non-English translations exist, provide one empty row for the user to start
-          this.hierarchyForm.translations.push({ lang: '', text: '' });
-        }
+        // Populate the form with the filtered data. Replace, never append:
+        // a Retry re-populates a form that already carries rows (the failed
+        // load pushed a placeholder), and an empty successful fetch must
+        // yield exactly one placeholder row to start from.
+        this.hierarchyForm.translations =
+          filteredTranslations.length > 0 ? filteredTranslations : [{ lang: '', text: '' }];
 
-        // Step 4: Store the initial state for the unsaved changes check
+        // Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch {
         // The same staleness rule: a superseded fetch must not block the
@@ -3173,6 +3210,19 @@ export default {
           this.isTranslationsLoading = false;
         }
       }
+    },
+
+    // Retry a failed translation load (#1400) for the form currently open.
+    // The reset is the one a fresh showEditForm gets: the failure flag and
+    // the spinner state drop, and a new generation owns the new fetch.
+    retryHierarchyTranslations() {
+      if (!this.hierarchyForm.visible || !this.hierarchyForm._key) {
+        return;
+      }
+      // Positive derivation, the same shape saveHierarchyItem dispatches by.
+      const isCategory = this.hierarchyForm.mode === 'editCategory';
+      this.invalidateTranslationsFetch();
+      this.loadHierarchyTranslations(isCategory, this.hierarchyForm._key);
     },
 
     addTranslationRow() {

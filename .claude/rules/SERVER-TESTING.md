@@ -79,7 +79,7 @@ curl -sk -X POST "<KEYCLOAK_URL>/admin/realms/<REALM>/users" \
   }'
 ```
 
-**WARNING:** Never use `PUT` on a user to update individual fields (e.g., `emailVerified`) — it **overwrites** the `credentials` array, deleting the password. Always include the full user payload in creation.
+**WARNING:** `PUT` on a user is a **partial** update — the fields the payload omits are kept, and the credentials array is only touched when the payload carries one (Keycloak 26.x: `RepresentationToModel.createCredentials` acts only on a representation that has `credentials`). Send the fields you mean to change; at creation, always the full payload, where an omitted field is an omitted value.
 
 ## Key Pitfalls
 

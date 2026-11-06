@@ -811,20 +811,17 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
   });
 
-  // The cleanup reads the entry and then removes the key — two storage
-  // operations. A holder that publishes a FRESH handoff between them must
-  // not have it deleted by the cleanup's stale judgement (#1535 review).
-  it('a publication published while the cleanup judges the previous one survives (#1535 review)', async () => {
+  // The shared drive for the cleanup's race tests (#1535 review, #1607):
+  // the cleanup's FIRST read of the publication returns `judgedRaw` — the
+  // entry it judges — while a FRESH publication lands on disk in that same
+  // instant. The decision binds the entry that was READ: after the renewal
+  // entry, the fresh handoff must still be on disk.
+  async function expectFreshPublicationSurvivesRace(judgedRaw, freshTokenName) {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
-    const spent = createMockUser({
-      access_token: 'spent-pub',
-      expires_at: Math.floor(Date.now() / 1000) - 10
-    });
-    const spentRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: spent });
-    const fresh = createMockUser({ access_token: 'fresh-pub' });
+    const fresh = createMockUser({ access_token: freshTokenName });
     const freshRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: fresh });
-    window.localStorage.setItem(RENEW_USER_KEY, spentRaw);
+    window.localStorage.setItem(RENEW_USER_KEY, judgedRaw);
     const realGetItem = Storage.prototype.getItem;
     let firstRead = true;
     const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
@@ -832,10 +829,10 @@ describe('cross-tab renew lease (#80800)', () => {
       if (firstRead) {
         firstRead = false;
         // A holder publishes a FRESH handoff right after the cleanup's read:
-        // the cleanup still sees the spent entry, the disk already holds the
-        // fresh one.
+        // the cleanup still sees the judged entry, the disk already holds
+        // the fresh one.
         window.localStorage.setItem(RENEW_USER_KEY, freshRaw);
-        return spentRaw;
+        return judgedRaw;
       }
       return realGetItem.call(this, key);
     });
@@ -843,12 +840,26 @@ describe('cross-tab renew lease (#80800)', () => {
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
       await keycloakAuthService.signinSilent();
       spy.mockRestore();
-      // The fresh handoff is still on disk — the cleanup judged the previous
-      // entry, not this one.
+      // The fresh handoff is still on disk — the cleanup judged the entry it
+      // read, not whatever landed after it.
       expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);
     } finally {
       spy.mockRestore();
     }
+  }
+
+  // The cleanup reads the entry and then removes the key — two storage
+  // operations. A holder that publishes a FRESH handoff between them must
+  // not have it deleted by the cleanup's stale judgement (#1535 review).
+  it('a publication published while the cleanup judges the previous one survives (#1535 review)', async () => {
+    const spent = createMockUser({
+      access_token: 'spent-pub',
+      expires_at: Math.floor(Date.now() / 1000) - 10
+    });
+    await expectFreshPublicationSurvivesRace(
+      JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: spent }),
+      'fresh-pub'
+    );
   });
 
   // The catch arm of the same cleanup (a CORRUPT entry — non-parsing JSON)
@@ -856,36 +867,7 @@ describe('cross-tab renew lease (#80800)', () => {
   // fresh handoff between the cleanup's read and the catch arm's removal
   // must keep it, exactly like the sibling case above (#1607).
   it('a publication published while the cleanup judges a CORRUPT entry survives (#1607)', async () => {
-    delete navigator.locks;
-    mockGetUser.mockResolvedValue(null);
-    const corruptRaw = '{not json';
-    const fresh = createMockUser({ access_token: 'fresh-corrupt-race' });
-    const freshRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: fresh });
-    window.localStorage.setItem(RENEW_USER_KEY, corruptRaw);
-    const realGetItem = Storage.prototype.getItem;
-    let firstRead = true;
-    const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
-      if (key !== RENEW_USER_KEY) return realGetItem.call(this, key);
-      if (firstRead) {
-        firstRead = false;
-        // A holder publishes a FRESH handoff right after the cleanup's read:
-        // the cleanup still sees the corrupt entry, the disk already holds
-        // the fresh one.
-        window.localStorage.setItem(RENEW_USER_KEY, freshRaw);
-        return corruptRaw;
-      }
-      return realGetItem.call(this, key);
-    });
-    try {
-      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
-      await keycloakAuthService.signinSilent();
-      spy.mockRestore();
-      // The fresh handoff is still on disk — the catch arm judged the corrupt
-      // entry it READ, not whatever landed after it.
-      expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);
-    } finally {
-      spy.mockRestore();
-    }
+    await expectFreshPublicationSurvivesRace('{not json', 'fresh-corrupt-race');
   });
 
   it('publication retention: the cleanup drops a publication whose token is spent, keeps one whose token is live (#1535)', async () => {

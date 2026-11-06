@@ -184,16 +184,12 @@ function clearRenewPublication() {
  * adopt or keeps an entry no reader can use.
  * A usable publication carries the access token a reader needs (an entry
  * without one is readable by nobody, #1535 review) and an expiry that is
- * still ahead. The publisher's `at` stamp is NOT part of the question
- * (#1615): the stamp is provenance, not a gate. The retention keys on the
- * token's own expiry, so a stamp-less entry is judged like any other — by
- * whether a reader could still use its token; requiring the stamp in the
- * READER would make a stamp-less handoff unreadable, and a future writer
- * that dropped the stamp would then silently reproduce the #1535
- * regression (the reader refusing every publication). The write keeps
- * stamping `at` (see publishRenewedUser): an OLDER build's cleanup
- * requires the stamp's PRESENCE and drops a stamp-less publication as
- * corrupt, so the stamp is what keeps the mixed-version handoff alive.
+ * still ahead. The publisher's `at` stamp is deliberately NOT required
+ * (#1615): reads judge the token alone — the retention keys on the token's
+ * own expiry, so a stamp-less entry is judged like any other. Requiring
+ * the stamp HERE would make every handoff unreadable the day a writer
+ * drops it; the stamp's one remaining job (older builds' cleanups) is
+ * described in the STAMP note on publishRenewedUser.
  * The bound is the token's OWN expiry with the reader's 5 s margin — not
  * the lease takeover clock (RENEW_LEASE_TTL_MS), which answers a different
  * question (how long a dead holder's lease claim may be trusted) and was

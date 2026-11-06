@@ -10,7 +10,7 @@ Ordering (from the remediation plan, architect rationale):
 - EPIC-2 carries its own security review (user-facing authz — treat like 6-1c's).
 - **EPIC-4 → EPIC-5 is an ORDERED PAIR** (source links lie if the stamp is
   unproven) — dispatch them as a unit; EPIC-6/7/8 interleave freely.
-- EPIC-9 after EPIC-2 + EPIC-3; mobile disposition tracked separately (#1441).
+- EPIC-9 after EPIC-2 + EPIC-3; mobile disposition tracked separately (#1439).
 
 Standing per-MR gates: every touched component ≥ its existing `coverageThreshold`
 floor (backend 35 / frontend 65 / doc-repo 55; okf-server: no regression of the
@@ -231,7 +231,7 @@ semantics documented in the UI copy.
 
 ---
 
-## Story estimate total: 22 (2+3+3+2+2+3+2+2+3)
+## Story estimate total: 23 (2+3+3+2+2+3+2+3+3)
 
 Sequencing recommendation for the first train: EPIC-1 → EPIC-2 → EPIC-3 (the
 dead-link fix chain ships end-to-end value first), then EPIC-7 + EPIC-8 (data

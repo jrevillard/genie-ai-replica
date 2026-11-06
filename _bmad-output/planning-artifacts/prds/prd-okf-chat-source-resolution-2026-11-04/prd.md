@@ -4,7 +4,7 @@
 **Author:** David Forden (with Claude Code agent)
 **Version:** 1.0
 **Project Type:** Framework feature initiative (GENIE.AI)
-**Project Level:** 2 (8 FRs, 9 epics, ~22 stories)
+**Project Level:** 2 (8 FRs, 9 epics, ~23 stories)
 **Status:** Draft
 
 ---
@@ -217,12 +217,15 @@ and explained in the UI.
 **Description:**
 Concept-keyed ingestion-log rows are purged with their repo under the 1:1 keying
 safety rule; the SOURCES_NOT_RETRACTED gate downgrades deletion-aware (a
-hand-deleted source no longer dead-locks ingest).
+hand-deleted source no longer dead-locks ingest). The delete flow also captures
+a **`deletion_reason`** — a steward-provided reason recorded on the
+tombstone/audit row (#925 split ruling), so a deletion carries its own reason.
 
 **Acceptance Criteria:**
 - [ ] Zero concept-keyed log rows survive a repo delete/retract
 - [ ] 1:1 safety test proves no cross-repo rows die
 - [ ] Deletion-aware gate downgrade tested (missing source = skip + log, not block)
+- [ ] A repo delete records a steward-provided reason on the tombstone/audit row
 
 **Dependencies:** none
 
@@ -348,7 +351,7 @@ epic detail, story slices and verification anchors live in
 | EPIC-5 Original-source links | W5 / MR-5 | FR-004 | 2 | Should |
 | EPIC-6 OKF artifacts view | W6 / MR-6 | FR-005 | 3 | Should |
 | EPIC-7 Retract-retention | W7 / MR-7 | FR-006 | 2 | Must |
-| EPIC-8 Log purge + gate downgrade | W8 / MR-8 | FR-007 | 2 | Must |
+| EPIC-8 Log purge + gate downgrade | W8 / MR-8 | FR-007 | 3 | Must |
 | EPIC-9 Concept tree browse | W9 / MR-9 | FR-008 | 3 | Should |
 
 ---
@@ -457,7 +460,7 @@ epic detail, story slices and verification anchors live in
 | EPIC-5 | Original-source links | FR-004 | 2 |
 | EPIC-6 | OKF artifacts view | FR-005 | 3 |
 | EPIC-7 | Retract-retention | FR-006 | 2 |
-| EPIC-8 | Log purge + gate downgrade | FR-007 | 2 |
+| EPIC-8 | Log purge + gate downgrade | FR-007 | 3 |
 | EPIC-9 | Concept tree browse | FR-008 | 3 |
 
 ## Appendix B: Prioritization Details

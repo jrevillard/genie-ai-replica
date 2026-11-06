@@ -274,9 +274,11 @@ Up or equal on every metric. The suite is **138 suites / 3906 tests** green.
 **Re-measured on the FINAL head** (after `main` was merged in, so the CHANGELOG would not
 conflict — and after `main` itself moved, carrying **!791**, the OKF-citation guard, which
 raises the frontend's own numbers). The comparison a reviewer makes is therefore against the
-*current* `origin/main`, and the branch is **above** it on every metric:
+*current* `origin/main`, and the branch is **above** it on every metric. (The branch was
+rebased onto `main` afterwards, so its shas moved; the numbers do not — the rebase touched no
+measured file, and `main`'s two new commits are a backend seed-locale fix.)
 
-| Component | Metric | `origin/main` (700c2c8de) | this branch (81ed7c89b) | Δ |
+| Component | Metric | `origin/main` (700c2c8de) | this branch | Δ |
 |---|---|---|---|---|
 | frontend | Statements | 89.2708% | **89.2810%** | +0.0102 |
 | frontend | Lines | 89.2954% | **89.3121%** | +0.0167 |

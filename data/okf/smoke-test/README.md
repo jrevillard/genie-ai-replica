@@ -13,6 +13,7 @@ mints the scoped smoke tokens.
 | `run-smoke-building-gate.js` | The building gate: mutations refused while a conversion/indexing run is active. |
 | `run-smoke-import-documents.js` | The document→OKF import pipeline (mode B). |
 | `run-smoke-lifecycle.js` | The lifecycle state machine: submit → review → approve, per-transition refusals. |
+| `run-smoke-ceiling.js` | The concept-document ceiling: the editor save refuses an over-ceiling body (409 `CONCEPT_TOO_LARGE`, and **writes nothing**), the concept read carries the server's `max_doc_chars`, and the publish gate refuses a repo holding an over-ceiling corpus **before the mint** (no version burned). |
 
 Run pattern (from the repo root):
 
@@ -21,6 +22,18 @@ docker cp data/okf/smoke-test/run-smoke.js <okf-server-container>:/app/
 docker cp data/okf/smoke-test/kenya-bundle-clean <okf-server-container>:/app/
 docker exec -e OKF_SMOKE_TOKEN_ADMIN=<...> <okf-server-container> node /app/run-smoke.js
 ```
+
+`run-smoke-ceiling.js` needs no fixture corpus (it imports its own two
+concepts), so its copy is the script alone:
+
+```bash
+docker cp data/okf/smoke-test/run-smoke-ceiling.js <okf-server-container>:/app/
+docker exec -e OKF_SMOKE_TOKEN_ADMIN=<...> <okf-server-container> node /app/run-smoke-ceiling.js
+```
+
+It reads the ceiling from `OKF_MAX_CONCEPT_DOC_CHARS` (default 250000) — the
+same variable the server enforces — and creates and removes its own repository,
+so it leaves no residue.
 
 Tokens: `node mint-tokens.mjs` prints the `OKF_SMOKE_TOKEN_*` values
 (scoped `okf:smoke:{repo}:read` on the smoke repo, plus the admin token).

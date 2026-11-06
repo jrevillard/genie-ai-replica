@@ -459,7 +459,7 @@ defaults.
 | `CONTENT_EXTRACTION_METHOD` | enum | no | `docling` (compose) / `opea` (Python code) | `opea` or `docling` (compose wins at runtime; set in `.env` to override) |
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | string | no | (built-in) | LLM labeling rules |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | bool | no | `true` | Prepend LLM doc-context prefix to each chunk |
-| `CONTEXTUAL_STRATEGY` | enum | no | `doc_level` | `per_chunk` or `doc_level` (compose default `doc_level`; Python code default `per_chunk` — compose wins at runtime; set in `.env` to override) |
+| `CONTEXTUAL_STRATEGY` | enum | no | `per_chunk` | `per_chunk` (the default on every surface — N context calls per document, section-tailored) or `doc_level` (1 call per document, the same context on every chunk — N× cheaper, opt in by setting `.env`) |
 | `CONTEXTUAL_RETRIEVAL_PROMPT` | string | no | (built-in) | Per-chunk context prompt (`{document_context}` placeholder) |
 | `MULTI_TURN_BLEND_ENABLED` | bool | no | `false` | Multi-turn vector-space blending |
 | `MULTI_TURN_BLEND_ALPHA` | number | no | `0.7` | Query weight α in `V = α·EQ + (1-α)·EH` |

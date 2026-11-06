@@ -1998,6 +1998,8 @@ export default {
       saved: '已保存',
       saving: '保存中…',
       unsaved: '未保存的更改',
+      ceiling: '{chars} / {ceiling} 个字符',
+      ceilingOver: '超出上限——保存将被拒绝。请拆分此概念，或提高 OKF_MAX_CONCEPT_DOC_CHARS。',
       view: {
         rendered: '已渲染',
         source: '源码'
@@ -2584,6 +2586,8 @@ export default {
         fsBusy: '正在导入您的文件…',
         fsFailed: '导入失败——请检查文件后重试。',
         skippedEmpty: '已跳过 {n} 个空文件。',
+        splitReport: '已拆分 {n} 个文件以符合大小限制：{files}',
+        splitFile: '{file}（{parts} 部分）',
         noneSelected: '尚未选择任何来源。',
         selectedN: '已选择：{n}',
         moreN: ' 另有 {n} 个',

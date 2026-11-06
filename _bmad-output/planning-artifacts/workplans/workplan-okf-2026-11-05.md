@@ -12,8 +12,8 @@ the ORDER and the cross-stream slots.
 
 | Stream | Branch | Tracker | Scope |
 |---|---|---|---|
-| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
-| **C — CSR waves resume** | `feat/okf-chat-source-w1` (pushed through `b2d4700aa`; W1–W5 done) | #1409 umbrella, !720 planning MR (awaiting David's review/merge order) | W6–W9 per the remediation plan |
+| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) — **MERGED to main 2026-11-05** (MR **!770**; rebase merge → `bc1989f8a`; the branch is back on origin as the readable form of the work) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
+| **C — CSR waves resume** | `feat/okf-chat-source-w1` (pushed through `92209a1548`; W1–W5 done, live-verified, deliberately held back as one batch — **still unmerged, no code MR**; the CAP-3 guard is already running in the local build) | #1409 umbrella, !720 planning MR **MERGED to main 2026-11-06** (`b4cc40dbe`) | W6–W9 per the remediation plan |
 | **T — Triage-scheduled items** | slot into U/C per their rulings | the 12 open `prd::okf-server` issues | See Phase T |
 
 ## Phase U — Admin-Dashboard UX pass (FIRST)
@@ -24,6 +24,14 @@ the ORDER and the cross-stream slots.
 > Security review: no findings on every slice. Frontend 129 suites / 3739 tests
 > green at 88.84% coverage (baseline 88.78% held+raised); okf-server 82 suites /
 > 1990 tests green. MR + Phase C resume follow.**
+>
+> **UPDATED 2026-11-06: the MR followed — !770 was opened and MERGED to main on
+> 2026-11-05** (a rebase merge, so main carries the work as `bc1989f8a` and the
+> branch's own commits are not ancestors of main — the shape, not the content, is
+> what differs). The branch was removed from origin after the merge and has
+> been put back, so the plan's named branch exists again and the UX work is
+> readable in its eight focused commits. UX-5's leg optimization still waits on
+> the live `[okf-lab-timing]` numbers.**
 
 1. **UX-1 — Tab-rack consolidation.** Remove the left nav rail (`.sidebar`, whose
    sections mirror the tab rack 1:1); ship its icons into the main tab rack
@@ -90,14 +98,26 @@ the ORDER and the cross-stream slots.
 
 ## Phase C — CSR waves resume (after Phase U)
 
-- **W6 — artifacts view** — now lands INTO the new theme (the double-restyling
-  risk avoided by the ordering).
-- **W7 — retract-retention D3 reversal.**
+- **W6 — artifacts view** — **MERGED to main 2026-11-06** (MR !780, via merge
+  train 228; it landed INTO the new theme, so the double-restyling risk was
+  avoided by the ordering). Issue #1557 closed by the merge.
+- **W7 — retract-retention D3 reversal.** Not started. (Not the concept-document
+  ceiling slice — see the note below this list.)
 - **W8 — log purge + gate downgrade, SCOPE GREW per the #925 split ruling:**
   the delete flow also captures a **`deletion_reason`** (#925). The TTL sweep
   half stays parked pending the D3 revisit — out of scope here.
 - **W9 — concept tree browse** (carries the D8 `create-ux-design` pass at story
   time).
+
+> **NOT A CSR WAVE — the concept-document ceiling (curation half).** It ships on
+> its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576** — green
+> and awaiting David's merge decision), because it is the *ceiling initiative's*
+> curation half and not a slice of the chat-source remediation. Its story file is
+> named `_bmad-output/implementation-artifacts/csr-w7-concept-ceiling-story.md` —
+> that file's **own "W7" label is NOT this workplan's W7** (retract-retention D3
+> reversal, above, still not started). The deferred curator-initiated split is
+> **#1577**; the ceiling-vs-document-budget drift found while documenting it is
+> **#1588**.
 
 ## Phase T — triage-scheduled items (slots per the rulings)
 
@@ -106,6 +126,9 @@ the ORDER and the cross-stream slots.
 | First CSR-adjacent slot after Phase U | **#995** retrieval-mode card | Backend done on main (GET+PUT /retrieval-config, audited); card is frontend-only, must name the EFFECTIVE posture + serving-graph count + preview before apply. Ruled "right after CSR W4" — W4 is done |
 | After W6 | **#948** ingestion aggregation Studio panel | Read-only aggregation; ruled "behind CSR W4–W6" |
 | With W9 / tail of C | **#914** threat model + bounded sanitizer + injection eval rows | Narrow re-scope; "behind CSR waves" |
+| **MERGED 2026-11-06 — the guard half** (MR **!791**, merge commit `700c2c8de`; issue #1594 closed); the open/download half with the CSR batch | **#1594** OKF citations 404 on the doc-repo metadata lookup in `okf_only` mode | Generic work → **Path 1** (local compose validation, MR to main). Severity low (the fetch failure is caught; badges degrade) but it fires on **every** OKF-citing query and makes the `okf_only` posture look broken in devtools. **AMENDED 2026-11-06 (David, after reading the code): the fix is a FRONTEND GUARD — no backend change.** chatqna already emits the OKF shape (`source: "okf-concept"`, `document_name`, `concept_id` — `genieai_chatqna.py:3636-3659`) and the backend relays `source_documents` verbatim (`query-service.js:466`), so the marker reaches the frontend; the frontend drops it in `translateSources` and then fetches doc-repo for **every** citation. The fix: carry the marker through `translateSources`, skip the doc-repo metadata fetch for an OKF citation, render its badge from the citation's own payload (both the answer card and the sidebar — they list the same citations). **SECOND PASS 2026-11-06: the CSR branch `origin/okf-chat-source-w1` ALREADY carries this guard** — CAP-3 (`402296433a`), live-verified (W1–W3 smoke 7/7) and running in the local build; that batch also carries the retriever identity, the concept route, the async title resolution and the open/download flow, and it is deliberately held back as one batch (the devlog's "Not done yet"). So the guard half landed AHEAD of the batch as **!791** — its own Path-1 MR, so `main` stops the 404 while the batch waits for a merge decision. The batch's CAP-3 supersedes it (one hunk conflicts, `translateSources`; the batch's side wins) and the badge fix is additive, because CAP-3 leaves the badge on the extension fallback (`HADI`). The instance stays on `okf_only` |
+| With the CSR batch (CSR EPIC-3's slice) | **#1598** an OKF citation still has no working open/download target in `main` | The card offers a dead affordance: the click opens a repository document, and an OKF concept is not one (404 → "Could not open the document"). The working target is **CSR EPIC-2's concept route + EPIC-3's card branch** — BOTH already implemented and live-verified on `origin/okf-chat-source-w1` (CAP-2 `897926dad8`, CAP-3 `402296433a`; the W1–W3 smoke 7/7). `main` cannot point the click at a route that does not exist, so this closes when the batch lands |
+| Its own slot (a one-term fix) | **#1596** the OKF smoke harnesses purge by NAME, across every domain | The ceiling slice's new harness lists every repository and deletes the ones whose NAME matches, without matching the domain — so a user repository carrying that name in another domain is soft-deleted when an operator runs it. It copies the shipped house pattern and is below the security review's bar, so it is filed rather than fixed inside a slice whose harness is live-verified (20/20). The fix is one term in the match, applied to the sibling harnesses too |
 | Not scheduled | **#909** air-gap/retention sweep | Parked; trigger = a sovereignty/air-gapped deployment contract |
 | On child closure | Umbrellas **#889 #904 #956 #960** | Close when the last child closes (David) |
 

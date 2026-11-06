@@ -47,6 +47,7 @@
             type="button"
             class="okf-dashboard__card"
             :class="cardClasses(r)"
+            :data-test-id="`okf-studio-repo-${r.repo_id}`"
             @click="onCardClick(r)"
             @mouseenter="onCardEnter(r, $event)"
             @mouseleave="onCardLeave"

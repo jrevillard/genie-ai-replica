@@ -2056,6 +2056,9 @@ export default {
       saved: 'Сохранено',
       saving: 'Сохранение…',
       unsaved: 'Несохраненные изменения',
+      ceiling: '{chars} / {ceiling} символов',
+      ceilingOver:
+        'Превышен предел — сохранение будет отклонено. Разделите этот концепт или увеличьте OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Отрисовано',
         source: 'Источник'
@@ -2668,6 +2671,8 @@ export default {
         fsBusy: 'Импорт ваших файлов…',
         fsFailed: 'Импортировать не удалось — проверьте файлы и повторите.',
         skippedEmpty: 'Пропущено пустых файлов: {n}.',
+        splitReport: 'Разделено файлов: {n}, чтобы уложиться в ограничение размера: {files}',
+        splitFile: '{file} ({parts} частей)',
         noneSelected: 'Источники пока не выбраны.',
         selectedN: 'Выбрано: {n}',
         moreN: ' +{n} ещё',

@@ -76,6 +76,26 @@ const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
 const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
 const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
+/**
+ * The rejection a call produced, for the assertions that read its
+ * properties (the verdict flags, the status it carries).
+ *
+ * The runner's own `rejects.toMatchObject` does NOT enforce a regex
+ * against a string property — a message assertion written that way
+ * passes whatever the message says — so the message is asserted here,
+ * on the error itself.
+ * @param {Promise} promise - The call expected to be rejected
+ * @returns {Promise<Error>} The rejection
+ */
+async function rejection(promise) {
+  try {
+    await promise;
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected the call to be rejected — it resolved');
+}
+
 test.beforeEach(() => {
   routes = [];
   calls = [];
@@ -1031,46 +1051,46 @@ test.describe('the realm settings helpers report a failure with the module verdi
   test('a transport break on a realm read names the read and stays transient', async () => {
     routes = [['GET', REALM_PATH, { throws: new Error('connection reset by peer') }]];
 
-    await expect(getRealmSettings('tok', REALM)).rejects.toMatchObject({
-      transient: true,
-      message: /Cannot reach the Keycloak admin API for the realm settings of genie/,
-    });
+    const caught = await rejection(getRealmSettings('tok', REALM));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings of genie/);
   });
 
   test('a refused realm update names the update and carries the status', async () => {
     routes = [['PUT', REALM_PATH, { status: 409, data: { errorMessage: 'Conflict' } }]];
 
-    await expect(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' })).rejects.toMatchObject({
-      httpStatus: 409,
-      message: /Failed to update the realm settings of genie: HTTP 409/,
-    });
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.httpStatus).toBe(409);
+    expect(caught.message).toMatch(/Failed to update the realm settings of genie: HTTP 409/);
   });
 
   test('a realm update the admin API fails with a 5xx is transient', async () => {
     routes = [['PUT', REALM_PATH, { status: 503, data: null }]];
 
-    await expect(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' })).rejects.toMatchObject({
-      transient: true,
-      httpStatus: 503,
-    });
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(503);
   });
 
   test('a transport break on a realm update names the update', async () => {
     routes = [['PUT', REALM_PATH, { throws: new Error('connection reset by peer') }]];
 
-    await expect(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' })).rejects.toMatchObject({
-      transient: true,
-      message: /Cannot reach the Keycloak admin API for the realm settings update of genie/,
-    });
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings update of genie/);
   });
 
   test('a refused deletion names the user and carries the status', async () => {
     routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
 
-    await expect(deleteUser('tok', REALM, 'user-1')).rejects.toMatchObject({
-      transient: true,
-      message: /Failed to delete user user-1: HTTP 500/,
-    });
+    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
   });
 
   test('a user that is already gone is the end state every caller wants', async () => {
@@ -1088,9 +1108,9 @@ test.describe('the realm settings helpers report a failure with the module verdi
     notJson.nonJsonBody = true;
     routes = [['GET', REALM_PATH, { throws: notJson }]];
 
-    await expect(getRealmSettings('tok', REALM)).rejects.toMatchObject({
-      message: /The Keycloak admin API did not answer the realm settings of genie usably/,
-    });
+    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(
+      /The Keycloak admin API did not answer the realm settings of genie usably/
+    );
     expect(notJson.message).toContain('non-JSON body (HTTP 403)');
     expect(notJson.message).not.toContain('The Keycloak admin API did not answer');
   });
@@ -1105,10 +1125,9 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     // is in fact there.
     routes = [['GET', CLIENTS_PATH, { status: 500, data: null }]];
 
-    await expect(enableDirectAccessGrants('tok', 'genie2', 'genie-app')).rejects.toMatchObject({
-      transient: true,
-      message: /^Cannot read the client genie-app of genie2: HTTP 500/,
-    });
+    await expect(enableDirectAccessGrants('tok', 'genie2', 'genie-app')).rejects.toThrow(
+      /^Cannot read the client genie-app of genie2: HTTP 500/
+    );
   });
 
   test('a realm that carries no client of that name says so', async () => {

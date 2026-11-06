@@ -5,7 +5,7 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
-const { runRouteHandler } = require('./helpers/route');
+const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -461,11 +461,7 @@ test.describe('Conversation — answer card', () => {
     });
     await page.route(
       '**/queries/stream**',
-      runRouteHandler(page, async (route) => {
-        if (route.request().method() !== 'POST') {
-          await route.continue();
-          return;
-        }
+      runPostOnlyRouteHandler(page, async (route) => {
         const resp = await route.fetch();
         const body = await resp.text();
         await streamReleased;
@@ -545,11 +541,7 @@ test.describe('Conversation — surface invariants', () => {
     const body = sseBody(['The answer completes in the background.']);
     await page.route(
       '**/queries/stream**',
-      runRouteHandler(page, async (route) => {
-        if (route.request().method() !== 'POST') {
-          await route.continue();
-          return;
-        }
+      runPostOnlyRouteHandler(page, async (route) => {
         await streamReleased;
         await route.fulfill({
           status: 200,

@@ -87,6 +87,24 @@ function runRouteHandler(page, handler) {
   };
 }
 
+/**
+ * Wrap a POST-only route handler: everything `runRouteHandler` tolerates,
+ * plus the stream mocks' request filter, stated once — only the app's
+ * POST reaches the handler; a preflight (cross-origin dev posture) or a
+ * stray GET must reach the network, not a CORS-less 200 from a handler
+ * that only knows how to answer a stream.
+ */
+function runPostOnlyRouteHandler(page, handler) {
+  return runRouteHandler(page, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    return handler(route);
+  });
+}
+
 module.exports = {
+  runPostOnlyRouteHandler,
   runRouteHandler
 };

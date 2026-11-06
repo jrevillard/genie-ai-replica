@@ -6,7 +6,7 @@ const {
   waitForBotResponse,
   getLastBotMessage,
 } = require('../helpers/chatbot');
-const { runRouteHandler } = require('../helpers/route');
+const { runPostOnlyRouteHandler } = require('../helpers/route');
 
 // One spelling for the stream endpoint inside this file: the route and
 // the unroute that removes it must be the same string — Playwright drops
@@ -61,11 +61,7 @@ test.describe('RAG error handling', () => {
     });
     await page.route(
       STREAM_ROUTE,
-      runRouteHandler(page, async (route) => {
-        if (route.request().method() !== 'POST') {
-          await route.continue();
-          return;
-        }
+      runPostOnlyRouteHandler(page, async (route) => {
         await route.fulfill({
           status: 503,
           contentType: 'application/json',

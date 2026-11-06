@@ -9,7 +9,7 @@ const {
   TEST_ADMIN_USER,
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
-const { runRouteHandler } = require('./route');
+const { runPostOnlyRouteHandler, runRouteHandler } = require('./route');
 
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when
@@ -262,13 +262,7 @@ async function mockChatStream(page, chunks, metadata) {
   const body = sseBody(chunks, metadata);
   await page.route(
     '**/queries/stream**',
-    runRouteHandler(page, async (route) => {
-      // Only the app's POST carries a stream; a preflight (cross-origin dev
-      // posture) or stray GET must reach the network, not a CORS-less 200.
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
+    runPostOnlyRouteHandler(page, async (route) => {
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
     })
   );

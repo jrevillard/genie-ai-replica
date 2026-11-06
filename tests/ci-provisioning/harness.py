@@ -535,6 +535,43 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # A JSON array with NO client objects (a gateway standing in for
+            # the admin API) proves nothing either: zero clients read cannot
+            # certify the realm — the probe must fail, not pass silently.
+            "realm_client_listing_empty_fails",
+            1,
+            base_rules(realm_clients_resp={"status": "200", "body": "[]"}),
+            expect=["no client entries", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # A transient 5xx WITH a JSON error body is still transient: the
+            # definitive classifier gates on the status (400/401/403), so an
+            # error-carrying 500 retries like any other 5xx instead of
+            # failing the job on one flaky admin answer.
+            "realm_client_listing_error_5xx_retries",
+            0,
+            base_rules(
+                realm_clients_resp=[
+                    {"status": "500", "body": json.dumps({"error": "unknown_error"})},
+                    {"status": "200", "body": REALM_CLIENTS},
+                ]
+            ),
+            expect=[
+                "Realm client read-back attempt 1/3",
+                "Direct-access grants verified",
+            ],
+            forbid=["the realm client list was refused"],
+            calls={"realm_clients": 2},
+        )
+    )
+
+    scs.append(
+        scenario(
             # A TRUNCATED credentials rejection on the read-back's mint is
             # transport noise, not a verdict (#1320/#1334): the status may
             # sit over a truncated body. It must retry, never exit — the

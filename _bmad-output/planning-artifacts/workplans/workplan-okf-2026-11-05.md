@@ -109,10 +109,12 @@ the ORDER and the cross-stream slots.
 - **W9 — concept tree browse** (carries the D8 `create-ux-design` pass at story
   time).
 
-> **NOT A CSR WAVE — the concept-document ceiling (curation half).** It ships on
-> its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576** — green
-> and awaiting David's merge decision), because it is the *ceiling initiative's*
-> curation half and not a slice of the chat-source remediation. Its story file is
+> **NOT A CSR WAVE — the concept-document ceiling (curation half).** It shipped on
+> its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576**) and is
+> **MERGED to main 2026-11-06** (David, merge commit `83d7d04bd`; issue #1576
+> closed by the merge, `status::done`). It was a separate branch because it is
+> the *ceiling initiative's* curation half and not a slice of the chat-source
+> remediation. Its story file is
 > named `_bmad-output/implementation-artifacts/csr-w7-concept-ceiling-story.md` —
 > that file's **own "W7" label is NOT this workplan's W7** (retract-retention D3
 > reversal, above, still not started). The deferred curator-initiated split is

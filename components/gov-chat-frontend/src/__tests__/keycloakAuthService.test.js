@@ -56,8 +56,7 @@ jest.mock('@/config/oidcConfig', () => ({
   postLogoutRedirectUri: 'http://localhost',
   responseType: 'code',
   scope: 'openid profile email',
-  automaticSilentRenew: true,
-  storeAuthStateInCookie: false
+  automaticSilentRenew: true
 }));
 
 const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
@@ -100,12 +99,13 @@ function createMockUser(overrides = {}) {
 //    catches them), so the test stays GREEN while exercising the error path;
 //  - the localStorage state wiped, because the cross-tab renew protocol
 //    leaves its state there: the holder PUBLISHES the minted user under
-//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST (gate
-//    `entry.at >= startedAt`, millisecond resolution), so a surviving
-//    publication makes the next test's renew adopt the previous test's user
-//    instead of running its own grant (#1518 flake, reproducible locally
-//    too). The whole store is cleared, not just the two renew keys, so a
-//    coordination key added later cannot leak either.
+//    RENEW_USER_KEY and the NEXT renew reads that publication FIRST — the
+//    reader admits any FOREIGN-tab publication (ownership gate + token
+//    usability; the adoptedTokens memo starts empty on a fresh module), so
+//    a surviving publication makes the next test's renew adopt the
+//    previous test's user instead of running its own grant (#1518 flake,
+//    reproducible locally too). The whole store is cleared, not just the
+//    two renew keys, so a coordination key added later cannot leak either.
 // jest.resetAllMocks() covers every mock, present and future — but it also
 // strips the factory implementations the unsubscribe assertions depend on, so
 // those are restored here. jest.restoreAllMocks() undoes a spy a failing test
@@ -812,20 +812,17 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
   });
 
-  // The cleanup reads the entry and then removes the key — two storage
-  // operations. A holder that publishes a FRESH handoff between them must
-  // not have it deleted by the cleanup's stale judgement (#1535 review).
-  it('a publication published while the cleanup judges the previous one survives (#1535 review)', async () => {
+  // The shared drive for the cleanup's race tests (#1535 review, #1607):
+  // the cleanup's FIRST read of the publication returns `judgedRaw` — the
+  // entry it judges — while a FRESH publication lands on disk in that same
+  // instant. The decision binds the entry that was READ: after the renewal
+  // entry, the fresh handoff must still be on disk.
+  async function expectFreshPublicationSurvivesRace(judgedRaw, freshTokenName) {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
-    const spent = createMockUser({
-      access_token: 'spent-pub',
-      expires_at: Math.floor(Date.now() / 1000) - 10
-    });
-    const spentRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: spent });
-    const fresh = createMockUser({ access_token: 'fresh-pub' });
+    const fresh = createMockUser({ access_token: freshTokenName });
     const freshRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: fresh });
-    window.localStorage.setItem(RENEW_USER_KEY, spentRaw);
+    window.localStorage.setItem(RENEW_USER_KEY, judgedRaw);
     const realGetItem = Storage.prototype.getItem;
     let firstRead = true;
     const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
@@ -833,23 +830,44 @@ describe('cross-tab renew lease (#80800)', () => {
       if (firstRead) {
         firstRead = false;
         // A holder publishes a FRESH handoff right after the cleanup's read:
-        // the cleanup still sees the spent entry, the disk already holds the
-        // fresh one.
+        // the cleanup still sees the judged entry, the disk already holds
+        // the fresh one.
         window.localStorage.setItem(RENEW_USER_KEY, freshRaw);
-        return spentRaw;
+        return judgedRaw;
       }
       return realGetItem.call(this, key);
     });
     try {
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
       await keycloakAuthService.signinSilent();
-      spy.mockRestore();
-      // The fresh handoff is still on disk — the cleanup judged the previous
-      // entry, not this one.
+      // The fresh handoff is still on disk — the cleanup judged the entry it
+      // read, not whatever landed after it.
       expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);
     } finally {
       spy.mockRestore();
     }
+  }
+
+  // The cleanup reads the entry and then removes the key — two storage
+  // operations. A holder that publishes a FRESH handoff between them must
+  // not have it deleted by the cleanup's stale judgement (#1535 review).
+  it('a publication published while the cleanup judges the previous one survives (#1535 review)', async () => {
+    const spent = createMockUser({
+      access_token: 'spent-pub',
+      expires_at: Math.floor(Date.now() / 1000) - 10
+    });
+    await expectFreshPublicationSurvivesRace(
+      JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: spent }),
+      'fresh-pub'
+    );
+  });
+
+  // The catch arm of the same cleanup (a CORRUPT entry — non-parsing JSON)
+  // removes without judging what is on disk NOW: a holder that publishes a
+  // fresh handoff between the cleanup's read and the catch arm's removal
+  // must keep it, exactly like the sibling case above (#1607).
+  it('a publication published while the cleanup judges a CORRUPT entry survives (#1607)', async () => {
+    await expectFreshPublicationSurvivesRace('{not json', 'fresh-corrupt-race');
   });
 
   it('publication retention: the cleanup drops a publication whose token is spent, keeps one whose token is live (#1535)', async () => {
@@ -1092,18 +1110,33 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(third.access_token).toBe('memo-token');
   });
 
-  it('a corrupt (at-less) publication is dropped at renew entry like a non-parsing one (#1521 review)', async () => {
+  it('an at-less publication is judged by its token, not its stamp — a live one is adoptable (#1615)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // The stamp is provenance, not a gate (#1615): the retention keys on the
+    // token's own expiry, so an entry without `at` is judged like any other —
+    // by whether a reader could still use its token. (The pre-#1535 reader
+    // never checked the stamp; the shared predicate must not either, or a
+    // writer that dropped it would make every handoff unreadable.)
+    const atLess = createMockUser({ access_token: 'at-less-pub' });
+    const atLessRaw = JSON.stringify({ tab: 'holder-tab', user: atLess });
+    window.localStorage.setItem(RENEW_USER_KEY, atLessRaw);
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('at-less-pub'); // adopted, not re-granted
+    expect(mockSigninSilent).not.toHaveBeenCalled();
+    // and the live handoff stays on disk — the cleanup keeps what a reader can use
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(atLessRaw);
+  });
+
+  it('a non-parsing publication is dropped at renew entry like any corruption (#1521 review)', async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
     // The grant fails so nothing republishes the slot — only the entry
-    // cleanup can empty it.
+    // cleanup can empty it. A non-parsing value is corruption no reader can
+    // judge: the catch arm drops it.
     mockSigninSilent.mockRejectedValue(new Error('grant refused'));
-    // Valid JSON, no usable `at` — not a publication this build wrote (the
-    // publisher always stamps `at`), so the corruption arm drops it.
-    window.localStorage.setItem(
-      RENEW_USER_KEY,
-      JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) })
-    );
+    window.localStorage.setItem(RENEW_USER_KEY, '{not json');
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
     expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });

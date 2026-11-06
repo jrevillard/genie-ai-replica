@@ -32,8 +32,7 @@ function getOidcConfig() {
     post_logout_redirect_uri: origin,
     response_type: 'code',
     scope: 'openid profile email roles',
-    automaticSilentRenew: true,
-    storeAuthStateInCookie: false
+    automaticSilentRenew: true
   };
 }
 

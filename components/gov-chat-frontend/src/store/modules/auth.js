@@ -3,7 +3,11 @@
  *
  * Replaces the existing auth module entirely (no coexistence).
  * Consumes keycloakAuthService for all OIDC operations.
- * Tokens are stored in-memory only via the service layer.
+ * Tokens live in the service layer's memory plus that service's two
+ * documented disk footprints: oidc-client-ts's per-tab user store
+ * (sessionStorage) and the cross-tab renewal handoff (one shared
+ * same-origin localStorage entry, genie.renew.user). The store itself
+ * never touches token storage — see src/services/keycloakAuthService.js.
  */
 
 import keycloakAuthService from '@/services/keycloakAuthService';

@@ -93,10 +93,14 @@ async function main() {
 
   // 0. SELF-CLEANUP: a prior crashed run (token expiry mid-run) leaves
   // 'smoke-lifecycle' behind and the next create 409s. Purge it first.
+  //
+  // The match is NAME **and DOMAIN** (#1596): the purge only reaches this
+  // harness's own 'smoke' domain. A user repository carrying the same NAME in
+  // another domain is not this harness's to purge — the name alone deleted it.
   try {
     const stale = await call('GET', '/api/okf/repos?lifecycle=all');
     for (const it of (stale.body && stale.body.items) || []) {
-      if (it.name !== REPO_NAME) continue;
+      if (it.name !== REPO_NAME || it.domain !== DOMAIN) continue;
       let d = await call('DELETE', `/api/okf/repos/${it.repo_id}`);
       if (d.status === 409) {
         await call('POST', `/api/okf/repos/${it.repo_id}/lifecycle`, { action: 'retract' });

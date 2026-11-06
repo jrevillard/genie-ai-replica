@@ -26,6 +26,7 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 spec:
   replicas: {{ include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "redisCache") | int }}
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" .Values "service" "redisCache") }}
   selector:
     matchLabels:
       genieai.io/component: redis-cache

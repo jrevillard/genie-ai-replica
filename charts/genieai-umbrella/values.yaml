@@ -24,6 +24,18 @@
 namespace: genieai
 
 global:
+  # The progress deadline every Deployment the chart renders carries.
+  # Kubernetes defaults spec.progressDeadlineSeconds to 600s and that
+  # clock starts when the DEPLOYMENT is created, not when the pod runs —
+  # on a first install the pod is created minutes later (multi-GB images
+  # still pulling), so it inherits only what is left of the window. Past
+  # it the Deployment reports ProgressDeadlineExceeded, Helm declares the
+  # release failed and uninstalls it, deleting the resources the next
+  # attempt needs — the install restarts from scratch and can loop.
+  # 900s gives a cold start on a slow node room without letting a truly
+  # stuck Deployment hang forever. Per-service override:
+  # services.<svc>.progressDeadlineSeconds (wins over this value).
+  progressDeadlineSeconds: 900
   # Optional registry prefix that WINS over the top-level imageRegistry
   # when set (the factory and the migrations Job both read it first).
   # Empty = the top-level imageRegistry applies. Exists for operators
@@ -587,6 +599,8 @@ dependencyGraph:
 #   volumes: optional PodSpec volumes (PVC, ConfigMap, emptyDir, ...)
 #   volumeMounts: optional container volumeMounts (subPath supported)
 #   probes: readiness/liveness/startup probe definitions
+#   progressDeadlineSeconds: per-service override of
+#     global.progressDeadlineSeconds (the Deployment's progress window)
 #   podDisruptionBudget: optional PDB; null disables
 #   podAnnotations: optional map merged into the pod template metadata
 #   workingDir: optional container working directory
@@ -658,6 +672,7 @@ services:
     # chart (in-cluster Service name).
     opeaHost: ""
     port: 3000
+    progressDeadlineSeconds: 900    # per-service override of global.progressDeadlineSeconds
     # Image USER is `node` (uid 1000). The namespace enforces Pod Security
     # `baseline` (the in-cluster GPU model tier cannot run non-root, so it
     # cannot go stricter — see templates/opea/models/_model-deployment.tpl).
@@ -742,6 +757,7 @@ services:
     replicas: null
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
+    progressDeadlineSeconds: 900    # per-service override of global.progressDeadlineSeconds
     # Image USER is nginx (uid 101). The Dockerfile pre-chowns
     # every path the container writes (the runtime-config dir
     # /app/dist/runtime, the nginx temp dirs under /tmp), the nginx pid and
@@ -801,6 +817,7 @@ services:
     replicas: null
     image: { repository: genie-ai-document-repository, tag: "main" }
     port: 3001
+    progressDeadlineSeconds: 900    # per-service override of global.progressDeadlineSeconds
     # The image has no USER directive, so the default would be root.
     # Pin to uid 1000 (matches backend's node user) so the PVC mounts
     # at /app/uploads and /app/data (kubelet-created dirs at
@@ -919,6 +936,7 @@ services:
     # honours no port variable), so another number moves the plumbing to
     # a port nothing listens on.
     port: 3310
+    progressDeadlineSeconds: 900    # per-service override of global.progressDeadlineSeconds
     # securityContext / volumes / volumeMounts / PVC are NOT values
     # here: templates/services/clamav.yaml is a hand-written Deployment
     # that owns them (uid 1000 rationale, /run/clamav tmpfs, signature
@@ -966,6 +984,7 @@ services:
     # helper (a mutable tag pulls Always, a pinned one does not).
     image: { repository: redis, tag: "7-alpine", pullPolicy: "" }
     port: 6379
+    progressDeadlineSeconds: 900    # per-service override of global.progressDeadlineSeconds
     # Probes are NOT declared under a `probes:` key here: the
     # hand-written template (templates/services/redis-cache.yaml) renders
     # readiness/liveness exec probes that ASSERT the reply

@@ -304,9 +304,16 @@ them is an unchecked key.
   size and the ceiling, and the import path already splits the same content on re-ingest, so the
   invariant holds without it; but "split it into smaller concepts" is advice with no affordance
   behind it until that lands.
-- **The 229 multi-line `translate(` calls invisible to the i18n contract extractor** — a gap in
-  the guard, not in the keys. Worth a separate sweep; it is a guard-strengthening change, not a
-  product change.
+- **The multi-line `translate(` calls invisible to the i18n contract extractor** — a gap in
+  the guard, not in the keys: **225** of them, measured over the 40 files the guard scans (it
+  sees 1077 keys and misses 225). Filed as **#1590**; the sweep is a guard-strengthening change,
+  not a product change. The same issue carries a second, related hole: the placeholder-parity
+  guard only recognises a `translate()` whose fallback is a quoted literal, so a hoisted constant
+  drops a key out of it silently.
+- **The wizard's steps have no browser-level coverage** — the wizard (`components/gov-chat-frontend/src/components/okf/steps/`)
+  is not driven by any Playwright spec, so the wizard's split report is covered only at the
+  component level (a Jest test) and by the live smoke harness (the server's answer). Filed as
+  **#1591**: the handles the spec needs have to be declared on the components first.
 
 ---
 

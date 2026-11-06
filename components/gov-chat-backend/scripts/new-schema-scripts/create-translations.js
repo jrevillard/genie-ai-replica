@@ -415,6 +415,13 @@ class TranslationCreator {
   async createCategoryTranslations(lang) {
     try {
       console.log(`\nCreating category translations for ${lang}...`);
+      // ONE normalized locale for this run: the application write path
+      // stores the UPPERCASED locale and keys the row
+      // `${ownerKey}_${LOCALE}` — service-category-service.js
+      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
+      // the next admin edit re-inserts the row with a fresh createdAt and
+      // the GC pass deletes this one.
+      const locale = lang.trim().toUpperCase();
 
       // First, try to fetch English translations from serviceCategoryTranslations
       let categories = await this.db
@@ -450,7 +457,7 @@ class TranslationCreator {
         .query(
           aql`
         FOR trans IN ${this.categoryTranslations}
-          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
+          FILTER LOWER(trans.languageCode) == ${locale.toLowerCase()}
           RETURN trans.serviceCategoryId
       `
         )
@@ -480,7 +487,7 @@ class TranslationCreator {
           // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.categoryTranslations}
-              FILTER trans.serviceCategoryId == ${categoryId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
+              FILTER trans.serviceCategoryId == ${categoryId} AND LOWER(trans.languageCode) == ${locale.toLowerCase()}
               REMOVE trans IN ${this.categoryTranslations}
           `);
         }
@@ -489,14 +496,8 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      // The application write path stores the UPPERCASED locale and keys
-      // the row `${ownerKey}_${LOCALE}` — service-category-service.js
-      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
-      // the next admin edit re-inserts the row with a fresh createdAt and
-      // the GC pass deletes this one.
-      const locale = lang.trim().toUpperCase();
       for (const category of categories) {
-        const translatedName = await this.generateTranslation(category.nameEN, lang);
+        const translatedName = await this.generateTranslation(category.nameEN, locale.toLowerCase());
         const translation = {
           _key: `${category._key}_${locale}`,
           serviceCategoryId: category._key,
@@ -533,6 +534,13 @@ class TranslationCreator {
   async createServiceTranslations(lang) {
     try {
       console.log(`\nCreating service translations for ${lang}...`);
+      // ONE normalized locale for this run: the application write path
+      // stores the UPPERCASED locale and keys the row
+      // `${ownerKey}_${LOCALE}` — service-category-service.js
+      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
+      // the next admin edit re-inserts the row with a fresh createdAt and
+      // the GC pass deletes this one.
+      const locale = lang.trim().toUpperCase();
 
       // First, try to fetch English translations from serviceTranslations
       let services = await this.db
@@ -566,7 +574,7 @@ class TranslationCreator {
         .query(
           aql`
         FOR trans IN ${this.serviceTranslations}
-          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
+          FILTER LOWER(trans.languageCode) == ${locale.toLowerCase()}
           RETURN trans.serviceId
       `
         )
@@ -596,7 +604,7 @@ class TranslationCreator {
           // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.serviceTranslations}
-              FILTER trans.serviceId == ${serviceId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
+              FILTER trans.serviceId == ${serviceId} AND LOWER(trans.languageCode) == ${locale.toLowerCase()}
               REMOVE trans IN ${this.serviceTranslations}
           `);
         }
@@ -605,14 +613,8 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      // The application write path stores the UPPERCASED locale and keys
-      // the row `${ownerKey}_${LOCALE}` — service-category-service.js
-      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
-      // the next admin edit re-inserts the row with a fresh createdAt and
-      // the GC pass deletes this one.
-      const locale = lang.trim().toUpperCase();
       for (const service of services) {
-        const translatedName = await this.generateTranslation(service.nameEN, lang);
+        const translatedName = await this.generateTranslation(service.nameEN, locale.toLowerCase());
         const translation = {
           _key: `${service._key}_${locale}`,
           serviceId: service._key,

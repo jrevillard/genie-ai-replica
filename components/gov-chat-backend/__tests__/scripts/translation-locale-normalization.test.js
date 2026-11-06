@@ -192,6 +192,18 @@ describe('seed scripts write the locale the application reads back', () => {
       expect(row._key).toBe(`${ownerKey}_${row.languageCode}`);
     }
 
+    // The seed gives its rows a SYNTHETIC AGE (daysAgo(55) for categories,
+    // daysAgo(50) for services) — the age is the point of the seed, and it
+    // must survive: it only does if the application's UPSERT updates the
+    // seeded row instead of inserting a second one.
+    const seventyDays = 70 * 24 * 60 * 60 * 1000;
+    for (const row of categoryRows) {
+      expect(Date.now() - Date.parse(row.createdAt)).toBeGreaterThan(seventyDays / 2);
+    }
+    for (const row of serviceRows) {
+      expect(Date.now() - Date.parse(row.createdAt)).toBeGreaterThan(seventyDays / 2);
+    }
+
     // The application write path must bind exactly those keys: that is what
     // turns its UPSERT into an UPDATE over the seeded row (createdAt and
     // the seeded age preserved) instead of an INSERT of a second row.
@@ -211,6 +223,15 @@ describe('seed scripts write the locale the application reads back', () => {
     const boundDocs = upsert.values[0];
     expect(boundDocs.map((doc) => doc._key)).toContain(seededFrenchRow._key);
     expect(boundDocs.map((doc) => doc.languageCode)).toContain('FR');
+
+    // The application ALWAYS writes the EN row of the owner, keyed
+    // `${ownerKey}_EN`. The seed writes one too, so it must land on the
+    // same key — otherwise the edit inserts a second EN row.
+    const seededEnglishRow = categoryRows.find(
+      (row) => row.serviceCategoryId === seededCategory._key && row.languageCode === 'EN'
+    );
+    expect(seededEnglishRow).toBeDefined();
+    expect(boundDocs.map((doc) => doc._key)).toContain(seededEnglishRow._key);
   });
 
   it('create-translations.js writes translation rows the application write path targets', async () => {

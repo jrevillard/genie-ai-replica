@@ -26,6 +26,14 @@
  * and the synthetic age this script gives it, survive the first admin edit. A
  * raw locale would write a DIFFERENT document: the edit would insert a second
  * row with a fresh createdAt and the GC pass would delete the seeded one.
+ *
+ * The existence probe before each write matches the row the script is about
+ * to write BY KEY, and any row of the same owner and locale whatever case it
+ * was stored in. The key clause keeps the script from writing a key that
+ * already exists: a row whose foreign key is missing or wrong cannot be
+ * reached by owner, and the database would reject the second write. The owner
+ * clause keeps a rerun over a database that still holds legacy lowercased
+ * rows from adding a SECOND row for the same owner and locale.
  */
 
 const { Database, aql } = require('arangojs');
@@ -589,7 +597,8 @@ class SeedRunner {
           .query(
             aql`
           FOR d IN serviceCategoryTranslations
-            FILTER d.serviceCategoryId == ${currentCatKey} AND LOWER(d.languageCode) == ${locale.toLowerCase()}
+            FILTER d._key == ${tKey}
+              OR (d.serviceCategoryId == ${currentCatKey} AND LOWER(d.languageCode) == ${locale.toLowerCase()})
             LIMIT 1 RETURN d._key
         `
           )
@@ -766,7 +775,8 @@ class SeedRunner {
           .query(
             aql`
           FOR d IN serviceTranslations
-            FILTER d.serviceId == ${svc._key} AND LOWER(d.languageCode) == ${locale.toLowerCase()}
+            FILTER d._key == ${tKey}
+              OR (d.serviceId == ${svc._key} AND LOWER(d.languageCode) == ${locale.toLowerCase()})
             LIMIT 1 RETURN d._key
         `
           )

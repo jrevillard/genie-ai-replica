@@ -113,17 +113,20 @@ function createMemoryDb() {
 
   /**
    * The seed's existence probe: "does this owner already have a translation
-   * for this locale?". Mirrors the AQL exactly — `LOWER(d.languageCode) ==
-   * <bound locale>` compares the FOLDED column against the bound value
-   * LITERALLY, so a probe that binds the uppercase locale (or drops the
-   * folding) genuinely does not match a lowercase row.
+   * for this locale?". Mirrors the AQL exactly — the key clause matches a row
+   * by its `_key`, the other clause matches the FOLDED column against the
+   * bound value LITERALLY, so a probe that binds the uppercase locale (or
+   * drops the folding) genuinely does not match a lowercase row.
    */
   function findTranslation(rows, ownerField, values, text) {
-    const [owner, locale] = values;
+    const byKey = text.includes('d._key ==');
     const folded = text.includes('LOWER(d.languageCode)');
-    const row = rows.find(
-      (r) => r[ownerField] === owner && (folded ? String(r.languageCode).toLowerCase() : r.languageCode) === locale
-    );
+    const [key, owner, locale] = byKey ? values : [null, values[0], values[1]];
+    const row = rows.find((r) => {
+      if (byKey && r._key === key) return true;
+      if (r[ownerField] !== owner) return false;
+      return (folded ? String(r.languageCode).toLowerCase() : r.languageCode) === locale;
+    });
     return row ? row._key : null;
   }
 
@@ -254,18 +257,26 @@ describe('seed scripts write the locale the application reads back', () => {
     expect(boundDocs.map((doc) => doc._key)).toContain(seededEnglishRow._key);
   });
 
-  it('seed-synthetic-data.js does not add a second row for a locale already held in another case', async () => {
-    // The application writes UPPERCASE rows (`owner_FR`). A database that
-    // already holds one must not gain a SECOND row for the same owner and
-    // locale when the seed runs: the existence probe has to recognize the
-    // row whatever case it was stored in. Against a real database the
-    // second row is worse than a duplicate — the seed would save the same
-    // `_key` again and the database would reject it.
+  it('seed-synthetic-data.js does not add a second row for a locale it already holds', async () => {
+    // The legacy shape: a lowercased key AND a lowercased languageCode (what
+    // the old script wrote). Only the owner clause can reach it — the key
+    // the script would write is the uppercase one.
     db.saved.serviceCategoryTranslations.push({
-      _key: '1_FR',
+      _key: '1_fr',
       serviceCategoryId: '1',
+      languageCode: 'fr',
+      translation: 'legacy french row',
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z'
+    });
+    // The owner-less shape: the canonical key, no foreign key. It is
+    // invisible to every read and immortal to the GC pass, so only the key
+    // clause can reach it — and the seed must not write that key again (a
+    // real database rejects the second write).
+    db.saved.serviceCategoryTranslations.push({
+      _key: '2_FR',
       languageCode: 'FR',
-      translation: 'existing french row',
+      translation: 'row without an owner',
       isActive: true,
       createdAt: '2026-01-01T00:00:00.000Z'
     });
@@ -274,12 +285,16 @@ describe('seed scripts write the locale the application reads back', () => {
     const runner = new SeedRunner(db, { knowledge: true });
     await runner.seedKnowledge();
 
+    // the legacy row is recognized: no second row for that owner and locale
     const frenchRows = db.saved.serviceCategoryTranslations.filter(
       (row) => row.serviceCategoryId === '1' && row.languageCode.toUpperCase() === 'FR'
     );
     expect(frenchRows.length).toBe(1);
-    // untouched, not overwritten by a second row
-    expect(frenchRows[0].translation).toBe('existing french row');
+    expect(frenchRows[0].translation).toBe('legacy french row');
+
+    // the owner-less row is recognized by its key: the seed writes no
+    // second document under that key
+    expect(db.saved.serviceCategoryTranslations.filter((row) => row._key === '2_FR').length).toBe(1);
   });
 
   it('create-translations.js writes translation rows the application write path targets', async () => {

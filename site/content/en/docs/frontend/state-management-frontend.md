@@ -5,7 +5,7 @@ weight: 2
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-06
 ---
 
 > **For frontend developers.** How the Vue 3 web app keeps state across logins, navigation, and page reloads — and the one rule you must not break.

@@ -85,6 +85,18 @@ orchestrator dispatches from. An issue leaves `backlog` only when it has:
 
 Promotion happens in batch during sweeps. Workers never promote.
 
+### Dispatch order
+
+Which issue a free seat takes next, from the `status::ready-for-dev` queue:
+`priority::high` first (the operator's override, whatever the type), then
+`type::bug` (something is broken), then **oldest first** as the last-resort
+tie-break — it only applies when no other signal discriminates.
+
+Age is not a freshness signal: a stale premise is handled at dispatch time by
+re-verifying it against the current base, not by ordering the queue. To work a
+specific wave or set first, name it explicitly rather than reordering the
+queue.
+
 ## Staleness and closing
 
 - The only auto-close candidate is `status::awaiting-operator` inert past the

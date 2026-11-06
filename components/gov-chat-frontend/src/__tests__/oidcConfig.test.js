@@ -20,7 +20,6 @@ describe('oidcConfig', () => {
     expect(oidcConfig.response_type).toBe('code');
     expect(oidcConfig.scope).toBe('openid profile email roles');
     expect(oidcConfig.automaticSilentRenew).toBe(true);
-    expect(oidcConfig.storeAuthStateInCookie).toBe(false);
     expect(oidcConfig.redirect_uri).toMatch(/\/callback$/);
     expect(oidcConfig.post_logout_redirect_uri).toBeDefined();
   });

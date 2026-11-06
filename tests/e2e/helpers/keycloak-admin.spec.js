@@ -8,6 +8,10 @@ const {
   effectiveRealmRoles,
   createUser,
   rotateRealmKeys,
+  getRealmSettings,
+  updateRealmSettings,
+  deleteUser,
+  enableDirectAccessGrants,
 } = require('./keycloak-admin');
 
 /**
@@ -19,12 +23,15 @@ const {
  */
 
 // The fake transport: a table of [method, pathRegex] → {status, data}
-// (or {throws}), plus a call log the endpoint assertions read.
+// (or {throws}), plus a call log and a body log the endpoint assertions
+// read.
 let routes;
 let calls;
+let bodies;
 
-function fakeRequest(method, path) {
+function fakeRequest(method, path, options = {}) {
   calls.push(`${method} ${path}`);
+  bodies.push(options.body);
   for (const [m, pattern, answer] of routes) {
     if (m === method && pattern.test(path)) {
       if (answer.throws) return Promise.reject(answer.throws);
@@ -63,6 +70,7 @@ const EMAIL_LOOKUP = new RegExp(
   `/auth/admin/realms/${REALM}/users\\?email=${encodeURIComponent(ADMIN_FIXTURE.email)}&exact=true$`
 );
 const RESET_PASSWORD_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/reset-password$`);
+const USER_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1$`);
 
 // Shared 409-diagnosis routes: both convergeUser's and createUser's
 // describes run the same shape, so one definition keeps them in
@@ -71,9 +79,30 @@ const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
 const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
 const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
 
+/**
+ * The rejection a call produced, for the assertions that read its
+ * properties (the verdict flags, the status it carries).
+ *
+ * The runner's own `rejects.toMatchObject` does NOT enforce a regex
+ * against a string property — a message assertion written that way
+ * passes whatever the message says — so the message is asserted here,
+ * on the error itself.
+ * @param {Promise} promise - The call expected to be rejected
+ * @returns {Promise<Error>} The rejection
+ */
+async function rejection(promise) {
+  try {
+    await promise;
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected the call to be rejected — it resolved');
+}
+
 test.beforeEach(() => {
   routes = [];
   calls = [];
+  bodies = [];
   auth.request = fakeRequest;
 });
 
@@ -99,8 +128,11 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   });
 
   test('names a missing role and never posts the assignment', async () => {
+    // Keycloak answers an unknown role with 404 AND an error body: the
+    // absence must read as an absence, not as the body the read site
+    // would otherwise hand back as a role.
     routes = [
-      ['GET', ROLE_PATH('ghost'), { status: 404, data: null }],
+      ['GET', ROLE_PATH('ghost'), { status: 404, data: { error: 'Role not found' } }],
       ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }],
     ];
 
@@ -277,6 +309,20 @@ test.describe('removeRealmRoles', () => {
     expect(calls).toEqual([`GET /auth/admin/realms/${REALM}/roles/ghost`, `GET /auth/admin/realms/${REALM}`]);
   });
 
+  test('a transport break during the removal names the removal', async () => {
+    // The removal side of the fixture provisioning: a break must carry
+    // the transient verdict, like every other write in the module.
+    routes = [
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['DELETE', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }],
+    ];
+
+    const caught = await rejection(removeRealmRoles('tok', REALM, 'user-1', ['admin']));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the removal of the realm roles of user-1/);
+  });
+
   test('a realm that does not exist leaves nothing to remove', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
@@ -394,7 +440,10 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
 
     expect(caught).toBeTruthy();
     expect(caught.transient).toBe(true);
-    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the email-ownership probe/);
+    // The probe's verdict names the user lookup it ran; the diagnosis step
+    // is named after it, not stitched into it.
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the user lookup of/);
+    expect(caught.message).toMatch(/while running the email-ownership probe of/);
   });
 
   test('a username lookup that FAILED diagnoses nothing about the account', async () => {
@@ -410,7 +459,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 500/);
+    expect(caught.message).toMatch(/Cannot read the user lookup of testadmin in realm genie: HTTP 500/);
     expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
     expect(caught.transient).toBe(true);
@@ -445,7 +494,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/answered a non-array payload/);
+    expect(caught.message).toMatch(/answered HTTP 200 with a non-array payload/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
   });
 });
@@ -507,8 +556,10 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
   test('a failed email probe fails loudly instead of guessing', async () => {
     routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { status: 403, data: null }]];
 
+    // The verdict names the status Keycloak answered: the caller must be
+    // able to tell a rate limit from an expired admin token.
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
-      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run`)
+      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run \\(HTTP 403\\)`)
     );
   });
 
@@ -525,7 +576,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     }
 
     expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/User lookup for testadmin in realm genie failed: HTTP 401/);
+    expect(caught.message).toMatch(/Cannot read the user lookup of testadmin in realm genie: HTTP 401/);
     expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
   });
@@ -549,6 +600,54 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     expect(caught.message).toMatch(/User testadmin not found in realm genie/);
     expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
     expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
+});
+
+test.describe('convergeUser keeps a transport break retryable', () => {
+  test('a transport break during the role assignment stays transient, so the retry budget can save the provisioning', async () => {
+    // The role assignment runs on EVERY converge: a break there must carry
+    // the transient verdict, or the retry budget cannot see it and the
+    // provisioning dies on a blip the budget exists to survive.
+    routes = [
+      ['POST', USERS_PATH, { status: 409, data: null }],
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+      ],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }],
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] }));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(
+      /Cannot reach the Keycloak admin API for the assignment of the realm roles admin to user-1/
+    );
+  });
+
+  test('a transport break during the password convergence names the convergence', async () => {
+    // The password reset runs on every converge of an existing account (the
+    // 409 branch — the hot path on every re-run): a break there must carry
+    // the transient verdict, or the retry budget cannot see it.
+    routes = [
+      ['POST', USERS_PATH, { status: 409, data: null }],
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+      ],
+      ['PUT', RESET_PASSWORD_PATH, { throws: new Error('socket hang up') }],
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(
+      /Cannot reach the Keycloak admin API for the password convergence of testadmin \(user-1\)/
+    );
   });
 });
 
@@ -640,6 +739,17 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     expect(caught.message).toMatch(/Cannot read the existing key providers of genie: HTTP 401/);
     // Nothing was created behind a read that failed: the realm stays untouched.
     expect(calls.some((c) => c.startsWith('POST '))).toBe(false);
+  });
+
+  test('a transport break while minting the rotated key names the rotation', async () => {
+    // The operator must be able to read the verdict: a bare socket error
+    // says nothing about the signing-key generation having broken.
+    routes = [...BASE_ROUTES, ['POST', COMPONENTS_PATH, { throws: new Error('socket hang up') }]];
+
+    const caught = await rejection(rotateRealmKeys('tok', REALM));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the creation of the rotated key/);
   });
 
   test('a components read answering 200 with a non-array payload fails loudly instead of demoting nothing', async () => {
@@ -997,5 +1107,159 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
 
     expect(result.newKeyId).toBe('new-key-id');
     expect(result.oldKeyIds).toEqual(['rsa-signing-id']);
+  });
+});
+
+test.describe('the realm settings helpers report a failure with the module verdict', () => {
+  test('a realm read the admin API refuses names the read', async () => {
+    routes = [['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]];
+
+    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(
+      /Cannot read the realm settings of genie: HTTP 401/
+    );
+  });
+
+  test('a realm read whose body carries no representation fails loudly', async () => {
+    // The rotation indexes realm.id on the answer: a 200 without one is a
+    // broken answer, and the verdict must name it instead of letting the
+    // caller read 'undefined' off a null.
+    routes = [['GET', REALM_PATH, { status: 200, data: null }]];
+
+    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(
+      /The realm settings of genie answered HTTP 200 without a usable representation/
+    );
+  });
+
+  test('a transport break on a realm read names the read and stays transient', async () => {
+    routes = [['GET', REALM_PATH, { throws: new Error('connection reset by peer') }]];
+
+    const caught = await rejection(getRealmSettings('tok', REALM));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings of genie/);
+  });
+
+  test('a refused realm update names the update and carries the status', async () => {
+    routes = [['PUT', REALM_PATH, { status: 409, data: { errorMessage: 'Conflict' } }]];
+
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.httpStatus).toBe(409);
+    expect(caught.message).toMatch(/Failed to update the realm settings of genie: HTTP 409/);
+  });
+
+  test('a realm update the admin API fails with a 5xx is transient', async () => {
+    routes = [['PUT', REALM_PATH, { status: 503, data: null }]];
+
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(503);
+  });
+
+  test('a transport break on a realm update names the update', async () => {
+    routes = [['PUT', REALM_PATH, { throws: new Error('connection reset by peer') }]];
+
+    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings update of genie/);
+  });
+
+  test('a refused deletion names the user and carries the status', async () => {
+    routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
+
+    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(500);
+    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
+  });
+
+  test('a user that is already gone is the end state every caller wants', async () => {
+    routes = [['DELETE', USER_PATH, { status: 404, data: null }]];
+
+    await expect(deleteUser('tok', REALM, 'user-1')).resolves.toBeUndefined();
+  });
+
+  test('an answered but unusable reply is not a transport break, and the verdict does not rewrite it', async () => {
+    // The transport owns the error it throws: the verdict must not write
+    // into it. A verdict that rewrote the transport's message would leave
+    // the transport's error carrying the verdict's own prefix.
+    const notJson = new Error('GET /auth/admin/realms/genie returned a non-JSON body (HTTP 403): <html>');
+    notJson.status = 403;
+    notJson.nonJsonBody = true;
+    routes = [['GET', REALM_PATH, { throws: notJson }]];
+
+    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(
+      /The Keycloak admin API did not answer the realm settings of genie usably/
+    );
+    expect(notJson.message).toContain('non-JSON body (HTTP 403)');
+    expect(notJson.message).not.toContain('The Keycloak admin API did not answer');
+  });
+});
+
+test.describe('enableDirectAccessGrants reads the client list like every other read', () => {
+  const CLIENTS_PATH = new RegExp('/auth/admin/realms/genie2/clients\\?clientId=genie-app');
+  const CLIENT_UPDATE_PATH = new RegExp('/auth/admin/realms/genie2/clients/client-1$');
+
+  test('an outage is not reported as a missing client', async () => {
+    // A 5xx is an outage, not a verdict about the client: the caller must
+    // be able to retry it, and the reader must not hunt for a client that
+    // is in fact there.
+    routes = [['GET', CLIENTS_PATH, { status: 500, data: null }]];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/^Cannot read the client genie-app of genie2: HTTP 500/);
+  });
+
+  test('a realm that carries no client of that name says so', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [] }]];
+
+    await expect(enableDirectAccessGrants('tok', 'genie2', 'genie-app')).rejects.toThrow(
+      'Client genie-app not found in realm genie2'
+    );
+  });
+
+  test('a transport break while enabling ROPC names the enablement', async () => {
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { throws: new Error('socket hang up') }],
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC enablement of genie-app/);
+  });
+
+  test('enabling ROPC puts the whole client representation with the grant flipped', async () => {
+    // Keycloak replaces the client on PUT: the update must carry the
+    // representation it read, or the enablement would wipe the client's
+    // other settings.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }],
+    ];
+
+    await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+    ]);
+    // Keycloak replaces the client wholesale: the whole representation it
+    // read travels back, with the grant flipped on.
+    expect(bodies[1]).toEqual({ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true });
+  });
+
+  test('an already-enabled client is left untouched', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }]];
+
+    await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([`GET /auth/admin/realms/genie2/clients?clientId=genie-app`]);
   });
 });

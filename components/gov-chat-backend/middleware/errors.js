@@ -30,4 +30,22 @@ class ValidationError extends AppError {
   }
 }
 
-module.exports = { AppError, NotFoundError, ForbiddenError, ValidationError };
+/**
+ * True when the error is a typed client outcome (an AppError below 500 —
+ * the 404 of an unknown id, the 400 of a malformed payload, the 403 of a
+ * denied access): an expected outcome, not a fault.
+ *
+ * The typed hierarchy is the discriminator, NOT a bare `statusCode < 500`:
+ * a driver or upstream error that happens to carry a 4xx status is a fault
+ * and must keep error-grade logging. Every layer that has to tell an
+ * expected outcome from a fault grades with this one function, so the
+ * layers cannot drift apart.
+ *
+ * @param {Error|Object} error - The caught error.
+ * @returns {Boolean} True when the error is an expected client outcome.
+ */
+function isClientError(error) {
+  return error instanceof AppError && error.statusCode < 500;
+}
+
+module.exports = { AppError, NotFoundError, ForbiddenError, ValidationError, isClientError };

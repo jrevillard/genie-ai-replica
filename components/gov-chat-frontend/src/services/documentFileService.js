@@ -96,7 +96,7 @@ const documentFileService = {
    * WHY NOT A PLAIN `<a href>`: doc-repo's file router applies
    * `authenticateToken` to every route, and the download route is not on the
    * public-path list — a browser NAVIGATION sends no Authorization header
-   * (the SPA holds its token in memory; `storeAuthStateInCookie: false`),
+   * (the SPA holds its token in memory),
    * so the link answers `401 TOKEN_INVALID`. Verified live against the
    * running stack: `GET /api/files/<id>/download` without a bearer answers
    * 401. The axios interceptor is what adds the header, so the download has

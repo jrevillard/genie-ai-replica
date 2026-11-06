@@ -22,10 +22,15 @@ in the error (never silently tolerated).
   Soft guards (`if (await locator.isVisible().catch(() => false)) ...`) are forbidden.
 - **No swallowing.** No `.catch(() => {})`, no bare `catch` that continues, no
   try/except that degrades to a fallback path. Helpers must not absorb a failure a
-  spec should see. Cleanup code is the only narrow exception: the default is a
+  spec should see. Two narrow exceptions: cleanup code (the default is a
   failing cleanup that reports exactly what it could not remove; warn-and-continue
   is permitted only for a leftover state the next test's seed provably makes
-  impossible, and the warning must name the leftover state.
+  impossible, and the warning must name the leftover state), and the
+  browser-target-closed teardown race in route handlers — tolerated ONLY by
+  `helpers/route.js` (`runRouteHandler`/`runPostOnlyRouteHandler`), which
+  requires BOTH the target being gone AND the error being Playwright's
+  target-closed error, and rethrows everything else. Route mocks use the
+  wrapper; they do not hand-roll their own catch.
 - **Wait for conditions, not durations.** No `waitForTimeout`, no fixed `sleep`:
   a fixed sleep is slow on a fast machine and flaky on a slow one. Wait on the
   observable condition (`waitForSelector`, `expect.poll`, `waitForURL`,

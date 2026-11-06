@@ -467,6 +467,47 @@ workflow:
         STATUS=$(resp_status "$KC_RAW")
         BODY=$(resp_body "$KC_RAW")
       }
+      # The JSON-member extraction over KC_RAW, stated ONCE: the capture
+      # contract (the -w trailer stripped with sed '$d', the member parsed
+      # with python3) — the #1334/#1289 churn was exactly this contract
+      # drifting between copies. A definitive Keycloak rejection carries an
+      # `error` member, while a gateway interception page answers 401 with
+      # HTML that parses to nothing (#1319's classifier input).
+      kc_json_member() {
+        printf '%s' "$KC_RAW" | sed '$d' \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('$1',''); print(v if isinstance(v,str) and v else '')" 2>/dev/null || true
+      }
+      kc_access_token() { kc_json_member access_token; }
+      kc_error_detail() { kc_json_member error; }
+      # The master admin token mint through admin-cli's password grant,
+      # shared by the readiness loop and the realm client read-back: one
+      # flag set for one contract. KC_URL and KC_PWD must be set before the
+      # call (they are GitLab script-item locals, not arguments).
+      kc_mint_master_token() {
+        kc_curl POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "client_id=admin-cli" -d "username=admin" \
+          --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
+      }
+      # True when the captured answer is a DEFINITIVE Keycloak rejection:
+      # an OAuth error body over a CLEAN exit on a definitive status
+      # (#1319). A truncated answer (curl exit != 0, the #1334 round-6
+      # class), an interception page answering 401 with HTML, and a
+      # transient status — even one carrying a JSON error body — are all
+      # noise that retries; a truncated answer is never read as a verdict
+      # (#1320). Takes the kc_error_detail output as its argument and, as
+      # the second, ONE definitive status (a caller with a narrower rule
+      # passes its own — the readiness loop's #1319 rule is 401-only); with
+      # no second argument the set is 400, 401 and 403.
+      kc_is_definitive_rejection() {
+        local _detail=$1 _status=$2
+        [ "$CURL_RC" -eq 0 ] || return 1
+        if [ -n "$_status" ]; then
+          case "$STATUS" in "$_status") ;; *) return 1 ;; esac
+        else
+          case "$STATUS" in 400|401|403) ;; *) return 1 ;; esac
+        fi
+        [ -n "$_detail" ]
+      }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
       # better path anyway); a hung nginx must fall through to the NGINX_IP
@@ -510,14 +551,11 @@ workflow:
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
           TOKEN_ATTEMPTS=$((TOKEN_ATTEMPTS+1))
-          kc_curl POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
-            -d "client_id=admin-cli" -d "username=admin" \
-            --data-urlencode "password=${KC_PWD}" -d "grant_type=password"
+          kc_mint_master_token
           TOKEN_STATUS=$STATUS
           [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
           TOKEN_BODY=$BODY
-          ADMIN_TOKEN=$(printf '%s' "$KC_RAW" | sed '$d' \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
+          ADMIN_TOKEN=$(kc_access_token)
           # #1319: a 401 carrying an OAuth error body is a deterministic
           # credentials rejection — retrying cannot heal it, and every failed
           # attempt feeds Keycloak's brute-force protector (which can lock
@@ -529,18 +567,25 @@ workflow:
           # The error field is parsed from KC_RAW (the full capture, like
           # the token parse above) — the 200-char display BODY can truncate
           # the JSON before the error member and would hide a real
-          # rejection. The parse only runs on a 401: other statuses reset.
+          # rejection. Whether the answer counts as definitive is
+          # kc_is_definitive_rejection's single contract, with #1319's own
+          # status set (401): a truncated answer — curl exit != 0, the
+          # #1334 round-6 class — may carry a status trailer over a cut
+          # body, and a truncated answer is never read as a verdict (#1320);
+          # it counts as transient noise and the budget rides it out. Other
+          # statuses reset the counter. The parse spawn is skipped for
+          # answers that cannot qualify (a non-401 or a truncated capture) —
+          # up to 90 iterations would otherwise fork python for a verdict
+          # the classifier discards anyway; it stays the verdict authority.
           TOKEN_REJECT_DETAIL=""
-          if [ "$TOKEN_STATUS" = "401" ]; then
-            TOKEN_REJECT_DETAIL=$(printf '%s' "$KC_RAW" | sed '$d' \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error',''); print(e if isinstance(e,str) and e else '')" 2>/dev/null || true)
+          if [ "$TOKEN_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
+            TOKEN_REJECT_DETAIL=$(kc_error_detail)
           fi
-          # DETAIL is reset unconditionally above and assigned only in the
-          # 401 branch — non-empty ⟹ a definitive OAuth rejection answer.
-          if [ -n "$TOKEN_REJECT_DETAIL" ]; then
+          if kc_is_definitive_rejection "$TOKEN_REJECT_DETAIL" 401; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else
             TOKEN_REJECT_RUN=0
+            TOKEN_REJECT_DETAIL=""
           fi
           if [ "$TOKEN_REJECT_RUN" -ge 3 ]; then
             echo "ERROR: master admin token definitively rejected (HTTP 401, error '${TOKEN_REJECT_DETAIL}') on ${TOKEN_REJECT_RUN} consecutive attempts — a credentials rejection cannot heal on retry and further attempts feed Keycloak's brute-force protector; failing fast instead of burning the readiness budget. Check KEYCLOAK_ADMIN_PASSWORD."
@@ -759,6 +804,209 @@ workflow:
           exit 1
           ;;
       esac
+      # #1303 — the refusal above proves the posture of genie-app ONLY. The
+      # realm pins directAccessGrantsEnabled: false on six clients
+      # (genie-app, genie-proxy-client, dataprep-service-client, okf-server,
+      # the mobile client and the Grafana client), and a drift on any of the
+      # other five stays invisible to that probe: genie-proxy-client holds the
+      # admin-API proxy service account, so a realm that accepts a
+      # direct-access grant on it lets the holder of its secret mint a token
+      # as any user.
+      #
+      # The job cannot behaviour-probe those clients — they are confidential
+      # and their secret is not in the job, so a token request against them
+      # would fail on the secret, not on the grant. What the job CAN observe
+      # is the realm CONFIGURATION: the admin API returns each client's
+      # directAccessGrantsEnabled flag. So the probe reads the realm back and
+      # asserts the shape — no client outside the allowlist carries the
+      # direct-access grant. admin-cli is on the allowlist because Keycloak
+      # provisions it with direct grants on in every realm, and the readiness
+      # loop above mints its admin token through it.
+      #
+      # The admin listing carries the clients' secrets. Nothing here prints
+      # the raw answer: only the client ids and their grant flag are
+      # extracted, and the ids are printed only when they ARE the drift.
+      #
+      # A fresh admin token is minted for the read-back: the token the
+      # readiness loop acquired may already have expired (a master realm
+      # Access Token Lifespan shorter than the readiness wait is a known
+      # cause, #1320), and a 401 here would read as drift rather than as an
+      # expired token.
+      #
+      # Both calls retry, like every other call site in this block: a
+      # transient 429/5xx/timeout on the mint or the listing must not fail
+      # the job (and with it the suites) on one flaky admin answer. The
+      # retry is bounded to three attempts, five seconds apart, and only
+      # transient answers retry: a credentials rejection is definitive
+      # (#1319 — retrying cannot heal it and every failed attempt feeds
+      # Keycloak's brute-force protector), and a drift verdict never
+      # retries — it exits. A DEFINITIVE rejection (an OAuth error body over
+      # a clean exit on a definitive status) is counted the way #1319 counts
+      # the readiness loop's own: three consecutive definitive answers fail
+      # the job, one is ridden out as a one-off proxy hiccup. The STATUS SET
+      # is deliberately wider than the readiness loop's 401-only parse: by
+      # the time this runs, the readiness loop has established the stack, so
+      # a clean 400/403 with an OAuth body is a configuration failure, not a
+      # convergence race — retrying it burns attempts, not patience.
+      ROPC_CLIENT_GRANTS=""
+      ROPC_REALM_TOKEN=""
+      ROPC_READBACK_REASON=""
+      ROPC_DEFINITIVE_RUN=0
+      UNVERIFIED_MSG="the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED"
+      # Both read-back arms record a failed answer through ONE pair of
+      # helpers: the definitive counter, its threshold and the fatal
+      # message live here and nowhere else. $1 is the arm's clause for the
+      # fatal verdict, $2 its transient retry reason.
+      ropc_note_definitive() {
+        ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
+        if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
+          echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one $1; the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
+          exit 1
+        fi
+        ROPC_READBACK_REASON="$2"
+      }
+      ropc_note_transient() {
+        ROPC_DEFINITIVE_RUN=0
+        ROPC_READBACK_REASON="$1"
+      }
+      for i in 1 2 3; do
+        # The token is minted only when the last attempt left none: a
+        # listing-only failure keeps the still-valid token instead of
+        # spending three admin logins on one flaky listing. Both failure
+        # arms fall through to the ONE retry tail at the bottom of the
+        # loop; a successful listing breaks past it.
+        if [ -z "$ROPC_REALM_TOKEN" ]; then
+          kc_mint_master_token
+          ROPC_REALM_TOKEN=$(kc_access_token)
+          if [ -z "$ROPC_REALM_TOKEN" ]; then
+            ROPC_MINT_DETAIL=$(kc_error_detail)
+            if kc_is_definitive_rejection "$ROPC_MINT_DETAIL"; then
+              ropc_note_definitive \
+                "rejected the master admin token (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')" \
+                "the master admin token was rejected (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')"
+            else
+              ropc_note_transient "no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+            fi
+          fi
+        fi
+        if [ -n "$ROPC_REALM_TOKEN" ]; then
+          # max=-1: the admin API's default window would cap the listing,
+          # and the verdict below certifies the realm — it must certify
+          # everything it read, so the read asks for the full set.
+          # --max-time 15: this is the largest answer in the block, and the
+          # ROPC probe below already showed the block's 10s default too
+          # tight for a smaller call — truncating the certification call
+          # three times would fail the job on a healthy realm.
+          kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
+            --max-time 15 \
+            -H "Authorization: Bearer $ROPC_REALM_TOKEN"
+          if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
+            # A client whose directAccessGrantsEnabled member is missing or
+            # not a boolean was never READ — Keycloak's default for a new
+            # client is the grant ON, so an unread client cannot be assumed
+            # disabled: UNREAD fails like any other no-verdict answer. The
+            # member must be exactly true to count as drift, exactly false
+            # to count as read. An entry that is not a client object at all
+            # means the answer was mangled in transit — a drifted client
+            # whose entry was mangled away would otherwise vanish from the
+            # verdict — so MALFORMED is checked FIRST: a mangled answer is
+            # never reported as an empty one. Both concerns report in one
+            # answer (UNREAD first, then DRIFT) so one red run names
+            # everything the realm got wrong; neither masks the other. The
+            # program sits on several lines ON PURPOSE — a
+            # verdict-precedence edit inside a one-liner is how the
+            # EMPTY/MALFORMED ordering flipped twice under review — at the
+            # block-scalar base indent, which the YAML dedent lands at
+            # shell column 0.
+            ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c '
+      import sys, json
+      allow = {"admin-cli"}
+      data = json.load(sys.stdin)
+      if not isinstance(data, list):
+          print("PARSE_ERROR")
+      else:
+          clients = [c for c in data if isinstance(c, dict)]
+          malformed = len(clients) != len(data)
+          if malformed or not clients:
+              print("MALFORMED" if malformed else "EMPTY")
+          else:
+              unread = sorted(
+                  c.get("clientId", "?")
+                  for c in clients
+                  if c.get("directAccessGrantsEnabled") is not True
+                  and c.get("directAccessGrantsEnabled") is not False
+              )
+              drift = sorted(
+                  c.get("clientId", "?")
+                  for c in clients
+                  if c.get("directAccessGrantsEnabled") is True
+                  and c.get("clientId") not in allow
+              )
+              lines = []
+              if unread:
+                  lines.append("UNREAD:" + ",".join(unread))
+              if drift:
+                  lines.append("DRIFT:" + ",".join(drift))
+              if not lines:
+                  lines.append("OK")
+              print("\n".join(lines))
+      ' 2>/dev/null || echo "PARSE_ERROR")
+            ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
+            ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
+            break
+          fi
+          ROPC_LIST_DETAIL=$(kc_error_detail)
+          if kc_is_definitive_rejection "$ROPC_LIST_DETAIL"; then
+            # The listing refused a token this run minted seconds ago: the
+            # token is dead (the #1320 class) — drop it so the next attempt
+            # mints fresh.
+            ROPC_REALM_TOKEN=""
+            ropc_note_definitive \
+              "refused the realm client list (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')" \
+              "the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')"
+          else
+            ropc_note_transient "the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+          fi
+        fi
+        if [ "$i" -lt 3 ]; then
+          echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+        else
+          echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — giving up"
+        fi
+        { [ "$i" -lt 3 ] && sleep 5; } || true
+      done
+      if [ -z "$ROPC_CLIENT_GRANTS" ]; then
+        echo "ERROR: the realm client list could not be read back after 3 attempts ($ROPC_READBACK_REASON) — ${UNVERIFIED_MSG}."
+        exit 1
+      fi
+      # PARSE_ERROR / EMPTY / MALFORMED are whole-value verdicts (the parse
+      # emits exactly one), so equality dispatches without spawning greps.
+      case "$ROPC_CLIENT_GRANTS" in
+        PARSE_ERROR)
+          echo "ERROR: the genie realm client list could not be parsed — the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+        EMPTY)
+          echo "ERROR: the genie realm client list carries no client entries — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+        MALFORMED)
+          echo "ERROR: the genie realm client list carries entries that are not client objects — the answer was mangled in transit and a drifted client could hide behind a mangled entry; the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+      esac
+      # Drift first: it is the security-relevant answer, and when the realm
+      # got two things wrong the red run names both — the drifted client
+      # AND the clients whose grant state was never read.
+      if [ -n "$ROPC_DRIFT_IDS" ]; then
+        echo "ERROR: genie realm ROPC posture drifted — these clients carry directAccessGrantsEnabled: $ROPC_DRIFT_IDS — direct access grants must stay disabled on every client but admin-cli${ROPC_UNREAD_IDS:+; the grant state was never read for: $ROPC_UNREAD_IDS}"
+        exit 1
+      fi
+      if [ -n "$ROPC_UNREAD_IDS" ]; then
+        echo "ERROR: the genie realm client list omits the directAccessGrantsEnabled member for: $ROPC_UNREAD_IDS — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        exit 1
+      fi
+      echo "Direct-access grants verified across the genie realm's clients — none outside the allowlist (admin-cli) carries directAccessGrantsEnabled"
     # All three venue fixtures (testuser, testadmin, testplain) are
     # provisioned through ONE mechanism: the provisioning script
     # (tests/e2e/provision-e2e-fixtures.js) over the ensureUser helper —

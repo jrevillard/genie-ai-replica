@@ -5,6 +5,7 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
+const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -346,13 +347,12 @@ test.describe('Conversation — status pill', () => {
     const pillFont = await pill.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(pillFont, 'the pill label is body-legible, not a footnote').toBeGreaterThanOrEqual(12);
     // A failed turn flips the pill to its offline explanation.
-    await page.route('**/queries/stream**', async (route) => {
-      try {
+    await page.route(
+      '**/queries/stream**',
+      runRouteHandler(page, async (route) => {
         await route.abort();
-      } catch {
-        /* the context closed before the abort */
-      }
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('say something');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
@@ -450,20 +450,24 @@ test.describe('Conversation — answer card', () => {
   // first frame of the stream.
   test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    // Throttle the stream so the thinking frame is stable and observable —
-    // otherwise the answer may complete before the first read.
-    await page.route('**/queries/stream**', async (route) => {
-      try {
+    // Hold the stream until the thinking frame has been read — a fixed
+    // sleep is slow on a fast machine and flaky on a slow one, and the
+    // release promise is the same idiom the background-completion test
+    // below uses. The frame is then stable by construction, not by
+    // timing.
+    let releaseStream;
+    const streamReleased = new Promise((resolve) => {
+      releaseStream = resolve;
+    });
+    await page.route(
+      '**/queries/stream**',
+      runPostOnlyRouteHandler(page, async (route) => {
         const resp = await route.fetch();
         const body = await resp.text();
-        await new Promise((r) => setTimeout(r, 800));
-        // The browser context may close while the throttle is still pending —
-        // the fulfilled stream would then outlive its test.
+        await streamReleased;
         await route.fulfill({ response: resp, body });
-      } catch {
-        /* the context closed mid-throttle */
-      }
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // The card exists immediately (the thinking frame), before the answer
@@ -484,6 +488,8 @@ test.describe('Conversation — answer card', () => {
     expect(early.shadow, 'the card is elevated').toBe(true);
     expect(early.distinctFromGround, 'the card fills one step above the unified ground, not the same paint').toBe(true);
     expect(early.hasThinking, 'the first frame shows the thinking indicator, not a fake progress').toBe(true);
+    // The frame has been read: let the answer through.
+    releaseStream();
     await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     const late = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="answer-card"]');
@@ -533,22 +539,17 @@ test.describe('Conversation — surface invariants', () => {
     });
     await ackFeedback(page);
     const body = sseBody(['The answer completes in the background.']);
-    await page.route('**/queries/stream**', async (route) => {
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
-      await streamReleased;
-      try {
+    await page.route(
+      '**/queries/stream**',
+      runPostOnlyRouteHandler(page, async (route) => {
+        await streamReleased;
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
           body
         });
-      } catch {
-        /* the context closed before the fulfillment */
-      }
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.

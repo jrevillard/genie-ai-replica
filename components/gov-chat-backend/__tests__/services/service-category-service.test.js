@@ -813,14 +813,11 @@ describe('ServiceCategoryService', () => {
     });
 
     it('throws a ValidationError when categoryKey is missing', async () => {
-      try {
-        await service.getCategoryTranslations(null);
-        throw new Error('should have thrown');
-      } catch (e) {
-        expect(e.name).toBe('ValidationError');
-        expect(e.statusCode).toBe(400);
-        expect(e.message).toBe('Invalid category key provided');
-      }
+      await expect(service.getCategoryTranslations(null)).rejects.toMatchObject({
+        name: 'ValidationError',
+        statusCode: 400,
+        message: 'Invalid category key provided'
+      });
     });
   });
 
@@ -854,14 +851,11 @@ describe('ServiceCategoryService', () => {
     });
 
     it('throws a ValidationError when serviceKey is missing', async () => {
-      try {
-        await service.getServiceTranslations(null);
-        throw new Error('should have thrown');
-      } catch (e) {
-        expect(e.name).toBe('ValidationError');
-        expect(e.statusCode).toBe(400);
-        expect(e.message).toBe('Invalid service key provided');
-      }
+      await expect(service.getServiceTranslations(null)).rejects.toMatchObject({
+        name: 'ValidationError',
+        statusCode: 400,
+        message: 'Invalid service key provided'
+      });
     });
   });
 

@@ -249,23 +249,28 @@
                         </DsStateDisplay>
 
                         <div v-else>
-                          <div
+                          <DsStateDisplay
                             v-if="translationsLoadFailed"
-                            class="translations-load-failed"
+                            type="error"
                             data-test-id="hierarchy-translations-load-failed"
+                            :message="
+                              translate(
+                                'admin.hierarchy.translationsLoadFailedNotice',
+                                'Translations could not be loaded. Editing is disabled until they load.'
+                              )
+                            "
                           >
-                            <span class="translations-load-failed-text">
-                              {{
-                                translate(
-                                  'admin.hierarchy.translationsLoadFailedNotice',
-                                  'Translations could not be loaded. Editing is disabled until they load.'
-                                )
-                              }}
-                            </span>
-                            <DsButton variant="secondary" :small="true" @click="retryHierarchyTranslations">
-                              {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
-                            </DsButton>
-                          </div>
+                            <template #action>
+                              <DsButton
+                                variant="secondary"
+                                :small="true"
+                                data-test-id="hierarchy-translations-retry"
+                                @click="retryHierarchyTranslations"
+                              >
+                                {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
+                              </DsButton>
+                            </template>
+                          </DsStateDisplay>
                           <div
                             v-for="(translation, index) in hierarchyForm.translations"
                             :key="index"
@@ -5240,21 +5245,6 @@ input:checked + .slider:before {
   font-weight: 600;
   color: var(--muted);
   margin-bottom: var(--space-md);
-}
-.translations-load-failed {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--warning);
-  border-radius: var(--radius-sm);
-  background: var(--warning-bg);
-}
-.translations-load-failed-text {
-  color: var(--fg);
-  font-size: var(--text-sm);
 }
 .translation-row {
   display: flex;

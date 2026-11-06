@@ -311,31 +311,24 @@ class ServiceCategoryService {
    *   answers false.
    */
   async categoryExists(categoryKey) {
+    if (!categoryKey) {
+      logger.warn('Invalid category key provided');
+      return false;
+    }
     try {
       logger.info(`Checking if category ${categoryKey} exists`);
-      if (!categoryKey) {
-        logger.warn('Invalid category key provided');
-        return false;
-      }
-
-      const document = await this.serviceCategories.document(categoryKey);
-      // The ArcadeDB adapter resolves a missing row as undefined instead of
-      // raising — without this the absence would pass as an existing record
-      // (the same guard _documentOr404 applies).
-      if (!document) {
-        logger.info(`Category existence check: ${categoryKey} does not exist`);
-        return false;
-      }
+      // The absence verdict comes from _documentOr404: it classifies a
+      // missing row, the 3.12 no-match and the undefined-resolving adapter
+      // as a typed NotFoundError, and rethrows every real fault (a missing
+      // collection, a DB outage) untouched. A missing COLLECTION also
+      // answers HTTP 404 (errorNum 1203), and reporting that as "no such
+      // category" would render a broken deployment as an ordinary missing
+      // resource.
+      await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
       logger.info(`Category existence check successful: ${categoryKey} exists`);
       return true;
     } catch (error) {
-      // The verdict comes from the canonical absence classifier
-      // (components/shared/lib/arango-absence.js), NOT from the HTTP
-      // status: a missing COLLECTION also answers 404 (errorNum 1203), and
-      // reporting that as "no such category" would render a broken
-      // deployment as an ordinary missing resource. Non-absence errors
-      // propagate.
-      if (dbService._isExpectedAbsence(error)) {
+      if (error instanceof NotFoundError) {
         logger.info(`Category existence check: ${categoryKey} does not exist`);
         return false;
       }

@@ -6,7 +6,7 @@
  * Covers: renders without errors, auth state from Vuex, tab navigation,
  * overview tab content, users tab content, and loading state.
  */
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const { createAuthenticatedState, createUnauthenticatedState } = require('../fixtures/store-state');
 const { realI18nMock } = require('../helpers/realI18n');
@@ -299,12 +299,17 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extra
         },
         DsSpinner: true,
         DsStateDisplay: {
-          template: '<div><slot /></div>',
+          // Mirrors the real primitive: a message prop, the default slot
+          // and the #action slot (the sibling components put their Retry
+          // button there).
+          template:
+            '<div><p v-if="message">{{ message }}</p><slot /><div class="ds-state__action"><slot name="action" /></div></div>',
           props: ['type', 'message']
         },
         DsInput: {
-          template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          props: ['modelValue', 'type', 'placeholder']
+          template:
+            '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          props: ['modelValue', 'type', 'placeholder', 'disabled']
         },
         DsSelect: true,
         DsStatusTag: true,
@@ -3257,11 +3262,6 @@ describe('translation load-failure gate', () => {
         template: '<select :disabled="disabled"><slot /></select>',
         props: ['modelValue', 'placeholder', 'disabled']
       },
-      DsInput: {
-        template:
-          '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-        props: ['modelValue', 'type', 'placeholder', 'disabled']
-      }
     };
 
     async function mountFailedEdit() {
@@ -3331,7 +3331,7 @@ describe('translation load-failure gate', () => {
       const notice = wrapper.find('[data-test-id="hierarchy-translations-load-failed"]');
       expect(notice.exists()).toBe(true);
       expect(notice.text()).toContain('Translations could not be loaded');
-      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
       expect(retryBtn).toBeTruthy();
       wrapper.unmount();
     });
@@ -3341,9 +3341,9 @@ describe('translation load-failure gate', () => {
       treeMock.getServiceTranslations.mockClear();
       treeMock.getServiceTranslations.mockResolvedValueOnce([{ lang: 'fr', text: 'Déclaration' }]);
 
-      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
       await retryBtn.trigger('click');
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
 
       expect(treeMock.getServiceTranslations).toHaveBeenCalledWith('svc-1');
       expect(wrapper.vm.translationsLoadFailed).toBe(false);
@@ -3362,9 +3362,9 @@ describe('translation load-failure gate', () => {
       treeMock.getServiceTranslations.mockClear();
       treeMock.getServiceTranslations.mockResolvedValueOnce([]);
 
-      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
       await retryBtn.trigger('click');
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
 
       expect(wrapper.vm.translationsLoadFailed).toBe(false);
       expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
@@ -3376,9 +3376,9 @@ describe('translation load-failure gate', () => {
       treeMock.getServiceTranslations.mockClear();
       treeMock.getServiceTranslations.mockRejectedValueOnce(new Error('still down'));
 
-      const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry');
+      const retryBtn = wrapper.find('[data-test-id="hierarchy-translations-retry"]');
       await retryBtn.trigger('click');
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
 
       expect(wrapper.vm.translationsLoadFailed).toBe(true);
       expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(true);

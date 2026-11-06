@@ -423,12 +423,40 @@ describe('ServiceCategoryService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when category not found (404)', async () => {
-      const err = new Error('Not found');
-      err.code = 404;
-      mockServiceCategories.document.mockRejectedValue(err);
+    it('should return false for a canonical absence (driver document-not-found)', async () => {
+      // The classifier's own shapes (1204, the 3.12 no-match) are covered
+      // at their owner: shared/lib/__tests__/db-connection-service.test.js.
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
 
       const result = await service.categoryExists('missing');
+      expect(result).toBe(false);
+    });
+
+    it('rethrows a missing-collection error (1203) instead of answering "does not exist"', async () => {
+      // A missing/misnamed collection also carries HTTP 404 (errorNum 1203).
+      // Classifying it as "the category does not exist" renders a broken
+      // deployment as an ordinary missing resource.
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('collection or index not found'), { code: 404, errorNum: 1203 })
+      );
+
+      await expect(service.categoryExists('cat-1')).rejects.toThrow('collection or index not found');
+    });
+
+    it('rethrows a DB outage instead of answering "does not exist" (a 404 would lie)', async () => {
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.categoryExists('cat-1')).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('should return false when the adapter resolves a missing row as undefined', async () => {
+      // The ArcadeDB adapter resolves absence instead of raising — the same
+      // shape _documentOr404 defends against in this file.
+      mockServiceCategories.document.mockResolvedValue(undefined);
+
+      const result = await service.categoryExists('phantom');
       expect(result).toBe(false);
     });
 
@@ -437,11 +465,16 @@ describe('ServiceCategoryService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false on other errors', async () => {
-      mockServiceCategories.document.mockRejectedValue(new Error('DB error'));
+    it('initializes the service before the check (a fresh instance holds no collection yet)', async () => {
+      // Every other method of the service initializes first; without it the
+      // check dereferences a null collection — a TypeError the caller would
+      // report as a server fault.
+      service.initialized = false;
+      service.serviceCategories = null;
 
       const result = await service.categoryExists('cat-1');
-      expect(result).toBe(false);
+
+      expect(result).toBe(true);
     });
   });
 
@@ -786,8 +819,12 @@ describe('ServiceCategoryService', () => {
       await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
     });
 
-    it('should throw Error when categoryKey is missing', async () => {
-      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
+    it('throws a ValidationError when categoryKey is missing', async () => {
+      await expect(service.getCategoryTranslations(null)).rejects.toMatchObject({
+        name: 'ValidationError',
+        statusCode: 400,
+        message: 'Invalid category key provided'
+      });
     });
   });
 
@@ -820,8 +857,12 @@ describe('ServiceCategoryService', () => {
       await expect(service.getServiceTranslations('svc-1')).rejects.toThrow('ECONNREFUSED');
     });
 
-    it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key provided');
+    it('throws a ValidationError when serviceKey is missing', async () => {
+      await expect(service.getServiceTranslations(null)).rejects.toMatchObject({
+        name: 'ValidationError',
+        statusCode: 400,
+        message: 'Invalid service key provided'
+      });
     });
   });
 

@@ -146,3 +146,19 @@ it('a refused import (the server answered with an error) shows the failure, not 
   expect(wrapper.find('[data-test-id="okf-input-split-note"]').exists()).toBe(false);
   expect(wrapper.vm.fsError).toBeTruthy();
 });
+
+it('a report that is not a list says nothing — the wizard does not render a broken note', async () => {
+  // `split_documents` is the server's shape, and the server's shape can
+  // change. A note built from something that is not a list would render
+  // nonsense ("undefined parts"), so the guard returns early and the wizard
+  // says nothing at all.
+  mockImportConcepts.mockResolvedValue({ ok: true, split_documents: 'not-a-list' });
+  const wrapper = mountInput();
+  await settled(wrapper);
+
+  await wrapper.vm.onFsFiles({ target: { files: [pickedFile('odd.md', 'x')] } });
+  await settled(wrapper);
+
+  expect(wrapper.vm.fsSplitNote).toBe('');
+  expect(wrapper.find('[data-test-id="okf-input-split-note"]').exists()).toBe(false);
+});

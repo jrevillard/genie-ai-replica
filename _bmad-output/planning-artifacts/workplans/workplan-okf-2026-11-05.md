@@ -12,7 +12,7 @@ the ORDER and the cross-stream slots.
 
 | Stream | Branch | Tracker | Scope |
 |---|---|---|---|
-| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
+| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) — **MERGED to main 2026-11-05** (MR **!770**; rebase merge → `bc1989f8a`; the branch is back on origin as the readable form of the work) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
 | **C — CSR waves resume** | `feat/okf-chat-source-w1` (pushed through `92209a1548`; W1–W5 done, live-verified, deliberately held back as one batch — **still unmerged, no code MR**; the CAP-3 guard is already running in the local build) | #1409 umbrella, !720 planning MR **MERGED to main 2026-11-06** (`b4cc40dbe`) | W6–W9 per the remediation plan |
 | **T — Triage-scheduled items** | slot into U/C per their rulings | the 12 open `prd::okf-server` issues | See Phase T |
 
@@ -24,6 +24,14 @@ the ORDER and the cross-stream slots.
 > Security review: no findings on every slice. Frontend 129 suites / 3739 tests
 > green at 88.84% coverage (baseline 88.78% held+raised); okf-server 82 suites /
 > 1990 tests green. MR + Phase C resume follow.**
+>
+> **UPDATED 2026-11-06: the MR followed — !770 was opened and MERGED to main on
+> 2026-11-05** (a rebase merge, so main carries the work as `bc1989f8a` and the
+> branch's own commits are not ancestors of main — the shape, not the content, is
+> what differs). The branch was removed from origin after the merge and has
+> been put back, so the plan's named branch exists again and the UX work is
+> readable in its eight focused commits. UX-5's leg optimization still waits on
+> the live `[okf-lab-timing]` numbers.**
 
 1. **UX-1 — Tab-rack consolidation.** Remove the left nav rail (`.sidebar`, whose
    sections mirror the tab rack 1:1); ship its icons into the main tab rack

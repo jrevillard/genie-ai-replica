@@ -56,8 +56,7 @@ jest.mock('@/config/oidcConfig', () => ({
   postLogoutRedirectUri: 'http://localhost',
   responseType: 'code',
   scope: 'openid profile email',
-  automaticSilentRenew: true,
-  storeAuthStateInCookie: false
+  automaticSilentRenew: true
 }));
 
 const { RENEW_LEASE_KEY, RENEW_USER_KEY } = require('@/services/keycloakAuthService');
@@ -852,6 +851,43 @@ describe('cross-tab renew lease (#80800)', () => {
     }
   });
 
+  // The catch arm of the same cleanup (a CORRUPT entry — non-parsing JSON)
+  // removes without judging what is on disk NOW: a holder that publishes a
+  // fresh handoff between the cleanup's read and the catch arm's removal
+  // must keep it, exactly like the sibling case above (#1607).
+  it('a publication published while the cleanup judges a CORRUPT entry survives (#1607)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    const corruptRaw = '{not json';
+    const fresh = createMockUser({ access_token: 'fresh-corrupt-race' });
+    const freshRaw = JSON.stringify({ at: Date.now(), tab: 'holder-tab', user: fresh });
+    window.localStorage.setItem(RENEW_USER_KEY, corruptRaw);
+    const realGetItem = Storage.prototype.getItem;
+    let firstRead = true;
+    const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
+      if (key !== RENEW_USER_KEY) return realGetItem.call(this, key);
+      if (firstRead) {
+        firstRead = false;
+        // A holder publishes a FRESH handoff right after the cleanup's read:
+        // the cleanup still sees the corrupt entry, the disk already holds
+        // the fresh one.
+        window.localStorage.setItem(RENEW_USER_KEY, freshRaw);
+        return corruptRaw;
+      }
+      return realGetItem.call(this, key);
+    });
+    try {
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'own-grant-token' }));
+      await keycloakAuthService.signinSilent();
+      spy.mockRestore();
+      // The fresh handoff is still on disk — the catch arm judged the corrupt
+      // entry it READ, not whatever landed after it.
+      expect(window.localStorage.getItem(RENEW_USER_KEY)).toBe(freshRaw);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('publication retention: the cleanup drops a publication whose token is spent, keeps one whose token is live (#1535)', async () => {
     mockGetUser.mockResolvedValue(null);
     mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-ok' }));
@@ -1092,18 +1128,32 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(third.access_token).toBe('memo-token');
   });
 
-  it('a corrupt (at-less) publication is dropped at renew entry like a non-parsing one (#1521 review)', async () => {
+  it('an at-less publication is judged by its token, not its stamp — a live one is adoptable (#1615)', async () => {
+    delete navigator.locks;
+    mockGetUser.mockResolvedValue(null);
+    // The stamp is provenance, not a gate (#1615): the retention keys on the
+    // token's own expiry, so an entry without `at` is judged like any other —
+    // by whether a reader could still use its token. (The pre-#1535 reader
+    // never checked the stamp; the shared predicate must not either, or a
+    // writer that dropped it would make every handoff unreadable.)
+    const atLess = createMockUser({ access_token: 'at-less-pub' });
+    window.localStorage.setItem(RENEW_USER_KEY, JSON.stringify({ tab: 'holder-tab', user: atLess }));
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-grant' }));
+    const user = await keycloakAuthService.signinSilent();
+    expect(user.access_token).toBe('at-less-pub'); // adopted, not re-granted
+    expect(mockSigninSilent).not.toHaveBeenCalled();
+    // and the live handoff stays on disk — the cleanup keeps what a reader can use
+    expect(window.localStorage.getItem(RENEW_USER_KEY)).not.toBeNull();
+  });
+
+  it('a non-parsing publication is dropped at renew entry like any corruption (#1521 review)', async () => {
     delete navigator.locks;
     mockGetUser.mockResolvedValue(null);
     // The grant fails so nothing republishes the slot — only the entry
-    // cleanup can empty it.
+    // cleanup can empty it. A non-parsing value is corruption no reader can
+    // judge: the catch arm drops it.
     mockSigninSilent.mockRejectedValue(new Error('grant refused'));
-    // Valid JSON, no usable `at` — not a publication this build wrote (the
-    // publisher always stamps `at`), so the corruption arm drops it.
-    window.localStorage.setItem(
-      RENEW_USER_KEY,
-      JSON.stringify({ user: createMockUser({ access_token: 'at-less-pub' }) })
-    );
+    window.localStorage.setItem(RENEW_USER_KEY, '{not json');
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('grant refused');
     expect(window.localStorage.getItem(RENEW_USER_KEY)).toBeNull();
   });

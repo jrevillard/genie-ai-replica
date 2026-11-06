@@ -79,7 +79,7 @@ curl -sk -X POST "<KEYCLOAK_URL>/admin/realms/<REALM>/users" \
   }'
 ```
 
-**`PUT` on a user is a partial update:** the fields the payload omits are kept, and the credentials array is touched only when the payload carries one. Send the fields you mean to change; at creation, send the full payload — there, an omitted field is an omitted value.
+**`PUT` on a user is a partial update:** the credentials array is touched only when the payload carries one, so a partial payload does not delete the password. One exception: a payload that carries an `attributes` map replaces the user's attributes instead of merging them, and the profile fields it omits (email, name) are cleared. Send the fields you mean to change; at creation, send the full payload — there, an omitted field is an omitted value.
 
 ## Key Pitfalls
 

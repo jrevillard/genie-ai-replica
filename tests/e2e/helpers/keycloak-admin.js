@@ -94,19 +94,16 @@ function bodyText(res) {
 }
 
 // The payload shapes a read can expect: a LIST of representations, or a
-// single REPRESENTATION carrying the id its caller indexes.
-const ARRAY_PAYLOAD = 'array';
-const REPRESENTATION_PAYLOAD = 'representation';
-
-const PAYLOAD_SHAPES = {
-  [ARRAY_PAYLOAD]: {
-    ok: (data) => Array.isArray(data),
-    complaint: 'with a non-array payload',
-  },
-  [REPRESENTATION_PAYLOAD]: {
-    ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
-    complaint: 'without a usable representation',
-  },
+// single REPRESENTATION carrying the id its caller indexes. The descriptor
+// travels with the read, so there is no name to mistype and no shape a
+// read site can silently fall through.
+const ARRAY_SHAPE = {
+  ok: (data) => Array.isArray(data),
+  complaint: 'with a non-array payload',
+};
+const REPRESENTATION_SHAPE = {
+  ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
+  complaint: 'without a usable representation',
 };
 
 /**
@@ -115,20 +112,15 @@ const PAYLOAD_SHAPES = {
  * undefined entry instead of naming the cause.
  * @param {string} what - What was being read, for the verdict
  * @param {{data: *}} res - The response
- * @param {string} shape - ARRAY_PAYLOAD or REPRESENTATION_PAYLOAD
+ * @param {{ok: function, complaint: string}} shape - ARRAY_SHAPE or
+ *   REPRESENTATION_SHAPE
  * @throws {Error} The verdict — flagged as an invalid payload
  */
 function assertPayloadShape(what, res, shape) {
-  const spec = PAYLOAD_SHAPES[shape];
-  if (!spec) {
-    // An unknown shape is a bug in the read site, not a broken answer: a
-    // silent fallthrough would answer with the wrong verdict.
-    throw new Error(`Unknown payload shape "${shape}" for ${what} — the read site is wrong`);
-  }
-  if (spec.ok(res.data)) return;
+  if (shape.ok(res.data)) return;
   // The verdict reads as a sentence, so the subject starts capitalized.
   const subject = what.charAt(0).toUpperCase() + what.slice(1);
-  const error = new Error(`${subject} answered HTTP 200 ${spec.complaint}: ${bodyText(res)}`);
+  const error = new Error(`${subject} answered HTTP 200 ${shape.complaint}: ${bodyText(res)}`);
   error.invalidPayload = true;
   throw error;
 }
@@ -227,7 +219,7 @@ async function findUsers(adminToken, realm, field, value) {
       adminToken,
       `/auth/admin/realms/${realm}/users?${field}=${encodeURIComponent(value)}&exact=true`,
       `the user lookup of ${value} in realm ${realm}`,
-      { shape: ARRAY_PAYLOAD }
+      { shape: ARRAY_SHAPE }
     );
     return searchRes.data;
   } catch (err) {
@@ -280,7 +272,7 @@ async function findRealmRole(adminToken, realm, roleName) {
       absentStatus: 404,
       // A 200 with no usable representation is a broken answer, not a role:
       // the callers index role.id on it.
-      shape: REPRESENTATION_PAYLOAD,
+      shape: REPRESENTATION_SHAPE,
     }
   );
   if (res === null) return null;
@@ -497,7 +489,7 @@ async function effectiveRealmRoles(adminToken, realm, userId) {
     adminToken,
     `/auth/admin/realms/${realm}/users/${userId}/role-mappings/realm/composite`,
     `the effective realm roles of ${userId}`,
-    { shape: ARRAY_PAYLOAD }
+    { shape: ARRAY_SHAPE }
   );
   return res.data.map((r) => r.name);
 }
@@ -616,7 +608,10 @@ async function convergeUser(adminToken, realm, userData) {
       );
     }
     if (resetRes.status !== 204) {
-      failWithStatus(`Failed to converge the password of ${username}: HTTP ${resetRes.status}`, resetRes.status);
+      failWithStatus(
+        `Failed to converge the password of ${username}: HTTP ${resetRes.status} ${bodyText(resetRes)}`,
+        resetRes.status
+      );
     }
   }
 
@@ -824,7 +819,7 @@ async function rotateRealmKeys(adminToken, realm) {
     adminToken,
     `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`,
     `the existing key providers of ${realm}`,
-    { shape: ARRAY_PAYLOAD }
+    { shape: ARRAY_SHAPE }
   );
   const existingKeys = keysRes.data;
 
@@ -894,7 +889,7 @@ async function getRealmSettings(adminToken, realm) {
   // rotation parents the new key on it) — a 200 without one is a broken
   // answer, not a realm.
   const res = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm settings of ${realm}`, {
-    shape: REPRESENTATION_PAYLOAD,
+    shape: REPRESENTATION_SHAPE,
   });
   return res.data;
 }
@@ -960,9 +955,9 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 
   const searchRes = await readAdminApi(
     adminToken,
-    `/auth/admin/realms/${realm}/clients?clientId=${clientId}`,
+    `/auth/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
     `the client ${clientId} of ${realm}`,
-    { shape: ARRAY_PAYLOAD }
+    { shape: ARRAY_SHAPE }
   );
 
   // An empty list is the admin API's way of saying the realm carries no

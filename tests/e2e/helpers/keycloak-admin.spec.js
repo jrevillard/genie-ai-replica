@@ -556,8 +556,10 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
   test('a failed email probe fails loudly instead of guessing', async () => {
     routes = [POST_USERS_409, USERNAME_LOOKUP_MISS, ['GET', EMAIL_LOOKUP, { status: 403, data: null }]];
 
+    // The verdict names the status Keycloak answered: the caller must be
+    // able to tell a rate limit from an expired admin token.
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
-      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run`)
+      new RegExp(`email-ownership probe for ${ADMIN_FIXTURE.email.replaceAll('.', '\\.')} could not run \\(HTTP 403\\)`)
     );
   });
 
@@ -1170,6 +1172,7 @@ test.describe('the realm settings helpers report a failure with the module verdi
     const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
 
     expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(500);
     expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
   });
 

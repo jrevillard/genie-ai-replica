@@ -288,6 +288,33 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # The readiness side of the truncated-mint classification (#1319
+            # as amended): a 401 trailer over a truncated transport answer is
+            # noise — it must NEVER reach the definitive fail-fast ("Check
+            # KEYCLOAK_ADMIN_PASSWORD" on healthy credentials); the budget
+            # rides it out and the honest verdict is the exhaustion one.
+            "readiness_truncated_mint_401_retries",
+            1,
+            base_rules(
+                token_resp={
+                    "status": "401",
+                    "body": json.dumps(
+                        {
+                            "error": "invalid_grant",
+                            "error_description": "Invalid user credentials.",
+                        }
+                    ),
+                    "rc": 28,
+                }
+            ),
+            expect=["master admin token never obtained"],
+            forbid=["definitively rejected"],
+            calls={"token": 90},
+        )
+    )
+
+    scs.append(
+        scenario(
             "transient_000_then_token_ok",
             0,
             base_rules(
@@ -474,8 +501,8 @@ def scenarios_list():
                 ]
             ),
             expect=[
-                "master admin token was rejected",
-                "on 3 consecutive attempts",
+                "3 consecutive definitive rejections",
+                "rejected the master admin token",
                 "UNVERIFIED",
             ],
             forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
@@ -521,7 +548,7 @@ def scenarios_list():
             ),
             expect=[
                 "the realm client list was refused",
-                "on 3 consecutive attempts",
+                "3 consecutive definitive rejections",
                 "UNVERIFIED",
             ],
             forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
@@ -736,7 +763,7 @@ def scenarios_list():
             ),
             expect=[
                 "the realm client list was refused",
-                "on 3 consecutive attempts",
+                "3 consecutive definitive rejections",
                 "UNVERIFIED",
             ],
             forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
@@ -772,7 +799,7 @@ def scenarios_list():
             ],
             # The one-off rejection legitimately names itself in the retry
             # reason; what must never appear is the DEFINITIVE verdict.
-            forbid=[FIXTURE_SECRET, "on 3 consecutive attempts"],
+            forbid=[FIXTURE_SECRET, "3 consecutive definitive rejections"],
             calls={"token": 3},
         )
     )

@@ -564,13 +564,19 @@ workflow:
           # The error field is parsed from KC_RAW (the full capture, like
           # the token parse above) — the 200-char display BODY can truncate
           # the JSON before the error member and would hide a real
-          # rejection. The parse only runs on a 401: other statuses reset.
+          # rejection. The parse only runs on a CLEAN-exit 401 (#1319's rule
+          # as amended by this MR): a truncated answer — curl exit != 0, the
+          # #1334 round-6 class — may carry a status trailer over a cut
+          # body, and a truncated answer is never read as a verdict (#1320);
+          # it counts as transient noise and the budget rides it out. Other
+          # statuses reset.
           TOKEN_REJECT_DETAIL=""
-          if [ "$TOKEN_STATUS" = "401" ]; then
+          if [ "$TOKEN_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
             TOKEN_REJECT_DETAIL=$(kc_error_detail)
           fi
           # DETAIL is reset unconditionally above and assigned only in the
-          # 401 branch — non-empty ⟹ a definitive OAuth rejection answer.
+          # clean-exit-401 branch — non-empty ⟹ a definitive OAuth
+          # rejection answer.
           if [ -n "$TOKEN_REJECT_DETAIL" ]; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else
@@ -854,7 +860,7 @@ workflow:
             if kc_is_definitive_rejection "$ROPC_MINT_DETAIL"; then
               ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
               if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
-                echo "ERROR: the master admin token was rejected for the realm client read-back (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}') on ${ROPC_DEFINITIVE_RUN} consecutive attempts — ${UNVERIFIED_MSG}."
+                echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one rejected the master admin token (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}'); the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
                 exit 1
               fi
               ROPC_READBACK_REASON="the master admin token was rejected (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')"
@@ -862,7 +868,11 @@ workflow:
               ROPC_DEFINITIVE_RUN=0
               ROPC_READBACK_REASON="no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
             fi
-            echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+            if [ "$i" -lt 3 ]; then
+              echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+            else
+              echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — giving up"
+            fi
             { [ "$i" -lt 3 ] && sleep 5; } || true
             continue
           fi
@@ -894,7 +904,7 @@ workflow:
           ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
           ROPC_REALM_TOKEN=""
           if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
-            echo "ERROR: the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}') on ${ROPC_DEFINITIVE_RUN} consecutive attempts — ${UNVERIFIED_MSG}."
+            echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one refused the realm client list (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}'); the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
             exit 1
           fi
           ROPC_READBACK_REASON="the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')"
@@ -902,7 +912,11 @@ workflow:
           ROPC_DEFINITIVE_RUN=0
           ROPC_READBACK_REASON="the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
         fi
-        echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+        if [ "$i" -lt 3 ]; then
+          echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
+        else
+          echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — giving up"
+        fi
         { [ "$i" -lt 3 ] && sleep 5; } || true
       done
       if [ -z "$ROPC_CLIENT_GRANTS" ]; then
@@ -910,11 +924,11 @@ workflow:
         exit 1
       fi
       if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^PARSE_ERROR$'; then
-        echo "ERROR: the genie realm client list could not be parsed (answer: '$ROPC_CLIENT_GRANTS') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        echo "ERROR: the genie realm client list could not be parsed — the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
         exit 1
       fi
       if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^EMPTY$'; then
-        echo "ERROR: the genie realm client list carries no client entries (answer: 'EMPTY') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        echo "ERROR: the genie realm client list carries no client entries — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
         exit 1
       fi
       # Drift first: it is the security-relevant answer, and when the realm

@@ -59,6 +59,7 @@ the re-scoped scenario set):
 | #1319 classifier reads the 200-char display body instead of the full capture | `long_body_401_still_fails_fast` |
 | #1320 fail-fast loses the clean-exit gate (truncated 401 treated as definitive) | `truncated_client_401_retries` |
 | the realm read-back's drift verdict no longer fails the job (#1303) | `realm_client_drift_fails` |
+| the readiness loop's #1319 classifier loses the clean-exit gate — #1319's rule as amended by !795: a truncated 401 is transport noise, never a definitive credentials rejection | `readiness_truncated_mint_401_retries` |
 
 The read-back's own failure paths are asserted too: a listing the admin API
 refuses (`realm_client_listing_unreadable_fails`) leaves the invariant

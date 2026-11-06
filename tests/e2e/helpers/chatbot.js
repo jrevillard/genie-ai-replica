@@ -9,7 +9,7 @@ const {
   TEST_ADMIN_USER,
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
-const { runPostOnlyRouteHandler, runRouteHandler } = require('./route');
+const { runPostOnlyRouteHandler } = require('./route');
 
 // Normalized once: page.url() never produces a trailing double slash,
 // so every `${BASE_URL}/...` interpolation stays well-formed even when
@@ -276,12 +276,8 @@ async function mockChatStream(page, chunks, metadata) {
 async function ackFeedback(page) {
   await page.route(
     '**/feedback**',
-    runRouteHandler(page, async (route) => {
-      if (route.request().method() === 'POST') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-        return;
-      }
-      await route.continue();
+    runPostOnlyRouteHandler(page, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     })
   );
 }

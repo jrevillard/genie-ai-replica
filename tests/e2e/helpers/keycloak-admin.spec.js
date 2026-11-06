@@ -23,12 +23,15 @@ const {
  */
 
 // The fake transport: a table of [method, pathRegex] → {status, data}
-// (or {throws}), plus a call log the endpoint assertions read.
+// (or {throws}), plus a call log and a body log the endpoint assertions
+// read.
 let routes;
 let calls;
+let bodies;
 
-function fakeRequest(method, path) {
+function fakeRequest(method, path, options = {}) {
   calls.push(`${method} ${path}`);
+  bodies.push(options.body);
   for (const [m, pattern, answer] of routes) {
     if (m === method && pattern.test(path)) {
       if (answer.throws) return Promise.reject(answer.throws);
@@ -99,6 +102,7 @@ async function rejection(promise) {
 test.beforeEach(() => {
   routes = [];
   calls = [];
+  bodies = [];
   auth.request = fakeRequest;
 });
 
@@ -436,7 +440,10 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
 
     expect(caught).toBeTruthy();
     expect(caught.transient).toBe(true);
-    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the email-ownership probe/);
+    // The probe's verdict names the user lookup it ran; the diagnosis step
+    // is named after it, not stitched into it.
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the user lookup of/);
+    expect(caught.message).toMatch(/while running the email-ownership probe of/);
   });
 
   test('a username lookup that FAILED diagnoses nothing about the account', async () => {
@@ -572,6 +579,29 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     expect(calls.some((call) => call.includes('email='))).toBe(false);
   });
 
+  test('a create that did NOT answer 409 is reported as-is, with no probe', async () => {
+    // The diagnosis exists for the 409 shape only: a vanished account on a
+    // 201 create has no conflict to explain, and probing would invent one.
+    routes = [
+      ['POST', USERS_PATH, { status: 201, data: null }],
+      ['GET', USERNAME_LOOKUP, { status: 200, data: [] }],
+    ];
+
+    let caught;
+    try {
+      await createUser('tok', REALM, ADMIN_USER);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toMatch(/User testadmin not found in realm genie/);
+    expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
+    expect(calls.some((call) => call.includes('email='))).toBe(false);
+  });
+});
+
+test.describe('convergeUser keeps a transport break retryable', () => {
   test('a transport break during the role assignment stays transient, so the retry budget can save the provisioning', async () => {
     // The role assignment runs on EVERY converge: a break there must carry
     // the transient verdict, or the retry budget cannot see it and the
@@ -616,27 +646,6 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     expect(caught.message).toMatch(
       /Cannot reach the Keycloak admin API for the password convergence of testadmin \(user-1\)/
     );
-  });
-
-  test('a create that did NOT answer 409 is reported as-is, with no probe', async () => {
-    // The diagnosis exists for the 409 shape only: a vanished account on a
-    // 201 create has no conflict to explain, and probing would invent one.
-    routes = [
-      ['POST', USERS_PATH, { status: 201, data: null }],
-      ['GET', USERNAME_LOOKUP, { status: 200, data: [] }],
-    ];
-
-    let caught;
-    try {
-      await createUser('tok', REALM, ADMIN_USER);
-    } catch (err) {
-      caught = err;
-    }
-
-    expect(caught).toBeTruthy();
-    expect(caught.message).toMatch(/User testadmin not found in realm genie/);
-    expect(caught.message).not.toMatch(/email conflict|deleted mid-provisioning/);
-    expect(calls.some((call) => call.includes('email='))).toBe(false);
   });
 });
 
@@ -1221,5 +1230,33 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
 
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC enablement of genie-app/);
+  });
+
+  test('enabling ROPC puts the whole client representation with the grant flipped', async () => {
+    // Keycloak replaces the client on PUT: the update must carry the
+    // representation it read, or the enablement would wipe the client's
+    // other settings.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }],
+    ];
+
+    await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+    ]);
+    // Keycloak replaces the client wholesale: the whole representation it
+    // read travels back, with the grant flipped on.
+    expect(bodies[1]).toEqual({ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true });
+  });
+
+  test('an already-enabled client is left untouched', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }]];
+
+    await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([`GET /auth/admin/realms/genie2/clients?clientId=genie-app`]);
   });
 });

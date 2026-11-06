@@ -72,10 +72,10 @@ function requestFailure(err, what) {
     }
     // A permanent refusal: the rejection's non-JSON marker travels with
     // the verdict (the caller tells a broken answer from a transport break
-    // by it), and the transport's own error travels as the cause — the
-    // verdict carries no status of its own, because a status on a verdict
-    // means "Keycloak answered with that status", which is not what
-    // happened here.
+    // by it), and the transport's own error travels as the cause. The
+    // verdict carries no httpStatus of its own — that field means
+    // "Keycloak answered with a status this module could read", which is
+    // not what happened here: the answer's body was unusable.
     const error = new Error(`${answered}: ${err.message}`, { cause: err });
     if (err.nonJsonBody) error.nonJsonBody = true;
     return error;
@@ -355,7 +355,9 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
   );
   if (assignRes.status !== 204 && assignRes.status !== 200) {
     failWithStatus(
-      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status}`,
+      `Failed to assign the realm roles ${roleNames.join(', ')} to ${userId}: HTTP ${assignRes.status} ${bodyText(
+        assignRes
+      )}`,
       assignRes.status
     );
   }
@@ -477,7 +479,7 @@ async function removeRealmRoles(adminToken, realm, userId, roleNames) {
     toRemove
   );
   if (res.status !== 204) {
-    failWithStatus(`Failed to remove the realm roles of ${userId}: HTTP ${res.status}`, res.status);
+    failWithStatus(`Failed to remove the realm roles of ${userId}: HTTP ${res.status} ${bodyText(res)}`, res.status);
   }
   return toRemove.map((r) => r.name);
 }
@@ -579,10 +581,10 @@ async function convergeUser(adminToken, realm, userData) {
         }
         // A transport-level failure of the probe is transient, exactly like
         // the create's own: it must not kill a provisioning that the
-        // deadline-based retry exists to save.
-        throw transientError(
-          `Cannot reach the Keycloak admin API for the email-ownership probe of ${email}: ${probeErr.message}`
-        );
+        // deadline-based retry exists to save. The probe's verdict already
+        // names the operation — it is kept whole, with the diagnosis step
+        // added after it, so no verdict is stitched inside another.
+        throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`);
       }
       if (owners.length > 0) {
         throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
@@ -850,15 +852,17 @@ async function rotateRealmKeys(adminToken, realm) {
     const updatedConfig = { ...oldKey.config, active: ['false'] };
     let res;
     try {
-      res = await request('PUT', `/auth/admin/realms/${realm}/components/${oldKey.id}`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-        body: { ...oldKey, config: updatedConfig },
-      });
-    } catch (err) {
+      res = await adminRequest(
+        'PUT',
+        `/auth/admin/realms/${realm}/components/${oldKey.id}`,
+        adminToken,
+        `the demotion of key ${oldKey.id}`,
+        { ...oldKey, config: updatedConfig }
+      );
+    } catch (failure) {
       // A transport break here is past the mutation boundary: the new key
-      // already exists and signs, so the raw transport message must not
-      // bypass the re-run-safety diagnosis.
-      const failure = requestFailure(err, `the demotion of key ${oldKey.id}`);
+      // already exists and signs, so the verdict must not bypass the
+      // re-run-safety diagnosis.
       failure.message +=
         ` — the new rotated key ${newKeyId} was already created and is the active signer: ` +
         `a re-run must NOT create a second rotated key (reuse or delete ${newKeyId})`;

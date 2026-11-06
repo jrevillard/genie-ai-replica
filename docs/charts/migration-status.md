@@ -148,6 +148,26 @@ contractual evidence — a fresh clone does not carry them.)
   fixture renders no OPEA deployment otherwise, so the key was read by
   nobody), and a cleared (`null`) knob falls back to the default VALUE,
   not just to a render that succeeds.
+- **Issue #1606 — the ArangoDB member flaps on a loaded node — fixed
+  (0.2.165)** — the chart rendered the `ArangoDeployment` without any
+  `resources`, so the member ran on the node's leftovers, and its exec
+  readiness probe — an in-container process spawn the kube-arangodb
+  operator issues with a FIXED two-second timeout — then missed its
+  window: the pod flapped NotReady, the Service lost its endpoints and
+  every ArangoDB client crash-looped while the database answered fine.
+  Two knobs close it: `data.arangodb.resources` (default
+  `requests.cpu: 500m` — the guaranteed share that keeps the probe
+  answering; no memory request and no limits by design, arangod
+  self-sizes its heap and a memory limit on a database is an OOMKill
+  waiting for the first large query; the render rejects an override
+  that drops the request) and `data.arangodb.probeTimeoutSeconds`
+  (default 10s, written into all three exec probe specs via the
+  upstream `spec.<group>.probes.*ProbeSpec.timeoutSeconds` surface —
+  kube-arangodb 1.4.5 `ServerGroupProbesSpec`, verified against the
+  operator source). Both apply to every server group: single mode, and
+  cluster-mode agents, dbservers and coordinators alike. Guard cases
+  pin the no-request render failure BY NAME and the probe blocks'
+  presence in the render; the cpu-request guard is mutation-tested.
 - **The vendored dependency tarballs no longer block a rebase** — the
   branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
   replay recreated them as untracked files and the merge refused to

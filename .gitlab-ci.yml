@@ -852,63 +852,72 @@ workflow:
       ROPC_READBACK_REASON=""
       ROPC_DEFINITIVE_RUN=0
       UNVERIFIED_MSG="the direct-access-grant invariant on the genie realm's other clients is UNVERIFIED"
+      # Both read-back arms record a failed answer through ONE pair of
+      # helpers: the definitive counter, its threshold and the fatal
+      # message live here and nowhere else. $1 is the arm's clause for the
+      # fatal verdict, $2 its transient retry reason.
+      ropc_note_definitive() {
+        ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
+        if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
+          echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one $1; the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
+          exit 1
+        fi
+        ROPC_READBACK_REASON="$2"
+      }
+      ropc_note_transient() {
+        ROPC_DEFINITIVE_RUN=0
+        ROPC_READBACK_REASON="$1"
+      }
       for i in 1 2 3; do
         # The token is minted only when the last attempt left none: a
         # listing-only failure keeps the still-valid token instead of
-        # spending three admin logins on one flaky listing.
+        # spending three admin logins on one flaky listing. Both failure
+        # arms fall through to the ONE retry tail at the bottom of the
+        # loop; a successful listing breaks past it.
         if [ -z "$ROPC_REALM_TOKEN" ]; then
           kc_mint_master_token
           ROPC_REALM_TOKEN=$(kc_access_token)
           if [ -z "$ROPC_REALM_TOKEN" ]; then
             ROPC_MINT_DETAIL=$(kc_error_detail)
             if kc_is_definitive_rejection "$ROPC_MINT_DETAIL"; then
-              ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
-              if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
-                echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one rejected the master admin token (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}'); the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
-                exit 1
-              fi
-              ROPC_READBACK_REASON="the master admin token was rejected (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')"
+              ropc_note_definitive \
+                "rejected the master admin token (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')" \
+                "the master admin token was rejected (HTTP $(http_label "$STATUS"), error '${ROPC_MINT_DETAIL}')"
             else
-              ROPC_DEFINITIVE_RUN=0
-              ROPC_READBACK_REASON="no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+              ropc_note_transient "no master admin token (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
             fi
-            if [ "$i" -lt 3 ]; then
-              echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
-            else
-              echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — giving up"
-            fi
-            { [ "$i" -lt 3 ] && sleep 5; } || true
-            continue
           fi
         fi
-        # max=-1: the admin API's default window would cap the listing,
-        # and the verdict below certifies the realm — it must certify
-        # everything it read, so the read asks for the full set.
-        # --max-time 15: this is the largest answer in the block, and the
-        # ROPC probe below already showed the block's 10s default too
-        # tight for a smaller call — truncating the certification call
-        # three times would fail the job on a healthy realm.
-        kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
-          --max-time 15 \
-          -H "Authorization: Bearer $ROPC_REALM_TOKEN"
-        if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
-          # A client whose directAccessGrantsEnabled member is missing or
-          # not a boolean was never READ — Keycloak's default for a new
-          # client is the grant ON, so an unread client cannot be assumed
-          # disabled: UNREAD fails like any other no-verdict answer. The
-          # member must be exactly true to count as drift, exactly false to
-          # count as read. An entry that is not a client object at all
-          # means the answer was mangled in transit — a drifted client whose
-          # entry was mangled away would otherwise vanish from the verdict —
-          # so MALFORMED is checked FIRST: a mangled answer is never
-          # reported as an empty one. Both concerns report in one answer
-          # (UNREAD first, then DRIFT) so one red run names everything the
-          # realm got wrong; neither masks the other. The program sits on
-          # several lines ON PURPOSE — a verdict-precedence edit inside a
-          # one-liner is how the EMPTY/MALFORMED ordering flipped twice
-          # under review — at the block-scalar base indent, which the YAML
-          # dedent lands at shell column 0.
-          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c '
+        if [ -n "$ROPC_REALM_TOKEN" ]; then
+          # max=-1: the admin API's default window would cap the listing,
+          # and the verdict below certifies the realm — it must certify
+          # everything it read, so the read asks for the full set.
+          # --max-time 15: this is the largest answer in the block, and the
+          # ROPC probe below already showed the block's 10s default too
+          # tight for a smaller call — truncating the certification call
+          # three times would fail the job on a healthy realm.
+          kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
+            --max-time 15 \
+            -H "Authorization: Bearer $ROPC_REALM_TOKEN"
+          if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
+            # A client whose directAccessGrantsEnabled member is missing or
+            # not a boolean was never READ — Keycloak's default for a new
+            # client is the grant ON, so an unread client cannot be assumed
+            # disabled: UNREAD fails like any other no-verdict answer. The
+            # member must be exactly true to count as drift, exactly false
+            # to count as read. An entry that is not a client object at all
+            # means the answer was mangled in transit — a drifted client
+            # whose entry was mangled away would otherwise vanish from the
+            # verdict — so MALFORMED is checked FIRST: a mangled answer is
+            # never reported as an empty one. Both concerns report in one
+            # answer (UNREAD first, then DRIFT) so one red run names
+            # everything the realm got wrong; neither masks the other. The
+            # program sits on several lines ON PURPOSE — a
+            # verdict-precedence edit inside a one-liner is how the
+            # EMPTY/MALFORMED ordering flipped twice under review — at the
+            # block-scalar base indent, which the YAML dedent lands at
+            # shell column 0.
+            ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c '
       import sys, json
       allow = {"admin-cli"}
       data = json.load(sys.stdin)
@@ -916,7 +925,7 @@ workflow:
           print("PARSE_ERROR")
       else:
           clients = [c for c in data if isinstance(c, dict)]
-          malformed = any(not isinstance(c, dict) for c in data)
+          malformed = len(clients) != len(data)
           if malformed or not clients:
               print("MALFORMED" if malformed else "EMPTY")
           else:
@@ -941,25 +950,22 @@ workflow:
                   lines.append("OK")
               print("\n".join(lines))
       ' 2>/dev/null || echo "PARSE_ERROR")
-          ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
-          ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
-          break
-        fi
-        ROPC_LIST_DETAIL=$(kc_error_detail)
-        if kc_is_definitive_rejection "$ROPC_LIST_DETAIL"; then
-          # The listing refused a token this run minted seconds ago: the
-          # token is dead (the #1320 class) — drop it so the next attempt
-          # mints fresh.
-          ROPC_DEFINITIVE_RUN=$((ROPC_DEFINITIVE_RUN+1))
-          ROPC_REALM_TOKEN=""
-          if [ "$ROPC_DEFINITIVE_RUN" -ge 3 ]; then
-            echo "ERROR: the realm client read-back reached 3 consecutive definitive rejections — the last one refused the realm client list (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}'); the counter is shared by the mint and the listing, so an earlier arm may have answered first — ${UNVERIFIED_MSG}."
-            exit 1
+            ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
+            ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
+            break
           fi
-          ROPC_READBACK_REASON="the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')"
-        else
-          ROPC_DEFINITIVE_RUN=0
-          ROPC_READBACK_REASON="the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+          ROPC_LIST_DETAIL=$(kc_error_detail)
+          if kc_is_definitive_rejection "$ROPC_LIST_DETAIL"; then
+            # The listing refused a token this run minted seconds ago: the
+            # token is dead (the #1320 class) — drop it so the next attempt
+            # mints fresh.
+            ROPC_REALM_TOKEN=""
+            ropc_note_definitive \
+              "refused the realm client list (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')" \
+              "the realm client list was refused (HTTP $(http_label "$STATUS"), error '${ROPC_LIST_DETAIL}')"
+          else
+            ropc_note_transient "the realm client list was not readable (HTTP $(http_label "$STATUS"), curl exit ${CURL_RC})"
+          fi
         fi
         if [ "$i" -lt 3 ]; then
           echo "Realm client read-back attempt ${i}/3: ${ROPC_READBACK_REASON} — retrying"
@@ -972,18 +978,22 @@ workflow:
         echo "ERROR: the realm client list could not be read back after 3 attempts ($ROPC_READBACK_REASON) — ${UNVERIFIED_MSG}."
         exit 1
       fi
-      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^PARSE_ERROR$'; then
-        echo "ERROR: the genie realm client list could not be parsed — the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-        exit 1
-      fi
-      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^EMPTY$'; then
-        echo "ERROR: the genie realm client list carries no client entries — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-        exit 1
-      fi
-      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^MALFORMED$'; then
-        echo "ERROR: the genie realm client list carries entries that are not client objects — the answer was mangled in transit and a drifted client could hide behind a mangled entry; the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-        exit 1
-      fi
+      # PARSE_ERROR / EMPTY / MALFORMED are whole-value verdicts (the parse
+      # emits exactly one), so equality dispatches without spawning greps.
+      case "$ROPC_CLIENT_GRANTS" in
+        PARSE_ERROR)
+          echo "ERROR: the genie realm client list could not be parsed — the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+        EMPTY)
+          echo "ERROR: the genie realm client list carries no client entries — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+        MALFORMED)
+          echo "ERROR: the genie realm client list carries entries that are not client objects — the answer was mangled in transit and a drifted client could hide behind a mangled entry; the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+          exit 1
+          ;;
+      esac
       # Drift first: it is the security-relevant answer, and when the realm
       # got two things wrong the red run names both — the drifted client
       # AND the clients whose grant state was never read.

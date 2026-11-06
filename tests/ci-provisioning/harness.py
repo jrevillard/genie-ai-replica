@@ -295,18 +295,7 @@ def scenarios_list():
             # rides it out and the honest verdict is the exhaustion one.
             "readiness_truncated_mint_401_retries",
             1,
-            base_rules(
-                token_resp={
-                    "status": "401",
-                    "body": json.dumps(
-                        {
-                            "error": "invalid_grant",
-                            "error_description": "Invalid user credentials.",
-                        }
-                    ),
-                    "rc": 28,
-                }
-            ),
+            base_rules(token_resp={**invalid_grant, "rc": 28}),
             expect=["master admin token never obtained"],
             forbid=["definitively rejected"],
             calls={"token": 90},
@@ -618,16 +607,7 @@ def scenarios_list():
             base_rules(
                 token_resp=[
                     {"status": "200", "body": token_body()},
-                    {
-                        "status": "401",
-                        "body": json.dumps(
-                            {
-                                "error": "invalid_grant",
-                                "error_description": "Invalid user credentials.",
-                            }
-                        ),
-                        "rc": 28,
-                    },
+                    {**invalid_grant, "rc": 28},
                     {"status": "200", "body": token_body()},
                 ]
             ),
@@ -782,15 +762,7 @@ def scenarios_list():
             base_rules(
                 token_resp=[
                     {"status": "200", "body": token_body()},
-                    {
-                        "status": "401",
-                        "body": json.dumps(
-                            {
-                                "error": "invalid_grant",
-                                "error_description": "Invalid user credentials.",
-                            }
-                        ),
-                    },
+                    invalid_grant,
                     {"status": "200", "body": token_body()},
                 ]
             ),

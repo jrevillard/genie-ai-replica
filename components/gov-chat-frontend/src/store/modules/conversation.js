@@ -191,6 +191,7 @@ const mutations = {
 
 import chatbotService from '../../services/chatbotService';
 import documentFileService from '../../services/documentFileService';
+import { isOkfConceptSource } from '../../utils/okfCitation';
 import i18n from '../../i18n';
 
 function t(key, fallback) {
@@ -236,6 +237,15 @@ export function translateSources(sourceDocuments = []) {
       title: documentName || fileName || `Source ${(documentId || '').slice(0, 4)}`,
       documentName,
       fileName,
+      // The OKF marker travels WITH the citation. chatqna marks an
+      // OKF-sourced citation (`source: 'okf-concept'` + `concept_id`), and
+      // it is the only thing that separates "resolve me against doc-repo"
+      // from "I AM a concept" — a concept's document id is its slug, and
+      // doc-repo has no record of it. Mapping it away left the store unable
+      // to tell the two apart, so it asked doc-repo about every citation
+      // and got one 404 per cited concept.
+      source: doc.source || null,
+      conceptId: doc.concept_id || null,
       type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
       size: 0,
       url: doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
@@ -272,6 +282,14 @@ const actions = {
         // when the metadata fetch fails — same as the component did.
         sources.forEach((doc) => {
           if (!doc.id) return;
+          // An OKF concept is NOT a repository document: chatqna emits it
+          // precisely because the doc-repo lookup cannot answer for it (the
+          // concept's markdown never becomes a doc-repo `files` doc), and
+          // the citation carries its own name. Asking anyway produced one
+          // 404 per cited concept on every OKF-citing query — noise in the
+          // console and in the access log, for a lookup that can only fail.
+          // A legacy document citation still fetches exactly as before.
+          if (isOkfConceptSource(doc)) return;
           documentFileService
             .getFileMetadata(doc.id)
             .then((file) => {

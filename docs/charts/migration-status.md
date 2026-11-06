@@ -77,6 +77,80 @@ contractual evidence — a fresh clone does not carry them.)
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.
+- **Issue #1420 — the Grafana pod crashlooped on a broken operator
+  default — fixed (0.2.156)** — the chart created the Grafana CR without
+  `spec.version`, so grafana-operator v5.25.0 substituted its built-in
+  default, 13.1.3 — a Docker Hub tag whose amd64 `/run.sh` is 0 bytes:
+  every fresh pull died with `exec /run.sh: exec format error`. The
+  laptop cluster only survived because its node cached a healthy pull
+  from before the tag broke. New `observability.grafana.version` (default
+  12.4 = the version docker-compose pins — one Grafana across both
+  delivery paths) wired into `spec.version`. Live: the operator rolled a
+  NEW pod on a fresh 12.4 pull, Ready.
+- **Issue #1522 — the storage class is now the operator's choice, per
+  volume (0.2.157 → 0.2.158)** — `pluggable.storageClassName` stays the
+  chart-wide standard ("" = cluster default) and every persistent volume
+  carries its own key beside its size: ArangoDeployment, the CNPG
+  Cluster, document uploads, redis appendonly, clamav signatures, the
+  model cache, the ragas judge cache, and the observability VLSingle /
+  VMSingle / VTSingle CRs. Precedence: surface → chart-wide → cluster
+  default, the field omitted when both are empty. The first review round
+  caught the CNPG class reading a different surface than its size (an
+  operator following the convention would have been silently ignored) —
+  the template and the values key now agree on `data.postgres`. The
+  model-cache surface was harmonized (its key used to lose to the
+  chart-wide value). The tmpfs shape the issue proposed is deliberately
+  NOT built: a venue points the chart-wide value at a tmpfs-backed
+  StorageClass and exempts the data tier, which the docs paragraph says
+  explicitly — the data tier on tmpfs loses the dev database on every
+  pod restart.
+- **Issue #1543 — the clamav and redis claims did not honor the hook —
+  not reproducible** — both templates read the chain since 0.2.157 and
+  carry their own per-surface key (which wins over the chart-wide
+  value); the render proof behind #1522 shows them following the global
+  and then their own overrides. Closed with that evidence and a request
+  for the venue's chart version + rendered PVC spec if a case survives.
+- **Issue #1597 — a first install failed on a slow node — fixed
+  (0.2.160)** — the chart rendered its Deployments without
+  `spec.progressDeadlineSeconds`, so they inherited the Kubernetes 600s
+  default, and that clock starts when the DEPLOYMENT is created, not
+  when the pod runs: on a first install the pod is created minutes later
+  (multi-GB images pulling) and inherits only the remainder. Past it the
+  Deployment reports ProgressDeadlineExceeded, Helm declares the release
+  failed and UNINSTALLS it — deleting the resources the next attempt
+  needs, so the install restarts from scratch and can loop. Every
+  chart-owned Deployment (14 in the full render) now carries an explicit
+  deadline: `global.progressDeadlineSeconds` (default 900s) with a
+  per-service override that wins; a value below 1s fails the render by
+  name, because that value reproduces the symptom the knob removes.
+  Second half of the issue: the keycloak-operator prerequisite shipped
+  requests.cpu 300m / limits.cpu 700m, so on a node close to its CPU
+  quota it was throttled, never finished booting, died on a connection
+  timeout to the API server, and the Keycloak CR stayed permanently not
+  Ready — blocking every release that waits for it. Its CPU is now sized
+  by `KC_OPERATOR_CPU_REQUEST` / `KC_OPERATOR_CPU_LIMIT` (500m / 1000m):
+  the request stays low so the pod still lands on a busy node, the limit
+  is what the JVM gets to use.
+- **The vendored dependency tarballs no longer block a rebase** — the
+  branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
+  replay recreated them as untracked files and the merge refused to
+  overwrite them (the "would be overwritten by merge" loop, hit three
+  times in one session). `git filter-repo --invert-paths` removed the
+  path from the WHOLE history of the branch: the tip's tree hash is
+  IDENTICAL before and after (767c907a1a96), zero commits reference the
+  tarballs any more, and the force-push needed no follow-up (the deploy
+  overlays pin a branch tip, never a SHA). The rebase that follows is a
+  plain one, with no `rm -f *.tgz` ritual.
+- **The branch was rebased onto `main` again (84 commits, 3329 picks
+  replayed)** — main carried the flaky-`signinSilent` stabilization
+  (#1518), the AQL injection hardening, the OKF retrieval-posture card,
+  the VL scan guards and the jest-worker CI budget. Chart-relevant
+  impact: the OTel collector's severity stamp gained an idempotency
+  guard (only a record with no severity is stamped) and the FATAL /
+  TRACE severity-number rows — the chart's verbatim copy of that block
+  was updated to match, and the PII smoke passes against BOTH configs
+  (compose production and chart-rendered gateway) with the guard
+  asserted present in the rendered output.
 - **Issue #1362 — SSA duplicate env names — fixed across the whole chart
   (0.2.153 → 0.2.154)** — helm-controller applies HelmReleases with
   server-side apply, and SSA merges container `env` as a list of dicts

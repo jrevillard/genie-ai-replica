@@ -1,7 +1,16 @@
 ---
 # Dedicated runner host — 10.0.0.100.
-# Full docker role + socket proxy + runner. No overrides needed beyond the
-# display name (defaults come from roles/*/defaults/main.yml).
+# Full docker role + socket proxy + runner. Defaults come from
+# roles/*/defaults/main.yml; per-host tuning lives below.
 gitlab_runner_description: "genie-ai-runner-cpu"
 # gitlab_runner_version lives in group_vars/gitlab_runners/vars.yml — shared
 # across all runners in the gitlab_runners group.
+
+# 6 parallel jobs on an 8-core / 62 GB host. Memory: 6 x 4g (per-job limit)
+# = 24 GB worst case. CPU: 6 x 2.0 (per-job quota) = 12 — quota is a cap, not
+# a reservation, so jobs share the 8 cores; the docker build stage does its
+# real work in the host buildkitd (uncapped) either way. `concurrent` is the
+# runner-daemon-wide cap and `limit` the per-runner-entry cap; this host has a
+# single runner entry, so both must move together.
+gitlab_runner_concurrent: 6
+gitlab_runner_limit: 6

@@ -136,6 +136,20 @@ expect_fail "resetPasswordAllowed without smtp" \
   "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp" \
   $(valid_flags_except "smtp.") --set data.keycloak.verifyEmail=false
 
+# 3c. The progress deadline is a NUMBER of seconds, and a window under
+#     one second is the pathology the knob exists to remove (the
+#     Deployment reports ProgressDeadlineExceeded before its pod can
+#     start, and Helm then uninstalls the release). The schema rejects
+#     the non-integer and the sub-second values; the template guard
+#     catches whatever the schema lets through.
+expect_fail "a zero per-service progress deadline" \
+  "progressDeadlineSeconds" \
+  $(valid_flags) --set services.backend.progressDeadlineSeconds=0
+
+expect_fail "a boolean per-service progress deadline" \
+  "progressDeadlineSeconds" \
+  $(valid_flags) --set services.backend.progressDeadlineSeconds=true
+
 # 3b. A CLEARED knob is not an "off" knob. Helm deletes a key an
 #     overlay sets to null, so the template reads it as absent — and
 #     the fallback it applies must be the one values.yaml declares.

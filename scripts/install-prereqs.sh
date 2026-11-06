@@ -46,10 +46,15 @@ KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
 # node close to its CPU quota the operator is throttled for most of its
 # periods and never finishes booting (it dies on a connection timeout to
 # the API server), which leaves the Keycloak CR permanently not Ready and
-# blocks every release that waits for it. The requests are what the
-# scheduler RESERVES — too high and the pod cannot land on a busy node.
-# 500m/1000m is the floor that boots on a 1-CPU-constrained node.
-KC_OPERATOR_CPU_REQUEST="${KC_OPERATOR_CPU_REQUEST:-500m}"
+# blocks every release that waits for it.
+#
+# The LIMIT is the lever for that symptom: it is the CFS quota the
+# container is throttled against, and the JVM (four informers) wants
+# more than 700m. The REQUEST is left at upstream's 300m on purpose: it
+# is what the scheduler RESERVES, and raising it makes the pod harder
+# to place on exactly the busy node the limit fix targets. A venue with
+# a dedicated node can raise both.
+KC_OPERATOR_CPU_REQUEST="${KC_OPERATOR_CPU_REQUEST:-300m}"
 KC_OPERATOR_CPU_LIMIT="${KC_OPERATOR_CPU_LIMIT:-1000m}"
 # CHART version, not the operator version: cloudnative-pg chart 0.22.0
 # ships operator 1.24.0 (the two numberings diverged at 1.0). The chart

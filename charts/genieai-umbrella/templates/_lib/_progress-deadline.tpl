@@ -12,9 +12,20 @@ attempt needs, so the install restarts from scratch and can loop.
 Precedence, same direction as every other knob here: the service's own
 `progressDeadlineSeconds` wins, the chart-wide
 `global.progressDeadlineSeconds` is the fallback, and the chart default
-(900s) is the last resort. The chart NEVER renders the field as unset —
+(1800s) is the last resort. The chart NEVER renders the field as unset —
 the Kubernetes 600s fallback is exactly the value that breaks a cold
 start on a slow node.
+
+The default is 1800s, not 900s: the reference venue measured an 18-minute
+first install, most of it image pulls, so a 15-minute window would still
+trip on the very case this knob exists for.
+
+The per-service keys are NOT declared in values.yaml on purpose: Helm
+merges chart values OVER overlay values, so a concrete per-service value
+would always be present and would always win over the chart-wide one —
+making the global knob inert for exactly the services it matters most
+for (the backend among them). The shape block documents the key; an
+overlay declares it when it wants to override.
 
 Context: (dict "Values" <values> "service" <service name or "">).
 The service name is empty for the deployments no service owns (the OPEA
@@ -22,26 +33,48 @@ model and translation deployments) — those read the chart-wide value.
 */}}
 {{- define "genieai-umbrella.progressDeadlineSeconds" -}}
 {{- $ctx := . -}}
-{{- $deadline := 900 -}}
-{{- with $ctx.Values.global -}}
-{{- if hasKey . "progressDeadlineSeconds" -}}
-{{- if not (kindIs "invalid" .progressDeadlineSeconds) -}}
-{{- $deadline = int .progressDeadlineSeconds -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
+{{- /* Helm has no nil: an UNSET value is tracked with a separate flag and
+the raw value is read only where it exists. */ -}}
+{{- $found := false -}}
+{{- $raw := 0 -}}
+{{- $source := "" -}}
 {{- with $ctx.service -}}
 {{- $svc := index ($ctx.Values.services | default dict) . | default dict -}}
 {{- if hasKey $svc "progressDeadlineSeconds" -}}
-{{- if not (kindIs "invalid" $svc.progressDeadlineSeconds) -}}
-{{- $deadline = int $svc.progressDeadlineSeconds -}}
+{{- $found = true -}}
+{{- $raw = $svc.progressDeadlineSeconds -}}
+{{- $source = printf "services.%s.progressDeadlineSeconds" . -}}
+{{- end -}}
+{{- end -}}
+{{- if not $found -}}
+{{- with $ctx.Values.global -}}
+{{- if hasKey . "progressDeadlineSeconds" -}}
+{{- $found = true -}}
+{{- $raw = .progressDeadlineSeconds -}}
+{{- $source = "global.progressDeadlineSeconds" -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- /* A deadline of 0 or less would make the Deployment fail
-immediately — the very symptom this knob exists to remove. */ -}}
+{{- $deadline := 1800 -}}
+{{- if $found -}}
+{{- /* A BOOLEAN or a string is a typo, not a deadline: `int true` is 1,
+which is a one-second progress window — the exact pathology this knob
+exists to remove. Fail by name, with the value the operator wrote. */ -}}
+{{- /* Helm's YAML parser hands every value read from values.yaml over
+as a float64 (the `--set` CLI path yields an int64), so both numeric
+kinds are accepted — but a BOOLEAN or a string is a typo, and `int true`
+is 1, a one-second progress window: the exact pathology this knob
+exists to remove. A fractional number is a typo too. */ -}}
+{{- if not (or (kindIs "int64" $raw) (kindIs "float64" $raw)) -}}
+{{- fail (printf "%s must be an integer number of seconds (got %v of type %s) — a deadline under 1 second reports ProgressDeadlineExceeded before the pod can start" $source $raw (kindOf $raw)) -}}
+{{- end -}}
+{{- if ne (printf "%v" (int $raw)) (printf "%v" $raw) -}}
+{{- fail (printf "%s must be a whole number of seconds (got %v) — a fractional deadline is a typo" $source $raw) -}}
+{{- end -}}
+{{- $deadline = int $raw -}}
+{{- end -}}
 {{- if lt $deadline 1 -}}
-{{- fail (printf "the progress deadline must be at least 1 second (got %d) — a Deployment with no progress window reports ProgressDeadlineExceeded before its pods can start" $deadline) -}}
+{{- fail (printf "%s must be at least 1 second (got %d) — a Deployment with no progress window reports ProgressDeadlineExceeded before its pods can start" $source $deadline) -}}
 {{- end -}}
 {{- $deadline -}}
 {{- end -}}

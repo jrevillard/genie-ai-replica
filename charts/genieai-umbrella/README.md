@@ -306,7 +306,7 @@ the current source of truth.
 
 | Tier | Top-level key | Purpose |
 |---|---|---|
-| Global | `global.imageRegistry`, `global.imagePullSecrets`, `global.toolingArch`, `global.toolingImageRegistry`, `global.kubeletToolsMirror` | Image + tooling registry knobs |
+| Global | `global.imageRegistry`, `global.imagePullSecrets`, `global.toolingArch`, `global.toolingImageRegistry`, `global.kubeletToolsMirror`, `global.progressDeadlineSeconds` | Image + tooling registry knobs; the Deployment progress window (default 1800s) |
 | Profile | `clusterProfile`, `clusterProfileReplicas`, `clusterProfileInstances` | `dev` \| `staging` \| `prod`; `sovereign` reserved |
 | Pluggable | `pluggable.storageClassName` | PVC storage class; `""` = cluster default |
 | Ingress | `ingress.host`, `ingress.scheme` | Public origin; feeds `KC_PUBLIC_ORIGIN` (issuer pin) |

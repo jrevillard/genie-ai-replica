@@ -275,6 +275,25 @@ a disk-backed class, or the dev database dies with every pod restart.
 Applied at PVC creation only: `storageClassName` is immutable on a bound
 PVC, so changing these values later does not migrate existing volumes.
 
+**`global.progressDeadlineSeconds`** — the progress window every Deployment
+the chart renders carries (default 900s), with a per-service override
+(`services.<svc>.progressDeadlineSeconds`) that wins. Kubernetes defaults
+`spec.progressDeadlineSeconds` to 600s, and that clock starts when the
+DEPLOYMENT is created — not when the pod runs. On a first install the pod
+is created minutes later (multi-GB images still pulling) and inherits only
+what is left of the window; past it the Deployment reports
+`ProgressDeadlineExceeded`, Helm declares the release failed and
+uninstalls it, deleting the resources the next attempt needs, so the
+install restarts from scratch and can loop indefinitely. Raise it on a
+venue with slow disks or large images; a value below 1 second fails the
+render by name.
+
+**`observability.grafana.version`** — the Grafana image the CR pins
+(default 12.4, the version docker-compose pins). Without it the
+grafana-operator substitutes its own default, and on v5.25.0 that default
+is 13.1.3 — a Docker Hub tag whose amd64 entrypoint script is 0 bytes, so
+every fresh pull crashloops with `exec /run.sh: exec format error`.
+
 ## Exposure topologies
 
 The chart ships an Envoy Gateway as an optional dependency

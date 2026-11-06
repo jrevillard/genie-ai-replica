@@ -9,7 +9,8 @@
 // mint window and REVERTED immediately after (asserted).
 //
 // Usage (from the repo root, local build running):
-//   node data/okf/smoke-test/mint-tokens.mjs [output-path]
+//   OKF_SMOKE_KEYCLOAK_URL=https://localhost/auth \
+//     node data/okf/smoke-test/mint-tokens.mjs [output-path]
 //   docker exec -e OKF_SMOKE_TOKEN_SCOPED=... -e OKF_SMOKE_TOKEN_SCOPELESS=... \
 //     -e OKF_SMOKE_TOKEN_ADMIN=... <okf-container> node /app/run-smoke.js
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // local self-signed cert
@@ -21,7 +22,15 @@ const OUT = process.argv[2] || 'okf-smoke-tokens.json';
 const ENV = Object.fromEntries(
   fs.readFileSync(ENV_FILE, 'utf8').split(/\r?\n/).map((l) => l.match(/^([A-Z_0-9]+)=(.*)$/)).filter(Boolean).map((m) => [m[1], m[2]])
 );
-const AUTH = `${ENV.KEYCLOAK_URL || 'https://localhost/auth'}`;
+// The Keycloak base URL. The .env carries the IN-NETWORK address
+// (`http://keycloak:8080`), which the HOST cannot resolve — so the script's
+// own documented host-side invocation (`node mint-tokens.mjs`, run from the
+// repo root) failed with `getaddrinfo ENOTFOUND keycloak`.
+//
+// `OKF_SMOKE_KEYCLOAK_URL` overrides it for a host-side run. When it is
+// unset, the .env value is used — which is what a run INSIDE the container
+// network wants.
+const AUTH = `${process.env.OKF_SMOKE_KEYCLOAK_URL || ENV.KEYCLOAK_URL || 'https://localhost/auth'}`;
 const out = {};
 
 async function j(url, opts) {

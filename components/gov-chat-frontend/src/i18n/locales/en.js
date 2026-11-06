@@ -485,6 +485,12 @@ export default {
       duplicateLangError: 'Duplicate languages found in translations. Please remove them.'
     },
     documents: {
+      viewDocuments: 'Documents',
+      viewArtifacts: 'Artifacts',
+      deleteRefuseBundle: '{count} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+      deleteRefuseMixed:
+        '{blocked} file(s) are still ingested — retract them first. {bundles} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+      artifactsParked: 'OKF artifacts appear when the OKF feature is enabled for this deployment.',
       title: 'Document Management',
       addLink: 'Add from Link',
       uploadFiles: 'Upload Files',
@@ -1435,6 +1441,7 @@ export default {
     alt: 'Upload'
   },
   details: {
+    bundleBadge: 'Managed by the OKF lifecycle',
     crawl: {
       seconds: 'seconds',
       autoRefreshEvery: 'Auto-refresh every',
@@ -1550,6 +1557,21 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF artifacts',
+      lead: 'One artifact per published version.',
+      empty: 'No OKF artifacts yet.',
+      loadFailed: 'Could not read the OKF artifacts.',
+      downloadFailed: 'Could not download the OKF artifact.',
+      column: {
+        artifact: 'Artifact',
+        repository: 'Repository',
+        actions: 'Actions',
+        state: 'Status'
+      },
+      openRepo: 'Open repository',
+      unknownVersion: 'unknown version'
+    },
     retrieval: {
       title: 'Retrieval posture',
       refresh: 'Refresh',
@@ -2482,6 +2504,7 @@ export default {
       ingestCompleted: 'ingested',
       bundleMissing: 'zip missing',
       bundleDownload: 'Download zip',
+      viewArtifact: 'View artifact',
       bundle: 'Bundle',
       col: {
         ingest: 'Ingest',

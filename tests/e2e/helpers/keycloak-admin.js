@@ -30,28 +30,18 @@ function isTransientStatus(status) {
 }
 
 /**
- * The error a status deserves: a 5xx or a 408/425/429 is a failure a
- * later attempt may survive (transient), anything else is a real
- * failure. The status travels with the error, so the caller can re-derive
- * the verdict for its own operation.
- * @param {string} message - The diagnosis
- * @param {number} status - The HTTP status
- * @returns {Error} The error — transient when the status is transient
- */
-function statusError(message, status) {
-  const error = isTransientStatus(status) ? transientError(message) : new Error(message);
-  error.httpStatus = status;
-  return error;
-}
-
-/**
- * Fail with the verdict a status deserves.
+ * Fail with the verdict a status deserves: a 5xx or a 408/425/429 is a
+ * failure a later attempt may survive (transient), anything else is a
+ * real failure. The status travels with the error, so the caller can
+ * re-derive the verdict for its own operation.
  * @param {string} message - The diagnosis
  * @param {number} status - The HTTP status
  * @throws {Error} The error — transient when the status is transient
  */
 function failWithStatus(message, status) {
-  throw statusError(message, status);
+  const error = isTransientStatus(status) ? transientError(message) : new Error(message);
+  error.httpStatus = status;
+  throw error;
 }
 
 /**

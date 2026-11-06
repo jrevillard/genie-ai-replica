@@ -591,12 +591,62 @@ async function ensureUser(adminToken, realm, userData) {
   }
 }
 
+// The key providers a signing rotation may demote. Keycloak 26 creates
+// four of them in a realm: rsa-generated (SIG), rsa-enc-generated (ENC),
+// hmac-generated (SIG) and aes-generated (ENC).
+const RSA_SIGNING_PROVIDER_IDS = new Set(['rsa', 'rsa-generated']);
+
+// The name prefix the rotation gives the key it mints.
+const ROTATED_KEY_NAME_PREFIX = 'rsa-generated-rotated-';
+
+/**
+ * The value of a component's config entry. Keycloak stores the config
+ * values as lists of strings, one value per entry.
+ * @param {object} component - The key provider component
+ * @param {string} key - The config key
+ * @returns {string} The value, or '' when the config does not carry it
+ */
+function configValue(component, key) {
+  const raw = component.config && component.config[key];
+  if (Array.isArray(raw)) return raw[0] === undefined ? '' : raw[0];
+  return raw === undefined || raw === null ? '' : String(raw);
+}
+
+/**
+ * Is this key provider an RSA signing key — the only kind a signing
+ * rotation demotes? The HMAC and AES providers and the RSA encryption
+ * provider must survive the rotation: deactivating them breaks the
+ * HMAC-signed tokens and the token encryption, which is not what a
+ * rotation is for.
+ * @param {object} component - The key provider component
+ * @returns {boolean} True when the provider is an RSA signing key
+ */
+function isRsaSigningKey(component) {
+  if (!RSA_SIGNING_PROVIDER_IDS.has(component.providerId)) return false;
+  // Keycloak records the use in the component config ('SIG'/'ENC'): a
+  // provider configured for encryption is no signer, whatever its id says.
+  return configValue(component, 'keyUse').toUpperCase() !== 'ENC';
+}
+
+/**
+ * Is this key provider the active one for its use?
+ * @param {object} component - The key provider component
+ * @returns {boolean} True when the provider is active
+ */
+function isActiveKey(component) {
+  return configValue(component, 'active') === 'true';
+}
+
 /**
  * Rotate realm signing keys: generate a new RSA key and demote the old one.
  * Uses the Keycloak 26 components API (no /keys POST endpoint exists).
+ * The rotation demotes the RSA SIGNING providers only, and it reuses the
+ * active key a previous rotation already minted instead of creating a
+ * second one.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @returns {Promise<{newKeyId: string, oldKeyIds: string[]}>}
+ * @returns {Promise<{newKeyId: string, oldKeyIds: string[]}>} The active
+ *   signing key and the ids of the RSA signing keys it demoted
  */
 async function rotateRealmKeys(adminToken, realm) {
   // Get realm UUID (parentId for key components)
@@ -620,50 +670,65 @@ async function rotateRealmKeys(adminToken, realm) {
     throw new Error(`The key providers of ${realm} answered HTTP 200 with a non-array payload: ${bodyText(keysRes)}`);
   }
   const existingKeys = keysRes.data;
-  const oldKeyIds = existingKeys.map((k) => k.id);
 
-  // Generate new RSA key with higher priority (becomes active signing key)
-  const rotatedKeyName = `rsa-generated-rotated-${Date.now()}`;
-  const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: {
-      name: rotatedKeyName,
-      providerId: 'rsa-generated',
-      providerType: 'org.keycloak.keys.KeyProvider',
-      parentId: realmId,
-      config: {
-        priority: ['101'],
-        enabled: ['true'],
-        active: ['true'],
-        keySize: ['2048'],
+  // A re-run must not mint a second active rotated key: when the realm
+  // already carries an active key a previous rotation minted, that key IS
+  // the rotation's key and the rotation continues from it.
+  const reusableKey = existingKeys.find(
+    (k) => typeof k.name === 'string' && k.name.startsWith(ROTATED_KEY_NAME_PREFIX) && isActiveKey(k)
+  );
+
+  let newKeyId;
+  if (reusableKey) {
+    newKeyId = reusableKey.id;
+  } else {
+    // Generate new RSA key with higher priority (becomes active signing key)
+    const rotatedKeyName = `rsa-generated-rotated-${Date.now()}`;
+    const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        name: rotatedKeyName,
+        providerId: 'rsa-generated',
+        providerType: 'org.keycloak.keys.KeyProvider',
+        parentId: realmId,
+        config: {
+          priority: ['101'],
+          enabled: ['true'],
+          active: ['true'],
+          keySize: ['2048'],
+        },
       },
-    },
-  });
+    });
 
-  if (newKeyRes.status !== 201) {
-    failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
+    if (newKeyRes.status !== 201) {
+      failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
+    }
+
+    // The components API answers 201 with an EMPTY body — auth.request
+    // resolves an empty body as data: null — and the new component id in
+    // the Location header (/…/components/<id>): the id is read from the
+    // header, never from the body.
+    const location = newKeyRes.headers && newKeyRes.headers.location;
+    const createdKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
+    if (!createdKeyId) {
+      // The key component was already created and is the realm's ACTIVE
+      // signer, but its id is untracked: the message must say so, or a
+      // re-run accumulates untracked active rotated keys.
+      throw new Error(
+        `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
+          `(${location || 'none'}) — the new key id cannot be resolved. The key component ${rotatedKeyName} ` +
+          `was already created and is the active signer but is untracked: delete it or resolve its id ` +
+          `via the components list before re-running`
+      );
+    }
+    newKeyId = createdKeyId;
   }
 
-  // The components API answers 201 with an EMPTY body — auth.request
-  // resolves an empty body as data: null — and the new component id in
-  // the Location header (/…/components/<id>): the id is read from the
-  // header, never from the body.
-  const location = newKeyRes.headers && newKeyRes.headers.location;
-  const newKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
-  if (!newKeyId) {
-    // The key component was already created and is the realm's ACTIVE
-    // signer, but its id is untracked: the message must say so, or a
-    // re-run accumulates untracked active rotated keys.
-    throw new Error(
-      `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
-        `(${location || 'none'}) — the new key id cannot be resolved. The key component ${rotatedKeyName} ` +
-        `was already created and is the active signer but is untracked: delete it or resolve its id ` +
-        `via the components list before re-running`
-    );
-  }
-
-  // Demote old keys (set active to false)
-  for (const oldKey of existingKeys) {
+  // Demote the old RSA signing keys (set active to false). The key the
+  // rotation keeps — the reused one or the one it just created — is the
+  // realm's active signer and stays untouched.
+  const keysToDemote = existingKeys.filter((k) => isRsaSigningKey(k) && k.id !== newKeyId);
+  for (const oldKey of keysToDemote) {
     const updatedConfig = { ...oldKey.config, active: ['false'] };
     let res;
     try {
@@ -693,7 +758,7 @@ async function rotateRealmKeys(adminToken, realm) {
     }
   }
 
-  return { newKeyId, oldKeyIds };
+  return { newKeyId, oldKeyIds: keysToDemote.map((k) => k.id) };
 }
 
 /**

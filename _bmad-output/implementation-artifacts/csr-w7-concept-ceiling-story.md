@@ -1,12 +1,13 @@
 # W7 — the concept-document ceiling holds on every write path
 
-**Status:** IMPLEMENTED (2026-11-06) — story written before code; the verification results are at the
-end of this file.
+**Status:** MERGED to main (2026-11-06) — MR **!788**, merge commit `83d7d04bd` (David). The
+story was written before the code; the verification results are at the end of this file.
 **Source:** the plan-mode plan *"Oversized concept documents — derive the budget first, then split"*
 (`~/.claude/plans/zazzy-sniffing-lobster.md`), sections §6 / §7 / §8 and requirement **R11** of
 `_bmad-output/archived/okf-server/implementation-artifacts/concept-doc-ceiling-test-plan.md`.
 **Branch:** **`feat/okf-concept-ceiling`, cut from `origin/main`** — NOT the CSR batch branch.
-**Issue:** **#1576**. The deferred curator-initiated split (§6's second half) is **#1577**.
+**Issue:** **#1576** (closed by the merge). The deferred curator-initiated split (§6's second half)
+is **#1577**.
 
 ---
 

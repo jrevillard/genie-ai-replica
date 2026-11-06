@@ -10,22 +10,29 @@ jest.mock('arangojs', () => ({
 
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
-jest.mock('../../middleware/errors', () => ({
-  NotFoundError: class NotFoundError extends Error {
-    constructor(msg) {
-      super(msg);
-      this.name = 'NotFoundError';
-      this.statusCode = 404;
-    }
-  },
-  ValidationError: class ValidationError extends Error {
-    constructor(msg) {
-      super(msg);
-      this.name = 'ValidationError';
-      this.statusCode = 400;
+// The mock mirrors the real hierarchy (middleware/errors.js): the service
+// grades a typed client error on `instanceof AppError`, so the mock must
+// keep AppError in the chain.
+jest.mock('../../middleware/errors', () => {
+  class AppError extends Error {
+    constructor(message, statusCode) {
+      super(message);
+      this.statusCode = statusCode;
+      this.name = this.constructor.name;
     }
   }
-}));
+  class NotFoundError extends AppError {
+    constructor(message = 'Resource not found') {
+      super(message, 404);
+    }
+  }
+  class ValidationError extends AppError {
+    constructor(message = 'Invalid input') {
+      super(message, 400);
+    }
+  }
+  return { AppError, NotFoundError, ValidationError };
+});
 
 const { dbService } = require('../../shared-lib');
 
@@ -824,6 +831,29 @@ describe('ServiceCategoryService', () => {
       mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
 
       await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('stays silent for a typed 404 — the route layer owns that one log line', async () => {
+      const { logger } = require('../../shared-lib');
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
+      );
+
+      await expect(service.getCategoryTranslations('ghost-cat')).rejects.toMatchObject({ statusCode: 404 });
+
+      // An expected absence is not a fault: logging it here would double
+      // the line the route already writes.
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('logs a genuine fault at error grade, with its stack', async () => {
+      const { logger } = require('../../shared-lib');
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.getCategoryTranslations('cat-1')).rejects.toThrow('ECONNREFUSED');
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      expect(logger.error.mock.calls[0][1]).toHaveProperty('stack');
     });
 
     it('throws a ValidationError when categoryKey is missing', async () => {

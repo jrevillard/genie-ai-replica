@@ -37,10 +37,26 @@ jest.mock(
   { virtual: true }
 );
 
-jest.mock('../../middleware/errors', () => ({
-  NotFoundError: class NotFoundError extends Error {},
-  ValidationError: class ValidationError extends Error {}
-}));
+jest.mock('../../middleware/errors', () => {
+  class AppError extends Error {
+    constructor(message, statusCode) {
+      super(message);
+      this.statusCode = statusCode;
+      this.name = this.constructor.name;
+    }
+  }
+  class NotFoundError extends AppError {
+    constructor(message = 'Resource not found') {
+      super(message, 404);
+    }
+  }
+  class ValidationError extends AppError {
+    constructor(message = 'Invalid input') {
+      super(message, 400);
+    }
+  }
+  return { AppError, NotFoundError, ValidationError };
+});
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || '';

@@ -202,9 +202,8 @@ describe('GET /api/service-categories/categories/:categoryId (AC12)', () => {
   });
 
   it('should return 404 when category not found', async () => {
-    const notFoundError = new Error('Category not found');
-    notFoundError.statusCode = 404;
-    serviceCategoryService.getCategoryWithServices.mockRejectedValue(notFoundError);
+    const { NotFoundError } = require('../../middleware/errors');
+    serviceCategoryService.getCategoryWithServices.mockRejectedValue(new NotFoundError('Category not found'));
 
     const response = await authGet('/api/service-categories/categories/nonexistent');
 
@@ -338,9 +337,8 @@ describe('DELETE /api/service-categories/services/:serviceId (AC16)', () => {
   });
 
   it('should return 404 when service not found', async () => {
-    const notFoundError = new Error('Service not found');
-    notFoundError.statusCode = 404;
-    serviceCategoryService.deleteService.mockRejectedValue(notFoundError);
+    const { NotFoundError } = require('../../middleware/errors');
+    serviceCategoryService.deleteService.mockRejectedValue(new NotFoundError('Service not found'));
 
     const response = await authDelete('/api/service-categories/services/nonexistent');
 
@@ -504,9 +502,8 @@ describe('expected 404 logging contract', () => {
   const { logger } = require('../../shared-lib');
 
   it('logs an unknown service id once at warn grade, never at error grade', async () => {
-    const notFoundError = new Error('Service not found');
-    notFoundError.statusCode = 404;
-    serviceCategoryService.deleteService.mockRejectedValue(notFoundError);
+    const { NotFoundError } = require('../../middleware/errors');
+    serviceCategoryService.deleteService.mockRejectedValue(new NotFoundError('Service not found'));
 
     const response = await authDelete('/api/service-categories/services/nonexistent');
 
@@ -518,8 +515,10 @@ describe('expected 404 logging contract', () => {
     // ... and no stack on it (a stack is what makes an expected outcome
     // expensive to read).
     expect(warnCalls[0][1] || {}).not.toHaveProperty('stack');
-    // ... and nothing at error grade.
-    expect(logger.error).not.toHaveBeenCalled();
+    // ... and nothing at error grade for THIS failure (another part of the
+    // request may legitimately log an error of its own).
+    const errorCalls = logger.error.mock.calls.filter((call) => String(call[0]).includes('Service not found'));
+    expect(errorCalls).toHaveLength(0);
   });
 });
 

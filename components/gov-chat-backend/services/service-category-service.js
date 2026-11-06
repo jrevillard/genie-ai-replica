@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
-const { NotFoundError, ValidationError } = require('../middleware/errors');
+const { AppError, NotFoundError, ValidationError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -126,7 +126,8 @@ class ServiceCategoryService {
       }
       const locale = this._normalizeLocale(trans.languageCode);
       // Same normalized code = same stored _key: the second entry would
-      // UPSERT onto the first row's key and silently replace it.
+      // UPSERT onto the first row's key and silently replace it — hence
+      // the rejection.
       if (seenLocales.has(locale)) {
         throw new ValidationError(`Duplicate languageCode '${locale}' in translations`);
       }
@@ -214,7 +215,7 @@ class ServiceCategoryService {
     `);
     logger.info(`Upserted ${docs.length} translations for ${fkField} ${ownerKey}`);
 
-    if (translations) {
+    if (translations !== undefined && translations !== null) {
       const keys = docs.map((doc) => doc._key);
       await this.db.query(aql`
         FOR trans IN ${collection}
@@ -303,16 +304,24 @@ class ServiceCategoryService {
    * Rethrows a failure caught on a service-category path, logging it only
    * when it is a genuine fault.
    *
-   * A typed client error (statusCode below 500 — the 404 of an unknown id,
+   * A typed client error (an AppError below 500 — the 404 of an unknown id,
    * the 400 of a malformed payload) is an EXPECTED OUTCOME, not a fault: it
    * is NOT logged here — the route layer logs it once, at warn grade and
    * without a stack, and answers it. Any other error is a genuine fault: it
    * is logged at error grade, with its stack.
+   *
+   * The typed hierarchy is the discriminator, not a bare `statusCode` below
+   * 500: a driver or upstream error that happens to carry a 4xx status is a
+   * fault, and the absence classifier exists precisely because "the HTTP
+   * status is 404" does not mean "the row is not there".
+   *
+   * A caller that is not this router (the analytics service) logs the error
+   * itself, so nothing is lost by staying silent here.
    * @param {Error} error - The caught error.
    * @param {String} context - Log context of the failing operation.
    */
   _rethrowFailure(error, context) {
-    if (!(error.statusCode && error.statusCode < 500)) {
+    if (!(error instanceof AppError && error.statusCode < 500)) {
       logger.error(`${context}: ${error.message}`, { stack: error.stack });
     }
     throw error;
@@ -327,12 +336,19 @@ class ServiceCategoryService {
    * a 500. Every other failure is rethrown unchanged — a genuine fault is
    * logged, an expected client outcome is not (see _rethrowFailure).
    *
+   * An already-typed NotFoundError is rethrown as it is: it IS the expected
+   * absence (raised by _documentOr404), and the driver predicate must not
+   * classify it a second time.
+   *
    * @param {Error} error - The caught error.
    * @param {String} label - Resource label ('Service', 'Category').
    * @param {String} key - The _key of the resource.
    * @param {String} context - Log context of the failing operation.
    */
   _absenceOrRethrow(error, label, key, context) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
     if (dbService._isExpectedAbsence(error)) {
       throw new NotFoundError(`${label} ${key} not found`);
     }

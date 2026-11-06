@@ -1,21 +1,27 @@
 const express = require('express');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const { AppError, NotFoundError } = require('../middleware/errors');
 
 /**
  * Answers a failed service-category request.
  *
- * A typed client error (statusCode below 500 — the 404 of an unknown id,
+ * A typed client error (an AppError below 500 — the 404 of an unknown id,
  * the 400 of a malformed payload) is an EXPECTED OUTCOME, not a fault: it
  * is logged ONCE, at warn grade and without a stack, and answered here —
  * the service layer stays silent for it, so a client probing ids produces
- * one line per probe instead of a pair of error-grade lines. A genuine
- * fault keeps its error-grade log with the stack and is handed to the
- * global error middleware, which renders the 500.
+ * one line per probe instead of a pair of error-grade lines. The typed
+ * hierarchy is the discriminator, not a bare statusCode below 500: an
+ * upstream error that happens to carry a 4xx status is a fault.
  *
- * The response is byte-for-byte what the global error middleware would
- * have rendered for the same error: the typed status code, and the typed
- * error's own body when it carries one.
+ * The response is what the global error middleware would have rendered for
+ * the same error: the typed status code, and the typed error's own body
+ * when it carries one.
+ *
+ * A genuine fault is NOT logged here: the global error middleware logs
+ * every error it receives, at error grade with the stack, so a second
+ * error-grade line here would duplicate it. The fault is simply handed
+ * over.
  *
  * @param {Object} res - The Express response.
  * @param {Function} next - The Express next callback.
@@ -24,14 +30,13 @@ const { logger } = require('../shared-lib');
  * @param {Number} durationMs - Time spent on the request.
  */
 function respondWithFailure(res, next, error, context, durationMs) {
-  if (error.statusCode && error.statusCode < 500) {
-    logger.warn(`${context}: ${error.message}`, { durationMs });
+  if (error instanceof AppError && error.statusCode < 500) {
+    logger.warn(`${context}: ${error.message}`, { statusCode: error.statusCode, durationMs });
     if (error.body && typeof error.body === 'object') {
       return res.status(error.statusCode).json(error.body);
     }
     return res.status(error.statusCode).json({ message: error.message });
   }
-  logger.error(`${context}: ${error.message}`, { stack: error.stack, durationMs });
   return next(error);
 }
 
@@ -464,8 +469,9 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Attempting to delete category: ${req.params.categoryId}`);
       const exists = await serviceCategoryService.categoryExists(req.params.categoryId);
       if (!exists) {
-        logger.warn(`Category ${req.params.categoryId} not found for deletion`);
-        return res.status(404).json({ message: `Category ${req.params.categoryId} not found` });
+        // A typed 404, like every other 404 on these paths: the catch
+        // block below logs it once and renders it.
+        throw new NotFoundError(`Category ${req.params.categoryId} not found`);
       }
       await serviceCategoryService.deleteCategory(req.params.categoryId);
       logger.info(`Category ${req.params.categoryId} deleted successfully in ${Date.now() - start}ms`);

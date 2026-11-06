@@ -49,18 +49,31 @@
         download endpoint). For legacy manifests minted before WS4, the
         file_id is null and we show a "missing" badge instead. -->
       <template #cell-bundle="{ row }">
-        <a
-          v-if="row.bundle_file_id"
-          :href="bundleDownloadUrl(row.bundle_file_id)"
-          class="okf-versions__bundle-link"
-          :title="row.bundle_file_name || row.bundle_file_id"
-          target="_blank"
-          rel="noopener"
-        >
-          <DsPill variant="success">
+        <div v-if="row.bundle_file_id" class="okf-versions__bundle-cell">
+          <!-- The download goes through the AUTHENTICATED client: doc-repo's
+               download route sits behind `authenticateToken` and is not on
+               the public-path list, so a plain `<a href>` navigation — which
+               carries no Authorization header — answers 401 TOKEN_INVALID.
+               Verified live against the running stack. -->
+          <DsButton
+            variant="ghost"
+            small
+            :disabled="downloading === row.bundle_file_id"
+            :title="row.bundle_file_name || row.bundle_file_id"
+            @click="downloadBundle(row)"
+          >
             {{ translate('okf.versions.bundleDownload', 'Download zip') }}
-          </DsPill>
-        </a>
+          </DsButton>
+          <!-- W6 / EPIC-6 / CAP-5: the repository → ARTIFACT direction. The
+               artifact (the bundle zip) has its own labeled view in Document
+               Management; this link deep-links to that view with the
+               artifact's details open, reusing the existing
+               ?tab=documents&file= deep-link pattern (its `view` sibling
+               selects the artifacts view). -->
+          <DsButton variant="ghost" small @click="viewArtifact(row)">
+            {{ translate('okf.versions.viewArtifact', 'View artifact') }}
+          </DsButton>
+        </div>
         <DsPill v-else variant="warn">
           {{ translate('okf.versions.bundleMissing', 'zip missing') }}
         </DsPill>
@@ -101,11 +114,15 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTable from '../../ds/Table.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsButton from '../../ds/Button.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
+import documentFileService from '../../../services/documentFileService';
+import { eventBus } from '../../../eventBus.js';
+import { saveBlob } from '../../../utils/fileDownload';
 
 export default {
   name: 'OkfVersionsDialog',
-  components: { DsDialog, DsTable, DsPill },
+  components: { DsDialog, DsTable, DsPill, DsButton },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
@@ -117,6 +134,8 @@ export default {
       loading: false,
       error: '',
       lastResult: null,
+      // The bundle file_id whose download is in flight.
+      downloading: null,
       columns: [
         { key: 'version', label: this.translate('okf.versions.col.version', 'Version') },
         { key: 'okf_tag', label: this.translate('okf.versions.col.tag', 'Tag') },
@@ -213,14 +232,43 @@ export default {
         return iso || '—';
       }
     },
-    /** WS4: build the doc-repo download URL for a bundle file. The path is
-     * auth-gated by the existing /api/files/:fileId/download endpoint; the
-     * browser's session cookie (or bearer) carries the auth header. */
-    bundleDownloadUrl(fileId) {
-      // The frontend proxies API calls to /api/* via the Vue/Vite dev proxy
-      // in dev and via Kong in prod — both relative paths work. We embed the
-      // file id directly in the URL (no extra encoding needed — IDs are safe).
-      return `/api/files/${encodeURIComponent(fileId)}/download`;
+    /** WS4 (corrected): download a version's bundle zip.
+     *
+     *  The content comes through the AUTHENTICATED client: doc-repo's
+     *  download route sits behind `authenticateToken` and is not on the
+     *  public-path list, so a browser navigation (which carries no
+     *  Authorization header — the SPA keeps its token in memory) answers
+     *  401 TOKEN_INVALID. Verified live against the running stack. */
+    async downloadBundle(row) {
+      if (!row || !row.bundle_file_id || this.downloading) return;
+      this.downloading = row.bundle_file_id;
+      try {
+        const { blob, fileName } = await documentFileService.downloadFile(row.bundle_file_id);
+        saveBlob(blob, fileName || row.bundle_file_name || 'bundle.zip');
+      } catch (err) {
+        // A failed download is reported, never silent: the operator clicked
+        // an action and must see that it did not happen.
+        console.error('[OkfVersionsDialog] the bundle could not be downloaded:', err);
+        eventBus.$emit('notification:show', {
+          message: this.translate('okf.artifacts.downloadFailed', 'The artifact could not be downloaded.'),
+          type: 'error'
+        });
+      } finally {
+        this.downloading = null;
+      }
+    },
+    /** W6 / EPIC-6 / CAP-5: the repository → artifact direction. The
+     *  `view=artifacts` sibling selects the artifacts view of the Document
+     *  Management tab; `file` opens that artifact's details — the SAME
+     *  deep-link contract the concept cards already use. */
+    viewArtifact(row) {
+      if (!row || !row.bundle_file_id) return;
+      this.$router
+        .push({
+          path: '/admin',
+          query: { ...(this.$route.query || {}), tab: 'documents', view: 'artifacts', file: row.bundle_file_id }
+        })
+        .catch(() => {});
     }
   }
 };
@@ -249,8 +297,13 @@ export default {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
 }
-.okf-versions__bundle-link {
-  text-decoration: none;
+
+/* W6: the bundle cell carries the download AND the artifact link. */
+.okf-versions__bundle-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
 }
 .okf-versions__not-ingested {
   color: var(--muted);

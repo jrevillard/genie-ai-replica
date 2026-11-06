@@ -91,6 +91,38 @@ const documentFileService = {
   },
 
   /**
+   * Downloads a file's CONTENT through the authenticated client.
+   *
+   * WHY NOT A PLAIN `<a href>`: doc-repo's file router applies
+   * `authenticateToken` to every route, and the download route is not on the
+   * public-path list — a browser NAVIGATION sends no Authorization header
+   * (the SPA holds its token in memory; `storeAuthStateInCookie: false`),
+   * so the link answers `401 TOKEN_INVALID`. Verified live against the
+   * running stack: `GET /api/files/<id>/download` without a bearer answers
+   * 401. The axios interceptor is what adds the header, so the download has
+   * to go through it.
+   *
+   * @param {string} fileId - The ID of the file to download.
+   * @returns {Promise<{blob: Blob, fileName: string|null}>} The content and
+   *   the server's file name (from content-disposition) when it carries one.
+   */
+  async downloadFile(fileId) {
+    try {
+      const response = await httpService.get(
+        `/files/${encodeURIComponent(fileId)}/download`,
+        {},
+        { responseType: 'blob' }
+      );
+      const disposition = (response && response.headers && response.headers['content-disposition']) || '';
+      const match = /filename="?([^";]+)"?/.exec(disposition);
+      return { blob: response.data, fileName: match ? match[1] : null };
+    } catch (error) {
+      console.error(`Error downloading file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
    * Deletes a single file.
    * @param {string} fileId - The ID of the file to delete.
    * @returns {Promise<Object>} The confirmation response.

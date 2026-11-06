@@ -480,6 +480,12 @@ export default {
       duplicateLangError: '翻译中发现重复语言。请移除它们。'
     },
     documents: {
+      viewDocuments: '文档',
+      viewArtifacts: '构件',
+      deleteRefuseBundle: '{count} 个 OKF 构件由知识库生命周期管理，无法在此删除。',
+      deleteRefuseMixed:
+        '{blocked} 个文件仍在摄取中——请先撤回。{bundles} 个 OKF 构件由知识库生命周期管理，无法在此删除。',
+      artifactsParked: '当此部署启用 OKF 功能时，将显示 OKF 构件。',
       title: '文档管理',
       addLink: '从链接添加',
       uploadFiles: '上传文件',
@@ -1406,6 +1412,7 @@ export default {
     alt: '上传'
   },
   details: {
+    bundleBadge: '由 OKF 生命周期管理',
     crawl: {
       seconds: '秒',
       autoRefreshEvery: '自动刷新间隔',
@@ -1516,6 +1523,21 @@ export default {
       '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
   okf: {
+    artifacts: {
+      title: 'OKF 构件',
+      lead: '每个已发布版本对应一个构件。',
+      empty: '尚无 OKF 构件。',
+      loadFailed: '无法读取 OKF 构件。',
+      downloadFailed: '无法下载 OKF 构件。',
+      column: {
+        artifact: '构件',
+        repository: '知识库',
+        actions: '操作',
+        state: '状态'
+      },
+      openRepo: '打开知识库',
+      unknownVersion: '未知版本'
+    },
     retrieval: {
       title: '检索态势',
       refresh: '刷新',
@@ -1684,6 +1706,7 @@ export default {
       ingestCompleted: '已摄入',
       bundleMissing: '缺少 zip',
       bundleDownload: '下载 zip',
+      viewArtifact: '查看构件',
       bundle: '捆绑包',
       col: {
         ingest: '摄入',

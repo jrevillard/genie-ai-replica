@@ -159,6 +159,112 @@ the ORDER and the cross-stream slots.
 > blocks Save with the bounds hint; the mode round-trip works. David then ran
 > the same smoke test by hand and it checked out.
 
+> **W6 STATUS 2026-11-06: CODE COMPLETE + LIVE-VERIFIED — MR !780, awaiting review.**
+> Issue **#1557** (wave-level, part of this #1409 umbrella).
+> The artifacts view (`components/gov-chat-frontend/src/components/okf/ArtifactsView.vue`)
+> is the second view of the admin dashboard's Document Management tab
+> (Documents | Artifacts). The default list now fetches `is_bundle: false`, so
+> the OKF bundle zips LEAVE it; the artifacts view fetches `is_bundle: true`
+> and lists them with their provenance (`repo@version`), their state, a
+> download and — when the repository resolves — a link into the OKF Studio.
+>
+> The lie it removes: the bundles sat in the document list unlabeled, and the
+> batch Delete counted a Pending bundle as deletable (only ingested/ingesting
+> are status-blocked) — so the UI offered a delete the server refuses with
+> `403 BUNDLE_PROTECTED`. The affordance is DROPPED, not made to work: a
+> privileged write path would build on the rule W7 is about to reverse.
+>
+> The state vocabulary is SHARED (`src/utils/documentStatus.js`) between the
+> document list and the artifacts view, so the two surfaces cannot disagree
+> about what "Ingested" means — pinned by a cross-surface invariant test
+> (en + fr). `FileDetailsDialog.vue` is deliberately NOT wired to it: its
+> mapper takes a DISPLAY string (crawl arms included) and answers with a
+> different default — sharing the module with it would change existing
+> renderings, which is out of scope for this wave.
+>
+> Verified: frontend suite **137 suites / 3946 tests** green; coverage lines
+> **89.05 %** vs the measured main baseline **88.97 %** (statements 89.01 vs
+> 88.92, branches 76.16 vs 76.00, functions 67.40 vs 67.14) — the
+> must-not-decrease bar is met on every metric, measured on this machine by
+> stashing the wave and re-running. **Re-measured against the CURRENT main**
+> after the branch merged `origin/main` (which moved the baseline): the wave
+> **89.09 %** lines / **89.04 %** statements / **76.28 %** branches /
+> **67.49 %** functions vs main's **89.02 %** / **88.98 %** / **76.12 %** /
+> **67.23 %** — above on all four. The smoke harness gained the W6 phase
+> (the artifacts view's data source: the bundle is listed by `is_bundle=true`
+> and does NOT appear in the document list) and the Playwright spec
+> (`tests/e2e/okf/artifacts-view.spec.js`, injected payloads) drives the view
+> in a browser.
+>
+> **LIVE: GREEN on the local build (2026-11-06).** The spec passes **5/5**
+> against the running stack. The live data contract, measured against the
+> running document repository: `is_bundle=true` → **24 artifacts** (16 with a
+> version, **8 without** — a third of the live set has no version, so the
+> honest "unknown version" is the common case, not a corner; all 24 carry a
+> `repo_id`), `is_bundle=false` → the documents, and **no bundle leaks into
+> the document list**. The tree was synced with the tooling
+> (`--merge-prefer-target`: the tree's HEAD is a local merge of a branch
+> upstream has since merged in its own shape, so it cannot fast-forward — the
+> tooling merges the target on top and verifies every conflicted file against
+> it; nothing was reset, the tree's own CSR work is intact), the images were
+> rebuilt, the containers recreated, `verify-local-build.sh` 46 pass / 0 fail.
+> Two local-build findings that were NOT the wave's: the e2e fixtures did not
+> exist in the local realm (every Playwright spec failed at login — Keycloak's
+> own log says `user_not_found`; the tooling gained
+> `provision-e2e-fixtures.sh`) and the recreated document-repository image
+> needed the one-shot `document-repository-init` chown for `/app/uploads`
+> (`EACCES` on upload). The two red CI jobs on MR !780 are the registry's
+> half-published `@playwright/test@1.65.0` (**#1561** — main is red on the
+> same job) and a timing flake in the okf-server RAGAS suite tests (passes
+> locally 121/121, in a component this wave does not touch). **Both are GREEN
+> on the re-run after the merge.**
+>
+> **Re-verified after the merge (2026-11-06): GREEN.** The branch merged
+> `origin/main` (three new main commits — the keycloak silent-renew fix, the
+> draft-contract fix, the #995 record); the tree was re-synced to the merged
+> head, `frontend` / `okf-server` / `chatqna` / `retriever` rebuilt and
+> recreated, `verify-local-build.sh` 46 pass / 0 fail, and the spec re-run
+> against the merged stack. The re-run found ONE defect — the spec's first
+> assertion read the captured `is_bundle` filters right after the view became
+> VISIBLE, while the view fires its read from `mounted()`, so the capture
+> could land a tick later. The read was never in doubt (the provenance test
+> asserts a row whose text comes only from the `is_bundle=true` payload); the
+> ASSERTION raced it. Fixed with an explicit bounded wait
+> (`expect.poll`, 15 s) — an implicit race is what makes an E2E suite flaky.
+>
+> **Merged with `origin/main` a SECOND time** (the #991 crawl-worker fix —
+> the only conflict was the CHANGELOG, whose two sides added DISTINCT
+> entries to the same list, so the resolution is the union). Coverage
+> re-measured: identical (89.09 / 89.04 / 76.28 / 67.49) — main's two new
+> commits touch NO frontend file, so the baseline could not have moved.
+>
+> **The smoke harness's W6 phase, re-run LIVE: PASS** (three assertions —
+> the bundle is listed by `is_bundle=true`, it does NOT appear in the
+> document list, and it carries its `repo_id`). The REST of the harness run
+> is red on `main` — the wave's harness diff is purely additive (54 lines,
+> one block) and every failing assertion is byte-identical to `origin/main`,
+> proved by a control run with main's own copy of the file. The causes are
+> the harness's own staleness (it expects the pre-slug graph name, and it
+> never performs the `ingest` lifecycle transition that is the only writer of
+> `rag_drain_active` — the worker's claim filter). Filed as **#1568**.
+>
+> **Security review, re-run on the MERGED result** (a merge can drop a
+> guard): **no HIGH/MEDIUM finding**. The wave adds ZERO server-side
+> changes — the whole diff is frontend + i18n + tests + a CI comment + the
+> smoke script — so no server rule could have been added, removed or
+> weakened. The WS2 bundle guard is single-sourced and **fails closed**
+> (`503 BUNDLE_GUARD_UNAVAILABLE`); the client's `is_bundle: false` filter is
+> a HIDE, not a grant; the new `?repo=` deep link is server-gated on every
+> read (404 anti-enumeration) and every write (`requireRepoScope('admin')`).
+> The `npm audit` sweep found the wave added **no** dependency — the 6 HIGH
+> advisories are `vue-i18n` 9.14.5 and the `webpack-dev-server` dev chain,
+> both **unreachable** here (`srcdoc` appears nowhere in the frontend
+> source, `escapeParameter` is never called, and the house `translateMixin`
+> does a raw message lookup). `9.14.5` is the last 9.x release, so the fix
+> exists only in the 11.x major → filed as **#1566**, not bumped here (a
+> vue-i18n 9 → 11 migration touches every locale file and every call site
+> and cannot ride along on a feature MR).
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

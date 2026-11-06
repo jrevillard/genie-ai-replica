@@ -77,6 +77,42 @@ describe('documentFileService', () => {
   });
 
   // =========================================================================
+  // downloadFile
+  // =========================================================================
+  describe('downloadFile', () => {
+    it('asks the authenticated client for the content (a plain link 401s)', async () => {
+      // doc-repo's download route sits behind `authenticateToken` and is not
+      // on the public-path list: the Authorization header has to be added by
+      // the client, which is what this call does.
+      const blob = { size: 3 };
+      mockGet.mockResolvedValue({
+        data: blob,
+        headers: { 'content-disposition': 'attachment; filename="kenya-v18.zip"' }
+      });
+
+      const result = await documentFileService.downloadFile('file 1');
+
+      expect(mockGet).toHaveBeenCalledWith('/files/file%201/download', {}, { responseType: 'blob' });
+      expect(result.blob).toBe(blob);
+      expect(result.fileName).toBe('kenya-v18.zip');
+    });
+
+    it('answers a null file name when the server carries no content-disposition', async () => {
+      mockGet.mockResolvedValue({ data: { size: 1 }, headers: {} });
+
+      const result = await documentFileService.downloadFile('file-1');
+
+      expect(result.fileName).toBe(null);
+    });
+
+    it('throws on API failure', async () => {
+      mockGet.mockRejectedValue(new Error('TOKEN_INVALID'));
+
+      await expect(documentFileService.downloadFile('file-1')).rejects.toThrow('TOKEN_INVALID');
+    });
+  });
+
+  // =========================================================================
   // uploadFile
   // =========================================================================
   describe('uploadFile', () => {

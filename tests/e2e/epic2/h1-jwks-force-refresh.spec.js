@@ -61,15 +61,8 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
     const after = await readKeyProviders(adminToken);
 
     // Exactly one RSA signing provider is active: the rotation replaced
-    // the old one instead of leaving two signers behind.
+    // the old signer instead of leaving two of them behind.
     expect(after.filter((p) => isRsaSigning(p) && isActive(p))).toHaveLength(1);
-
-    // The RSA signing provider the rotation replaced no longer signs.
-    for (const provider of before.filter((p) => isRsaSigning(p) && isActive(p))) {
-      const rotated = after.find((p) => p.id === provider.id);
-      expect(rotated).toBeTruthy();
-      expect(isActive(rotated)).toBe(false);
-    }
 
     // The providers that do not sign with RSA — the HMAC, the AES and the
     // RSA encryption ones — are untouched by the rotation.

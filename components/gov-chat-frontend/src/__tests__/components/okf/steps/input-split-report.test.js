@@ -147,6 +147,42 @@ it('a refused import (the server answered with an error) shows the failure, not 
   expect(wrapper.vm.fsError).toBeTruthy();
 });
 
+it("a NAMED refusal shows the SERVER's own words — the size, the ceiling and the remedy", async () => {
+  // #1603: an unsplittable over-ceiling document is refused with a message a
+  // curator can act on; the wizard's generic "check the files and retry" was
+  // advice that cannot work — the retry fails identically forever. The
+  // envelope is the house shape: the code at err.data.error, the server's
+  // words at err.data.message.
+  const SERVER_MESSAGE =
+    'concept "one-huge-section.md" is 352018 characters, over the 250000-character ceiling. ' +
+    'It cannot be split without losing content: a single 352000-character line exceeds the ' +
+    '250000-character ceiling and has no heading, paragraph, or line boundary to split on — ' +
+    'shorten the source content for this concept.';
+  mockImportConcepts.mockRejectedValueOnce({
+    status: 400,
+    data: { error: 'CONCEPT_TOO_LARGE', message: SERVER_MESSAGE }
+  });
+  const wrapper = mountInput();
+  await settled(wrapper);
+
+  await wrapper.vm.onFsFiles({ target: { files: [pickedFile('one-huge-section.md', 'x')] } });
+  await settled(wrapper);
+
+  expect(wrapper.vm.fsError).toBe(SERVER_MESSAGE);
+});
+
+it('a code with NO message keeps the generic advice (the server said nothing to show)', async () => {
+  mockImportConcepts.mockRejectedValueOnce({ status: 400, data: { error: 'SOMETHING_ELSE' } });
+  const wrapper = mountInput();
+  await settled(wrapper);
+
+  await wrapper.vm.onFsFiles({ target: { files: [pickedFile('odd.md', 'x')] } });
+  await settled(wrapper);
+
+  expect(wrapper.vm.fsError).toBeTruthy();
+  expect(wrapper.vm.fsError).not.toContain('SOMETHING_ELSE');
+});
+
 it('a report that is not a list says nothing — the wizard does not render a broken note', async () => {
   // `split_documents` is the server's shape, and the server's shape can
   // change. A note built from something that is not a list would render

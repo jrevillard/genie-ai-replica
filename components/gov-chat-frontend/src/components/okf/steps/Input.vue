@@ -633,9 +633,20 @@ export default {
             String(skipped)
           );
         }
-      } catch {
-        this.fsError =
-          this.translate('okf.steps.input.fsFailed', 'Import failed — check the files and retry.') || 'Import failed';
+      } catch (err) {
+        // A NAMED refusal (the concept-document ceiling, the concept cap) carries
+        // the server's own explanation — the size, the ceiling and the remedy —
+        // and it speaks for itself. The generic wording is advice that cannot
+        // work for such a refusal: retrying an over-ceiling import fails
+        // identically forever. Only a failure that names itself AND explains
+        // itself surfaces the server's words; everything else (network, timeout)
+        // keeps the generic text, which IS the right advice there. Same pattern
+        // as the concept editor's save (ConceptEditor.vue saveErrorMessage).
+        console.warn('[okf-input] import refused', err && { status: err.status, code: err.data && err.data.error });
+        const serverMessage = err && err.data && err.data.error && err.data.message;
+        this.fsError = serverMessage
+          ? String(serverMessage)
+          : this.translate('okf.steps.input.fsFailed', 'Import failed — check the files and retry.') || 'Import failed';
       } finally {
         this.fsBusy = false;
         if (evt && evt.target) evt.target.value = '';

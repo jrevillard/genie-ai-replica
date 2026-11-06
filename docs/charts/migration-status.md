@@ -168,6 +168,23 @@ contractual evidence — a fresh clone does not carry them.)
   cluster-mode agents, dbservers and coordinators alike. Guard cases
   pin the no-request render failure BY NAME and the probe blocks'
   presence in the render; the cpu-request guard is mutation-tested.
+- **Issue #1631 — the backend cannot reach any external HTTPS API —
+  fixed (0.2.167)** — the backend NetworkPolicy is default-deny on
+  egress and carried only the in-cluster peers plus the GPU node, so
+  port 443 to the outside world was never allowed: the weather feature
+  (api.open-meteo.com, behind a DNS round-robin pool no /32 pin can
+  cover) died with ECONNREFUSED on every NetworkPolicy-enforced
+  cluster, and every future externally-backed backend feature would
+  have needed its own CIDR pin against a pool that changes under it.
+  `services.backend.externalApiCIDRs` now renders the compose-equivalent
+  open egress on 80/443 by default (pin resolved CIDRs to restrict) —
+  the same convention the document-repository crawler's
+  `crawlAllowedCIDRs` set one tier over. The guard case pins the rule
+  inside the BACKEND NetworkPolicy document by name (the render carries
+  one NetworkPolicy per service and the crawler rule already puts 443
+  in a different one); mutation-tested: rule removed → the backend
+  policy loses its 443 line and the case fails. The docs site
+  paragraph covers both knobs together.
 - **The vendored dependency tarballs no longer block a rebase** — the
   branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
   replay recreated them as untracked files and the merge refused to

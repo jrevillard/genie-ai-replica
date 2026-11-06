@@ -216,7 +216,7 @@
             "progressDeadlineSeconds": {
               "type": "integer",
               "minimum": 1,
-              "description": "Per-service override of global.progressDeadlineSeconds \\u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always be present \\u2014 an overlay can set the key, never remove it \\u2014 and the template reads the service key before the chart-wide one, which would make the global knob inert. A value below 1 second is rejected by the render."
+              "description": "Per-service override of global.progressDeadlineSeconds \\u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always be present \\u2014 an overlay can set the key, never remove it \\u2014 and the template reads the service key before the chart-wide one, which would make the global knob inert. A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
             }
           }
         },
@@ -254,7 +254,7 @@
             "progressDeadlineSeconds": {
               "type": "integer",
               "minimum": 1,
-              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
             }
           }
         },
@@ -303,7 +303,7 @@
             "progressDeadlineSeconds": {
               "type": "integer",
               "minimum": 1,
-              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
             }
           }
         },
@@ -338,7 +338,7 @@
             "progressDeadlineSeconds": {
               "type": "integer",
               "minimum": 1,
-              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
             }
           }
         },
@@ -373,7 +373,7 @@
             "progressDeadlineSeconds": {
               "type": "integer",
               "minimum": 1,
-              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (Helm merges chart values over overlay values). A value below 1 second is rejected by the render."
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
             }
           }
         }

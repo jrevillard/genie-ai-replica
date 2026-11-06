@@ -5,7 +5,7 @@ weight: 4
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-11-05
+last_reviewed: 2026-11-06
 ---
 
 > **For frontend developers and operators.** The full OIDC sequence from "user clicks Sign in" through token rotation to logout, including the token storage policy and the post-logout re-auth block.
@@ -45,7 +45,6 @@ Final config returned to `oidc-client-ts`:
   response_type: 'code',
   scope: 'openid profile email roles',
   automaticSilentRenew: true,
-  storeAuthStateInCookie: false,
   // realm is fixed at 'genie' — see oidcConfig.js for the override order
 }
 ```
@@ -111,7 +110,7 @@ The callback is also where the `setInitialized` mutation fires (via the `try / f
 | ID token | Same `currentUser` object and the same per-tab user store; the cross-tab handoff entry carries it as part of the renewed token set | The per-tab store is the browser's session storage; the handoff entry is the one `localStorage` footprint, and it is wiped at logout and by the cleanup at each renew entry. |
 | Refresh token | Same `currentUser` object and the same per-tab user store; rotated by Keycloak on every silent renew. The cross-tab handoff entry (`localStorage`, `genie.renew.user`) carries the renewed token set for the other tabs — wiped at logout and by the cleanup at each renew entry, which drops it once the access token it carries is no longer usable | RFC 6749 §10.4 — refresh tokens for SPAs SHOULD be sender-constrained or rotated; we rotate. The handoff is what keeps a second tab from spending a second grant on an already-rotated refresh token. |
 | Session cookie (Keycloak) | Browser-managed, HttpOnly | Set by Keycloak on the auth flow; the silent-renew iframe uses it. |
-| OIDC state / nonce | `oidc-client-ts` in-memory store (`storeAuthStateInCookie: false`) | Not persisted. |
+| OIDC state / nonce | `oidc-client-ts`'s state store — the library default is the origin's `localStorage` (its `oidc.`-prefixed keys), written for the authorize round-trip | Persisted only for the redirect; the callback consumes it and removes it. |
 
 What the Vuex store exposes:
 
@@ -204,7 +203,7 @@ Setting `sessionStorage.genie_post_logout = 'true'` is what prevents the silent-
 | Login loops — keeps redirecting back to Keycloak | `state` parameter missing or invalid. Often: `automaticSilentRenew` error fired too early. | Inspect browser DevTools → Application → Cookies — Keycloak session cookie should still be present. If it's gone, the silent renew legitimately failed; that's expected. |
 | Silent renew fires but user gets bounced to login anyway | Keycloak session cookie expired or was cleared. | Re-login is the correct behaviour. Nothing to fix. |
 | `Error: User is missing` from `chatHistory.moveChat` | `currentUser` getter returned `undefined` — usually means `auth.initialize` hasn't run yet, or the user is on the login page. | Make sure the call site is inside a `v-if="currentUser"` guard or behind a route guard. |
-| `INVALID_NONCE` or `invalid_state` errors | `oidc-client-ts` state store was cleared (private browsing, aggressive cookie policy). | Verify `storeAuthStateInCookie: false` matches your deployment's cookie policy. For some embed scenarios (e.g. inside an iframe with third-party cookies blocked), flip to `true`. |
+| `INVALID_NONCE` or `invalid_state` errors | The OIDC state written to the origin's `localStorage` before the redirect is gone when the callback returns — private browsing with storage disabled, a storage-clearing policy or extension, or the callback landing on a different origin than the one that started the flow. | In DevTools → Application → Local Storage, confirm an `oidc.`-prefixed state entry exists after the authorize redirect starts, and that the callback URL's origin is identical to the origin that initiated the flow. The app does not configure the state store: `oidc-client-ts` uses `localStorage` by default and has no cookie-store option. |
 | Logout returns to app but `isAuthenticated` is still `true` | `commit('clearAuth')` didn't run because `signoutRedirect` succeeded but then the user came back via the iframe before `clearAuth` could fire. | The next `setAuth` / `setInitialized` cycle will reconcile. If reproducible, manually reload the page after logout. |
 | Expanding back-channel logout (RFC 8962) | Out of scope of the current implementation. | Use front-channel logout redirect (which is what we do). For back-channel, add a `backchannel_logout_uri` to the Keycloak client and a `/logout/backchannel` endpoint to the BFF. |
 

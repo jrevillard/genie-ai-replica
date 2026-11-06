@@ -77,6 +77,38 @@ def token_body():
 
 GENIE_CLIENT = json.dumps([{"id": "client-1", "clientId": "genie-app"}])
 
+# The realm's client listing as the admin API returns it: every client with
+# its direct-access-grant flag. Only admin-cli carries the grant — Keycloak
+# provisions it with direct grants on in every realm, and the readiness loop
+# mints its admin token through it. The `secret` member is a FIXTURE STRING,
+# not a credential: its only job is to prove the probe never prints the
+# listing it reads (the scenarios forbid it in the output).
+REALM_CLIENTS = json.dumps(
+    [
+        {"clientId": "admin-cli", "directAccessGrantsEnabled": True},
+        {
+            "clientId": "genie-app",
+            "secret": "harness-fixture-not-a-credential",
+            "directAccessGrantsEnabled": False,
+        },
+        {
+            "clientId": "genie-proxy-client",
+            "secret": "harness-fixture-not-a-credential",
+            "directAccessGrantsEnabled": False,
+        },
+        {
+            "clientId": "dataprep-service-client",
+            "secret": "harness-fixture-not-a-credential",
+            "directAccessGrantsEnabled": False,
+        },
+        {
+            "clientId": "okf-server",
+            "secret": "harness-fixture-not-a-credential",
+            "directAccessGrantsEnabled": False,
+        },
+    ]
+)
+
 
 def _resp_list(override, default):
     """Normalize an override: a single dict becomes a one-entry list; a list
@@ -93,7 +125,7 @@ def _resp_list(override, default):
     return override
 
 
-def base_rules(client_resp=None, token_resp=None, ropc_resp=None):
+def base_rules(client_resp=None, token_resp=None, ropc_resp=None, realm_clients_resp=None):
     """The scripted endpoints of the reduced readiness block, overridable
     per scenario. An endpoint the block stops calling leaves an unused rule
     (harmless); an endpoint that appears without a rule makes the stub exit 97 and the
@@ -114,11 +146,26 @@ def base_rules(client_resp=None, token_resp=None, ropc_resp=None):
             ),
         },
         {
+            # The genie-app lookup is the FILTERED listing. Its url is spelled
+            # out in full because the stub serves the longest matching url:
+            # the unfiltered realm listing below is a substring of it, and a
+            # shorter rule would win on the filtered call too.
             "name": "client",
             "method": "GET",
-            "url": "clients?clientId=genie-app",
+            "url": "/admin/realms/genie/clients?clientId=genie-app",
             "responses": _resp_list(
                 client_resp, {"status": "200", "body": GENIE_CLIENT}
+            ),
+        },
+        {
+            # The unfiltered realm listing: the whole client set with its
+            # direct-access-grant flags. The read-back asserts the SHAPE of
+            # that set — no client outside the allowlist carries the grant.
+            "name": "realm_clients",
+            "method": "GET",
+            "url": "/admin/realms/genie/clients",
+            "responses": _resp_list(
+                realm_clients_resp, {"status": "200", "body": REALM_CLIENTS}
             ),
         },
         {
@@ -163,10 +210,18 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # The read-back must answer the realm listing AND print nothing
+            # of it: the listing carries the clients' secrets, so the fixture
+            # string is forbidden in the output.
             "happy_path_full",
             0,
             base_rules(),
-            expect=["Keycloak ready", "ROPC refusal verified"],
+            expect=[
+                "Keycloak ready",
+                "ROPC refusal verified",
+                "Direct-access grants verified across the genie realm's clients",
+            ],
+            forbid=["harness-fixture-not-a-credential"],
         )
     )
 
@@ -220,7 +275,8 @@ def scenarios_list():
                     {"status": "200", "body": token_body()},
                 ]
             ),
-            expect=["Keycloak ready"],
+            expect=["Keycloak ready", "Direct-access grants verified"],
+            forbid=["harness-fixture-not-a-credential"],
         )
     )
 
@@ -326,6 +382,52 @@ def scenarios_list():
             expect=["token endpoint rate-limited the probe"],
             forbid=["ROPC refusal verified"],
             calls={"ropc": 5},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # #1303: a client OUTSIDE the allowlist carrying the direct-access
+            # grant is the drift the genie-app probe cannot see (genie-app
+            # itself refuses). The read-back is what catches it — the job
+            # fails and names the client.
+            "realm_client_drift_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "200",
+                    "body": json.dumps(
+                        [
+                            {"clientId": "admin-cli", "directAccessGrantsEnabled": True},
+                            {
+                                "clientId": "genie-proxy-client",
+                                "secret": "harness-fixture-not-a-credential",
+                                "directAccessGrantsEnabled": True,
+                            },
+                        ]
+                    ),
+                }
+            ),
+            expect=["genie realm ROPC posture drifted", "genie-proxy-client"],
+            forbid=["Direct-access grants verified"],
+        )
+    )
+
+    scs.append(
+        scenario(
+            # The listing is the ONLY thing that proves the other clients'
+            # posture: an unreadable answer leaves the invariant UNVERIFIED,
+            # and the job must fail on that — never pass without a verdict.
+            "realm_client_listing_unreadable_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "401",
+                    "body": json.dumps({"error": "HTTP 401 Unauthorized"}),
+                }
+            ),
+            expect=["could not be read back", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
         )
     )
 

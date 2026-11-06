@@ -23,6 +23,7 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
 spec:
   replicas: {{ include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "clamav") | int }}
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" .Values "service" "clamav") }}
   selector:
     matchLabels:
       genieai.io/component: clamav

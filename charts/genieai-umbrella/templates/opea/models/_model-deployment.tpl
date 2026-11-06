@@ -76,6 +76,7 @@ metadata:
     app.kubernetes.io/part-of: genieai
 spec:
   replicas: 1
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" $root.Values "service" "") }}
   selector:
     matchLabels:
       app: {{ .name }}

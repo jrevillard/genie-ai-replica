@@ -6,13 +6,11 @@ const { NotFoundError, isClientError } = require('../middleware/errors');
 /**
  * Answers a failed service-category request.
  *
- * A typed client error (an AppError below 500 — the 404 of an unknown id,
- * the 400 of a malformed payload) is an EXPECTED OUTCOME, not a fault: it
- * is logged ONCE, at warn grade and without a stack, and answered here —
- * the service layer stays silent for it, so a client probing ids produces
- * one line per probe instead of a pair of error-grade lines. The typed
- * hierarchy is the discriminator, not a bare statusCode below 500: an
- * upstream error that happens to carry a 4xx status is a fault.
+ * A typed client error (`isClientError` — the one predicate, in
+ * middleware/errors.js) is an EXPECTED OUTCOME, not a fault: it is logged
+ * ONCE, at warn grade and without a stack, and answered here — the
+ * service layer stays silent for it, so a client probing ids produces one
+ * line per probe instead of a pair of error-grade lines.
  *
  * The response is the typed status code and the typed error's message.
  * The one middleware behaviour this does not reproduce is the verbatim

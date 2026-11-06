@@ -312,10 +312,8 @@ class ServiceCategoryService {
    * without a stack, and answers it. Any other error is a genuine fault: it
    * is logged at error grade, with its stack.
    *
-   * The typed hierarchy is the discriminator, not a bare `statusCode` below
-   * 500: a driver or upstream error that happens to carry a 4xx status is a
-   * fault, and the absence classifier exists precisely because "the HTTP
-   * status is 404" does not mean "the row is not there".
+   * The grading is `isClientError` (middleware/errors.js) — one predicate,
+   * so the layers cannot drift apart on what counts as an outcome.
    *
    * The contract this leaves to the caller: a client error carries NO log
    * line from the service, so whoever catches it must log it. The router
@@ -347,11 +345,10 @@ class ServiceCategoryService {
    * a 500. Every other failure is rethrown unchanged — a genuine fault is
    * logged, an expected client outcome is not (see _rethrowFailure).
    *
-   * An already-typed client error is rethrown as it is: a typed NotFoundError
-   * IS the expected absence (raised by _documentOr404), and no typed error
-   * may be re-graded by the driver predicate — the predicate reads raw
-   * driver errors, and a typed error that happened to carry its text would
-   * be rebuilt with its real message lost.
+   * An already-typed client error (`isClientError`) is rethrown as it is:
+   * the driver predicate reads raw driver errors, and a typed error that
+   * happened to carry its text would be rebuilt with its real message
+   * lost — a 400 would even become a 404.
    *
    * @param {Error} error - The caught error.
    * @param {String} label - Resource label ('Service', 'Category').
@@ -677,6 +674,10 @@ class ServiceCategoryService {
               SORT edge.order ASC
               RETURN serviceTranslation
         )
+        // An unknown id must answer 404, not a row of null fields: without
+        // this filter the projection emits exactly one shell row and the
+        // absence below never fires.
+        FILTER category != null
         RETURN {
           catKey: category._key,
           catCode: category.catCode,

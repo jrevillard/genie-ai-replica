@@ -32,17 +32,18 @@ global:
   # it the Deployment reports ProgressDeadlineExceeded, Helm declares the
   # release failed and uninstalls it, deleting the resources the next
   # attempt needs — the install restarts from scratch and can loop.
-  # 900s gives a cold start on a slow node room without letting a truly
-  # stuck Deployment hang forever. Per-service override:
-  # services.<svc>.progressDeadlineSeconds (wins over this value).
-  # 900s, not the Kubernetes 600s fallback: the clock starts when the
-  # DEPLOYMENT is created, so a cold pull eats into it. 900s covers a
-  # normal cold start (images pulled in minutes) with margin, and it is
-  # NOT sized for a pathological venue: a cluster whose images pull for
-  # 18 minutes declares its own value here (the laptop and forge
-  # overlays do), BELOW that venue's own Helm timeout — the deadline
-  # fires an uninstall, so it must never outlive the wait it sits in.
-  progressDeadlineSeconds: 900
+  # Per-service override: services.<svc>.progressDeadlineSeconds
+  # (wins over this value).
+  # 1800s, calibrated on the reference venue (a single-node k3s dev
+  # cluster: an 18-minute first install, almost all of it image pulls —
+  # the OPEA images are multi-GB by nature, so a cold pull eating into
+  # the window is the NORMAL case, not an outlier). A venue slower than
+  # that declares its own value in its overlay, BELOW its own Helm
+  # INSTALL timeout: the deadline fires an uninstall (an INSTALL
+  # failure — an upgrade aborts without uninstalling), so it must never
+  # outlive the install wait it sits in (the forge overlay carries
+  # 2400s under a 3600s install timeout).
+  progressDeadlineSeconds: 1800
   # Optional registry prefix that WINS over the top-level imageRegistry
   # when set (the factory and the migrations Job both read it first).
   # Empty = the top-level imageRegistry applies. Exists for operators
@@ -608,10 +609,11 @@ dependencyGraph:
 #   probes: readiness/liveness/startup probe definitions
 #   progressDeadlineSeconds: OPTIONAL per-service override of
 #     global.progressDeadlineSeconds (the Deployment's progress window).
-#     Not declared here on purpose: a concrete value would ALWAYS win over
-#     the chart-wide one (Helm merges chart values over overlay values, so
-#     the key is always present), which would make the global knob inert
-#     for exactly these services — the backend among them.
+#     Not declared here on purpose: a concrete value would always be
+#     present — an overlay can set the key, never remove it — and the
+#     template reads the service key before the chart-wide one, which
+#     would make the global knob inert for exactly these services — the
+#     backend among them.
 #   podDisruptionBudget: optional PDB; null disables
 #   podAnnotations: optional map merged into the pod template metadata
 #   workingDir: optional container working directory

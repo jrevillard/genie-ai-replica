@@ -120,15 +120,19 @@ contractual evidence — a fresh clone does not carry them.)
   failed and UNINSTALLS it — deleting the resources the next attempt
   needs, so the install restarts from scratch and can loop. Every
   chart-owned Deployment (14 in the full render) now carries an explicit
-  deadline: `global.progressDeadlineSeconds` (default 900s) with a
-  per-service override that wins; a value below 1s fails the render by
-  name, because that value reproduces the symptom the knob removes.
+  deadline: `global.progressDeadlineSeconds` (default 1800s, calibrated
+  on the reference venue — a single-node k3s dev cluster whose 18-minute
+  first install is almost all image pull; the OPEA images are multi-GB
+  by nature, so a cold pull eating into the window is the normal case,
+  not an outlier) with a per-service override that wins; a value below
+  1s fails the render by name, because that value reproduces the
+  symptom the knob removes.
   Second half of the issue: the keycloak-operator prerequisite shipped
   requests.cpu 300m / limits.cpu 700m, so on a node close to its CPU
   quota it was throttled, never finished booting, died on a connection
   timeout to the API server, and the Keycloak CR stayed permanently not
   Ready — blocking every release that waits for it. Its CPU is now sized
-  by `KC_OPERATOR_CPU_REQUEST` / `KC_OPERATOR_CPU_LIMIT` (500m / 1000m):
+  by `KC_OPERATOR_CPU_REQUEST` / `KC_OPERATOR_CPU_LIMIT` (300m / 1000m):
   the request stays low so the pod still lands on a busy node, the limit
   is what the JVM gets to use.
 - **The vendored dependency tarballs no longer block a rebase** — the

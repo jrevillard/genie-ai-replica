@@ -74,6 +74,29 @@ function mockFetch({ faqAvailable, translation }) {
 
 const TRANSLATED_FAQ = { translated_markdown: '## Qu est-ce que GENIE.AI ?' };
 
+// The sidebar lists the SAME citations as the answer card, so its badge must
+// say the same thing: an OKF concept has no file extension, and the
+// extension fallback renders the first four characters of its name.
+describe('RightSideBarComponent OKF concept citations', () => {
+  it('badges an OKF concept citation as OKF, not as a file extension', () => {
+    const wrapper = mountSidebar({
+      relatedDocuments: [{ id: 'hadith-nawawi-36', title: 'hadith nawawi 36', source: 'okf-concept' }]
+    });
+    const badge = wrapper.find('.file-type-badge');
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toBe('OKF');
+  });
+
+  it('keeps the file-extension badge for a repository document', () => {
+    const wrapper = mountSidebar({
+      relatedDocuments: [{ id: 'doc-1', title: 'Guide', fileName: 'guide.pdf' }]
+    });
+    const badge = wrapper.find('.file-type-badge');
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toBe('PDF');
+  });
+});
+
 describe('RightSideBarComponent FAQ language contract', () => {
   let originalFetch;
 

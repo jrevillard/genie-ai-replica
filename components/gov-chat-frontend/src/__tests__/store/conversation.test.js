@@ -316,6 +316,7 @@ describe('conversation persistence', () => {
 
 describe('conversation sendStream action', () => {
   const chatbotService = require('../../services/chatbotService.js').default;
+  const documentFileService = require('../../services/documentFileService.js').default;
 
   function storeWithService(streamImpl) {
     const store = freshStore();
@@ -373,6 +374,71 @@ describe('conversation sendStream action', () => {
       expect(open.messages.at(-1).sources[0].url).toBe('/api/files/doc-1/download');
       expect(open.relatedDocuments.length).toBe(1);
     });
+  });
+
+  // An OKF concept is not a repository document: chatqna emits it precisely
+  // because the doc-repo lookup cannot answer for it (the concept's markdown
+  // never becomes a doc-repo `files` doc). Asking anyway produced one 404
+  // per cited concept on every OKF-citing query.
+  it('never asks doc-repo about an OKF concept citation', async () => {
+    const metadataSpy = jest
+      .spyOn(documentFileService, 'getFileMetadata')
+      .mockResolvedValue({ file_type: 'pdf', file_size: 4096 });
+    let captured = null;
+    const store = storeWithService((q, cb) => {
+      captured = cb;
+      return new AbortController();
+    });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
+    await Promise.resolve();
+
+    captured.onMetadata({
+      source_documents: [
+        {
+          document_id: 'hadith-nawawi-36',
+          document_name: 'hadith nawawi 36',
+          url: '',
+          score: 0.9,
+          concept_id: 'hadith-nawawi-36',
+          source: 'okf-concept'
+        },
+        { document_id: 'doc-1', document_name: 'Guide', url: '/api/files/doc-1/download', score: 0.8 }
+      ]
+    });
+
+    const asked = metadataSpy.mock.calls.map((call) => call[0]);
+    expect(asked).not.toContain('hadith-nawawi-36');
+    expect(asked).toContain('doc-1');
+  });
+
+  it('keeps the OKF marker on the mapped citation', async () => {
+    let captured = null;
+    const store = storeWithService((q, cb) => {
+      captured = cb;
+      return new AbortController();
+    });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
+    await Promise.resolve();
+
+    captured.onMetadata({
+      source_documents: [
+        {
+          document_id: 'hadith-nawawi-36',
+          document_name: 'hadith nawawi 36',
+          url: '',
+          score: 0.9,
+          concept_id: 'hadith-nawawi-36',
+          source: 'okf-concept'
+        }
+      ]
+    });
+
+    const source = store.getters['conversation/openConversation'].messages.at(-1).sources[0];
+    expect(source.source).toBe('okf-concept');
+    expect(source.conceptId).toBe('hadith-nawawi-36');
+    expect(source.title).toBe('hadith nawawi 36');
   });
 
   it('status timing survives going back online and dies with an outage', () => {

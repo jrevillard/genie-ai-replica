@@ -470,7 +470,7 @@ export default {
       loadError: 'Falha ao carregar a hierarquia de conhecimento.',
       loadTranslationsError: 'Falha ao carregar as traduções.',
       translationsLoadFailedNotice:
-        'Não foi possível carregar as traduções. A edição fica desativada até que sejam carregadas.',
+        'Não foi possível carregar as traduções. A edição das traduções e o salvamento permanecem desativados até que sejam carregadas.',
       retryTranslations: 'Tentar novamente',
       translationsNotLoaded: 'Traduções não carregadas — recarregue antes de guardar.',
       confirmCancelTitle: 'Alterações Não Salvas',

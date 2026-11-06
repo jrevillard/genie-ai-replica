@@ -467,7 +467,7 @@ export default {
       saveError: 'ล้มเหลวในการบันทึกรายการลำดับชั้น',
       loadError: 'ล้มเหลวในการโหลดลำดับชั้นความรู้',
       loadTranslationsError: 'ล้มเหลวในการโหลดการแปล',
-      translationsLoadFailedNotice: 'โหลดคำแปลไม่สำเร็จ การแก้ไขถูกปิดใช้งานจนกว่าจะโหลดสำเร็จ',
+      translationsLoadFailedNotice: 'โหลดคำแปลไม่สำเร็จ การแก้ไขคำแปลและการบันทึกถูกปิดใช้งานจนกว่าจะโหลดสำเร็จ',
       retryTranslations: 'ลองอีกครั้ง',
       translationsNotLoaded: 'ยังโหลดคำแปลไม่สำเร็จ — โหลดซ้ำก่อนบันทึก',
       confirmCancelTitle: 'การเปลี่ยนแปลงที่ยังไม่ได้บันทึก',

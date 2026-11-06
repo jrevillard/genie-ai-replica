@@ -469,7 +469,7 @@ export default {
       loadError: 'Error al cargar la jerarquía de conocimiento.',
       loadTranslationsError: 'Error al cargar las traducciones.',
       translationsLoadFailedNotice:
-        'No se pudieron cargar las traducciones. La edición está deshabilitada hasta que se carguen.',
+        'No se pudieron cargar las traducciones. La edición de las traducciones y el guardado permanecen deshabilitados hasta que se carguen.',
       retryTranslations: 'Reintentar',
       translationsNotLoaded: 'Traducciones no cargadas: recargue antes de guardar.',
       confirmCancelTitle: 'Cambios no guardados',

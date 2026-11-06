@@ -466,7 +466,8 @@ export default {
       saveError: 'Failed to save hierarchy item.',
       loadError: 'Failed to load knowledge hierarchy.',
       loadTranslationsError: 'Failed to load translations.',
-      translationsLoadFailedNotice: 'Translations could not be loaded. Editing is disabled until they load.',
+      translationsLoadFailedNotice:
+        'Translations could not be loaded. Editing the translations and saving stay disabled until they load.',
       retryTranslations: 'Retry',
       translationsNotLoaded: 'Translations not loaded — reload before saving.',
       confirmCancelTitle: 'Unsaved Changes',

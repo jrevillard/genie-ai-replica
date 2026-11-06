@@ -468,7 +468,8 @@ export default {
       saveError: 'অনুক্রম আইটেম সংরক্ষণ করতে ব্যর্থ হয়েছে।',
       loadError: 'জ্ঞান অনুক্রম লোড করতে ব্যর্থ হয়েছে।',
       loadTranslationsError: 'অনুবাদ লোড করতে ব্যর্থ হয়েছে।',
-      translationsLoadFailedNotice: 'অনুবাদগুলি লোড করা যায়নি। সেগুলি লোড না হওয়া পর্যন্ত সম্পাদনা নিষ্ক্রিয়।',
+      translationsLoadFailedNotice:
+        'অনুবাদগুলি লোড করা যায়নি। সেগুলি লোড না হওয়া পর্যন্ত অনুবাদ সম্পাদনা ও সংরক্ষণ নিষ্ক্রিয় থাকবে।',
       retryTranslations: 'পুনরায় চেষ্টা করুন',
       translationsNotLoaded: 'অনুবাদ লোড হয়নি — সংরক্ষণের আগে পুনরায় লোড করুন।',
       confirmCancelTitle: 'অসংরক্ষিত পরিবর্তন',

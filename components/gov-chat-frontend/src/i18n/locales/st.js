@@ -469,7 +469,7 @@ export default {
       loadError: 'Ho hlolehile ho kenya tharollo ya tsebo.',
       loadTranslationsError: 'Ho hlolehile ho kenya diphetolelo.',
       translationsLoadFailedNotice:
-        'Ha e khonehe ho jarolla diphetolelo. Ho fetola ho timetse ho fihlela li jarollotsoe.',
+        'Ha e khonehe ho jarolla diphetolelo. Ho ngola diphetolelo le ho boloka ho bolokwa ho tima ho fihlela li jarollotsoe.',
       retryTranslations: 'Leka hape',
       translationsNotLoaded: 'Diphetolelo ha di hlahelletse — kenya hape pele o boloka.',
       confirmCancelTitle: 'Diphetoho tse sa Bolokoang',

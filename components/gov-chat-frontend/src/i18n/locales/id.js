@@ -467,7 +467,8 @@ export default {
       saveError: 'Gagal menyimpan item hierarki.',
       loadError: 'Gagal memuat hierarki pengetahuan.',
       loadTranslationsError: 'Gagal memuat terjemahan.',
-      translationsLoadFailedNotice: 'Terjemahan gagal dimuat. Penyuntingan dinonaktifkan sampai dimuat.',
+      translationsLoadFailedNotice:
+        'Terjemahan gagal dimuat. Penyuntingan terjemahan dan penyimpanan dinonaktifkan sampai dimuat.',
       retryTranslations: 'Coba lagi',
       translationsNotLoaded: 'Terjemahan tidak dimuat — muat ulang sebelum menyimpan.',
       confirmCancelTitle: 'Perubahan Belum Disimpan',

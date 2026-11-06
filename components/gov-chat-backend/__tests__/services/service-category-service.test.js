@@ -464,6 +464,18 @@ describe('ServiceCategoryService', () => {
       const result = await service.categoryExists(null);
       expect(result).toBe(false);
     });
+
+    it('initializes the service before the check (a fresh instance holds no collection yet)', async () => {
+      // Every other method of the service initializes first; without it the
+      // check dereferences a null collection — a TypeError the caller would
+      // report as a server fault.
+      service.initialized = false;
+      service.serviceCategories = null;
+
+      const result = await service.categoryExists('cat-1');
+
+      expect(result).toBe(true);
+    });
   });
 
   describe('getAllCategoriesWithServices', () => {

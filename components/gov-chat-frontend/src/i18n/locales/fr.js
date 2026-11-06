@@ -470,7 +470,7 @@ export default {
       loadError: 'Échec du chargement de la hiérarchie des connaissances.',
       loadTranslationsError: 'Échec du chargement des traductions.',
       translationsLoadFailedNotice:
-        "Impossible de charger les traductions. L'édition est désactivée jusqu'à leur chargement.",
+        "Impossible de charger les traductions. La modification des traductions et l'enregistrement restent désactivés jusqu'à leur chargement.",
       retryTranslations: 'Réessayer',
       translationsNotLoaded: "Traductions non chargées — rechargez avant d'enregistrer.",
       confirmCancelTitle: 'Modifications non enregistrées',

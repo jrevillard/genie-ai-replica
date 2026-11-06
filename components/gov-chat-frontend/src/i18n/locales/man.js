@@ -467,7 +467,7 @@ export default {
       loadError: 'Filiyata longo jukutol looti to.',
       loadTranslationsError: 'Filiyata tradiksion looti to.',
       translationsLoadFailedNotice:
-        "Cha dod yn load yn cherrinagh. Ta cur sheese ass-y-sthie currit ass shaghley derrey t'ad laoit.",
+        "Cha dod yn load yn cherrinagh. Ta cur sheese yn chaghlaa er y laa oo dysgagh, shaghley derrey t'ad laoit.",
       retryTranslations: 'Aa-chood',
       translationsNotLoaded: 'Tradiksion looti fili — looti ree adel savar.',
       confirmCancelTitle: 'Yailama-mang-mara',

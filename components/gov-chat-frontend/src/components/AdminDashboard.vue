@@ -256,7 +256,7 @@
                             :message="
                               translate(
                                 'admin.hierarchy.translationsLoadFailedNotice',
-                                'Translations could not be loaded. Editing is disabled until they load.'
+                                'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
                               )
                             "
                           >

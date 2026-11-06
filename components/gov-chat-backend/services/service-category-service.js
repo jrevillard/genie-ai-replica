@@ -316,6 +316,7 @@ class ServiceCategoryService {
       return false;
     }
     try {
+      await this.init();
       logger.info(`Checking if category ${categoryKey} exists`);
       // The absence verdict comes from _documentOr404: it classifies a
       // missing row, the 3.12 no-match and the undefined-resolving adapter

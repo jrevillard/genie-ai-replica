@@ -461,6 +461,7 @@ def scenarios_list():
             ),
             expect=["genie realm ROPC posture drifted", "genie-proxy-client"],
             forbid=["Direct-access grants verified", FIXTURE_SECRET],
+            calls={"realm_clients": 1},
         )
     )
 
@@ -836,6 +837,38 @@ def scenarios_list():
                 "the grant state was never read for: genie-mobile",
             ],
             forbid=["Direct-access grants verified", FIXTURE_SECRET],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # An entry that is not a client object means the answer was
+            # mangled in transit — a drifted client whose entry was mangled
+            # away would vanish from the verdict. The probe fails instead of
+            # certifying a listing it did not fully read.
+            "realm_client_listing_malformed_entry_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "200",
+                    "body": json.dumps(
+                        [
+                            {
+                                "clientId": "admin-cli",
+                                "directAccessGrantsEnabled": True,
+                            },
+                            {
+                                "clientId": "genie-app",
+                                "directAccessGrantsEnabled": False,
+                            },
+                            "gateway-error-text",
+                        ]
+                    ),
+                }
+            ),
+            expect=["entries that are not client objects", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
             calls={"realm_clients": 1},
         )
     )

@@ -499,11 +499,19 @@ workflow:
       # class), an interception page answering 401 with HTML, and a
       # transient status — even one carrying a JSON error body — are all
       # noise that retries; a truncated answer is never read as a verdict
-      # (#1320). Takes the kc_error_detail output as its argument.
+      # (#1320). Takes the kc_error_detail output as its argument and, as
+      # the second, ONE definitive status (a caller with a narrower rule
+      # passes its own — the readiness loop's #1319 rule is 401-only); with
+      # no second argument the set is 400, 401 and 403.
       kc_is_definitive_rejection() {
+        local _detail=$1 _status=$2
         [ "$CURL_RC" -eq 0 ] || return 1
-        case "$STATUS" in 400|401|403) ;; *) return 1 ;; esac
-        [ -n "$1" ]
+        if [ -n "$_status" ]; then
+          case "$STATUS" in "$_status") ;; *) return 1 ;; esac
+        else
+          case "$STATUS" in 400|401|403) ;; *) return 1 ;; esac
+        fi
+        [ -n "$_detail" ]
       }
       # Bounded, with a cap loose enough for a slow-but-alive backend that is
       # still warming up (a >30s health answer means the fallback is the
@@ -564,23 +572,19 @@ workflow:
           # The error field is parsed from KC_RAW (the full capture, like
           # the token parse above) — the 200-char display BODY can truncate
           # the JSON before the error member and would hide a real
-          # rejection. The parse only runs on a CLEAN-exit 401 (#1319's rule
-          # as amended by this MR): a truncated answer — curl exit != 0, the
+          # rejection. Whether the answer counts as definitive is
+          # kc_is_definitive_rejection's single contract, with #1319's own
+          # status set (401): a truncated answer — curl exit != 0, the
           # #1334 round-6 class — may carry a status trailer over a cut
           # body, and a truncated answer is never read as a verdict (#1320);
           # it counts as transient noise and the budget rides it out. Other
-          # statuses reset.
-          TOKEN_REJECT_DETAIL=""
-          if [ "$TOKEN_STATUS" = "401" ] && [ "$CURL_RC" -eq 0 ]; then
-            TOKEN_REJECT_DETAIL=$(kc_error_detail)
-          fi
-          # DETAIL is reset unconditionally above and assigned only in the
-          # clean-exit-401 branch — non-empty ⟹ a definitive OAuth
-          # rejection answer.
-          if [ -n "$TOKEN_REJECT_DETAIL" ]; then
+          # statuses reset the counter.
+          TOKEN_REJECT_DETAIL=$(kc_error_detail)
+          if kc_is_definitive_rejection "$TOKEN_REJECT_DETAIL" 401; then
             TOKEN_REJECT_RUN=$((TOKEN_REJECT_RUN+1))
           else
             TOKEN_REJECT_RUN=0
+            TOKEN_REJECT_DETAIL=""
           fi
           if [ "$TOKEN_REJECT_RUN" -ge 3 ]; then
             echo "ERROR: master admin token definitively rejected (HTTP 401, error '${TOKEN_REJECT_DETAIL}') on ${TOKEN_REJECT_RUN} consecutive attempts — a credentials rejection cannot heal on retry and further attempts feed Keycloak's brute-force protector; failing fast instead of burning the readiness budget. Check KEYCLOAK_ADMIN_PASSWORD."
@@ -880,7 +884,12 @@ workflow:
         # max=-1: the admin API's default window would cap the listing,
         # and the verdict below certifies the realm — it must certify
         # everything it read, so the read asks for the full set.
+        # --max-time 15: this is the largest answer in the block, and the
+        # ROPC probe below already showed the block's 10s default too
+        # tight for a smaller call — truncating the certification call
+        # three times would fail the job on a healthy realm.
         kc_curl GET "${KC_URL}/admin/realms/genie/clients?max=-1" \
+          --max-time 15 \
           -H "Authorization: Bearer $ROPC_REALM_TOKEN"
         if [ "$STATUS" = "200" ] && [ "$CURL_RC" -eq 0 ]; then
           # A client whose directAccessGrantsEnabled member is missing or
@@ -888,10 +897,13 @@ workflow:
           # client is the grant ON, so an unread client cannot be assumed
           # disabled: UNREAD fails like any other no-verdict answer. The
           # member must be exactly true to count as drift, exactly false to
-          # count as read. Both concerns report in one answer (UNREAD first,
-          # then DRIFT) so one red run names everything the realm got wrong;
-          # neither masks the other.
-          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients else []; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients else []; print('PARSE_ERROR' if clients is None else ('EMPTY' if not clients else chr(10).join([m for m in [('UNREAD:'+','.join(unread)) if unread else '', ('DRIFT:'+','.join(drift)) if drift else '', 'OK' if not unread and not drift else ''] if m])))" 2>/dev/null || echo "PARSE_ERROR")
+          # count as read. An entry that is not a client object at all
+          # means the answer was mangled in transit — a drifted client whose
+          # entry was mangled away would otherwise vanish from the verdict —
+          # so MALFORMED fails too. Both concerns report in one answer
+          # (UNREAD first, then DRIFT) so one red run names everything the
+          # realm got wrong; neither masks the other.
+          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; malformed=any(not isinstance(c,dict) for c in data) if isinstance(data,list) else False; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients else []; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients else []; print('PARSE_ERROR' if clients is None else ('EMPTY' if not clients else ('MALFORMED' if malformed else chr(10).join([m for m in [('UNREAD:'+','.join(unread)) if unread else '', ('DRIFT:'+','.join(drift)) if drift else '', 'OK' if not unread and not drift else ''] if m]))))" 2>/dev/null || echo "PARSE_ERROR")
           ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
           ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
           break
@@ -929,6 +941,10 @@ workflow:
       fi
       if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^EMPTY$'; then
         echo "ERROR: the genie realm client list carries no client entries — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        exit 1
+      fi
+      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^MALFORMED$'; then
+        echo "ERROR: the genie realm client list carries entries that are not client objects — the answer was mangled in transit and a drifted client could hide behind a mangled entry; the raw listing is withheld (it carries client secrets) — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
         exit 1
       fi
       # Drift first: it is the security-relevant answer, and when the realm

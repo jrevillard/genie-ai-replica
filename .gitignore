@@ -203,3 +203,6 @@ smoke-*.xlsx
 /redeploy-cloud-full.sh
 /redeploy-stack.sh
 /ssh-cloud.sh
+
+# scratch dir used for prettier hunk checks; never committed
+.fmtcheck/

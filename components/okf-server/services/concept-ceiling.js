@@ -12,10 +12,14 @@
 // — which is why the remedy is to split rather than discover the truncation at
 // query time.
 //
-// 250000 reflects a 65536-token window (~4 chars/token minus the prompt, batch
-// and output reservations). Override per deployment when the served model
-// differs; okf-server and dataprep must agree, which config-validator checks
-// (AC8).
+// 250000 is sized for the default 65536-token window. MEASURED 2026-11-06 in
+// the running container: the derived per-chunk document-context budget on that
+// window is ~219 700 characters (254 prompt + 2106 batch + 8192 output tokens
+// reserved), so a concept AT the ceiling has its document context truncated.
+// The gap is tracked as #1588: the ceiling is a STATIC literal and the budget
+// is DISCOVERED at runtime, so no config-validator check can keep them in
+// step — only an operator can, by hand, against the window their endpoint
+// actually serves. Override per deployment when the served model differs.
 //
 // WHY THIS IS A SEPARATE MODULE (2026-11-06): the ceiling was read from
 // `process.env` inside ingest-service, so the two OTHER paths that must

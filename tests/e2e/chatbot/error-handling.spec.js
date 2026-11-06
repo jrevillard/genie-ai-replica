@@ -38,7 +38,7 @@ test.describe('RAG error handling', () => {
     let attemptCount = 0;
 
     // First call returns error, second call proceeds normally (validates retry)
-    await page.route('**/api/queries/stream', (route) => {
+    await page.route('**/queries/stream**', (route) => {
       attemptCount++;
       if (attemptCount === 1) {
         route.fulfill({
@@ -65,7 +65,7 @@ test.describe('RAG error handling', () => {
     await expect(textarea).toBeVisible({ timeout: 5000 });
 
     // Remove the intercept so subsequent requests go through normally
-    await page.unroute('**/api/queries/stream');
+    await page.unroute('**/queries/stream**');
 
     // Send another message — should work now (retry probe). The
     // probe is only a probe if the retry actually ANSWERS: a second
@@ -84,7 +84,7 @@ test.describe('RAG error handling', () => {
 
   test('displays error when network connection fails', async () => {
     // Simulate network failure with error response (more reliable than abort for fetch+ReadableStream)
-    await page.route('**/api/queries/stream', (route) =>
+    await page.route('**/queries/stream**', (route) =>
       route.fulfill({
         status: 502,
         contentType: 'application/json',
@@ -108,7 +108,7 @@ test.describe('RAG error handling', () => {
 
   test('displays error when RAG pipeline returns internal error', async () => {
     // Intercept with a 500 error
-    await page.route('**/api/queries/stream', (route) =>
+    await page.route('**/queries/stream**', (route) =>
       route.fulfill({
         status: 500,
         contentType: 'application/json',

@@ -59,20 +59,28 @@ function failWithStatus(message, status) {
  * @returns {Error} The error to throw
  */
 function requestFailure(err, what) {
-  const subject = `Cannot reach the Keycloak admin API for ${what}`;
   if (err.status !== undefined) {
+    // The endpoint ANSWERED — only its body was unusable (auth.js rejects
+    // a non-JSON body and carries the status). The verdict says so: a
+    // reader must not go hunting for a network fault when the admin API
+    // answered 401 with an HTML error page.
+    const answered = `The Keycloak admin API did not answer ${what} usably`;
     if (isTransientStatus(err.status)) {
-      const error = transientError(`${subject}: ${err.message}`);
+      const error = transientError(`${answered}: ${err.message}`);
       error.httpStatus = err.status;
       return error;
     }
-    // A permanent refusal: the rejection keeps its own markers (the
-    // non-JSON body flag), so the caller can still tell a broken answer
-    // from a transport break.
-    err.message = `${subject}: ${err.message}`;
-    return err;
+    // A permanent refusal: the rejection's own markers travel with the
+    // verdict (the non-JSON body flag), so the caller can still tell a
+    // broken answer from a transport break. The verdict is a NEW error —
+    // the transport owns the object it threw, and a verdict must not
+    // rewrite it (the same rejection can be rendered more than once).
+    const error = new Error(`${answered}: ${err.message}`, { cause: err });
+    error.status = err.status;
+    if (err.nonJsonBody) error.nonJsonBody = true;
+    return error;
   }
-  return transientError(`${subject}: ${err.message}`);
+  return transientError(`Cannot reach the Keycloak admin API for ${what}: ${err.message}`);
 }
 
 /**
@@ -110,11 +118,17 @@ function assertPayloadShape(what, res, shape) {
     }
     return;
   }
-  if (!res.data || typeof res.data !== 'object' || !res.data.id) {
-    const error = new Error(`${subject} answered HTTP 200 without a usable representation: ${bodyText(res)}`);
-    error.invalidPayload = true;
-    throw error;
+  if (shape === REPRESENTATION_PAYLOAD) {
+    if (!res.data || typeof res.data !== 'object' || !res.data.id) {
+      const error = new Error(`${subject} answered HTTP 200 without a usable representation: ${bodyText(res)}`);
+      error.invalidPayload = true;
+      throw error;
+    }
+    return;
   }
+  // An unknown shape is a bug in the read site, not a broken answer: a
+  // silent fallthrough would answer with the wrong verdict.
+  throw new Error(`Unknown payload shape "${shape}" for ${subject} — the read site is wrong`);
 }
 
 /**
@@ -334,29 +348,39 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
 async function createUser(adminToken, realm, userData) {
   const { username, email, firstName, lastName, enabled = true } = userData;
 
-  const userRes = await request('POST', `/auth/admin/realms/${realm}/users`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: {
-      username,
-      email,
-      firstName: firstName || username,
-      lastName: lastName || 'Test',
-      enabled,
-      emailVerified: true,
-      credentials: userData.password
-        ? [
-            {
-              type: 'password',
-              value: userData.password,
-              temporary: false,
-            },
-          ]
-        : undefined,
-    },
-  });
+  let userRes;
+  try {
+    userRes = await request('POST', `/auth/admin/realms/${realm}/users`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        username,
+        email,
+        firstName: firstName || username,
+        lastName: lastName || 'Test',
+        enabled,
+        emailVerified: true,
+        credentials: userData.password
+          ? [
+              {
+                type: 'password',
+                value: userData.password,
+                temporary: false,
+              },
+            ]
+          : undefined,
+      },
+    });
+  } catch (err) {
+    // A rejected request is the same verdict as on a read: the transport
+    // break names what was being written.
+    throw requestFailure(err, `the creation of ${username} in realm ${realm}`);
+  }
 
   if (userRes.status !== 201 && userRes.status !== 409) {
-    throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
+    failWithStatus(
+      `Failed to create user ${username}: HTTP ${userRes.status} ${bodyText(userRes)}`,
+      userRes.status
+    );
   }
 
   let user;
@@ -366,7 +390,9 @@ async function createUser(adminToken, realm, userData) {
     if (err.lookupFailed) {
       // The lookup itself failed (an expired admin token answers 401, a
       // transport break): the account's state is unknown, so no diagnosis
-      // about it is possible.
+      // about it is possible. The verdict carries the server's state (a 5xx
+      // is transient); createUser has no retry budget, so that flag is
+      // inert here — no caller retries a create.
       throw err;
     }
     if (userRes.status === 409) {
@@ -833,7 +859,12 @@ async function rotateRealmKeys(adminToken, realm) {
  * @returns {Promise<object>} The realm representation
  */
 async function getRealmSettings(adminToken, realm) {
-  const res = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm settings of ${realm}`);
+  // The realm representation carries the id its caller indexes (the key
+  // rotation parents the new key on it) — a 200 without one is a broken
+  // answer, not a realm.
+  const res = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm settings of ${realm}`, {
+    shape: REPRESENTATION_PAYLOAD,
+  });
   return res.data;
 }
 
@@ -871,15 +902,20 @@ async function updateRealmSettings(adminToken, realm, settings) {
  * @returns {Promise<void>}
  */
 async function deleteUser(adminToken, realm, userId) {
-  const res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
+  let res;
+  try {
+    res = await request('DELETE', `/auth/admin/realms/${realm}/users/${userId}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+  } catch (err) {
+    throw requestFailure(err, `the deletion of user ${userId}`);
+  }
 
   // 404 means the user is already gone — that IS the end state every
   // caller wants (no test account left behind). Anything else is a real
   // failure and must fail the cleanup that asked for it.
   if (res.status !== 204 && res.status !== 404) {
-    throw new Error(`Failed to delete user ${userId}: ${res.status}`);
+    failWithStatus(`Failed to delete user ${userId}: HTTP ${res.status} ${bodyText(res)}`, res.status);
   }
 }
 
@@ -898,12 +934,17 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
   }
 
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
+  const searchRes = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/clients?clientId=${clientId}`,
+    `the client ${clientId} of ${realm}`,
+    { shape: ARRAY_PAYLOAD }
+  );
 
-  if (searchRes.status !== 200 || !Array.isArray(searchRes.data) || searchRes.data.length === 0) {
-    throw new Error(`Client ${clientId} not found in realm ${realm} (HTTP ${searchRes.status})`);
+  // An empty list is the admin API's way of saying the realm carries no
+  // client of that name — not an outage, and not a broken answer.
+  if (searchRes.data.length === 0) {
+    throw new Error(`Client ${clientId} not found in realm ${realm}`);
   }
 
   const client = searchRes.data[0];

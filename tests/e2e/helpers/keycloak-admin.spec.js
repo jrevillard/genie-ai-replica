@@ -53,6 +53,7 @@ const ADMIN_USER = {
 const REALM = 'genie';
 const ROLE_PATH = (name) => new RegExp(`/auth/admin/realms/${REALM}/roles/${name}$`);
 const REALM_PATH = new RegExp(`/auth/admin/realms/${REALM}$`);
+const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
 const ROLE_MAPPINGS_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/role-mappings/realm$`);
 const USERS_PATH = new RegExp(`/auth/admin/realms/${REALM}/users$`);
 const USERNAME_LOOKUP = new RegExp(
@@ -552,7 +553,6 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
 });
 
 test.describe('rotateRealmKeys reads the new key id from the Location header', () => {
-  const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
   const OLD_KEYS = [
     {
       id: 'old-key-1',
@@ -743,8 +743,8 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
 });
 
 test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
-  const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
-  const REALM_PATH = new RegExp(`/auth/admin/realms/${REALM}$`);
+  // The realm read every rotation performs before it touches a key.
+  const REALM_ROUTE = ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }];
 
   // The key providers a Keycloak 26 realm carries by default. The
   // components API answers with the config entries the provider declares
@@ -798,7 +798,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
 
   test('demotes the RSA signing key and leaves the encryption, HMAC and AES providers alone', async () => {
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       ['GET', COMPONENTS_PATH, { status: 200, data: REALM_KEYS }],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
       ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
@@ -819,7 +819,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     // demoted and the rotated key is the active signer. A second
     // rotation must not create a second active rotated key.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,
@@ -851,7 +851,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     // A passive rotated key cannot sign: reusing it would leave the
     // realm without an active signer.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,
@@ -889,7 +889,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     // active: a provider that carries no active flag signs. Reading it
     // as inactive would mint a second active rotated key.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,
@@ -912,7 +912,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
 
   test('a disabled rotated key is not reused — a disabled provider never signs', async () => {
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,
@@ -946,7 +946,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     // provider would demote the realm's real signing key and leave the
     // realm without one.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,
@@ -955,11 +955,10 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
           data: [
             REALM_KEYS[0],
             {
+              ...ROTATED_KEY,
               id: 'rotated-encryption-id',
               name: 'rsa-generated-rotated-backup',
               providerId: 'rsa-enc-generated',
-              providerType: 'org.keycloak.keys.KeyProvider',
-              config: { priority: ['101'], enabled: ['true'], active: ['true'] },
             },
           ],
         },
@@ -981,7 +980,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     // rotation reads it as Keycloak does — a flag without a value is the
     // default, active.
     routes = [
-      ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
+      REALM_ROUTE,
       [
         'GET',
         COMPONENTS_PATH,

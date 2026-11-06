@@ -646,6 +646,55 @@ function isActiveKey(component) {
 }
 
 /**
+ * Mint a new RSA signing key for the realm and return its component id.
+ * The components API answers 201 with an EMPTY body — auth.request
+ * resolves an empty body as data: null — and the new component id in
+ * the Location header (/…/components/<id>): the id is read from the
+ * header, never from the body.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} realmId - The realm uuid, the parent of the component
+ * @returns {Promise<string>} The id of the new key component
+ */
+async function createRotatedKey(adminToken, realm, realmId) {
+  const rotatedKeyName = `${ROTATED_KEY_NAME_PREFIX}${Date.now()}`;
+  const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: {
+      name: rotatedKeyName,
+      providerId: 'rsa-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      parentId: realmId,
+      config: {
+        priority: ['101'],
+        enabled: ['true'],
+        active: ['true'],
+        keySize: ['2048'],
+      },
+    },
+  });
+
+  if (newKeyRes.status !== 201) {
+    failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
+  }
+
+  const location = newKeyRes.headers && newKeyRes.headers.location;
+  const createdKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
+  if (!createdKeyId) {
+    // The key component was already created and is the realm's ACTIVE
+    // signer, but its id is untracked: the message must say so, or a
+    // re-run accumulates untracked active rotated keys.
+    throw new Error(
+      `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
+        `(${location || 'none'}) — the new key id cannot be resolved. The key component ${rotatedKeyName} ` +
+        `was already created and is the active signer but is untracked: delete it or resolve its id ` +
+        `via the components list before re-running`
+    );
+  }
+  return createdKeyId;
+}
+
+/**
  * Rotate realm signing keys: generate a new RSA key and demote the old one.
  * Uses the Keycloak 26 components API (no /keys POST endpoint exists).
  * The rotation demotes the RSA SIGNING providers only, and it reuses the
@@ -693,51 +742,7 @@ async function rotateRealmKeys(adminToken, realm) {
       isActiveKey(k)
   );
 
-  let newKeyId;
-  if (reusableKey) {
-    newKeyId = reusableKey.id;
-  } else {
-    // Generate new RSA key with higher priority (becomes active signing key)
-    const rotatedKeyName = `rsa-generated-rotated-${Date.now()}`;
-    const newKeyRes = await request('POST', `/auth/admin/realms/${realm}/components`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: {
-        name: rotatedKeyName,
-        providerId: 'rsa-generated',
-        providerType: 'org.keycloak.keys.KeyProvider',
-        parentId: realmId,
-        config: {
-          priority: ['101'],
-          enabled: ['true'],
-          active: ['true'],
-          keySize: ['2048'],
-        },
-      },
-    });
-
-    if (newKeyRes.status !== 201) {
-      failWithStatus(`Failed to generate new key: HTTP ${newKeyRes.status} ${bodyText(newKeyRes)}`, newKeyRes.status);
-    }
-
-    // The components API answers 201 with an EMPTY body — auth.request
-    // resolves an empty body as data: null — and the new component id in
-    // the Location header (/…/components/<id>): the id is read from the
-    // header, never from the body.
-    const location = newKeyRes.headers && newKeyRes.headers.location;
-    const createdKeyId = location && (location.match(/\/components\/([^/?]+)\/?$/) || [])[1];
-    if (!createdKeyId) {
-      // The key component was already created and is the realm's ACTIVE
-      // signer, but its id is untracked: the message must say so, or a
-      // re-run accumulates untracked active rotated keys.
-      throw new Error(
-        `Failed to generate new key: Keycloak answered 201 without a usable Location header ` +
-          `(${location || 'none'}) — the new key id cannot be resolved. The key component ${rotatedKeyName} ` +
-          `was already created and is the active signer but is untracked: delete it or resolve its id ` +
-          `via the components list before re-running`
-      );
-    }
-    newKeyId = createdKeyId;
-  }
+  const newKeyId = reusableKey ? reusableKey.id : await createRotatedKey(adminToken, realm, realmId);
 
   // Demote the old RSA signing keys (set active to false). The key the
   // rotation keeps — the reused one or the one it just created — is the

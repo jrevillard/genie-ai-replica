@@ -368,7 +368,11 @@ class TranslationCreator {
    * @returns {string} - Uppercase language code
    */
   validateLanguage(lang) {
-    const validLang = lang.toUpperCase();
+    // Trim + uppercase ONCE: the returned code is the locale the script
+    // stores and the locale its own queries filter on — the same form the
+    // application write path uses (service-category-service.js
+    // `_normalizeLocale`).
+    const validLang = lang.trim().toUpperCase();
     if (!validLang || typeof validLang !== 'string' || validLang.trim() === '') {
       throw new Error('Language code must be a non-empty string');
     }
@@ -485,13 +489,18 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
+      // The application write path stores the UPPERCASED locale and keys
+      // the row `${ownerKey}_${LOCALE}` — service-category-service.js
+      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
+      // the next admin edit re-inserts the row with a fresh createdAt and
+      // the GC pass deletes this one.
+      const locale = lang.trim().toUpperCase();
       for (const category of categories) {
         const translatedName = await this.generateTranslation(category.nameEN, lang);
         const translation = {
-          _key: `${category._key}_${langLower}`,
+          _key: `${category._key}_${locale}`,
           serviceCategoryId: category._key,
-          languageCode: langLower, // Store lowercase
+          languageCode: locale,
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()
@@ -596,13 +605,18 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
+      // The application write path stores the UPPERCASED locale and keys
+      // the row `${ownerKey}_${LOCALE}` — service-category-service.js
+      // `_normalizeLocale`. A lowercase locale writes a DIFFERENT document:
+      // the next admin edit re-inserts the row with a fresh createdAt and
+      // the GC pass deletes this one.
+      const locale = lang.trim().toUpperCase();
       for (const service of services) {
         const translatedName = await this.generateTranslation(service.nameEN, lang);
         const translation = {
-          _key: `${service._key}_${langLower}`,
+          _key: `${service._key}_${locale}`,
           serviceId: service._key,
-          languageCode: langLower, // Store lowercase
+          languageCode: locale,
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()
@@ -722,4 +736,8 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { TranslationCreator };

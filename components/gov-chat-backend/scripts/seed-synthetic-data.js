@@ -572,11 +572,19 @@ class SeedRunner {
         ['fr', 'nameFR'],
         ['sw', 'nameSW']
       ]) {
-        const tKey = `${currentCatKey}_${lang}`;
+        // The application write path stores the UPPERCASED locale and keys
+        // the row `${ownerKey}_${LOCALE}` — service-category-service.js
+        // `_normalizeLocale`. A raw locale writes a DIFFERENT document: the
+        // next admin edit re-inserts the row with a fresh createdAt and the
+        // GC pass deletes this one.
+        const locale = lang.trim().toUpperCase();
+        const tKey = `${currentCatKey}_${locale}`;
         const tExists = await this.db
           .query(
             aql`
-          FOR d IN serviceCategoryTranslations FILTER d._key == ${tKey} LIMIT 1 RETURN d._key
+          FOR d IN serviceCategoryTranslations
+            FILTER d.serviceCategoryId == ${currentCatKey} AND LOWER(d.languageCode) == ${locale.toLowerCase()}
+            LIMIT 1 RETURN d._key
         `
           )
           .then((c) => c.next());
@@ -584,7 +592,7 @@ class SeedRunner {
           await catTrans.save({
             _key: tKey,
             serviceCategoryId: currentCatKey,
-            languageCode: lang,
+            languageCode: locale,
             translation: cat[field],
             isActive: true,
             createdAt: daysAgo(55)
@@ -744,11 +752,19 @@ class SeedRunner {
         ['fr', frTranslations],
         ['sw', swTranslations]
       ]) {
-        const tKey = `${svc._key}_${lang}`;
+        // The application write path stores the UPPERCASED locale and keys
+        // the row `${ownerKey}_${LOCALE}` — service-category-service.js
+        // `_normalizeLocale`. A raw locale writes a DIFFERENT document: the
+        // next admin edit re-inserts the row with a fresh createdAt and the
+        // GC pass deletes this one.
+        const locale = lang.trim().toUpperCase();
+        const tKey = `${svc._key}_${locale}`;
         const tExists = await this.db
           .query(
             aql`
-          FOR d IN serviceTranslations FILTER d._key == ${tKey} LIMIT 1 RETURN d._key
+          FOR d IN serviceTranslations
+            FILTER d.serviceId == ${svc._key} AND LOWER(d.languageCode) == ${locale.toLowerCase()}
+            LIMIT 1 RETURN d._key
         `
           )
           .then((c) => c.next());
@@ -758,7 +774,7 @@ class SeedRunner {
             await svcTrans.save({
               _key: tKey,
               serviceId: svc._key,
-              languageCode: lang,
+              languageCode: locale,
               translation,
               isActive: true,
               createdAt: daysAgo(50)
@@ -1225,7 +1241,11 @@ async function main() {
   await runner.run();
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { SeedRunner };

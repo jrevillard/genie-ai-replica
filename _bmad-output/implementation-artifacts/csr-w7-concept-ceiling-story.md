@@ -271,6 +271,28 @@ branch's own work stashed, the same tree re-run, the work restored):
 
 Up or equal on every metric. The suite is **138 suites / 3906 tests** green.
 
+**Re-measured on the FINAL head** (after `main` was merged in, so the CHANGELOG would not
+conflict — and after `main` itself moved, carrying **!791**, the OKF-citation guard, which
+raises the frontend's own numbers). The comparison a reviewer makes is therefore against the
+*current* `origin/main`, and the branch is **above** it on every metric:
+
+| Component | Metric | `origin/main` (700c2c8de) | this branch (81ed7c89b) | Δ |
+|---|---|---|---|---|
+| frontend | Statements | 89.2708% | **89.2810%** | +0.0102 |
+| frontend | Lines | 89.2954% | **89.3121%** | +0.0167 |
+| frontend | Branches | 76.6051% | **76.6204%** | +0.0153 |
+| frontend | Functions | 67.8911% | **67.9535%** | +0.0624 |
+| okf-server | Lines | 88.7148% | **88.8347%** | +0.1199 |
+| okf-server | Statements | 87.1217% | **87.2463%** | +0.1246 |
+| okf-server | Branches | 74.4203% | **74.6281%** | +0.2078 |
+| okf-server | Functions | 88.3836% | **88.5309%** | +0.1473 |
+
+The suite is **143 suites / 4003 tests** green. Getting the frontend *above* rather than level
+with the moved main took closing the slice's last two uncovered branches: the store's
+error-code guard (a refusal that carries no error object used to throw inside the catch, so
+the dispatch REJECTED instead of answering "the save failed") and a split report that is not
+a list.
+
 ### Every new assertion was mutation-tested
 
 A test that cannot fail proves nothing, so each new assertion was checked by reverting the
@@ -314,6 +336,13 @@ them is an unchecked key.
   is not driven by any Playwright spec, so the wizard's split report is covered only at the
   component level (a Jest test) and by the live smoke harness (the server's answer). Filed as
   **#1591**: the handles the spec needs have to be declared on the components first.
+- **The new smoke harness purges by NAME, across every domain** — `data/okf/smoke-test/run-smoke-ceiling.js`
+  lists every repository and deletes the ones whose NAME matches the harness's own repo, without
+  matching the domain too, so a user repository that happens to carry that name in another domain
+  is soft-deleted when an operator runs the harness. It copies the shipped house pattern of the
+  sibling harnesses, and it is below the security review's bar (operator action, admin token, a
+  soft delete) — so it is filed rather than fixed inside a slice whose harness is live-verified
+  (20/20) as it stands. Filed as **#1596**: the fix is one term in the match.
 
 ---
 

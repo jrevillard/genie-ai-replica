@@ -38,19 +38,29 @@ test.describe('RAG error handling', () => {
     let attemptCount = 0;
 
     // First call returns error, second call proceeds normally (validates retry)
-    await page.route('**/queries/stream**', (route) => {
+    await page.route('**/queries/stream**', async (route) => {
+      // Only the app's POST carries a stream: a CORS preflight (cross-origin
+      // posture) must reach the network, not be answered with the error body.
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
       attemptCount++;
       if (attemptCount === 1) {
-        route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            error: 'SERVICE_UNAVAILABLE',
-            message: 'RAG pipeline is temporarily unavailable',
-          }),
-        });
+        try {
+          await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: 'SERVICE_UNAVAILABLE',
+              message: 'RAG pipeline is temporarily unavailable',
+            }),
+          });
+        } catch {
+          /* the context closed before the fulfillment */
+        }
       } else {
-        route.fallback();
+        await route.fallback();
       }
     });
 
@@ -84,16 +94,26 @@ test.describe('RAG error handling', () => {
 
   test('displays error when network connection fails', async () => {
     // Simulate network failure with error response (more reliable than abort for fetch+ReadableStream)
-    await page.route('**/queries/stream**', (route) =>
-      route.fulfill({
-        status: 502,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'BAD_GATEWAY',
-          message: 'Network connection failed',
-        }),
-      }),
-    );
+    await page.route('**/queries/stream**', async (route) => {
+      // Only the app's POST carries a stream: a CORS preflight (cross-origin
+      // posture) must reach the network, not be answered with the error body.
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      try {
+        await route.fulfill({
+          status: 502,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: 'BAD_GATEWAY',
+            message: 'Network connection failed',
+          }),
+        });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+    });
 
     await sendMessage(page, 'This should fail with network error');
 
@@ -108,16 +128,26 @@ test.describe('RAG error handling', () => {
 
   test('displays error when RAG pipeline returns internal error', async () => {
     // Intercept with a 500 error
-    await page.route('**/queries/stream**', (route) =>
-      route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'INTERNAL_ERROR',
-          message: 'An internal error occurred in the RAG pipeline',
-        }),
-      }),
-    );
+    await page.route('**/queries/stream**', async (route) => {
+      // Only the app's POST carries a stream: a CORS preflight (cross-origin
+      // posture) must reach the network, not be answered with the error body.
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      try {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: 'INTERNAL_ERROR',
+            message: 'An internal error occurred in the RAG pipeline',
+          }),
+        });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+    });
 
     await sendMessage(page, 'Trigger internal error');
 

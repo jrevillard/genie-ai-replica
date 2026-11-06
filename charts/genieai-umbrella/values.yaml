@@ -325,6 +325,29 @@ data:
     # Covers the dbserver AND the agency volume (the agency keeps its own size only).
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
+    # The ArangoDB member's Kubernetes resources (requests + limits, the
+    # kube-arangodb ServerGroupSpec.resources). The chart default is a CPU
+    # request ONLY: a member with no request runs on the node's leftovers,
+    # and its exec readiness probe — an in-container process spawn the
+    # operator issues with a 2-second timeout — then misses its window and
+    # the pod flaps NotReady while the database answers fine (#1606). The
+    # request is the guaranteed share that keeps the probe answering. No
+    # memory request and no limits on purpose: arangod self-sizes its heap
+    # to the node, and a memory LIMIT on a database is an OOMKill waiting
+    # for the first large query. The render REJECTS an override that drops
+    # the request. Cluster mode applies the same map to agents, dbservers
+    # and coordinators (8 members × this request) — size it for the mode.
+    resources:
+      requests:
+        cpu: 500m
+    # Timeout (seconds) the kube-arangodb operator writes into the member's
+    # exec liveness/readiness/startup probes (spec.<group>.probes.
+    # <livenessProbeSpec|readinessProbeSpec|startupProbeSpec>.timeoutSeconds,
+    # ServerGroupProbesSpec — kube-arangodb 1.4.5). Upstream default is 2s:
+    # spawning a process inside the container can miss 2s on a CPU-saturated
+    # node and the pod is declared NotReady while the database answers
+    # (#1606). One value for all three probe specs.
+    probeTimeoutSeconds: 10
   keycloak:
     # Gates the Keycloak CR. The operator itself is a cluster
     # bootstrap prerequisite — NOT a chart dependency.

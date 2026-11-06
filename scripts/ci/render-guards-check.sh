@@ -685,6 +685,38 @@ expect_fail "a toolingArch outside the download URL's vocabulary" \
   "toolingArch" \
   $(valid_flags) --set global.toolingArch=x86_64
 
+# 31. An ArangoDB member with NO cpu request is the pathology #1606
+#     recorded: the member runs on the node's leftovers, its exec probes
+#     miss their window and the pod flaps NotReady while the database
+#     answers. An override that clears the resources block fails by
+#     name instead of silently reproducing the defect.
+expect_fail "an arango member with no cpu request" \
+  "data.arangodb.resources" \
+  $(valid_flags) --set data.arangodb.resources=null
+
+#     A sub-second probe timeout is a typo, not a budget (the schema
+#     floors the key at 1; this catches whatever reaches the template).
+expect_fail "a sub-second arango probe timeout" \
+  "probeTimeoutSeconds" \
+  $(valid_flags) --set data.arangodb.probeTimeoutSeconds=0
+
+#     The member workload block itself must reach the CR: the three
+#     probe specs the operator reads (ServerGroupProbesSpec) and the
+#     chart's default cpu request. Without the needles a template
+#     regression that stopped rendering the block would leave every
+#     negative guard above green.
+expect_render_contains "the arango member probes carry their specs" \
+  "readinessProbeSpec:" \
+  $(valid_flags)
+
+expect_render_contains "the arango member startup probe is wired" \
+  "startupProbeSpec:" \
+  $(valid_flags)
+
+expect_render_contains "the arango member probes carry the chart default timeout" \
+  "timeoutSeconds: 10" \
+  $(valid_flags)
+
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)

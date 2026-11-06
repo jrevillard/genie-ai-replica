@@ -25,6 +25,8 @@ canonical sets below is legacy: the sweep maps it or removes it.
 | `area::*` | `area::backend`, `area::frontend`, `area::mobile`, `area::doc-repo`, `area::chatqna`, `area::dataprep`, `area::retriever`, `area::reranker`, `area::embedding`, `area::tei`, `area::deploy`, `area::gateway`, `area::ci`, `area::testing`, `area::docs`, `area::security`, `area::okf`, `area::admin`, `area::i18n` | Which component. One per issue; cross-component issues take the primary one. |
 | `priority::` | `priority::high` — that is the whole set | Ordering signal for the ready-for-dev queue. Absence = normal. **Never applied by automation** — the highest-consequence axis stays human: at low confidence, apply no priority and let the state label speak. |
 | `prd::*`, `okf-server::epic-*`, `type::story`, `type::epic` | managed by the BMAD issue-tracking flows | Initiative/story bookkeeping — `type::story` and `type::epic` are BMAD artifacts, not triage types. Out of sweep scope — never hand-edited. An issue carrying any BMAD-namespace label is a managed artifact: the sweep skips it entirely — no re-classification, no label moves. |
+| `report::*` | `report::triage` — triage-run report artifacts | The durable sink for an unattended sweep's report: the full report lives in an issue **created closed** (a report is not a work item), and every issue the run touched is linked to it with `relates_to` (bidirectional — the treated issue shows the run that touched it; an `#iid` mention in a description is NOT a link). The coordination board carries the one-line index **only for a run that moved something** — a no-op run's trace stays in its report issue, because the board is the operator's attention budget. Out of sweep scope like the BMAD namespaces — never classified, never labelled. The local `.claude/state/triage/*.md` copy is scratch, not the source of truth. |
+| `board::*` | `board::coordination` — coordination surfaces (the board, the work plan) | A coordination surface is **not a work item**: it is never a sweep target, never classified, never closed (the board is titled *do not close*). It carries **no `status::*` label on purpose** — an `in-progress` label would pollute the census the orchestrator scans to detect a worker's active claim. The skip is what protects it: a default sweep selects the open issues that carry no `status::*` label, and a coordination surface without one would be selected. |
 | `1.*`–`4.*` numbered | legacy phase-plan labels | Not part of the taxonomy. The sweep strips them from open issues. |
 
 ### Legacy mapping (applied by the sweep)
@@ -34,6 +36,9 @@ with the target (add canonical + remove legacy in the same request). A legacy
 label whose definition is left with zero open issues at the end of a sweep is
 deleted from the tracker. If the issue already carries a canonical value on
 that axis, the mapping does not add a second — the canonical value wins.
+**Namespace labels are never deletion candidates** — `report::triage` in
+particular is carried only by closed issues, so "zero OPEN issues" is its
+normal state, not a sign of obsolescence.
 
 | Legacy label | Action |
 |---|---|

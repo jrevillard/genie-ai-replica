@@ -455,6 +455,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
+            forbid=[FIXTURE_SECRET],
             calls={"token": 3},
         )
     )
@@ -477,7 +478,7 @@ def scenarios_list():
                 "on 3 consecutive attempts",
                 "UNVERIFIED",
             ],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"token": 4},
         )
     )
@@ -523,7 +524,7 @@ def scenarios_list():
                 "on 3 consecutive attempts",
                 "UNVERIFIED",
             ],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"realm_clients": 3},
         )
     )
@@ -536,7 +537,7 @@ def scenarios_list():
             1,
             base_rules(realm_clients_resp={"status": "200", "body": "not json"}),
             expect=["could not be parsed", "UNVERIFIED"],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"realm_clients": 1},
         )
     )
@@ -550,7 +551,7 @@ def scenarios_list():
             1,
             base_rules(realm_clients_resp={"status": "200", "body": "[]"}),
             expect=["no client entries", "UNVERIFIED"],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"realm_clients": 1},
         )
     )
@@ -573,7 +574,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
-            forbid=["the realm client list was refused"],
+            forbid=[FIXTURE_SECRET, "the realm client list was refused"],
             calls={"realm_clients": 2},
         )
     )
@@ -606,7 +607,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
-            forbid=["master admin token was rejected"],
+            forbid=[FIXTURE_SECRET, "master admin token was rejected"],
             calls={"token": 3},
         )
     )
@@ -630,7 +631,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
-            forbid=["master admin token was rejected"],
+            forbid=[FIXTURE_SECRET, "master admin token was rejected"],
             calls={"token": 3},
         )
     )
@@ -656,7 +657,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
-            forbid=["the realm client list was refused"],
+            forbid=[FIXTURE_SECRET, "the realm client list was refused"],
             calls={"realm_clients": 2},
         )
     )
@@ -688,7 +689,7 @@ def scenarios_list():
                 "genie-app",
                 "UNVERIFIED",
             ],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"realm_clients": 1},
         )
     )
@@ -711,6 +712,7 @@ def scenarios_list():
                 "Realm client read-back attempt 1/3",
                 "Direct-access grants verified",
             ],
+            forbid=[FIXTURE_SECRET],
             calls={"realm_clients": 2},
         )
     )
@@ -737,7 +739,7 @@ def scenarios_list():
                 "on 3 consecutive attempts",
                 "UNVERIFIED",
             ],
-            forbid=["Direct-access grants verified"],
+            forbid=[FIXTURE_SECRET, "Direct-access grants verified"],
             calls={"realm_clients": 3},
         )
     )
@@ -770,8 +772,64 @@ def scenarios_list():
             ],
             # The one-off rejection legitimately names itself in the retry
             # reason; what must never appear is the DEFINITIVE verdict.
-            forbid=["on 3 consecutive attempts"],
+            forbid=[FIXTURE_SECRET, "on 3 consecutive attempts"],
             calls={"token": 3},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # Drift and unread members in ONE listing must both be named in
+            # one red run: the drift verdict leads, the unread clients ride
+            # along — neither concern masks the other.
+            "realm_client_drift_and_missing_named_together",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "200",
+                    "body": json.dumps(
+                        [
+                            {
+                                "clientId": "admin-cli",
+                                "directAccessGrantsEnabled": True,
+                            },
+                            {
+                                "clientId": "genie-proxy-client",
+                                "secret": FIXTURE_SECRET,
+                                "directAccessGrantsEnabled": True,
+                            },
+                            {"clientId": "genie-mobile"},
+                        ]
+                    ),
+                }
+            ),
+            expect=[
+                "genie realm ROPC posture drifted",
+                "genie-proxy-client",
+                "the grant state was never read for: genie-mobile",
+            ],
+            forbid=["Direct-access grants verified", FIXTURE_SECRET],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
+            # Three consecutive transient answers exhaust the loop into the
+            # fail-closed branch: the probe can never end green without a
+            # verdict, and this scenario is the pin on that guarantee.
+            "realm_client_listing_all_transient_fails",
+            1,
+            base_rules(
+                realm_clients_resp=[
+                    {"status": "503", "body": "upstream overloaded"},
+                    {"status": "503", "body": "upstream overloaded"},
+                    {"status": "503", "body": "upstream overloaded"},
+                ]
+            ),
+            expect=["could not be read back after 3 attempts", "UNVERIFIED"],
+            forbid=["Direct-access grants verified"],
+            calls={"realm_clients": 3},
         )
     )
 

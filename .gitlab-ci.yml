@@ -830,9 +830,13 @@ workflow:
       # (#1319 — retrying cannot heal it and every failed attempt feeds
       # Keycloak's brute-force protector), and a drift verdict never
       # retries — it exits. A DEFINITIVE rejection (an OAuth error body over
-      # a clean exit on a definitive status) is counted like the readiness
-      # loop counts its own (#1319): three consecutive definitive answers
-      # fail the job, one is ridden out as a one-off proxy hiccup.
+      # a clean exit on a definitive status) is counted the way #1319 counts
+      # the readiness loop's own: three consecutive definitive answers fail
+      # the job, one is ridden out as a one-off proxy hiccup. The STATUS SET
+      # is deliberately wider than the readiness loop's 401-only parse: by
+      # the time this runs, the readiness loop has established the stack, so
+      # a clean 400/403 with an OAuth body is a configuration failure, not a
+      # convergence race — retrying it burns attempts, not patience.
       ROPC_CLIENT_GRANTS=""
       ROPC_REALM_TOKEN=""
       ROPC_READBACK_REASON=""
@@ -874,8 +878,12 @@ workflow:
           # client is the grant ON, so an unread client cannot be assumed
           # disabled: UNREAD fails like any other no-verdict answer. The
           # member must be exactly true to count as drift, exactly false to
-          # count as read.
-          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients is not None else None; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients is not None else []; print('PARSE_ERROR' if drift is None else ('EMPTY' if not clients else ('UNREAD:'+','.join(unread) if unread else ('DRIFT:'+','.join(drift) if drift else 'OK'))))" 2>/dev/null || echo "PARSE_ERROR")
+          # count as read. Both concerns report in one answer (UNREAD first,
+          # then DRIFT) so one red run names everything the realm got wrong;
+          # neither masks the other.
+          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients else []; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients else []; print('PARSE_ERROR' if clients is None else ('EMPTY' if not clients else chr(10).join([m for m in [('UNREAD:'+','.join(unread)) if unread else '', ('DRIFT:'+','.join(drift)) if drift else '', 'OK' if not unread and not drift else ''] if m])))" 2>/dev/null || echo "PARSE_ERROR")
+          ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
+          ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
           break
         fi
         ROPC_LIST_DETAIL=$(kc_error_detail)
@@ -901,27 +909,26 @@ workflow:
         echo "ERROR: the realm client list could not be read back after 3 attempts ($ROPC_READBACK_REASON) — ${UNVERIFIED_MSG}."
         exit 1
       fi
-      case "$ROPC_CLIENT_GRANTS" in
-        OK)
-          echo "Direct-access grants verified across the genie realm's clients — none outside the allowlist (admin-cli) carries directAccessGrantsEnabled"
-          ;;
-        EMPTY)
-          echo "ERROR: the genie realm client list carries no client entries (answer: 'EMPTY') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-          exit 1
-          ;;
-        UNREAD:*)
-          echo "ERROR: the genie realm client list omits the directAccessGrantsEnabled member for: ${ROPC_CLIENT_GRANTS#UNREAD:} — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-          exit 1
-          ;;
-        DRIFT:*)
-          echo "ERROR: genie realm ROPC posture drifted — these clients carry directAccessGrantsEnabled: ${ROPC_CLIENT_GRANTS#DRIFT:} — direct access grants must stay disabled on every client but admin-cli"
-          exit 1
-          ;;
-        *)
-          echo "ERROR: the genie realm client list could not be parsed (answer: '$ROPC_CLIENT_GRANTS') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
-          exit 1
-          ;;
-      esac
+      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^PARSE_ERROR$'; then
+        echo "ERROR: the genie realm client list could not be parsed (answer: '$ROPC_CLIENT_GRANTS') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        exit 1
+      fi
+      if printf '%s' "$ROPC_CLIENT_GRANTS" | grep -q '^EMPTY$'; then
+        echo "ERROR: the genie realm client list carries no client entries (answer: 'EMPTY') — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        exit 1
+      fi
+      # Drift first: it is the security-relevant answer, and when the realm
+      # got two things wrong the red run names both — the drifted client
+      # AND the clients whose grant state was never read.
+      if [ -n "$ROPC_DRIFT_IDS" ]; then
+        echo "ERROR: genie realm ROPC posture drifted — these clients carry directAccessGrantsEnabled: $ROPC_DRIFT_IDS — direct access grants must stay disabled on every client but admin-cli${ROPC_UNREAD_IDS:+; the grant state was never read for: $ROPC_UNREAD_IDS}"
+        exit 1
+      fi
+      if [ -n "$ROPC_UNREAD_IDS" ]; then
+        echo "ERROR: the genie realm client list omits the directAccessGrantsEnabled member for: $ROPC_UNREAD_IDS — ${UNVERIFIED_MSG}; failing rather than passing without a verdict"
+        exit 1
+      fi
+      echo "Direct-access grants verified across the genie realm's clients — none outside the allowlist (admin-cli) carries directAccessGrantsEnabled"
     # All three venue fixtures (testuser, testadmin, testplain) are
     # provisioned through ONE mechanism: the provisioning script
     # (tests/e2e/provision-e2e-fixtures.js) over the ensureUser helper —

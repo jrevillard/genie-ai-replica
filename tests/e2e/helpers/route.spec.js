@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { runRouteHandler } = require('./route');
+const { runPostOnlyRouteHandler, runRouteHandler } = require('./route');
 
 // The mutation gate for runRouteHandler's discrimination — why the
 // conjunction (target state AND error class) is what it is lives once,
@@ -136,5 +136,49 @@ test.describe('runRouteHandler', () => {
   test('returns the handler result when nothing throws', async () => {
     const { page } = pageState();
     await expect(runOnce(page, async () => 'fulfilled')).resolves.toBe('fulfilled');
+  });
+});
+
+// The POST filter is the helper's most behavior-bearing branch: a
+// preflight (cross-origin dev posture) or a stray GET must reach the
+// network, never a CORS-less 200 from a handler that only knows how to
+// answer a stream. The route double records which action the filter took,
+// so a dropped or inverted method check turns one of these red.
+function routeOf(method) {
+  const calls = { continued: 0, fulfilled: 0 };
+  return {
+    calls,
+    route: {
+      request: () => ({ method: () => method }),
+      continue: async () => {
+        calls.continued += 1;
+      },
+      fulfill: async () => {
+        calls.fulfilled += 1;
+      }
+    }
+  };
+}
+
+test.describe('runPostOnlyRouteHandler', () => {
+  test('a non-POST request continues to the network and never reaches the handler', async () => {
+    const { page } = pageState();
+    let handled = 0;
+    const { calls, route } = routeOf('OPTIONS');
+    await runPostOnlyRouteHandler(page, async () => {
+      handled += 1;
+    })(route);
+    expect(handled, 'the handler must not answer a preflight').toBe(0);
+    expect(calls.continued, 'the preflight continues to the network').toBe(1);
+    expect(calls.fulfilled).toBe(0);
+  });
+
+  test('a POST request reaches the handler and is not continued', async () => {
+    const { page } = pageState();
+    const { calls, route } = routeOf('POST');
+    const result = await runPostOnlyRouteHandler(page, async () => 'answered')(route);
+    expect(result).toBe('answered');
+    expect(calls.continued).toBe(0);
+    expect(calls.fulfilled).toBe(0);
   });
 });

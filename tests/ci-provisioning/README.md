@@ -8,12 +8,14 @@ shared-helper item that precedes it (`http_label` / `resp_status` / `resp_body` 
 
 **Scope (after main's venue-fixture convergence, 3991dd474):** the block
 under test is the readiness loop (master-token acquisition, genie-app
-client visibility) and the ROPC refusal probe. The testuser/roles
-provisioning lives in `tests/e2e/provision-e2e-fixtures.js` and is
-exercised by its own suite — a scenario that drives the reduced block
-toward an unscripted endpoint makes the stub exit 97 — the block captures
-every exit code, so the scenario ends red on a transport verdict naming
-"curl exit 97" (loud either way).
+client visibility), the ROPC refusal probe and the realm client read-back
+(#1303: the probe reads the realm's client listing back and asserts that
+no client outside the allowlist carries the direct-access grant). The
+testuser/roles provisioning lives in `tests/e2e/provision-e2e-fixtures.js`
+and is exercised by its own suite — a scenario that drives the reduced
+block toward an unscripted endpoint makes the stub exit 97 — the block
+captures every exit code, so the scenario ends red on a transport verdict
+naming "curl exit 97" (loud either way).
 
 ## Run
 
@@ -56,3 +58,11 @@ the re-scoped scenario set):
 | rc capture moved inside the command substitution (the #1289 bug) | `truncated_client_401_retries` |
 | #1319 classifier reads the 200-char display body instead of the full capture | `long_body_401_still_fails_fast` |
 | #1320 fail-fast loses the clean-exit gate (truncated 401 treated as definitive) | `truncated_client_401_retries` |
+| the realm read-back's drift verdict no longer fails the job (#1303) | `realm_client_drift_fails` |
+| the readiness loop's #1319 classifier loses the clean-exit gate — #1319's rule as amended by !795: a truncated 401 is transport noise, never a definitive credentials rejection | `readiness_truncated_mint_401_retries` |
+
+The read-back's own failure paths are asserted too: a listing the admin API
+refuses (`realm_client_listing_unreadable_fails`) leaves the invariant
+UNVERIFIED and the job red — the probe fails on the unreadable answer and
+on the unparseable body alike, so no path through it can end green without
+a verdict.

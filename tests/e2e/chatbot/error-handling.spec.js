@@ -6,6 +6,7 @@ const {
   waitForBotResponse,
   getLastBotMessage,
 } = require('../helpers/chatbot');
+const { runPostOnlyRouteHandler } = require('../helpers/route');
 
 // One spelling for the stream endpoint inside this file: the route and
 // the unroute that removes it must be the same string — Playwright drops
@@ -58,28 +59,17 @@ test.describe('RAG error handling', () => {
       error: 'SERVICE_UNAVAILABLE',
       message: 'RAG pipeline is temporarily unavailable',
     });
-    await page.route(STREAM_ROUTE, async (route) => {
-      try {
-        if (route.request().method() !== 'POST') {
-          await route.continue();
-          return;
-        }
+    await page.route(
+      STREAM_ROUTE,
+      runPostOnlyRouteHandler(page, async (route) => {
         await route.fulfill({
           status: 503,
           contentType: 'application/json',
           headers: { 'access-control-allow-origin': '*' },
           body,
         });
-      } catch (failure) {
-        // The context can close while a request is still in flight, and
-        // that race must not fail the spec. Every other failure surfaces
-        // — a swallowed one fails the spec later, with a cause that
-        // points nowhere (tests/e2e/CLAUDE.md: no swallowing).
-        if (!/has been closed/i.test(failure?.message || '')) {
-          throw failure;
-        }
-      }
-    });
+      })
+    );
 
     await sendMessage(page, 'First attempt will fail');
 

@@ -522,6 +522,7 @@ import {
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isStorableTurn, translateSources } from '../store/modules/conversation';
 import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -1167,6 +1168,11 @@ export default {
     // The badge of a source card, from the file's own extension — the
     // repository type label when the fetch landed, the name otherwise.
     fileBadge(doc) {
+      // An OKF concept is not a file: it has no extension and no size, so
+      // the extension fallback would render the first four characters of
+      // its name ("HADI" for "hadith nawawi 36"). The badge names the
+      // family the citation actually is.
+      if (isOkfConceptSource(doc)) return okfConceptBadge();
       return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
     },
 
@@ -2305,10 +2311,12 @@ export default {
         // scope's labels for ones nobody chose. A single unambiguous
         // button is re-installed; anything else re-installs the CATEGORY
         // itself, which is the scope the chip actually showed. A BROKEN
-        // button is never re-installed: it would block every subsequent
-        // send, and removing the chip again would re-add the same broken
-        // button — the user could not recover from here.
-        if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
+        // card is never re-installed — the quickHelpCardBroken verdict
+        // the grid card and the composer render: a missing title would
+        // come back as a chip with a blank label, and removing the chip
+        // again would re-add the same broken card — the user could not
+        // recover from here.
+        if (quickHelpOption && this.quickHelpCardBroken(quickHelpOption)) {
           this.currentCategoryId = null;
         } else if (quickHelpOption) {
           this.$store.commit('conversation/setContextItems', [quickHelpContextItem(quickHelpOption)]);

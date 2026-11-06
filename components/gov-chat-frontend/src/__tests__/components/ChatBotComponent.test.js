@@ -5000,6 +5000,40 @@ describe('ChatBotComponent', () => {
       expect(vm.relatedDocuments[0].type).toBe('PDF');
     });
 
+    // An OKF concept citation has no file extension and no size: the badge
+    // names the family. Without the OKF branch, the extension fallback
+    // renders the first four characters of the concept name — "HADI" for
+    // "hadith nawawi 36".
+    it('badges an OKF concept citation as OKF, not as a file extension', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'OKF citation test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          {
+            document_id: 'hadith-nawawi-36',
+            document_name: 'hadith nawawi 36',
+            url: '',
+            score: 0.9,
+            concept_id: 'hadith-nawawi-36',
+            source: 'okf-concept'
+          }
+        ]
+      });
+      await wrapper.vm.$nextTick();
+
+      const badge = wrapper.find('[data-testid="answer-source-card-0"] .file-type-badge');
+      expect(badge.exists()).toBe(true);
+      expect(badge.text()).toBe('OKF');
+      expect(wrapper.find('[data-testid="answer-source-card-0"] .answer-source-card__title').text()).toBe(
+        'hadith nawawi 36'
+      );
+    });
+
     it('filters duplicate source documents', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -5163,6 +5197,51 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems[0].id).toBe('births');
       expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Births']);
       expect(vm.selectedContextItems[0].categoryOnly).toBeUndefined();
+    });
+
+    it('clearing the last chip refuses the category card the title gate calls broken', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The button's SCOPE is perfectly fine — the TITLE is what resolves to
+      // nothing (the configuration defect the grid renders as a broken card
+      // and every press refuses). The scope-only verdict calls this card
+      // healthy; the card's own verdict calls it broken. Re-installing it
+      // would put a chip with a blank label and an empty accessible name on
+      // the context panel, and removing that chip would re-add the same
+      // blank chip — the user could not recover from here.
+      vm.quickHelpButtons = [
+        {
+          id: 'births',
+          service: '',
+          serviceLabels: ['Births'],
+          serviceKey: 'births',
+          category: '2',
+          icon: 'x'
+        }
+      ];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Naissances', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+
+      vm.removeContextItem(0);
+
+      // The broken card is not re-installed, and the category goes with it:
+      // there is no scope left worth keeping.
+      expect(vm.selectedContextItems).toHaveLength(0);
+      expect(vm.currentCategoryId).toBeNull();
     });
   });
 

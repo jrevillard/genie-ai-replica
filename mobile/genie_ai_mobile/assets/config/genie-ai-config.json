@@ -254,7 +254,7 @@
     "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/logo-genie-ai.jpeg"
+      "value": "/assets/config/genie-ai-icon.svg"
     }
   },
   "theme": {

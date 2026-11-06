@@ -466,6 +466,9 @@ export default {
       saveError: 'Filiyata jukuto feng mara to.',
       loadError: 'Filiyata longo jukutol looti to.',
       loadTranslationsError: 'Filiyata tradiksion looti to.',
+      translationsLoadFailedNotice:
+        "Cha dod yn load yn cherrinagh. Ta cur sheese yn chaghlaa er y laa oo dysgagh, shaghley derrey t'ad laoit.",
+      retryTranslations: 'Aa-chood',
       translationsNotLoaded: 'Tradiksion looti fili — looti ree adel savar.',
       confirmCancelTitle: 'Yailama-mang-mara',
       confirmCancelEdit: 'I la yailamawol ti mara folo. I lafiya la a bula le ti?',
@@ -480,6 +483,13 @@ export default {
       duplicateLangError: 'Kango kilin-kilin naata tradiksion to. A bong banta.'
     },
     documents: {
+      viewDocuments: 'Peba ko',
+      viewArtifacts: 'Artefek',
+      deleteRefuseBundle:
+        '{count} OKF artefek tught l jehe ayr daa ny rea er, as nad eh erinney ayd oo hent dy goll dy hon.',
+      deleteRefuseMixed:
+        '{blocked} feil tgorree les mayd, tarry nish. {bundles} OKF artefek tught l jehe ayr daa ny rea er, as nad eh erinney ayd oo hent dy goll dy hon.',
+      artifactsParked: 'Dy OKF artefacts ta goll myr, dy goll dy OKF shoh ayd er dy deployment shoh.',
       title: 'Dokuuma Lataramoo',
       addLink: 'A kafu linkoo la',
       uploadFiles: 'Fayilolu Yele',
@@ -1422,6 +1432,7 @@ export default {
     alt: 'Yele'
   },
   details: {
+    bundleBadge: 'Ta goll l jehe ayr daa ny rea er OKF',
     crawl: {
       seconds: 'seconds',
       autoRefreshEvery: 'Auto-refresh bera kungo',
@@ -1535,6 +1546,21 @@ export default {
       'Elego mun na a maa RAG la: dokuuma kili-kili min i yelata, a be run ka ke kibaro curated, labeled ye — dokuudu focused, dada kumbalu soto jaabi faama ju be dokuuma warayaa kili bolo.'
   },
   okf: {
+    artifacts: {
+      title: 'OKF artefacts',
+      lead: 'Yn artefek gys un gys locafo.',
+      empty: 'Cha nel artafek OKF etirree.',
+      loadFailed: "Naa'mod goll dy gollad et rea as arragh.",
+      downloadFailed: "Naa'mod goll dy gollad et koba as arragh.",
+      column: {
+        artifact: 'Artefek',
+        repository: 'Jikin kakwōn',
+        actions: 'Kewol',
+        state: 'Cokoyaa'
+      },
+      openRepo: 'Jikin kakwōn aigh',
+      unknownVersion: 'Locaa gynnydd'
+    },
     retrieval: {
       title: 'Gbangbang njeng',
       refresh: 'Kurandi',
@@ -1703,6 +1729,7 @@ export default {
       ingestCompleted: 'ingested',
       bundleMissing: 'zip missing',
       bundleDownload: 'Download zip',
+      viewArtifact: 'War artefek',
       bundle: 'Bulo',
       col: {
         ingest: 'Ingest',

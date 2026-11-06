@@ -468,6 +468,9 @@ export default {
       saveError: 'Error al guardar el elemento de jerarquía.',
       loadError: 'Error al cargar la jerarquía de conocimiento.',
       loadTranslationsError: 'Error al cargar las traducciones.',
+      translationsLoadFailedNotice:
+        'No se pudieron cargar las traducciones. La edición de las traducciones y el guardado permanecen deshabilitados hasta que se carguen.',
+      retryTranslations: 'Reintentar',
       translationsNotLoaded: 'Traducciones no cargadas: recargue antes de guardar.',
       confirmCancelTitle: 'Cambios no guardados',
       confirmCancelEdit: 'Tiene cambios no guardados que se perderán. ¿Está seguro de que desea cambiar de pestaña?',
@@ -484,6 +487,13 @@ export default {
       duplicateLangError: 'Se encontraron idiomas duplicados en las traducciones. Por favor, elimínelos.'
     },
     documents: {
+      viewDocuments: 'Documentos',
+      viewArtifacts: 'Artefactos',
+      deleteRefuseBundle:
+        '{count} artefacto(s) OKF están gestionados por el ciclo de vida del repositorio y no se pueden eliminar aquí.',
+      deleteRefuseMixed:
+        '{blocked} archivo(s) todavía están ingeridos: retíralos primero. {bundles} artefacto(s) OKF están gestionados por el ciclo de vida del repositorio y no se pueden eliminar aquí.',
+      artifactsParked: 'Los artefactos OKF aparecen cuando la función OKF está habilitada para esta instalación.',
       title: 'Gestión de Documentos',
       addLink: 'Añadir desde Enlace',
       uploadFiles: 'Subir Archivos',
@@ -1441,6 +1451,7 @@ export default {
     alt: 'Subir'
   },
   details: {
+    bundleBadge: 'Gestionado por el ciclo de vida de OKF',
     crawl: {
       seconds: 'segundos',
       autoRefreshEvery: 'Actualización automática cada',
@@ -1558,6 +1569,21 @@ export default {
       'Por qué las subidas importan para el RAG: cada documento que suba puede convertirse en conocimiento curado y etiquetado — los documentos enfocados y bien estructurados se recuperan con mucha más precisión que un único archivo largo.'
   },
   okf: {
+    artifacts: {
+      title: 'Artefactos OKF',
+      lead: 'Un artefacto por versión publicada.',
+      empty: 'Todavía no hay artefactos OKF.',
+      loadFailed: 'No se pudieron leer los artefactos OKF.',
+      downloadFailed: 'No se pudieron descargar los artefactos OKF.',
+      column: {
+        artifact: 'Artefacto',
+        repository: 'Repositorio',
+        actions: 'Acciones',
+        state: 'Estado'
+      },
+      openRepo: 'Abrir repositorio',
+      unknownVersion: 'versión desconocida'
+    },
     retrieval: {
       title: 'Postura de recuperación',
       refresh: 'Actualizar',
@@ -1737,6 +1763,7 @@ export default {
       ingestCompleted: 'ingerido',
       bundleMissing: 'falta el zip',
       bundleDownload: 'Descargar zip',
+      viewArtifact: 'Ver artefacto',
       bundle: 'Paquete',
       col: {
         ingest: 'Ingesta',

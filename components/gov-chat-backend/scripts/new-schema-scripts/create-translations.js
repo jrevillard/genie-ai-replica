@@ -52,6 +52,11 @@
  * - Edges link translations to their respective categories/services.
  * - Handles translation API errors with a fallback placeholder translation.
  * - Schema aligns with import-service-categories.js, using `serviceCategoryId`, `languageCode`, and `translation`.
+ * - The locale is normalized to UPPERCASE (`trim().toUpperCase()`), the same form the application write
+ *   path stores (service-category-service.js `_normalizeLocale`). The stored `languageCode` and the `_key`
+ *   suffix are that one normalized value, so the row written here is the row the application's UPSERT
+ *   (keyed on `_key`) updates. A lowercase locale would write a DIFFERENT document: the next admin edit
+ *   would insert a second row with a fresh createdAt and the GC pass would delete this one.
  */
 
 const { Database, aql } = require('arangojs');
@@ -368,8 +373,14 @@ class TranslationCreator {
    * @returns {string} - Uppercase language code
    */
   validateLanguage(lang) {
-    const validLang = lang.toUpperCase();
-    if (!validLang || typeof validLang !== 'string' || validLang.trim() === '') {
+    // Trim + uppercase ONCE: the returned code is the locale the script
+    // stores and the locale its own queries filter on — the same form the
+    // application write path uses (service-category-service.js
+    // `_normalizeLocale`).
+    const validLang = lang.trim().toUpperCase();
+    // `trim()` already ran: an empty (or whitespace-only) code arrives here
+    // as '', and a non-string code threw on the trim itself.
+    if (!validLang) {
       throw new Error('Language code must be a non-empty string');
     }
     if (validLang === 'EN') {
@@ -411,6 +422,9 @@ class TranslationCreator {
   async createCategoryTranslations(lang) {
     try {
       console.log(`\nCreating category translations for ${lang}...`);
+      // The locale is normalized ONCE and used by every query and by the
+      // write below (see the file header).
+      const locale = lang.trim().toUpperCase();
 
       // First, try to fetch English translations from serviceCategoryTranslations
       let categories = await this.db
@@ -446,7 +460,7 @@ class TranslationCreator {
         .query(
           aql`
         FOR trans IN ${this.categoryTranslations}
-          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
+          FILTER LOWER(trans.languageCode) == ${locale.toLowerCase()}
           RETURN trans.serviceCategoryId
       `
         )
@@ -476,7 +490,7 @@ class TranslationCreator {
           // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.categoryTranslations}
-              FILTER trans.serviceCategoryId == ${categoryId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
+              FILTER trans.serviceCategoryId == ${categoryId} AND LOWER(trans.languageCode) == ${locale.toLowerCase()}
               REMOVE trans IN ${this.categoryTranslations}
           `);
         }
@@ -485,13 +499,12 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
       for (const category of categories) {
-        const translatedName = await this.generateTranslation(category.nameEN, lang);
+        const translatedName = await this.generateTranslation(category.nameEN, locale);
         const translation = {
-          _key: `${category._key}_${langLower}`,
+          _key: `${category._key}_${locale}`,
           serviceCategoryId: category._key,
-          languageCode: langLower, // Store lowercase
+          languageCode: locale,
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()
@@ -524,6 +537,9 @@ class TranslationCreator {
   async createServiceTranslations(lang) {
     try {
       console.log(`\nCreating service translations for ${lang}...`);
+      // The locale is normalized ONCE and used by every query and by the
+      // write below (see the file header).
+      const locale = lang.trim().toUpperCase();
 
       // First, try to fetch English translations from serviceTranslations
       let services = await this.db
@@ -557,7 +573,7 @@ class TranslationCreator {
         .query(
           aql`
         FOR trans IN ${this.serviceTranslations}
-          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
+          FILTER LOWER(trans.languageCode) == ${locale.toLowerCase()}
           RETURN trans.serviceId
       `
         )
@@ -587,7 +603,7 @@ class TranslationCreator {
           // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.serviceTranslations}
-              FILTER trans.serviceId == ${serviceId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
+              FILTER trans.serviceId == ${serviceId} AND LOWER(trans.languageCode) == ${locale.toLowerCase()}
               REMOVE trans IN ${this.serviceTranslations}
           `);
         }
@@ -596,13 +612,12 @@ class TranslationCreator {
       }
 
       let inserted = 0;
-      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
       for (const service of services) {
-        const translatedName = await this.generateTranslation(service.nameEN, lang);
+        const translatedName = await this.generateTranslation(service.nameEN, locale);
         const translation = {
-          _key: `${service._key}_${langLower}`,
+          _key: `${service._key}_${locale}`,
           serviceId: service._key,
-          languageCode: langLower, // Store lowercase
+          languageCode: locale,
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()
@@ -722,4 +737,8 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { TranslationCreator };

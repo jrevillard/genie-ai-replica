@@ -468,6 +468,8 @@ export default {
       saveError: 'فشل حفظ عنصر الهرمية.',
       loadError: 'فشل تحميل هرمية المعرفة.',
       loadTranslationsError: 'فشل تحميل الترجمات.',
+      translationsLoadFailedNotice: 'تعذر تحميل الترجمات. يظل تعديل الترجمات والحفظ معطلين حتى يتم تحميلها.',
+      retryTranslations: 'إعادة المحاولة',
       translationsNotLoaded: 'لم يتم تحميل الترجمات — أعد التحميل قبل الحفظ.',
       confirmCancelTitle: 'تغييرات غير محفوظة',
       confirmCancelEdit: 'لديك تغييرات غير محفوظة سيتم فقدانها. هل أنت متأكد أنك تريد التبديل؟',
@@ -482,6 +484,12 @@ export default {
       duplicateLangError: 'تم العثور على لغات مكررة في الترجمات. يرجى إزالتها.'
     },
     documents: {
+      viewDocuments: 'المستندات',
+      viewArtifacts: 'المخرجات',
+      deleteRefuseBundle: '{count} من مخرجات OKF يديرها دورة حياة المستودع ولا يمكن حذفها من هنا.',
+      deleteRefuseMixed:
+        '{blocked} ملف ما زال مُستوعَبًا — اسحبه أولاً. {bundles} من مخرجات OKF يديرها دورة حياة المستودع ولا يمكن حذفها من هنا.',
+      artifactsParked: 'تظهر مخرجات OKF عند تفعيل ميزة OKF لهذا التثبيت.',
       title: 'إدارة المستندات',
       addLink: 'إضافة من رابط',
       uploadFiles: 'تحميل الملفات',
@@ -1425,6 +1433,7 @@ export default {
     alt: 'تحميل'
   },
   details: {
+    bundleBadge: 'يديره دورة حياة OKF',
     crawl: {
       seconds: 'ثوانٍ',
       autoRefreshEvery: 'تحديث تلقائي كل',
@@ -1539,6 +1548,21 @@ export default {
       'لماذا تهم عمليات الرفع لـ RAG: كل مستند ترفعه يمكن أن يصبح معرفة منقّحة وموسومة — المستندات المركّزة جيّدة البنية تُسترجع بدقة أكبر بكثير من ملف طويل واحد.'
   },
   okf: {
+    artifacts: {
+      title: 'مخرجات OKF',
+      lead: 'ناتج واحد لكل نسخة منشورة.',
+      empty: 'لا توجد مخرجات OKF بعد.',
+      loadFailed: 'تعذّرت قراءة مخرجات OKF.',
+      downloadFailed: 'تعذّر تنزيل مخرجات OKF.',
+      column: {
+        artifact: 'الناتج',
+        repository: 'المستودع',
+        actions: 'الإجراءات',
+        state: 'الحالة'
+      },
+      openRepo: 'فتح المستودع',
+      unknownVersion: 'نسخة غير معروفة'
+    },
     retrieval: {
       title: 'وضعية الاسترجاع',
       refresh: 'تحديث',
@@ -1710,6 +1734,7 @@ export default {
       ingestCompleted: 'تمت المعالجة',
       bundleMissing: 'ملف zip مفقود',
       bundleDownload: 'تنزيل ملف zip',
+      viewArtifact: 'عرض الناتج',
       bundle: 'حزمة',
       col: {
         ingest: 'المعالجة',

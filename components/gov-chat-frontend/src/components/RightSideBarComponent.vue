@@ -129,6 +129,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isExternalUrl as isExternalHref, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
@@ -352,6 +353,11 @@ export default {
     },
 
     documentBadge(doc) {
+      // An OKF concept is not a file: it has no extension, so the extension
+      // fallback would render the first four characters of its name. The
+      // sidebar lists the SAME citations as the answer card — the badge must
+      // say the same thing in both places.
+      if (isOkfConceptSource(doc)) return okfConceptBadge();
       return fileTypeBadge(doc.fileName || doc.title);
     },
 

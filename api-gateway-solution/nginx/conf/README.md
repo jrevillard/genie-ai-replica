@@ -15,7 +15,7 @@ Replace these placeholders:
 #### `assetlinks.json` (Android App Links)
 
 Replace these placeholders:
-- `<APPLICATION_ID>` — Your Android application ID per flavor (e.g., `com.example.genie_ai_mobile`)
+- `<APPLICATION_ID>` — Your Android application ID per flavor (e.g., `com.itu.genieai`)
 - `<SHA256_FINGERPRINT>` — SHA-256 fingerprint of your app's signing certificate
 
 **Note:** Debug and release certificates have different fingerprints. If you support both, add both fingerprints to the array:

@@ -179,6 +179,7 @@ import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
 import SatisfactionGauge from './charts/SatisfactionGauge.vue';
 import SatisfactionHeatmap from './charts/SatisfactionHeatmap.vue';
 import analyticsService from '../services/analyticsService';
+import { SATISFACTION_PERIOD_KEYS } from '../utils/satisfactionPeriods.js';
 import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
 import DsSpinner from './ds/Spinner.vue';
@@ -516,21 +517,15 @@ export default {
           satisfactionGaugeData: {
             currentValue: 87.5,
             changePercentage: 1.2,
-            historicalData: [
-              { label: 'Previous Month', value: 86.3 },
-              { label: 'Two Months Ago', value: 85.0 }
-            ],
+            historicalData: SATISFACTION_PERIOD_KEYS.map((label, index) => ({
+              label,
+              value: 87.5 - index * 1.15
+            })),
             target: 85
           },
           satisfactionHeatmapData: this.staticData.queryDistribution.map((category) => ({
             name: category.name,
-            data: [
-              { x: '4 Weeks Ago', y: 75 + Math.random() * 10 },
-              { x: '3 Weeks Ago', y: 78 + Math.random() * 10 },
-              { x: '2 Weeks Ago', y: 80 + Math.random() * 10 },
-              { x: 'Last Week', y: 82 + Math.random() * 10 },
-              { x: 'Current', y: 85 + Math.random() * 10 }
-            ]
+            data: SATISFACTION_PERIOD_KEYS.map((x, index) => ({ x, y: 85 - index * 2.5 + Math.random() * 10 }))
           }))
         };
 
@@ -571,11 +566,7 @@ export default {
 
         const uniqueUsers = await analyticsService.getUniqueUsersCount(startDate, endDate, this.currentLocale);
 
-        const gaugeData = await analyticsService.getSatisfactionGauge(
-          this.selectedPeriod,
-          this.selectedDate,
-          this.currentLocale
-        );
+        const gaugeData = await analyticsService.getSatisfactionGauge(this.selectedPeriod, this.selectedDate);
 
         const heatmapData = await analyticsService.getSatisfactionHeatmap(
           this.selectedPeriod,

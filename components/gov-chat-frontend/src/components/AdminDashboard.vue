@@ -249,6 +249,28 @@
                         </DsStateDisplay>
 
                         <div v-else>
+                          <DsStateDisplay
+                            v-if="translationsLoadFailed"
+                            type="error"
+                            data-test-id="hierarchy-translations-load-failed"
+                            :message="
+                              translate(
+                                'admin.hierarchy.translationsLoadFailedNotice',
+                                'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
+                              )
+                            "
+                          >
+                            <template #action>
+                              <DsButton
+                                variant="secondary"
+                                :small="true"
+                                data-test-id="hierarchy-translations-retry"
+                                @click="retryHierarchyTranslations"
+                              >
+                                {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
+                              </DsButton>
+                            </template>
+                          </DsStateDisplay>
                           <div
                             v-for="(translation, index) in hierarchyForm.translations"
                             :key="index"
@@ -258,6 +280,7 @@
                               v-model="translation.lang"
                               class="translation-lang-select"
                               :placeholder="translate('admin.hierarchy.selectLang', 'Select Language')"
+                              :disabled="translationsLoadFailed"
                             >
                               <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
                                 {{ lang.name }} ({{ lang.code }})
@@ -268,18 +291,25 @@
                               type="text"
                               class="translation-text-input"
                               :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
+                              :disabled="translationsLoadFailed"
                             />
                             <DsButton
                               variant="danger"
                               :small="true"
                               class="translation-delete-btn"
                               :aria-label="translate('admin.hierarchy.deleteTranslation', 'Delete Translation')"
+                              :disabled="translationsLoadFailed"
                               @click="removeTranslationRow(index)"
                             >
                               🗑️
                             </DsButton>
                           </div>
-                          <DsButton variant="secondary" :small="true" @click="addTranslationRow">
+                          <DsButton
+                            variant="secondary"
+                            :small="true"
+                            :disabled="translationsLoadFailed"
+                            @click="addTranslationRow"
+                          >
                             {{ translate('admin.hierarchy.addTranslation', '+ Add Translation') }}
                           </DsButton>
                         </div>
@@ -325,79 +355,116 @@
                     </div>
                   </div>
 
-                  <div class="filter-bar">
-                    <div class="search-input-container">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="search-icon"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                      <DsInput
-                        v-model="documentSearchTerm"
-                        type="search"
-                        class="search-input"
-                        :placeholder="translate('admin.documents.searchPlaceholder', 'Search by file name...')"
-                      />
-                    </div>
-                    <DsSelect
-                      v-model="documentFilters.status"
-                      class="filter-select"
-                      data-test-id="admin-status-filter"
-                      :placeholder="translate('admin.documents.allStatuses', 'All Statuses')"
+                  <!-- W6 / EPIC-6 / CAP-5: the two views over doc-repo's files.
+                       The DEFAULT view lists documents; the ARTIFACTS view lists
+                       the OKF bundle zips — the per-version ingestion artifacts of
+                       the published repositories. They are not documents, and they
+                       used to sit in this very list unlabeled, carrying a Delete
+                       affordance the server refuses (WS2 → 403 BUNDLE_PROTECTED).
+                       The toggle mirrors the OKF Studio's Dashboard|Wizard switch
+                       (StudioTab.vue:27-34) — one switch per surface, no new
+                       navigation paradigm.
+                       The switch is ALWAYS rendered — it is the surface's own
+                       control, and a parked deployment (OKF_ENABLED=0) explains
+                       itself in the artifacts pane rather than leaving the
+                       operator on a switch that leads nowhere. -->
+                  <nav
+                    class="admin-documents__view-toggle"
+                    aria-label="View"
+                    data-test-id="admin-documents-view-toggle"
+                  >
+                    <DsButton
+                      :variant="documentView === 'documents' ? 'primary' : 'secondary'"
+                      small
+                      data-test-id="admin-documents-view-documents"
+                      @click="documentView = 'documents'"
                     >
-                      <option value="all">
-                        {{ translate('admin.documents.allStatuses', 'All Statuses') }}
-                      </option>
-                      <option value="pending">
-                        {{ translate('admin.documents.statusPending', 'Pending') }}
-                      </option>
-                      <option value="ingested">
-                        {{ translate('admin.documents.statusIngested', 'Ingested') }}
-                      </option>
-                      <!-- FilteredDocuments matches the status string exactly, so without
+                      {{ translate('admin.documents.viewDocuments', 'Documents') }}
+                    </DsButton>
+                    <DsButton
+                      :variant="documentView === 'artifacts' ? 'primary' : 'secondary'"
+                      data-test-id="admin-documents-view-artifacts"
+                      small
+                      @click="documentView = 'artifacts'"
+                    >
+                      {{ translate('admin.documents.viewArtifacts', 'Artifacts') }}
+                    </DsButton>
+                  </nav>
+
+                  <template v-if="documentView === 'documents'">
+                    <div class="filter-bar">
+                      <div class="search-input-container">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="search-icon"
+                        >
+                          <circle cx="11" cy="11" r="8" />
+                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        <DsInput
+                          v-model="documentSearchTerm"
+                          type="search"
+                          class="search-input"
+                          :placeholder="translate('admin.documents.searchPlaceholder', 'Search by file name...')"
+                        />
+                      </div>
+                      <DsSelect
+                        v-model="documentFilters.status"
+                        class="filter-select"
+                        data-test-id="admin-status-filter"
+                        :placeholder="translate('admin.documents.allStatuses', 'All Statuses')"
+                      >
+                        <option value="all">
+                          {{ translate('admin.documents.allStatuses', 'All Statuses') }}
+                        </option>
+                        <option value="pending">
+                          {{ translate('admin.documents.statusPending', 'Pending') }}
+                        </option>
+                        <option value="ingested">
+                          {{ translate('admin.documents.statusIngested', 'Ingested') }}
+                        </option>
+                        <!-- FilteredDocuments matches the status string exactly, so without
                            this option an "Ingested with Warnings" document shows only
                            under All Statuses — the very documents an operator needs to
                            isolate after raising a budget would be the ones that vanish. -->
-                      <option value="ingested with warnings">
-                        {{ translate('admin.documents.statusWarning', 'Ingested with Warnings') }}
-                      </option>
-                      <option value="retracted">
-                        {{ translate('admin.documents.statusRetracted', 'Retracted') }}
-                      </option>
-                    </DsSelect>
-                    <div v-if="showIngestButton" class="card-actions">
-                      <DsButton variant="primary" @click="handleBatchAction('ingest')">
-                        {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
-                        ({{ selectedDocuments.length }})
-                      </DsButton>
-                      <DsButton
-                        v-if="okfEnabled"
-                        variant="secondary"
-                        :disabled="!okfRepoGate.visible"
-                        :title="okfGateTitle"
-                        @click="onCreateOkfRepoFromSelection"
-                      >
-                        {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
-                      </DsButton>
-                    </div>
-                    <div v-if="showRetractButton" class="card-actions">
-                      <DsButton variant="secondary" @click="handleBatchAction('retract')">
-                        {{ translate('admin.documents.retractSelected', 'Retract Selected') }}
-                        ({{ selectedDocuments.length }})
-                      </DsButton>
-                    </div>
-                    <div v-if="showDeleteButton" class="card-actions">
-                      <!-- #1042 BATCH DELETE, AMENDED 2026-10-10 (live: David
+                        <option value="ingested with warnings">
+                          {{ translate('admin.documents.statusWarning', 'Ingested with Warnings') }}
+                        </option>
+                        <option value="retracted">
+                          {{ translate('admin.documents.statusRetracted', 'Retracted') }}
+                        </option>
+                      </DsSelect>
+                      <div v-if="showIngestButton" class="card-actions">
+                        <DsButton variant="primary" @click="handleBatchAction('ingest')">
+                          {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
+                          ({{ selectedDocuments.length }})
+                        </DsButton>
+                        <DsButton
+                          v-if="okfEnabled"
+                          variant="secondary"
+                          :disabled="!okfRepoGate.visible"
+                          :title="okfGateTitle"
+                          @click="onCreateOkfRepoFromSelection"
+                        >
+                          {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
+                        </DsButton>
+                      </div>
+                      <div v-if="showRetractButton" class="card-actions">
+                        <DsButton variant="secondary" @click="handleBatchAction('retract')">
+                          {{ translate('admin.documents.retractSelected', 'Retract Selected') }}
+                          ({{ selectedDocuments.length }})
+                        </DsButton>
+                      </div>
+                      <div v-if="showDeleteButton" class="card-actions">
+                        <!-- #1042 BATCH DELETE, AMENDED 2026-10-10 (live: David
                            selected pending rows to clean up and the whole
                            batch silently refused because ONE row had gone
                            Ingesting — the only signal was a hover tooltip on
@@ -407,151 +474,171 @@
                            deletable subset (the confirm says exactly what
                            will be skipped). Full-disable only when NOTHING
                            is deletable. -->
-                      <DsButton
-                        variant="danger"
-                        :disabled="!!deleteRefuseReason && !deletableSelection.length"
-                        :title="deleteRefuseReason"
-                        @click="handleBatchAction('delete')"
-                      >
-                        {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
-                        ({{
-                          deleteRefuseReason && deletableSelection.length
-                            ? deletableSelection.length
-                            : selectedDocuments.length
-                        }})
-                      </DsButton>
-                      <span v-if="deleteRefuseReason" class="delete-refuse-strip">
-                        {{
-                          deletableSelection.length
-                            ? translate(
-                                'admin.documents.deletePartialNotice',
-                                '{blocked} selected file(s) cannot be deleted ({reason}) — only the other {n} will be deleted.'
-                              )
-                                .replace('{blocked}', String(blockedSelection.length))
-                                .replace('{reason}', deleteRefuseReason)
-                                .replace('{n}', String(deletableSelection.length))
-                            : deleteRefuseReason
-                        }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="table-container">
-                    <table class="data-table">
-                      <thead>
-                        <tr>
-                          <th class="col-checkbox">
-                            <input type="checkbox" @change="selectAllDocuments" />
-                          </th>
-
-                          <th class="col-main sortable" @click="sortBy('file_name')">
-                            {{ translate('admin.documents.colFileName', 'File Name') }}
-                            <span v-if="sortKey === 'file_name'" class="sort-arrow">
-                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                            </span>
-                          </th>
-
-                          <th class="col-status sortable" @click="sortBy('dataprep.status')">
-                            {{ translate('admin.documents.colStatus', 'Status') }}
-                            <span v-if="sortKey === 'dataprep.status'" class="sort-arrow">
-                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                            </span>
-                          </th>
-
-                          <th class="col-labels">
-                            {{ translate('admin.documents.colLabels', 'Labels') }}
-                          </th>
-
-                          <th class="col-date sortable" @click="sortBy('upload_date')">
-                            {{ translate('admin.documents.colUploadDate', 'Upload Date') }}
-                            <span v-if="sortKey === 'upload_date'" class="sort-arrow">
-                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                            </span>
-                          </th>
-
-                          <th class="col-size sortable" @click="sortBy('file_size')">
-                            {{ translate('admin.documents.colSize', 'Size') }}
-                            <span v-if="sortKey === 'file_size'" class="sort-arrow">
-                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                            </span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-if="isDocumentsLoading">
-                          <td colspan="6">
-                            <DsStateDisplay type="loading">
-                              {{ translate('admin.documents.loading', 'Loading documents...') }}
-                            </DsStateDisplay>
-                          </td>
-                        </tr>
-
-                        <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
-                          <td colspan="6" class="table-message" data-test-id="table-message">
-                            {{ translate('admin.documents.empty', 'No documents found.') }}
-                          </td>
-                        </tr>
-
-                        <tr
-                          v-for="doc in sortedAndFilteredDocuments"
-                          :key="doc._key"
-                          class="document-row"
-                          @click="viewDocumentDetails(doc.file_id)"
+                        <DsButton
+                          variant="danger"
+                          :disabled="!!deleteRefuseReason && !deletableSelection.length"
+                          :title="deleteRefuseReason"
+                          @click="handleBatchAction('delete')"
                         >
-                          <td @click.stop>
-                            <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
-                          </td>
-                          <td class="cell-main">{{ doc.file_name }}</td>
-                          <td>
-                            <DsStatusTag :variant="getStatusVariant(doc)">
-                              {{ getDisplayStatus(doc) }}
-                            </DsStatusTag>
-                          </td>
-                          <td>
-                            <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
-                              {{ label }}
-                            </span>
-                            <span v-if="doc.labels.length > 2" class="label-tag-more"
-                              >+{{ doc.labels.length - 2 }}</span
-                            >
-                          </td>
-                          <td>
-                            {{ new Date(doc.upload_date).toLocaleDateString() }}
-                          </td>
-                          <td>{{ formatFileSize(doc.file_size) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div v-if="documentPagination.total > documentPagination.limit" class="pagination">
-                    <DsButton
-                      variant="ghost"
-                      :small="true"
-                      class="page-btn"
-                      :disabled="documentPagination.page <= 1"
-                      @click="handleDocumentPagination(documentPagination.page - 1)"
-                    >
-                      « {{ translate('admin.previous', 'Previous') }}
-                    </DsButton>
+                          {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
+                          ({{
+                            deleteRefuseReason && deletableSelection.length
+                              ? deletableSelection.length
+                              : selectedDocuments.length
+                          }})
+                        </DsButton>
+                        <span v-if="deleteRefuseReason" class="delete-refuse-strip">
+                          {{
+                            deletableSelection.length
+                              ? translate(
+                                  'admin.documents.deletePartialNotice',
+                                  '{blocked} selected file(s) cannot be deleted ({reason}) — only the other {n} will be deleted.'
+                                )
+                                  .replace('{blocked}', String(blockedSelection.length))
+                                  .replace('{reason}', deleteRefuseReason)
+                                  .replace('{n}', String(deletableSelection.length))
+                              : deleteRefuseReason
+                          }}
+                        </span>
+                      </div>
+                    </div>
 
-                    <span class="pagination-info">
-                      {{ translate('admin.showing', 'Showing') }}
-                      {{ (documentPagination.page - 1) * documentPagination.limit + 1 }}-{{
-                        Math.min(documentPagination.page * documentPagination.limit, documentPagination.total)
+                    <div class="table-container">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th class="col-checkbox">
+                              <input type="checkbox" @change="selectAllDocuments" />
+                            </th>
+
+                            <th class="col-main sortable" @click="sortBy('file_name')">
+                              {{ translate('admin.documents.colFileName', 'File Name') }}
+                              <span v-if="sortKey === 'file_name'" class="sort-arrow">
+                                {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                              </span>
+                            </th>
+
+                            <th class="col-status sortable" @click="sortBy('dataprep.status')">
+                              {{ translate('admin.documents.colStatus', 'Status') }}
+                              <span v-if="sortKey === 'dataprep.status'" class="sort-arrow">
+                                {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                              </span>
+                            </th>
+
+                            <th class="col-labels">
+                              {{ translate('admin.documents.colLabels', 'Labels') }}
+                            </th>
+
+                            <th class="col-date sortable" @click="sortBy('upload_date')">
+                              {{ translate('admin.documents.colUploadDate', 'Upload Date') }}
+                              <span v-if="sortKey === 'upload_date'" class="sort-arrow">
+                                {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                              </span>
+                            </th>
+
+                            <th class="col-size sortable" @click="sortBy('file_size')">
+                              {{ translate('admin.documents.colSize', 'Size') }}
+                              <span v-if="sortKey === 'file_size'" class="sort-arrow">
+                                {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                              </span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-if="isDocumentsLoading">
+                            <td colspan="6">
+                              <DsStateDisplay type="loading">
+                                {{ translate('admin.documents.loading', 'Loading documents...') }}
+                              </DsStateDisplay>
+                            </td>
+                          </tr>
+
+                          <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
+                            <td colspan="6" class="table-message" data-test-id="table-message">
+                              {{ translate('admin.documents.empty', 'No documents found.') }}
+                            </td>
+                          </tr>
+
+                          <tr
+                            v-for="doc in sortedAndFilteredDocuments"
+                            :key="doc._key"
+                            class="document-row"
+                            @click="viewDocumentDetails(doc.file_id)"
+                          >
+                            <td @click.stop>
+                              <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
+                            </td>
+                            <td class="cell-main">{{ doc.file_name }}</td>
+                            <td>
+                              <DsStatusTag :variant="getStatusVariant(doc)">
+                                {{ getDisplayStatus(doc) }}
+                              </DsStatusTag>
+                            </td>
+                            <td>
+                              <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
+                                {{ label }}
+                              </span>
+                              <span v-if="doc.labels.length > 2" class="label-tag-more"
+                                >+{{ doc.labels.length - 2 }}</span
+                              >
+                            </td>
+                            <td>
+                              {{ new Date(doc.upload_date).toLocaleDateString() }}
+                            </td>
+                            <td>{{ formatFileSize(doc.file_size) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div v-if="documentPagination.total > documentPagination.limit" class="pagination">
+                      <DsButton
+                        variant="ghost"
+                        :small="true"
+                        class="page-btn"
+                        :disabled="documentPagination.page <= 1"
+                        @click="handleDocumentPagination(documentPagination.page - 1)"
+                      >
+                        « {{ translate('admin.userManagementSection.previous', 'Previous') }}
+                      </DsButton>
+
+                      <span class="pagination-info">
+                        {{ translate('admin.userManagementSection.showing', 'Showing') }}
+                        {{ (documentPagination.page - 1) * documentPagination.limit + 1 }}-{{
+                          Math.min(documentPagination.page * documentPagination.limit, documentPagination.total)
+                        }}
+                        {{ translate('admin.userManagementSection.of', 'of') }}
+                        {{ documentPagination.total }}
+                      </span>
+
+                      <DsButton
+                        variant="ghost"
+                        :small="true"
+                        class="page-btn"
+                        :disabled="documentPagination.page * documentPagination.limit >= documentPagination.total"
+                        @click="handleDocumentPagination(documentPagination.page + 1)"
+                      >
+                        {{ translate('admin.userManagementSection.next', 'Next') }} »
+                      </DsButton>
+                    </div>
+                  </template>
+
+                  <!-- The artifacts view. OKF-gated: the bundle zips only exist
+                       when the OKF pillar is on, and the okf store module (the
+                       source of the repository names) is only registered then.
+                       A parked deployment keeps the documents view only — the
+                       toggle is still rendered (the view switch is the surface's
+                       own control), but the artifacts pane explains itself
+                       rather than showing an empty list. -->
+                  <OkfArtifactsView v-else-if="okfEnabled" />
+                  <div v-else class="admin-documents__parked">
+                    <p class="admin-documents__parked-text">
+                      {{
+                        translate(
+                          'admin.documents.artifactsParked',
+                          'OKF artifacts appear when the OKF feature is enabled for this deployment.'
+                        )
                       }}
-                      {{ translate('admin.of', 'of') }}
-                      {{ documentPagination.total }}
-                    </span>
-
-                    <DsButton
-                      variant="ghost"
-                      :small="true"
-                      class="page-btn"
-                      :disabled="documentPagination.page * documentPagination.limit >= documentPagination.total"
-                      @click="handleDocumentPagination(documentPagination.page + 1)"
-                    >
-                      {{ translate('admin.next', 'Next') }} »
-                    </DsButton>
+                    </p>
                   </div>
                 </div>
 
@@ -1483,13 +1570,13 @@
                       :disabled="userSearchOffset === 0"
                       @click="handleUserSearchPagination(Math.max(0, userSearchOffset - userSearchLimit))"
                     >
-                      « {{ translate('admin.previous', 'Previous') }}
+                      « {{ translate('admin.userManagementSection.previous', 'Previous') }}
                     </DsButton>
 
                     <span class="pagination-info">
-                      {{ translate('admin.showing', 'Showing') }}
+                      {{ translate('admin.userManagementSection.showing', 'Showing') }}
                       {{ userSearchOffset + 1 }}-{{ Math.min(userSearchOffset + userSearchLimit, userSearchTotal) }}
-                      {{ translate('admin.of', 'of') }} {{ userSearchTotal }}
+                      {{ translate('admin.userManagementSection.of', 'of') }} {{ userSearchTotal }}
                     </span>
 
                     <DsButton
@@ -1499,7 +1586,7 @@
                       :disabled="userSearchOffset + userSearchLimit >= userSearchTotal"
                       @click="handleUserSearchPagination(userSearchOffset + userSearchLimit)"
                     >
-                      {{ translate('admin.next', 'Next') }} »
+                      {{ translate('admin.userManagementSection.next', 'Next') }} »
                     </DsButton>
                   </div>
                 </div>
@@ -1594,6 +1681,7 @@ import { getAvailableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
+import { statusKey, statusVariant, displayStatus } from '../utils/documentStatus.js';
 import { themeManager } from '../utils/ThemeManager';
 
 // OKF HEAVY COMPONENTS — ASYNC (round 17, #80362): StudioTab and
@@ -1604,6 +1692,9 @@ import { themeManager } from '../utils/ThemeManager';
 // exclusively behind isOkfEnabled(), so the dark build never fetches them.
 const OkfStudioTab = defineAsyncComponent(() => import('./okf/StudioTab.vue'));
 const OkfModelConfigPanel = defineAsyncComponent(() => import('./okf/editor/ModelConfigPanel.vue'));
+// W6 / EPIC-6 / CAP-5: the OKF artifacts view — the labeled home of the
+// bundle zips that used to sit unlabeled in the document list.
+const OkfArtifactsView = defineAsyncComponent(() => import('./okf/ArtifactsView.vue'));
 
 // Shared empty named-params dict for translate() — a frozen module constant
 // so the default argument allocates once, not on every per-render call.
@@ -1626,6 +1717,7 @@ export default {
     OperationResultsModal,
     LogSearchDialog,
     OkfModelConfigPanel,
+    OkfArtifactsView,
     ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
@@ -1696,7 +1788,12 @@ export default {
         // a spec needs them.
         { id: 'overview', label: 'System Health', icon: '📊' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀' },
-        { id: 'documents', label: 'Document Management', icon: '📂' },
+        // W6: the documents tab carries a test handle. The tab rack replaced
+        // the sidebar (UX-1), and the e2e helper still navigated by the
+        // REMOVED sidebar link — a locator for a surface that no longer
+        // exists. The handle is the tab's own address, as the logs tab
+        // already had.
+        { id: 'documents', label: 'Document Management', icon: '📂', testid: 'admin-documents-link' },
         { id: 'studio', label: 'OKF Studio', icon: '🧪' },
         { id: 'database', label: 'Database', icon: '💾' },
         { id: 'logs', label: 'Logs', icon: '📋', testid: 'admin-logs-link' },
@@ -1812,6 +1909,10 @@ export default {
       },
       documents: [], // Remove the old hardcoded data and start with an empty array
       isDocumentsLoading: false,
+      // W6 / EPIC-6 / CAP-5: which view the documents tab shows —
+      // 'documents' (the list of documents) or 'artifacts' (the OKF bundle
+      // zips, labeled with their repository and version).
+      documentView: 'documents',
       documentPagination: {
         page: 1,
         limit: 15, // You can adjust the number of items per page
@@ -2016,15 +2117,37 @@ export default {
     // files so the message is actionable.
     deleteRefuseReason() {
       if (this.selectedDocuments.length === 0) return null;
-      if (!this.blockedSelection.length) return null;
+      const blocked = this.blockedSelection.length;
+      const bundles = this.bundleSelection.length;
+      if (!blocked && !bundles) return null;
       // Named-param interpolation (the post-merge translate() convention):
       // the fallback path interpolates {count} itself, so a .replace chain
       // would see its placeholder consumed first (round 11, merge fallout).
+      //
+      // W6 / EPIC-6 / CAP-5: an OKF bundle zip in the selection needs its OWN
+      // reason — "still ingested, retract it first" is advice that cannot be
+      // followed on a bundle (the WS2 guard refuses every delete except the
+      // okf-service account's). Telling an operator to retract a bundle
+      // would be the same class of lie this wave removes.
+      if (bundles && !blocked) {
+        return this.translate(
+          'admin.documents.deleteRefuseBundle',
+          '{count} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+          { count: bundles }
+        );
+      }
+      if (bundles && blocked) {
+        return this.translate(
+          'admin.documents.deleteRefuseMixed',
+          '{blocked} file(s) are still ingested — retract them first. {bundles} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
+          { blocked, bundles }
+        );
+      }
       return this.translate(
         'admin.documents.deleteRefuseReason',
         '{count} file(s) are still ingested — retract them first.',
         {
-          count: this.blockedSelection.length
+          count: blocked
         }
       );
     },
@@ -2048,6 +2171,7 @@ export default {
     deletableSelection() {
       if (this.selectedDocuments.length === 0) return [];
       const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
+      const bundleIds = new Set(this.bundleSelection.map((d) => d.file_id));
       // Round 18 (#80486): blockedSelection only sees rows in the LOADED
       // documents list — a blocked row hidden by the active search filter
       // (or a stale selection) was counted deletable, the confirm dialog
@@ -2056,7 +2180,29 @@ export default {
       // failure" the dialog said could not happen. Only ids the loaded
       // list can vouch for count as deletable.
       const loadedIds = new Set(this.documents.map((d) => d.file_id));
-      return this.selectedDocuments.filter((id) => loadedIds.has(id) && !blockedIds.has(id));
+      // W6 / EPIC-6 / CAP-5: a bundle zip is NEVER deletable from document
+      // management — the WS2 guard refuses every delete except the
+      // okf-service account's, with 403 BUNDLE_PROTECTED. Counting one as
+      // deletable is the "deletable in the UI but 403s" lie this wave
+      // exists to remove.
+      //
+      // The PRIMARY guard is the list filter itself (is_bundle: false — the
+      // bundles live in the artifacts view), so with that filter in place no
+      // bundle reaches `this.documents` and this clause cannot fire. It
+      // stays because it states the RULE rather than the filter's current
+      // behaviour: should the filter ever regress, or a bundle row arrive by
+      // another path, the rule still holds here — and the server-side WS2
+      // guard is the backstop either way.
+      return this.selectedDocuments.filter((id) => loadedIds.has(id) && !blockedIds.has(id) && !bundleIds.has(id));
+    },
+    /** W6 / EPIC-6 / CAP-5: the selected rows that are OKF bundle zips.
+     * They are owned by the OKF lifecycle (the WS2 guard), never by the
+     * document management delete. (With the is_bundle: false list filter in
+     * place no bundle reaches the document list — see deletableSelection.) */
+    bundleSelection() {
+      if (this.selectedDocuments.length === 0) return [];
+      const ids = new Set(this.selectedDocuments);
+      return this.documents.filter((doc) => ids.has(doc.file_id) && doc.is_bundle === true);
     },
 
     // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
@@ -3113,16 +3259,24 @@ export default {
 
       // Step 2: Fetch the translations asynchronously
       this.invalidateTranslationsFetch();
+      await this.loadHierarchyTranslations(isCategory, item._key);
+    },
+
+    // The edit form's translation fetch, owned by the CURRENT form
+    // generation: populates the rows on success, or parks the form in the
+    // failed-load state (#1400). A superseded fetch (a newer showEditForm
+    // or a close) may neither populate, flag, nor unblock the newer form.
+    async loadHierarchyTranslations(isCategory, itemKey) {
       this.isTranslationsLoading = true;
       const loadSeq = this.hierarchyTranslationsSeq;
       try {
         let fetchedTranslations = [];
         if (isCategory) {
           // Call the service method for categories
-          fetchedTranslations = await serviceTreeService.getCategoryTranslations(item._key);
+          fetchedTranslations = await serviceTreeService.getCategoryTranslations(itemKey);
         } else {
           // Call the service method for services
-          fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key);
+          fetchedTranslations = await serviceTreeService.getServiceTranslations(itemKey);
         }
 
         // A newer showEditForm superseded this fetch: neither its rows nor
@@ -3134,15 +3288,14 @@ export default {
         // Filter out the English ('en') translation from the results
         const filteredTranslations = fetchedTranslations.filter((t) => t.lang !== 'en');
 
-        // Step 3: Populate the form with the filtered data
-        if (filteredTranslations.length > 0) {
-          this.hierarchyForm.translations = filteredTranslations;
-        } else {
-          // If no non-English translations exist, provide one empty row for the user to start
-          this.hierarchyForm.translations.push({ lang: '', text: '' });
-        }
+        // Populate the form with the filtered data. Replace, never append:
+        // a Retry re-populates a form that already carries rows (the failed
+        // load pushed a placeholder), and an empty successful fetch must
+        // yield exactly one placeholder row to start from.
+        this.hierarchyForm.translations =
+          filteredTranslations.length > 0 ? filteredTranslations : [{ lang: '', text: '' }];
 
-        // Step 4: Store the initial state for the unsaved changes check
+        // Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch {
         // The same staleness rule: a superseded fetch must not block the
@@ -3173,6 +3326,19 @@ export default {
           this.isTranslationsLoading = false;
         }
       }
+    },
+
+    // Retry a failed translation load (#1400) for the form currently open.
+    // The reset is the one a fresh showEditForm gets: the failure flag and
+    // the spinner state drop, and a new generation owns the new fetch.
+    retryHierarchyTranslations() {
+      if (!this.hierarchyForm.visible || !this.hierarchyForm._key) {
+        return;
+      }
+      // Positive derivation, the same shape saveHierarchyItem dispatches by.
+      const isCategory = this.hierarchyForm.mode === 'editCategory';
+      this.invalidateTranslationsFetch();
+      this.loadHierarchyTranslations(isCategory, this.hierarchyForm._key);
     },
 
     addTranslationRow() {
@@ -3383,14 +3549,12 @@ export default {
       if (crawlStatus === 'crawling') return 'info';
       if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'error';
 
-      if (dataPrepStatus === 'ingested') return 'success';
-      if (dataPrepStatus === 'ingesting') return 'info';
-      if (dataPrepStatus === 'ingested with warnings') return 'warning';
-      if (dataPrepStatus === 'ingestion error') return 'error';
-      if (dataPrepStatus === 'pending') return 'pending';
-      if (dataPrepStatus === 'retracted') return 'info';
-
-      return 'info';
+      // The dataprep status → variant mapping is SHARED with the OKF
+      // artifacts view (utils/documentStatus.js): two surfaces that disagree
+      // about what "Ingested" looks like is the same class of lie this wave
+      // exists to remove. The crawl arms above stay here — a different
+      // vocabulary, which the artifacts view never has.
+      return statusVariant(dataPrepStatus);
     },
 
     getDisplayStatus(doc) {
@@ -3415,17 +3579,18 @@ export default {
       // leaving the badge in raw English put two languages on one screen for
       // the same value. The crawl statuses stay as they were — pre-existing,
       // and translating them belongs with their own keys rather than here.
-      if (!doc.dataprep || !doc.dataprep.status) return 'Unknown';
-      const keys = {
-        pending: ['statusPending', 'Pending'],
-        ingested: ['statusIngested', 'Ingested'],
-        'ingested with warnings': ['statusWarning', 'Ingested with Warnings'],
-        retracted: ['statusRetracted', 'Retracted'],
-        ingesting: ['statusIngesting', 'Ingesting'],
-        'ingestion error': ['statusError', 'Ingestion Error']
-      };
-      const key = keys[String(doc.dataprep.status).toLowerCase().trim()];
-      return key ? this.translate(`admin.documents.${key[0]}`, key[1]) : doc.dataprep.status;
+      //
+      // The dataprep status → catalogue leaf mapping is SHARED with the OKF
+      // artifacts view (utils/documentStatus.js) — the two surfaces must not
+      // disagree about what "Ingested" means. The crawl arms above stay
+      // here: they are a different vocabulary, and the artifacts view never
+      // has a crawl job.
+      const status = doc.dataprep && doc.dataprep.status;
+      const known = statusKey(status);
+      // The English label — the catalogue's own fallback for a known status,
+      // the raw status for an unknown one, 'Unknown' when there is no status.
+      const label = displayStatus(status);
+      return known ? this.translate(`admin.documents.${known}`, label) : label;
     },
 
     selectAllDocuments(event) {
@@ -3797,6 +3962,14 @@ export default {
       if (q.tab && this.adminTabs.some((t) => t.value === q.tab)) {
         this.activeTab = q.tab;
       }
+      // W6 / EPIC-6 / CAP-5: `?tab=documents&view=artifacts` selects the
+      // ARTIFACTS view of the Document Management tab (the repository →
+      // artifact direction: the VersionsDialog's "View artifact" link).
+      // It is the `view` sibling of the `file` deep link — the same pattern,
+      // one more parameter.
+      if (q.tab === 'documents' && q.view === 'artifacts') {
+        this.documentView = 'artifacts';
+      }
       if (q.tab === 'documents' && q.file) {
         this.selectedFileId = q.file;
         this.showDetailsDialog = true;
@@ -3808,6 +3981,24 @@ export default {
           delete rest.file;
           this.$router.replace({ query: rest }).catch(() => {});
         }
+      }
+      // W6 / EPIC-6 / CAP-5: the artifact → repository direction.
+      // `?tab=studio&repo=<repo_id>` opens the OKF Studio at that repository
+      // — the same resume path the repository cards use. It reuses the
+      // `?tab=…&file=` deep-link pattern (the sibling param, same handler,
+      // same route) rather than inventing a second navigation mechanism.
+      // The `repo` param is NOT scrubbed: it names a NAVIGATION TARGET, not
+      // a click effect — the same treatment `?tab=studio` gets.
+      if (q.tab === 'studio' && q.repo && this.adminTabs.some((t) => t.value === 'studio')) {
+        this.activeTab = 'studio';
+        // The Studio pane is an async component behind v-if: on the first
+        // activation of a session the ref is not there yet, so the resume is
+        // deferred through the ready handshake (the same mechanism the
+        // crawl→OKF relay uses) and NEVER dropped.
+        this.dispatchWhenStudioReady(() => {
+          const studio = this.$refs.okfStudioTab;
+          if (studio && typeof studio.onResume === 'function') studio.onResume(q.repo);
+        });
       }
     },
     // --- END: DOCUMENT METHODS ---
@@ -3888,7 +4079,16 @@ export default {
         // The list will load in the backend's default order (currently Ascending/Oldest First).
         const params = {
           page: this.documentPagination.page,
-          limit: this.documentPagination.limit
+          limit: this.documentPagination.limit,
+          // W6 / EPIC-6 / CAP-5: the OKF bundle zips are the per-version
+          // INGESTION ARTIFACTS of the published repositories — not documents
+          // a steward uploaded. They have their own labeled view (the
+          // Artifacts view), and leaving them in this list is what made them
+          // look like documents AND put a Delete affordance on a row the
+          // server refuses (WS2 → 403 BUNDLE_PROTECTED).
+          // The backend's filter is `is_bundle == false OR is_bundle == null`,
+          // so every document uploaded before the stamp existed stays.
+          is_bundle: false
         };
 
         if (this.documentSearchTerm && this.documentSearchTerm.trim() !== '') {

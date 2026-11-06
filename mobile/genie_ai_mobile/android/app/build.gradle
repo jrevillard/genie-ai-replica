@@ -11,7 +11,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.genie_ai_mobile"
+    namespace = "com.itu.genieai"
     ndkVersion = "27.0.12077973"
     compileSdk = 36
 
@@ -27,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.genie_ai_mobile.debug"
+        applicationId = "com.itu.genieai.debug"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -44,28 +44,28 @@ android {
     productFlavors {
         dev {
             dimension "environment"
-            applicationId = "com.example.genie_ai_mobile.dev"
+            applicationId = "com.itu.genieai.dev"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.dev"
             ]
         }
         staging {
             dimension "environment"
-            applicationId = "com.example.genie_ai_mobile.staging"
+            applicationId = "com.itu.genieai.staging"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.staging"
             ]
         }
         e2e {
             dimension "environment"
-            applicationId = "com.example.genie_ai_mobile.e2e"
+            applicationId = "com.itu.genieai.e2e"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.e2e"
             ]
         }
         itu {
             dimension "environment"
-            applicationId = "com.example.genie_ai_mobile"
+            applicationId = "com.itu.genieai"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai"
             ]
@@ -83,6 +83,11 @@ android {
 
     buildTypes {
         release {
+            // A release build must NEVER be silently debug-signed. The
+            // fallback stays (a local test release has no keystore); the
+            // task-graph hook below warns when a release artifact is really
+            // built. The keystore is supplied locally through
+            // android/key.properties (gitignored) — never committed.
             signingConfig = keystorePropertiesFile.exists()
                 ? signingConfigs.release
                 : signingConfigs.debug
@@ -92,7 +97,22 @@ android {
             // which are compile-time-only. Without these rules R8 errors
             // on the missing classes during `flutter build apk --release`.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // R8 was OFF (the rules file above was inert) — the release APK
+            // shipped unminified. The Flutter engine/plugin keep rules live in
+            // proguard-rules.pro.
+            minifyEnabled true
         }
+    }
+}
+
+// Loud, but only when a RELEASE artifact is actually built: a debug build
+// must not cry wolf about a signing key it will never use.
+gradle.taskGraph.whenReady { graph ->
+    def releaseTask = graph.allTasks.any { it.name.toLowerCase().contains("release") }
+    if (releaseTask && !keystorePropertiesFile.exists()) {
+        logger.warn("Release build is DEBUG-SIGNED: no ${keystorePropertiesFile.name} found. " +
+            "Copy android/key.properties.example to android/key.properties and fill it in " +
+            "before publishing this artifact.")
     }
 }
 

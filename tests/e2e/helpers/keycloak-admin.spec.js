@@ -53,6 +53,7 @@ const ADMIN_USER = {
 const REALM = 'genie';
 const ROLE_PATH = (name) => new RegExp(`/auth/admin/realms/${REALM}/roles/${name}$`);
 const REALM_PATH = new RegExp(`/auth/admin/realms/${REALM}$`);
+const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
 const ROLE_MAPPINGS_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1/role-mappings/realm$`);
 const USERS_PATH = new RegExp(`/auth/admin/realms/${REALM}/users$`);
 const USERNAME_LOOKUP = new RegExp(
@@ -552,7 +553,6 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
 });
 
 test.describe('rotateRealmKeys reads the new key id from the Location header', () => {
-  const COMPONENTS_PATH = new RegExp(`/auth/admin/realms/${REALM}/components`);
   const OLD_KEYS = [
     {
       id: 'old-key-1',
@@ -739,5 +739,263 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     expect(caught.message).toMatch(/rsa-generated-rotated-\d+/);
     expect(caught.message).toMatch(/already created.*active/s);
     expect(calls.some((c) => c.startsWith('PUT '))).toBe(false);
+  });
+});
+
+test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
+  // The realm read every rotation performs before it touches a key.
+  const REALM_ROUTE = ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }];
+
+  // The key providers a Keycloak 26 realm carries by default. The
+  // components API answers with the config entries the provider declares
+  // (priority, enabled, active, key size) — the default providers carry
+  // the priority alone, and the use of a key is not in the answer.
+  const REALM_KEYS = [
+    {
+      id: 'rsa-signing-id',
+      name: 'rsa-generated',
+      providerId: 'rsa-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['100'] },
+    },
+    {
+      id: 'rsa-encryption-id',
+      name: 'rsa-enc-generated',
+      providerId: 'rsa-enc-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['100'], algorithm: ['RSA-OAEP'] },
+    },
+    {
+      id: 'hmac-id',
+      name: 'hmac-generated-hs512',
+      providerId: 'hmac-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['100'], algorithm: ['HS512'] },
+    },
+    {
+      id: 'aes-id',
+      name: 'aes-generated',
+      providerId: 'aes-generated',
+      providerType: 'org.keycloak.keys.KeyProvider',
+      config: { priority: ['100'] },
+    },
+  ];
+
+  // The key a rotation mints: the same shape the helper POSTs.
+  const ROTATED_KEY = {
+    id: 'rotated-key-id',
+    name: 'rsa-generated-rotated-1700000000000',
+    providerId: 'rsa-generated',
+    providerType: 'org.keycloak.keys.KeyProvider',
+    config: { priority: ['101'], enabled: ['true'], active: ['true'], keySize: ['2048'] },
+  };
+
+  const CREATED_KEY = {
+    status: 201,
+    data: null,
+    headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
+  };
+
+  test('demotes the RSA signing key and leaves the encryption, HMAC and AES providers alone', async () => {
+    routes = [
+      REALM_ROUTE,
+      ['GET', COMPONENTS_PATH, { status: 200, data: REALM_KEYS }],
+      ['POST', COMPONENTS_PATH, CREATED_KEY],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('new-key-id');
+    // Only the RSA signing key was demoted: the encryption, HMAC and AES
+    // providers keep signing and encrypting what they signed and encrypted.
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id']);
+    const putCalls = calls.filter((c) => c.startsWith('PUT '));
+    expect(putCalls).toEqual([`PUT /auth/admin/realms/${REALM}/components/rsa-signing-id`]);
+  });
+
+  test('reuses the active rotated key instead of minting a second one', async () => {
+    // The realm after a first rotation: the original signing key is
+    // demoted and the rotated key is the active signer. A second
+    // rotation must not create a second active rotated key.
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [
+            { ...REALM_KEYS[0], config: { ...REALM_KEYS[0].config, active: ['false'] } },
+            ROTATED_KEY,
+          ],
+        },
+      ],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    // The key of the previous rotation IS the rotation's key.
+    expect(result.newKeyId).toBe('rotated-key-id');
+    // Nothing was minted: a second active rotated key would leave the
+    // realm with two signers and no way to tell which one is the rotation.
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(false);
+    // The reused key keeps signing: it is not demoted along with the old one.
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id']);
+    const putCalls = calls.filter((c) => c.startsWith('PUT '));
+    expect(putCalls).toEqual([`PUT /auth/admin/realms/${REALM}/components/rsa-signing-id`]);
+  });
+
+  test('a rotated key that is no longer active is not reused', async () => {
+    // A passive rotated key cannot sign: reusing it would leave the
+    // realm without an active signer.
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [
+            REALM_KEYS[0],
+            {
+              id: 'passive-rotated-id',
+              name: 'rsa-generated-rotated-1700000000000',
+              providerId: 'rsa-generated',
+              providerType: 'org.keycloak.keys.KeyProvider',
+              config: { priority: ['101'], enabled: ['true'], active: ['false'], keySize: ['2048'] },
+            },
+          ],
+        },
+      ],
+      ['POST', COMPONENTS_PATH, CREATED_KEY],
+      [
+        'PUT',
+        new RegExp(`/auth/admin/realms/${REALM}/components/(rsa-signing-id|passive-rotated-id)$`),
+        { status: 204, data: null },
+      ],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('new-key-id');
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(true);
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id', 'passive-rotated-id']);
+  });
+
+  test('a rotated key that carries no active flag is reused — Keycloak reads a missing flag as active', async () => {
+    // Keycloak derives the key status from the flags with a default of
+    // active: a provider that carries no active flag signs. Reading it
+    // as inactive would mint a second active rotated key.
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [
+            REALM_KEYS[0],
+            { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['true'], keySize: ['2048'] } },
+          ],
+        },
+      ],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('rotated-key-id');
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(false);
+  });
+
+  test('a disabled rotated key is not reused — a disabled provider never signs', async () => {
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [
+            REALM_KEYS[0],
+            { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['false'], active: ['true'] } },
+          ],
+        },
+      ],
+      ['POST', COMPONENTS_PATH, CREATED_KEY],
+      [
+        'PUT',
+        new RegExp(`/auth/admin/realms/${REALM}/components/(rsa-signing-id|rotated-key-id)$`),
+        { status: 204, data: null },
+      ],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    // The disabled key cannot sign: reusing it would demote the realm's
+    // real signer and leave it without one.
+    expect(result.newKeyId).toBe('new-key-id');
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(true);
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id', 'rotated-key-id']);
+  });
+
+  test('a rotated name on a provider that is no RSA signing key is not reused', async () => {
+    // The name alone does not make a key a signer: adopting an encryption
+    // provider would demote the realm's real signing key and leave the
+    // realm without one.
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [
+            REALM_KEYS[0],
+            {
+              ...ROTATED_KEY,
+              id: 'rotated-encryption-id',
+              name: 'rsa-generated-rotated-backup',
+              providerId: 'rsa-enc-generated',
+            },
+          ],
+        },
+      ],
+      ['POST', COMPONENTS_PATH, CREATED_KEY],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('new-key-id');
+    expect(calls.some((c) => c.startsWith('POST '))).toBe(true);
+    // The encryption provider is not a signing key: it survives.
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id']);
+  });
+
+  test('a provider whose flag carries no value does not break the rotation', async () => {
+    // A malformed config entry is a broken answer, not a crash: the
+    // rotation reads it as Keycloak does — a flag without a value is the
+    // default, active.
+    routes = [
+      REALM_ROUTE,
+      [
+        'GET',
+        COMPONENTS_PATH,
+        {
+          status: 200,
+          data: [{ ...REALM_KEYS[0], config: { priority: ['100'], active: [null] } }],
+        },
+      ],
+      ['POST', COMPONENTS_PATH, CREATED_KEY],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+    ];
+
+    const result = await rotateRealmKeys('tok', REALM);
+
+    expect(result.newKeyId).toBe('new-key-id');
+    expect(result.oldKeyIds).toEqual(['rsa-signing-id']);
   });
 });

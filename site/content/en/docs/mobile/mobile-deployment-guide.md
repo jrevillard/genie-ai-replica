@@ -26,7 +26,7 @@ Every `<PLACEHOLDER>` in the code blocks below must be substituted before runnin
 export KEYCLOAK_URL="https://keycloak.<your-domain>"
 export KC_MOBILE_CLIENT_ID="genie-mobile-<institution>"
 export KC_MOBILE_REDIRECT_SCHEME="com.<institution>.genieai"
-export APPLICATION_ID="com.example.genie_ai_mobile"
+export APPLICATION_ID="com.itu.genieai"
 export BUNDLE_ID="com.example.genieAiMobile"
 export TEAM_ID="<Apple Developer Team ID>"
 export SHA256_FINGERPRINT="<release-key SHA-256>"
@@ -38,7 +38,7 @@ export SHA256_FINGERPRINT="<release-key SHA-256>"
 | `<institution>` | Your institution short name (lowercase, no spaces) |
 | `<KC_MOBILE_CLIENT_ID>` | The mobile OIDC client ID (defaults to `genie-mobile-<institution>`) |
 | `<KC_MOBILE_REDIRECT_SCHEME>` | Reverse-DNS scheme, e.g. `com.<institution>.genieai` |
-| `<APPLICATION_ID>` | Android `applicationId` from `build.gradle` (e.g. `com.example.genie_ai_mobile`) |
+| `<APPLICATION_ID>` | Android `applicationId` from `build.gradle` (e.g. `com.itu.genieai`) |
 | `<BUNDLE_ID>` | iOS `PRODUCT_BUNDLE_IDENTIFIER` from the XCConfig triplet |
 | `<TEAM_ID>` | Apple Developer Team ID (from [Apple Developer Portal](https://developer.apple.com/account)) |
 | `<SHA256_FINGERPRINT>` | Output of `keytool -list -v -keystore <keystore>` for the release key |
@@ -264,6 +264,35 @@ ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 ```
 
 Replace `PRODUCT_BUNDLE_IDENTIFIER` with the unique bundle ID for this deployment. Each deployment needs a unique bundle ID for App Store distribution.
+
+## Step 4b: Android application id (migration note)
+
+The Android `applicationId`/`namespace` used to be the template identity
+`com.example.genie_ai_mobile[.<flavor>]`; it is now the repo convention
+`com.itu.genieai[.<flavor>]` — the same value as the per-flavour OIDC
+redirect scheme (`com.itu.genieai.dev`, …, `com.itu.genieai`).
+
+**Android treats a different application id as a different app.** A device
+that installed a build with the old id cannot be updated in place: the
+install fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the old app stays
+on the device. Locally stored state (the encrypted preferences of
+`flutter_secure_storage`, keyed by application id) is unreachable from the new
+id, so every user re-authenticates.
+
+**Migration for an already-distributed build:**
+
+```bash
+# 1. Uninstall the old-id app (its local state goes with it).
+adb uninstall com.example.genie_ai_mobile
+
+# 2. Install the new-id build.
+adb install -r build/app/outputs/flutter-apk/app-itu-release.apk
+```
+
+The Keycloak client is unaffected: the redirect scheme was already
+`com.itu.genieai*` before the rename, so `redirectUris` stay as they are.
+Only `webOrigins` that named the old package id need the new value
+(`android-app://com.itu.genieai[.<flavor>]`).
 
 ## Step 5: Android signing
 
@@ -563,7 +592,7 @@ Host the verification file at `https://<keycloak-domain>/.well-known/assetlinks.
 
 | Placeholder | Value |
 |-------------|-------|
-| `<APPLICATION_ID>` | Android `applicationId` per flavor (e.g. `com.example.genie_ai_mobile`) |
+| `<APPLICATION_ID>` | Android `applicationId` per flavor (e.g. `com.itu.genieai`) |
 | `<SHA256_FINGERPRINT>` | SHA-256 fingerprint of the app signing certificate |
 
 > **IMPORTANT: Debug vs release fingerprints**

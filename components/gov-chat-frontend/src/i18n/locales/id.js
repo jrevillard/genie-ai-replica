@@ -467,6 +467,9 @@ export default {
       saveError: 'Gagal menyimpan item hierarki.',
       loadError: 'Gagal memuat hierarki pengetahuan.',
       loadTranslationsError: 'Gagal memuat terjemahan.',
+      translationsLoadFailedNotice:
+        'Terjemahan gagal dimuat. Penyuntingan terjemahan dan penyimpanan dinonaktifkan sampai dimuat.',
+      retryTranslations: 'Coba lagi',
       translationsNotLoaded: 'Terjemahan tidak dimuat — muat ulang sebelum menyimpan.',
       confirmCancelTitle: 'Perubahan Belum Disimpan',
       confirmCancelEdit:
@@ -484,6 +487,12 @@ export default {
       duplicateLangError: 'Ditemukan bahasa duplikat dalam terjemahan. Harap hapus.'
     },
     documents: {
+      viewDocuments: 'Dokumen',
+      viewArtifacts: 'Artefak',
+      deleteRefuseBundle: '{count} artefak OKF dikelola oleh siklus hidup repositori dan tidak dapat dihapus di sini.',
+      deleteRefuseMixed:
+        '{blocked} file masih di-ingest — cabut 먼저. {bundles} artefak OKF dikelola oleh siklus hidup repositori dan tidak dapat dihapus di sini.',
+      artifactsParked: 'Artefak OKF muncul saat fitur OKF diaktifkan untuk deployment ini.',
       title: 'Manajemen Dokumen',
       addLink: 'Tambah dari Tautan',
       uploadFiles: 'Unggah File',
@@ -1439,6 +1448,7 @@ export default {
     alt: 'Unggah'
   },
   details: {
+    bundleBadge: 'Dikelola oleh siklus hidup OKF',
     crawl: {
       seconds: 'detik',
       autoRefreshEvery: 'Penyegaran otomatis setiap',
@@ -1555,6 +1565,21 @@ export default {
       'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang.'
   },
   okf: {
+    artifacts: {
+      title: 'Artefak OKF',
+      lead: 'Satu artefak per versi yang dipublikasikan.',
+      empty: 'Belum ada artefak OKF.',
+      loadFailed: 'Artefak OKF tidak dapat dibaca.',
+      downloadFailed: 'Artefak OKF tidak dapat diunduh.',
+      column: {
+        artifact: 'Artefak',
+        repository: 'Repositori',
+        actions: 'Tindakan',
+        state: 'Status'
+      },
+      openRepo: 'Buka repositori',
+      unknownVersion: 'versi tidak diketahui'
+    },
     retrieval: {
       title: 'Postur retrieval',
       refresh: 'Segarkan',
@@ -1730,6 +1755,7 @@ export default {
       ingestCompleted: 'terintegrasi',
       bundleMissing: 'zip hilang',
       bundleDownload: 'Unduh zip',
+      viewArtifact: 'Lihat artefak',
       bundle: 'Bundel',
       col: {
         ingest: 'Ingest',

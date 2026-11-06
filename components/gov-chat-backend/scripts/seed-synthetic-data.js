@@ -17,6 +17,23 @@
  *
  * Environment variables (from .env):
  *   ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
+ *
+ * Translation rows are written with the locale normalized to UPPERCASE
+ * (`trim().toUpperCase()`), the same form the application write path stores
+ * (service-category-service.js `_normalizeLocale`). The stored `languageCode`
+ * and the `_key` suffix are that one normalized value, so a seeded row is the
+ * row the application's UPSERT (keyed on `_key`) updates — its `createdAt`,
+ * and the synthetic age this script gives it, survive the first admin edit. A
+ * raw locale would write a DIFFERENT document: the edit would insert a second
+ * row with a fresh createdAt and the GC pass would delete the seeded one.
+ *
+ * The existence probe before each write matches the row the script is about
+ * to write BY KEY, and any row of the same owner and locale whatever case it
+ * was stored in. The key clause keeps the script from writing a key that
+ * already exists: a row whose foreign key is missing or wrong cannot be
+ * reached by owner, and the database would reject the second write. The owner
+ * clause keeps a rerun over a database that still holds legacy lowercased
+ * rows from adding a SECOND row for the same owner and locale.
  */
 
 const { Database, aql } = require('arangojs');
@@ -572,11 +589,17 @@ class SeedRunner {
         ['fr', 'nameFR'],
         ['sw', 'nameSW']
       ]) {
-        const tKey = `${currentCatKey}_${lang}`;
+        // The locale is normalized ONCE and used by the query and by the
+        // write below (see the file header).
+        const locale = lang.trim().toUpperCase();
+        const tKey = `${currentCatKey}_${locale}`;
         const tExists = await this.db
           .query(
             aql`
-          FOR d IN serviceCategoryTranslations FILTER d._key == ${tKey} LIMIT 1 RETURN d._key
+          FOR d IN serviceCategoryTranslations
+            FILTER d._key == ${tKey}
+              OR (d.serviceCategoryId == ${currentCatKey} AND LOWER(d.languageCode) == ${locale.toLowerCase()})
+            LIMIT 1 RETURN d._key
         `
           )
           .then((c) => c.next());
@@ -584,7 +607,7 @@ class SeedRunner {
           await catTrans.save({
             _key: tKey,
             serviceCategoryId: currentCatKey,
-            languageCode: lang,
+            languageCode: locale,
             translation: cat[field],
             isActive: true,
             createdAt: daysAgo(55)
@@ -744,11 +767,17 @@ class SeedRunner {
         ['fr', frTranslations],
         ['sw', swTranslations]
       ]) {
-        const tKey = `${svc._key}_${lang}`;
+        // The locale is normalized ONCE and used by the query and by the
+        // write below (see the file header).
+        const locale = lang.trim().toUpperCase();
+        const tKey = `${svc._key}_${locale}`;
         const tExists = await this.db
           .query(
             aql`
-          FOR d IN serviceTranslations FILTER d._key == ${tKey} LIMIT 1 RETURN d._key
+          FOR d IN serviceTranslations
+            FILTER d._key == ${tKey}
+              OR (d.serviceId == ${svc._key} AND LOWER(d.languageCode) == ${locale.toLowerCase()})
+            LIMIT 1 RETURN d._key
         `
           )
           .then((c) => c.next());
@@ -758,7 +787,7 @@ class SeedRunner {
             await svcTrans.save({
               _key: tKey,
               serviceId: svc._key,
-              languageCode: lang,
+              languageCode: locale,
               translation,
               isActive: true,
               createdAt: daysAgo(50)
@@ -1225,7 +1254,11 @@ async function main() {
   await runner.run();
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { SeedRunner };

@@ -424,16 +424,11 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should return false for a canonical absence (driver document-not-found)', async () => {
+      // The classifier's own shapes (1204, the 3.12 no-match) are covered
+      // at their owner: shared/lib/__tests__/db-connection-service.test.js.
       mockServiceCategories.document.mockRejectedValue(
         Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
       );
-
-      const result = await service.categoryExists('missing');
-      expect(result).toBe(false);
-    });
-
-    it('should return false for the ArangoDB 3.12 no-match absence', async () => {
-      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('no match'), { errorNum: 404 }));
 
       const result = await service.categoryExists('missing');
       expect(result).toBe(false);

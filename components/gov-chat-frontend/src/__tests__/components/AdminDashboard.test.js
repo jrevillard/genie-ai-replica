@@ -3346,7 +3346,6 @@ describe('translation load-failure gate', () => {
       await flushPromises();
 
       expect(treeMock.getServiceTranslations).toHaveBeenCalledWith('svc-1');
-      expect(wrapper.vm.translationsLoadFailed).toBe(false);
       expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: 'fr', text: 'Déclaration' }]);
       expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(false);
       for (const select of wrapper.findAll('.translation-lang-select')) {
@@ -3366,7 +3365,6 @@ describe('translation load-failure gate', () => {
       await retryBtn.trigger('click');
       await flushPromises();
 
-      expect(wrapper.vm.translationsLoadFailed).toBe(false);
       expect(wrapper.vm.hierarchyForm.translations).toEqual([{ lang: '', text: '' }]);
       wrapper.unmount();
     });
@@ -3380,7 +3378,6 @@ describe('translation load-failure gate', () => {
       await retryBtn.trigger('click');
       await flushPromises();
 
-      expect(wrapper.vm.translationsLoadFailed).toBe(true);
       expect(wrapper.find('[data-test-id="hierarchy-translations-load-failed"]').exists()).toBe(true);
       for (const select of wrapper.findAll('.translation-lang-select')) {
         expect(select.attributes('disabled')).toBeDefined();

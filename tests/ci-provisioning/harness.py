@@ -875,6 +875,25 @@ def scenarios_list():
 
     scs.append(
         scenario(
+            # A 200 whose array holds ONLY non-object entries is a mangled
+            # answer, not an empty realm: MALFORMED must win the precedence
+            # and say so — the mutation gate flips the EMPTY/MALFORMED order.
+            "realm_client_listing_pure_malformed_fails",
+            1,
+            base_rules(
+                realm_clients_resp={
+                    "status": "200",
+                    "body": json.dumps(["gateway-error-text"]),
+                }
+            ),
+            expect=["entries that are not client objects", "UNVERIFIED"],
+            forbid=["no client entries", "Direct-access grants verified"],
+            calls={"realm_clients": 1},
+        )
+    )
+
+    scs.append(
+        scenario(
             # Three consecutive transient answers exhaust the loop into the
             # fail-closed branch: the probe can never end green without a
             # verdict, and this scenario is the pin on that guarantee.

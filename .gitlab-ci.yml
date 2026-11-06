@@ -900,10 +900,47 @@ workflow:
           # count as read. An entry that is not a client object at all
           # means the answer was mangled in transit — a drifted client whose
           # entry was mangled away would otherwise vanish from the verdict —
-          # so MALFORMED fails too. Both concerns report in one answer
+          # so MALFORMED is checked FIRST: a mangled answer is never
+          # reported as an empty one. Both concerns report in one answer
           # (UNREAD first, then DRIFT) so one red run names everything the
-          # realm got wrong; neither masks the other.
-          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c "import sys,json; allow={'admin-cli'}; data=json.load(sys.stdin); clients=[c for c in data if isinstance(c,dict)] if isinstance(data,list) else None; malformed=any(not isinstance(c,dict) for c in data) if isinstance(data,list) else False; unread=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is not True and c.get('directAccessGrantsEnabled') is not False]) if clients else []; drift=sorted([c.get('clientId','?') for c in clients if c.get('directAccessGrantsEnabled') is True and c.get('clientId') not in allow]) if clients else []; print('PARSE_ERROR' if clients is None else ('EMPTY' if not clients else ('MALFORMED' if malformed else chr(10).join([m for m in [('UNREAD:'+','.join(unread)) if unread else '', ('DRIFT:'+','.join(drift)) if drift else '', 'OK' if not unread and not drift else ''] if m]))))" 2>/dev/null || echo "PARSE_ERROR")
+          # realm got wrong; neither masks the other. The program sits on
+          # several lines ON PURPOSE — a verdict-precedence edit inside a
+          # one-liner is how the EMPTY/MALFORMED ordering flipped twice
+          # under review — at the block-scalar base indent, which the YAML
+          # dedent lands at shell column 0.
+          ROPC_CLIENT_GRANTS=$(printf '%s' "$KC_RAW" | sed '$d' | python3 -c '
+      import sys, json
+      allow = {"admin-cli"}
+      data = json.load(sys.stdin)
+      if not isinstance(data, list):
+          print("PARSE_ERROR")
+      else:
+          clients = [c for c in data if isinstance(c, dict)]
+          malformed = any(not isinstance(c, dict) for c in data)
+          if malformed or not clients:
+              print("MALFORMED" if malformed else "EMPTY")
+          else:
+              unread = sorted(
+                  c.get("clientId", "?")
+                  for c in clients
+                  if c.get("directAccessGrantsEnabled") is not True
+                  and c.get("directAccessGrantsEnabled") is not False
+              )
+              drift = sorted(
+                  c.get("clientId", "?")
+                  for c in clients
+                  if c.get("directAccessGrantsEnabled") is True
+                  and c.get("clientId") not in allow
+              )
+              lines = []
+              if unread:
+                  lines.append("UNREAD:" + ",".join(unread))
+              if drift:
+                  lines.append("DRIFT:" + ",".join(drift))
+              if not lines:
+                  lines.append("OK")
+              print("\n".join(lines))
+      ' 2>/dev/null || echo "PARSE_ERROR")
           ROPC_DRIFT_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^DRIFT://p')
           ROPC_UNREAD_IDS=$(printf '%s' "$ROPC_CLIENT_GRANTS" | sed -n 's/^UNREAD://p')
           break

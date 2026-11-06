@@ -16,6 +16,7 @@ void main() {
   // final instance = ApiAnalyticsSatisfactionHeatmapGet200ResponseInnerDataInner();
 
   group('test ApiAnalyticsSatisfactionHeatmapGet200ResponseInnerDataInner', () {
+    // Period key (current, week1, week2, week3, week4) to translate client-side
     // String x
     test('to test the property `x`', () async {
       // TODO

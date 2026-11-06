@@ -33,10 +33,9 @@ Retrieves a specific service category with its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final categoryId = categoryId_example; // String | Category key
 final locale = locale_example; // String | Language locale for category and service names
 
@@ -80,10 +79,9 @@ Retrieves all categories with their associated services as objects (including ke
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final locale = locale_example; // String | Language locale for category and service names
 
 try {
@@ -125,10 +123,9 @@ Retrieves all service categories with their associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final locale = locale_example; // String | Language locale for category and service names
 
 try {
@@ -170,10 +167,9 @@ Deletes a service category and its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final categoryId = categoryId_example; // String | Category key
 
 try {
@@ -214,10 +210,9 @@ Updates a category's name and translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final categoryId = categoryId_example; // String | The key of the category to update
 final apiServiceCategoriesPostRequest = ApiServiceCategoriesPostRequest(); // ApiServiceCategoriesPostRequest | 
 
@@ -260,10 +255,9 @@ Creates a new service with translations under a specific category
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final categoryId = categoryId_example; // String | The key of the parent category
 final apiServiceCategoriesPostRequest = ApiServiceCategoriesPostRequest(); // ApiServiceCategoriesPostRequest | 
 
@@ -306,10 +300,9 @@ Retrieves all available translations for a specific service category
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final categoryId = categoryId_example; // String | The key of the category
 
 try {
@@ -351,10 +344,9 @@ Creates a new service category with translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final apiServiceCategoriesPostRequest = ApiServiceCategoriesPostRequest(); // ApiServiceCategoriesPostRequest | 
 
 try {
@@ -395,10 +387,9 @@ Searches for categories and services based on a query string
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final query = query_example; // String | Search query
 final locale = locale_example; // String | Language locale for search results
 
@@ -442,10 +433,9 @@ Deletes a service and its associated translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final serviceId = serviceId_example; // String | The key of the service to delete
 
 try {
@@ -486,10 +476,9 @@ Updates a service's name and its associated translations
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final serviceId = serviceId_example; // String | The key of the service to update
 final apiServiceCategoriesPostRequest = ApiServiceCategoriesPostRequest(); // ApiServiceCategoriesPostRequest | 
 
@@ -532,10 +521,9 @@ Retrieves all available translations for a specific service
 ### Example
 ```dart
 import 'package:openapi/api.dart';
-// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
-//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+final api_client = ApiClient(authentication: OAuth(accessToken: 'YOUR_ACCESS_TOKEN'));
 
-final api_instance = ServiceCategoriesApi();
+final api_instance = ServiceCategoriesApi(api_client);
 final serviceId = serviceId_example; // String | The key of the service
 
 try {

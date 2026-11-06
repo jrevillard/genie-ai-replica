@@ -387,10 +387,7 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate:
   ///   End date (ISO format)
-  ///
-  /// * [String] locale:
-  ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<Response> apiAnalyticsSatisfactionGaugeGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
+  Future<Response> apiAnalyticsSatisfactionGaugeGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/satisfaction/gauge';
 
@@ -406,9 +403,6 @@ class AnalyticsApi {
     }
     if (endDate != null) {
       queryParams.addAll(_queryParams('', 'endDate', endDate));
-    }
-    if (locale != null) {
-      queryParams.addAll(_queryParams('', 'locale', locale));
     }
 
     const contentTypes = <String>[];
@@ -436,11 +430,8 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate:
   ///   End date (ISO format)
-  ///
-  /// * [String] locale:
-  ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<ApiAnalyticsSatisfactionGaugeGet200Response?> apiAnalyticsSatisfactionGaugeGet({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
-    final response = await apiAnalyticsSatisfactionGaugeGetWithHttpInfo( startDate: startDate, endDate: endDate, locale: locale, );
+  Future<ApiAnalyticsSatisfactionGaugeGet200Response?> apiAnalyticsSatisfactionGaugeGet({ DateTime? startDate, DateTime? endDate, }) async {
+    final response = await apiAnalyticsSatisfactionGaugeGetWithHttpInfo( startDate: startDate, endDate: endDate, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

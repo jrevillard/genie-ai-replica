@@ -16,6 +16,7 @@ void main() {
   // final instance = ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner();
 
   group('test ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner', () {
+    // Period key (current, week1, week2, week3, week4) to translate client-side
     // String label
     test('to test the property `label`', () async {
       // TODO

@@ -2048,6 +2048,8 @@ export default {
       saved: 'Imehifadhiwa',
       saving: 'Inahifadhi…',
       unsaved: 'Mabadiliko ambayo hayajahifadhiwa',
+      ceiling: '{chars} / {ceiling} herufi',
+      ceilingOver: 'Imevuka kizingiti — uhifadhi utakatalizwa. Splitu dhana hili, au ongeza OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'Imetolewa',
         source: 'Chanzo'
@@ -2657,6 +2659,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Uingizaji umeshindwa — angalia faili kisha ujaribu tena.',
         skippedEmpty: 'Faili {n} tupu zimepuuzwa.',
+        splitReport: 'Faili {n} ziligawwa ili kuzingatia ukingo wa ukubwa: {files}',
+        splitFile: '{file} ({parts} vipande)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

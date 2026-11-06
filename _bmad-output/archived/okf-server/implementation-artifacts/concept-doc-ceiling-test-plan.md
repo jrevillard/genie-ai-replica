@@ -170,6 +170,16 @@ Full action sequence per tier is in **§9.3**; preconditions in **§9.1**.
 
 **Exit — all of**
 - [x] R1–R13 each covered by ≥1 executed case
+  > **CORRECTED 2026-11-06: this tick was FALSE when written.** R11 (the editor save
+  > over the ceiling → 409) was never implemented and never had an executed case —
+  > `patchConcept` wrote any body it was given. It was implemented in **MR !788**
+  > (issue **#1576**, branch `feat/okf-concept-ceiling`) and now has executed cases:
+  > the okf-server suite (`concept-ceiling-guards.test.js`), the live smoke harness
+  > (`data/okf/smoke-test/run-smoke-ceiling.js`) and the browser spec
+  > (`tests/e2e/okf/concept-ceiling.spec.js`). The tick became true only then —
+  > the plan's own exit criterion is exactly the claim that had no case behind it.
+  > The implementation record is
+  > `_bmad-output/implementation-artifacts/csr-w7-concept-ceiling-story.md`.
 - [x] Losslessness proven on synthetic shapes **and** 215 MB of real crawled content
 - [x] Negative controls present (TC-A13, TC-I06, TC-I07)
 - [x] Every guard falsified at least once (non-vacuous)

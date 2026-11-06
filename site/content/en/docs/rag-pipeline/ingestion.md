@@ -184,22 +184,20 @@ generation makes per document.
 
 ### Which is the actual default?
 
-This is the one piece of the configuration that has **two contradictory
-defaults** depending on where you look — preserve that nuance when
-configuring:
+`per_chunk` — on **every** surface, so there is nothing to reconcile:
 
-- **Code default** (`genieai_dataprep_arangodb.py:112`):
-  `CONTEXTUAL_STRATEGY = "per_chunk"`.
-- **`env` template comment** (line 224): documents `per_chunk` as the
-  expected default.
-- **docker-compose runtime default** (`docker-compose.yaml:1221`):
-  `CONTEXTUAL_STRATEGY=${CONTEXTUAL_STRATEGY:-per_chunk}`. This is what the
+- **Code default** (`genieai_dataprep_arangodb.py:729`):
+  `CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk")`.
+- **`env` template comment**: documents `per_chunk` as the expected default.
+- **docker-compose runtime default** (`docker-compose.yaml:2269`):
+  `CONTEXTUAL_STRATEGY: ${CONTEXTUAL_STRATEGY:-per_chunk}`. This is what the
   **deployed service actually sees** if you do not override the env var.
 
-In practice, a fresh `docker compose up` deploys with `doc_level`; a
-deployer who follows the `env` comments without also reading the compose
-file ends up with `per_chunk`. Choose explicitly and verify with
-[§ Verification](#verification).
+`doc_level` is an **opt-in**: set `CONTEXTUAL_STRATEGY=doc_level` to trade
+per-section precision for N× cheaper ingestion. Earlier revisions of this page
+described a contradiction between these surfaces; there is none now — the
+compose file, the env template and the code all say `per_chunk`. Choose
+explicitly and verify with [§ Verification](#verification).
 
 For the developer-side discussion of resilience (the silent-degradation
 guard that fires when the model returns no contexts), model requirements
@@ -254,7 +252,7 @@ same values as commented-out examples.
 | Variable | Default (compose) | Default (code/env template) | Effect |
 |---|---|---|---|
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | `true` | Master switch. `false` skips context generation entirely (a no-op — chunks are embedded and labelled raw). |
-| `CONTEXTUAL_STRATEGY` | `doc_level` | `per_chunk` | `per_chunk` = N LLM calls/doc, section-tailored context. `doc_level` = 1 call/doc, same context on every chunk. See the [§ Which is the actual default?](#which-is-the-actual-default) caveat. |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` | `per_chunk` | `per_chunk` = N LLM calls/doc, section-tailored context (the default on every surface). `doc_level` = 1 call/doc, the same context on every chunk — an opt-in that costs N× less. See [§ Which is the actual default?](#which-is-the-actual-default). |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(empty)_ | _(empty)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` | `0` | Max chars of doc text fed to the context LLM under `per_chunk`. `0` = derived from the context window the endpoint actually serves (discovered at runtime from `VLLM_ENDPOINT`); `>0` sets a maximum the window still caps. |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | `100000` | Max chars of doc text fed to the context LLM under `doc_level` (1 call, larger window). A maximum: the served window caps it. |

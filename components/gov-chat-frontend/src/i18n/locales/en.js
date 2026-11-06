@@ -2928,6 +2928,8 @@ export default {
       saved: 'Saved',
       saving: 'Saving…',
       unsaved: 'Unsaved changes',
+      ceiling: '{chars} / {ceiling} characters',
+      ceilingOver: 'Over the limit — the save will be refused. Split this concept, or raise OKF_MAX_CONCEPT_DOC_CHARS.',
       saveFailed: 'Save failed — retry',
       view: {
         rendered: 'Rendered',
@@ -3481,6 +3483,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import failed — check the files and retry.',
         skippedEmpty: '{n} empty file(s) skipped.',
+        splitReport: '{n} file(s) were split to fit the size limit: {files}',
+        splitFile: '{file} ({parts} parts)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

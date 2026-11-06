@@ -2060,6 +2060,8 @@ export default {
       saved: 'Bolokiloe',
       saving: 'Ho boloka…',
       unsaved: 'Liphetoho tse sa bolokoang',
+      ceiling: '{chars} / {ceiling} litso',
+      ceilingOver: 'Fetoe ka hodima — polokiso e tla hana. Karoholo khopha eo, kapa phakisa OKF_MAX_CONCEPT_DOC_CHARS.',
       view: {
         rendered: 'E fanoe',
         source: 'Mohloli'
@@ -2673,6 +2675,8 @@ export default {
         fsBusy: 'Importing your files…',
         fsFailed: 'Import o hlolehile — hlahloba difaele o leke hape.',
         skippedEmpty: 'Difaele tse {n} tse se nang letho di fetisoa.',
+        splitReport: 'Ho ile {n} faele ho fihlela boholo ba lekaba: {files}',
+        splitFile: '{file} ({parts} maf pieces)',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',

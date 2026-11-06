@@ -8,7 +8,7 @@
   parent can refresh the row.
 -->
 <template>
-  <div class="okf-ce">
+  <div class="okf-ce" data-test-id="okf-concept-editor">
     <div class="okf-ce__toolbar">
       <div class="okf-ce__view-toggle" role="tablist" :aria-label="translate('okf.editor.viewToggle', 'Editor view')">
         <DsButton :variant="view === 'source' ? 'primary' : 'secondary'" small @click="view = 'source'">
@@ -26,11 +26,21 @@
 
       <span class="okf-ce__path">{{ pathLabel }}</span>
 
-      <span class="okf-ce__save-status" :class="{ 'okf-ce__save-status--dirty': dirty }">
+      <span
+        class="okf-ce__save-status"
+        :class="{ 'okf-ce__save-status--dirty': dirty }"
+        data-test-id="okf-concept-save-status"
+      >
         {{ saveStatusLabel }}
       </span>
 
-      <DsButton variant="primary" small :disabled="readOnly || !dirty || saving" @click="saveNow">
+      <DsButton
+        variant="primary"
+        small
+        data-test-id="okf-concept-save"
+        :disabled="readOnly || !dirty || saving"
+        @click="saveNow"
+      >
         {{ translate('okf.editor.save', 'Save') }}
       </DsButton>
     </div>
@@ -282,6 +292,19 @@
         @update:mode="view = $event"
         @update:value="onEdit"
       />
+      <!-- THE CONCEPT-DOCUMENT CEILING — the live advisory (the plan's §8:
+           "the UI tells the user what happened"). The rule is visible while
+           the curator types, not only after the server refuses the save. The
+           number is the SERVER's ceiling (it rides the concept read), so the
+           advice here cannot contradict the refusal that follows. -->
+      <div v-if="maxDocChars" class="okf-ce__ceiling" data-test-id="concept-ceiling">
+        <DsPill :variant="overCeiling ? 'warning' : 'neutral'">
+          {{ ceilingLabel }}
+        </DsPill>
+        <span v-if="overCeiling" class="okf-ce__ceiling-note">
+          {{ ceilingOverNote }}
+        </span>
+      </div>
     </template>
   </div>
 </template>
@@ -292,6 +315,7 @@ import DsButton from '../../ds/Button.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsProgress from '../../ds/Progress.vue';
 import DsOkfMarkdownEditor from '../../ds/OkfMarkdownEditor.vue';
+import DsPill from '../../ds/Pill.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsInput from '../../ds/Input.vue';
@@ -309,6 +333,11 @@ const AUTOSAVE_DEBOUNCE_MS = 1500;
 const PII_STORE_KEY = 'okf.pii.findings.v1';
 const PII_STORE_MAX = 40;
 const FM_TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'];
+// The English fallback for the over-ceiling note (the concept-document
+// ceiling). A constant so the `translate()` call that carries it stays on one
+// line — see `ceilingOverNote` for why that matters.
+const CEILING_OVER_FALLBACK =
+  'Over the limit — the save will be refused. Split this concept, or raise OKF_MAX_CONCEPT_DOC_CHARS.';
 // D-F: the generic typed rows. 'json' covers nested shapes (objects,
 // arrays-of-objects) via a JSON textarea.
 const FM_KINDS = ['string', 'number', 'boolean', 'array', 'json'];
@@ -329,6 +358,7 @@ export default {
     DsSpinner,
     DsProgress,
     DsOkfMarkdownEditor,
+    DsPill,
     DsInfoTip,
     DsSelect,
     DsInput,
@@ -389,6 +419,17 @@ export default {
       // the panel keeps showing the green list after the state clears.
       piiPanelPinned: false,
       saveError: false,
+      // THE CONCEPT-DOCUMENT CEILING (the plan's §8 — "advise the curator").
+      // The ceiling is the SERVER's number (it rides the concept read), never
+      // a copy in the frontend: two numbers would drift, and the editor's
+      // advice would then contradict the refusal the curator actually gets.
+      maxDocChars: null,
+      // The reason the last save was refused, when the server named one
+      // (a 409 CONCEPT_TOO_LARGE carries the size, the ceiling and the
+      // remedy). Empty for a generic failure — the label then keeps its
+      // "Save failed — retry" wording, which IS the right advice for a
+      // transient failure and the WRONG advice for a ceiling refusal.
+      saveErrorMessage: '',
       // FRONTMATTER BAR (David, 2026-09-06): display is the PRIMARY job —
       // the collapsed bar shows the parsed fields at a glance; the per-field
       // edit form is secondary behind Expand.
@@ -457,10 +498,55 @@ export default {
     },
     saveStatusLabel() {
       if (this.saving) return this.translate('okf.editor.saving', 'Saving…');
-      if (this.saveError) return this.translate('okf.editor.saveFailed', 'Save failed — retry');
+      // A NAMED refusal (the concept-document ceiling) speaks for itself —
+      // the server's message names the size, the ceiling and the remedy.
+      // A generic failure keeps "Save failed — retry", which IS the right
+      // advice for a transient failure and the WRONG advice for a ceiling
+      // refusal (retrying an over-ceiling save fails identically forever).
+      if (this.saveError) {
+        return this.saveErrorMessage || this.translate('okf.editor.saveFailed', 'Save failed — retry');
+      }
       if (this.dirty) return this.translate('okf.editor.unsaved', 'Unsaved changes');
       if (this.lastSavedAt) return this.translate('okf.editor.saved', 'Saved');
       return '';
+    },
+    // THE CONCEPT-DOCUMENT CEILING — the live advisory (the plan's §8).
+    //
+    // `bodyChars` is the BODY the editor is about to write (the markdown
+    // minus its frontmatter), because the ceiling governs the body — the
+    // server measures the same thing, so the number here and the number the
+    // server refuses on are the same number.
+    bodyChars() {
+      const parsed = this.parseMarkdown(this.markdown);
+      if (!parsed) return 0;
+      return String(parsed.content || '').length;
+    },
+    // Over the ceiling? The advisory turns the warning pill on BEFORE the
+    // save is refused — the rule is visible while the curator types, not
+    // only after they are told off.
+    overCeiling() {
+      if (!this.maxDocChars) return false;
+      return this.bodyChars > this.maxDocChars;
+    },
+    ceilingLabel() {
+      if (!this.maxDocChars) return '';
+      return this.translate('okf.editor.ceiling', '{chars} / {ceiling} characters')
+        .replace('{chars}', String(this.bodyChars))
+        .replace('{ceiling}', String(this.maxDocChars));
+    },
+    // The over-ceiling note.
+    //
+    // WHY A COMPUTED AND WHY A CONSTANT FALLBACK: the i18n contract test
+    // (`okf-surface-i18n-contract.test.js`) extracts the referenced `okf.*`
+    // keys with a PER-LINE regex — a `translate(` call that Prettier has
+    // wrapped across lines is invisible to it, and its key would then never be
+    // checked against the shipped catalogue. The fallback text is long enough
+    // that an inline call does not fit the 120-column width, so Prettier wraps
+    // it and the key drops out of the guard. Hoisting the call into a computed
+    // and the fallback into a constant keeps the key on ONE line, where the
+    // extractor sees it.
+    ceilingOverNote() {
+      return this.translate('okf.editor.ceilingOver', CEILING_OVER_FALLBACK);
     },
     parsedFm() {
       const parsed = this.parseMarkdown(this.markdown);
@@ -549,6 +635,10 @@ export default {
       this.loadPct = 60; // row arrived — composing markdown next
       const row = result.concept;
       this.piiState = row.pii_state || null;
+      // THE CONCEPT-DOCUMENT CEILING — the server's number, read with the
+      // concept (the plan's §8). Absent on a server that predates it: the
+      // advisory then simply does not render, and the refusal still works.
+      this.maxDocChars = typeof row.max_doc_chars === 'number' && row.max_doc_chars > 0 ? row.max_doc_chars : null;
       // The persisted remediation ledger rides the meta row — a PROCESSED
       // file (pii_state now clean) must still show its green history.
       this.piiResolutions = Array.isArray(row.pii_resolutions) ? row.pii_resolutions : [];
@@ -695,12 +785,19 @@ export default {
             }
             this.$emit('saved', { conceptId, result });
           } else {
+            // A NAMED refusal (the concept-document ceiling) carries the
+            // server's own explanation — the size, the ceiling and the
+            // remedy. Show it: "Save failed — retry" would be advice that
+            // cannot work, because retrying an over-ceiling save fails
+            // identically forever.
             this.saveError = true;
+            this.saveErrorMessage = result && result.code === 'CONCEPT_TOO_LARGE' ? result.message || '' : '';
           }
         } catch {
           // Timeout/network failure — surface it; the dirty state stays so the
           // user can retry (the old silent failure re-armed autosave forever).
           this.saveError = true;
+          this.saveErrorMessage = '';
         } finally {
           this.saving = false;
           this._savePromise = null;
@@ -1184,6 +1281,20 @@ export default {
   white-space: nowrap;
 }
 .okf-ce__save-status--dirty {
+  color: var(--warning);
+}
+/* THE CONCEPT-DOCUMENT CEILING — the live advisory (the plan's §8). Token-
+   based like every other rule in this file: the pill carries its own variant
+   colour, so only the layout lives here. */
+.okf-ce__ceiling {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  flex-wrap: wrap;
+}
+.okf-ce__ceiling-note {
+  font-size: var(--text-xs);
   color: var(--warning);
 }
 .okf-ce__fm {

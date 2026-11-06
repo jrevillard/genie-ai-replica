@@ -90,3 +90,42 @@ All services use the fluentd logging driver to forward stdout/stderr to the Coll
 | Guardrail | 9090 | Disabled |
 | OPEA UI/Nginx | 5173 | Disabled |
 | Certbot | — | One-shot, `CERTBOT_REPLICAS:-0` |
+
+## The concept-document ceiling and the document-context budget
+
+Two settings bound how large one concept document may be. They are **not** the
+same number and they are **not** derived from one source:
+
+| Setting | Owner | Default | Nature |
+|---|---|---|---|
+| `OKF_MAX_CONCEPT_DOC_CHARS` | okf-server | `250000` | A **static literal**. Bounds the characters in ONE concept document **body**. |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | dataprep | `0` | **Derived at runtime** from the context window the endpoint actually serves (`VLLM_ENDPOINT`). `0` = derive. |
+
+Measured on the shipped defaults (500-char chunks, `per_chunk` strategy):
+
+| Served context window | Derived document-context budget |
+|---|---|
+| 65536 tokens (compose default, `env.rtx6000`) | ≈ **219 700 characters** |
+| 4096 tokens | **no room** — the output reservation alone (512 × 16 tokens) exceeds the window |
+| 2048 tokens (`env.t4`) | **no room** — the same |
+
+With no room, dataprep **fails closed**: the document is not contextualised at
+all and its chunks are embedded raw, with an ERROR in the ingestion log naming
+the knobs to lower.
+
+**What an agent needs to know:**
+
+- The derived budget (**≈219 700** on the default window) is **below** the
+  ceiling's default (**250 000**). A concept at the ceiling therefore has its
+  document context truncated on the default deployment — the truncation is
+  recorded in the ingestion log, so check it after changing either value.
+- **Never copy a budget from another deployment.** A budget sized for a
+  65536-token window overflows a 2048-token one, and the rejected calls fall
+  back to raw chunks *silently*.
+- `VLLM_MAX_MODEL_LEN` is the **vLLM memory knob** (`--max-model-len`).
+  Dataprep does **not** read it — it discovers the served window at runtime
+  from `VLLM_ENDPOINT` (issue #1182). `DATAPREP_MAX_MODEL_LEN` is the lever on
+  a provider whose `/v1/models` carries no `max_model_len`.
+- The ceiling is enforced on **every** write path: the import splits (or
+  rejects), the Studio editor refuses the save (409, nothing written), and
+  the publish gate refuses **before** minting a version.

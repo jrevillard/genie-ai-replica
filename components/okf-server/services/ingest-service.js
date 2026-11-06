@@ -28,6 +28,8 @@ const conceptMetaService = require('./concept-meta-service');
 const piiService = require('./pii-service');
 const repositoryService = require('./repository-service');
 const { splitConceptBody } = require('./concept-splitter');
+const { maxConceptDocChars, conceptTooLargeError } = require('./concept-ceiling');
+
 const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
@@ -167,22 +169,20 @@ function uniquifySlug(base, body, seen) {
 
 /** Maximum characters in a single concept document.
  *
+ * The SINGLE authority is `concept-ceiling.js` — the editor save
+ * (repository-controller) and the publish gate (lifecycle-service) enforce the
+ * same number, and importing the whole import service from those paths would
+ * drag a cycle with it (ingest-service ⇄ concept-meta-service). The value is
+ * re-exported here under its historical name so every existing caller (and
+ * test) keeps working.
+ *
  * Contextual Retrieval truncates a document's context to a budget derived from
  * the serving model's window; a document larger than that budget has its deep
  * chunks embedded against a description of its start. The ceiling is the same
  * number, so "over the ceiling" and "will be truncated" are the same condition
  * — which is why the remedy is to split at import rather than discover the
  * truncation at query time.
- *
- * 250000 reflects a 65536-token window (~4 chars/token minus the prompt, batch
- * and output reservations). Override per deployment when the served model
- * differs; okf-server and dataprep must agree, which config-validator checks.
  */
-function maxConceptDocChars() {
-  const raw = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 250000;
-}
 
 /** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
  * so every inbound link keeps resolving to a document that still exists. */
@@ -219,13 +219,23 @@ function applyDocumentCeiling(rawInputs) {
     }
     const result = splitConceptBody(body, ceiling);
     if (result.unsplittable) {
-      throw new IngestError(
-        'CONCEPT_TOO_LARGE',
-        `concept "${raw.path}" is ${body.length} characters, over the ${ceiling}-character ceiling, ` +
-          `and cannot be split without losing content: ${result.reason}. Shorten the source, or raise ` +
-          `OKF_MAX_CONCEPT_DOC_CHARS if the served model's context window allows a larger document.`,
-        400
-      );
+      // The shared refusal (concept-ceiling): the editor save and the publish
+      // gate answer the same question with the same code, so a curator who
+      // meets it in one surface recognises it in the others. The import path
+      // keeps its 400 (a malformed IMPORT is a bad request); the two write
+      // paths use 409 (a well-formed write that conflicts with the state it
+      // targets).
+      const err = conceptTooLargeError({
+        label: `concept "${raw.path}"`,
+        chars: body.length,
+        ceiling,
+        remedy:
+          `It cannot be split without losing content: ${result.reason}. ` +
+          "Shorten the source, or raise OKF_MAX_CONCEPT_DOC_CHARS if the served model's " +
+          'context window allows a larger document.'
+      });
+      err.status = 400;
+      throw err;
     }
     result.parts.forEach((part, i) => {
       inputs.push({

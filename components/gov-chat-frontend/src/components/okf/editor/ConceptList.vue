@@ -73,6 +73,7 @@
           <div
             class="okf-cl__row"
             :class="{ 'okf-cl__row--selected': node.concept_id === selectedId }"
+            :data-test-id="`okf-concept-row-${node.concept_id}`"
             role="button"
             tabindex="0"
             @click="$emit('select', node.concept_id)"

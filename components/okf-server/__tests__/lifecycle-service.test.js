@@ -26,7 +26,10 @@ jest.mock('../services/concept-meta-service', () => ({
   countByIndexStatus: jest.fn().mockResolvedValue(0),
   requeueRepoForRedrain: jest.fn().mockResolvedValue(0),
   requeueFailedForReingest: jest.fn().mockResolvedValue({ requeued: 0, conceptIds: [] }),
-  stampRepoGraphName: jest.fn().mockResolvedValue(0)
+  stampRepoGraphName: jest.fn().mockResolvedValue(0),
+  // The concept-document ceiling gate (the plan's §7) — the read lives in
+  // concept-meta-service, so the publish path's query order is UNCHANGED.
+  listOverCeiling: jest.fn().mockResolvedValue({ count: 0, offenders: [] })
 }));
 // Story 1.6/1.7 (2026-10-08): the publish path gained the frontmatter
 // gate (topic>=3 + forbidden>=1 → write-through → vectorized head).
@@ -1069,5 +1072,88 @@ describe('rag_ingestion.failed_concepts ownership (card-lies fix)', () => {
     const rec = mockDb._stores.okf_repositories[REPO].rag_ingestion;
     expect(rec.status).toBe('completed');
     expect(rec.failed_concepts).toEqual([]);
+  });
+});
+
+// ── THE CONCEPT-DOCUMENT CEILING — the publish gate (the plan's §7) ────────
+//
+// The load-bearing property is the PLACEMENT, not the refusal: the gate must
+// fire BEFORE `mintVersion`, because everything after the mint creates state
+// (the version number is bumped, the bundle is stored). A gate that refuses
+// after the mint rejects having already burned a version number — the exact
+// defect the plan names when it places the gate "alongside the existing count
+// check … not after the frontmatter gate".
+describe('publish — the concept-document ceiling gate (the plan §7)', () => {
+  const ORIGINAL_CEILING = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
+  const cms = () => require('../services/concept-meta-service');
+
+  beforeEach(() => {
+    // Default: no over-ceiling concept — the gate must not fire.
+    cms().listOverCeiling.mockResolvedValue({ count: 0, offenders: [] });
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_CEILING === undefined) delete process.env.OKF_MAX_CONCEPT_DOC_CHARS;
+    else process.env.OKF_MAX_CONCEPT_DOC_CHARS = ORIGINAL_CEILING;
+  });
+
+  test('an over-ceiling concept refuses the publish BEFORE the mint, naming the offender', async () => {
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '1000';
+    seedRepo({ lifecycle_state: 'approve', version: null });
+    cms().listOverCeiling.mockResolvedValue({
+      count: 1,
+      offenders: [{ concept_id: 'big-page', chars: 300000 }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [7] }); // the concept-count gate
+
+    await expect(lifecycleService.transition(REPO, 'publish', { sub: 'steward-1' })).rejects.toMatchObject({
+      code: 'CONCEPT_TOO_LARGE',
+      status: 409
+    });
+    // THE assertion that matters: no version was minted. A refusal after the
+    // mint would burn a version number and strand an orphan manifest.
+    expect(mintVersion).not.toHaveBeenCalled();
+    expect(exportBundle).not.toHaveBeenCalled();
+    // The repo is untouched — still in 'approve', no version.
+    expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('approve');
+    expect(mockDb._stores.okf_repositories[REPO].version).toBeNull();
+  });
+
+  test('the refusal names the offender, its size and the ceiling', async () => {
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '1000';
+    seedRepo({ lifecycle_state: 'approve' });
+    cms().listOverCeiling.mockResolvedValue({
+      count: 1,
+      offenders: [{ concept_id: 'big-page', chars: 300000 }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [7] }); // the concept-count gate
+
+    const err = await lifecycleService.transition(REPO, 'publish', { sub: 'steward-1' }).catch((e) => e);
+    expect(err.message).toMatch(/big-page/);
+    expect(err.message).toMatch(/300000 characters/);
+    expect(err.message).toMatch(/1000-character ceiling/);
+    expect(err.message).toMatch(/Split them into smaller concepts/);
+  });
+
+  test('a healthy corpus publishes UNCHANGED — the gate never fires', async () => {
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '1000';
+    seedRepo({ lifecycle_state: 'approve', version: null });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [7] }); // the concept-count gate
+
+    await expect(lifecycleService.transition(REPO, 'publish', { sub: 'steward-1' })).resolves.toMatchObject({
+      ok: true,
+      action: 'publish'
+    });
+    expect(mintVersion).toHaveBeenCalled();
+    expect(exportBundle).toHaveBeenCalledTimes(1);
+  });
+
+  test('the gate reads the SERVER ceiling — the same number the editor is told', async () => {
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '1234';
+    seedRepo({ lifecycle_state: 'approve' });
+    cms().listOverCeiling.mockResolvedValue({ count: 0, offenders: [] });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [7] });
+    await lifecycleService.transition(REPO, 'publish', {});
+    expect(cms().listOverCeiling).toHaveBeenCalledWith(REPO, 1234, 10);
   });
 });

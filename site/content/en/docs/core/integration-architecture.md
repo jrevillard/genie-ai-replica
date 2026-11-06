@@ -7,7 +7,7 @@ audience: "integrator, developer"
 mode: explanation
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-06
 ---
 
 This document describes how the GENIE.AI components fit together — service

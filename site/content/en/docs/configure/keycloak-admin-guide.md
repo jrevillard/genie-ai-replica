@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-06
 ---
 
 This guide explains how to manage users, roles, and groups for GENIE.AI through the Keycloak admin console. Everything identity-related — sign-up, sign-in, password reset, role assignment — happens in Keycloak; no GENIE.AI-specific UI is needed for user administration.

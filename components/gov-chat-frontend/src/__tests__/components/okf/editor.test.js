@@ -196,6 +196,11 @@ describe('OkfConceptEditor', () => {
     expect(wrapper.vm.markdown).toContain('# C1 body');
   });
 
+  it('opens in the RENDERED view (#1634 — David, 2026-11-07: every OKF markdown surface defaults rendered)', () => {
+    const wrapper = mountEditor();
+    expect(wrapper.vm.view).toBe('rendered');
+  });
+
   it('marks dirty on edit and autosaves after the debounce window', async () => {
     const store = fakeStore();
     const wrapper = mountEditor(store);

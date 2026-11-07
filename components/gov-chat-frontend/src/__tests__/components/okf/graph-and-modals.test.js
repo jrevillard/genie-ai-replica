@@ -415,13 +415,20 @@ describe('OkfAddConceptModal', () => {
     expect(withIdx.find('select').html()).not.toContain('value="index"');
   });
 
-  it('edits the body in the shared markdown editor — Source/Preview modes, value reaches create', async () => {
+  it('edits the body in the shared markdown editor — opens RENDERED (#1634), source one click away, value reaches create', async () => {
     const store = modalStore();
     const wrapper = mountWith(OkfAddConceptModal, { visible: true, repoId: 'r-1', hasIndex: true }, store);
-    // The SAME DsOkfMarkdownEditor mode bar (Source | Split | Preview)…
+    // The SAME DsOkfMarkdownEditor mode bar (Preview | Split | Source only)…
     const modeButtons = wrapper.findAll('.ds-okf-md__mode').map((b) => b.text());
     expect(modeButtons).toEqual(expect.arrayContaining(['Preview', 'Split', 'Source only']));
-    // …with the source pane usable immediately (expert) and NO frontmatter banner.
+    // RENDERED default (#1634, David 2026-11-07): the preview pane is up; the
+    // raw textarea is not.
+    expect(wrapper.find('.ds-okf-md__preview').exists()).toBe(true);
+    expect(wrapper.find('.ds-okf-md__textarea').exists()).toBe(false);
+    // One click to source (expert: usable immediately, NO frontmatter banner).
+    const sourceBtn = wrapper.findAll('.ds-okf-md__mode').find((b) => b.text().includes('Source'));
+    await sourceBtn.trigger('click');
+    await wrapper.vm.$nextTick();
     expect(wrapper.find('.ds-okf-md__textarea').exists()).toBe(true);
     expect(wrapper.find('.ds-okf-md__frontmatter').exists()).toBe(false);
     // Typing in the editor reaches the modal body that createConcept dispatches.

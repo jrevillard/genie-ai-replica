@@ -40,12 +40,15 @@
            frontmatter on create, exactly as the dialog text promises. -->
       <DsOkfMarkdownEditor
         :value="body"
-        mode="split"
+        mode="preview"
         :expert="true"
         :enable-frontmatter="false"
         :aria-label="translate('okf.editor.addConcept.bodyLabel', 'Markdown (paste or leave empty)')"
         @update:value="body = $event"
       />
+      <!-- RENDERED default (David, 2026-11-07, #1634): every OKF markdown
+           surface opens rendered; raw markdown is one click away
+           (Source / Split above, unchanged). -->
     </DsFormGroup>
 
     <label v-if="hasIndex" class="okf-acn__check">

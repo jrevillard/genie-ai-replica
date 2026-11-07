@@ -101,6 +101,13 @@ the ORDER and the cross-stream slots.
 - **W6 — artifacts view** — **MERGED to main 2026-11-06** (MR !780, via merge
   train 228; it landed INTO the new theme, so the double-restyling risk was
   avoided by the ordering). Issue #1557 closed by the merge.
+- **BEFORE W7 — markdown editor defaults RENDERED (#1634, David 2026-11-07).** Every
+  OKF markdown surface opens on the raw markdown today; the default becomes RENDERED:
+  the Studio concept editor (`ConceptEditor.vue` `view: 'source'` → `'rendered'`) and
+  the wizard's "+ Write a concept" modal (`AddConceptModal.vue` `mode="split"` →
+  `"preview"`). The DS component stays prop-driven; raw markdown stays one click away
+  (Source / Split unchanged); the frontmatter dialog keeps its contextual source
+  switch. Small UX fix — rides its own MR with its workplan row.
 - **W7 — retract-retention D3 reversal.** Not started. (Not the concept-document
   ceiling slice — see the note below this list.)
 - **W8 — log purge + gate downgrade, SCOPE GREW per the #925 split ruling:**

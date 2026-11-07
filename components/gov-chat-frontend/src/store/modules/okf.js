@@ -1083,10 +1083,11 @@ const actions = {
   /**
    * Story #978 — delete the whole repository (cascade). The server refuses
    * while an ingested version is serving (INGESTED_DELETE_BLOCKED).
+   * W8 (#925): `reason` rides to the server and lands on the delete audit row.
    */
-  async deleteRepoAction({ commit, state }, { repoId } = {}) {
+  async deleteRepoAction({ commit, state }, { repoId, reason } = {}) {
     try {
-      await okfRepoOps.deleteRepo(repoId);
+      await okfRepoOps.deleteRepo(repoId, reason);
       commit('removeRepo', repoId);
       // Recompute the lanes from the remaining repos — a stale lane entry
       // would keep rendering a deleted card (live-caught by the store test).

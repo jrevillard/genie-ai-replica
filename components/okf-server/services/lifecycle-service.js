@@ -198,6 +198,22 @@ async function sourcesBusyBlocker(repo) {
         if (serving.length > 0) break; // one serving source blocks — don't pay N×timeout on the rest
       }
     } catch (err) {
+      // W8 GATE DOWNGRADE (EPIC-8 slice 2): a 404 means the source doc no
+      // longer EXISTS — a steward hand-deleted it in doc-repo, and Story 7.7's
+      // "retract it first" can never be satisfied on a file that is gone. A
+      // missing file cannot serve anything, so skip it with a visible warn
+      // (a permanent block was turning the re-drive into a deadlock). Only a
+      // real outage (non-404) still fails closed: "doc-repo can't tell us" is
+      // not evidence the content is gone.
+      const notFound = err && err.response && err.response.status === 404;
+      if (notFound) {
+        logger.warn(
+          'SOURCES-BUSY gate: source doc no longer exists in doc-repo (hand-deleted) — skipping it. ' +
+            'If this is unexpected, audit the doc-repo delete history.',
+          { file_id: s.file_id, file_name: s.file_name || null }
+        );
+        continue;
+      }
       // FAIL-CLOSED: if doc-repo cannot tell us the status, treat the source
       // as still serving (a transient outage must not double-serve content).
       logger.warn('SOURCES-BUSY re-check failed (fail-closed)', { file_id: s.file_id, error: err.message });

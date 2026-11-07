@@ -672,6 +672,55 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
     });
     expect(await lifecycle.sourcesBusyBlocker(repo([{ kind: 'document', file_id: 'bundle-1' }]))).toBeNull();
   });
+
+  // ── W8 gate downgrade (EPIC-8 slice 2): a hand-deleted source is not a
+  // permanent block. The steward who deletes the source doc in doc-repo can
+  // never satisfy Story 7.7's "retract them first" — there is nothing left to
+  // retract. A 404 says the file CANNOT serve anything; only a real outage
+  // (non-404) still fails closed, because "doc-repo can't tell us" is not
+  // evidence the content is gone.
+  it('W8: a hand-DELETED source (404) is skipped — the gate passes with a warn', async () => {
+    const notFound = Object.assign(new Error('Request failed with status code 404'), {
+      response: { status: 404 }
+    });
+    authedAxios.get.mockRejectedValueOnce(notFound);
+    const blocker = await lifecycle.sourcesBusyBlocker(
+      repo([{ kind: 'document', file_id: 'hand-deleted', file_name: 'deleted.pdf' }])
+    );
+    expect(blocker).toBeNull();
+    // The visible log line — a steward must be able to see WHY ingest
+    // suddenly works when a source vanished.
+    const warnCalls = logger.warn.mock.calls.map((c) => String(c[0]));
+    expect(warnCalls.some((m) => m.includes('hand-deleted') && m.includes('no longer exists'))).toBe(true);
+  });
+
+  it('W8: a deleted source skips only itself — a live Ingested sibling still blocks', async () => {
+    authedAxios.get.mockImplementation((url) => {
+      if (String(url).includes('hand-deleted')) {
+        return Promise.reject(Object.assign(new Error('404'), { response: { status: 404 } }));
+      }
+      return Promise.resolve({
+        data: { file: { file_name: 'live.pdf', dataprep: { status: 'Ingested' } } }
+      });
+    });
+    const blocker = await lifecycle.sourcesBusyBlocker(
+      repo([
+        { kind: 'document', file_id: 'hand-deleted', file_name: 'deleted.pdf' },
+        { kind: 'document', file_id: 'f-live', file_name: 'live.pdf' }
+      ])
+    );
+    expect(blocker.code).toBe('SOURCES_NOT_RETRACTED');
+    expect(blocker.message).toContain('live.pdf');
+    expect(blocker.message).not.toContain('deleted.pdf');
+  });
+
+  it('W8: a NON-404 re-check error still fails closed (the downgrade is 404-only)', async () => {
+    authedAxios.get.mockRejectedValueOnce(Object.assign(new Error('boom'), { response: { status: 500 } }));
+    const failClosed = await lifecycle.sourcesBusyBlocker(
+      repo([{ kind: 'document', file_id: 'f-500', file_name: 'x.pdf' }])
+    );
+    expect(failClosed.code).toBe('SOURCES_NOT_RETRACTED');
+  });
 });
 
 describe('producer-service — docRepoFileOf (shared doc-repo envelope unwrap)', () => {

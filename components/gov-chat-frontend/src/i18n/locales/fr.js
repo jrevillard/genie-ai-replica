@@ -2165,7 +2165,9 @@ export default {
       delete: {
         body: "Cette action supprime définitivement le référentiel, ses concepts, le contenu indexé, le graphe et les artefacts de l'archive. Cette action est irréversible.",
         confirm: 'Supprimer',
-        title: 'Supprimer le référentiel'
+        title: 'Supprimer le référentiel',
+        reasonLabel: 'Motif (facultatif)',
+        reasonPlaceholder: "ex. demande d'effacement RGPD, jeu de données retiré, créé par erreur"
       },
       filter: {
         domain: 'Filtrer par domaine',

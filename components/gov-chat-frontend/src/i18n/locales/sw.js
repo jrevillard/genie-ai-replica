@@ -2141,7 +2141,9 @@ export default {
       delete: {
         body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake. Hatua hii haiwezi kutenduliwa.',
         confirm: 'Futa',
-        title: 'Futa ghala'
+        title: 'Futa ghala',
+        reasonLabel: 'Sababu (hiari)',
+        reasonPlaceholder: 'mf. ombi la kufuta kwa GDPR, data iliyoondolewa, iliyoundwa kwa bahati mbaya'
       },
       filter: {
         domain: 'Chuja kwa eneo la mada',

@@ -434,15 +434,70 @@ async function main() {
     ? pass('submit from retracted → review (designed re-entry loop)')
     : fail('submit-from-retracted: ' + r.status);
 
-  const del2 = await call('DELETE', `/api/okf/repos/${REPO_ID}`);
+  // W8 snapshot (BEFORE the delete): the repo's concept ids split SOLE vs
+  // SHARED. The 1:1 purge only sweeps ids this repo ALONE holds — `index` is
+  // held by every repo on the deployment (the TOC concept), and its rows are
+  // the shared history of those other holders, so they MUST survive. The pin
+  // counts sole ids only (first live run caught this: it naively counted the
+  // whole id set and "failed" on 14 other repos' index rows — production was
+  // right, the pin was wrong).
+  const conceptIds = await aql(
+    'FOR m IN okf_concepts_meta FILTER m.repo_id == @r FILTER m.concept_id != null RETURN DISTINCT m.concept_id',
+    { r: REPO_ID }
+  );
+  const sharedIds = await aql(
+    'FOR m IN okf_concepts_meta FILTER m.repo_id != @r FILTER m.concept_id IN @ids RETURN DISTINCT m.concept_id',
+    { r: REPO_ID, ids: conceptIds }
+  );
+  const soleIds = conceptIds.filter((cid) => !sharedIds.includes(cid));
+  soleIds.length > 0
+    ? pass('W8: sole-holder concept ids enumerated (' + JSON.stringify(soleIds) + '; shared: ' + JSON.stringify(sharedIds) + ')')
+    : fail('W8: every concept id is shared — the purge pin has no sole-holder proof');
+  const logRowsBefore = (
+    await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: soleIds })
+  ).length;
+
+  const del2 = await call('DELETE', `/api/okf/repos/${REPO_ID}`, {
+    reason: 'smoke: W8 reason pin'
+  });
   del2.status === 202
     ? pass('delete (retracted, not serving) → 202 cascade')
     : fail('final delete: ' + del2.status + ' ' + JSON.stringify(del2.body));
+
+  // W8 deletion_reason (#925): the response echoes the trimmed reason and the
+  // audit row carries it on details.
+  del2.body && del2.body.deletion_reason === 'smoke: W8 reason pin'
+    ? pass('W8: delete response carries deletion_reason')
+    : fail('W8: deletion_reason missing from the delete response: ' + JSON.stringify(del2.body));
+  const auditRows = await aql(
+    'FOR a IN okf_audit_logs FILTER a.repo_id == @r AND a.action == "repo.delete" SORT a.ts DESC LIMIT 1 RETURN a',
+    { r: REPO_ID }
+  );
+  auditRows.length === 1 && auditRows[0].details && auditRows[0].details.deletion_reason === 'smoke: W8 reason pin'
+    ? pass('W8: delete audit row carries the reason')
+    : fail('W8: audit row without the reason: ' + JSON.stringify(auditRows));
 
   const leftovers = await aql('FOR r IN okf_repositories FILTER r.repo_id == @r RETURN r', { r: REPO_ID });
   leftovers.length === 0
     ? pass('no leftovers — repo fully removed')
     : fail('leftovers: ' + leftovers.length);
+
+  // W8 log purge: zero concept-keyed rows survive the delete (the 1:1-safe
+  // purge swept what the drain wrote for ids it held SOLELY; a retraction
+  // purges nothing — that is D3, pinned in section 11. Shared ids (index)
+  // keep their rows by design — their history belongs to the other holders.
+  if (soleIds.length === 0) {
+    fail('W8: no sole-holder ids — the purge pin is vacuous');
+  } else if (logRowsBefore === 0) {
+    fail('W8: no concept-keyed log rows existed for the sole ids before the delete — the purge pin is vacuous');
+  } else {
+    const logRowsAfter = (
+      await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: soleIds })
+    ).length;
+    logRowsAfter === 0
+      ? pass('W8: sole-holder concept rows purged on delete (' + logRowsBefore + ' → 0; shared index rows kept: ' + JSON.stringify(sharedIds) + ')')
+      : fail('W8: ' + logRowsAfter + ' of ' + logRowsBefore + ' sole-holder log rows survived the delete');
+  }
 
   // R7: the delete cascade must drop the repo's ArangoDB graphs. A repo that is
   // gone can never leave an OKF_<slug>_vN graph behind (David, 2026-09-04 — the

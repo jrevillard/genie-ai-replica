@@ -2158,7 +2158,9 @@ export default {
       delete: {
         body: 'Isso remove permanentemente o repositório, seus conceitos, conteúdo indexado, grafo e artefatos de pacote. Esta ação não pode ser desfeita.',
         confirm: 'Excluir',
-        title: 'Excluir repositório'
+        title: 'Excluir repositório',
+        reasonLabel: 'Motivo (opcional)',
+        reasonPlaceholder: 'ex. pedido de eliminação RGPD, conjunto de dados retirado, criado por engano'
       },
       filter: {
         domain: 'Filtrar por área temática',

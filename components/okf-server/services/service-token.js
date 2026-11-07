@@ -6,8 +6,10 @@
 // authenticate (doc-repo requires a valid token on every route). Mirrors the
 // proven dataprep pattern (genie-ai-overlay/dataprep/keycloak_service_account.py):
 // cached with expiry + 30s buffer, single-flight refresh, clear errors.
-// Token endpoint base precedence: KEYCLOAK_INTERNAL_URL (split-URL/local —
-// container-reachable) → KEYCLOAK_URL → KEYCLOAK_PUBLIC_URL (browser-facing
+// Token endpoint base precedence (#1636 mint-first-public): KEYCLOAK_URL (the
+// PUBLIC url — the mint host stamps iss and chatqna accepts only this issuer,
+// so it must be primary) → KEYCLOAK_INTERNAL_URL (container-reachable
+// failover — the consumer-side JWKS var) → KEYCLOAK_PUBLIC_URL (browser-facing
 // alias — LAST, never first: a service-account mint is server-to-server and
 // the public alias is routinely unreachable from inside the container).
 // MINTING FAILOVERS across every candidate (live-caught 2026-09-01: with only
@@ -32,9 +34,19 @@ let _warnedUnconfigured = false;
 let _tokenEndpoint = null; // the endpoint that last minted successfully (failover memory)
 
 function tokenEndpointCandidates() {
+  // MINT-FIRST-PUBLIC (#1636, 2026-11-07): the mint host stamps iss into the
+  // token (this realm has no pinned frontendUrl) and chatqna's validator
+  // accepts only the issuer derived from the PUBLIC KEYCLOAK_URL — so the
+  // PUBLIC URL must be the primary mint endpoint or every okf-server-minted
+  // token 401s at chatqna (live: all RAGAS serve-mode runs aborted when
+  // KEYCLOAK_INTERNAL_URL was set and internal-first minting produced
+  // internal-issuer tokens). Order: KEYCLOAK_URL (public/issuer-consistent)
+  // → KEYCLOAK_INTERNAL_URL (container-local, reachable failover) →
+  // KEYCLOAK_PUBLIC_URL (browser alias, often TLS-dead from inside the
+  // container — live-caught 2026-09-01) → compose default.
   const bases = [
-    process.env.KEYCLOAK_INTERNAL_URL,
     process.env.KEYCLOAK_URL,
+    process.env.KEYCLOAK_INTERNAL_URL,
     process.env.KEYCLOAK_PUBLIC_URL,
     'http://keycloak:8080'
   ];

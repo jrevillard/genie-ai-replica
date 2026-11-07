@@ -31,6 +31,28 @@ KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 
+
+def _expected_issuers() -> list:
+    """The issuer SET this deployment accepts — #1636.
+
+    The realm runs without a pinned frontendUrl, so Keycloak stamps the MINT
+    HOST into ``iss``: a token minted via the internal host carries
+    ``iss=http://keycloak:8080/realms/<realm>`` while one minted via the
+    public URL carries the public issuer. okf-server's service-token mints
+    through whichever endpoint is reachable (since 2026-11-06 the internal
+    one, now the public one by mint-first policy — see okf-server
+    service-token.js), so the validator must accept BOTH hosts of the SAME
+    deployment. Signature verification is unchanged; only the issuer claim
+    widens, and only to the deployment's own two hosts — a foreign issuer is
+    still rejected (pinned by test). Public first: it is the issuer every
+    other consumer of these tokens expects.
+    """
+    public = f"{KEYCLOAK_URL.rstrip('/')}/realms/{KC_REALM}"
+    internal = f"{KEYCLOAK_INTERNAL_URL.rstrip('/')}/realms/{KC_REALM}"
+    if internal == public:
+        return [public]
+    return [public, internal]
+
 # JWKS cache + single-flight lock. JWKS validation runs on every authenticated
 # request, so concurrent requests at the TTL boundary must coalesce into a single
 # Keycloak fetch instead of each issuing its own GET /certs request.
@@ -141,12 +163,12 @@ async def validate_token(token: str) -> dict | None:
 
         public_key = jose_jwk.construct(key_data)
 
-        expected_issuer = f"{KEYCLOAK_URL}/realms/{KC_REALM}"
+        expected_issuers = _expected_issuers()
 
         payload = jwt.decode(
             token,
             public_key,
-            issuer=expected_issuer,
+            issuer=expected_issuers,
             options={"verify_aud": False},
         )
 

@@ -351,6 +351,22 @@ async function main() {
     metaRows > 0
       ? pass('D-C: meta rows survive the retract (' + metaRows + ' rows)')
       : fail('D-C BROKEN: retract destroyed the meta rows (' + metaRows + ')');
+    // W7 (the D3 reversal): retract deletes NO bundle zip — every version's
+    // download survives. Before W7 this sweep hard-deleted the zips here.
+    const zipsAfter = await aql(
+      'FOR f IN files FILTER f.repo_id == @r AND f.is_bundle == true SORT f.bundle_version RETURN f.bundle_version',
+      { r: REPO_ID }
+    );
+    zipsAfter.join(',') === '1,2'
+      ? pass('W7: retract deleted NO bundle zip — both versions retained (' + JSON.stringify(zipsAfter) + ')')
+      : fail('W7 BROKEN: bundle zips destroyed on retract: ' + JSON.stringify(zipsAfter));
+    const retractedBadges = await aql(
+      'FOR f IN files FILTER f.repo_id == @r AND f.is_bundle == true SORT f.bundle_version RETURN f.dataprep.status',
+      { r: REPO_ID }
+    );
+    retractedBadges.every((s) => s === 'Retracted')
+      ? pass('W7: every retained zip badged Retracted (' + JSON.stringify(retractedBadges) + ')')
+      : fail('W7: bundle badges after retract: ' + JSON.stringify(retractedBadges));
   }
 
   // 12. The retracted repo does NOT re-ingest directly: ingest-from-retracted

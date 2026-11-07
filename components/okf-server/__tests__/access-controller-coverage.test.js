@@ -188,7 +188,10 @@ describe('access-controller.putAccess — the restriction toggle (6-1c)', () => 
       expect.objectContaining({
         action: 'repo.access.restrict',
         repo_id: REPO,
-        details: expect.objectContaining({ restricted: true, propagation: { patched: 2, failed: 0, gone: 0, total: 2 } })
+        details: expect.objectContaining({
+          restricted: true,
+          propagation: { patched: 2, failed: 0, gone: 0, total: 2 }
+        })
       })
     );
   });

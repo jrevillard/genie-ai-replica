@@ -796,7 +796,11 @@ describe('producer-service — D4 propagateRestrictedToSources (Access-toggle pr
   it('patches every source file and sorts outcomes into patched/gone/failed', async () => {
     await mockDb.collection('okf_repositories').save({
       repo_id: P1,
-      source_documents: [{ kind: 'document', file_id: 'a' }, { kind: 'document', file_id: 'b' }, { kind: 'document', file_id: 'c' }]
+      source_documents: [
+        { kind: 'document', file_id: 'a' },
+        { kind: 'document', file_id: 'b' },
+        { kind: 'document', file_id: 'c' }
+      ]
     });
     authedAxios.patch.mockImplementation(async (url) => {
       if (!url.endsWith('/api/files/b')) return { status: 200 };

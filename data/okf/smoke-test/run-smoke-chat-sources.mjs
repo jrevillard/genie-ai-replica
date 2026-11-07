@@ -106,7 +106,9 @@ async function waitIndexed(repoId, timeoutMs = DRAIN_TIMEOUT_MS) {
     const rows = Array.isArray(body) ? body : (body && body.concepts) || [];
     if (rows.length && rows.every((c) => c.index_status === 'indexed')) return rows;
     if (rows.length && rows.some((c) => c.index_status === 'failed'))
-      throw new Error(`${repoId}: a concept dead-lettered: ${JSON.stringify(rows.map((c) => [c.concept_id, c.index_status, c.last_error]))}`);
+      throw new Error(
+        `${repoId}: a concept dead-lettered: ${JSON.stringify(rows.map((c) => [c.concept_id, c.index_status, c.last_error]))}`
+      );
     await new Promise((r) => setTimeout(r, 5000));
   }
   throw new Error(`${repoId}: drain did not settle in ${timeoutMs}ms`);
@@ -198,7 +200,9 @@ async function main() {
   // earlier run keeps SERVING and its citations pollute the chat answer's
   // sources (live 2026-11-04: attempt N cited attempt N-1's repo).
   const listed = await call('GET', '/api/okf/repos', ADMIN);
-  const stale = ((listed.json && listed.json.items) || []).filter((r) => String(r.name || '').startsWith('w1-smoke-srcs-'));
+  const stale = ((listed.json && listed.json.items) || []).filter((r) =>
+    String(r.name || '').startsWith('w1-smoke-srcs-')
+  );
   for (const r of stale) {
     await deleteRepo(r.repo_id);
     console.log(`  swept stale smoke repo ${r.name} (${r.repo_id})`);
@@ -210,7 +214,9 @@ async function main() {
     { concept_id: 'alpha_booking', body: CONCEPT('alpha_booking', 'Alpha Booking'), title: 'Alpha Booking' },
     { concept_id: 'alpha_hours', body: CONCEPT('alpha_hours', 'Alpha Office Hours'), title: 'Alpha Office Hours' }
   ];
-  const restricted = [{ concept_id: 'secret_alpha', body: CONCEPT('secret_alpha', 'Secret Alpha'), title: 'Secret Alpha' }];
+  const restricted = [
+    { concept_id: 'secret_alpha', body: CONCEPT('secret_alpha', 'Secret Alpha'), title: 'Secret Alpha' }
+  ];
   // SEQUENTIAL drains, deliberately: the server minted BOTH repos' concepts
   // as the same id (concept-1) and dataprep's uploaded_files namespace is
   // FLAT — concurrent same-id ingests clobber each other's files (live
@@ -290,9 +296,13 @@ async function main() {
     const withIdentity = okfSources.filter((s) => s.repo_id && s.bundle_version != null && s.graph_name);
     const graphs = [...new Set(okfSources.map((s) => s.graph_name))];
     if (withIdentity.length === okfSources.length) {
-      pass(`all ${okfSources.length} citations carry repo_id + bundle_version + graph_name (CAP-1 end-to-end; graphs: ${graphs.join(', ')})`);
+      pass(
+        `all ${okfSources.length} citations carry repo_id + bundle_version + graph_name (CAP-1 end-to-end; graphs: ${graphs.join(', ')})`
+      );
     } else {
-      fail(`identity missing on ${okfSources.length - withIdentity.length}/${okfSources.length} citations: ${JSON.stringify(okfSources).slice(0, 300)}`);
+      fail(
+        `identity missing on ${okfSources.length - withIdentity.length}/${okfSources.length} citations: ${JSON.stringify(okfSources).slice(0, 300)}`
+      );
     }
   }
 

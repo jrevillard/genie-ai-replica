@@ -193,7 +193,7 @@ async function propagateRestrictedToSources(repoId, restricted) {
   let fileIds; // the catch returns, so every fall-through use is assigned
   try {
     const repoDoc = await db.collection(COLLECTION).document(repoId);
-    fileIds = (repoDoc && repoDoc.source_documents || []).map((s) => s && s.file_id).filter(Boolean);
+    fileIds = ((repoDoc && repoDoc.source_documents) || []).map((s) => s && s.file_id).filter(Boolean);
   } catch (err) {
     logger.warn('okf_restricted propagation: repo doc unreadable — nothing propagated', {
       repo_id: repoId,

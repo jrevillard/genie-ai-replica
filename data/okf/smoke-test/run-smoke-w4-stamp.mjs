@@ -106,7 +106,8 @@ async function uploadDoc(fileName, text) {
     /* non-JSON */
   }
   const id = (json && json.data && (json.data.file_id || json.data.id)) || (json && (json.file_id || json.id));
-  if (res.status !== 200 && res.status !== 201) throw new Error(`upload ${fileName}: ${res.status} ${text2.slice(0, 200)}`);
+  if (res.status !== 200 && res.status !== 201)
+    throw new Error(`upload ${fileName}: ${res.status} ${text2.slice(0, 200)}`);
   if (!id) throw new Error(`upload ${fileName}: no file_id in response ${text2.slice(0, 200)}`);
   return id;
 }
@@ -164,7 +165,10 @@ try {
 
   // [1] upload the source documents (documents origin)
   console.log('[1] upload two source documents');
-  FILE_IDS = [await uploadDoc(`w4-stamp-charter-${STAMP}.md`, DOC_A), await uploadDoc(`w4-stamp-ops-${STAMP}.md`, DOC_B)];
+  FILE_IDS = [
+    await uploadDoc(`w4-stamp-charter-${STAMP}.md`, DOC_A),
+    await uploadDoc(`w4-stamp-ops-${STAMP}.md`, DOC_B)
+  ];
   pass(`2 documents uploaded (${FILE_IDS.join(', ')})`);
 
   // [2] the wizard's documents-origin import
@@ -176,7 +180,8 @@ try {
     classification: 'heuristics'
   });
   REPO_ID = imp.json && imp.json.repo_id;
-  if (imp.status !== 202 || !REPO_ID) throw new Error(`convert-from-documents: ${imp.status} ${imp.text.slice(0, 200)}`);
+  if (imp.status !== 202 || !REPO_ID)
+    throw new Error(`convert-from-documents: ${imp.status} ${imp.text.slice(0, 200)}`);
   pass(`202 repo_id=${REPO_ID}`);
 
   // [3] wait for conversion; the repo doc must name all sources
@@ -186,7 +191,9 @@ try {
   pass('conversion done: ' + JSON.stringify(conversion.summary || {}).slice(0, 160));
   const sources = (repo && repo.source_documents) || [];
   const sourcesOk = FILE_IDS.every((id) => sources.some((s) => (s.file_id || s) === id));
-  sourcesOk ? pass('repo.source_documents carries both file_ids') : fail(`source_documents mismatch: ${JSON.stringify(sources).slice(0, 200)}`);
+  sourcesOk
+    ? pass('repo.source_documents carries both file_ids')
+    : fail(`source_documents mismatch: ${JSON.stringify(sources).slice(0, 200)}`);
 
   // [4] THE MEASURE — read each source file's doc-repo metadata back
   console.log('[4] stamp ratio');

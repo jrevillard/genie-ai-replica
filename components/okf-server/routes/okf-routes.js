@@ -40,10 +40,7 @@ servingReads.get('/authz/graphs', authzResolverController.getGraphs);
 // mutations stay behind the strict router gate below; this shadows only the
 // single-concept GET (same handler the /repos sub-router registers, so
 // scoped callers behave identically).
-servingReads.get(
-  '/repos/:repo_id/concepts/:concept_id',
-  require('../controllers/repository-controller').getConcept
-);
+servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers/repository-controller').getConcept);
 router.use(servingReads);
 
 router.use(requireScope('read'));

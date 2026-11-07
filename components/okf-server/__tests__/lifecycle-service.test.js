@@ -264,8 +264,11 @@ describe('lifecycle transitions — the machine, exhaustively', () => {
     // rejects.toMatchObject — a .catch() body would silently never run if the
     // transition stopped rejecting on this path (the exact regression this
     // test exists to catch), so the assertion must own the rejection itself.
+    // `allowed` = valid ACTIONS from the current state (#1630), not the
+    // refused action's from-states: from 'review' the only valid action is
+    // 'approve' — the old shape listed submit's from-states here.
     await expect(lifecycleService.transition(REPO, 'submit', {})).rejects.toMatchObject({
-      details: { current_state: 'review', allowed: ['draft', 'register', 'validate', 'retracted'] }
+      details: { current_state: 'review', allowed: ['approve'] }
     });
   });
 
@@ -478,10 +481,13 @@ describe('publish — mint + bundle export + serving cleared', () => {
 
   test('publish from retracted is INVALID — a pulled repo re-enters via submit (David, 2026-09-11)', async () => {
     seedRepo({ lifecycle_state: 'retracted', version: 2 });
+    // details.allowed names the valid next ACTIONS (#1630): from 'retracted'
+    // the only exit is 'submit' — the old shape listed publish's from-states
+    // ('approve', 'publish'), which read as "these transitions are allowed".
     await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       status: 409,
-      details: { current_state: 'retracted', allowed: ['approve', 'publish'] }
+      details: { current_state: 'retracted', allowed: ['submit'] }
     });
     expect(mintVersion).not.toHaveBeenCalled();
   });
@@ -491,7 +497,7 @@ describe('publish — mint + bundle export + serving cleared', () => {
     await expect(lifecycleService.transition(REPO, 'ingest', {})).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       status: 409,
-      details: { current_state: 'retracted', allowed: ['publish'] }
+      details: { current_state: 'retracted', allowed: ['submit'] }
     });
   });
 

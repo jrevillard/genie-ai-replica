@@ -32,6 +32,11 @@ test = [
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
     "python-jose>=3.5.0",
+    # The #1636 issuer-set tests generate a REAL RSA keypair and round-trip a
+    # signed token through jose's decode — cryptography is jose's RSA backend
+    # for that (an optional extra, absent from the bare CI install until now).
+    # Apache-2.0 OR BSD-3-Clause.
+    "cryptography>=42.0",
 ]
 
 # Overlay services are Docker-deployed, not pip-installed.

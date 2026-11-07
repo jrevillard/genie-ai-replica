@@ -62,8 +62,38 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     expect(axios.post).toHaveBeenCalledTimes(1);
   });
 
-  test('prefers KEYCLOAK_INTERNAL_URL (split-URL/local) for the token endpoint', async () => {
+  // #1636 (2026-11-07): the mint host stamps iss (this realm has no pinned
+  // frontendUrl) and chatqna's validator accepts only the PUBLIC issuer —
+  // so minting MUST go through the public KEYCLOAK_URL first. Internal-first
+  // minting (the old contract) produced internal-issuer tokens and every
+  // RAGAS serve-mode run aborted 401. Internal stays reachable as failover
+  // (it is container-local, unlike the public alias).
+  test('mints via the PUBLIC KEYCLOAK_URL first — internal is the FAILOVER (#1636)', async () => {
     axios.post.mockResolvedValue({ data: { access_token: 't', expires_in: 60 } });
+    process.env.KEYCLOAK_URL = 'https://192.168.18.16/auth';
+    process.env.KEYCLOAK_INTERNAL_URL = 'http://keycloak:8080';
+    await getServiceToken();
+    expect(axios.post.mock.calls[0][0]).toContain(
+      'https://192.168.18.16/auth/realms/genie/protocol/openid-connect/token'
+    );
+    // Failover still reaches the internal host when the public one is down.
+    require('../services/service-token')._resetForTesting();
+    axios.post.mockClear(); // leg 2's calls only — leg 1's public mint already asserted
+    axios.post.mockImplementation((url) =>
+      url.startsWith('https://192.168.18.16/auth')
+        ? Promise.reject(new Error('dead public route'))
+        : Promise.resolve({ data: { access_token: 't-internal', expires_in: 3600 } })
+    );
+    const t = await getServiceToken();
+    expect(t).toBe('t-internal');
+    // The failover leg: the public attempt (rejected) then the internal mint.
+    const urls = axios.post.mock.calls.map((c) => c[0]);
+    expect(urls.filter((u) => u.includes('192.168.18.16')).length).toBe(1); // one dead public try
+    expect(urls.some((u) => u.includes('http://keycloak:8080/realms/genie'))).toBe(true); // internal mints
+  });
+
+  test('KEYCLOAK_INTERNAL_URL alone still mints (no public URL configured)', async () => {
+    axios.post.mockResolvedValue({ data: { access_token: 't-int-only', expires_in: 60 } });
     process.env.KEYCLOAK_INTERNAL_URL = 'http://keycloak:8080';
     await getServiceToken();
     expect(axios.post.mock.calls[0][0]).toContain('http://keycloak:8080/realms/genie/protocol/openid-connect/token');

@@ -217,3 +217,136 @@ async def test_expired_cache_triggers_single_refresh():
         results = await asyncio.gather(*[v._fetch_jwks() for _ in range(10)])
     assert all(r == new_keys for r in results)
     assert call_count == 1
+
+
+# ── #1636: the issuer SET ────────────────────────────────────────────────────
+# The minting host stamps iss (this realm has no pinned frontendUrl), and
+# okf-server's service-token mints via KEYCLOAK_INTERNAL_URL since that var
+# was set (2026-11-06) — so serve-mode service tokens carry
+# iss=http://keycloak:8080/realms/genie while the validator expected exactly
+# the public-URL issuer. Every RAGAS serve-mode run aborted 401. The fix
+# widens the ISSUER CLAIM ONLY to the deployment's two hosts; signature
+# validation is unchanged.
+
+
+def test_expected_issuers_lists_public_and_internal(monkeypatch):
+    """Both deployment hosts are accepted; order: public first (the issuer the
+    rest of the stack expects)."""
+    from chatqna import keycloak_token_validator as v
+
+    monkeypatch.setattr(v, "KEYCLOAK_URL", "https://192.168.18.16/auth")
+    monkeypatch.setattr(v, "KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+    assert v._expected_issuers() == [
+        "https://192.168.18.16/auth/realms/genie",
+        "http://keycloak:8080/realms/genie",
+    ]
+
+
+def test_expected_issuers_dedupes_when_hosts_match(monkeypatch):
+    """KEYCLOAK_INTERNAL_URL defaults to http://keycloak:8080 — when it equals
+    the public URL (or public defaults to the same host), one entry, not two
+    identical strings (jose would accept either, but the list must stay
+    clean for logs and tests)."""
+    from chatqna import keycloak_token_validator as v
+
+    monkeypatch.setattr(v, "KEYCLOAK_URL", "http://keycloak:8080")
+    monkeypatch.setattr(v, "KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+    assert v._expected_issuers() == ["http://keycloak:8080/realms/genie"]
+
+
+@pytest.mark.asyncio
+async def test_validate_token_accepts_internal_host_issuer(monkeypatch):
+    """THE #1636 regression: a token minted via the INTERNAL host (iss =
+    http://keycloak:8080/realms/genie) validates when KEYCLOAK_INTERNAL_URL is
+    set, against a public KEYCLOAK_URL. Real jose round-trip — real RSA
+    keypair, real signature verification, only the JWKS fetch mocked."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from jose import jwk as jose_jwk
+    from jose import jwt as jose_jwt
+
+    from chatqna import keycloak_token_validator as v
+
+    monkeypatch.setattr(v, "KEYCLOAK_URL", "https://192.168.18.16/auth")
+    monkeypatch.setattr(v, "KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+    monkeypatch.setattr(v, "KC_REALM", "genie")
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    jwk_dict = jose_jwk.construct(
+        key.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ),
+        algorithm="RS256",
+    ).to_dict()
+    jwk_dict["kid"] = "abc"
+
+    claims = {
+        "iss": "http://keycloak:8080/realms/genie",
+        "sub": "service-account-okf-server",
+        "exp": 9999999999,
+    }
+    token = jose_jwt.encode(claims, private_pem, algorithm="RS256", headers={"kid": "abc"})
+
+    with (
+        patch(
+            "chatqna.keycloak_token_validator.jwt.get_unverified_header", return_value={"kid": "abc", "alg": "RS256"}
+        ),
+        patch("chatqna.keycloak_token_validator._fetch_jwks", new=AsyncMock(return_value=[jwk_dict])),
+    ):
+        v._jwks_keys = [jwk_dict]
+        payload = await v.validate_token(token)
+    assert payload is not None, "internal-host issuer must validate (the #1636 401)"
+    assert payload["sub"] == "service-account-okf-server"
+
+
+@pytest.mark.asyncio
+async def test_validate_token_still_rejects_foreign_issuer(monkeypatch):
+    """The widening is two hosts, not open: a FOREIGN issuer (an attacker's
+    realm with its own key the validator was tricked into trusting) must still
+    fail the claim check. Same real-key round-trip, foreign iss."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from jose import jwk as jose_jwk
+    from jose import jwt as jose_jwt
+
+    from chatqna import keycloak_token_validator as v
+
+    monkeypatch.setattr(v, "KEYCLOAK_URL", "https://192.168.18.16/auth")
+    monkeypatch.setattr(v, "KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    jwk_dict = jose_jwk.construct(
+        key.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ),
+        algorithm="RS256",
+    ).to_dict()
+    jwk_dict["kid"] = "abc"
+
+    claims = {
+        "iss": "https://evil.example.com/realms/genie",
+        "sub": "attacker",
+        "exp": 9999999999,
+    }
+    token = jose_jwt.encode(claims, private_pem, algorithm="RS256", headers={"kid": "abc"})
+
+    with (
+        patch(
+            "chatqna.keycloak_token_validator.jwt.get_unverified_header", return_value={"kid": "abc", "alg": "RS256"}
+        ),
+        patch("chatqna.keycloak_token_validator._fetch_jwks", new=AsyncMock(return_value=[jwk_dict])),
+    ):
+        v._jwks_keys = [jwk_dict]
+        assert await v.validate_token(token) is None, "a foreign issuer must still be rejected"

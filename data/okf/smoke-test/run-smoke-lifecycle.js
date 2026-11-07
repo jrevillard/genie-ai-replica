@@ -418,16 +418,27 @@ async function main() {
     ? pass('submit from retracted → review (designed re-entry loop)')
     : fail('submit-from-retracted: ' + r.status);
 
-  // W8 snapshot (BEFORE the delete): the repo's concept ids and how many
-  // concept-keyed ingestion_log rows they hold. The drain wrote per-concept
-  // progress rows keyed file_id == concept_id — after the delete they must be
-  // GONE (the W8 purge), and the delete must carry its reason (#925).
+  // W8 snapshot (BEFORE the delete): the repo's concept ids split SOLE vs
+  // SHARED. The 1:1 purge only sweeps ids this repo ALONE holds — `index` is
+  // held by every repo on the deployment (the TOC concept), and its rows are
+  // the shared history of those other holders, so they MUST survive. The pin
+  // counts sole ids only (first live run caught this: it naively counted the
+  // whole id set and "failed" on 14 other repos' index rows — production was
+  // right, the pin was wrong).
   const conceptIds = await aql(
     'FOR m IN okf_concepts_meta FILTER m.repo_id == @r FILTER m.concept_id != null RETURN DISTINCT m.concept_id',
     { r: REPO_ID }
   );
+  const sharedIds = await aql(
+    'FOR m IN okf_concepts_meta FILTER m.repo_id != @r FILTER m.concept_id IN @ids RETURN DISTINCT m.concept_id',
+    { r: REPO_ID, ids: conceptIds }
+  );
+  const soleIds = conceptIds.filter((cid) => !sharedIds.includes(cid));
+  soleIds.length > 0
+    ? pass('W8: sole-holder concept ids enumerated (' + JSON.stringify(soleIds) + '; shared: ' + JSON.stringify(sharedIds) + ')')
+    : fail('W8: every concept id is shared — the purge pin has no sole-holder proof');
   const logRowsBefore = (
-    await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: conceptIds })
+    await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: soleIds })
   ).length;
 
   const del2 = await call('DELETE', `/api/okf/repos/${REPO_ID}`, {
@@ -456,19 +467,20 @@ async function main() {
     : fail('leftovers: ' + leftovers.length);
 
   // W8 log purge: zero concept-keyed rows survive the delete (the 1:1-safe
-  // purge swept what the drain wrote; a retraction purges nothing — that is
-  // D3, pinned in section 11).
-  if (conceptIds.length === 0) {
-    fail('W8: no concept ids enumerated before the delete — the purge pin is vacuous');
+  // purge swept what the drain wrote for ids it held SOLELY; a retraction
+  // purges nothing — that is D3, pinned in section 11. Shared ids (index)
+  // keep their rows by design — their history belongs to the other holders.
+  if (soleIds.length === 0) {
+    fail('W8: no sole-holder ids — the purge pin is vacuous');
   } else if (logRowsBefore === 0) {
-    fail('W8: no concept-keyed log rows existed before the delete — the purge pin is vacuous');
+    fail('W8: no concept-keyed log rows existed for the sole ids before the delete — the purge pin is vacuous');
   } else {
     const logRowsAfter = (
-      await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: conceptIds })
+      await aql('FOR l IN ingestion_log FILTER l.file_id IN @ids RETURN l.file_id', { ids: soleIds })
     ).length;
     logRowsAfter === 0
-      ? pass('W8: concept-keyed ingestion_log rows purged on delete (' + logRowsBefore + ' → 0)')
-      : fail('W8: ' + logRowsAfter + ' of ' + logRowsBefore + ' concept-keyed log rows survived the delete');
+      ? pass('W8: sole-holder concept rows purged on delete (' + logRowsBefore + ' → 0; shared index rows kept: ' + JSON.stringify(sharedIds) + ')')
+      : fail('W8: ' + logRowsAfter + ' of ' + logRowsBefore + ' sole-holder log rows survived the delete');
   }
 
   // R7: the delete cascade must drop the repo's ArangoDB graphs. A repo that is

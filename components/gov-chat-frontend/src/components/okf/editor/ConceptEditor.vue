@@ -382,7 +382,11 @@ export default {
   emits: ['saved'],
   data() {
     return {
-      view: 'source', // Source default per the UX design
+      // RENDERED default (David, 2026-11-07, #1634): the curator opens a
+      // concept to READ it — the rendered page is the first view, raw
+      // markdown one click away (Source / Split, unchanged). The frontmatter
+      // dialog still forces source contextually (see the inFm guard below).
+      view: 'rendered',
       markdown: '',
       markdownLoaded: false,
       // LOAD PROGRESS (David, 2026-09-13): staged real progress while the

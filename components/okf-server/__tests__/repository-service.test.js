@@ -426,8 +426,25 @@ describe('repository-service', () => {
 
       test('purge failure never fails the delete (best-effort cascade step)', async () => {
         const created = await repoService.create(validCreateInput(), ACTOR);
-        db.query.mockRejectedValueOnce(new Error('arango reset'));
+        // Route the failure to the PURGE statement itself. A bare
+        // mockRejectedValueOnce is consumed by hardDelete's enumeration query
+        // first (remove()'s statement order: hardDelete → purge → meta sweep),
+        // which hardDelete swallows as non-fatal — the test then passed
+        // without ever exercising the purge-failure path its name claims
+        // (correctness review, 2026-11-07; the review's scratch probe pinned
+        // the order empirically). A persistent routed implementation fires
+        // exactly when the purge statement reaches db.query, and the issued
+        // assertion below keeps the test from passing vacuously if the purge
+        // call is ever removed from remove().
+        const issued = [];
+        db.query.mockImplementation(async (q) => {
+          const text = typeof q === 'string' ? q : String(q && q.query);
+          issued.push(text);
+          if (text.includes('REMOVE log IN ingestion_log')) throw new Error('arango reset');
+          return { all: async () => [] };
+        });
         await expect(repoService.remove(created.repo_id, ACTOR)).resolves.toMatchObject({ status: 'deleted' });
+        expect(issued.some((t) => t.includes('REMOVE log IN ingestion_log'))).toBe(true);
       });
 
       test('deletes a repo with no concepts cleanly (empty enumeration)', async () => {

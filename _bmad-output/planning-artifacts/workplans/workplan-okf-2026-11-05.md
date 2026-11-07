@@ -108,8 +108,13 @@ the ORDER and the cross-stream slots.
   `"preview"`). The DS component stays prop-driven; raw markdown stays one click away
   (Source / Split unchanged); the frontmatter dialog keeps its contextual source
   switch. Small UX fix — rides its own MR with its workplan row.
-- **W7 — retract-retention D3 reversal.** Not started. (Not the concept-document
-  ceiling slice — see the note below this list.)
+- **W7 — retract-retention D3 reversal.** ON MR (branch `feat/w7-retract-retention`,
+  2026-11-07): the sweep is mark-only for EVERYTHING — bundle zips marked `Retracted`
+  with a retract_date (Versions dialog downloads survive; the live-repo guard and its
+  skip list went away with the delete — a bundle is stamped per-repo by construction),
+  sources untouched (already mark-only), repo DELETE still the hard purge, the
+  file-header directive records the reversal. (Not the concept-document ceiling slice —
+  see the note below this list.)
 - **W8 — log purge + gate downgrade, SCOPE GREW per the #925 split ruling:**
   the delete flow also captures a **`deletion_reason`** (#925). The TTL sweep
   half stays parked pending the D3 revisit — out of scope here.

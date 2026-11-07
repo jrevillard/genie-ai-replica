@@ -2111,7 +2111,9 @@ export default {
       delete: {
         body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo. Ban maron̦ bar kōjepel̦o̦ke.',
         confirm: 'A kuntu',
-        title: 'Jol̦o̦k jikin kakwōn'
+        title: 'Jol̦o̦k jikin kakwōn',
+        reasonLabel: 'Reason (likūt)',
+        reasonPlaceholder: 'misal: GDPR erasure req, dataset eo kōjepel̦o̦ke, created by mistake'
       },
       filter: {
         domain: 'Kāālet ekkar ñan un ko',

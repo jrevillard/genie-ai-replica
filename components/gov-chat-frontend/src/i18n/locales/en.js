@@ -2964,7 +2964,9 @@ export default {
       delete: {
         body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Delete repository',
+        reasonLabel: 'Reason (optional)',
+        reasonPlaceholder: 'e.g. GDPR erasure request, retired dataset, created by mistake'
       },
       filter: {
         domain: 'Filter by subject area',

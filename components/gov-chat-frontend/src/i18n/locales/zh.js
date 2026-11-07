@@ -2083,7 +2083,9 @@ export default {
       delete: {
         body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
         confirm: '删除',
-        title: '删除知识库'
+        title: '删除知识库',
+        reasonLabel: '原因（可选）',
+        reasonPlaceholder: '例如：GDPR 删除请求、已停用的数据集、误创建'
       },
       filter: {
         domain: '按主题领域过滤',

@@ -2165,7 +2165,9 @@ export default {
       delete: {
         body: 'Dies entfernt das Repository, seine Konzepte, indexierten Inhalte, Graphen und Bundle-Artefakte dauerhaft. Dieser Vorgang kann nicht rückgängig gemacht werden.',
         confirm: 'Löschen',
-        title: 'Repository löschen'
+        title: 'Repository löschen',
+        reasonLabel: 'Grund (optional)',
+        reasonPlaceholder: 'z. B. DSGVO-Löschanfrage, stillgelegter Datensatz, versehentlich erstellt'
       },
       filter: {
         domain: 'Nach Themenbereich filtern',

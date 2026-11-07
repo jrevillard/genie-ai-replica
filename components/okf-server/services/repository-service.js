@@ -862,12 +862,20 @@ async function update(repo_id, patch, actor) {
  * re-create of the same (name, domain) is allowed because the doc is gone).
  * @param {string} repo_id
  * @param {object} actor
+ * @param {object} [opts]
+ * @param {string} [opts.reason] - W8 deletion_reason (#925 split ruling): the
+ *   steward's WHY, trimmed to 500 chars, persisted on the audit row's details
+ *   and echoed in the response. Optional — null when absent/whitespace-only.
  */
-async function remove(repo_id, actor) {
+async function remove(repo_id, actor, opts = {}) {
   return withSpan('okf.repo.delete', async (span) => {
     span.setAttribute('okf.operation', 'delete');
     span.setAttribute('okf.repo_id', repo_id);
     const db = await getDb();
+
+    // W8 deletion_reason (#925): trim + cap, whitespace-only is not a reason.
+    const rawReason = typeof opts.reason === 'string' ? opts.reason.trim().slice(0, 500) : '';
+    const deletion_reason = rawReason || null;
 
     let existing;
     try {
@@ -919,6 +927,20 @@ async function remove(repo_id, actor) {
         repo_id,
         error: backingErr && backingErr.message
       });
+    }
+
+    // W8 (EPIC-8 slice 1): purge the concept-keyed ingestion_log rows BEFORE
+    // the graph retract sweeps the meta rows (that enumeration is the purge's
+    // source of `mine`). 1:1-safe: rows whose concept_id another live repo
+    // holds survive. Best-effort like every cascade step. Lazy require —
+    // concept-meta-service lazily requires ingest-service, which loads
+    // repository-service (the same cycle the studio-draft cascade dodges
+    // below); no load-order surprise is worth a top-level require here.
+    try {
+      const purged = await require('./concept-meta-service').purgeConceptIngestionLogs(repo_id);
+      span.setAttribute('okf.log_purge_count', (purged && purged.purged && purged.purged.length) || 0);
+    } catch (err) {
+      logger.warn('Concept ingestion-log purge failed (non-fatal)', { repo_id, error: err.message });
     }
 
     // Cascade retract FIRST — retractRepoGraph reads the registry doc for the
@@ -982,11 +1004,14 @@ async function remove(repo_id, actor) {
       action: 'repo.delete',
       repo_id,
       source_ip: (actor && actor.source_ip) || null,
-      description: 'Deleted the repository with its concepts, graph, bundle artifacts and manifests'
+      description: deletion_reason
+        ? `Deleted the repository with its concepts, graph, bundle artifacts and manifests — reason: ${deletion_reason}`
+        : 'Deleted the repository with its concepts, graph, bundle artifacts and manifests',
+      details: { deletion_reason }
     });
     recordOp('delete', 'success');
-    logger.info('OKF repository deleted (fully cleaned)', { repo_id });
-    return { repo_id, deleted_at: ts, delete_after, status: 'deleted' };
+    logger.info('OKF repository deleted (fully cleaned)', { repo_id, deletion_reason });
+    return { repo_id, deleted_at: ts, delete_after, status: 'deleted', deletion_reason };
   });
 }
 

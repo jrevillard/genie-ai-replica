@@ -402,9 +402,10 @@ export function isLabelsStale(repo) {
 // wave 2, #78695: zero non-test callers, and the publish wrapper's docstring
 // still described the retired supersede model).
 
-/** Delete the whole repository (refused while an ingested version serves). */
-export function deleteRepo(repoId) {
-  return repoOkfService.deleteRepo(repoId);
+/** Delete the whole repository (refused while an ingested version serves).
+ * `reason` (W8 #925): optional steward-provided WHY, audited server-side. */
+export function deleteRepo(repoId, reason) {
+  return repoOkfService.deleteRepo(repoId, reason);
 }
 
 /** List the repo's version manifests (newest first) for the versions panel. */

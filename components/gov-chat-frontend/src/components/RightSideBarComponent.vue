@@ -55,10 +55,7 @@
               <!-- CAP-4 (W5): a concept card can name the documents it
                    ORIGINATED from — the same secondary origin rows as the
                    answer cards. Never rendered without resolved sources. -->
-              <div
-                v-if="isOkfConceptSource(doc) && doc.okfSources && doc.okfSources.length"
-                class="document-origins"
-              >
+              <div v-if="isOkfConceptSource(doc) && doc.okfSources && doc.okfSources.length" class="document-origins">
                 <button
                   v-for="(o, oi) in doc.okfSources"
                   :key="`${oi}-${o.file_id || o.resource}`"

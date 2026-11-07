@@ -715,9 +715,7 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
   });
 
   it('W8: a NON-404 re-check error still fails closed (the downgrade is 404-only)', async () => {
-    authedAxios.get.mockRejectedValueOnce(
-      Object.assign(new Error('boom'), { response: { status: 500 } })
-    );
+    authedAxios.get.mockRejectedValueOnce(Object.assign(new Error('boom'), { response: { status: 500 } }));
     const failClosed = await lifecycle.sourcesBusyBlocker(
       repo([{ kind: 'document', file_id: 'f-500', file_name: 'x.pdf' }])
     );

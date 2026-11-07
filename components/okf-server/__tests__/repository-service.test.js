@@ -374,7 +374,9 @@ describe('repository-service', () => {
             const allMeta = Object.values(db._stores.okf_concepts_meta || {});
             const mineSet = allMeta.filter((m) => m.repo_id === bind.repo_id).map((m) => m.concept_id);
             const sharedSet = new Set(
-              allMeta.filter((m) => m.repo_id !== bind.repo_id && mineSet.includes(m.concept_id)).map((m) => m.concept_id)
+              allMeta
+                .filter((m) => m.repo_id !== bind.repo_id && mineSet.includes(m.concept_id))
+                .map((m) => m.concept_id)
             );
             const soleIds = mineSet.filter((cid) => !sharedSet.has(cid));
             const removed = [];

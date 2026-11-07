@@ -35,7 +35,7 @@ jest.mock('../services/backing-file-service', () => ({
   // behaviour — this suite only asserts the hook is wired.
   retractBackingFiles: jest.fn(async (repo_id) => {
     order.push('retractBackingFiles');
-    return { repo_id, deleted_bundles: [], marked_sources: [], skipped: [], failed: [], total: 0 };
+    return { repo_id, marked_bundles: [], marked_sources: [], failed: [], total: 0 };
   }),
   markIngested: jest.fn(async (repo_id) => {
     order.push('markIngested');

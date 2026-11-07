@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Retracting a repository no longer deletes its version bundle zips** (W7, the D3 reversal). The retract sweep was the only place in the pipeline that hard-deleted anything: every published version's zip was erased on retract as "regenerable by the next publish", which destroyed the version downloads of a retracted repository and made the next publish re-export what already existed. Retract is now unpublish, not erase: every bundle zip is marked `Retracted` with a retract date (the Versions dialog keeps downloading every version of a retracted repository), sources were already mark-only and are untouched, and repository **delete** remains the intentional hard purge that removes everything.
 - **The OKF markdown editor opens in the rendered view by default** (#1634). Every OKF markdown surface — the Studio concept editor (and the wizard's edit pane) and the wizard's "+ Write a concept" modal — used to open on the raw markdown, with the rendered preview one click away. A curator opening a concept now sees the rendered page first; the raw markdown stays one click away (the Source / Split buttons are unchanged), and the frontmatter dialog still switches to source contextually where it must.
 
 ### Fixed

@@ -245,18 +245,50 @@ async function main() {
     ? pass('delete while serving → 409 INGESTED_DELETE_BLOCKED')
     : fail('delete-while-serving → ' + del.status + ' ' + JSON.stringify(del.body));
 
-  // 7. STEP-6 LOOP: retract (serving is READ ONLY) → publish v2 → ingest v2.
+  // 7. STEP-6 LOOP: retract (serving is READ ONLY) → the 2026-09-11 re-entry
+  // loop → publish v2 → ingest v2. publish-from-retracted is INVALID by the
+  // Kenya ruling (a retracted repo's ONLY exit is submit — re-entry runs
+  // submit → review → approve → publish, which mints v{N+1}); the direct
+  // publish this section used to attempt was the escape hatch the ruling
+  // removed, not a flow the server ever should have allowed.
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'retract' });
   (r.status === 200 && r.body.lifecycle_state === 'retracted')
     ? pass('retract → retracted (step-6 loop; edit window opens)')
     : fail('retract → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  // The refusal is part of the contract now — pin it, including the honest
+  // details.allowed (valid next ACTIONS, #1630).
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'publish' });
+  (r.status === 409 && r.body.details && Array.isArray(r.body.details.allowed) && r.body.details.allowed.includes('submit'))
+    ? pass('publish-from-retracted → 409, details.allowed names the valid exit (submit)')
+    : fail('publish-from-retracted: expected 409 with details.allowed=[submit], got ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
+  // The edit window exists for edits: without a content change the
+  // content-gated mint correctly refuses (PUBLISH_NO_CHANGES — nothing
+  // changed since v1), so make the post-retract edit the loop exists for.
+  // The edit must move the BODY: the publish gate fingerprints content_hash,
+  // which covers the concept body — frontmatter labels are ingest metadata
+  // and do not change the published content.
+  r = await call('PATCH', `/api/okf/repos/${REPO_ID}/concepts/${encodeURIComponent(CID)}`, {
+    body: '# Alpha\n\nTopic body.\n\nRe-entry edition (v2 smoke edit).'
+  });
+  (r.status === 200 || r.status === 204)
+    ? pass('re-entry: body edited in the retract window → ' + r.status)
+    : fail('re-entry edit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 160));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'submit' });
+  (r.status === 200 && r.body.lifecycle_state === 'review')
+    ? pass('re-entry: submit → review')
+    : fail('re-entry submit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'approve' });
+  (r.status === 200 && r.body.lifecycle_state === 'approve')
+    ? pass('re-entry: approve → approve')
+    : fail('re-entry approve → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'publish' });
   (r.status === 200 && r.body.bundle_version === 2)
     ? pass('publish → v2 (new version of published repo)')
     : fail('publish v2: ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
   const bundles2 = await aql('FOR f IN files FILTER f.repo_id == @r AND f.is_bundle == true RETURN f.bundle_version', { r: REPO_ID });
-  bundles2.length === 1 && bundles2[0] === 2
-    ? pass('v1 zip superseded — exactly 1 bundle, version 2')
+  const sortedBundles = [...bundles2].sort((a, b) => a - b);
+  sortedBundles.join(',') === '1,2'
+    ? pass('bundles retained per version — [v1, v2] (version downloads survive supersede)')
     : fail('post-supersede bundles: ' + JSON.stringify(bundles2));
   // R6: v2 must NOT be serving until ITS ingest completes. Whether publish
   // clears the v1 serving flag is an implementation choice — what the contract
@@ -321,35 +353,61 @@ async function main() {
       : fail('D-C BROKEN: retract destroyed the meta rows (' + metaRows + ')');
   }
 
-  // 12. Re-ingest from retracted → serving again; retract; machine closes; delete.
+  // 12. The retracted repo does NOT re-ingest directly: ingest-from-retracted
+  // is forbidden by the 2026-09-11 ruling (Kenya v11 — a direct re-ingest
+  // reused the retired version). Pin the refusal, then re-enter the loop with
+  // a FRESH edit: submit → review → approve → publish (v3) → ingest, and
+  // prove the drain rebuilds a serving graph born-right.
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'ingest' });
+  (r.status === 409 && r.body.details && Array.isArray(r.body.details.allowed) && r.body.details.allowed.includes('submit'))
+    ? pass('ingest-from-retracted → 409, details.allowed names the valid exit (submit)')
+    : fail('ingest-from-retracted: expected 409 with details.allowed=[submit], got ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
+  r = await call('PATCH', `/api/okf/repos/${REPO_ID}/concepts/${encodeURIComponent(CID)}`, {
+    body: '# Alpha\n\nTopic body.\n\nRe-entry edition (v3 smoke edit).'
+  });
+  (r.status === 200 || r.status === 204)
+    ? pass('re-entry: body edited for v3 → ' + r.status)
+    : fail('v3 edit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 160));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'submit' });
+  r.status === 200 ? pass('re-entry: submit → review') : fail('v3 submit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 160));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'approve' });
+  r.status === 200 ? pass('re-entry: approve → approve') : fail('v3 approve → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 160));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'publish' });
+  (r.status === 200 && r.body.bundle_version === 3)
+    ? pass('publish → v3')
+    : fail('publish v3: ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'ingest' });
   if (r.status !== 200 && r.status !== 202) {
-    fail('re-ingest (arm) → ' + r.status + ' ' + JSON.stringify(r.body));
+    fail('ingest v3 (arm) → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
     return done();
   }
-  const drain3 = await waitDrainedAndServing(180000, 2);
-  drain3 === 'ok' ? pass('re-ingest from retracted → serving again') : fail('re-ingest drain (' + drain3 + ')');
-  // D-C completion: the drain REBUILT the dropped graph born-right.
-  const rebuilt = await aql('FOR g IN _graphs FILTER g._key == @g RETURN g._key', { g: servedGraph });
+  const drain3 = await waitDrainedAndServing(180000, 3);
+  drain3 === 'ok' ? pass('re-entry: v3 drained + serving') : fail('v3 drain (' + drain3 + ')');
+  // D-C completion: the drain REBUILT a serving graph born-right.
+  const repoAfterV3 = (await repoDoc()) || {};
+  const rebuiltGraph = repoAfterV3.ingested_graph_name || '';
+  const rebuilt = rebuiltGraph
+    ? await aql('FOR g IN _graphs FILTER g._key == @g RETURN g._key', { g: rebuiltGraph })
+    : [];
   rebuilt.length === 1
-    ? pass('D-C: re-ingest rebuilt the serving graph (' + servedGraph + ')')
-    : fail('D-C BROKEN: serving graph not rebuilt after re-ingest (found: ' + JSON.stringify(rebuilt) + ')');
+    ? pass('D-C: the v3 drain rebuilt a serving graph (' + rebuiltGraph + ')')
+    : fail('D-C BROKEN: no serving graph rebuilt after the v3 re-entry (found: ' + JSON.stringify(rebuilt) + ')');
   // ZERO-WRITE GATE (#981, David's v8 shell 2026-09-08): existence alone let
   // an EMPTY promote-shell serve. The graph must hold DATA — all four member
   // collections populated, each count > 0.
-  if (servedGraph) {
+  if (rebuiltGraph) {
     const counts = (
       await aql(
-        'RETURN [LENGTH(FOR d IN `' + servedGraph + '_ENTITY` RETURN 1),' +
-          'LENGTH(FOR d IN `' + servedGraph + '_SOURCE` RETURN 1),' +
-          'LENGTH(FOR d IN `' + servedGraph + '_HAS_SOURCE` RETURN 1),' +
-          'LENGTH(FOR d IN `' + servedGraph + '_LINKS_TO` RETURN 1)]'
+        'RETURN [LENGTH(FOR d IN `' + rebuiltGraph + '_ENTITY` RETURN 1),' +
+          'LENGTH(FOR d IN `' + rebuiltGraph + '_SOURCE` RETURN 1),' +
+          'LENGTH(FOR d IN `' + rebuiltGraph + '_HAS_SOURCE` RETURN 1),' +
+          'LENGTH(FOR d IN `' + rebuiltGraph + '_LINKS_TO` RETURN 1)]'
       )
     )[0];
     const ok = Array.isArray(counts) && counts.every((n) => n > 0);
     ok
       ? pass('ZERO-WRITE GATE: graph holds data — ENTITY=' + counts[0] + ' SOURCE=' + counts[1] + ' HAS_SOURCE=' + counts[2] + ' LINKS_TO=' + counts[3])
-      : fail('ZERO-WRITE GATE BROKEN: ' + servedGraph + ' counts=' + JSON.stringify(counts) + ' (empty shell serving)');
+      : fail('ZERO-WRITE GATE BROKEN: ' + rebuiltGraph + ' counts=' + JSON.stringify(counts) + ' (empty shell serving)');
   }
   await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'retract' });
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'submit' });

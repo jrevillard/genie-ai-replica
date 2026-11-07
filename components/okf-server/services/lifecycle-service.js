@@ -589,16 +589,24 @@ async function transition(repoId, action, actor, opts = {}) {
     }
 
     if (!spec.from.includes(repo.lifecycle_state)) {
+      // VALID NEXT ACTIONS (#1630): `details.allowed` is the list of ACTIONS
+      // valid from the CURRENT state — not the from-states of the refused
+      // action. The old shape carried state names under an action-shaped key
+      // and the message printed them the same way, so a consumer (or a human)
+      // reading publish-from-retracted saw "allows: approve, publish" and
+      // reasonably concluded the transition was allowed — it is not, by the
+      // 2026-09-11 Kenya ruling (a retracted repo's ONLY exit is submit).
+      // The error handler passes client-error `details` through verbatim;
+      // STRUCTURED BODY (David's wizard-idempotency directive, 2026-09-04).
+      const allowedActions = ACTIONS.filter((a) => TRANSITIONS[a].from.includes(repo.lifecycle_state));
       const e = new LifecycleError(
         'INVALID_TRANSITION',
-        `'${action}' is not allowed from lifecycle state '${repo.lifecycle_state}' (allows: ${spec.from.join(', ')})`,
+        `'${action}' is not allowed from lifecycle state '${repo.lifecycle_state}' (valid next actions: ${
+          allowedActions.join(', ') || 'none'
+        })`,
         409
       );
-      // STRUCTURED BODY (David's wizard-idempotency directive, 2026-09-04):
-      // the wizard renders only VALID actions — carry the machine in the
-      // machine-readable fields, not just the message text. The error
-      // handler passes client-error `details` through verbatim.
-      e.details = { current_state: repo.lifecycle_state, allowed: spec.from.slice() };
+      e.details = { current_state: repo.lifecycle_state, allowed: allowedActions };
       throw e;
     }
 

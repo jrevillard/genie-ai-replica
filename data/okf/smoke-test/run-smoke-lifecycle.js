@@ -245,11 +245,30 @@ async function main() {
     ? pass('delete while serving → 409 INGESTED_DELETE_BLOCKED')
     : fail('delete-while-serving → ' + del.status + ' ' + JSON.stringify(del.body));
 
-  // 7. STEP-6 LOOP: retract (serving is READ ONLY) → publish v2 → ingest v2.
+  // 7. STEP-6 LOOP: retract (serving is READ ONLY) → the 2026-09-11 re-entry
+  // loop → publish v2 → ingest v2. publish-from-retracted is INVALID by the
+  // Kenya ruling (a retracted repo's ONLY exit is submit — re-entry runs
+  // submit → review → approve → publish, which mints v{N+1}); the direct
+  // publish this section used to attempt was the escape hatch the ruling
+  // removed, not a flow the server ever should have allowed.
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'retract' });
   (r.status === 200 && r.body.lifecycle_state === 'retracted')
     ? pass('retract → retracted (step-6 loop; edit window opens)')
     : fail('retract → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  // The refusal is part of the contract now — pin it, including the honest
+  // details.allowed (valid next ACTIONS, #1630).
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'publish' });
+  (r.status === 409 && r.body.details && Array.isArray(r.body.details.allowed) && r.body.details.allowed.includes('submit'))
+    ? pass('publish-from-retracted → 409, details.allowed names the valid exit (submit)')
+    : fail('publish-from-retracted: expected 409 with details.allowed=[submit], got ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'submit' });
+  (r.status === 200 && r.body.lifecycle_state === 'review')
+    ? pass('re-entry: submit → review')
+    : fail('re-entry submit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'approve' });
+  (r.status === 200 && r.body.lifecycle_state === 'approve')
+    ? pass('re-entry: approve → approve')
+    : fail('re-entry approve → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
   r = await call('POST', `/api/okf/repos/${REPO_ID}/lifecycle`, { action: 'publish' });
   (r.status === 200 && r.body.bundle_version === 2)
     ? pass('publish → v2 (new version of published repo)')

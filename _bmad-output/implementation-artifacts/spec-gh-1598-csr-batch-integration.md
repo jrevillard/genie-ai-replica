@@ -2,7 +2,7 @@
 title: 'Land the CSR batch (feat/okf-chat-source-w1) as one MR to main'
 type: 'feature'
 created: '2026-11-07'
-status: 'in-review'
+status: 'done'
 baseline_commit: '569a4f8ee9d6b86db18a18fbc2506444cef93f6b'
 route: 'dispatch'
 review_loop_iteration: 0

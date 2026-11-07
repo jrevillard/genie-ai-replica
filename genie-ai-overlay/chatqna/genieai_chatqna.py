@@ -3659,7 +3659,9 @@ class ChatQnAService:
                     # CAP-1: bundle_version rides the same provenance envelope
                     # (retriever okf_concepts_meta enrichment) — additive key
                     # only; every field above is byte-identical when absent.
-                    if prov.get("bundle_version"):
+                    # `is not None` (not truthiness) so a version of 0 rides —
+                    # the same idiom align_outputs uses one envelope up.
+                    if prov.get("bundle_version") is not None:
                         okf_source["bundle_version"] = prov["bundle_version"]
                     if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
                         okf_source["text"] = text_by_doc[doc_id_by_orchestrator]

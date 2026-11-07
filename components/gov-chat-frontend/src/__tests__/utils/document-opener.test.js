@@ -213,6 +213,52 @@ describe('OKF concept flows (document-opener)', () => {
     await expect(openOkfConcept('repo-1', 'ghost')).rejects.toMatchObject({ code: 'OKF_CONCEPT_UNAVAILABLE' });
   });
 
+  // Review fix (2026-11-07): conceptService.get THROWS on a 403 (it maps only
+  // 404/501 to null) — a correct authz refusal for this concept (the
+  // closed-mode scope gate) rendered as a generic open failure. Same honest
+  // unavailable code as the anti-enumeration 404.
+  it('openOkfConcept maps a 403 refusal to the unavailable code too', async () => {
+    const refused = new Error('Forbidden');
+    refused.status = 403;
+    conceptService.get.mockRejectedValueOnce(refused);
+    await expect(openOkfConcept('repo-1', 'fenced')).rejects.toMatchObject({ code: 'OKF_CONCEPT_UNAVAILABLE' });
+  });
+
+  it('a 500 on the concept fetch stays a generic failure (transient, not unavailability)', async () => {
+    const boom = new Error('Internal Server Error');
+    boom.status = 500;
+    conceptService.get.mockRejectedValueOnce(boom);
+    await expect(openOkfConcept('repo-1', 'flaky')).rejects.toMatchObject({ status: 500 });
+  });
+
+  // Review fix (2026-11-07): the ASCII \w sanitizer turned any non-Latin
+  // title into all-underscores — the UI ships 14 locales.
+  it('downloadOkfConcept keeps non-Latin titles readable in the filename', async () => {
+    conceptService.get.mockResolvedValueOnce({ frontmatter: { title: '采购指南' }, body: '# Body' });
+    URL.createObjectURL = jest.fn(() => 'blob:dl');
+    URL.revokeObjectURL = jest.fn();
+    const click = jest.fn();
+    const remove = jest.fn();
+    const anchor = {
+      click,
+      remove,
+      set href(v) {
+        this._href = v;
+      },
+      get href() {
+        return this._href;
+      }
+    };
+    const appendChild = jest.spyOn(document.body, 'appendChild').mockImplementation(() => {});
+    const createElement = jest.spyOn(document, 'createElement').mockReturnValue(anchor);
+
+    await downloadOkfConcept('repo-1', 'guide');
+
+    expect(anchor.download).toBe('采购指南.md');
+    appendChild.mockRestore();
+    createElement.mockRestore();
+  });
+
   it('downloadOkfConcept saves the markdown body as <title>.md', async () => {
     conceptService.get.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, body: '# Body' });
     URL.createObjectURL = jest.fn(() => 'blob:dl');

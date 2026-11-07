@@ -39,7 +39,17 @@ export function okfConceptUnavailable(message) {
 /** Fetch one concept's meta row through conceptService (user bearer, per-request scope authz). */
 export async function fetchOkfConcept(repoId, conceptId) {
   if (!repoId || !conceptId) throw okfConceptUnavailable();
-  const meta = await conceptService.get(repoId, conceptId);
+  let meta;
+  try {
+    meta = await conceptService.get(repoId, conceptId);
+  } catch (err) {
+    // A 403 is a correct authz refusal for THIS concept (the closed-mode
+    // scope gate; open mode has no 403 on this route) — render it as the
+    // same honest "not available" the anti-enumeration 404 gets, not a
+    // generic open failure (review fix 2026-11-07).
+    if (err && err.status === 403) throw okfConceptUnavailable();
+    throw err;
+  }
   // conceptService maps 404/501 → null: the concept is gone or fenced (404 is
   // the anti-enumeration denial for restricted repos too).
   if (!meta) throw okfConceptUnavailable();
@@ -89,7 +99,10 @@ export async function downloadOkfConcept(repoId, conceptId) {
   const blob = new Blob([String(meta.body || '')], { type: 'text/markdown;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${title.replace(/[^\w\-. ]+/g, '_')}.md`;
+  // \p{L}\p{N} (unicode property escapes) keep non-Latin titles readable —
+  // the ASCII \w turned any Arabic/Chinese title into all-underscores
+  // (review fix 2026-11-07; the UI ships 14 locales).
+  a.download = `${title.replace(/[^\p{L}\p{N}\-. ]+/gu, '_')}.md`;
   document.body.appendChild(a);
   a.click();
   a.remove();

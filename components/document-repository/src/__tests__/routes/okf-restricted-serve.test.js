@@ -258,6 +258,34 @@ describe('D4 serve-path refusal for okf_restricted files', () => {
       // the byte reader must never have been paid for a refused file
       expect(fs.readFile).not.toHaveBeenCalled();
     });
+
+    // Review fix (2026-11-07): the refusal was the ONLY /view test — the D4
+    // rewire (viewFile now goes through _getFileAndPath + assertServeAllowed
+    // + _readFileBase64) had no admission test, so a rewiring slip (e.g. the
+    // file id passed where the resolved path belongs) would 500 every /view
+    // consumer — the okf-server PII pipeline and the Studio review surface —
+    // with green gates. Pin the success shape on the rewired path.
+    it('serves an UNRESTRICTED file with the base64 envelope (admission after the D4 rewire)', async () => {
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord({ okf_restricted: false }));
+      const res = await request(app).get('/api/files/f-1/view');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toMatchObject({
+        id: expect.any(String),
+        file_name: 'restricted-source.pdf',
+        base64: Buffer.from('bytes').toString('base64')
+      });
+      // the rewire reads BYTES via the resolved storage path, not the id
+      expect(fs.readFile).toHaveBeenCalledWith(expect.stringContaining('restricted-file.pdf'));
+    });
+
+    it('admits a THIS-repo okf scope holder to a restricted file on /view too', async () => {
+      asCaller(['user'], ['okf:t:repo-1:read']);
+      metadataService.getMetadataById.mockResolvedValue(restrictedRecord());
+      const res = await request(app).get('/api/files/f-1/view');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
   });
 
   describe('POST /api/files/downloads (batch zip)', () => {

@@ -266,11 +266,18 @@ async function putAccess(req, res, next) {
     }
     await audit('repo.access.restrict', req, repo.repo_id, {
       restricted,
+      // Review fix (2026-11-07): the crash path builds {error} but the count
+      // projection dropped it — the audit row then showed bare zeros,
+      // indistinguishable from a repo with no source files. Carry the error
+      // and an explicit total in the AUDIT row (the response keeps its
+      // count-only shape) so crash-induced drift is visible where the drift
+      // is supposed to be audited.
       propagation: propagation && {
         patched: (propagation.patched || []).length,
         failed: (propagation.failed || []).length,
         gone: (propagation.gone || []).length,
-        total: propagation.total
+        total: propagation.total ?? null,
+        error: propagation.error || undefined
       }
     });
     res.status(200).json({

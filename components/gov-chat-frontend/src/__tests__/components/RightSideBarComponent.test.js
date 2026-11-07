@@ -22,7 +22,8 @@ jest.mock('@lucide/vue', () => ({
   Globe: { template: '<svg />' },
   FileSpreadsheet: { template: '<svg />' },
   FileImage: { template: '<svg />' },
-  Languages: { template: '<svg />' }
+  Languages: { template: '<svg />' },
+  ExternalLink: { template: '<svg />' }
 }));
 
 const RightSideBarComponent = require('../../components/RightSideBarComponent.vue').default;
@@ -94,6 +95,32 @@ describe('RightSideBarComponent OKF concept citations', () => {
     const badge = wrapper.find('.file-type-badge');
     expect(badge.exists()).toBe(true);
     expect(badge.text()).toBe('PDF');
+  });
+
+  // Review fix (2026-11-07): the origin-row TEMPLATE block had no render
+  // test — the existing suites assert the methods only, so a v-if that never
+  // fires (or rows moved outside the card's v-for scope) would silently drop
+  // the sidebar's W5 origin affordance with every gate green. Mirror of the
+  // ChatBotComponent CAP-4 rendering test.
+  it('renders origin rows for a resolved concept row and none without resolved origins', () => {
+    const wrapper = mountSidebar({
+      relatedDocuments: [
+        {
+          id: 'alpha_concept',
+          title: 'Alpha Concept',
+          source: 'okf-concept',
+          repoId: 'repo-1',
+          okfSources: [{ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf' }]
+        },
+        { id: 'doc-7', title: 'Plain.pdf', url: '/api/files/doc-7/download' },
+        { id: 'bare_concept', title: 'Bare', source: 'okf-concept', repoId: 'repo-1', okfSources: [] }
+      ]
+    });
+    const origins = wrapper.findAll('.document-origin');
+    expect(origins.length).toBe(1);
+    expect(origins[0].attributes('data-testid')).toBe('document-origin-0');
+    expect(origins[0].text()).toContain('Report.pdf');
+    wrapper.unmount();
   });
 });
 

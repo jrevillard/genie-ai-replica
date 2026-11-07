@@ -431,6 +431,7 @@ const actions = {
       if (typeof doc.titleResolved !== 'undefined') continue;
       const cacheKey = `${doc.repoId}::${doc.id}`;
       let meta = okfTitleCache.get(cacheKey);
+      let definitive = true; // a cache hit (a meta row or a pinned null) is terminal
       if (meta === undefined) {
         // Fetches serialize per card (the loop awaits); distinct cards still
         // resolve across turns without refetch through the cache. The FULL
@@ -438,15 +439,30 @@ const actions = {
         // originating documents become the card's original-source row.
         try {
           meta = await fetchOkfConcept(doc.repoId, doc.id);
-        } catch {
-          meta = null; // unavailable (restricted/retracted/deleted) — honest fallback
+          okfTitleCache.set(cacheKey, meta);
+        } catch (err) {
+          meta = null; // this dispatch renders the honest fallback either way
+          // Cache only a DEFINITIVE unavailability — the unavailable code
+          // marks restricted/retracted/deleted. A transient failure (500,
+          // network, token expiry) must not pin the card degraded for the
+          // whole session: leave the cache empty so the next dispatch
+          // retries (review fix 2026-11-07; openOkfSource makes the same
+          // live/transient distinction for the same data).
+          definitive = Boolean(err && err.code === 'OKF_CONCEPT_UNAVAILABLE');
+          if (definitive) okfTitleCache.set(cacheKey, null);
         }
-        okfTitleCache.set(cacheKey, meta);
       }
       const title = meta ? okfConceptTitle(meta, doc.id) : null;
       const okfSources = meta && Array.isArray(meta.sources) ? meta.sources : [];
-      if (title) commit('patchSource', [doc.id, { title, titleResolved: true, okfSources }]);
-      else commit('patchSource', [doc.id, { titleResolved: false, okfSources }]);
+      if (title) {
+        commit('patchSource', [doc.id, { title, titleResolved: true, okfSources }]);
+      } else if (definitive) {
+        commit('patchSource', [doc.id, { titleResolved: false, okfSources }]);
+      } else {
+        // Transient failure — no terminal marker, so a later dispatch retries
+        // the resolution instead of pinning the card degraded for the session.
+        commit('patchSource', [doc.id, { okfSources }]);
+      }
     }
   }
 };

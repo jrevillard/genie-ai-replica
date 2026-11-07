@@ -450,6 +450,46 @@ describe('conversation sendStream action', () => {
     expect(source.title).toBe('hadith nawawi 36');
   });
 
+  // Review fix (2026-11-07): the resolver DISPATCH wiring was unpinned —
+  // every suite fed repo-less citations or called the action directly, so
+  // deleting the sendStream dispatch left every gate green while cards kept
+  // their raw concept-id titles forever. A repo-bearing citation must
+  // resolve through the SAME turn's metadata frame.
+  it('dispatches the CAP-3 title resolver when the metadata carries a repo-bearing OKF citation', async () => {
+    let captured = null;
+    const store = storeWithService((q, cb) => {
+      captured = cb;
+      return new AbortController();
+    });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
+    await Promise.resolve();
+
+    fetchOkfConcept.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, sources: [] });
+    captured.onMetadata({
+      confidence_score: 0.9,
+      is_grounded: true,
+      source_documents: [
+        {
+          document_id: 'wire_alpha_concept',
+          document_name: 'wire_alpha_concept',
+          url: '',
+          score: 0.9,
+          concept_id: 'wire_alpha_concept',
+          source: 'okf-concept',
+          repo_id: 'repo-1'
+        }
+      ]
+    });
+    // the resolver runs async after the frame — flush the microtask chain
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchOkfConcept).toHaveBeenCalledWith('repo-1', 'wire_alpha_concept');
+    const source = store.getters['conversation/openConversation'].messages.at(-1).sources[0];
+    expect(source.title).toBe('Alpha Concept');
+    expect(source.titleResolved).toBe(true);
+  });
+
   it('status timing survives going back online and dies with an outage', () => {
     const store = freshStore();
     store.commit('status/setResponseTime', 250);
@@ -782,19 +822,68 @@ describe('CAP-3 okf concept sources', () => {
     ]);
   });
 
-  it('resolveOkfSourceTitles stashes an empty okfSources when the concept cannot be fetched', async () => {
+  it('resolveOkfSourceTitles stashes an empty okfSources when the concept is DEFINITIVELY unavailable', async () => {
     const store = freshStore();
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
     store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
     store.commit('conversation/setRelatedDocuments', [
       { id: 'ghost_concept', title: 'ghost concept', source: 'okf-concept', repoId: 'repo-1' }
     ]);
-    fetchOkfConcept.mockRejectedValueOnce(new Error('unavailable'));
+    // The DEFINITIVE unavailable code (restricted/retracted/deleted) — this
+    // is the terminal case: the row keeps the id title and the cache pins
+    // null. Review fix 2026-11-07: this test previously rejected with a
+    // PLAIN error, pinning transient failures as permanent — the exact bug
+    // the retry test below now guards.
+    fetchOkfConcept.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'OKF_CONCEPT_UNAVAILABLE' }));
     await store.dispatch('conversation/resolveOkfSourceTitles');
     const row = store.getters['conversation/openConversation'].relatedDocuments[0];
     expect(row.title).toBe('ghost concept');
     expect(row.titleResolved).toBe(false);
     expect(row.okfSources).toEqual([]);
+  });
+
+  it('resolveOkfSourceTitles retries after a TRANSIENT failure — the cache never pins it', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'flaky_concept', title: 'flaky concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    // A plain error (500, network, token expiry) is transient: the row gets
+    // no terminal marker and the cache stays empty — a later dispatch retries.
+    fetchOkfConcept.mockRejectedValueOnce(new Error('500 — transient'));
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    let row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('flaky concept');
+    expect(row.titleResolved).toBeUndefined();
+    expect(row.okfSources).toEqual([]);
+    // later dispatch (next message / next open): the fetch runs again
+    fetchOkfConcept.mockResolvedValueOnce({ frontmatter: { title: 'Flaky Concept' }, sources: [] });
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(2);
+    row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('Flaky Concept');
+    expect(row.titleResolved).toBe(true);
+  });
+
+  it('resolveOkfSourceTitles serves a fresh same-concept row from the pinned cache (no refetch)', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'sealed_concept', title: 'sealed concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    fetchOkfConcept.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'OKF_CONCEPT_UNAVAILABLE' }));
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(1);
+    // A fresh row for the SAME (repo, concept) — as a later message would
+    // add — is served by the cache's pinned null, not a second fetch.
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'sealed_concept', title: 'sealed concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(1);
+    expect(store.getters['conversation/openConversation'].relatedDocuments[0].titleResolved).toBe(false);
   });
 
   it('resolveOkfSourceTitles skips legacy rows and rows without repo identity', async () => {

@@ -96,16 +96,30 @@ function authzForService(req) {
 
 /**
  * The READ-side verdict for the serving-reads surface (CAP-2, 2026-11-04):
- * deriveReadAuthz is the SAME rule resolveGraphSet and getRetrievalConfig
- * apply — super/wildcard, or open-mode scopeless (the default-open posture:
- * a regular user's query resolves the serving set, so its citation card can
- * read the concept that grounded it). Repo-MANAGEMENT routes keep
- * authzForService (default-deny); only the serving read gets the open-mode
- * fall-open, and the 6-1c restricted fence still gates EVERY caller behind
- * it (privileged stays derived-privilege — never this verdict).
+ * the SAME base rule resolveGraphSet and getRetrievalConfig apply — super/
+ * wildcard, or OPEN MODE (the default-open posture: grants are ADDITIVE,
+ * "they sit on top of the public repos, they never remove them", so every
+ * caller's base is the full serving set and a citation card can read the
+ * concept that grounded it, whoever holds which grant). CLOSED mode keeps
+ * the Story-6.1 exact list (scopes = the whole reachable universe).
+ * Repo-MANAGEMENT routes keep authzForService (default-deny); only the
+ * serving read gets the open-mode fall-open, and the 6-1c restricted fence
+ * still gates EVERY caller behind it (privileged stays derived-privilege —
+ * never this verdict).
+ *
+ * Review fix (2026-11-07): the first cut returned the exact grant Set for
+ * scope-holding callers in OPEN mode too — getById then 404'd every open
+ * repo outside the caller's grants, so a single grant stripped a granted
+ * user of every open repo's citation cards. That is precisely the first cut
+ * resolveGraphSet's own comment records as "caught in review against the
+ * product model"; this read now mirrors its base rule (`scopeMode ===
+ * 'open'` → the full serving base, null = unrestricted for getById).
+ * Pinned by the CAP-2 additive-grants block in
+ * repository-controller-surface.test.js (authz-aware getById mirror).
  */
 function readAuthzForService(req) {
   const verdict = scopeAuthzService.deriveReadAuthz(req.okfScopes, req.okfIsSuperAdmin);
+  if (verdict.scopeMode === 'open') return null;
   return verdict.unrestricted ? null : verdict.authorizedRepoIds;
 }
 

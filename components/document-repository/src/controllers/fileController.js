@@ -784,18 +784,15 @@ class FileController {
     }
   }
 
-  // Byte reader, split from _getFileBase64 so an ingest can load metadata,
-  // run its refusal guards, and only then pay for buffer + base64 copies of
-  // what may be a multi-GB file (review, #1350 closeout).
+  // Byte reader, split from the former all-in-one _getFileBase64 so an
+  // ingest can load metadata, run its refusal guards, and only then pay for
+  // buffer + base64 copies of what may be a multi-GB file (review, #1350
+  // closeout). The old wrapper lost its last caller when viewFile moved to
+  // the split path (D4 rewire) and is gone — the two-step shape IS the
+  // contract now, so the wrapper cannot silently drift back.
   async _readFileBase64(filePath) {
     const fileBuffer = await fs.readFile(filePath);
     return fileBuffer.toString('base64');
-  }
-
-  async _getFileBase64(fileId) {
-    const { file, filePath } = await this._getFileAndPath(fileId);
-    const base64String = await this._readFileBase64(filePath);
-    return { file, base64String };
   }
 
   /**

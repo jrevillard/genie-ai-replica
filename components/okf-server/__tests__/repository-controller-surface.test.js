@@ -931,6 +931,83 @@ describe('repository-controller — CAP-2 restricted-repo read fence', () => {
 });
 
 // ===========================================================================
+// CAP-2 additive grants (review fix 2026-11-07): in OPEN mode (the default)
+// the serving read bases EVERY caller on the full serving set — grants are
+// ADDITIVE and never remove the public repos (the resolveGraphSet base rule;
+// its own comment records the exact-list-in-open-mode first cut as the bug
+// "caught in review against the product model"). The getById mock here
+// MIRRORS the real authz filter (a Set 404s repos outside it) so the
+// verdict's SHAPE is exercised: under the first cut these cases 404'd.
+// ===========================================================================
+describe('repository-controller — CAP-2 additive grants on the serving read', () => {
+  const OPEN_REPO = { repo_id: 'r1', name: 'R', lifecycle_state: 'publish', ingested_at: '2026-11-04T00:00:00Z' };
+  const { RepoError } = require('../services/repository-service');
+
+  beforeEach(() => {
+    // Mirror the real getById authz filter (repository-service: outsideAuthz
+    // → REPO_NOT_FOUND 404). Without this mirror the exact-Set bug was
+    // invisible: a plain mockResolvedValue served every repo regardless of
+    // the verdict the controller computed.
+    repoService.getById.mockImplementation((repoId, opts = {}) => {
+      if (opts && opts.authz instanceof Set && !opts.authz.has(repoId)) {
+        return Promise.reject(new RepoError('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404));
+      }
+      return Promise.resolve(OPEN_REPO);
+    });
+  });
+
+  it('open mode: a scoped, non-privileged caller reads an open repo card — the verdict rides to getById as null', async () => {
+    const { res, next } = await drive(controller.getConcept, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:other:read']
+    });
+    expect(res.statusCode).toBe(200);
+    expect(next).not.toHaveBeenCalled();
+    // THE assertion: under the first cut this call carried Set{'other'} and
+    // the authz-aware mirror 404'd r1 (a single grant stripped every open
+    // repo's citation cards). Additive grants ⇒ null.
+    expect(repoService.getById).toHaveBeenCalledWith('r1', expect.objectContaining({ authz: null }));
+  });
+
+  it('open mode: the scoped caller gets the CITIZEN card (scope names another repo — not steward)', async () => {
+    const conceptMetaService = require('../services/concept-meta-service');
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      title: 'C1',
+      body: '# hi',
+      pii_scan_error: 'internal-only',
+      last_worker_error: 'internal-only',
+      sources: [{ kind: 'doc-repo', file_id: 'f1', file_name: 'a.pdf', internal_note: 'drop-me' }, { kind: 'doc-repo' }]
+    });
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: ['okf:t:other:read'] });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.concept_id).toBe('c1');
+    expect(res.body.pii_scan_error).toBeUndefined();
+    expect(res.body.last_worker_error).toBeUndefined();
+    expect(res.body.max_doc_chars).toBeUndefined();
+    // sources narrowed: the entry lacking both file_id and resource is dropped
+    expect(res.body.sources).toEqual([{ kind: 'doc-repo', file_id: 'f1', file_name: 'a.pdf' }]);
+  });
+
+  it('closed mode: the exact list still governs — a caller scoped elsewhere is 404 on this repo', async () => {
+    const prev = process.env.OKF_SCOPE_MODE;
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      const { next } = await drive(controller.getConcept, {
+        okfIsSuperAdmin: false,
+        okfScopes: ['okf:t:other:read']
+      });
+      expect(next).toHaveBeenCalled();
+      expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+      expect(next.mock.calls[0][0].status).toBe(404);
+    } finally {
+      if (prev === undefined) delete process.env.OKF_SCOPE_MODE;
+      else process.env.OKF_SCOPE_MODE = prev;
+    }
+  });
+});
+
+// ===========================================================================
 // W2 security review (2026-11-04) — the CAP-2 citizen content path serves
 // ONLY what retrieval serves. Two gates beyond the restricted fence:
 // (1) publication gate — non-steward callers get the servingRepos predicate

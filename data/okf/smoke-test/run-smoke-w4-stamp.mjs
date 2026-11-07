@@ -69,7 +69,11 @@ async function call(method, path, token, body, extraHeaders) {
 // PII-CLEAN by construction (no dates, times, ids, person names) — the same
 // discipline as the chat-sources smoke: the Presidio scan must never have a
 // reason to block anything downstream of this test.
-const DOC_A = `# Alpha service charter ${STAMP}
+// No run stamp in the DOCUMENT BODIES — the header claims PII-clean by
+// construction (no dates/times), so the bodies must not carry the timestamp
+// either (review fix 2026-11-07); uniqueness comes from the file NAMES and
+// the repo name, which carry ${STAMP}.
+const DOC_A = `# Alpha service charter
 
 The alpha service charter explains how citizens request an alpha appointment.
 Alpha offices confirm every booking by letter. Staff follow the alpha handbook
@@ -80,7 +84,7 @@ for every request.
 See the alpha operations note for the booking workflow details.
 `;
 
-const DOC_B = `# Alpha operations note ${STAMP}
+const DOC_B = `# Alpha operations note
 
 The alpha operations note describes the booking workflow. An officer reviews
 the request, records the decision, and sends the confirmation letter.

@@ -204,7 +204,7 @@
                          the card — it never renders for rows without resolved
                          sources (bundle-import/scratch: nothing to name). -->
                     <div
-                      v-if="d.source === 'okf-concept' && d.okfSources && d.okfSources.length"
+                      v-if="isOkfConceptSource(d) && d.okfSources && d.okfSources.length"
                       class="answer-source-origins"
                     >
                       <button
@@ -1198,6 +1198,12 @@ export default {
   },
 
   methods: {
+    // Template-facing alias for the shared predicate (review fix 2026-11-07:
+    // the card branches once keyed on the raw `doc.source` string; one
+    // predicate for fetch guard, badge AND card branches keeps them from
+    // drifting apart).
+    isOkfConceptSource,
+
     // The badge of a source card, from the file's own extension — the
     // repository type label when the fetch landed, the name otherwise.
     fileBadge(doc) {
@@ -1228,7 +1234,7 @@ export default {
       // scope; a concept without repo identity (persisted pre-CAP-1 row) or
       // an unavailable one (restricted / retracted / deleted) degrades to an
       // honest notice, never a dead link or a generic error.
-      if (doc.source === 'okf-concept') {
+      if (isOkfConceptSource(doc)) {
         if (!doc.repoId || !doc.id) {
           notificationService.info(
             this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')

@@ -9,7 +9,9 @@
 //      Kong (CAP-2);
 //   3. a RESTRICTED repo's concept is FENCED from the scopeless user (404,
 //      anti-enumeration) while the wildcard admin still reads it (the W2
-//      fence — callerMayTraverseRepo on the read family).
+//      fence — callerMayTraverseRepo on the read family);
+//   4. a RETRACTED repo's concept read 404s for the scopeless user (the W2
+//      publication gate, live — added with the tree sync per the devlog).
 // Run from the repo root against the local build (host-side):
 //   OKF_SMOKE_ENV_FILE=<env-with-KEYCLOAK_URL=https://localhost/auth> \
 //     node data/okf/smoke-test/run-smoke-chat-sources.mjs
@@ -129,56 +131,80 @@ async function conceptIdByTitle(repoId, title) {
 // The real citizen path: POST /api/chat/stream (SSE) and collect the
 // metadata frame — its source_documents array is what the frontend cards
 // render. Resolves on the metadata frame, an error frame, or stream close.
+// The timeout is an AbortController, not just the loop deadline: a STALLED
+// stream (connected, never another frame) blocks inside reader.read()
+// forever — the while-check never runs again (review fix 2026-11-07).
 async function askChat(token, question) {
-  const res = await fetch(`${BASE}/api/queries/stream`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: `w1-smoke-${STAMP}`,
-      text: question,
-      userQuestion: question,
-      context: { language: 'EN' },
-      contextOption: 'single-message',
-      timestamp: new Date().toISOString()
-    })
-  });
-  if (!res.ok) return { status: res.status, sources: [], error: (await res.text()).slice(0, 300) };
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  const deadline = Date.now() + CHAT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 2);
-      if (!frame.startsWith('data: ')) continue;
-      let evt;
-      try {
-        evt = JSON.parse(frame.slice(6));
-      } catch {
-        continue;
-      }
-      if (evt.type === 'metadata') {
-        return { status: res.status, sources: evt.source_documents || [], payload: evt };
-      }
-      if (evt.type === 'error') {
-        return { status: res.status, sources: [], error: `${evt.code || 'STREAM_ERROR'}: ${evt.message}` };
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), CHAT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}/api/queries/stream`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: `w1-smoke-${STAMP}`,
+        text: question,
+        userQuestion: question,
+        context: { language: 'EN' },
+        contextOption: 'single-message',
+        timestamp: new Date().toISOString()
+      }),
+      signal: ac.signal
+    });
+    if (!res.ok) return { status: res.status, sources: [], error: (await res.text()).slice(0, 300) };
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 2);
+        if (!frame.startsWith('data: ')) continue;
+        let evt;
+        try {
+          evt = JSON.parse(frame.slice(6));
+        } catch {
+          continue;
+        }
+        if (evt.type === 'metadata') {
+          return { status: res.status, sources: evt.source_documents || [], payload: evt };
+        }
+        if (evt.type === 'error') {
+          return { status: res.status, sources: [], error: `${evt.code || 'STREAM_ERROR'}: ${evt.message}` };
+        }
       }
     }
+    return { status: res.status, sources: [], error: `stream closed before the metadata frame` };
+  } catch (err) {
+    if (ac.signal.aborted) return { status: 0, sources: [], error: `stream timed out after ${CHAT_TIMEOUT_MS}ms` };
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return { status: res.status, sources: [], error: `stream timed out after ${CHAT_TIMEOUT_MS}ms` };
 }
 
 async function deleteRepo(repoId) {
   // A repo with an INGESTED version refuses delete (INGESTED_DELETE_BLOCKED,
   // live 2026-11-04 — the sweep's silent failures left zombie serving graphs
-  // polluting later runs' citations). Retract first, then delete.
-  await call('POST', `/api/okf/repos/${repoId}/lifecycle`, ADMIN, { action: 'retract' });
-  await call('DELETE', `/api/okf/repos/${repoId}`, ADMIN);
+  // polluting later runs' citations). Retract first, then delete — and the
+  // DELETE result is ASSERTED: an unchecked failure silently leaves a serving
+  // zombie that pollutes the next run's citations (review fix 2026-11-07).
+  const ret = await call('POST', `/api/okf/repos/${repoId}/lifecycle`, ADMIN, { action: 'retract' });
+  if (ret.status !== 200) {
+    // Not retractable (a draft from a crashed earlier run, or already
+    // retracted) — harmless for the delete; say so instead of swallowing.
+    console.log(`  retract ${repoId} → ${ret.status} (not retractable; the DELETE decides)`);
+  }
+  const del = await call('DELETE', `/api/okf/repos/${repoId}`, ADMIN);
+  if (![200, 202, 204].includes(del.status)) {
+    fail(
+      `cleanup: delete ${repoId} refused (${del.status} ${del.text.slice(0, 120)}) — zombie serving repo pollutes the next run`
+    );
+  }
 }
 
 async function main() {
@@ -306,10 +332,26 @@ async function main() {
     }
   }
 
+  // --- 3.5 W2 publication gate, live: retract the open repo and the
+  // concept route must refuse. The serving read serves only the retrieval-
+  // serving state (publish + ingested); the unit gate cannot prove it
+  // end-to-end and the devlog called for exactly this assertion once the
+  // tree synced (review fix 2026-11-07).
+  console.log('[3.5] retracted repo → concept route refuses');
+  const retractA = await call('POST', `/api/okf/repos/${repoA.id}/lifecycle`, ADMIN, { action: 'retract' });
+  if (retractA.status !== 200)
+    throw new Error(`retract ${repoA.id}: ${retractA.status} ${retractA.text.slice(0, 200)}`);
+  const retractedRead = await call('GET', `/api/okf/repos/${repoA.id}/concepts/${openId}`, SCOPELESS);
+  if (retractedRead.status === 404) {
+    pass('retracted repo concept read → 404 (the publication gate holds live)');
+  } else {
+    fail(`retracted repo concept read as scopeless: expected 404, got ${retractedRead.status}`);
+  }
+
   // --- 4. Cleanup ---
   if (CLEANUP === 'full') {
     console.log('[4] cleanup');
-    await deleteRepo(repoA.id);
+    await deleteRepo(repoA.id); // already retracted above — delete asserts the rest
     await deleteRepo(repoR.id);
     console.log('  deleted both smoke repos');
   } else {

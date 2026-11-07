@@ -56,12 +56,12 @@
                    ORIGINATED from — the same secondary origin rows as the
                    answer cards. Never rendered without resolved sources. -->
               <div
-                v-if="doc.source === 'okf-concept' && doc.okfSources && doc.okfSources.length"
+                v-if="isOkfConceptSource(doc) && doc.okfSources && doc.okfSources.length"
                 class="document-origins"
               >
                 <button
                   v-for="(o, oi) in doc.okfSources"
-                  :key="o.file_id || o.resource"
+                  :key="`${oi}-${o.file_id || o.resource}`"
                   type="button"
                   class="document-origin"
                   :data-testid="`document-origin-${oi}`"
@@ -254,6 +254,11 @@ export default {
   },
 
   methods: {
+    // Template-facing alias for the shared predicate (review fix 2026-11-07:
+    // one predicate for fetch guard, badge AND card branches — no raw
+    // `doc.source` string checks left to drift).
+    isOkfConceptSource,
+
     formatFileSize,
     async loadFaqContent() {
       this.faqLoadFailed = false;
@@ -400,7 +405,7 @@ export default {
       // file — it opens as rendered markdown through okf-server under the
       // caller's own scope. No repo identity (persisted pre-CAP-1 row) or an
       // unavailable concept degrades to an honest notice, never a dead link.
-      if (doc.source === 'okf-concept') {
+      if (isOkfConceptSource(doc)) {
         if (!doc.repoId || !doc.id) {
           notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
           return;
@@ -412,7 +417,11 @@ export default {
           if (error && error.code === 'OKF_CONCEPT_UNAVAILABLE') {
             notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
           } else {
+            // Review fix (2026-11-07): a generic open failure was
+            // console-only here while ChatBotComponent surfaces the same
+            // failure as a toast — the sidebar must not be the silent one.
             console.error('There was a problem opening the OKF concept:', error);
+            notificationService.error(this.$t('chatbot.documentOpenError'));
           }
         }
         return;
@@ -465,7 +474,7 @@ export default {
       // CAP-3: a concept row never shows a doc-repository URL — the family
       // cannot resolve it (the old placeholder viewbrowser link was one of
       // the dead-link generators).
-      if (doc.source === 'okf-concept') {
+      if (isOkfConceptSource(doc)) {
         return '';
       }
       if (doc.id) {

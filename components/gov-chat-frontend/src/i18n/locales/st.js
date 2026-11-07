@@ -2155,7 +2155,9 @@ export default {
       delete: {
         body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri. Ha se khone ho etsolloa.',
         confirm: 'Hlakola',
-        title: 'Hlakola polokelo ruri'
+        title: 'Hlakola polokelo ruri',
+        reasonLabel: 'Sesila (boikhethelo)',
+        reasonPlaceholder: 'mohl. kopo ya hlakola ya GDPR, data e tlohileng, e entsoe ka phoso'
       },
       filter: {
         domain: 'Sefa ka sebaka sa taba',

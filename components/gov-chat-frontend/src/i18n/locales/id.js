@@ -2147,7 +2147,9 @@ export default {
       delete: {
         body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen. Tindakan ini tidak dapat dibatalkan.',
         confirm: 'Hapus',
-        title: 'Hapus repositori'
+        title: 'Hapus repositori',
+        reasonLabel: 'Alasan (opsional)',
+        reasonPlaceholder: 'mis. permintaan penghapusan GDPR, dataset yang dipensiunkan, dibuat karena keliru'
       },
       filter: {
         domain: 'Filter berdasarkan bidang subjek',

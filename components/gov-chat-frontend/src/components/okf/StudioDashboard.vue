@@ -252,6 +252,25 @@
         }}
         <strong>{{ deleteAsk && (deleteAsk.name || deleteAsk.repo_id) }}</strong>
       </p>
+      <!-- W8 (#925 split ruling): the steward's WHY, optional — audited
+        server-side on the delete row. Kept short by the server (500-char cap);
+        whitespace-only is treated as no reason. -->
+      <div class="okf-dashboard__dialog-field">
+        <label for="delete-reason">{{ translate('okf.dashboard.delete.reasonLabel', 'Reason (optional)') }}</label>
+        <DsInput
+          id="delete-reason"
+          v-model="deleteReason"
+          type="textarea"
+          :rows="2"
+          :placeholder="
+            translate(
+              'okf.dashboard.delete.reasonPlaceholder',
+              'e.g. GDPR erasure request, retired dataset, created by mistake'
+            )
+          "
+          :disabled="actionBusy"
+        />
+      </div>
       <p v-if="deleteError" class="okf-dashboard__dialog-error">{{ deleteError }}</p>
     </DsDialog>
 
@@ -460,6 +479,7 @@ export default {
       reingestError: '',
       deleteAsk: null,
       deleteError: '',
+      deleteReason: '', // W8 (#925): optional WHY, audited server-side
       versionsRepo: null,
       logsOpen: false,
       logsRepo: null,
@@ -862,6 +882,7 @@ export default {
     },
     onDeleteAsk(r) {
       this.deleteError = '';
+      this.deleteReason = '';
       this.deleteAsk = r;
     },
     async onDeleteAction(key) {
@@ -872,9 +893,16 @@ export default {
       if (key !== 'confirm' || !this.deleteAsk) return;
       this.actionBusy = true;
       this.deleteError = '';
-      const res = await this.$store.dispatch('okf/deleteRepoAction', { repoId: this.deleteAsk.repo_id });
+      // W8 (#925): the trimmed reason rides to the server (audited there);
+      // whitespace-only degrades to no reason.
+      const trimmed = (this.deleteReason || '').trim();
+      const res = await this.$store.dispatch('okf/deleteRepoAction', {
+        repoId: this.deleteAsk.repo_id,
+        reason: trimmed || undefined
+      });
       this.actionBusy = false;
       this.deleteAsk = null;
+      this.deleteReason = '';
       if (!res.ok) this.actionError = res.message || 'Delete failed';
     },
     onUnpublishAsk(r) {
@@ -1190,6 +1218,16 @@ export default {
   color: var(--danger);
   font-size: var(--text-sm);
   margin: var(--space-sm) 0 0;
+}
+/* W8 deletion-reason field: label above the DsInput textarea. */
+.okf-dashboard__dialog-field {
+  margin-top: var(--space-sm);
+}
+.okf-dashboard__dialog-field label {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  margin-bottom: var(--space-xs);
 }
 /* Inline publish-in-flight row: spinner + message side by side (DsSpinner's
   inline mode stacks children by default; dialogs want a single row). */

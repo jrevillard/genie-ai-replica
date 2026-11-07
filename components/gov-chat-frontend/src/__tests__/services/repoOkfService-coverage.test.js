@@ -237,6 +237,9 @@ describe('repoOkfService — writes', () => {
     expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/lifecycle', { action: 'publish' }, { headers: HDR });
     await repoOkfService.deleteRepo('r1');
     expect(httpService.delete).toHaveBeenCalledWith('/okf/repos/r1');
+    // W8 (#925): a reason rides a JSON body; no reason keeps the bare shape.
+    await repoOkfService.deleteRepo('r1', 'gdpr erasure request');
+    expect(httpService.delete).toHaveBeenLastCalledWith('/okf/repos/r1', { data: { reason: 'gdpr erasure request' } });
     await repoOkfService.acknowledgePii('r1', false, ACTOR);
     expect(httpService.post).toHaveBeenCalledWith(
       '/okf/repos/r1/pii-acknowledge',

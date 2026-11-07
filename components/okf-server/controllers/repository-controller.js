@@ -655,7 +655,11 @@ async function updateRepo(req, res, next) {
 
 async function deleteRepo(req, res, next) {
   try {
-    const result = await repoService.remove(req.params.repo_id, actorFrom(req));
+    // W8 deletion_reason (#925 split ruling): the steward's WHY is optional,
+    // rides the DELETE body, and lands on the audit row. The service trims +
+    // caps it; a whitespace-only body degrades to null.
+    const reason = (req.body && typeof req.body.reason === 'string' && req.body.reason) || undefined;
+    const result = await repoService.remove(req.params.repo_id, actorFrom(req), { reason });
     res.status(202).json(result);
   } catch (err) {
     next(err);

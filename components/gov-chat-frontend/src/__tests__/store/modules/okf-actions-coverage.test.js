@@ -173,6 +173,10 @@ describe('repo/lifecycle/version/validation pass-throughs', () => {
     okfRepoOps.deleteRepo.mockResolvedValueOnce({});
     const store2 = buildStore({ reposById: { r1: { repo_id: 'r1', lifecycle_state: 'draft' } } });
     expect(await store2.dispatch('okf/deleteRepoAction', { repoId: 'r1' })).toMatchObject({ ok: true });
+    // W8 (#925): the dialog's reason rides through the action to the ops call.
+    okfRepoOps.deleteRepo.mockResolvedValueOnce({});
+    await store2.dispatch('okf/deleteRepoAction', { repoId: 'r1', reason: 'gdpr erasure request' });
+    expect(okfRepoOps.deleteRepo).toHaveBeenLastCalledWith('r1', 'gdpr erasure request');
     expect(store2.state.okf.reposById.r1).toBeUndefined();
     okfRepoOps.importRepoZip.mockResolvedValueOnce({ repo_id: 'r9' });
     const store3 = buildStore();

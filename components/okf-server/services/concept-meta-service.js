@@ -504,6 +504,51 @@ async function getConceptMetaFromAnyRepo(concept_id) {
   return rows[0];
 }
 
+/**
+ * W8 (EPIC-8 slice 1): purge the repo's concept-keyed ingestion_log rows on
+ * repo DELETE. dataprep's _write_ingestion_log keys per-concept progress rows
+ * on file_id == concept_id (content-only chunking has no files doc, so
+ * doc-repo's file DELETE — which does purge per-FILE rows — never reaches
+ * them); a deleted repo left them orphaned forever, polluting the collection
+ * the admin UI and log queries read.
+ *
+ * 1:1 SAFETY — the one rule this query exists for: a row carries NO repo
+ * stamp, so a concept_id held by more than one repository (clone /
+ * shared-slug cases, the same ambiguity getConceptMetaFromAnyRepo treats as
+ * null) shares its rows across those repos. The purge removes a concept's
+ * rows only when the deleting repo is its SOLE live holder; the other
+ * holder's drain history must survive the delete.
+ *
+ * Must run BEFORE the graph retract sweeps the repo's okf_concepts_meta rows
+ * (that enumeration is the source of `mine`). NOT wired on retract — W7's D3
+ * reversal made retract an unpublish that deliberately keeps history (bundle
+ * zips survive; so does the ingestion history of the versions they carry).
+ * Repo DELETE remains the only hard purge.
+ */
+async function purgeConceptIngestionLogs(repo_id) {
+  if (!repo_id) return { repo_id, purged: [] };
+  return withSpan('okf.concept_meta.purge_ingestion_logs', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    const purged = await (
+      await db.query(
+        'LET mine = (FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id != null RETURN DISTINCT m.concept_id) ' +
+          'LET shared = (FOR m IN okf_concepts_meta FILTER m.repo_id != @repo_id AND m.concept_id IN mine RETURN DISTINCT m.concept_id) ' +
+          'LET sole = (FOR cid IN mine FILTER cid NOT IN shared RETURN cid) ' +
+          'FOR log IN ingestion_log FILTER log.file_id IN sole REMOVE log IN ingestion_log RETURN OLD.file_id',
+        { repo_id }
+      )
+    ).all();
+    span.setAttribute('okf.purged_count', (purged || []).length);
+    logger.info('W8 ingestion_log purge: concept-keyed rows removed on repo delete', {
+      repo_id,
+      purged_count: (purged || []).length,
+      concept_ids: (purged || []).slice(0, 20)
+    });
+    return { repo_id, purged: purged || [] };
+  });
+}
+
 /** Story #978 — remove ONE concept's meta row. Returns the removed doc (or
  * null when absent → 404 at the controller). The graph/content sweep lives in
  * ingest-service.deleteConcept (which owns the repositoryService import). */
@@ -1316,6 +1361,7 @@ module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
+  purgeConceptIngestionLogs,
   listConceptsMeta,
   patchConceptMeta,
   patchConceptFields,

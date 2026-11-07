@@ -341,9 +341,15 @@ const repoOkfService = {
    * Story #978 — delete the whole repository (cascade: graph + meta rows +
    * bundle artifacts + manifests). Refused with INGESTED_DELETE_BLOCKED while
    * an ingested version is serving.
+   * W8 (#925 split ruling): `reason` is the optional steward-provided WHY —
+   * the server trims it (500-char cap) and writes it onto the audit row.
    */
-  async deleteRepo(repoId) {
-    const res = await httpService.delete(`/okf/repos/${encodeURIComponent(repoId)}`);
+  async deleteRepo(repoId, reason) {
+    // No reason → the exact wire shape the route has always seen (a bare
+    // DELETE); a reason rides a JSON body.
+    const res = reason
+      ? await httpService.delete(`/okf/repos/${encodeURIComponent(repoId)}`, { data: { reason: String(reason) } })
+      : await httpService.delete(`/okf/repos/${encodeURIComponent(repoId)}`);
     return res && res.data ? res.data : { ok: true };
   },
 

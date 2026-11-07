@@ -337,6 +337,138 @@ describe('repository-service', () => {
       const deletes = Object.values(db._stores.okf_audit_logs || {}).filter((a) => a.action === 'repo.delete');
       expect(deletes).toHaveLength(1);
     });
+
+    // ── W8 EPIC-8 slice 1: the concept-keyed ingestion_log purge. dataprep
+    // writes per-concept progress rows keyed file_id == concept_id (content-only
+    // chunking has no files doc, so doc-repo's file DELETE never reaches them);
+    // a deleted repo left them orphaned forever. The purge is 1:1-safe: rows
+    // whose concept_id ANOTHER live repo also holds (clone / shared slug) must
+    // survive — the rows carry no repo stamp, so the other repo's history lives
+    // in the same rows.
+    describe('W8 log purge (concept-keyed ingestion_log, 1:1 safety)', () => {
+      const RID = 'w8-purge-test-repo';
+      const statements = []; // every AQL statement remove() issued, in order
+
+      /** Seed meta rows + log rows; route the purge statement by its bind. */
+      async function seed({ repoId, mine, foreign, logs }) {
+        for (const cid of mine) {
+          await db.collection('okf_concepts_meta').save({ _key: `${RID}:${cid}`, repo_id: repoId, concept_id: cid });
+        }
+        for (const [rid, cid] of foreign || []) {
+          await db.collection('okf_concepts_meta').save({ _key: `${rid}:${cid}`, repo_id: rid, concept_id: cid });
+        }
+        for (const cid of logs) {
+          await db.collection('ingestion_log').save({ file_id: cid, message: `drain of ${cid}` });
+        }
+        // Route ONLY the purge statement (text is unique to it); the real
+        // semantics run against the mock stores so the removal is observable.
+        // Unknown statements (the graph retract's) return empty cursors and
+        // are recorded, so the ORDER proof reads the same array.
+        statements.length = 0;
+        db.query.mockImplementation(async (q, bind) => {
+          const text = typeof q === 'string' ? q : String(q && q.query);
+          statements.push(text);
+          if (text.includes('REMOVE log IN ingestion_log')) {
+            // Recompute sole from the stores exactly as the AQL would: mine
+            // minus shared, then remove matching log rows.
+            const allMeta = Object.values(db._stores.okf_concepts_meta || {});
+            const mineSet = allMeta.filter((m) => m.repo_id === bind.repo_id).map((m) => m.concept_id);
+            const sharedSet = new Set(
+              allMeta.filter((m) => m.repo_id !== bind.repo_id && mineSet.includes(m.concept_id)).map((m) => m.concept_id)
+            );
+            const soleIds = mineSet.filter((cid) => !sharedSet.has(cid));
+            const removed = [];
+            for (const [key, doc] of Object.entries(db._stores.ingestion_log || {})) {
+              if (soleIds.includes(doc.file_id)) {
+                delete db._stores.ingestion_log[key];
+                removed.push(doc.file_id);
+              }
+            }
+            return { all: async () => removed };
+          }
+          return { all: async () => [] };
+        });
+      }
+
+      afterEach(() => db.query.mockRestore());
+
+      test('purges the deleted repo OWN concept-keyed rows when it is the sole holder — BEFORE the meta sweep', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        await seed({ repoId: created.repo_id, mine: ['alpha', 'beta'], logs: ['alpha', 'beta', 'unrelated'] });
+        await repoService.remove(created.repo_id, ACTOR);
+        const left = Object.values(db._stores.ingestion_log).map((r) => r.file_id);
+        expect(left).toEqual(['unrelated']); // 'alpha' and 'beta' gone, strangers untouched
+        // ORDER is load-bearing: the purge enumerates okf_concepts_meta, which
+        // the graph retract sweeps (REMOVE m IN okf_concepts_meta) — run the
+        // purge after that and it would purge NOTHING, silently.
+        const purgeIdx = statements.findIndex((t) => t.includes('REMOVE log IN ingestion_log'));
+        const metaSweepIdx = statements.findIndex((t) => t.includes('REMOVE m IN okf_concepts_meta'));
+        expect(purgeIdx).toBeGreaterThanOrEqual(0);
+        expect(metaSweepIdx).toBeGreaterThan(purgeIdx);
+      });
+
+      test('keeps rows whose concept_id ANOTHER live repo also holds (clone case)', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        const clone = await repoService.create(validCreateInput({ name: 'Clone' }), ACTOR);
+        await seed({ repoId: created.repo_id, mine: ['alpha'], foreign: [[clone.repo_id, 'alpha']], logs: ['alpha'] });
+        await repoService.remove(created.repo_id, ACTOR);
+        const left = Object.values(db._stores.ingestion_log).map((r) => r.file_id);
+        expect(left).toEqual(['alpha']); // the clone still owns this concept_id
+        // Mock fidelity: the real graph retract sweeps the deleted repo's meta
+        // rows with AQL the mock stores don't execute — mirror that sweep so
+        // the clone's delete sees a clean slate, as production would.
+        await db.collection('okf_concepts_meta').remove(`${RID}:alpha`);
+        await repoService.remove(clone.repo_id, ACTOR);
+        expect(Object.keys(db._stores.ingestion_log)).toHaveLength(0); // last holder out → rows go
+      });
+
+      test('purge failure never fails the delete (best-effort cascade step)', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        db.query.mockRejectedValueOnce(new Error('arango reset'));
+        await expect(repoService.remove(created.repo_id, ACTOR)).resolves.toMatchObject({ status: 'deleted' });
+      });
+
+      test('deletes a repo with no concepts cleanly (empty enumeration)', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        await seed({ repoId: created.repo_id, mine: [], logs: ['stranger'] });
+        await repoService.remove(created.repo_id, ACTOR);
+        expect(Object.keys(db._stores.ingestion_log)).toHaveLength(1);
+      });
+    });
+
+    // ── W8 EPIC-8 slice 3: deletion_reason (#925 split ruling). The steward
+    // says WHY; the reason rides the audit row (details) and the response.
+    describe('W8 deletion_reason', () => {
+      test('a reason is trimmed, carried on the audit row and in the response', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        const result = await repoService.remove(created.repo_id, ACTOR, { reason: '  gdpr erasure request  ' });
+        expect(result.deletion_reason).toBe('gdpr erasure request');
+        const deletes = Object.values(db._stores.okf_audit_logs).filter((a) => a.action === 'repo.delete');
+        expect(deletes[0].details).toMatchObject({ deletion_reason: 'gdpr erasure request' });
+        expect(deletes[0].description).toContain('gdpr erasure request');
+      });
+
+      test('no reason → null everywhere (the delete still audits)', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        const result = await repoService.remove(created.repo_id, ACTOR);
+        expect(result.deletion_reason).toBeNull();
+        const deletes = Object.values(db._stores.okf_audit_logs).filter((a) => a.action === 'repo.delete');
+        expect(deletes[0].details.deletion_reason).toBeNull();
+      });
+
+      test('a whitespace-only reason is not a reason (null)', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        const result = await repoService.remove(created.repo_id, ACTOR, { reason: '   ' });
+        expect(result.deletion_reason).toBeNull();
+      });
+
+      test('a reason longer than the cap is truncated, never rejected', async () => {
+        const created = await repoService.create(validCreateInput(), ACTOR);
+        const long = 'x'.repeat(2000);
+        const result = await repoService.remove(created.repo_id, ACTOR, { reason: long });
+        expect(result.deletion_reason).toHaveLength(500);
+      });
+    });
   });
 
   describe('list', () => {

@@ -112,7 +112,15 @@ the ORDER and the cross-stream slots.
   ceiling slice — see the note below this list.)
 - **W8 — log purge + gate downgrade, SCOPE GREW per the #925 split ruling:**
   the delete flow also captures a **`deletion_reason`** (#925). The TTL sweep
-  half stays parked pending the D3 revisit — out of scope here.
+  half stays parked pending the D3 revisit — out of scope here. ON MR
+  (branch `feat/w8-log-purge-reason`, 2026-11-07): the delete purges the
+  repo's concept-keyed `ingestion_log` rows (1:1-safe — a concept id another
+  live repo holds keeps its rows), the SOURCES_NOT_RETRACTED gate skips a
+  hand-deleted source (404) with a visible warn instead of blocking forever,
+  and the delete flow carries the steward's reason onto the audit row
+  (trimmed, 500-char cap) + response. Retract purges NOTHING (D3 coherence —
+  a divergence from EPIC-8's "delete/retract" wording, deliberate: the
+  versions W7 retains carry their history).
 - **W9 — concept tree browse** (carries the D8 `create-ux-design` pass at story
   time).
 

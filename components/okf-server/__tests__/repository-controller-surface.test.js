@@ -20,6 +20,7 @@ jest.mock('../services/repository-service', () => ({
   getById: jest.fn().mockResolvedValue({ repo_id: 'r1', name: 'R' }),
   create: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
   update: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
+  remove: jest.fn().mockResolvedValue({ repo_id: 'r1', status: 'deleted', deletion_reason: null }),
   frontmatterHistory: jest.fn().mockResolvedValue({ entries: [] }),
   revertFrontmatter: jest.fn().mockResolvedValue({ ok: true })
 }));
@@ -760,6 +761,18 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
       frontmatterPatch: { topic: ['y'] }
     });
     expect(mod.patchConceptMeta).not.toHaveBeenCalled();
+  });
+
+  it('deleteRepo → 202 and passes the optional body reason through (W8 deletion_reason)', async () => {
+    const { res, next } = await drive(controller.deleteRepo, { body: { reason: 'gdpr erasure request' } });
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ status: 'deleted' });
+    expect(repoService.remove).toHaveBeenCalledWith('r1', expect.anything(), { reason: 'gdpr erasure request' });
+    expect(next).not.toHaveBeenCalled();
+    // No body → reason undefined, the call shape stays the three-arg one.
+    const second = await drive(controller.deleteRepo);
+    expect(second.res.statusCode).toBe(202);
+    expect(repoService.remove).toHaveBeenLastCalledWith('r1', expect.anything(), { reason: undefined });
   });
 
   it('every one of these handlers forwards a service throw to next(err)', async () => {

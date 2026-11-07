@@ -263,6 +263,10 @@ export function translateSources(sourceDocuments = []) {
       categoryLabel: doc.categoryLabel,
       serviceLabels: doc.labels || doc.serviceLabels || [],
       source: isOkfConcept ? 'okf-concept' : undefined,
+      // !791's contract (additive per the BCAP ruling): the concept slug
+      // rides the citation row even though the batch's flow keys off the
+      // `source` marker — main's suite pins it on the mapped citation.
+      conceptId: doc.concept_id || null,
       repoId: isOkfConcept ? doc.repo_id || null : undefined,
       bundleVersion: isOkfConcept ? (doc.bundle_version ?? null) : undefined,
       graphName: isOkfConcept ? doc.graph_name || null : undefined

@@ -1350,6 +1350,8 @@ export default {
     copyFailed: 'Cha dooie coipey',
 
     documentOpenError: 'Cha dooarsh yn docamad',
+    okfSourceUnavailable: 'Cha nel y bun shoh ry-akin dy fakin.',
+    okfOriginalSource: 'Bun chibsagh',
     feedbackSubmitted: 'Sauailit ynnsyn',
     feedbackError: 'Cha dooarsh yn sauail',
     feedbackMissingQueryId: 'Cha nel y rere shoh ry-gholl rabbyt',

@@ -28,6 +28,11 @@ const { parseOkfScope } = require('../services/scope-authz-service');
 const { writeAudit } = require('../services/audit-service');
 const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
+// D4 (W4 story 2, 2026-11-04): the toggle propagates the restriction snapshot
+// onto the repo's stamped source files (producer-service owns the doc-repo
+// PATCH precedent). Best-effort — the toggle itself must not fail because a
+// snapshot write did; the audit records the drift either way.
+const producerService = require('../services/producer-service');
 
 const toggleSchema = Joi.object({ restricted: Joi.boolean().required() });
 const grantSchema = Joi.alternatives()
@@ -248,8 +253,37 @@ async function putAccess(req, res, next) {
     const db = await dbService.getConnection();
     const acl = { ...(repo.acl || {}), restricted };
     await db.collection('okf_repositories').update(repo.repo_id, { acl, updated_at: new Date().toISOString() });
-    await audit('repo.access.restrict', req, repo.repo_id, { restricted });
-    res.status(200).json({ ok: true, repo_id: repo.repo_id, restricted });
+    // D4 (W4 story 2): re-stamp the repo's source files so doc-repo's serve
+    // paths refuse (or re-admit) them WITHOUT a runtime okf-server round-trip.
+    // Best-effort + audited — a propagation failure leaves a stale snapshot
+    // (named drift risk of the snapshot mechanism), so it must be visible.
+    let propagation = null;
+    try {
+      propagation = await producerService.propagateRestrictedToSources(repo.repo_id, restricted);
+    } catch (err) {
+      propagation = { repo_id: repo.repo_id, restricted, error: err.message };
+      logger.warn('okf_restricted propagation crashed (non-fatal)', { repo_id: repo.repo_id, error: err.message });
+    }
+    await audit('repo.access.restrict', req, repo.repo_id, {
+      restricted,
+      propagation: propagation && {
+        patched: (propagation.patched || []).length,
+        failed: (propagation.failed || []).length,
+        gone: (propagation.gone || []).length,
+        total: propagation.total
+      }
+    });
+    res.status(200).json({
+      ok: true,
+      repo_id: repo.repo_id,
+      restricted,
+      propagation: propagation && {
+        patched: (propagation.patched || []).length,
+        failed: (propagation.failed || []).length,
+        gone: (propagation.gone || []).length,
+        total: propagation.total
+      }
+    });
   } catch (err) {
     next(err);
   }

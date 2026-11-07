@@ -4,6 +4,8 @@
 // snake_case response → next(err) on failure. No business logic.
 
 const repoService = require('../services/repository-service');
+const { RepoError } = repoService;
+const accessControlService = require('../services/access-control-service');
 const conceptMetaService = require('../services/concept-meta-service');
 const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
@@ -90,6 +92,53 @@ function callerAuthz(req) {
 function authzForService(req) {
   const { isSuperAdmin, authorizedRepoIds } = callerAuthz(req);
   return isSuperAdmin ? null : authorizedRepoIds;
+}
+
+/**
+ * The READ-side verdict for the serving-reads surface (CAP-2, 2026-11-04):
+ * deriveReadAuthz is the SAME rule resolveGraphSet and getRetrievalConfig
+ * apply — super/wildcard, or open-mode scopeless (the default-open posture:
+ * a regular user's query resolves the serving set, so its citation card can
+ * read the concept that grounded it). Repo-MANAGEMENT routes keep
+ * authzForService (default-deny); only the serving read gets the open-mode
+ * fall-open, and the 6-1c restricted fence still gates EVERY caller behind
+ * it (privileged stays derived-privilege — never this verdict).
+ */
+function readAuthzForService(req) {
+  const verdict = scopeAuthzService.deriveReadAuthz(req.okfScopes, req.okfIsSuperAdmin);
+  return verdict.unrestricted ? null : verdict.authorizedRepoIds;
+}
+
+/**
+ * CAP-2 (chat-source resolution spec, 2026-11-04): the 6-1c per-repo READ
+ * fence for the concept-content read family. `authzForService`'s Set/null
+ * filter decides which repos the caller's SCOPE LIST names; `acl.restricted`
+ * is a second gate that fences a repo from non-privileged callers in BOTH
+ * scope modes — `resolveGraphSet` has applied callerMayTraverseRepo to the
+ * retrieval views since 6-1c, and these routes must not serve what retrieval
+ * refuses: a scopeless caller in open mode passed getById's unrestricted
+ * verdict and could read a RESTRICTED repo's full meta row (title, labels,
+ * body). Denial mirrors getById byte-for-byte — RepoError REPO_NOT_FOUND 404,
+ * audited — so foreign and fenced stay indistinguishable (anti-enumeration,
+ * AC7 posture). `privileged` here is DERIVED privilege only (superadmin /
+ * wildcard scope), never the open-mode "unrestricted" verdict — that exact
+ * confusion is what the 6-1c integration test caught.
+ */
+async function assertRepoReadableByCaller(req, repoDoc) {
+  const { authorizedRepoIds } = callerAuthz(req);
+  const privileged = authorizedRepoIds === null;
+  if (accessControlService.callerMayTraverseRepo(repoDoc, req.okfScopes, privileged)) return;
+  auditService
+    .writeAudit({
+      action: 'authz.denied.repo',
+      actor: (req.user && req.user.sub) || null,
+      repo_id: repoDoc && repoDoc.repo_id,
+      source_ip: req.ip
+    })
+    .catch(() => {
+      /* best-effort */
+    });
+  throw new RepoError('REPO_NOT_FOUND', `Repository ${(repoDoc && repoDoc.repo_id) || 'unknown'} not found`, 404);
 }
 
 function validate(schema, body) {
@@ -831,8 +880,10 @@ async function getPiiConceptScan(req, res, next) {
 async function getRepoManifest(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepo).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // mirrors getConcept; the manifest names every concept in the repo).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     const wantSummary = req.query.summary === '1' || req.query.summary === 'true';
     const manifest = wantSummary
       ? await conceptMetaService.ensureSummary(repo_id)
@@ -856,8 +907,10 @@ async function getRepoManifest(req, res, next) {
 async function getRepoLinks(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // the graph projection exposes the repo's structure).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     res.status(200).json(await conceptMetaService.getRepoLinks(repo_id));
   } catch (err) {
     next(err);
@@ -906,8 +959,10 @@ async function discoverFromManifests(req, res, next) {
 async function listConcepts(req, res, next) {
   try {
     const { repo_id } = req.params;
-    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // the concept index must not leak a repo whose bodies are fenced).
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
     const { limit, offset } = req.query || {};
     if (limit === undefined && offset === undefined) {
       const concepts = await conceptMetaService.listConceptsMeta(repo_id);
@@ -925,11 +980,86 @@ async function listConcepts(req, res, next) {
  * Full meta row — frontmatter + body included — so the editor can round-trip
  * the markdown (body is persisted on the meta doc since Story 4.8-amend
  * content-only chunking).
+ *
+ * W2 security review (2026-11-04): this handler is ALSO the CAP-2 citizen
+ * content path (registered on the allowScopelessWhenOpen sub-router), so two
+ * serving gates apply beyond the restricted fence:
+ * - Publication gate — a NON-steward caller gets exactly what retrieval
+ *   serves (the servingRepos predicate: lifecycle_state === 'publish' &&
+ *   ingested_at != null). Retract keeps the meta rows (it is the reversible
+ *   edit state), drafts carry bodies from import time, and publish-to-drain
+ *   has a window — none of those may serve a citizen a body retrieval will
+ *   not ground on. Same 404 envelope as the fence (foreign / fenced /
+ *   unpublished indistinguishable) but NO audit row: this state is normal
+ *   lifecycle traffic (every persisted citation of a retracted repo degrades
+ *   through it), not an authz denial. Steward-class callers (superadmin,
+ *   wildcard scope, or a scope naming THIS repo) keep the editor contract —
+ *   the draft/retracted row IS the editor's working set.
+ * - Field projection — non-steward callers get the CAP-3 card contract
+ *   (identity + title/labels/summary/body/links) plus the CAP-4 ORIGINATING
+ *   documents (W5, 2026-11-05: narrowed to {kind, file_id, file_name,
+ *   resource} — locator is chunk-internal). Naming restricted-repo sources is
+ *   safe now: the W4 D4 serve gate refuses the bytes themselves. Never the
+ *   worker internals (last_error / pii_* / ingest bookkeeping), curation
+ *   provenance, or the Arango system fields.
  */
+const CONCEPT_CARD_FIELDS = [
+  'repo_id',
+  'concept_id',
+  'graph_name',
+  'bundle_version',
+  'title',
+  'labels',
+  'summary',
+  'body',
+  'links'
+];
+
+/** Steward class for the publication gate: derived privilege or a scope
+ * naming THIS repo (deriveScopeAuthz is the single scope authority). */
+function callerIsStewardForRepo(req, repoId) {
+  const { isSuperAdmin, authorizedRepoIds } = callerAuthz(req);
+  return isSuperAdmin || authorizedRepoIds === null || authorizedRepoIds.has(repoId);
+}
+
+/** The CAP-3 card projection: keep only whitelisted fields that exist. */
+function projectConceptCard(concept) {
+  const card = {};
+  for (const field of CONCEPT_CARD_FIELDS) {
+    if (concept[field] !== undefined) card[field] = concept[field];
+  }
+  // CAP-4 (W5): narrowed originating-document identity for the source row.
+  // An entry with NEITHER file_id nor resource is unusable for a link and is
+  // dropped — the UI renders "source unavailable" from the field's absence.
+  if (Array.isArray(concept.sources)) {
+    card.sources = concept.sources
+      .map((s) => {
+        if (!s || typeof s !== 'object') return null;
+        const entry = {};
+        for (const f of ['kind', 'file_id', 'file_name', 'resource']) {
+          if (s[f] !== undefined) entry[f] = s[f];
+        }
+        return entry.file_id || entry.resource ? entry : null;
+      })
+      .filter(Boolean);
+  }
+  return card;
+}
+
 async function getConcept(req, res, next) {
   try {
     const { repo_id, concept_id } = req.params;
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
+    // anti-enumeration; the body must not serve what retrieval refuses).
+    // This handler is a SERVING READ (registered on the allowScopelessWhenOpen
+    // sub-router) — the pre-gate uses the read-side verdict, not the
+    // management default-deny.
+    const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
+    await assertRepoReadableByCaller(req, repoDoc);
+    const steward = callerIsStewardForRepo(req, repo_id);
+    if (!steward && !(repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null)) {
+      throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
     if (!concept) {
       return res.status(404).json({
@@ -937,16 +1067,18 @@ async function getConcept(req, res, next) {
         message: `Concept '${concept_id}' not found in repo '${repo_id}'`
       });
     }
-    // THE CONCEPT-DOCUMENT CEILING rides this read (the plan's §8: "advise
-    // the curator"). It is the SERVER's number — the editor shows it, so the
-    // advice the curator reads while typing cannot contradict the refusal
-    // they get for going over it. A frontend copy of the ceiling would be a
-    // second derivation of the same fact, and the two would drift.
+    // THE CONCEPT-DOCUMENT CEILING rides the STEWARD read (the plan's §8:
+    // "advise the curator"). It is the SERVER's number — the editor shows it,
+    // so the advice the curator reads while typing cannot contradict the
+    // refusal they get for going over it. A frontend copy of the ceiling
+    // would be a second derivation of the same fact, and the two would drift.
     //
-    // Additive: the response is the meta row plus this one field. No client
-    // writes a concept row back wholesale (the PATCH is field-scoped), so
-    // nothing can persist the synthetic field into the stored doc.
-    res.status(200).json({ ...concept, max_doc_chars: maxConceptDocChars() });
+    // Composition (W8 ceiling × CSR batch): the steward keeps the full meta
+    // row plus this one additive field (no client writes a concept row back
+    // wholesale — the PATCH is field-scoped — so nothing persists the
+    // synthetic field into the stored doc); the citizen gets the CAP-2 card
+    // projection, which carries no ceiling and no steward fields.
+    res.status(200).json(steward ? { ...concept, max_doc_chars: maxConceptDocChars() } : projectConceptCard(concept));
   } catch (err) {
     next(err);
   }

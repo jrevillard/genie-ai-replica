@@ -52,6 +52,26 @@
                   </div>
                 </div>
               </div>
+              <!-- CAP-4 (W5): a concept card can name the documents it
+                   ORIGINATED from — the same secondary origin rows as the
+                   answer cards. Never rendered without resolved sources. -->
+              <div
+                v-if="doc.source === 'okf-concept' && doc.okfSources && doc.okfSources.length"
+                class="document-origins"
+              >
+                <button
+                  v-for="(o, oi) in doc.okfSources"
+                  :key="o.file_id || o.resource"
+                  type="button"
+                  class="document-origin"
+                  :data-testid="`document-origin-${oi}`"
+                  @click.stop="openOriginDocument(o)"
+                >
+                  <FileText :size="12" aria-hidden="true" />
+                  <span class="document-origin__label">{{ originLabel(o) }}</span>
+                  <ExternalLink :size="12" aria-hidden="true" />
+                </button>
+              </div>
               <div class="document-details">
                 <div v-if="doc.documentName" class="detail-item">
                   <span class="detail-label">Document Name:</span>
@@ -128,10 +148,17 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
-import { isExternalUrl as isExternalHref, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import {
+  isExternalUrl as isExternalHref,
+  openRepositoryDocument,
+  openOkfConcept,
+  openOkfSource,
+  fileTypeBadge
+} from '../utils/document-opener.js';
 import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
+import notificationService from '../services/notificationService';
 import DsStateDisplay from './ds/StateDisplay.vue';
-import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages } from '@lucide/vue';
+import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages, ExternalLink } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
@@ -143,6 +170,7 @@ export default {
     DsCard,
     SidebarHandle,
     FileText,
+    ExternalLink,
     HelpCircle,
     ChevronUp,
     ChevronDown,
@@ -368,11 +396,60 @@ export default {
         return;
       }
 
+      // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+      // file — it opens as rendered markdown through okf-server under the
+      // caller's own scope. No repo identity (persisted pre-CAP-1 row) or an
+      // unavailable concept degrades to an honest notice, never a dead link.
+      if (doc.source === 'okf-concept') {
+        if (!doc.repoId || !doc.id) {
+          notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+          return;
+        }
+        try {
+          await openOkfConcept(doc.repoId, doc.id);
+          this.$emit('open-document', doc);
+        } catch (error) {
+          if (error && error.code === 'OKF_CONCEPT_UNAVAILABLE') {
+            notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+          } else {
+            console.error('There was a problem opening the OKF concept:', error);
+          }
+        }
+        return;
+      }
+
       try {
         await openRepositoryDocument(doc.id, this.getAuthToken());
         this.$emit('open-document', doc);
       } catch (error) {
         console.error('There was a problem fetching the internal document:', error);
+      }
+    },
+
+    // CAP-4 (W5): original-source rows under a concept card.
+    originLabel(origin) {
+      const name = (origin && (origin.file_name || origin.resource)) || '';
+      if (name)
+        return String(name)
+          .replace(/^https?:\/\//, '')
+          .slice(0, 60);
+      return this.$t('chatbot.okfOriginalSource');
+    },
+
+    async openOriginDocument(origin) {
+      if (!origin || !origin.file_id) {
+        notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+        return;
+      }
+      try {
+        await openOkfSource(origin.file_id, this.getAuthToken());
+        this.$emit('open-document', origin);
+      } catch (error) {
+        if (error && error.code === 'OKF_SOURCE_UNAVAILABLE') {
+          notificationService.info(this.$t('chatbot.okfSourceUnavailable'));
+        } else {
+          console.error('There was a problem opening the original source:', error);
+        }
       }
     },
 
@@ -384,6 +461,12 @@ export default {
       if (!doc) return '';
       if (this.isExternalUrl(doc.url)) {
         return doc.url;
+      }
+      // CAP-3: a concept row never shows a doc-repository URL — the family
+      // cannot resolve it (the old placeholder viewbrowser link was one of
+      // the dead-link generators).
+      if (doc.source === 'okf-concept') {
+        return '';
       }
       if (doc.id) {
         return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
@@ -506,6 +589,41 @@ export default {
 
 .document-header:hover {
   color: var(--accent);
+}
+
+/* CAP-4 (W5): the original-source rows under a concept card. */
+.document-origins {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-xs) / 2);
+  margin-bottom: var(--space-sm);
+}
+
+.document-origin {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.document-origin:hover {
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.document-origin__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .document-icon {

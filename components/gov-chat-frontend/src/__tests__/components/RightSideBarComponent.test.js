@@ -189,3 +189,101 @@ describe('RightSideBarComponent FAQ language contract', () => {
     expect(call[1].headers.Authorization).toBe('Bearer mock-access-token');
   });
 });
+
+// ===========================================================================
+// CAP-3 (chat-source resolution): the sidebar's okf-concept open branch and
+// the URL display guard.
+// ===========================================================================
+jest.mock('../../utils/document-opener', () => ({
+  ...jest.requireActual('../../utils/document-opener'),
+  openOkfConcept: jest.fn(),
+  openOkfSource: jest.fn(),
+  openRepositoryDocument: jest.fn()
+}));
+jest.mock('../../services/notificationService', () => ({
+  __esModule: true,
+  default: { info: jest.fn(), error: jest.fn(), success: jest.fn(), warning: jest.fn() }
+}));
+
+describe('CAP-3 okf-concept sidebar branch', () => {
+  const documentOpener = require('../../utils/document-opener');
+  const notificationService = require('../../services/notificationService').default;
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('openDocument routes a concept with repo identity through openOkfConcept', async () => {
+    const wrapper = mountSidebar();
+    documentOpener.openOkfConcept.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openDocument({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1', url: '' });
+    expect(documentOpener.openOkfConcept).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    expect(documentOpener.openRepositoryDocument).not.toHaveBeenCalled();
+    expect(wrapper.emitted('open-document')).toHaveLength(1);
+  });
+
+  it('openDocument degrades an identity-less concept to the info notice', async () => {
+    const wrapper = mountSidebar();
+    await wrapper.vm.openDocument({ id: 'old_concept', source: 'okf-concept', repoId: null, url: '' });
+    expect(documentOpener.openOkfConcept).not.toHaveBeenCalled();
+    expect(notificationService.info).toHaveBeenCalled();
+    expect(wrapper.emitted('open-document')).toBeUndefined();
+  });
+
+  it('getDisplayUrl shows no doc-repo URL for concept rows', () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.vm.getDisplayUrl({ id: 'alpha_concept', source: 'okf-concept', url: '' })).toBe('');
+    expect(wrapper.vm.getDisplayUrl({ id: 'doc-9', url: '/api/files/doc-9/download' })).toContain(
+      '/api/files/doc-9/viewbrowser'
+    );
+  });
+});
+
+// ===========================================================================
+// CAP-4 (W5): the sidebar's original-source origin rows — the same contract
+// as the answer cards: openOkfSource for file_id origins, honest notice for
+// the D4 refusal / gone file, notice without a fetch for crawl-only entries.
+// ===========================================================================
+describe('CAP-4 sidebar origin rows', () => {
+  const documentOpener = require('../../utils/document-opener');
+  const notificationService = require('../../services/notificationService').default;
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('openOriginDocument opens a file-id origin through openOkfSource', async () => {
+    const wrapper = mountSidebar();
+    documentOpener.openOkfSource.mockResolvedValueOnce(undefined);
+    await wrapper.vm.openOriginDocument({ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf' });
+    expect(documentOpener.openOkfSource).toHaveBeenCalledWith('doc-9', expect.any(String));
+    expect(wrapper.emitted('open-document')).toHaveLength(1);
+  });
+
+  it('a D4-refused or gone source shows the info notice', async () => {
+    const wrapper = mountSidebar();
+    const unavailable = new Error('not available');
+    unavailable.code = 'OKF_SOURCE_UNAVAILABLE';
+    documentOpener.openOkfSource.mockRejectedValueOnce(unavailable);
+    await wrapper.vm.openOriginDocument({ kind: 'document', file_id: 'doc-9' });
+    expect(notificationService.info).toHaveBeenCalled();
+  });
+
+  it('a crawl-resource origin without a file id notifies without fetching', async () => {
+    const wrapper = mountSidebar();
+    await wrapper.vm.openOriginDocument({ kind: 'crawl', resource: 'https://example.gov/page' });
+    expect(documentOpener.openOkfSource).not.toHaveBeenCalled();
+    expect(notificationService.info).toHaveBeenCalled();
+  });
+
+  it('originLabel prefers the file name, then the stripped URL, then the i18n wording', () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.vm.originLabel({ file_name: 'Report.pdf' })).toBe('Report.pdf');
+    expect(wrapper.vm.originLabel({ resource: 'https://example.gov/page' })).toBe('example.gov/page');
+    // the harness $t resolves the key itself — assert only that the fallback
+    // path yields the i18n word, not a name or a URL
+    const fallback = wrapper.vm.originLabel({});
+    expect(fallback).not.toBe('Report.pdf');
+    expect(fallback).not.toContain('example.gov');
+  });
+});

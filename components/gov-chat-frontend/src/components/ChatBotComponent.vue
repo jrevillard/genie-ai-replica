@@ -181,21 +181,46 @@
                   <ChevronDown v-else :size="16" aria-hidden="true" />
                 </button>
                 <div v-show="msg.sourcesOpen" class="answer-sources__list" data-testid="answer-sources-list">
-                  <button
-                    v-for="(d, di) in msg.sources"
-                    :key="d.id"
-                    type="button"
-                    class="answer-source-card"
-                    :data-testid="`answer-source-card-${di}`"
-                    @click="openSourceDocument(d)"
-                  >
-                    <span class="file-type-badge" :data-tone="fileBadge(d).tone">{{ fileBadge(d).label }}</span>
-                    <span class="answer-source-card__body">
-                      <span class="answer-source-card__title">{{ d.title }}</span>
-                      <span v-if="d._size" class="answer-source-card__size">{{ sourceSize(d) }}</span>
-                    </span>
-                    <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
-                  </button>
+                  <!-- The loop rides a template fragment: a concept card's
+                       original-source rows (CAP-4/W5) render as a sibling of
+                       the card button, so both need the (d, di) scope. -->
+                  <template v-for="(d, di) in msg.sources" :key="d.id">
+                    <button
+                      type="button"
+                      class="answer-source-card"
+                      :data-testid="`answer-source-card-${di}`"
+                      @click="openSourceDocument(d)"
+                    >
+                      <span class="file-type-badge" :data-tone="fileBadge(d).tone">{{ fileBadge(d).label }}</span>
+                      <span class="answer-source-card__body">
+                        <span class="answer-source-card__title">{{ d.title }}</span>
+                        <span v-if="d._size" class="answer-source-card__size">{{ sourceSize(d) }}</span>
+                      </span>
+                      <ExternalLink :size="14" class="answer-source-card__open" aria-hidden="true" />
+                    </button>
+                    <!-- CAP-4 (W5): a concept card can name the documents it
+                         ORIGINATED from (narrowed sources[] resolved with the
+                         title). The origin row is a secondary affordance under
+                         the card — it never renders for rows without resolved
+                         sources (bundle-import/scratch: nothing to name). -->
+                    <div
+                      v-if="d.source === 'okf-concept' && d.okfSources && d.okfSources.length"
+                      class="answer-source-origins"
+                    >
+                      <button
+                        v-for="(o, oi) in d.okfSources"
+                        :key="o.file_id || o.resource"
+                        type="button"
+                        class="answer-source-origin"
+                        :data-testid="`answer-source-origin-${di}-${oi}`"
+                        @click="openOriginDocument(o)"
+                      >
+                        <FileText :size="12" aria-hidden="true" />
+                        <span class="answer-source-origin__label">{{ originLabel(o) }}</span>
+                        <ExternalLink :size="12" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
@@ -503,6 +528,7 @@ import {
   AlertTriangle,
   Brain,
   FileDown,
+  FileText,
   Save,
   ChevronDown,
   ChevronUp,
@@ -521,7 +547,13 @@ import {
 } from '@lucide/vue';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { isStorableTurn, translateSources } from '../store/modules/conversation';
-import { isExternalUrl, openRepositoryDocument, fileTypeBadge } from '../utils/document-opener.js';
+import {
+  isExternalUrl,
+  openRepositoryDocument,
+  openOkfConcept,
+  openOkfSource,
+  fileTypeBadge
+} from '../utils/document-opener.js';
 import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -694,6 +726,7 @@ export default {
   components: {
     AlertTriangle,
     FileDown,
+    FileText,
     Save,
     Brain,
     ChevronDown,
@@ -1189,10 +1222,70 @@ export default {
         window.open(doc.url, '_blank', 'noopener');
         return;
       }
+      // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+      // file — the /api/files family 404s it by construction. Concepts open
+      // as rendered markdown through okf-server under the caller's own
+      // scope; a concept without repo identity (persisted pre-CAP-1 row) or
+      // an unavailable one (restricted / retracted / deleted) degrades to an
+      // honest notice, never a dead link or a generic error.
+      if (doc.source === 'okf-concept') {
+        if (!doc.repoId || !doc.id) {
+          notificationService.info(
+            this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+          );
+          return;
+        }
+        try {
+          await openOkfConcept(doc.repoId, doc.id);
+        } catch (err) {
+          if (err && err.code === 'OKF_CONCEPT_UNAVAILABLE') {
+            notificationService.info(
+              this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+            );
+          } else {
+            notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+          }
+        }
+        return;
+      }
       try {
         await openRepositoryDocument(doc.id, this.$store.getters.accessToken || null);
       } catch {
         notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+      }
+    },
+
+    // CAP-4 (W5): the label for an original-source row — the file name when
+    // the concept names one, else the crawl resource URL (scheme stripped),
+    // else the generic wording.
+    originLabel(origin) {
+      const name = (origin && (origin.file_name || origin.resource)) || '';
+      if (name)
+        return String(name)
+          .replace(/^https?:\/\//, '')
+          .slice(0, 60);
+      return this.translate('chatbot.okfOriginalSource', 'Original source');
+    },
+
+    async openOriginDocument(origin) {
+      if (!origin || !origin.file_id) {
+        // crawl-only entries name a resource but no doc-repository file —
+        // nothing openable; honest notice, never a dead affordance.
+        notificationService.info(
+          this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+        );
+        return;
+      }
+      try {
+        await openOkfSource(origin.file_id, this.$store.getters.accessToken || null);
+      } catch (err) {
+        if (err && err.code === 'OKF_SOURCE_UNAVAILABLE') {
+          notificationService.info(
+            this.translate('chatbot.okfSourceUnavailable', 'This source is not available to view.')
+          );
+        } else {
+          notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
+        }
       }
     },
 
@@ -3830,6 +3923,42 @@ export default {
   margin-left: auto;
   color: var(--muted);
   flex: 0 0 auto;
+}
+
+/* CAP-4 (W5): the original-source rows under a concept card — a quiet,
+   indented secondary affordance that inherits the card list's width. */
+.answer-source-origins {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-xs) / 2);
+  margin-top: calc(var(--space-xs) / 2);
+}
+
+.answer-source-origin {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.answer-source-origin:hover {
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.answer-source-origin__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .message-wrapper {

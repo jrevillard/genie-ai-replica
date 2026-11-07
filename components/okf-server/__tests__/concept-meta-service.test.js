@@ -660,6 +660,36 @@ describe('concept-meta-service.requeueRepoForRedrain (P0 empty-graph fix)', () =
   });
 });
 
+// ── CAP-1 (chat-source resolution): the ingest-arm stamp binds every row to
+// the drained version — the retrieval enrichment join reads bundle_version
+// from the meta row as FIRST-CLASS data (no graph-name parsing downstream).
+describe('concept-meta-service.stampRepoGraphName (CAP-1 version stamp)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('stamps graph_name AND bundle_version; the filter re-stamps rows whose version lags', async () => {
+    const querySpy = mockDb.query;
+    querySpy.mockResolvedValueOnce({ all: async () => ['OKF_r1_v2'] });
+    const n = await conceptMeta.stampRepoGraphName('r1', 'OKF_r1_v2', 2);
+    expect(n).toBe(1);
+    const aqlText = String(querySpy.mock.calls[0][0]);
+    expect(aqlText).toContain('bundle_version: @bv');
+    expect(aqlText).toContain('m.graph_name != @gn OR m.bundle_version != @bv');
+    expect(querySpy.mock.calls[0][1]).toEqual({ rid: 'r1', gn: 'OKF_r1_v2', bv: 2 });
+  });
+
+  it('defaults the version bind to null when the caller omits it', async () => {
+    const querySpy = mockDb.query;
+    querySpy.mockResolvedValueOnce({ all: async () => [] });
+    await conceptMeta.stampRepoGraphName('r1', 'OKF_r1_v1');
+    expect(querySpy.mock.calls[0][1]).toEqual({ rid: 'r1', gn: 'OKF_r1_v1', bv: null });
+  });
+
+  it('returns 0 for falsy guards', async () => {
+    expect(await conceptMeta.stampRepoGraphName('', 'OKF_r1_v1')).toBe(0);
+    expect(await conceptMeta.stampRepoGraphName('r1', '')).toBe(0);
+  });
+});
+
 // ── RE-INGEST FAILED CONCEPTS (David, 2026-10-14) ──
 describe('concept-meta-service.requeueFailedForReingest', () => {
   beforeEach(() => mockDb._reset());

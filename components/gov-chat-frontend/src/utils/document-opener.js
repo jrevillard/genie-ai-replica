@@ -3,6 +3,9 @@
 // link cannot carry the session — the fetch-blob flow is the only way to
 // hand the browser a viewable document.
 
+import MarkdownIt from 'markdown-it';
+import conceptService from '../services/conceptService';
+
 /**
  * Whether a stored url points outside the repository.
  * @param {String} url
@@ -15,6 +18,98 @@ export function isExternalUrl(url) {
   // A URL is considered external only if it's a valid HTTP link AND not a
   // placeholder.
   return isHttp && !isPlaceholder;
+}
+
+// ---------------------------------------------------------------------------
+// OKF concept sources (CAP-2/CAP-3, chat-source resolution). A concept has NO
+// doc-repository file (content-only chunking) — the open/download flows go
+// through the okf-server concept route under the caller's own scope, never
+// through the /api/files URL family. An unavailable concept (restricted repo,
+// retracted, deleted) resolves to OKF_CONCEPT_UNAVAILABLE so the callers can
+// render an honest "unavailable" notice instead of a generic open error.
+// ---------------------------------------------------------------------------
+
+/** Error shape for a concept that exists as a citation but cannot be served. */
+export function okfConceptUnavailable(message) {
+  const err = new Error(message || 'OKF concept content is not available');
+  err.code = 'OKF_CONCEPT_UNAVAILABLE';
+  return err;
+}
+
+/** Fetch one concept's meta row through conceptService (user bearer, per-request scope authz). */
+export async function fetchOkfConcept(repoId, conceptId) {
+  if (!repoId || !conceptId) throw okfConceptUnavailable();
+  const meta = await conceptService.get(repoId, conceptId);
+  // conceptService maps 404/501 → null: the concept is gone or fenced (404 is
+  // the anti-enumeration denial for restricted repos too).
+  if (!meta) throw okfConceptUnavailable();
+  return meta;
+}
+
+/** The concept's display title: frontmatter title, else the humanized id. */
+export function okfConceptTitle(meta, conceptId) {
+  const t = meta && meta.frontmatter && meta.frontmatter.title;
+  return (typeof t === 'string' && t.trim()) || String(conceptId).replace(/_/g, ' ').trim();
+}
+
+/**
+ * Open a concept as rendered markdown in a new tab (the viewbrowser
+ * equivalent for OKF concepts).
+ * @param {String} repoId
+ * @param {String} conceptId
+ */
+export async function openOkfConcept(repoId, conceptId) {
+  const meta = await fetchOkfConcept(repoId, conceptId);
+  const title = okfConceptTitle(meta, conceptId);
+  const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+  const rendered = md.render(String(meta.body || ''));
+  const html =
+    '<!doctype html><html><head><meta charset="utf-8">' +
+    `<title>${title.replace(/[<>&]/g, '')}</title>` +
+    '<style>body{font-family:system-ui,sans-serif;margin:2rem auto;max-width:52rem;line-height:1.55;color:#1a1a1a;padding:0 1rem}' +
+    'h1,h2,h3{line-height:1.25}code,pre{background:#f4f4f4;border-radius:4px;font-family:ui-monospace,monospace}' +
+    'pre{padding:.75rem;overflow:auto}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:.35rem .5rem}' +
+    'img{max-width:100%}</style></head><body>' +
+    `<h1>${title.replace(/[<>&]/g, '')}</h1>` +
+    rendered +
+    '</body></html>';
+  const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  window.open(blobUrl, '_blank');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+}
+
+/**
+ * Download a concept's markdown body as <title>.md.
+ * @param {String} repoId
+ * @param {String} conceptId
+ */
+export async function downloadOkfConcept(repoId, conceptId) {
+  const meta = await fetchOkfConcept(repoId, conceptId);
+  const title = okfConceptTitle(meta, conceptId);
+  const blob = new Blob([String(meta.body || '')], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${title.replace(/[^\w\-. ]+/g, '_')}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 100);
+}
+
+/**
+ * Resolve a concept's real title for a citation card (async id → title swap).
+ * Returns null when the concept cannot be fetched — the caller keeps the
+ * fallback title (never blocks render).
+ * @param {String} repoId
+ * @param {String} conceptId
+ */
+export async function fetchOkfConceptTitle(repoId, conceptId) {
+  try {
+    const meta = await fetchOkfConcept(repoId, conceptId);
+    return okfConceptTitle(meta, conceptId);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -33,12 +128,49 @@ export async function openRepositoryDocument(docId, accessToken) {
     }
   });
   if (!response.ok) {
-    throw new Error(`Network response was not ok: ${response.statusText}`);
+    // W5 (CAP-4): the status rides the error so callers can distinguish an
+    // honest refusal (D4's 403 OKF_RESTRICTED, a 404) from a transient
+    // failure — additive; existing callers only read the message.
+    const err = new Error(`Network response was not ok: ${response.statusText}`);
+    err.status = response.status;
+    throw err;
   }
   const fileBlob = await response.blob();
   const blobUrl = URL.createObjectURL(fileBlob);
   window.open(blobUrl, '_blank');
   setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+}
+
+// ---------------------------------------------------------------------------
+// OKF ORIGINAL SOURCE documents (CAP-4/W5, chat-source resolution). A concept
+// card can name the doc-repository documents the concept ORIGINATED from
+// (narrowed sources[] from the CAP-2 route). Those open through the legacy
+// fetch-blob flow; the D4 serve-refusal (403 OKF_RESTRICTED) and a gone file
+// (404) resolve to the honest unavailable code — never a generic open error.
+// ---------------------------------------------------------------------------
+
+/** Error shape for an original-source document that cannot be served. */
+export function okfSourceDocUnavailable(message) {
+  const err = new Error(message || 'OKF original source is not available');
+  err.code = 'OKF_SOURCE_UNAVAILABLE';
+  return err;
+}
+
+/**
+ * Open a concept's original source document in a new tab.
+ * @param {String} fileId - the doc-repository file id from the concept's sources
+ * @param {String} accessToken - OIDC access token
+ */
+export async function openOkfSource(fileId, accessToken) {
+  if (!fileId) throw okfSourceDocUnavailable();
+  try {
+    await openRepositoryDocument(fileId, accessToken);
+  } catch (err) {
+    // 403 = the D4 serve refusal (restricted repo, caller without the scope
+    // or role); 404 = the file is gone. Both are honest unavailability.
+    if (err && (err.status === 403 || err.status === 404)) throw okfSourceDocUnavailable();
+    throw err;
+  }
 }
 
 /**

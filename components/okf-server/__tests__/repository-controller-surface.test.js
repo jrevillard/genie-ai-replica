@@ -22,7 +22,16 @@ jest.mock('../services/repository-service', () => ({
   update: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
   remove: jest.fn().mockResolvedValue({ repo_id: 'r1', status: 'deleted', deletion_reason: null }),
   frontmatterHistory: jest.fn().mockResolvedValue({ entries: [] }),
-  revertFrontmatter: jest.fn().mockResolvedValue({ ok: true })
+  revertFrontmatter: jest.fn().mockResolvedValue({ ok: true }),
+  // CAP-2 fence: the controller destructures RepoError from this module to
+  // mirror getById's denial byte-for-byte (real export: repository-service:1050).
+  RepoError: class RepoError extends Error {
+    constructor(code, message, status) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  }
 }));
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null),
@@ -43,25 +52,21 @@ jest.mock('../services/pii-service', () => ({
   repoBulkAction: jest.fn().mockResolvedValue({ ok: true }),
   acknowledgePii: jest.fn().mockResolvedValue({ ok: true, acknowledged: true })
 }));
-jest.mock('../services/concept-meta-service', () => ({
-  __esModule: true,
-  default: {
+jest.mock('../services/concept-meta-service', () => {
+  const base = {
     countByIndexStatus: jest.fn().mockResolvedValue(0),
     getConceptMeta: jest.fn(),
     patchConceptFields: jest.fn().mockResolvedValue({ ok: true }),
     patchConceptMeta: jest.fn().mockResolvedValue({ ok: true }),
     discoverRepos: jest.fn().mockResolvedValue([]),
     ensureSummary: jest.fn().mockResolvedValue(null),
-    readManifest: jest.fn().mockResolvedValue(null)
-  },
-  countByIndexStatus: jest.fn().mockResolvedValue(0),
-  getConceptMeta: jest.fn(),
-  patchConceptFields: jest.fn().mockResolvedValue({ ok: true }),
-  patchConceptMeta: jest.fn().mockResolvedValue({ ok: true }),
-  discoverRepos: jest.fn().mockResolvedValue([]),
-  ensureSummary: jest.fn().mockResolvedValue(null),
-  readManifest: jest.fn().mockResolvedValue(null)
-}));
+    readManifest: jest.fn().mockResolvedValue(null),
+    // CAP-2 fence suite drives these read paths directly.
+    listConceptsMeta: jest.fn().mockResolvedValue([]),
+    getRepoLinks: jest.fn().mockResolvedValue([])
+  };
+  return { __esModule: true, default: base, ...base };
+});
 jest.mock('../services/conformance-service', () => ({
   getRepoMetrics: jest.fn().mockResolvedValue({})
 }));
@@ -164,9 +169,23 @@ jest.mock('../services/llm-curation-service', () => ({
   proposeLinks: jest.fn().mockResolvedValue({ suggestions: [] }),
   proposeFrontmatter: jest.fn().mockResolvedValue([])
 }));
-jest.mock('../services/scope-authz-service', () => ({
-  deriveScopeAuthz: jest.fn().mockReturnValue({ isSuperAdmin: true, authorizedRepoIds: new Set() })
-}));
+jest.mock('../services/scope-authz-service', () => {
+  // The suite's standing assumption: every driven caller is privileged. The
+  // CAP-2 fence delegates the SCOPE GRAMMAR (parseOkfScope/LEVEL_SATISFIES)
+  // to the real module via access-control-service — keep those real — and
+  // reads authorizedRepoIds === null as privilege, so the mock must mirror
+  // the real derivation's SHAPE (null when superadmin, else the scope set)
+  // or the privileged fence case would fence the superadmin.
+  const real = jest.requireActual('../services/scope-authz-service');
+  return {
+    ...real,
+    // Delegate to the REAL derivation: it is a pure scope-grammar parse, and
+    // the publication-gate steward check (W2 security review) needs
+    // scope-bearing callers to land in authorizedRepoIds — a scope-ignoring
+    // stub would classify a scoped steward as a citizen.
+    deriveScopeAuthz: jest.fn((okfScopes, isSuperAdmin) => real.deriveScopeAuthz(okfScopes, isSuperAdmin))
+  };
+});
 
 const controller = require('../controllers/repository-controller');
 const repoService = require('../services/repository-service');
@@ -194,7 +213,9 @@ function fakeReq(over = {}) {
     query: over.query || {},
     headers: over.headers || {},
     okfScopes: over.okfScopes || [],
-    okfIsSuperAdmin: true,
+    // Default TRUE preserves every pre-fence test's privileged caller; the
+    // CAP-2 fence tests below pass explicit false to exercise the gate.
+    okfIsSuperAdmin: over.okfIsSuperAdmin !== undefined ? over.okfIsSuperAdmin : true,
     user: { sub: 'u1' }
   };
 }
@@ -798,5 +819,269 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
       expect(next).toHaveBeenCalledWith(boom);
       expect(res.json).not.toHaveBeenCalled();
     }
+  });
+});
+
+// ===========================================================================
+// CAP-2 (chat-source resolution) — the 6-1c restricted-repo READ fence on the
+// concept-content read family. resolveGraphSet has fenced RESTRICTED repos
+// from non-privileged callers since 6-1c (callerMayTraverseRepo); these read
+// routes must not serve what retrieval refuses. Denial = getById's exact
+// shape (RepoError REPO_NOT_FOUND 404 + audit) so foreign and fenced stay
+// indistinguishable (anti-enumeration).
+// ===========================================================================
+describe('repository-controller — CAP-2 restricted-repo read fence', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const auditService = require('../services/audit-service');
+  const RESTRICTED = { repo_id: 'r1', name: 'R', acl: { restricted: true, required_scopes: ['okf:t:dom:admin'] } };
+  // no acl → never restricted; a SERVING repo is published AND ingested —
+  // the CAP-2 serving-read surface serves only the retrieval-serving state.
+  const OPEN_REPO = { repo_id: 'r1', name: 'R', lifecycle_state: 'publish', ingested_at: '2026-11-04T00:00:00Z' };
+
+  const cases = (handler, svcFn, svcResult) => {
+    return [
+      () => {
+        // fenced: scopeless non-privileged caller on a RESTRICTED repo → 404 + audit
+        repoService.getById.mockResolvedValueOnce(RESTRICTED);
+        if (svcFn) svcFn.mockResolvedValueOnce(svcResult);
+        return drive(handler, { okfIsSuperAdmin: false, okfScopes: [] });
+      },
+      () => {
+        // granted: exact-repo read scope on the same RESTRICTED repo → served
+        repoService.getById.mockResolvedValueOnce(RESTRICTED);
+        if (svcFn) svcFn.mockResolvedValueOnce(svcResult);
+        return drive(handler, { okfIsSuperAdmin: false, okfScopes: ['okf:t:r1:read'] });
+      },
+      () => {
+        // privileged: superadmin passes without any scope
+        repoService.getById.mockResolvedValueOnce(RESTRICTED);
+        if (svcFn) svcFn.mockResolvedValueOnce(svcResult);
+        return drive(handler, { okfIsSuperAdmin: true, okfScopes: [] });
+      },
+      () => {
+        // unchanged: scopeless caller on a NEVER-restricted repo (the default-open base)
+        repoService.getById.mockResolvedValueOnce(OPEN_REPO);
+        if (svcFn) svcFn.mockResolvedValueOnce(svcResult);
+        return drive(handler, { okfIsSuperAdmin: false, okfScopes: [] });
+      }
+    ];
+  };
+
+  it('getConcept: fenced caller 404s with the getById denial shape + audit; granted/privileged/unrestricted pass', async () => {
+    conceptMetaService.getConceptMeta.mockResolvedValue({ concept_id: 'c1', body: '# hi' });
+    const [fenced, granted, privileged, base] = cases(controller.getConcept, conceptMetaService.getConceptMeta, {
+      concept_id: 'c1'
+    });
+
+    const deny = await fenced();
+    expect(deny.next).toHaveBeenCalled();
+    expect(deny.next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(deny.next.mock.calls[0][0].status).toBe(404);
+    expect(deny.res.json).not.toHaveBeenCalled();
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'authz.denied.repo', repo_id: 'r1' })
+    );
+
+    for (const run of [granted, privileged, base]) {
+      const { res, next } = await run();
+      expect(res.statusCode).toBe(200);
+      expect(next).not.toHaveBeenCalled();
+    }
+    expect(conceptMetaService.getConceptMeta).toHaveBeenCalledWith('r1', 'c1');
+  });
+
+  it('listConcepts: fenced caller 404s — the index must not leak a fenced repo', async () => {
+    const [fenced, , , base] = cases(controller.listConcepts, conceptMetaService.listConceptsMeta, []);
+
+    const deny = await fenced();
+    expect(deny.next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(conceptMetaService.listConceptsMeta).not.toHaveBeenCalled();
+
+    const { res } = await base();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('getRepoManifest: fenced caller 404s — the manifest names every concept', async () => {
+    const [fenced, , , base] = cases(controller.getRepoManifest, conceptMetaService.readManifest, { concepts: [] });
+
+    const deny = await fenced();
+    expect(deny.next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+
+    const { res } = await base();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('getRepoLinks: fenced caller 404s — the projection exposes repo structure', async () => {
+    const [fenced, , , base] = cases(controller.getRepoLinks, conceptMetaService.getRepoLinks, []);
+
+    const deny = await fenced();
+    expect(deny.next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+
+    const { res } = await base();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('the concept read family never touches the internal shared secret (CAP-2 hard rule)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'repository-controller.js'), 'utf8');
+    expect(src).not.toContain('x-okf-internal-secret');
+    expect(src).not.toContain('internal.secret');
+  });
+});
+
+// ===========================================================================
+// W2 security review (2026-11-04) — the CAP-2 citizen content path serves
+// ONLY what retrieval serves. Two gates beyond the restricted fence:
+// (1) publication gate — non-steward callers get the servingRepos predicate
+//     (lifecycle_state==='publish' && ingested_at != null); retracted keeps
+//     meta rows, drafts carry bodies from import time, publish-to-drain has
+//     a window — none may serve a citizen. Same 404 envelope as the fence,
+//     but NO audit row (normal lifecycle traffic, not an authz denial).
+//     Stewards (superadmin / wildcard / this repo's scope) keep the editor
+//     contract — the draft/retracted row IS their working set.
+// (2) field projection — non-steward callers get the CAP-3 card contract
+//     (identity + title/labels/summary/body/links), never worker internals,
+//     curation provenance, Arango system fields, or sources[] (stays
+//     steward-only until W5 delivers it behind the W4 serve-refusal gate).
+// ===========================================================================
+describe('repository-controller — CAP-2 publication gate + card projection (W2 security review)', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const auditService = require('../services/audit-service');
+  // W8 ceiling × CSR batch composition: the steward row carries the ceiling
+  // field (the editor's "advise the curator" number); the citizen card does not.
+  const { maxConceptDocChars } = require('../services/concept-ceiling');
+
+  const FULL_ROW = {
+    repo_id: 'r1',
+    concept_id: 'c1',
+    graph_name: 'OKF_r1',
+    bundle_version: 3,
+    title: 'Concept One',
+    labels: ['tax.a'],
+    summary: 's',
+    body: '# body',
+    links: [{ target: 'c2' }],
+    // everything below must NOT reach a citizen
+    path: 'dir/c1.md',
+    curation: { by: 'steward' },
+    sources: [{ kind: 'crawl', resource: 'x', file_id: 'f9' }],
+    pii_state: 'error',
+    pii_hits_summary: { DATE_TIME: 2 },
+    pii_scan_error: { message: 'scan failed' },
+    index_status: 'error',
+    last_error: 'axios boom http://dataprep:5000/ingest',
+    last_worker_error: 'Internal Server Error',
+    ingest_attempts: 7,
+    worker_claimed_at: '2026-11-04T00:00:00Z',
+    next_attempt_after: '2026-11-04T01:00:00Z',
+    content_hash: 'h',
+    ingest_labels: ['x'],
+    trust_tier: 'gold',
+    _key: 'k',
+    _id: 'okf_concepts_meta/k',
+    _rev: 'r'
+  };
+
+  const servingRepo = (over = {}) => ({
+    repo_id: 'r1',
+    name: 'R',
+    lifecycle_state: 'publish',
+    ingested_at: '2026-11-04T00:00:00Z',
+    ...over
+  });
+
+  beforeEach(() => {
+    conceptMetaService.getConceptMeta.mockReset();
+    conceptMetaService.getConceptMeta.mockResolvedValue({ ...FULL_ROW });
+    auditService.writeAudit.mockClear();
+  });
+
+  it('citizen + serving repo → 200 card contract: card fields + narrowed sources, no worker/PII/system fields', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    // CAP-4 (W5): sources ride narrowed to {kind, file_id, file_name, resource}
+    // — the D4 serve gate refuses restricted bytes, so naming them is safe.
+    expect(res.body).toEqual({
+      repo_id: 'r1',
+      concept_id: 'c1',
+      graph_name: 'OKF_r1',
+      bundle_version: 3,
+      title: 'Concept One',
+      labels: ['tax.a'],
+      summary: 's',
+      body: '# body',
+      links: [{ target: 'c2' }],
+      sources: [{ kind: 'crawl', file_id: 'f9', resource: 'x' }]
+    });
+  });
+
+  it('sources entries with NEITHER file_id nor resource are dropped, not leaked', async () => {
+    conceptMetaService.getConceptMeta.mockResolvedValue({
+      ...FULL_ROW,
+      sources: [
+        { kind: 'document', file_id: 'keep-1', file_name: 'a.pdf' },
+        { kind: 'mystery' },
+        'garbage-string',
+        null
+      ]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.body.sources).toEqual([{ kind: 'document', file_id: 'keep-1', file_name: 'a.pdf' }]);
+  });
+
+  it('an absent sources field stays absent (bundle-import/scratch rows render no affordance)', async () => {
+    conceptMetaService.getConceptMeta.mockResolvedValue({ ...FULL_ROW, sources: undefined });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.body.sources).toBeUndefined();
+  });
+
+  it.each([
+    ['retracted', { lifecycle_state: 'retracted' }],
+    ['draft (never published)', { lifecycle_state: 'draft' }],
+    ['published but not yet drained', { lifecycle_state: 'publish', ingested_at: null }]
+  ])('citizen + %s repo → 404 REPO_NOT_FOUND, silent (no audit)', async (_label, over) => {
+    repoService.getById.mockResolvedValueOnce(servingRepo(over));
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    expect(auditService.writeAudit).not.toHaveBeenCalled();
+    expect(conceptMetaService.getConceptMeta).not.toHaveBeenCalled();
+  });
+
+  it('superadmin + retracted repo → 200 FULL row + ceiling (steward editor contract intact)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'retracted' }));
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: true, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ...FULL_ROW, max_doc_chars: maxConceptDocChars() });
+  });
+
+  it('scoped steward + draft repo → 200 FULL row + ceiling (the editor working set)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    const { res, next } = await drive(controller.getConcept, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r1:read']
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ...FULL_ROW, max_doc_chars: maxConceptDocChars() });
+  });
+
+  it('citizen + serving repo the caller is NOT scoped to → still the projected card (scope names restrict, not widen)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:other-repo:read']
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.body).toBe('# body');
+    expect(res.body.last_error).toBeUndefined();
   });
 });

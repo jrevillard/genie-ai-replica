@@ -1,6 +1,20 @@
 'use strict';
 
-const { isExternalUrl, fileTypeBadge, openRepositoryDocument } = require('@/utils/document-opener');
+jest.mock('@/services/conceptService', () => ({
+  __esModule: true,
+  default: { get: jest.fn() }
+}));
+
+const {
+  isExternalUrl,
+  fileTypeBadge,
+  openRepositoryDocument,
+  openOkfConcept,
+  openOkfSource,
+  downloadOkfConcept,
+  fetchOkfConceptTitle
+} = require('@/utils/document-opener');
+const conceptService = require('@/services/conceptService').default;
 
 describe('isExternalUrl', () => {
   it('treats only absolute http(s) links as external', () => {
@@ -70,5 +84,174 @@ describe('openRepositoryDocument', () => {
   it('surfaces a failed fetch', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, statusText: 'Not Found' });
     await expect(openRepositoryDocument('doc-9', 'token-1')).rejects.toThrow('Not Found');
+  });
+
+  it('carries the HTTP status on the failure (W5: the caller distinguishes refusal from outage)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, statusText: 'Forbidden' });
+    await expect(openRepositoryDocument('doc-9', 'token-1')).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CAP-4 (W5): the ORIGINAL SOURCE flow. A concept's narrowed sources[] name
+// doc-repository documents; those open through the legacy fetch-blob flow,
+// with the D4 refusal (403) and a gone file (404) resolving to the honest
+// OKF_SOURCE_UNAVAILABLE code — a 500 stays a generic failure.
+// ---------------------------------------------------------------------------
+describe('openOkfSource (original source flow)', () => {
+  const originalFetch = global.fetch;
+  const originalOpen = window.open;
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    window.open = originalOpen;
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  });
+
+  function mockFetch(status, ok) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: ok === undefined ? status < 400 : ok,
+      status,
+      statusText: status === 403 ? 'Forbidden' : status === 404 ? 'Not Found' : 'Internal Server Error',
+      blob: () => Promise.resolve({})
+    });
+    URL.createObjectURL = jest.fn(() => 'blob:mock');
+    URL.revokeObjectURL = jest.fn();
+    window.open = jest.fn();
+  }
+
+  it('opens the source document through the legacy blob flow', async () => {
+    mockFetch(200);
+    await openOkfSource('doc-9', 'token-1');
+    expect(global.fetch).toHaveBeenCalledWith(`${window.location.origin}/api/files/doc-9/viewbrowser`, {
+      headers: { Authorization: 'Bearer token-1' }
+    });
+    expect(window.open).toHaveBeenCalledWith('blob:mock', '_blank');
+  });
+
+  it('maps the D4 refusal (403) to OKF_SOURCE_UNAVAILABLE', async () => {
+    mockFetch(403);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+  });
+
+  it('maps a gone file (404) to OKF_SOURCE_UNAVAILABLE', async () => {
+    mockFetch(404);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+  });
+
+  it('a 500 stays a generic failure (transient outage, not unavailability)', async () => {
+    mockFetch(500);
+    await expect(openOkfSource('doc-9', 'token-1')).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('a missing file id is unavailable before any fetch', async () => {
+    global.fetch = jest.fn();
+    await expect(openOkfSource(null, 'token-1')).rejects.toMatchObject({ code: 'OKF_SOURCE_UNAVAILABLE' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CAP-3 (chat-source resolution): the OKF concept open/download/title flows.
+// A concept resolves through conceptService (the okf-server route under the
+// caller's own scope) — NEVER through the /api/files family, which cannot
+// resolve a concept on any creation origin.
+// ---------------------------------------------------------------------------
+describe('OKF concept flows (document-opener)', () => {
+  const originalOpen = window.open;
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+
+  afterEach(() => {
+    window.open = originalOpen;
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+    jest.clearAllMocks();
+  });
+
+  it('openOkfConcept renders the markdown and opens the blob in a new tab', async () => {
+    conceptService.get.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, body: '# Body\n\nText.' });
+    const createObjectURL = jest.fn(() => 'blob:concept');
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = jest.fn();
+    window.open = jest.fn();
+    // jsdom's Blob lacks .text() — carry the constructor parts on the instance.
+    const RealBlob = global.Blob;
+    global.Blob = class extends RealBlob {
+      constructor(parts, opts) {
+        super(parts, opts);
+        this._parts = parts;
+      }
+    };
+
+    try {
+      await openOkfConcept('repo-1', 'alpha_concept');
+    } finally {
+      global.Blob = RealBlob;
+    }
+
+    expect(conceptService.get).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0][0];
+    expect(blob.type).toBe('text/html');
+    const html = blob._parts.join('');
+    expect(html).toContain('<h1>Alpha Concept</h1>');
+    expect(html).toContain('<h1>Body</h1>');
+    expect(window.open).toHaveBeenCalledWith('blob:concept', '_blank');
+  });
+
+  it('openOkfConcept refuses identity-less citations with the unavailable code', async () => {
+    await expect(openOkfConcept(null, 'alpha_concept')).rejects.toMatchObject({ code: 'OKF_CONCEPT_UNAVAILABLE' });
+    expect(conceptService.get).not.toHaveBeenCalled();
+  });
+
+  it('openOkfConcept maps an unavailable concept (404 null) to the unavailable code', async () => {
+    conceptService.get.mockResolvedValueOnce(null); // 404/501 → null: fenced or gone
+    await expect(openOkfConcept('repo-1', 'ghost')).rejects.toMatchObject({ code: 'OKF_CONCEPT_UNAVAILABLE' });
+  });
+
+  it('downloadOkfConcept saves the markdown body as <title>.md', async () => {
+    conceptService.get.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, body: '# Body' });
+    URL.createObjectURL = jest.fn(() => 'blob:dl');
+    URL.revokeObjectURL = jest.fn();
+    const click = jest.fn();
+    const remove = jest.fn();
+    const anchor = {
+      click,
+      remove,
+      set href(v) {
+        this._href = v;
+      },
+      get href() {
+        return this._href;
+      }
+    };
+    const appendChild = jest.spyOn(document.body, 'appendChild').mockImplementation(() => {});
+    const createElement = jest.spyOn(document, 'createElement').mockReturnValue(anchor);
+
+    await downloadOkfConcept('repo-1', 'alpha_concept');
+
+    expect(createElement).toHaveBeenCalledWith('a');
+    expect(anchor.download).toBe('Alpha Concept.md');
+    expect(click).toHaveBeenCalled();
+    expect(remove).toHaveBeenCalled();
+    expect(appendChild).toHaveBeenCalled();
+    appendChild.mockRestore();
+    createElement.mockRestore();
+  });
+
+  it('fetchOkfConceptTitle resolves the frontmatter title; null when unavailable', async () => {
+    conceptService.get.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, body: '' });
+    await expect(fetchOkfConceptTitle('repo-1', 'alpha_concept')).resolves.toBe('Alpha Concept');
+    conceptService.get.mockResolvedValueOnce(null);
+    await expect(fetchOkfConceptTitle('repo-1', 'ghost')).resolves.toBeNull();
+  });
+
+  it('fetchOkfConceptTitle falls back to the humanized id when frontmatter lacks a title', async () => {
+    conceptService.get.mockResolvedValueOnce({ frontmatter: {}, body: '' });
+    await expect(fetchOkfConceptTitle('repo-1', 'alpha_two')).resolves.toBe('alpha two');
   });
 });

@@ -73,7 +73,9 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     process.env.KEYCLOAK_URL = 'https://192.168.18.16/auth';
     process.env.KEYCLOAK_INTERNAL_URL = 'http://keycloak:8080';
     await getServiceToken();
-    expect(axios.post.mock.calls[0][0]).toContain('https://192.168.18.16/auth/realms/genie/protocol/openid-connect/token');
+    expect(axios.post.mock.calls[0][0]).toContain(
+      'https://192.168.18.16/auth/realms/genie/protocol/openid-connect/token'
+    );
     // Failover still reaches the internal host when the public one is down.
     require('../services/service-token')._resetForTesting();
     axios.post.mockClear(); // leg 2's calls only — leg 1's public mint already asserted

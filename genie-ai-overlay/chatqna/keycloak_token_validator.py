@@ -53,6 +53,7 @@ def _expected_issuers() -> list:
         return [public]
     return [public, internal]
 
+
 # JWKS cache + single-flight lock. JWKS validation runs on every authenticated
 # request, so concurrent requests at the TTL boundary must coalesce into a single
 # Keycloak fetch instead of each issuing its own GET /certs request.

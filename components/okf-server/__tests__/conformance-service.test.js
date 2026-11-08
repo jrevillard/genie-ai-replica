@@ -146,6 +146,18 @@ describe('conformance-service — persistConformanceIssues (DB)', () => {
 describe('conformance-service — getRepoMetrics (DB)', () => {
   beforeEach(() => db._reset());
 
+  // #1647 ride-along: the metrics read must run against the repo_id
+  // persistent index (it measured 0.43-4.3 s on a 1112-concept repo without
+  // it). This test is deliberately FIRST in the describe — the module's
+  // per-process ensure cache makes every later call a no-op, so only the
+  // first getRepoMetrics invocation can observe the ensure.
+  test('the metrics read ensures the repo_id persistent index', async () => {
+    db.query.mockResolvedValue({ all: async () => [{ concept_count: 0 }] });
+    await getRepoMetrics('r1');
+    const col = db.collection('okf_concepts_meta');
+    expect(col.ensureIndex).toHaveBeenCalledWith({ type: 'persistent', fields: ['repo_id'] });
+  });
+
   // NOTE: there is deliberately NO mock-echo test here — a fixture supplying
   // the five metric values with assertions reading them back proves only
   // rows[0] passthrough and cannot detect a wrong query, discriminator, or a

@@ -518,6 +518,42 @@ async function listConceptsMeta(repo_id, opts = {}) {
  * never drained (a steward reading a draft) has no _LINKS_TO collection:
  * the index degrades to links: [] instead of erroring — the walk is
  * content-complete through the list, the links are an affordance. */
+/** W9 perf fix (David, 2026-11-08 — "optimized for handling large
+ * repositories"): the first tree page must never gateway-timeout. Live
+ * evidence: the original per-row correlated join (200 subqueries × an
+ * un-indexed 483k-row _LINKS_TO scan) took >300 s per page on Bali — the
+ * dialog 504'd before anything rendered. Two-part fix:
+ *   1. LAZY PERSISTENT INDEXES — `okf_concepts_meta` on `repo_id` and each
+ *      graph's `_LINKS_TO` on `from_concept_id`, ensured on first read,
+ *      cached per process, NON-FATAL on failure (the batched scan below
+ *      still serves). This also heals repos already drained before the
+ *      index existed — no re-ingest needed.
+ *   2. BATCHED JOIN — the page's links come from ONE filtered edges scan
+ *      (`from_concept_id IN <page ids>`, index-served) collected per from,
+ *      instead of one correlated scan PER ROW. */
+const treeIndexReady = new Set();
+
+/** Ensure a persistent index exists on [fields]; cache the verdict per
+ * collection so steady-state reads pay nothing. Never throws. */
+async function ensureTreeIndex(db, collection, fields) {
+  const key = `${collection}:${fields.join(',')}`;
+  if (treeIndexReady.has(key)) return;
+  try {
+    const col = db.collection(collection);
+    const existing = await col.indexes();
+    if (!existing.some((i) => i.type === 'persistent' && (i.fields || []).join(',') === fields.join(','))) {
+      await col.ensureIndex({ type: 'persistent', fields });
+      logger.info(`okf.tree index created (large-repo read path)`, { collection, fields });
+    }
+    treeIndexReady.add(key);
+  } catch (err) {
+    // Non-fatal by design: the batched IN-join full scan still serves the
+    // page; the index is a scale optimization. NOT cached on failure — the
+    // next call retries.
+    logger.warn(`okf.tree index check failed (non-fatal)`, { collection, fields, error: err.message });
+  }
+}
+
 async function listConceptTree(repo_id, opts = {}) {
   if (!repo_id) return { total: 0, offset: 0, limit: 200, concepts: [] };
   const db = await getDb();
@@ -546,17 +582,27 @@ async function listConceptTree(repo_id, opts = {}) {
     // transient DB fault THROWS and surfaces as a 500 instead of silently
     // serving a link-less index for a drained repo (review r0).
     const edgesReady = await db.collection(edgeName).exists();
-    const PAGE =
-      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.title, m.concept_id LIMIT @offset, @limit ';
+    // Scale indexes (see the helper above): always the meta lookup, the
+    // edges lookup only when this repo's graph was actually drained.
+    await ensureTreeIndex(db, 'okf_concepts_meta', ['repo_id']);
+    if (edgesReady) await ensureTreeIndex(db, edgeName, ['from_concept_id']);
+    const PAGEQ =
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.title, m.concept_id LIMIT @offset, @limit';
     const rows = edgesReady
       ? await (
           await db.query(
-            `${PAGE}LET out = (FOR e IN \`${edgeName}\` FILTER e.from_concept_id == m.concept_id AND e.source == 'author' RETURN e.to_concept_id) RETURN { concept_id: m.concept_id, title: m.title, links: out }`,
+            // Batched join: ONE edges scan for the whole page (index-served on
+            // from_concept_id once ensured), collected per from — never a
+            // correlated subquery per row (the >300 s Bali failure mode).
+            `LET ids = (${PAGEQ} RETURN m.concept_id)
+             LET grouped = (FOR e IN \`${edgeName}\` FILTER e.source == 'author' AND e.from_concept_id IN ids COLLECT from = e.from_concept_id INTO hits RETURN { from, tos: hits[*].e.to_concept_id })
+             ${PAGEQ} LET g = FIRST(FOR x IN grouped FILTER x.from == m.concept_id RETURN x)
+             RETURN { concept_id: m.concept_id, title: m.title, links: g ? g.tos : [] }`,
             { rid: repo_id, offset, limit }
           )
         ).all()
       : await (
-          await db.query(`${PAGE}RETURN { concept_id: m.concept_id, title: m.title, links: [] }`, {
+          await db.query(`${PAGEQ} RETURN { concept_id: m.concept_id, title: m.title, links: [] }`, {
             rid: repo_id,
             offset,
             limit

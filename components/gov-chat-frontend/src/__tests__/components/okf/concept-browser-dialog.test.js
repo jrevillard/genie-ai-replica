@@ -34,7 +34,8 @@ const BROWSER = (over = {}) => ({
   concepts: [],
   total: 0,
   loading: false,
-  progress: null,
+  extending: false,
+  treeComplete: false,
   unavailable: false,
   error: null,
   selectedConceptId: null,
@@ -95,13 +96,42 @@ describe('ConceptBrowserDialog — list, filter, progress', () => {
     expect(w.find('[data-testid="okf-browser-count"]').text()).not.toContain('{n}');
   });
 
-  it('the progress line renders done/total with the placeholders replaced', () => {
-    const rows = Array.from({ length: 2 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
-    const w = mountDialog(BROWSER({ concepts: rows, total: 6, progress: { done: 2, total: 6 } }));
-    const line = w.find('[data-testid="okf-browser-progress"]');
-    expect(line.exists()).toBe(true);
-    expect(line.text()).toContain('2 of 6');
-    expect(line.text()).not.toContain('{done}');
+  it('lazy loading: Show more extends in memory first — NO page fetch while rows remain', async () => {
+    const rows = Array.from({ length: 250 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
+    const store = fakeStore(BROWSER({ concepts: rows, total: 250 }));
+    const w = mount(ConceptBrowserDialog, {
+      global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
+      props: { visible: true }
+    });
+    expect(w.findAll('.ds-table tbody tr').length).toBe(100);
+    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
+    expect(w.findAll('.ds-table tbody tr').length).toBe(200);
+    // David, 2026-11-08: the dialog never waits for the whole repository —
+    // in-memory extension must not fetch anything.
+    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserExtendConceptTree', expect.anything());
+  });
+
+  it('lazy loading: at the loaded edge Show more fetches the NEXT page on demand, then extends', async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
+    const store = fakeStore(BROWSER({ concepts: rows, total: 500, treeComplete: false }));
+    const w = mount(ConceptBrowserDialog, {
+      global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
+      props: { visible: true }
+    });
+    // Window to the loaded edge (100 → 200): still no fetch.
+    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
+    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserExtendConceptTree', expect.anything());
+    // At the edge with pages remaining: the click IS the on-demand fetch —
+    // the component's contract ends at the dispatch (the store owns the
+    // append; pinned in okf-browser.test.js).
+    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
+    expect(store.dispatch).toHaveBeenCalledWith('okf/browserExtendConceptTree', { repoId: 'repo-1' });
+  });
+
+  it('a complete tree fully covered by the render window hides Show more entirely', () => {
+    const rows = Array.from({ length: 80 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
+    const w = mountDialog(BROWSER({ concepts: rows, total: 80, treeComplete: true }));
+    expect(w.find('[data-testid="okf-browser-show-more"]').exists()).toBe(false);
   });
 
   it('the filter narrows the assembled rows client-side (title or id) and the count follows', async () => {

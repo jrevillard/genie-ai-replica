@@ -46,7 +46,8 @@ function seedConcepts(repoId, n) {
 }
 
 /** Emulate the tree page queries against the seeded stores: the count, the
- * joined page (author edges only) and the no-graph page (links: []). */
+ * BATCHED joined page (author edges only, one IN-join per page — David,
+ * 2026-11-08 large-repo fix) and the no-graph page (links: []). */
 function programTreeQuery() {
   mockDb.query.mockImplementation(async (q, b) => {
     const text = typeof q === 'string' ? q : '';
@@ -63,8 +64,10 @@ function programTreeQuery() {
       if (!String(text).includes("e.source == 'author'")) {
         throw new Error('the tree index must join AUTHOR edges only');
       }
-      if (!String(text).includes('e.from_concept_id == m.concept_id')) {
-        throw new Error('the tree index must join on from_concept_id');
+      if (!String(text).includes('e.from_concept_id IN ids')) {
+        throw new Error(
+          'the tree index must join via ONE batched scan (from_concept_id IN <page ids>) — never a correlated per-row subquery (the >300s Bali failure)'
+        );
       }
       const edges = Object.values(mockDb._stores[`${m[1]}_LINKS_TO`] || {});
       return {
@@ -155,6 +158,31 @@ describe('concept-meta-service.listConceptTree (W9 tree index)', () => {
     // the legacy anchor) — never an invented name.
     const pageCall = mockDb.query.mock.calls.find(([q]) => String(q).includes('_LINKS_TO'));
     expect(String(pageCall[0])).toContain('`OKF_r1_LINKS_TO`');
+  });
+
+  test('large-repo read path ensures the scale indexes (meta repo_id + edges from_concept_id)', async () => {
+    // A UNIQUE repo so the module-level ensure cache has not seen its edge
+    // collection yet (the cache deliberately persists across tests).
+    seedConcepts('idx-r1', 1);
+    const edgeCol = mockDb.collection('OKF_idx-r1_LINKS_TO');
+    await edgeCol.save({ _key: 'e1', from_concept_id: 'c0', to_concept_id: 'c0', source: 'author' });
+    await conceptMeta.listConceptTree('idx-r1', { limit: 200, offset: 0 });
+    expect(edgeCol.ensureIndex).toHaveBeenCalledWith({ type: 'persistent', fields: ['from_concept_id'] });
+    // The META index (okf_concepts_meta:repo_id) goes through the same
+    // helper, but its ensure fired in this file's FIRST listConceptTree call
+    // and the module-level cache holds the verdict — asserting it here would
+    // pin Jest's file-local module state, not the code. The fresh edge
+    // collection above proves the ensure path.
+  });
+
+  test('the index ensure is cached — a second read on the same repo never re-ensures', async () => {
+    seedConcepts('idx-r2', 1);
+    const edgeCol = mockDb.collection('OKF_idx-r2_LINKS_TO');
+    await edgeCol.save({ _key: 'e1', from_concept_id: 'c0', to_concept_id: 'c0', source: 'author' });
+    await conceptMeta.listConceptTree('idx-r2', { limit: 200, offset: 0 });
+    const callsAfterFirst = edgeCol.ensureIndex.mock.calls.length;
+    await conceptMeta.listConceptTree('idx-r2', { limit: 200, offset: 0 });
+    expect(edgeCol.ensureIndex.mock.calls.length).toBe(callsAfterFirst);
   });
 
   test('no drained graph: links degrade to [] (steward on a draft), the page still serves', async () => {

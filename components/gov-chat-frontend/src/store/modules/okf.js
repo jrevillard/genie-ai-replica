@@ -140,6 +140,8 @@ function initialBrowserState() {
     concepts: [],
     total: 0,
     loading: false,
+    extending: false,
+    treeComplete: false,
     progress: null,
     unavailable: false,
     error: null,
@@ -2250,10 +2252,12 @@ const actions = {
   // ── W9 (concept tree browse, 2026-11-08) — the citizen modal viewer ──────
   /**
    * Open the browser at a cited concept: reset the slice, then start the
-   * progressive index assembly AND the first per-hop CAP-2 fetch in
-   * parallel. Validation is honest: an entry without repo identity (a
-   * pre-CAP-1 persisted row) never opens a dead dialog — but the
-   * affordances only render on working citations, so this arm is a
+   * FIRST index page AND the first per-hop CAP-2 fetch in parallel (David,
+   * 2026-11-08: "the user must not have to wait until the whole repository
+   * loads into the browser — only the initial tree and the focus document;
+   * the rest on demand"). Validation is honest: an entry without repo
+   * identity (a pre-CAP-1 persisted row) never opens a dead dialog — but
+   * the affordances only render on working citations, so this arm is a
    * backstop, not the UI's gate.
    */
   openConceptBrowser({ commit, dispatch }, { repoId, conceptId } = {}) {
@@ -2276,13 +2280,12 @@ const actions = {
   },
 
   /**
-   * The paginated index assembly (the fetchConcepts stale-guard pattern):
-   * pages of 200, SEQUENTIAL (each offset needs the previous count), each
-   * page committed as it lands so the list renders progressively, progress
-   * {done,total} for the bar. A superseded run (a newer open, or a repo
-   * switch) exits WITHOUT clearing the newer run's flags — the round-11
-   * rule — and a fenced/absent repo (the 404 anti-enumeration envelope)
-   * arms the honest `unavailable` state instead of an error.
+   * The INITIAL index page ONLY (David, 2026-11-08 — lazy loading): one
+   * request, then the dialog is interactive; further pages are fetched by
+   * browserExtendConceptTree on demand. Stale guards: a superseded run (a
+   * newer open) drops its page WITHOUT clearing the newer run's flags —
+   * the round-11 rule — and a fenced/absent repo (the 404 anti-enumeration
+   * envelope) arms the honest `unavailable` state instead of an error.
    */
   async fetchConceptTree({ commit, state }, { repoId } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
@@ -2290,42 +2293,70 @@ const actions = {
     const myGen = ++browserTreeGeneration;
     commit('setBrowser', {
       loading: true,
-      progress: null,
       unavailable: false,
       error: null,
       concepts: [],
-      total: 0
+      total: 0,
+      treeComplete: false,
+      extending: false
     });
     const stale = () => myGen !== browserTreeGeneration || state.browser.repoId !== repoId;
     try {
-      let offset = 0;
-      for (;;) {
-        const page = await conceptService.getConceptTree(repoId, { limit: PAGE, offset });
-        if (stale()) return { ok: true, stale: true };
-        // 404/501 → null: restricted / retracted / absent repo. The 404 is
-        // the anti-enumeration refusal — an honest "cannot be browsed", not
-        // an error.
-        if (!page) {
-          commit('setBrowser', { loading: false, progress: null, unavailable: true });
-          return { ok: false, code: 'UNAVAILABLE' };
-        }
-        const rows = Array.isArray(page.concepts) ? page.concepts : [];
-        commit('appendBrowserConcepts', { repoId, rows });
-        const total = typeof page.total === 'number' ? page.total : state.browser.concepts.length;
-        commit('setBrowser', { total });
-        const done = Math.min(state.browser.concepts.length, total);
-        commit('setBrowserProgress', state.browser.concepts.length >= total ? null : { done, total });
-        // Out-of-range offset → an empty page; a short page ends the walk.
-        if (rows.length < PAGE || state.browser.concepts.length >= total) break;
-        offset = state.browser.concepts.length;
-      }
+      const page = await conceptService.getConceptTree(repoId, { limit: PAGE, offset: 0 });
       if (stale()) return { ok: true, stale: true };
-      commit('setBrowser', { loading: false });
-      commit('setBrowserProgress', null);
+      // 404/501 → null: restricted / retracted / absent repo. The 404 is
+      // the anti-enumeration refusal — an honest "cannot be browsed", not
+      // an error.
+      if (!page) {
+        commit('setBrowser', { loading: false, unavailable: true });
+        return { ok: false, code: 'UNAVAILABLE' };
+      }
+      const rows = Array.isArray(page.concepts) ? page.concepts : [];
+      commit('appendBrowserConcepts', { repoId, rows });
+      const total = typeof page.total === 'number' ? page.total : rows.length;
+      const complete = rows.length < PAGE || rows.length >= total;
+      commit('setBrowser', { total, loading: false, treeComplete: complete });
       return { ok: true };
     } catch (err) {
       if (stale()) return { ok: false, stale: true, message: err.message };
-      commit('setBrowser', { loading: false, progress: null, error: err.message || 'fetchConceptTree failed' });
+      commit('setBrowser', { loading: false, error: err.message || 'fetchConceptTree failed' });
+      return { ok: false, code: 'FETCH_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * ONE on-demand page extension (David, 2026-11-08): the dialog's Show
+   * more dispatches this when the render window reaches the loaded edge
+   * and the tree is not complete. SEQUENTIAL (offset = the loaded count),
+   * guarded by the same generation + repo-identity checks — a superseded
+   * extension never commits into a newer open.
+   */
+  async browserExtendConceptTree({ commit, state }, { repoId } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    const myGen = browserTreeGeneration;
+    const stale = () => myGen !== browserTreeGeneration || state.browser.repoId !== repoId;
+    if (stale() || state.browser.treeComplete || state.browser.extending) {
+      return { ok: false, code: 'STALE' };
+    }
+    const PAGE = 200;
+    const offset = state.browser.concepts.length;
+    commit('setBrowser', { extending: true });
+    try {
+      const page = await conceptService.getConceptTree(repoId, { limit: PAGE, offset });
+      if (stale()) return { ok: true, stale: true };
+      if (!page) {
+        commit('setBrowser', { extending: false, unavailable: true });
+        return { ok: false, code: 'UNAVAILABLE' };
+      }
+      const rows = Array.isArray(page.concepts) ? page.concepts : [];
+      commit('appendBrowserConcepts', { repoId, rows });
+      const total = typeof page.total === 'number' ? page.total : state.browser.concepts.length;
+      const complete = rows.length < PAGE || state.browser.concepts.length >= total;
+      commit('setBrowser', { total, extending: false, treeComplete: complete });
+      return { ok: true };
+    } catch (err) {
+      if (stale()) return { ok: false, stale: true, message: err.message };
+      commit('setBrowser', { extending: false, error: err.message || 'browserExtendConceptTree failed' });
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     }
   },

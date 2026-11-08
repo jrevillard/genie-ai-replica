@@ -844,7 +844,10 @@ KEYCLOAK_URL=https://localhost/auth
 #                           (backend, document-repository, okf-server). Unset = disabled.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
-#                           mint). Unset = disabled (services use KEYCLOAK_URL).
+#                           mint). okf-server uses it ONLY as a connection failover —
+#                           it MINTS via the public KEYCLOAK_URL (the mint host stamps
+#                           iss, and chatqna accepts only the public issuer — #1636).
+#                           Unset = disabled (services use KEYCLOAK_URL).
 #   KEYCLOAK_JWKS_URL     — pins the host the JWKS is fetched from.
 #                           Default: unset. Used by: okf-server (shared verifier)
 #                           + document-repository middleware. Compose: yes.

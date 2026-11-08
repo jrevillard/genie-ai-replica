@@ -1362,6 +1362,8 @@ export default {
     copyFailed: 'Imeshindwa kunakili',
 
     documentOpenError: 'Imeshindwa kufungua hati',
+    okfSourceUnavailable: 'Chanzo hiki hakipatiki kutazamwa.',
+    okfOriginalSource: 'Chanzo asili',
     feedbackSubmitted: 'Mrejesho umehifadhiwa',
     feedbackError: 'Imeshindwa kuhifadhi mrejesho',
     feedbackMissingQueryId: 'Jibu hili halijawezi kupewa alama bado',

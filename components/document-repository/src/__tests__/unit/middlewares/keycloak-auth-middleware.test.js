@@ -199,6 +199,39 @@ describe('keycloak-auth-middleware', () => {
       );
     });
 
+    // D4 (review fix 2026-11-07): the okf_scopes claim mapping runs in this
+    // middleware but was never asserted anywhere — the D4 route suite mocks
+    // the middleware wholesale, so a dropped/misnamed mapping would 403 every
+    // legitimately-granted scope holder on restricted sources with green
+    // gates. Pin the mapping here on the REAL middleware.
+    it('should map the okf_scopes array claim onto req.user.okfScopes', async () => {
+      const payload = { ...createMockPayload(['user']), okf_scopes: ['okf:t:repo-a:read', 'okf:t:*:admin'] };
+      jose.createRemoteJWKSet.mockReturnValue({});
+      jose.jwtVerify.mockResolvedValue({ payload });
+
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer valid-token' } }
+      });
+      await authenticateToken(req, res, next);
+
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user.okfScopes).toEqual(['okf:t:repo-a:read', 'okf:t:*:admin']);
+    });
+
+    it('should default req.user.okfScopes to [] when the claim is absent', async () => {
+      const payload = createMockPayload(['user']); // no okf_scopes claim
+      jose.createRemoteJWKSet.mockReturnValue({});
+      jose.jwtVerify.mockResolvedValue({ payload });
+
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer valid-token' } }
+      });
+      await authenticateToken(req, res, next);
+
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user.okfScopes).toEqual([]);
+    });
+
     it('should accept service account token with dataprep-service-client azp', async () => {
       const payload = {
         ...createMockPayload(['dataprep-service']),

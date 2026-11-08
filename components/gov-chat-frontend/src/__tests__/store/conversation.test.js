@@ -16,6 +16,15 @@ const statusModule = require('../../store/modules/status.js').default;
 // assertions pin floor == locale.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
+// CAP-3/CAP-4: the store's title resolver goes through document-opener; mock
+// the fetch so title/source-resolution tests stay hermetic.
+jest.mock('../../utils/document-opener', () => ({
+  __esModule: true,
+  fetchOkfConcept: jest.fn(),
+  okfConceptTitle: jest.requireActual('../../utils/document-opener').okfConceptTitle
+}));
+const { fetchOkfConcept } = require('../../utils/document-opener');
+
 function freshStore() {
   return createStore({
     modules: {
@@ -441,6 +450,46 @@ describe('conversation sendStream action', () => {
     expect(source.title).toBe('hadith nawawi 36');
   });
 
+  // Review fix (2026-11-07): the resolver DISPATCH wiring was unpinned —
+  // every suite fed repo-less citations or called the action directly, so
+  // deleting the sendStream dispatch left every gate green while cards kept
+  // their raw concept-id titles forever. A repo-bearing citation must
+  // resolve through the SAME turn's metadata frame.
+  it('dispatches the CAP-3 title resolver when the metadata carries a repo-bearing OKF citation', async () => {
+    let captured = null;
+    const store = storeWithService((q, cb) => {
+      captured = cb;
+      return new AbortController();
+    });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: '', isStreaming: true });
+    store.dispatch('conversation/sendStream', { queryData: { query: 'q' } });
+    await Promise.resolve();
+
+    fetchOkfConcept.mockResolvedValueOnce({ frontmatter: { title: 'Alpha Concept' }, sources: [] });
+    captured.onMetadata({
+      confidence_score: 0.9,
+      is_grounded: true,
+      source_documents: [
+        {
+          document_id: 'wire_alpha_concept',
+          document_name: 'wire_alpha_concept',
+          url: '',
+          score: 0.9,
+          concept_id: 'wire_alpha_concept',
+          source: 'okf-concept',
+          repo_id: 'repo-1'
+        }
+      ]
+    });
+    // the resolver runs async after the frame — flush the microtask chain
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchOkfConcept).toHaveBeenCalledWith('repo-1', 'wire_alpha_concept');
+    const source = store.getters['conversation/openConversation'].messages.at(-1).sources[0];
+    expect(source.title).toBe('Alpha Concept');
+    expect(source.titleResolved).toBe(true);
+  });
+
   it('status timing survives going back online and dies with an outage', () => {
     const store = freshStore();
     store.commit('status/setResponseTime', 250);
@@ -603,5 +652,249 @@ describe('conversation misc mutations', () => {
     const store = freshStore();
     store.commit('conversation/setContextItems', [{ service: 'A', category: 1 }]);
     expect(store.getters['conversation/openConversation'].selectedContextItems.length).toBe(1);
+  });
+});
+
+// ===========================================================================
+// CAP-3 (chat-source resolution): OKF concept citation cards. The mint names
+// a concept by its id; the doc-repository URL family cannot resolve it —
+// concept rows never take it, carry their repo identity, resolve titles
+// asynchronously, and persisted pre-W3 rows are re-identified on rehydrate.
+// ===========================================================================
+describe('CAP-3 okf concept sources', () => {
+  const { translateSources } = require('../../store/modules/conversation.js');
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    fetchOkfConcept.mockReset();
+  });
+
+  it('translateSources: an enriched okf row never takes the doc-repo URL and carries its identity', () => {
+    const [row] = translateSources([
+      {
+        document_id: 'alpha_concept',
+        document_name: 'alpha_concept',
+        url: '',
+        source: 'okf-concept',
+        repo_id: 'repo-1',
+        bundle_version: 3,
+        graph_name: 'OKF_repo-1',
+        score: 0.9
+      }
+    ]);
+    expect(row.url).toBe('');
+    expect(row.source).toBe('okf-concept');
+    expect(row.repoId).toBe('repo-1');
+    expect(row.bundleVersion).toBe(3);
+    expect(row.graphName).toBe('OKF_repo-1');
+    expect(row.type).toBe('MD');
+  });
+
+  it('translateSources: a legacy document row keeps the exact pre-existing shape', () => {
+    const [row] = translateSources([{ document_id: 'doc-9', document_name: 'Report.pdf', score: 0.8 }]);
+    expect(row.url).toBe('/api/files/doc-9/download');
+    expect(row.source).toBeUndefined();
+    expect(row.repoId).toBeUndefined();
+    expect(row.type).toBe('LINK');
+  });
+
+  it('rehydrate grafts okf identity onto persisted concept rows and clears the dead URL', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [
+              { sender: 'user', content: 'q' },
+              {
+                sender: 'bot',
+                content: 'a',
+                sources: [{ id: 'alpha_concept', title: 'alpha concept', url: '/api/files/alpha_concept/download' }],
+                metadata: {
+                  source_documents: [
+                    {
+                      document_id: 'alpha_concept',
+                      document_name: 'alpha_concept',
+                      url: '',
+                      source: 'okf-concept',
+                      repo_id: 'repo-1',
+                      bundle_version: 2
+                    }
+                  ]
+                }
+              }
+            ],
+            relatedDocuments: [
+              { id: 'alpha_concept', title: 'alpha concept', url: '/api/files/alpha_concept/download' }
+            ]
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const open = store.getters['conversation/openConversation'];
+    for (const row of [...open.relatedDocuments, ...open.messages[1].sources]) {
+      expect(row.source).toBe('okf-concept');
+      expect(row.repoId).toBe('repo-1');
+      expect(row.bundleVersion).toBe(2);
+      expect(row.url).toBe('');
+    }
+  });
+
+  it('rehydrate leaves a legacy document row untouched', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [{ sender: 'user', content: 'q' }],
+            relatedDocuments: [{ id: 'doc-9', title: 'Report.pdf', url: '/api/files/doc-9/download' }]
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.url).toBe('/api/files/doc-9/download');
+    expect(row.source).toBeUndefined();
+    expect(row.repoId).toBeUndefined();
+  });
+
+  it('rehydrate marks a pre-CAP-1 concept row (no repo identity) so the UI degrades honestly', () => {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        openId: 'open',
+        conversations: {
+          open: {
+            messages: [
+              { sender: 'user', content: 'q' },
+              {
+                sender: 'bot',
+                content: 'a',
+                sources: [{ id: 'old_concept', title: 'old concept', url: '/api/files/old_concept/download' }],
+                metadata: {
+                  source_documents: [
+                    { document_id: 'old_concept', document_name: 'old_concept', url: '', source: 'okf-concept' }
+                  ]
+                }
+              }
+            ],
+            relatedDocuments: []
+          }
+        }
+      })
+    );
+    const store = freshStore();
+    rehydrateConversation(store.state.conversation);
+    const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+    expect(row.source).toBe('okf-concept');
+    expect(row.repoId).toBeNull();
+    expect(row.url).toBe('');
+  });
+
+  it('resolveOkfSourceTitles swaps the id title for the frontmatter title and stashes the origins (CAP-4)', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'alpha_concept', title: 'alpha concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    fetchOkfConcept.mockResolvedValueOnce({
+      frontmatter: { title: 'Alpha Concept' },
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf', locator: 'whole document' }]
+    });
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('Alpha Concept');
+    expect(row.titleResolved).toBe(true);
+    expect(fetchOkfConcept).toHaveBeenCalledWith('repo-1', 'alpha_concept');
+    // CAP-4: the narrowed sources land on the row for the origin rows —
+    // whatever the route shipped (already projected server-side, locator
+    // stripped there); absent field degrades to [] (no affordance).
+    expect(row.okfSources).toEqual([
+      { kind: 'document', file_id: 'doc-9', file_name: 'Report.pdf', locator: 'whole document' }
+    ]);
+  });
+
+  it('resolveOkfSourceTitles stashes an empty okfSources when the concept is DEFINITIVELY unavailable', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'ghost_concept', title: 'ghost concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    // The DEFINITIVE unavailable code (restricted/retracted/deleted) — this
+    // is the terminal case: the row keeps the id title and the cache pins
+    // null. Review fix 2026-11-07: this test previously rejected with a
+    // PLAIN error, pinning transient failures as permanent — the exact bug
+    // the retry test below now guards.
+    fetchOkfConcept.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'OKF_CONCEPT_UNAVAILABLE' }));
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    const row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('ghost concept');
+    expect(row.titleResolved).toBe(false);
+    expect(row.okfSources).toEqual([]);
+  });
+
+  it('resolveOkfSourceTitles retries after a TRANSIENT failure — the cache never pins it', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'flaky_concept', title: 'flaky concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    // A plain error (500, network, token expiry) is transient: the row gets
+    // no terminal marker and the cache stays empty — a later dispatch retries.
+    fetchOkfConcept.mockRejectedValueOnce(new Error('500 — transient'));
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    let row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('flaky concept');
+    expect(row.titleResolved).toBeUndefined();
+    expect(row.okfSources).toEqual([]);
+    // later dispatch (next message / next open): the fetch runs again
+    fetchOkfConcept.mockResolvedValueOnce({ frontmatter: { title: 'Flaky Concept' }, sources: [] });
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(2);
+    row = store.getters['conversation/openConversation'].relatedDocuments[0];
+    expect(row.title).toBe('Flaky Concept');
+    expect(row.titleResolved).toBe(true);
+  });
+
+  it('resolveOkfSourceTitles serves a fresh same-concept row from the pinned cache (no refetch)', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'sealed_concept', title: 'sealed concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    fetchOkfConcept.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'OKF_CONCEPT_UNAVAILABLE' }));
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(1);
+    // A fresh row for the SAME (repo, concept) — as a later message would
+    // add — is served by the cache's pinned null, not a second fetch.
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'sealed_concept', title: 'sealed concept', source: 'okf-concept', repoId: 'repo-1' }
+    ]);
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).toHaveBeenCalledTimes(1);
+    expect(store.getters['conversation/openConversation'].relatedDocuments[0].titleResolved).toBe(false);
+  });
+
+  it('resolveOkfSourceTitles skips legacy rows and rows without repo identity', async () => {
+    const store = freshStore();
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+    store.commit('conversation/setRelatedDocuments', [
+      { id: 'doc-9', title: 'Report.pdf', url: '/api/files/doc-9/download' },
+      { id: 'no_repo', title: 'no repo', source: 'okf-concept', repoId: null }
+    ]);
+    await store.dispatch('conversation/resolveOkfSourceTitles');
+    expect(fetchOkfConcept).not.toHaveBeenCalled();
   });
 });

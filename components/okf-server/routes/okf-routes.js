@@ -30,6 +30,17 @@ const servingReads = express.Router();
 servingReads.use(requireScope('read', { allowScopelessWhenOpen: true }));
 servingReads.get('/retrieval-config', retrievalConfigController.getRetrievalConfig);
 servingReads.get('/authz/graphs', authzResolverController.getGraphs);
+// CAP-2 (chat-source resolution, 2026-11-04): the concept CONTENT read is a
+// serving read — the citizen's citation card opens what the answer grounded
+// on, under the same default-open posture as retrieval. Registering it HERE
+// (allowScopelessWhenOpen) is the structural marker per this file's own rule;
+// RESTRICTED repos stay fenced INSIDE the handler by the 6-1c per-repo gate
+// (assertRepoReadableByCaller) in BOTH modes, so the fence — not the scope
+// gate — is what keeps restricted content unreachable. Repo management and
+// mutations stay behind the strict router gate below; this shadows only the
+// single-concept GET (same handler the /repos sub-router registers, so
+// scoped callers behave identically).
+servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers/repository-controller').getConcept);
 router.use(servingReads);
 
 router.use(requireScope('read'));

@@ -191,6 +191,9 @@ const mutations = {
 
 import chatbotService from '../../services/chatbotService';
 import documentFileService from '../../services/documentFileService';
+import { fetchOkfConcept, okfConceptTitle } from '../../utils/document-opener';
+// !791's shared predicate — the fetch guard below reads it (one predicate,
+// fetch guard and card badge alike; see utils/okfCitation.js).
 import { isOkfConceptSource } from '../../utils/okfCitation';
 import i18n from '../../i18n';
 
@@ -224,6 +227,11 @@ export function isStorableTurn(message) {
   return message.sender === 'user' || (message.sender === 'bot' && message.queryId);
 }
 
+// Session-scoped title cache for CAP-3 card resolution: (repo_id, concept_id)
+// → resolved title | null (null = fetched and unavailable — don't refetch).
+// In-memory only: titles resolve per session, never persisted.
+const okfTitleCache = new Map();
+
 // The sidebar-card shape, from either naming convention (the stream's
 // source_documents carry snake_case; the history payload's files carry
 // camelCase plus the knowledge-base fields).
@@ -232,32 +240,82 @@ export function translateSources(sourceDocuments = []) {
     const documentId = doc.document_id || doc.id;
     const documentName = doc.document_name || doc.documentName;
     const fileName = doc.file_name || doc.fileName;
+    // CAP-3 (chat-source resolution): an OKF concept citation NEVER takes the
+    // doc-repository URL family — no per-concept file exists on any creation
+    // origin (content-only chunking), so that URL 404s by construction. Its
+    // open/download flows go through okf-server with (repo_id, concept_id);
+    // repo identity arrives via the retriever enrichment (CAP-1). Legacy
+    // document rows take the exact pre-existing shape (byte-identical).
+    const isOkfConcept = doc.source === 'okf-concept';
     return {
       id: documentId,
       title: documentName || fileName || `Source ${(documentId || '').slice(0, 4)}`,
       documentName,
       fileName,
-      // The OKF marker travels WITH the citation. chatqna marks an
-      // OKF-sourced citation (`source: 'okf-concept'` + `concept_id`), and
-      // it is the only thing that separates "resolve me against doc-repo"
-      // from "I AM a concept" — a concept's document id is its slug, and
-      // doc-repo has no record of it. Mapping it away left the store unable
-      // to tell the two apart, so it asked doc-repo about every citation
-      // and got one 404 per cited concept.
-      source: doc.source || null,
-      conceptId: doc.concept_id || null,
-      type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
+      // Batch side wins for translateSources (the recorded !791/BCAP ruling):
+      // the marker rides in the `source` field below (`'okf-concept'` for
+      // concept rows), which the okfCitation predicate reads; the batch's MD
+      // type covers the extension fallback a concept row must not render.
+      type: isOkfConcept ? 'MD' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
       size: 0,
-      url: doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
+      url: isOkfConcept ? '' : doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
       score: doc.score,
       categoryLabel: doc.categoryLabel,
-      serviceLabels: doc.labels || doc.serviceLabels || []
+      serviceLabels: doc.labels || doc.serviceLabels || [],
+      source: isOkfConcept ? 'okf-concept' : undefined,
+      // !791's contract (additive per the BCAP ruling): the concept slug
+      // rides the citation row even though the batch's flow keys off the
+      // `source` marker — main's suite pins it on the mapped citation.
+      conceptId: doc.concept_id || null,
+      repoId: isOkfConcept ? doc.repo_id || null : undefined,
+      bundleVersion: isOkfConcept ? (doc.bundle_version ?? null) : undefined,
+      graphName: isOkfConcept ? doc.graph_name || null : undefined
     };
   });
 }
 
+// Grafts CAP-3 identity from a RAW metadata.source_documents entry onto an
+// already-translated (persisted) source row. Pre-W3 sessions stored the
+// translated shape — including the dead /api/files fallback URL — without the
+// okf tag, so a restored conversation could not tell a concept row from a
+// document row. The raw entries (kept verbatim in message.metadata) DO carry
+// the tag; re-hydration grafts tag + repo identity onto the persisted row and
+// clears the dead URL. Legacy document rows keep their patched fields
+// untouched (no wholesale re-translation).
+function graftOkfIdentity(translatedDoc, rawDoc) {
+  if (!rawDoc || rawDoc.source !== 'okf-concept') return translatedDoc;
+  return {
+    ...translatedDoc,
+    type: 'MD',
+    url: '',
+    source: 'okf-concept',
+    repoId: rawDoc.repo_id || null,
+    bundleVersion: rawDoc.bundle_version ?? null,
+    graphName: rawDoc.graph_name || null
+  };
+}
+
+function graftOkfIdentityOntoRestored(entry) {
+  const byId = new Map();
+  for (const m of entry.messages || []) {
+    for (const raw of (m && m.metadata && m.metadata.source_documents) || []) {
+      const rawId = raw && (raw.document_id || raw.id);
+      if (rawId && !byId.has(rawId)) byId.set(rawId, raw);
+    }
+  }
+  if (byId.size === 0) return entry;
+  entry.messages = (entry.messages || []).map((m) => {
+    const raws = (m && m.metadata && m.metadata.source_documents) || [];
+    if (!raws.length) return m;
+    const rawById = new Map(raws.map((r) => [r && (r.document_id || r.id), r]));
+    return { ...m, sources: (m.sources || []).map((s) => graftOkfIdentity(s, rawById.get(s.id))) };
+  });
+  entry.relatedDocuments = (entry.relatedDocuments || []).map((s) => graftOkfIdentity(s, byId.get(s.id)));
+  return entry;
+}
+
 const actions = {
-  sendStream({ commit, state }, queryData) {
+  sendStream({ commit, state, dispatch }, queryData) {
     commit('setStreaming', { isStreaming: true, streamingQueryId: null });
     const controller = chatbotService.submitQueryStream(queryData, {
       onChunk: (content) => commit('appendChunk', content),
@@ -279,17 +337,17 @@ const actions = {
           sources.filter((d) => !knownIds.has(d.id))
         );
         // The repository TYPE · size fields degrade to the extension type
-        // when the metadata fetch fails — same as the component did.
+        // when the metadata fetch fails — same as the component did. OKF
+        // concept rows skip it: they resolve in okf-server, not doc-repo
+        // (the fetch 404s BY DESIGN for concepts), and their title swap is
+        // the CAP-3 resolver below.
         sources.forEach((doc) => {
-          if (!doc.id) return;
-          // An OKF concept is NOT a repository document: chatqna emits it
-          // precisely because the doc-repo lookup cannot answer for it (the
-          // concept's markdown never becomes a doc-repo `files` doc), and
-          // the citation carries its own name. Asking anyway produced one
-          // 404 per cited concept on every OKF-citing query — noise in the
-          // console and in the access log, for a lookup that can only fail.
-          // A legacy document citation still fetches exactly as before.
-          if (isOkfConceptSource(doc)) return;
+          // An OKF concept is NOT a repository document (the concept's
+          // markdown never becomes a doc-repo files doc) — the lookup can
+          // only 404. The guard reads the SHARED predicate (okfCitation.js —
+          // one predicate, fetch guard and card badge alike), covering both
+          // the mapped shape and a raw citation slipping through.
+          if (!doc.id || isOkfConceptSource(doc)) return;
           documentFileService
             .getFileMetadata(doc.id)
             .then((file) => {
@@ -300,6 +358,9 @@ const actions = {
             })
             .catch(() => {});
         });
+        // CAP-3 title-first cards: swap the id-based title for the real
+        // frontmatter title, asynchronously, never blocking the render.
+        dispatch('resolveOkfSourceTitles').catch(() => {});
       },
       onTranslation: (text) => commit('setTranslation', text),
       onDone: (data) => {
@@ -354,6 +415,55 @@ const actions = {
     // the retry affordance replaces the eternal spinner.
     commit('markInterrupted');
     commit('setStreaming', { isStreaming: false, streamingQueryId: null });
+  },
+
+  // CAP-3 title-first cards: the mint names a concept by its id (underscores
+  // for spaces); the real title lives in the concept's frontmatter. Resolve
+  // asynchronously AFTER render — the card never blocks on the fetch — and
+  // patch through patchSource (the same mutation the repository-metadata
+  // patch rides). One in-flight fetch per (repo, concept) per session; a
+  // failure keeps the id-based title (plain text, no error noise).
+  async resolveOkfSourceTitles({ commit, state }) {
+    const entry = state.conversations[state.openId];
+    if (!entry) return;
+    const okfRows = entry.relatedDocuments.filter((d) => d.source === 'okf-concept' && d.repoId && d.id);
+    for (const doc of okfRows) {
+      if (typeof doc.titleResolved !== 'undefined') continue;
+      const cacheKey = `${doc.repoId}::${doc.id}`;
+      let meta = okfTitleCache.get(cacheKey);
+      let definitive = true; // a cache hit (a meta row or a pinned null) is terminal
+      if (meta === undefined) {
+        // Fetches serialize per card (the loop awaits); distinct cards still
+        // resolve across turns without refetch through the cache. The FULL
+        // meta is cached: W5 (CAP-4) rides the same fetch — the narrowed
+        // originating documents become the card's original-source row.
+        try {
+          meta = await fetchOkfConcept(doc.repoId, doc.id);
+          okfTitleCache.set(cacheKey, meta);
+        } catch (err) {
+          meta = null; // this dispatch renders the honest fallback either way
+          // Cache only a DEFINITIVE unavailability — the unavailable code
+          // marks restricted/retracted/deleted. A transient failure (500,
+          // network, token expiry) must not pin the card degraded for the
+          // whole session: leave the cache empty so the next dispatch
+          // retries (review fix 2026-11-07; openOkfSource makes the same
+          // live/transient distinction for the same data).
+          definitive = Boolean(err && err.code === 'OKF_CONCEPT_UNAVAILABLE');
+          if (definitive) okfTitleCache.set(cacheKey, null);
+        }
+      }
+      const title = meta ? okfConceptTitle(meta, doc.id) : null;
+      const okfSources = meta && Array.isArray(meta.sources) ? meta.sources : [];
+      if (title) {
+        commit('patchSource', [doc.id, { title, titleResolved: true, okfSources }]);
+      } else if (definitive) {
+        commit('patchSource', [doc.id, { titleResolved: false, okfSources }]);
+      } else {
+        // Transient failure — no terminal marker, so a later dispatch retries
+        // the resolution instead of pinning the card degraded for the session.
+        commit('patchSource', [doc.id, { okfSources }]);
+      }
+    }
   }
 };
 
@@ -396,8 +506,13 @@ export function rehydrateConversation(moduleState) {
     }
     const clean = emptyConversation();
     clean.messages = entry.messages.filter((m) => m && typeof m === 'object');
-    clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
     clean.relatedDocuments = Array.isArray(entry.relatedDocuments) ? entry.relatedDocuments : [];
+    // CAP-3: persisted pre-W3 concept rows carry the dead doc-repo URL and no
+    // okf tag; the raw metadata entries still tag them — graft the identity
+    // back before the rows render (graceful degradation for pre-CAP-1 rows
+    // without repo identity: honest "unavailable", never a dead link).
+    graftOkfIdentityOntoRestored(clean);
+    clean.selectedContextItems = Array.isArray(entry.selectedContextItems) ? entry.selectedContextItems : [];
     clean.lastSavedState =
       entry.lastSavedState && typeof entry.lastSavedState === 'object'
         ? {

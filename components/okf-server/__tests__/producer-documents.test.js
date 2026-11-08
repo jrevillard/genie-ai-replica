@@ -579,7 +579,8 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents[0].kind).toBe('document');
     expect(authedAxios.patch).toHaveBeenCalledWith(
       expect.stringContaining('/api/files/f1'),
-      { okf_repo_id: RID },
+      // D4: the restriction snapshot rides the same PATCH (unrestricted here)
+      { okf_repo_id: RID, okf_restricted: false },
       expect.anything()
     );
   });
@@ -742,5 +743,90 @@ describe('producer-service — docRepoFileOf (shared doc-repo envelope unwrap)',
     expect(producer.docRepoFileOf(null)).toEqual({});
     expect(producer.docRepoFileOf(undefined)).toEqual({});
     expect(producer.docRepoFileOf({})).toEqual({});
+  });
+});
+
+// ── D4 restricted-snapshot stamp + Access-toggle propagation (W4 story 2) ───
+
+describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () => {
+  // Distinct repo ids: this file's mock store has NO per-test reset, so a
+  // shared id would leak acl/source_documents state across tests (and the
+  // corpus test above already owns RID's row).
+  const R1 = '88888888-8888-4888-8888-888888888801';
+  const R2 = '88888888-8888-4888-8888-888888888802';
+  it('stamps okf_restricted=true beside okf_repo_id when the repo is restricted', async () => {
+    await mockDb.collection('okf_repositories').save({ repo_id: R1, acl: { restricted: true } });
+    authedAxios.get.mockResolvedValue({
+      data: { file: { file_id: 'f1', file_name: 'a.md', size: 10, file_hash: 'h1' } }
+    });
+    await producer.stampSources(R1, ['f1']);
+    expect(authedAxios.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/files/f1'),
+      { okf_repo_id: R1, okf_restricted: true },
+      expect.anything()
+    );
+  });
+
+  it('stamps okf_restricted=false for an unrestricted repo', async () => {
+    await mockDb.collection('okf_repositories').save({ repo_id: R2, acl: { restricted: false } });
+    authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
+    await producer.stampSources(R2, ['f1']);
+    expect(authedAxios.patch).toHaveBeenCalledWith(
+      expect.anything(),
+      { okf_repo_id: R2, okf_restricted: false },
+      expect.anything()
+    );
+  });
+
+  it('an unreadable repo doc stamps unrestricted and does not throw', async () => {
+    // no repo doc saved — document() rejects; the stamp must still land
+    authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
+    await expect(producer.stampSources(R2 + '-ghost', ['f1'])).resolves.toBeDefined();
+    expect(authedAxios.patch).toHaveBeenCalledWith(
+      expect.anything(),
+      { okf_repo_id: R2 + '-ghost', okf_restricted: false },
+      expect.anything()
+    );
+  });
+});
+
+describe('producer-service — D4 propagateRestrictedToSources (Access-toggle propagation)', () => {
+  const P1 = '88888888-8888-4888-8888-888888888811';
+  const P2 = '88888888-8888-4888-8888-888888888812';
+  it('patches every source file and sorts outcomes into patched/gone/failed', async () => {
+    await mockDb.collection('okf_repositories').save({
+      repo_id: P1,
+      source_documents: [
+        { kind: 'document', file_id: 'a' },
+        { kind: 'document', file_id: 'b' },
+        { kind: 'document', file_id: 'c' }
+      ]
+    });
+    authedAxios.patch.mockImplementation(async (url) => {
+      if (!url.endsWith('/api/files/b')) return { status: 200 };
+      const e = new Error('not found');
+      e.response = { status: 404 }; // repo delete cascade already removed it
+      throw e;
+    });
+    const out = await producer.propagateRestrictedToSources(P1, true);
+    expect(out).toMatchObject({ repo_id: P1, restricted: true, patched: ['a', 'c'], gone: ['b'], total: 3 });
+    expect(out.failed).toEqual([]);
+  });
+
+  it('a non-404 failure lands in failed[] and is logged, never thrown', async () => {
+    await mockDb.collection('okf_repositories').save({
+      repo_id: P2,
+      source_documents: [{ kind: 'document', file_id: 'x' }]
+    });
+    authedAxios.patch.mockRejectedValue(new Error('doc-repo down'));
+    const out = await producer.propagateRestrictedToSources(P2, true);
+    expect(out.patched).toEqual([]);
+    expect(out.failed).toEqual([{ file_id: 'x', error: 'doc-repo down' }]);
+  });
+
+  it('an unreadable repo doc propagates nothing and reports an empty set', async () => {
+    const out = await producer.propagateRestrictedToSources(P2 + '-ghost', false);
+    expect(out).toMatchObject({ patched: [], failed: [], gone: [], total: 0 });
+    expect(authedAxios.patch).not.toHaveBeenCalled();
   });
 });

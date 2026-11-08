@@ -1,0 +1,63 @@
+# Dev log — W1-W3 chat-source resolution (CAP-1..3 live-verified)
+
+**Branch:** `feat/okf-chat-source-w1` · **Spec:** `_bmad-output/specs/spec-okf-chat-source-resolution/` · **Date:** 2026-11-04
+**Status:** code-complete, unit-verified, LIVE-verified (smoke 7/7 PASS on the local build). Pushed + rebased onto origin/main (post-outage). W2 structured security review DONE — 2 findings fixed (`6c7bee69c`); live re-verify of the review fixes pending the build-tree sync (see below).
+
+## What shipped (commit order)
+
+| Commit | Wave | Summary |
+|---|---|---|
+| `e91cb7100` | W1/CAP-1 | Retriever identity: second batched AQL joins `okf_concepts_meta` on (graph_name, concept_id) → `repo_id` + `bundle_version` ride chunk metadata → provenance → chatqna mint. No graph-name parsing; legacy byte-identical; failure-isolated. |
+| `a91d2f7b2` | W2/CAP-2 | `assertRepoReadableByCaller` fence on the concept read family (getConcept/listConcepts/getRepoManifest/getRepoLinks) — RESTRICTED repos serve only privileged/granted callers, 404 + audited (anti-enum). Closed a real pre-existing gap: the read routes applied only the scope-set filter. |
+| `97f05de69` | W3/CAP-3 | Frontend: okf-concept cards never take the doc-repo URL family; open = markdown rendered via okf-server route (markdown-it → blob → tab); titles resolve async (frontmatter, session-cached); rehydrate grafts identity from raw metadata onto persisted rows; legacy rows byte-identical; i18n ×14. |
+| `a90f58f` | W2 fix | The concept GET registered on `servingReads` (allowScopelessWhenOpen) — the strict router gate 403'd citizens before the fence could run. |
+| `c0b2dde` | W1+W2 fix | `readAuthzForService` (deriveReadAuthz — the retrieval-side verdict) for the serving read; `stampRepoGraphName` now binds `bundle_version` at ingest-arm (meta rows were born null and nothing bound them). |
+| `3b12e904`→`1df9f145` | smoke | `run-smoke-chat-sources.mjs` — the live harness. |
+| `6c7bee69c` | W2 review | **Publication gate + card projection** (see below). |
+
+## W2 structured security review (EPIC-2's own review pass)
+
+Process: identification agent over the full W1-W3 diff → per-finding false-positive-filter agents → fix. Results:
+
+- **HIGH (confirmed 8/10) — no publication gate.** The citizen concept GET served the full meta row of any non-deleted repo subject only to the restricted fence: a retracted repo's bodies stayed readable through every persisted citation (retract keeps meta rows by design), and draft/never-drained repos served pre-PII-gate content. Exactly FR-002's publication-refusal AC, which the route shipped without.
+  **Fix:** non-steward callers need the retrieval serving predicate (`lifecycle_state === 'publish' && ingested_at != null`); same 404 envelope as the fence (anti-enum) but NO audit row (expected degradation traffic). Steward class (superadmin / wildcard / a scope naming the repo — D9) keeps the editor contract: draft/retracted rows are the editor's working set.
+- **MEDIUM → downgraded LOW (8/10) — full-row response.** The filter deflated it: `pii_hits_summary` is counts-only by contract (NFR-P2), and restricted repos are fenced before any file id could leak — net exposure was ops metadata. **Fixed as hardening:** the citizen response is projected to the CAP-3 card contract (identity + title/labels/summary/body/links); worker internals, curation provenance, Arango system fields and `sources[]` stay steward-only (`sources[]` returns with W5, behind the W4 D4 serve-refusal gate).
+- **Clean categories:** AQL injection (bind vars throughout — retriever join, stamp), XSS (markdown-it `html:false` + default validateLink; no new v-html), internal secret on path (grep-tested), cross-repo confusion (composite keys), closed-mode fail-closed, sensitive logging (ids only).
+- Tests: +7 (projection exact-shape; retracted/draft/undrained → silent 404; superadmin+retracted full row; scoped steward+draft full row; scopes-restrict-not-widen). The `deriveScopeAuthz` test double now delegates to the real pure parse — the steward check needs scope-bearing callers in `authorizedRepoIds`. Suite **2001/2001**; eslint + prettier clean.
+
+## Verification
+
+- okf-server Jest 1991+3+7 green; overlay pytest +7 new green (suite delta vs stash baseline: zero new failures); frontend Jest 3748 green, coverage **88.96%** vs 88.21% baseline; eslint/prettier/ruff clean.
+- **Live smoke 7/7** (`node data/okf/smoke-test/run-smoke-chat-sources.mjs`, host-side, real Keycloak/Kong/dataprep/remote-GPU): lifecycle ladder → drain → CAP-2 (scopeless open read 200; RESTRICTED fenced 404; admin reads; strict editor index 403) → CAP-1 (graph set visible; every okf citation carries repo_id + bundle_version + graph_name) → retract+delete cleanup.
+- Live re-verify of the review fixes **deferred**: the build tree sat at the pre-rebase w1 SHAs and `sync-local-build.sh` aborted per its ff-only rule (surfaced to David — the one-time reset is his call). The running okf-server container predates `6c7bee69c`; the smoke needs one new assertion (retracted repo → concept GET 404) when the tree syncs.
+
+## Live lessons baked into the smoke (each one cost an attempt)
+
+1. Lifecycle ladder is `submit → approve → publish → INGEST` — ingest is what enqueues the drain; publishing stops at the mint.
+2. PII gates publish: `DATE_TIME` hits (my "08:00–16:00") block it — smoke text is PII-clean by construction.
+3. Access tokens expire in minutes; an expired-token poll looks exactly like a stuck drain — the smoke re-mints at start.
+4. The server mints repo/concept ids itself — read them back, never reuse the request's names.
+5. `INGESTED_DELETE_BLOCKED`: sweeps must retract-then-delete (silent delete failures left serving zombies that polluted the next run's citations).
+6. A left-behind serving repo gets cited by the next run → the smoke defaults to full cleanup.
+7. CAP-1's contract is identity ON the citations; which repo the query-affinity router cites is routing's business (this build serves ~16 repos).
+
+## Bugs found & filed
+
+- **#1437** — flat `uploaded_files` namespace collides across repos when two repos mint the same `concept_id` under concurrent lanes (ENOENT dead-letter + cross-repo Retracted 404s). Mitigated in the smoke (sequential drains); real fix belongs to the ingest lane.
+
+## W4 progress
+
+- **Story 1 — stamp live RE-MEASURE: DONE, 2/2 = 100%** (2026-11-04, local build, live documents-origin import through Kong: upload ×2 → `convert-from-documents` → conversion done → both files' docs carry `okf_repo_id` === the new repo). `3d3f4c484` holds live; the producer-service loud tripwire stays as backstop. Harness: `run-smoke-w4-stamp.mjs` (host-side, re-mints tokens, cleanup default full). First run 9/10 — the one FAIL was the smoke's own cleanup ordering, not the product: **the repo delete cascade HARD-deletes the repo's backing files** (`backing-file-service.js` deleteBackingFiles, the intentional hard purge — files 404'd on the post-delete retract). Script fixed (retract-before-delete, 404-tolerant, DELETE 202 accepted); the fixed cleanup path validates on the next run (story-2's live validation).
+- **Story 2 — D4 refusal (stamped restricted snapshot): DONE, unit-verified** (`44eabb086`, live leg pending the build-tree sync). okf-server: `stampSources` PATCHes `okf_restricted` (read from the repo acl at stamp moment) beside `okf_repo_id`; `propagateRestrictedToSources` re-stamps every `source_documents` file on an Access-toggle flip (404 = settled — the delete cascade already removed it; other failures land in `failed[]` + loud warn); `putAccess` propagates best-effort, audits the tally, returns it in the response, never fails the toggle on a propagation crash. doc-repo: `updateFileSchema` accepts `okf_restricted`; `assertServeAllowed` refuses `okf_restricted` files to callers who are neither Admin nor okf-service on ALL four serve paths (download/view/viewbrowser/batch) with **403 OKF_RESTRICTED**; `viewFile` gates before the base64 copies; the batch zip carries an honest error entry naming the refusal (not a fake missing file). Tests: doc-repo 594/594 (+8), okf-server 2011/2011 (+10).
+  - Live-caught test-infra lessons: doc-repo `npm test` runs jest under `--experimental-vm-modules` (the security suite's magic-byte check needs it — bare `npx jest` fails 5 unrelated tests); single-suite runs hang on an open handle from the real tracing helpers (use `--forceExit` locally or run the full suite); single-suite runs also cannot meet the global coverage thresholds — the full suite is the gate.
+
+## W5 progress (CAP-4, ordered pair tail)
+
+- **D4 amendment first** (`2fed3f5`): the W4 gate refused okf-scope holders, but D4's letter admits them ("refused WITHOUT the okf scope"). The middleware now surfaces `req.user.okfScopes` (the token claim, additive); the gate admits this-repo read/admin scopes + wildcards + tools-admin (same grammar as deriveScopeAuthz, parsed locally); restricted file without okf_repo_id fail-closes. doc-repo 600/600 (+6).
+- **W5 shipped** (`4f97fb0`): the CAP-2 projection now carries a narrowed `sources[]` ({kind, file_id, file_name, resource}; locator dropped; unusable entries dropped — safe because D4 refuses restricted bytes). The store's title resolver caches the full meta and stashes `okfSources` on rows ([] when unavailable). `openOkfSource` maps 403/404 → `OKF_SOURCE_UNAVAILABLE` (`openRepositoryDocument` now attaches `err.status`, additive); 500 stays generic. Origin rows under concept cards in BOTH surfaces (card + sidebar) — the card loop moved to a template fragment so the rows share the v-for scope (live-caught by eslint flagging the icons unused). `chatbot.okfOriginalSource` × 14. Frontend 3764/3764, coverage **88.97** (above both baselines — the origin-rows rendering test claws back the uncoverable style-block dilution). okf-server surface 50/50 (+3).
+
+## Not done yet (deliberate)
+
+- **The live batch** (per David's (b) decision, 2026-11-05): build tree stays at the pre-rebase SHA; everything ships unit-verified and live-verifies in one pass when the tree syncs — the W2 publication-gate smoke assertion, W4 story 2's live leg, the w4-stamp cleanup path, and the per-origin Playwright sweep.
+- Browser-level citation-click pass (W3 UI behavior is unit-covered; the click-through rides W9's Playwright work or David's manual pass — the smoke leaves `OKF_SMOKE_CLEANUP=none` runs for exactly that).
+- W6–W9 per the remediation plan (W6 artifacts view, W7 D3 reversal, W8 log purge, W9 tree browse + the D8 UX design pass).

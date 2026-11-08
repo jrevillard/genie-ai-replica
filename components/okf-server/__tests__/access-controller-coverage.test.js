@@ -13,6 +13,18 @@ jest.mock('../shared-lib/db-connection-service', () => {
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
 jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
+jest.mock('../services/producer-service', () => ({
+  // D4: only the propagation surface is touched by this controller; mocking
+  // keeps the suite off producer-service's heavy require chain.
+  propagateRestrictedToSources: jest.fn(async (repo_id, restricted) => ({
+    repo_id,
+    restricted,
+    patched: [],
+    failed: [],
+    gone: [],
+    total: 0
+  }))
+}));
 jest.mock('../services/keycloak-access-service', () => ({
   isConfigured: jest.fn(() => true),
   usersWithAttribute: jest.fn(async () => []),
@@ -148,12 +160,68 @@ describe('access-controller.getAccessUsers — the grant picker directory', () =
 });
 
 describe('access-controller.putAccess — the restriction toggle (6-1c)', () => {
+  const producerService = require('../services/producer-service');
+  const { writeAudit } = require('../services/audit-service');
+
   test('merges restricted into the existing ACL and audits', async () => {
     const { res } = await drive(controller.putAccess, { body: { restricted: true } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ ok: true, restricted: true });
     const [, patch] = mockDb.collection('okf_repositories').update.mock.calls[0];
     expect(patch.acl).toMatchObject({ restricted: true });
+  });
+
+  test('D4: the toggle re-propagates the snapshot onto the repo’s source files', async () => {
+    producerService.propagateRestrictedToSources.mockResolvedValueOnce({
+      repo_id: REPO,
+      restricted: true,
+      patched: ['f1', 'f2'],
+      failed: [],
+      gone: [],
+      total: 2
+    });
+    const { res } = await drive(controller.putAccess, { body: { restricted: true } });
+    expect(res.statusCode).toBe(200);
+    expect(producerService.propagateRestrictedToSources).toHaveBeenCalledWith(REPO, true);
+    expect(res.body.propagation).toMatchObject({ patched: 2, failed: 0, gone: 0, total: 2 });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.access.restrict',
+        repo_id: REPO,
+        details: expect.objectContaining({
+          restricted: true,
+          propagation: { patched: 2, failed: 0, gone: 0, total: 2 }
+        })
+      })
+    );
+  });
+
+  test('D4: a PARTIAL propagation failure is visible in the audit but never fails the toggle', async () => {
+    producerService.propagateRestrictedToSources.mockResolvedValueOnce({
+      repo_id: REPO,
+      restricted: true,
+      patched: ['f1'],
+      failed: [{ file_id: 'f2', error: 'doc-repo down' }],
+      gone: [],
+      total: 2
+    });
+    const { res } = await drive(controller.putAccess, { body: { restricted: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.propagation).toMatchObject({ patched: 1, failed: 1 });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ propagation: { patched: 1, failed: 1, gone: 0, total: 2 } })
+      })
+    );
+  });
+
+  test('D4: a propagation CRASH is swallowed — the toggle still succeeds', async () => {
+    producerService.propagateRestrictedToSources.mockRejectedValueOnce(new Error('boom'));
+    const { res, next } = await drive(controller.putAccess, { body: { restricted: false } });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   test('restricted is required', async () => {

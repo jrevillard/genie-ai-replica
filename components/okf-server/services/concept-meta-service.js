@@ -426,17 +426,25 @@ async function requeueFailedForReingest(repo_id, opts = {}) {
  * drain write into the OLD version's name — dataprep's ensure-graph then
  * RESURRECTED the graph retract had just dropped. The ingest-arm calls this
  * right before arming, so the drain target and the serving name can never
- * disagree. */
-async function stampRepoGraphName(repo_id, graph_name) {
+ * disagree.
+ *
+ * CAP-1 (chat-source resolution, 2026-11-04): the same stamp carries the
+ * drained VERSION onto every row (bundle_version) — the retrieval-side
+ * enrichment join reads it to give each citation its identity. The graph
+ * name embeds the version but the rows must carry it as FIRST-CLASS data
+ * (no graph-name parsing downstream — the spec's dirty-hack ban). Import
+ * rows are born with bundle_version null (no version exists before mint);
+ * this stamp is the single writer that binds rows to the drained version. */
+async function stampRepoGraphName(repo_id, graph_name, bundle_version = null) {
   if (!repo_id || !graph_name) return 0;
   const db = await getDb();
   const rows = await (
     await db.query(
-      `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.graph_name != @gn
-       UPDATE m WITH { graph_name: @gn, updated_at: DATE_ISO8601(DATE_NOW()) }
+      `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND (m.graph_name != @gn OR m.bundle_version != @bv)
+       UPDATE m WITH { graph_name: @gn, bundle_version: @bv, updated_at: DATE_ISO8601(DATE_NOW()) }
        IN okf_concepts_meta
        RETURN NEW.graph_name`,
-      { rid: repo_id, gn: graph_name }
+      { rid: repo_id, gn: graph_name, bv: bundle_version === undefined ? null : bundle_version }
     )
   ).all();
   return rows.length;

@@ -2960,7 +2960,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             _provenance_by_doc = {}
             for i in range(len(retrieved_docs)):
                 md = _ck_meta[i] if i < len(_ck_meta) else {}
-                prov = {k: md[k] for k in ("graph_name", "repo_id", "concept_id") if md.get(k) is not None}
+                prov = {
+                    k: md[k] for k in ("graph_name", "repo_id", "concept_id", "bundle_version") if md.get(k) is not None
+                }
                 if prov:
                     _provenance_by_doc[retrieved_docs[i].get("id", "")] = prov
             if _provenance_by_doc:
@@ -3654,6 +3656,13 @@ class ChatQnAService:
                         okf_source["graph_name"] = prov["graph_name"]
                     if prov.get("repo_id"):
                         okf_source["repo_id"] = prov["repo_id"]
+                    # CAP-1: bundle_version rides the same provenance envelope
+                    # (retriever okf_concepts_meta enrichment) — additive key
+                    # only; every field above is byte-identical when absent.
+                    # `is not None` (not truthiness) so a version of 0 rides —
+                    # the same idiom align_outputs uses one envelope up.
+                    if prov.get("bundle_version") is not None:
+                        okf_source["bundle_version"] = prov["bundle_version"]
                     if include_contexts and text_by_doc.get(doc_id_by_orchestrator):
                         okf_source["text"] = text_by_doc[doc_id_by_orchestrator]
                     source_documents_formatted.append(okf_source)

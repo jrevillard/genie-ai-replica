@@ -17,6 +17,7 @@ from core.label_contract import encode_filter_labels
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     ARANGO_TRAVERSAL_QUERY,
+    OKF_CONCEPTS_META_COLLECTION,
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
     _build_aql_filter_clause,
@@ -764,6 +765,81 @@ class TestInvoke:
 
         result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
         assert result[0]["doc"].metadata["file_ids"] == ["file_abc"]
+
+    @pytest.mark.asyncio
+    async def test_okf_identity_enrichment_sets_repo_and_version(self, invoke_env):
+        # CAP-1 (chat-source resolution): the chunk-start leg enriches
+        # repo_id + bundle_version from okf_concepts_meta — joined on
+        # (graph_name, concept_id), first-class data, no graph-name parsing.
+        mock_doc = MagicMock()
+        mock_doc.id = "chunk1"
+        mock_doc.page_content = "text"
+        mock_doc.metadata = {}
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+        file_cursor = MagicMock()
+        file_cursor.__iter__ = MagicMock(return_value=iter([{"key": "chunk1", "file_id": "concept_abc"}]))
+        identity_cursor = MagicMock()
+        identity_cursor.__iter__ = MagicMock(
+            return_value=iter([{"key": "chunk1", "repo_id": "alpha", "bundle_version": 3}])
+        )
+        invoke_env["db"].aql.execute.side_effect = [file_cursor, identity_cursor]
+
+        result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        md = result[0]["doc"].metadata
+        assert md["file_ids"] == ["concept_abc"]
+        assert md["repo_id"] == "alpha"
+        assert md["bundle_version"] == 3
+        # The identity join must be bound per-graph (no prefix parsing anywhere).
+        bind_vars = invoke_env["db"].aql.execute.call_args_list[1][1]["bind_vars"]
+        assert bind_vars["graph_name"] == "GRAPH"
+        assert "OKF_" not in bind_vars["graph_name"]
+        identity_aql = invoke_env["db"].aql.execute.call_args_list[1][0][0]
+        assert OKF_CONCEPTS_META_COLLECTION in identity_aql
+        assert "m.graph_name == @graph_name" in identity_aql
+
+    @pytest.mark.asyncio
+    async def test_okf_identity_enrichment_failure_is_graceful(self, invoke_env):
+        # The meta join is additive: if it cannot run (collection absent,
+        # transient DB error), the leg keeps the pre-CAP-1 shape — file_ids
+        # set, no identity keys, NO exception.
+        mock_doc = MagicMock()
+        mock_doc.id = "chunk1"
+        mock_doc.page_content = "text"
+        mock_doc.metadata = {}
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+        file_cursor = MagicMock()
+        file_cursor.__iter__ = MagicMock(return_value=iter([{"key": "chunk1", "file_id": "file_abc"}]))
+        invoke_env["db"].aql.execute.side_effect = [file_cursor, Exception("meta collection missing")]
+
+        result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        md = result[0]["doc"].metadata
+        assert md["file_ids"] == ["file_abc"]
+        assert "repo_id" not in md
+        assert "bundle_version" not in md
+
+    @pytest.mark.asyncio
+    async def test_legacy_graph_carries_no_okf_identity(self, invoke_env):
+        # Legacy graphs have no okf_concepts_meta row naming their graph —
+        # the join returns nulls and the metadata stays byte-identical to
+        # the pre-CAP-1 contract.
+        mock_doc = MagicMock()
+        mock_doc.id = "chunk1"
+        mock_doc.page_content = "text"
+        mock_doc.metadata = {}
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+        file_cursor = MagicMock()
+        file_cursor.__iter__ = MagicMock(return_value=iter([{"key": "chunk1", "file_id": "legacy_file"}]))
+        identity_cursor = MagicMock()
+        identity_cursor.__iter__ = MagicMock(
+            return_value=iter([{"key": "chunk1", "repo_id": None, "bundle_version": None}])
+        )
+        invoke_env["db"].aql.execute.side_effect = [file_cursor, identity_cursor]
+
+        result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        md = result[0]["doc"].metadata
+        assert md["file_ids"] == ["legacy_file"]
+        assert "repo_id" not in md
+        assert "bundle_version" not in md
 
     @pytest.mark.asyncio
     async def test_pre_computed_embedding_skips_embed_query(self, invoke_env):

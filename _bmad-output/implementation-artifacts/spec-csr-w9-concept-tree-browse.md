@@ -2,7 +2,7 @@
 title: 'W9 — concept tree browse: paginated tree index + citizen modal viewer'
 type: 'feature'
 created: '2026-11-08'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b2bcbb5918ddd6b4ed0aae0bbbe149714adebecb'
@@ -86,6 +86,8 @@ context:
 
 - 2026-11-08 (implementation): the story-time `bmad-ux` agent skill was not available in this dispatch — the D8 information-architecture pass was authored and recorded directly as `_bmad-output/implementation-artifacts/ux-csr-w9-concept-browser.md` (per the epic's D8 frame: modal surface already resolved at planning; list-vs-tree, mobile behaviour and affordance placement decided there before any modal code). The `getConceptTree` API call went to `conceptService.js` (the spec allowed either home).
 - 2026-11-08 (verification): the committed smoke's chat leg requires the local build synced to this branch (the running `main` containers predate the route). The live proof ran as a scoped W9 probe against the running stack — writes through Kong (the container's PII sidecar + drain), every W9 READ leg against the worktree server on :3002 serving the same database: **7/7 PASS** (paginated scopeless walk 3 pages of ≤1, per-hop CAP-2 fetch, publication gate on retract, restricted fence on index + hop, wildcard admin read, cleanup). The extended smoke script is syntax-checked and ready for the post-sync live run.
+- 2026-11-08 (review r0): three-layer review (blind-hunter 18 findings, edge-case 5, verification-gap 2+2) — every claim verified against code before verdict. 9 patched (commit c52c7bd: hop-race guard, close cancels the walk, silent expected-refusal lookups, canBrowseSource + isServingRepo single definitions, bare `.exists()`, filtered count, real ChatBot composition tests, one test rename), 2 deferred (#1643 epic-context parser-edge line, #1644 st-locale noun mix), 11 refuted on evidence (house idioms, test-pinned invariants, instrument artifacts). No intent_gap, no bad_spec — no loopback. Suites re-run green after patches: okf-server 2130/2130, frontend 4099/4099.
+- 2026-11-08 (live gate): local build synced to the branch (sync tooling `--merge-prefer-target`, rebuild `frontend okf-server`), Kong restarted after the recreate (stale upstream IP), then the FULL smoke: **12 passed, 0 failed** — including [2.5] the paginated walk (2 pages of ≤1, never one payload), the RESTRICTED-tree 404 fence, the per-hop CAP-2 fetch, and [3.5] the retracted-tree publication-gate 404. verify-local-build.sh 47 pass / 0 fail after the rebuild.
 
 ## Review Triage Log
 

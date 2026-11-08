@@ -193,7 +193,12 @@ describe('PUT /api/okf/repos/:repo_id/access (toggle)', () => {
     expect(update[0]).toBe(RID);
     expect(update[1].acl).toMatchObject({ restricted: true, required_scopes: ['okf:t:island-tourism:admin'] });
     expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'repo.access.restrict', repo_id: RID, details: { restricted: true } })
+      expect.objectContaining({
+        action: 'repo.access.restrict',
+        repo_id: RID,
+        // D4: the audit now also carries the snapshot-propagation tally
+        details: expect.objectContaining({ restricted: true })
+      })
     );
   });
 

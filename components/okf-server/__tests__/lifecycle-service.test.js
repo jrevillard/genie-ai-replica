@@ -1007,7 +1007,7 @@ test('P0: retract REQUEUES the meta rows (the drain queue reset)', async () => {
   });
 });
 
-test('v9-wedge: ingest-arms stamps every row to the drain serving name', async () => {
+test('v9-wedge: ingest-arms stamps every row to the drain serving name + CAP-1 version', async () => {
   seedRepo({
     lifecycle_state: 'publish',
     version: 3,
@@ -1017,7 +1017,10 @@ test('v9-wedge: ingest-arms stamps every row to the drain serving name', async (
   const meta = require('../services/concept-meta-service');
   meta.countByIndexStatus.mockResolvedValueOnce(2).mockResolvedValueOnce(0); // parsed, then indexed
   await lifecycleService.transition(REPO, 'ingest', { sub: 'steward-1' });
-  expect(meta.stampRepoGraphName).toHaveBeenCalledWith(REPO, 'OKF_demo_v3');
+  // CAP-1 (chat-source resolution): the stamp binds rows to the drained
+  // version — the retrieval enrichment join reads bundle_version from the
+  // meta row (first-class data, never parsed out of the graph name).
+  expect(meta.stampRepoGraphName).toHaveBeenCalledWith(REPO, 'OKF_demo_v3', 3);
 });
 
 test('retract refuses loudly when the graph teardown fails (no state flip)', async () => {

@@ -1057,11 +1057,106 @@ describe('GET /api/okf/repos/:repo_id/concepts/:concept_id (Story #978 — edito
     expect(res.body.error).toBe('CONCEPT_NOT_FOUND');
   });
 
-  test('404 when the repo is foreign', async () => {
+  test('repo outside the caller grants: additive in OPEN mode (200), exact-list in CLOSED mode (404)', async () => {
+    // Review fix 2026-11-07: this case previously pinned 404 in open mode —
+    // the exact-list first cut that strips a granted user of every open repo
+    // (the bug resolveGraphSet's own comment records). The serving-read
+    // verdict is now additive in open mode (grants never remove public
+    // repos) and keeps the exact list in closed mode; both are pinned here.
     authScoped(['okf:t1:otherRepo:read']);
+    conceptMetaService.getConceptMeta.mockResolvedValue({
+      concept_id: 'conceptA',
+      title: 'Concept A',
+      frontmatter: { title: 'Concept A' },
+      body: '# Concept A',
+      sources: []
+    });
+    repoService.getById.mockImplementation(async (repoId, { authz } = {}) => {
+      if (authz instanceof Set && !authz.has(repoId)) {
+        return Promise.reject(Object.assign(new Error('not found'), { code: 'REPO_NOT_FOUND', status: 404 }));
+      }
+      return { repo_id: repoId, lifecycle_state: 'publish', ingested_at: '2026-11-04T00:00:00Z' };
+    });
+    const open = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(open.status).toBe(200);
+    expect(open.body.concept_id).toBe('conceptA');
+
+    const prev = process.env.OKF_SCOPE_MODE;
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      const closed = await request(createApp())
+        .get('/api/okf/repos/repoA/concepts/conceptA')
+        .set('Authorization', TOKEN);
+      expect(closed.status).toBe(404);
+    } finally {
+      if (prev === undefined) delete process.env.OKF_SCOPE_MODE;
+      else process.env.OKF_SCOPE_MODE = prev;
+    }
+  });
+});
+
+// CAP-2 (chat-source resolution, review fix 2026-11-07): the concept CONTENT
+// read is registered on the servingReads sub-router (allowScopelessWhenOpen)
+// — the registration IS what admits the scopeless citizen to the card route.
+// It has its own route-level pin here because deleting the registration line
+// leaves every other suite green: controller tests bypass routing, and the
+// scoped tests above reach the handler through the pre-existing /repos
+// registration. Pattern per retrieval-config-routes.test.js (the file that
+// exists because the security-relevant gates had no route coverage).
+describe('GET /api/okf/repos/:repo_id/concepts/:concept_id (CAP-2 serving-read registration)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  const servingRepo = () =>
+    repoService.getById.mockResolvedValue({
+      repo_id: 'repoA',
+      name: 'A',
+      lifecycle_state: 'publish',
+      ingested_at: '2026-11-04T00:00:00Z'
+    });
+  const servingConcept = () =>
+    conceptMetaService.getConceptMeta.mockResolvedValue({
+      concept_id: 'conceptA',
+      title: 'Concept A',
+      frontmatter: { title: 'Concept A' },
+      body: '# Concept A',
+      sources: []
+    });
+
+  test('scopeless caller in OPEN mode reaches the handler through servingReads (200 card)', async () => {
+    authScoped([]);
+    servingRepo();
+    servingConcept();
     const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
-    expect(res.status).toBe(404);
-    expect(conceptMetaService.getConceptMeta).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ concept_id: 'conceptA' });
+    // The citizen card, not the steward row:
+    expect(res.body.max_doc_chars).toBeUndefined();
+  });
+
+  test('scopeless caller in CLOSED mode is 403 at the scope gate (allowScopelessWhenOpen is open-mode only)', async () => {
+    const prev = process.env.OKF_SCOPE_MODE;
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      authScoped([]);
+      const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    } finally {
+      if (prev === undefined) delete process.env.OKF_SCOPE_MODE;
+      else process.env.OKF_SCOPE_MODE = prev;
+    }
+  });
+
+  test('a scoped caller in OPEN mode reads an open repo (additive grants — the shadow registration is behavior-identical)', async () => {
+    authScoped(['okf:t1:otherRepo:read']);
+    servingRepo();
+    servingConcept();
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.concept_id).toBe('conceptA');
   });
 });
 

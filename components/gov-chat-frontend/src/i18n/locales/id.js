@@ -1366,6 +1366,8 @@ export default {
     copyFailed: 'Gagal menyalin',
 
     documentOpenError: 'Gagal membuka dokumen',
+    okfSourceUnavailable: 'Sumber ini tidak tersedia untuk dilihat.',
+    okfOriginalSource: 'Sumber asli',
     feedbackSubmitted: 'Umpan balik tersimpan',
     feedbackError: 'Gagal menyimpan umpan balik',
     feedbackMissingQueryId: 'Jawaban ini belum bisa dinilai',

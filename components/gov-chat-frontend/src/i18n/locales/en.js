@@ -1355,6 +1355,8 @@ export default {
     copyFailed: 'Could not copy',
 
     documentOpenError: 'Could not open the document',
+    okfSourceUnavailable: 'This source is not available to view.',
+    okfOriginalSource: 'Original source',
     feedbackSubmitted: 'Feedback saved',
     feedbackError: 'Feedback could not be saved',
     feedbackMissingQueryId: 'This answer cannot be rated yet',

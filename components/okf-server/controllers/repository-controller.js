@@ -1040,6 +1040,12 @@ function callerIsStewardForRepo(req, repoId) {
   return isSuperAdmin || authorizedRepoIds === null || authorizedRepoIds.has(repoId);
 }
 
+/** The retrieval-serving state every citizen serving read requires (review
+ * r0: ONE definition — getConcept and getConceptTree must never drift). */
+function isServingRepo(repoDoc) {
+  return repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null;
+}
+
 /** The CAP-3 card projection: keep only whitelisted fields that exist. */
 function projectConceptCard(concept) {
   const card = {};
@@ -1075,7 +1081,7 @@ async function getConcept(req, res, next) {
     const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
     await assertRepoReadableByCaller(req, repoDoc);
     const steward = callerIsStewardForRepo(req, repo_id);
-    if (!steward && !(repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null)) {
+    if (!steward && !isServingRepo(repoDoc)) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
@@ -1131,7 +1137,7 @@ async function getConceptTree(req, res, next) {
       const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
       await assertRepoReadableByCaller(req, repoDoc);
       const steward = callerIsStewardForRepo(req, repo_id);
-      if (!steward && !(repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null)) {
+      if (!steward && !isServingRepo(repoDoc)) {
         throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
       }
       const { limit, offset } = req.query || {};

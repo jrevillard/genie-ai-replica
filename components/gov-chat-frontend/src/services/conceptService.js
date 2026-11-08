@@ -35,9 +35,15 @@ const conceptService = {
   },
 
   async get(repoId, conceptId) {
+    // silent: true (review r0) — every caller treats a non-success as an
+    // expected, handled outcome (fetchOkfConcept maps 403/404/501 to the
+    // honest "unavailable" arm; the editor paths catch and render their own
+    // states), so the interceptor's global error toast must stay off (the
+    // interceptor's own rule: silent for probe-style lookups).
     try {
       const res = await httpService.get(
-        `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`
+        `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+        { silent: true }
       );
       return res && res.data ? res.data : null;
     } catch (err) {
@@ -61,7 +67,12 @@ const conceptService = {
     if (opts.offset !== undefined) params.push(`offset=${encodeURIComponent(opts.offset)}`);
     const qs = params.length ? `?${params.join('&')}` : '';
     try {
-      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concept-tree${qs}`);
+      // silent: true (review r0) — the 404 anti-enumeration refusal is an
+      // expected, handled outcome (the browser renders an honest "cannot be
+      // browsed"), never a global error toast.
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concept-tree${qs}`, {
+        silent: true
+      });
       return res && res.data ? res.data : { total: 0, offset: 0, limit: 200, concepts: [] };
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) return null;

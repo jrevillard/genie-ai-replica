@@ -89,6 +89,33 @@ context:
 
 ## Review Triage Log
 
+- 2026-11-08 (review r0 — layers: blind-hunter 18, edge-case 5, verification-gap 2+2; every claim verified at the cited location):
+- ChatBot W9 tests never exercise the real composition (no okf module in the wrapper store, direct method calls, `browserVisible`/`:visible`/`@browse-document` unpinned — a rename keeps suites green while the modal never opens) — **medium → patch** (verification-gap, pre-verified).
+- The only AQL-executing check (the extended smoke leg) has not run against a synced stack — **routed to the live gate** (the story's declared post-sync verification; runs after patches land).
+- `browserLoadConcept` has no same-repo sequence guard: two rapid hops can commit out of order, pane shows the earlier click's concept — **low → patch** (one-line STALE guard; blind-hunter + edge-case concordant).
+- `closeConceptBrowser` leaves an in-flight walk fetching into the hidden slice — **low → patch** (bump `browserTreeGeneration` on close; edge-case + blind-hunter concordant).
+- `get()`/`getConceptTree()` let the httpService interceptor toast every expected refusal (404/403/501 are probe-style handled outcomes for all callers; httpService.js ~:257 documents `{ silent: true }` for exactly this) — **medium → patch** (fenced browse pops a raw toast beside the honest notice; reachable via the stale-citation path).
+- `canBrowseSource` duplicated with identical body in ChatBot + RightSideBar — **low → patch** (export from `utils/okfCitation.js` beside `isOkfConceptSource`).
+- The publication predicate is inlined in `getConcept` + `getConceptTree` and nothing pins their equality — **low → patch** (module-local `isServingRepo` helper; behavior identical).
+- `countLabel` shows the unfiltered count while a filter is active — **low → patch** (count filtered rows when filtering; no new i18n key).
+- `exists()` try/catch swallows transient DB faults as "no graph" — **low → patch** (house precedent calls `.exists()` bare — graph-lifecycle-service.js:153-164; absent collections return false, real faults surface as 500).
+- ChatBot affordance test never clicks the rendered button (`@click` wiring unpinned) — **low → patch, grouped with the composition gap** (same root cause; the click test rides the real-store composition test).
+- `okf-browser.test.js` "out-of-range offset" test name overstates (it exercises the short-page break) — **low → patch rider** (rename).
+- `epic-9-context.md` still says author+parser edges both walkable; spec+code narrowed to author-only — **low → defer** (fix edits an agent-context file; the narrowing is recorded in the approved spec's Design Notes).
+- st locale mixes 'maikutlo'/'kgopolo' for concept in one dialog — **low → defer** (needs native Sesotho review; guessing morphology violates the verbatim-i18n rule).
+- No Playwright spec added — **false** — the landed CSR batch touched zero tests/e2e files; the wave pattern is jest suites + the extended live smoke; the frozen spec operationalized the epic line as locator discipline + smoke leg.
+- `common.close` key absent — **false** — house idiom: 7 shipped components use `translate('common.close', 'Close')`; the key never existed; the fallback IS the mechanism.
+- Smoke "omits the restricted hop" — **false** — the hop route IS the CAP-2 concept GET; its restricted fence is pinned by the pre-existing smoke [2] leg; the change-log 7/7 describes the scoped probe faithfully.
+- Tree route lacks the /repos twin registration — **false** — servingReads mounts before the strict gates and shadows (the CAP-2 comment documents the twin as deliberate shadow redundancy); scoped callers reach the handler in both modes; route-level admission is test-pinned.
+- No test pins the OTel span — **false** — zero span-pinning tests exist in the okf-server suite (house pattern: pass-through tracing mocks); the constraint "gets a span" is delivered in code.
+- Sidebar `$t` lacks the fallback its twin has — **false** — key presence is pinned by the localeConsistency deep-identity test; the divergence cannot manifest through any shipped path.
+- Empty Review Triage Log heading — **false** — rows land with this entry.
+- Walk re-queries `total` per page — **false** — negligible at measured scale (~6k meta rows, indexed filter); the stateless per-page count is what keeps `total` honest mid-walk.
+- `browserVisible` lacks the dialog's state fallback — **false** — a host store without the okf module cannot dispatch the open action either; the mismatch scenario is unreachable in any host that can open the dialog.
+- Raw transport errors rendered untranslated — **low → reject** — rare (transport failure), honest-by-specificity, and the fix crosses the i18n ×14 surface for a string nobody sees in normal operation.
+- Markdown recipe omits the editor's hljs/taskLists — **low → reject** — the edge layer itself ruled it cosmetic; pulling hljs into the chat bundle for a browse modal is a cost tradeoff, and code blocks are rare in concepts.
+- Mid-walk re-ingest dup/skip (stateless offset over a mutable corpus) — **low → reject** — inherent to the frozen pagination contract (listConceptsMeta's), rare, display-only, self-healing on reopen; the safe fix (dedupe + raw-consumed offset counter) carries a walk-loop hazard disproportionate to the artifact.
+
 ## Design Notes
 
 - The index carries author links ONLY; parser-derived structure is reached per-concept on demand (the meta row's `links[]` rides the CAP-2 fetch). This is the scale-safe split: author edges are ~13–16k per large repo; raw edge collections reach 483k (Bali) — the index must never join those.

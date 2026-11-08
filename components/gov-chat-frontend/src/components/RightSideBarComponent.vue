@@ -174,7 +174,7 @@ import {
   openOkfSource,
   fileTypeBadge
 } from '../utils/document-opener.js';
-import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
+import { isOkfConceptSource, okfConceptBadge, canBrowseSource } from '../utils/okfCitation.js';
 import notificationService from '../services/notificationService';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages, ExternalLink, Library } from '@lucide/vue';
@@ -483,12 +483,10 @@ export default {
     },
 
     // ── W9 (concept tree browse) ─────────────────────────────────────────
-    // A WORKING citation: an okf-concept row with repo identity — the same
-    // predicate the answer cards use, so neither surface can render a dead
-    // browse affordance.
-    canBrowseSource(doc) {
-      return isOkfConceptSource(doc) && !!doc.repoId && !!doc.id;
-    },
+    // canBrowseSource is the SHARED predicate (utils/okfCitation.js — one
+    // definition for both surfaces, review r0); the sidebar only names the
+    // cited concept — the dialog itself is owned by the parent.
+    canBrowseSource,
 
     // The dialog is owned by the parent (one instance for both surfaces);
     // the sidebar only names the cited concept.

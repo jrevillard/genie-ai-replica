@@ -541,12 +541,11 @@ async function listConceptTree(repo_id, opts = {}) {
     const { graphNameForRepo } = require('./edge-service');
     const graph = await graphNameForRepo(db, repo_id);
     const edgeName = `${graph}_LINKS_TO`;
-    let edgesReady = false;
-    try {
-      edgesReady = await db.collection(edgeName).exists();
-    } catch {
-      /* no drained graph / unreachable collection name — index without links */
-    }
+    // House precedent (graph-lifecycle-service.js): .exists() is called BARE —
+    // an absent collection returns false (the no-graph degrade below), while a
+    // transient DB fault THROWS and surfaces as a 500 instead of silently
+    // serving a link-less index for a drained repo (review r0).
+    const edgesReady = await db.collection(edgeName).exists();
     const PAGE =
       'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.title, m.concept_id LIMIT @offset, @limit ';
     const rows = edgesReady

@@ -136,7 +136,7 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.loading).toBe(false);
   });
 
-  test('an out-of-range offset returns an empty page and ends the walk (total stays true)', async () => {
+  test('a short page ends the walk — a repo smaller than one page never fetches twice', async () => {
     mockTreePage.mockImplementation(async (_r, { offset }) => (offset === 0 ? page(2, 0, 2) : page(2, 5000, 0)));
     // A repo smaller than one page: the first page's short length ends it.
     const store = buildStore();
@@ -216,5 +216,62 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     store.dispatch('okf/closeConceptBrowser');
     expect(store.state.okf.browser.visible).toBe(false);
     expect(store.state.okf.browser.concepts.length).toBe(2);
+  });
+
+  test('a slower earlier hop never overwrites a newer selection (same-repo race)', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(2, offset, 2));
+    let releaseA;
+    const slowA = new Promise((resolve) => {
+      releaseA = resolve;
+    });
+    mockFetchConcept.mockImplementation(async (_repo, conceptId) => {
+      if (conceptId === 'cA') {
+        return slowA.then(() => ({ concept_id: 'cA', title: 'CA', body: 'A body', links: [] }));
+      }
+      return { concept_id: 'cB', title: 'CB', body: 'B body', links: [] };
+    });
+    const store = buildStore();
+    // The open's own hop (cA) is held in flight.
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'cA' });
+    // A newer hop for cB resolves fast while cA is still pending.
+    await store.dispatch('okf/browserLoadConcept', { repoId: 'r1', conceptId: 'cB' });
+    expect(store.state.okf.browser.selectedConceptId).toBe('cB');
+    expect(store.state.okf.browser.selectedConcept.body).toBe('B body');
+    // The held cA resolves now — it must NOT commit over cB.
+    releaseA({ concept_id: 'cA', title: 'CA', body: 'A body', links: [] });
+    await new Promise((r) => setTimeout(r, 0));
+    const b = store.state.okf.browser;
+    expect(b.selectedConceptId).toBe('cB');
+    expect(b.selectedConcept.body).toBe('B body');
+  });
+
+  test('closing the dialog cancels an in-flight walk — no further pages commit', async () => {
+    let releasePage2;
+    const page2 = new Promise((resolve) => {
+      releasePage2 = resolve;
+    });
+    mockTreePage.mockImplementation(async (_r, { offset }) => {
+      if (offset === 0) return page(400, 0, 200);
+      return page2;
+    });
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.state.okf.browser.concepts.length).toBe(200);
+    store.dispatch('okf/closeConceptBrowser');
+    expect(store.state.okf.browser.visible).toBe(false);
+    // The held page resolves after the close — the walk must have exited via
+    // its stale guard and never commit it.
+    releasePage2(page(400, 200, 200));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.state.okf.browser.concepts.length).toBe(200);
+    // A fresh open resets cleanly (the stale generation never poisons it).
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r2', conceptId: 'x' });
+    const b = store.state.okf.browser;
+    expect(b.visible).toBe(true);
+    expect(b.repoId).toBe('r2');
+    expect(b.concepts.length).toBe(1);
+    expect(b.loading).toBe(false);
   });
 });

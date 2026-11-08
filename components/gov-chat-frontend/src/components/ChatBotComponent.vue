@@ -577,7 +577,7 @@ import {
   openOkfSource,
   fileTypeBadge
 } from '../utils/document-opener.js';
-import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
+import { isOkfConceptSource, okfConceptBadge, canBrowseSource } from '../utils/okfCitation.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -1331,12 +1331,10 @@ export default {
     },
 
     // ── W9 (concept tree browse) ─────────────────────────────────────────
-    // A WORKING citation: an okf-concept row with repo identity. A pre-CAP-1
-    // row (no repoId) cannot browse — no affordance anywhere, so the entry
-    // is never dead.
-    canBrowseSource(doc) {
-      return isOkfConceptSource(doc) && !!doc.repoId && !!doc.id;
-    },
+    // canBrowseSource is the SHARED predicate (utils/okfCitation.js — one
+    // definition for both surfaces, review r0): a WORKING okf-concept row
+    // with repo identity; a pre-CAP-1 row never renders a dead affordance.
+    canBrowseSource,
 
     // Opens the shared modal at the cited concept (the okf store resets the
     // slice, starts the progressive index assembly and the first CAP-2 hop).

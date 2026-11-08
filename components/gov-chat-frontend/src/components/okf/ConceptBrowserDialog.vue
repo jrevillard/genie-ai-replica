@@ -258,7 +258,11 @@ export default {
       return DOMPurify.sanitize(this.md.render(body), { USE_PROFILES: { html: true } });
     },
     countLabel() {
-      const n = this.concepts.length;
+      // While a filter is active the count names the FILTERED rows (review
+      // r0) — an unfiltered total above a zero-match table reads as a
+      // contradiction.
+      const filtering = this.filter.trim().length > 0;
+      const n = filtering ? this.filteredRows.length : this.concepts.length;
       return this.translate('chatbot.okfBrowser.concepts', '{n} concepts').replace('{n}', String(n));
     }
   },

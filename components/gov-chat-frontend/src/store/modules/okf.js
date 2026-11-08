@@ -2268,6 +2268,10 @@ const actions = {
   },
 
   closeConceptBrowser({ commit }) {
+    // Closing CANCELS an in-flight walk: the generation bump fires the
+    // walk's stale() on its next page, so no hidden fetches continue into
+    // the hidden slice (review r0).
+    browserTreeGeneration += 1;
     commit('closeBrowser');
   },
 
@@ -2341,11 +2345,16 @@ const actions = {
     try {
       const meta = await documentOpener.fetchOkfConcept(repoId, conceptId);
       if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+      // Same-repo sequence guard (review r0): a NEWER hop was dispatched
+      // while this one was in flight — the slower earlier fetch must not
+      // overwrite the newer selection.
+      if (state.browser.selectedConceptId !== conceptId) return { ok: false, code: 'STALE' };
       commit('setBrowserSelected', { conceptId, concept: meta });
       commit('setBrowserSelectedLoading', false);
       return { ok: true };
     } catch (err) {
       if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+      if (state.browser.selectedConceptId !== conceptId) return { ok: false, code: 'STALE' };
       commit('setBrowserSelectedLoading', false);
       if (err && err.code === 'OKF_CONCEPT_UNAVAILABLE') {
         commit('setBrowserSelectedUnavailable');

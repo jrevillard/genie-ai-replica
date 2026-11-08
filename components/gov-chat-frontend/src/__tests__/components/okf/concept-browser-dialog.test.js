@@ -104,15 +104,21 @@ describe('ConceptBrowserDialog — list, filter, progress', () => {
     expect(line.text()).not.toContain('{done}');
   });
 
-  it('the filter narrows the assembled rows client-side (title or id)', async () => {
+  it('the filter narrows the assembled rows client-side (title or id) and the count follows', async () => {
     const rows = [
       { concept_id: 'alpha', title: 'Alpha Booking', links: [] },
       { concept_id: 'hours', title: 'Office Hours', links: [] }
     ];
     const w = mountDialog(BROWSER({ concepts: rows, total: 2 }));
+    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('2 concepts');
     await w.find('[data-testid="okf-browser-filter"]').setValue('alpha');
     expect(w.findAll('.ds-table tbody tr').length).toBe(1);
     expect(w.text()).toContain('Alpha Booking');
+    // Review r0: while filtering, the count names the FILTERED rows — an
+    // unfiltered total above a zero-match table would read as a contradiction.
+    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('1 concepts');
+    await w.find('[data-testid="okf-browser-filter"]').setValue('zzz-no-match');
+    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('0 concepts');
   });
 
   it('a windowed render: 250 rows render 100 + Show more extends by 100', async () => {

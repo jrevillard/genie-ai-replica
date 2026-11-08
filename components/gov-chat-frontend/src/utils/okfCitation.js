@@ -50,3 +50,17 @@ export function isOkfConceptSource(doc) {
 export function okfConceptBadge() {
   return { label: 'OKF', tone: 'accent' };
 }
+
+/**
+ * W9 (concept tree browse): whether a citation may render the browse
+ * affordance — a WORKING okf-concept row with repo identity. A pre-CAP-1
+ * row (no repoId) or a legacy document gets no affordance anywhere, so the
+ * entry is never dead. ONE definition for BOTH chat surfaces (review r0:
+ * the answer-card grid and the sidebar cannot drift).
+ *
+ * @param {Object} doc a mapped citation row
+ * @returns {Boolean}
+ */
+export function canBrowseSource(doc) {
+  return isOkfConceptSource(doc) && !!doc.repoId && !!doc.id;
+}

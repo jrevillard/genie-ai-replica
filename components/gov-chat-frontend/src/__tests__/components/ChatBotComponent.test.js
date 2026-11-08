@@ -81,12 +81,27 @@ jest.mock('../../services/notificationService', () => ({
 }));
 
 // CAP-3: the okf open flow is mocked (the real one fetches through
-// conceptService); the pure helpers stay real.
+// conceptService); the pure helpers stay real. W9 (review r0): fetchOkfConcept
+// joins the mocked set — the composition tests register the REAL okf module,
+// whose per-hop fetch must hit a seam mock, not httpService.
+const mockTreePage = jest.fn();
+const mockHopFetch = jest.fn();
 jest.mock('../../utils/document-opener', () => ({
   ...jest.requireActual('../../utils/document-opener'),
   openOkfConcept: jest.fn(),
   openOkfSource: jest.fn(),
-  openRepositoryDocument: jest.fn()
+  openRepositoryDocument: jest.fn(),
+  fetchOkfConcept: (...a) => mockHopFetch(...a)
+}));
+
+// W9 (review r0): the okf store's index walk rides the same seam — the real
+// conceptService stays (CAP-3 helpers share it), only getConceptTree mocks.
+jest.mock('../../services/conceptService', () => ({
+  __esModule: true,
+  default: {
+    ...jest.requireActual('../../services/conceptService').default,
+    getConceptTree: (...a) => mockTreePage(...a)
+  }
 }));
 
 // Event bus mock
@@ -158,6 +173,7 @@ jest.mock('@lucide/vue', () => ({
 const ChatBotComponent = require('../../components/ChatBotComponent.vue').default;
 const statusModule = require('../../store/modules/status.js').default;
 const conversationModule = require('../../store/modules/conversation.js').default;
+const okfModule = require('../../store/modules/okf.js').default;
 const { rehydrateConversation, STORAGE_KEY } = require('../../store/modules/conversation.js');
 
 // ---------------------------------------------------------------------------
@@ -196,6 +212,14 @@ function createChatBotStore(stateOverrides = {}) {
           createChat: jest.fn().mockResolvedValue({}),
           updateChat: jest.fn().mockResolvedValue({})
         }
+      },
+      // The REAL okf module (review r0): the W9 browse composition — the
+      // rendered affordance → dispatch → the browser slice → the dialog's
+      // visible prop — is exercised against the real actions, with the two
+      // browser services mocked at the seam (mockTreePage/mockHopFetch).
+      okf: {
+        ...okfModule,
+        state: () => JSON.parse(JSON.stringify(okfModule.state()))
       }
     }
   });
@@ -6130,8 +6154,27 @@ describe('CAP-4 origin rows rendering', () => {
 // cards — repo identity present — in the answer-card grid. A pre-CAP-1 row
 // (no repoId) and a legacy document get NO affordance (never a dead entry);
 // clicking dispatches the shared store open (one dialog for both surfaces).
+// Review r0: the composition is exercised for real — the store registers the
+// okf module, the click drives the real store path, and the tests assert
+// browserVisible and the dialog's visible prop (a rename of the getter /
+// :visible / @browse-document wiring can no longer stay green while the
+// modal never opens).
 // ===========================================================================
 describe('W9 browse affordance (answer cards)', () => {
+  // One page for the walk; the hop fetch returns the cited card.
+  function primeBrowserMocks() {
+    mockTreePage.mockImplementation(async (_r, { offset }) => ({
+      total: 2,
+      offset,
+      limit: 200,
+      concepts: [
+        { concept_id: 'alpha_concept', title: 'Alpha', links: [] },
+        { concept_id: 'beta_concept', title: 'Beta', links: [] }
+      ]
+    }));
+    mockHopFetch.mockResolvedValue({ concept_id: 'alpha_concept', title: 'Alpha', body: '# Alpha', links: [] });
+  }
+
   it('renders the browse affordance only on working okf-concept cards', async () => {
     const wrapper = createChatBotWrapper();
     const vm = wrapper.vm;
@@ -6187,5 +6230,74 @@ describe('W9 browse affordance (answer cards)', () => {
     await vm.handleBrowseDocument({ id: 'c', source: 'okf-concept', repoId: 'r' });
     expect(dispatchSpy).toHaveBeenCalledWith('okf/openConceptBrowser', { repoId: 'r', conceptId: 'c' });
     dispatchSpy.mockRestore();
+  });
+
+  it('the REAL store path: clicking the rendered affordance opens the dialog at the cited concept', async () => {
+    primeBrowserMocks();
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q', isSaved: false });
+    vm.$store.commit('conversation/appendBotMessage', {
+      sender: 'bot',
+      content: 'a',
+      queryId: 'q1',
+      isSaved: false,
+      isGrounded: true,
+      sourcesOpen: true,
+      sources: [{ id: 'alpha_concept', title: 'Alpha', source: 'okf-concept', repoId: 'repo-1' }]
+    });
+    await wrapper.vm.$nextTick();
+    expect(vm.browserVisible).toBe(false);
+    // The CLICK — the @click wiring itself, not a direct method call.
+    await wrapper.find('[data-testid="answer-source-browse-0"]').trigger('click');
+    await flushPromises();
+    // The slice is live: the real actions ran (walk + hop against the mocks).
+    expect(vm.browserVisible).toBe(true);
+    expect(vm.$store.state.okf.browser.repoId).toBe('repo-1');
+    expect(vm.$store.state.okf.browser.startConceptId).toBe('alpha_concept');
+    // The dialog instance receives the flag (the :visible binding).
+    const dialog = wrapper.findComponent({ name: 'ConceptBrowserDialog' });
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.props('visible')).toBe(true);
+    // Closing through the store flips the same flag the dialog binds.
+    vm.closeConceptBrowser();
+    await wrapper.vm.$nextTick();
+    expect(vm.browserVisible).toBe(false);
+    expect(dialog.props('visible')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('the sidebar browse-document emit opens the SAME dialog through the parent relay', async () => {
+    primeBrowserMocks();
+    // The relay stub carries the sidebar's real emit contract (browse-document
+    // with the citation row); the full sidebar's own emit behaviour is pinned
+    // in RightSideBarComponent.test.js — here the parent's @browse-document
+    // binding is what is under test.
+    const relaySidebar = {
+      template: '<button data-testid="sidebar-browse-relay" @click="$emit(\'browse-document\', doc)" />',
+      props: ['documents'],
+      data() {
+        return { doc: { id: 'beta_concept', title: 'Beta', source: 'okf-concept', repoId: 'repo-1' } };
+      }
+    };
+    const store = createChatBotStore({});
+    const wrapper = mount(ChatBotComponent, {
+      global: {
+        plugins: [store],
+        mocks: { $t: (key) => key, $i18n: reactive({ locale: 'en' }) },
+        stubs: { ...chatbotStubs(), RightSideBarComponent: relaySidebar }
+      }
+    });
+    await flushPromises();
+    expect(wrapper.vm.browserVisible).toBe(false);
+    await wrapper.find('[data-testid="sidebar-browse-relay"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.vm.browserVisible).toBe(true);
+    expect(wrapper.vm.$store.state.okf.browser.repoId).toBe('repo-1');
+    expect(wrapper.vm.$store.state.okf.browser.startConceptId).toBe('beta_concept');
+    const dialog = wrapper.findComponent({ name: 'ConceptBrowserDialog' });
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.props('visible')).toBe(true);
+    wrapper.unmount();
   });
 });

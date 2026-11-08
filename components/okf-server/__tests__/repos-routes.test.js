@@ -1160,6 +1160,69 @@ describe('GET /api/okf/repos/:repo_id/concepts/:concept_id (CAP-2 serving-read r
   });
 });
 
+// W9 (concept tree browse): the paginated tree INDEX is registered on the
+// servingReads sub-router like the concept GET above — the registration IS
+// what admits the scopeless citizen to the index. Same route-level pin as
+// the CAP-2 block: deleting the registration line leaves every other suite
+// green (controller tests bypass routing), so it is pinned here.
+describe('GET /api/okf/repos/:repo_id/concept-tree (W9 serving-read registration)', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  const servingRepo = () =>
+    repoService.getById.mockResolvedValue({
+      repo_id: 'repoA',
+      name: 'A',
+      lifecycle_state: 'publish',
+      ingested_at: '2026-11-04T00:00:00Z'
+    });
+  const treePage = () =>
+    conceptMetaService.listConceptTree.mockResolvedValue({
+      total: 2,
+      offset: 200,
+      limit: 200,
+      concepts: [{ concept_id: 'c3', title: 'C3', links: [] }]
+    });
+
+  test('scopeless caller in OPEN mode reaches the index through servingReads (200 page)', async () => {
+    authScoped([]);
+    servingRepo();
+    treePage();
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concept-tree?limit=200&offset=200')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ total: 2, offset: 200, limit: 200 });
+    expect(res.body.concepts).toHaveLength(1);
+    // The query params reached the service (the walker's pagination contract).
+    expect(conceptMetaService.listConceptTree).toHaveBeenCalledWith('repoA', { limit: '200', offset: '200' });
+  });
+
+  test('scopeless caller in CLOSED mode is 403 at the scope gate (allowScopelessWhenOpen is open-mode only)', async () => {
+    const prev = process.env.OKF_SCOPE_MODE;
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      authScoped([]);
+      const res = await request(createApp()).get('/api/okf/repos/repoA/concept-tree').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    } finally {
+      if (prev === undefined) delete process.env.OKF_SCOPE_MODE;
+      else process.env.OKF_SCOPE_MODE = prev;
+    }
+  });
+
+  // The 6-1c restricted fence + publication gate INSIDE the handler are
+  // pinned byte-for-byte in repository-controller-surface.test.js (this
+  // harness auto-mocks repository-service, whose RepoError cannot carry the
+  // denial envelope over HTTP) — the CAP-2 block above follows the same
+  // split: registration here, fence composition there.
+});
+
 describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
   beforeEach(() => {
     jest.clearAllMocks();

@@ -220,6 +220,22 @@
                         <ExternalLink :size="12" aria-hidden="true" />
                       </button>
                     </div>
+                    <!-- W9 (concept tree browse): the browse affordance on a
+                         WORKING okf-concept card (repo identity present) — a
+                         sibling of the card button, never nested inside it.
+                         No repo identity (pre-CAP-1 row) or a legacy
+                         document: no affordance, no dead entry. -->
+                    <div v-if="canBrowseSource(d)" class="answer-source-browse">
+                      <button
+                        type="button"
+                        class="answer-source-browse-btn"
+                        :data-testid="`answer-source-browse-${di}`"
+                        @click="browseSourceTree(d)"
+                      >
+                        <Library :size="12" aria-hidden="true" />
+                        <span>{{ translate('chatbot.okfBrowseRepo', 'Browse repository') }}</span>
+                      </button>
+                    </div>
                   </template>
                 </div>
               </div>
@@ -517,9 +533,15 @@
       :collapsed="rightSidebarCollapsed"
       :show-handle="showRightHandle"
       @open-document="handleOpenDocument"
+      @browse-document="handleBrowseDocument"
       @update:width="onRightWidthChange"
       @update:collapsed="onRightCollapsedChange"
     />
+
+    <!-- W9: the concept tree browser — ONE dialog instance for BOTH entry
+         surfaces (the card grid above and the sidebar's browse-document
+         emit). State lives in the okf store's browser slice. -->
+    <concept-browser-dialog :visible="browserVisible" @close="closeConceptBrowser" />
   </div>
 </template>
 
@@ -535,6 +557,7 @@ import {
   Copy,
   ExternalLink,
   Languages,
+  Library,
   Loader2,
   MessageSquareQuote,
   Sparkles,
@@ -570,6 +593,10 @@ import ChatComposer from './ChatComposer.vue';
 import chatHistoryService from '../services/chatHistoryService';
 import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
+// W9 (concept tree browse): the citizen modal viewer — one instance, opened
+// from a working OKF citation card in EITHER surface (the grid below or the
+// sidebar's browse-document emit).
+import ConceptBrowserDialog from './okf/ConceptBrowserDialog.vue';
 import {
   SIDEBAR_DEFAULTS,
   SIDEBAR_MIN_WIDTHS,
@@ -748,6 +775,8 @@ export default {
     RightSideBarComponent,
     ConfirmDialog,
     ChatComposer,
+    ConceptBrowserDialog,
+    Library,
     DsPill,
     DsSpinner,
     DsButton,
@@ -837,6 +866,12 @@ export default {
     ...mapGetters('conversation', ['openConversation']),
     openMessages() {
       return this.openConversation.messages;
+    },
+    // W9: the dialog's visibility lives in the okf store's browser slice —
+    // both entry surfaces share the one open flag.
+    browserVisible() {
+      const browser = this.$store.getters['okf/browser'];
+      return !!(browser && browser.visible);
     },
     selectedContextItems() {
       return this.openConversation.selectedContextItems;
@@ -1293,6 +1328,32 @@ export default {
           notificationService.error(this.translate('chatbot.documentOpenError', 'Could not open the document'));
         }
       }
+    },
+
+    // ── W9 (concept tree browse) ─────────────────────────────────────────
+    // A WORKING citation: an okf-concept row with repo identity. A pre-CAP-1
+    // row (no repoId) cannot browse — no affordance anywhere, so the entry
+    // is never dead.
+    canBrowseSource(doc) {
+      return isOkfConceptSource(doc) && !!doc.repoId && !!doc.id;
+    },
+
+    // Opens the shared modal at the cited concept (the okf store resets the
+    // slice, starts the progressive index assembly and the first CAP-2 hop).
+    browseSourceTree(doc) {
+      if (!this.canBrowseSource(doc)) return;
+      this.$store.dispatch('okf/openConceptBrowser', { repoId: doc.repoId, conceptId: doc.id });
+    },
+
+    closeConceptBrowser() {
+      this.$store.dispatch('okf/closeConceptBrowser');
+    },
+
+    // The sidebar's entry point — the SAME dialog, one implementation for
+    // both surfaces (D8: a card-only entry leaves the sidebar's citations
+    // without a working browse path).
+    handleBrowseDocument(doc) {
+      this.browseSourceTree(doc);
     },
 
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
@@ -3965,6 +4026,31 @@ export default {
   white-space: nowrap;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+/* W9 (concept tree browse): the browse affordance under a working OKF
+   citation card — the same quiet sibling-row pattern as the origin rows. */
+.answer-source-browse {
+  display: flex;
+  margin-top: calc(var(--space-xs) / 2);
+}
+
+.answer-source-browse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.answer-source-browse-btn:hover {
+  background: var(--accent-muted);
 }
 
 .message-wrapper {

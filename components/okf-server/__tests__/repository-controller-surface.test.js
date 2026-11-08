@@ -63,7 +63,9 @@ jest.mock('../services/concept-meta-service', () => {
     readManifest: jest.fn().mockResolvedValue(null),
     // CAP-2 fence suite drives these read paths directly.
     listConceptsMeta: jest.fn().mockResolvedValue([]),
-    getRepoLinks: jest.fn().mockResolvedValue([])
+    getRepoLinks: jest.fn().mockResolvedValue([]),
+    // W9 tree index (the citizen browse).
+    listConceptTree: jest.fn().mockResolvedValue({ total: 0, offset: 0, limit: 200, concepts: [] })
   };
   return { __esModule: true, default: base, ...base };
 });
@@ -1160,5 +1162,143 @@ describe('repository-controller — CAP-2 publication gate + card projection (W2
     expect(res.statusCode).toBe(200);
     expect(res.body.body).toBe('# body');
     expect(res.body.last_error).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// W9 (concept tree browse, 2026-11-08): the paginated tree INDEX composes
+// the SAME serving gates as getConcept — readAuthzForService (additive
+// open-mode verdict) + the 6-1c restricted fence (404 + audit) + the
+// publication gate (citizen = publish+ingested only, same 404 envelope, NO
+// audit). Mirrors the CAP-2 fence cases above, per the spec's "per the
+// CAP-2 precedents".
+// ===========================================================================
+describe('repository-controller — W9 getConceptTree serving gates', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const auditService = require('../services/audit-service');
+  const RESTRICTED = { repo_id: 'r1', name: 'R', acl: { restricted: true, required_scopes: ['okf:t:dom:admin'] } };
+  const servingRepo = (over = {}) => ({
+    repo_id: 'r1',
+    name: 'R',
+    lifecycle_state: 'publish',
+    ingested_at: '2026-11-04T00:00:00Z',
+    ...over
+  });
+  const PAGE = { total: 2, offset: 0, limit: 200, concepts: [{ concept_id: 'c1', title: 'T', links: ['c2'] }] };
+
+  beforeEach(() => {
+    conceptMetaService.listConceptTree.mockReset();
+    conceptMetaService.listConceptTree.mockResolvedValue({ ...PAGE });
+    auditService.writeAudit.mockClear();
+  });
+
+  it('fenced caller 404s with the getById denial shape + audit; the index never runs', async () => {
+    repoService.getById.mockResolvedValueOnce(RESTRICTED);
+    const { res, next } = await drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'authz.denied.repo', repo_id: 'r1' })
+    );
+    expect(conceptMetaService.listConceptTree).not.toHaveBeenCalled();
+  });
+
+  it('granted / privileged / open-repo callers pass — the index rides the query limit/offset', async () => {
+    const cases = [
+      () => {
+        repoService.getById.mockResolvedValueOnce(RESTRICTED);
+        return drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: ['okf:t:r1:read'] });
+      },
+      () => {
+        repoService.getById.mockResolvedValueOnce(RESTRICTED);
+        return drive(controller.getConceptTree, { okfIsSuperAdmin: true, okfScopes: [] });
+      },
+      () => {
+        repoService.getById.mockResolvedValueOnce(servingRepo());
+        return drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: [] });
+      }
+    ];
+    for (const run of cases) {
+      const { res, next } = await run();
+      expect(next).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual(PAGE);
+    }
+    expect(conceptMetaService.listConceptTree).toHaveBeenLastCalledWith('r1', { limit: undefined, offset: undefined });
+  });
+
+  it.each([
+    ['retracted', { lifecycle_state: 'retracted' }],
+    ['draft (never published)', { lifecycle_state: 'draft' }],
+    ['published but not yet drained', { lifecycle_state: 'publish', ingested_at: null }]
+  ])('citizen + %s repo → 404 REPO_NOT_FOUND, silent (no audit), index never runs', async (_label, over) => {
+    repoService.getById.mockResolvedValueOnce(servingRepo(over));
+    const { res, next } = await drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    expect(auditService.writeAudit).not.toHaveBeenCalled();
+    expect(conceptMetaService.listConceptTree).not.toHaveBeenCalled();
+  });
+
+  it('steward + draft repo → 200 (the editor contract — a steward may browse a draft)', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    const { res, next } = await drive(controller.getConceptTree, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r1:read']
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(2);
+  });
+
+  it('closed mode: the exact list still governs — a caller scoped elsewhere is 404', async () => {
+    const prev = process.env.OKF_SCOPE_MODE;
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      repoService.getById.mockImplementation(async (repoId, opts = {}) => {
+        if (opts && opts.authz instanceof Set && !opts.authz.has(repoId)) {
+          const { RepoError: E } = require('../services/repository-service');
+          throw new E('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);
+        }
+        return servingRepo();
+      });
+      const { next } = await drive(controller.getConceptTree, {
+        okfIsSuperAdmin: false,
+        okfScopes: ['okf:t:other:read']
+      });
+      expect(next).toHaveBeenCalled();
+      expect(next.mock.calls[0][0].code).toBe('REPO_NOT_FOUND');
+    } finally {
+      if (prev === undefined) delete process.env.OKF_SCOPE_MODE;
+      else process.env.OKF_SCOPE_MODE = prev;
+    }
+  });
+
+  it('open mode: the additive verdict rides to getById as null (grants never strip open repos)', async () => {
+    repoService.getById.mockImplementation(async (repoId, opts = {}) => {
+      if (opts && opts.authz instanceof Set && !opts.authz.has(repoId)) {
+        const { RepoError: E } = require('../services/repository-service');
+        throw new E('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);
+      }
+      return servingRepo();
+    });
+    const { res, next } = await drive(controller.getConceptTree, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:other:read']
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(repoService.getById).toHaveBeenCalledWith('r1', expect.objectContaining({ authz: null }));
+  });
+
+  it('a service throw reaches next verbatim', async () => {
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const boom = new Error('cursor died');
+    conceptMetaService.listConceptTree.mockRejectedValueOnce(boom);
+    const { next } = await drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).toHaveBeenCalledWith(boom);
   });
 });

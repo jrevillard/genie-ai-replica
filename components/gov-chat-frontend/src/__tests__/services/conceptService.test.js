@@ -53,6 +53,45 @@ describe('conceptService', () => {
       expect(mockGet.mock.calls[0][0].startsWith('/api/')).toBe(false);
     });
   });
+
+  // W9 (concept tree browse): the paginated tree index — the walker's
+  // pagination contract and the honest-null arm for the 404 anti-enumeration
+  // refusal (restricted / retracted / absent repo).
+  describe('getConceptTree', () => {
+    it('GETs /okf/repos/:id/concept-tree with the limit/offset query (no /api prefix)', async () => {
+      const page = { total: 3, offset: 200, limit: 200, concepts: [{ concept_id: 'c3', title: 'C3', links: [] }] };
+      mockGet.mockResolvedValue({ data: page });
+      const out = await conceptService.getConceptTree('r-1', { limit: 200, offset: 200 });
+      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concept-tree?limit=200&offset=200');
+      expect(mockGet.mock.calls[0][0].startsWith('/api/')).toBe(false);
+      expect(out).toBe(page);
+    });
+
+    it('omits the query string when no paging opts are passed', async () => {
+      mockGet.mockResolvedValue({ data: { total: 0, offset: 0, limit: 200, concepts: [] } });
+      await conceptService.getConceptTree('r-1');
+      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concept-tree');
+    });
+
+    it('maps a 404 (the anti-enumeration refusal) to null', async () => {
+      const err = new Error('not found');
+      err.status = 404;
+      mockGet.mockRejectedValue(err);
+      expect(await conceptService.getConceptTree('fenced')).toBeNull();
+    });
+
+    it('maps a 501 (older backend, no route) to null', async () => {
+      const err = new Error('not implemented');
+      err.status = 501;
+      mockGet.mockRejectedValue(err);
+      expect(await conceptService.getConceptTree('r-1')).toBeNull();
+    });
+
+    it('rethrows transport failures (they land in the store error arm, not unavailable)', async () => {
+      mockGet.mockRejectedValue(new Error('gateway 502'));
+      await expect(conceptService.getConceptTree('r-1')).rejects.toThrow('gateway 502');
+    });
+  });
 });
 
 describe('conceptService.update — labels write-through (frontmatter patch, 2026-09-05)', () => {

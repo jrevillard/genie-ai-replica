@@ -47,6 +47,29 @@ const conceptService = {
   },
 
   /**
+   * W9 (concept tree browse, 2026-11-08) — one page of the citizen browser's
+   * tree index (GET /okf/repos/:id/concept-tree?limit=&offset=). The response
+   * is { total, offset, limit, concepts:[{concept_id,title,links}] }; the
+   * caller (store okf/browser) assembles progressively, never one payload.
+   * A 404 is the anti-enumeration refusal (restricted / retracted / absent
+   * repo) — null, so the dialog renders an honest "cannot be browsed"
+   * instead of an error.
+   */
+  async getConceptTree(repoId, opts = {}) {
+    const params = [];
+    if (opts.limit !== undefined) params.push(`limit=${encodeURIComponent(opts.limit)}`);
+    if (opts.offset !== undefined) params.push(`offset=${encodeURIComponent(opts.offset)}`);
+    const qs = params.length ? `?${params.join('&')}` : '';
+    try {
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concept-tree${qs}`);
+      return res && res.data ? res.data : { total: 0, offset: 0, limit: 200, concepts: [] };
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) return null;
+      throw err;
+    }
+  },
+
+  /**
    * Story #978 — inline concept update, wired to the live PATCH endpoint.
    * Since the labels write-through (2026-09-05) this sends a FRONTMATTER
    * patch — the server merges it onto the CURRENT stored frontmatter

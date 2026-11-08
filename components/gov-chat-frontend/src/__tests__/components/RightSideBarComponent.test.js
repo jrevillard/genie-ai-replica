@@ -23,7 +23,8 @@ jest.mock('@lucide/vue', () => ({
   FileSpreadsheet: { template: '<svg />' },
   FileImage: { template: '<svg />' },
   Languages: { template: '<svg />' },
-  ExternalLink: { template: '<svg />' }
+  ExternalLink: { template: '<svg />' },
+  Library: { template: '<svg />' }
 }));
 
 const RightSideBarComponent = require('../../components/RightSideBarComponent.vue').default;
@@ -312,5 +313,47 @@ describe('CAP-4 sidebar origin rows', () => {
     const fallback = wrapper.vm.originLabel({});
     expect(fallback).not.toBe('Report.pdf');
     expect(fallback).not.toContain('example.gov');
+  });
+});
+
+// ===========================================================================
+// W9 (concept tree browse): the sidebar's browse affordance — the same
+// working-citation predicate as the answer cards; the dialog is owned by
+// the parent (one instance for both surfaces), so the click only EMITS.
+// ===========================================================================
+describe('W9 sidebar browse affordance', () => {
+  it('renders the browse affordance on a working concept card and none without repo identity', () => {
+    const wrapper = mountSidebar({
+      relatedDocuments: [
+        { id: 'working', title: 'Working', source: 'okf-concept', repoId: 'repo-1' },
+        { id: 'pre_cap1', title: 'Pre-CAP-1', source: 'okf-concept', repoId: null },
+        { id: 'doc-7', title: 'Plain.pdf', url: '/api/files/doc-7/download' }
+      ]
+    });
+    const browses = wrapper.findAll('.document-browse-btn');
+    expect(browses.length).toBe(1);
+    expect(browses[0].attributes('data-testid')).toBe('document-browse-0');
+    expect(wrapper.findAll('[data-testid="document-browse-1"]').length).toBe(0);
+    expect(wrapper.findAll('[data-testid="document-browse-2"]').length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('clicking the affordance emits browse-document with the cited concept', async () => {
+    const doc = { id: 'alpha_concept', title: 'Alpha', source: 'okf-concept', repoId: 'repo-1' };
+    const wrapper = mountSidebar({ relatedDocuments: [doc] });
+    await wrapper.find('[data-testid="document-browse-0"]').trigger('click');
+    expect(wrapper.emitted('browse-document')).toHaveLength(1);
+    expect(wrapper.emitted('browse-document')[0][0].id).toBe('alpha_concept');
+    // The click must not fall through to the card's open flow.
+    expect(wrapper.emitted('open-document')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('canBrowseSource mirrors the answer-card predicate', () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.vm.canBrowseSource({ id: 'c', source: 'okf-concept', repoId: 'r' })).toBe(true);
+    expect(wrapper.vm.canBrowseSource({ id: 'c', source: 'okf-concept', repoId: null })).toBe(false);
+    expect(wrapper.vm.canBrowseSource({ id: 'doc', url: '/api/files/doc' })).toBe(false);
+    wrapper.unmount();
   });
 });

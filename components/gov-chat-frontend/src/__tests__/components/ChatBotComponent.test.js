@@ -148,7 +148,8 @@ jest.mock('@lucide/vue', () => ({
   Loader2: { template: '<svg />' },
   Plus: { template: '<svg />' },
   Save: { template: '<svg />' },
-  FileText: { template: '<svg />' }
+  FileText: { template: '<svg />' },
+  Library: { template: '<svg />' }
 }));
 
 // ---------------------------------------------------------------------------
@@ -6121,5 +6122,70 @@ describe('CAP-4 origin rows rendering', () => {
     // the bare concept row renders no origins (no affordance without a target)
     expect(wrapper.findAll('[data-testid="answer-source-origin-2-0"]').length).toBe(0);
     wrapper.unmount();
+  });
+});
+
+// ===========================================================================
+// W9 (concept tree browse): the browse affordance on WORKING okf-concept
+// cards — repo identity present — in the answer-card grid. A pre-CAP-1 row
+// (no repoId) and a legacy document get NO affordance (never a dead entry);
+// clicking dispatches the shared store open (one dialog for both surfaces).
+// ===========================================================================
+describe('W9 browse affordance (answer cards)', () => {
+  it('renders the browse affordance only on working okf-concept cards', async () => {
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q', isSaved: false });
+    vm.$store.commit('conversation/appendBotMessage', {
+      sender: 'bot',
+      content: 'a',
+      queryId: 'q1',
+      isSaved: false,
+      isGrounded: true,
+      sourcesOpen: true,
+      sources: [
+        { id: 'working', title: 'Working', source: 'okf-concept', repoId: 'repo-1' },
+        { id: 'pre_cap1', title: 'Pre-CAP-1', source: 'okf-concept', repoId: null },
+        { id: 'doc-7', title: 'Plain.pdf', url: '/api/files/doc-7/download' }
+      ]
+    });
+    await wrapper.vm.$nextTick();
+    const browses = wrapper.findAll('.answer-source-browse-btn');
+    expect(browses.length).toBe(1);
+    expect(browses[0].attributes('data-testid')).toBe('answer-source-browse-0');
+    expect(wrapper.findAll('[data-testid="answer-source-browse-1"]').length).toBe(0);
+    expect(wrapper.findAll('[data-testid="answer-source-browse-2"]').length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('clicking the affordance opens the shared browser at the cited concept', async () => {
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    const dispatchSpy = jest.spyOn(vm.$store, 'dispatch');
+    await vm.browseSourceTree({ id: 'alpha_concept', source: 'okf-concept', repoId: 'repo-1' });
+    expect(dispatchSpy).toHaveBeenCalledWith('okf/openConceptBrowser', {
+      repoId: 'repo-1',
+      conceptId: 'alpha_concept'
+    });
+    dispatchSpy.mockRestore();
+  });
+
+  it('canBrowseSource refuses rows without repo identity or a concept id', () => {
+    const wrapper = createChatBotWrapper();
+    expect(wrapper.vm.canBrowseSource({ id: 'c', source: 'okf-concept', repoId: 'r' })).toBe(true);
+    expect(wrapper.vm.canBrowseSource({ id: 'c', source: 'okf-concept', repoId: null })).toBe(false);
+    expect(wrapper.vm.canBrowseSource({ id: null, source: 'okf-concept', repoId: 'r' })).toBe(false);
+    expect(wrapper.vm.canBrowseSource({ id: 'doc', url: '/api/files/doc' })).toBe(false);
+  });
+
+  it('closeConceptBrowser closes through the store; the sidebar emit rides the same open', async () => {
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    const dispatchSpy = jest.spyOn(vm.$store, 'dispatch');
+    vm.closeConceptBrowser();
+    expect(dispatchSpy).toHaveBeenCalledWith('okf/closeConceptBrowser');
+    await vm.handleBrowseDocument({ id: 'c', source: 'okf-concept', repoId: 'r' });
+    expect(dispatchSpy).toHaveBeenCalledWith('okf/openConceptBrowser', { repoId: 'r', conceptId: 'c' });
+    dispatchSpy.mockRestore();
   });
 });

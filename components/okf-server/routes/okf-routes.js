@@ -41,6 +41,16 @@ servingReads.get('/authz/graphs', authzResolverController.getGraphs);
 // single-concept GET (same handler the /repos sub-router registers, so
 // scoped callers behave identically).
 servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers/repository-controller').getConcept);
+// W9 (concept tree browse, 2026-11-08): the paginated tree INDEX is a
+// serving read like the concept GET above — the citizen's browser walks
+// the repo a citation grounded on, under the same default-open posture.
+// Registering it HERE is the structural marker per this file's own rule;
+// the per-repo fence + publication gate live INSIDE getConceptTree (the
+// same readAuthzForService + assertRepoReadableByCaller + serving-predicate
+// composition), so restricted and draft/retracted repos are unreachable
+// from the index too. The payload stays bounded (offset/limit, clamp
+// 1..500) — the full corpus never ships in one response.
+servingReads.get('/repos/:repo_id/concept-tree', require('../controllers/repository-controller').getConceptTree);
 router.use(servingReads);
 
 router.use(requireScope('read'));

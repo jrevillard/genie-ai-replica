@@ -66,6 +66,14 @@ const initialState = () => ({
   ui: {
     expertMode: readExpertModeFromStorage()
   },
+  // W9 (concept tree browse, 2026-11-08) — the citizen modal browser's state,
+  // opened from a working OKF citation card in EITHER chat surface. `concepts`
+  // is the paginated tree index assembled progressively (stale-guarded, the
+  // fetchConcepts pattern); the selection is the per-hop CAP-2 fetch. Never a
+  // full-corpus payload: the store pages the server 200 rows at a time.
+  // Shaped by initialBrowserState() (defined below initialState) so the
+  // openBrowser reset and the initial state are ONE definition.
+  browser: initialBrowserState(),
   error: null
 });
 
@@ -122,6 +130,26 @@ function readExpertModeFromStorage() {
   }
 }
 
+/** The browser slice's rest state (openBrowser resets to it). Kept beside
+ * initialState so the two can never drift — initialState composes it. */
+function initialBrowserState() {
+  return {
+    visible: false,
+    repoId: null,
+    startConceptId: null,
+    concepts: [],
+    total: 0,
+    loading: false,
+    progress: null,
+    unavailable: false,
+    error: null,
+    selectedConceptId: null,
+    selectedConcept: null,
+    selectedLoading: false,
+    selectedUnavailable: false
+  };
+}
+
 function writeExpertModeToStorage(value) {
   try {
     window.localStorage.setItem('okf.studio.expertMode', value ? 'expert' : 'basic');
@@ -132,6 +160,12 @@ function writeExpertModeToStorage(value) {
 
 /** NON-BLOCKING LOAD generation counter (see fetchConcepts). */
 let fetchGeneration = 0;
+
+/** Browser index-assembly generation counter (see fetchConceptTree): every
+ * open increments it; an in-flight assembly whose generation moved (a newer
+ * open, or a repo switch) drops its pages and exits without clearing the
+ * NEWER fetch's loading/progress flags — the fetchConcepts round-11 rule. */
+let browserTreeGeneration = 0;
 
 /**
  * THE bounded poll loop behind every Testing-Lab async action (round 16,
@@ -215,6 +249,8 @@ const getters = {
   editorLoadProgress: (state) => state.editor.loadProgress,
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
+  // W9 — the citizen concept-tree browser's whole state slice.
+  browser: (state) => state.browser,
   isExpert: (state) => state.ui.expertMode,
   // The session latch: the draft endpoint is not available on this server.
   // ONE degraded state, ONE notice. A repo that is gone (REPO_NOT_FOUND) is
@@ -320,6 +356,51 @@ const mutations = {
   },
   setError(state, value) {
     state.error = value;
+  },
+
+  // W9 — concept-tree browser mutations (the citizen modal viewer).
+  /** Merge a patch into the browser slice (loading/total/unavailable/error...). */
+  setBrowser(state, patch) {
+    state.browser = { ...state.browser, ...patch };
+  },
+  /** Open the dialog fresh at a cited concept — every open RESETS the index
+   * (browse reflects what is indexed NOW, never a stale cached corpus). */
+  openBrowser(state, { repoId, conceptId } = {}) {
+    state.browser = {
+      ...initialBrowserState(),
+      visible: true,
+      repoId: repoId || null,
+      startConceptId: conceptId || null
+    };
+  },
+  closeBrowser(state) {
+    state.browser = { ...state.browser, visible: false };
+  },
+  appendBrowserConcepts(state, { repoId, rows }) {
+    // A page from a SUPERSEDED repo is dropped, never appended (the stale
+    // guard checks generation too — this is the repo-identity backstop).
+    if (!repoId || state.browser.repoId !== repoId) return;
+    state.browser = {
+      ...state.browser,
+      concepts: state.browser.concepts.concat(Array.isArray(rows) ? rows : [])
+    };
+  },
+  setBrowserProgress(state, progress) {
+    state.browser = { ...state.browser, progress: progress || null };
+  },
+  setBrowserSelected(state, { conceptId, concept }) {
+    state.browser = {
+      ...state.browser,
+      selectedConceptId: conceptId || null,
+      selectedConcept: concept || null,
+      selectedUnavailable: false
+    };
+  },
+  setBrowserSelectedLoading(state, loading) {
+    state.browser = { ...state.browser, selectedLoading: !!loading };
+  },
+  setBrowserSelectedUnavailable(state) {
+    state.browser = { ...state.browser, selectedConcept: null, selectedUnavailable: true };
   }
 };
 
@@ -2164,6 +2245,115 @@ const actions = {
 
   setEditorSubTab({ commit }, subTab) {
     commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
+  },
+
+  // ── W9 (concept tree browse, 2026-11-08) — the citizen modal viewer ──────
+  /**
+   * Open the browser at a cited concept: reset the slice, then start the
+   * progressive index assembly AND the first per-hop CAP-2 fetch in
+   * parallel. Validation is honest: an entry without repo identity (a
+   * pre-CAP-1 persisted row) never opens a dead dialog — but the
+   * affordances only render on working citations, so this arm is a
+   * backstop, not the UI's gate.
+   */
+  openConceptBrowser({ commit, dispatch }, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    commit('openBrowser', { repoId, conceptId });
+    // Both runs own their stale guards independently; neither blocks the
+    // other — the list is usable from the first committed page, the detail
+    // pane as soon as the CAP-2 card lands.
+    dispatch('fetchConceptTree', { repoId });
+    dispatch('browserLoadConcept', { repoId, conceptId });
+    return { ok: true };
+  },
+
+  closeConceptBrowser({ commit }) {
+    commit('closeBrowser');
+  },
+
+  /**
+   * The paginated index assembly (the fetchConcepts stale-guard pattern):
+   * pages of 200, SEQUENTIAL (each offset needs the previous count), each
+   * page committed as it lands so the list renders progressively, progress
+   * {done,total} for the bar. A superseded run (a newer open, or a repo
+   * switch) exits WITHOUT clearing the newer run's flags — the round-11
+   * rule — and a fenced/absent repo (the 404 anti-enumeration envelope)
+   * arms the honest `unavailable` state instead of an error.
+   */
+  async fetchConceptTree({ commit, state }, { repoId } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    const PAGE = 200;
+    const myGen = ++browserTreeGeneration;
+    commit('setBrowser', {
+      loading: true,
+      progress: null,
+      unavailable: false,
+      error: null,
+      concepts: [],
+      total: 0
+    });
+    const stale = () => myGen !== browserTreeGeneration || state.browser.repoId !== repoId;
+    try {
+      let offset = 0;
+      for (;;) {
+        const page = await conceptService.getConceptTree(repoId, { limit: PAGE, offset });
+        if (stale()) return { ok: true, stale: true };
+        // 404/501 → null: restricted / retracted / absent repo. The 404 is
+        // the anti-enumeration refusal — an honest "cannot be browsed", not
+        // an error.
+        if (!page) {
+          commit('setBrowser', { loading: false, progress: null, unavailable: true });
+          return { ok: false, code: 'UNAVAILABLE' };
+        }
+        const rows = Array.isArray(page.concepts) ? page.concepts : [];
+        commit('appendBrowserConcepts', { repoId, rows });
+        const total = typeof page.total === 'number' ? page.total : state.browser.concepts.length;
+        commit('setBrowser', { total });
+        const done = Math.min(state.browser.concepts.length, total);
+        commit('setBrowserProgress', state.browser.concepts.length >= total ? null : { done, total });
+        // Out-of-range offset → an empty page; a short page ends the walk.
+        if (rows.length < PAGE || state.browser.concepts.length >= total) break;
+        offset = state.browser.concepts.length;
+      }
+      if (stale()) return { ok: true, stale: true };
+      commit('setBrowser', { loading: false });
+      commit('setBrowserProgress', null);
+      return { ok: true };
+    } catch (err) {
+      if (stale()) return { ok: false, stale: true, message: err.message };
+      commit('setBrowser', { loading: false, progress: null, error: err.message || 'fetchConceptTree failed' });
+      return { ok: false, code: 'FETCH_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * ONE per-hop fetch: the CAP-2 concept route under the caller's own scope,
+   * through fetchOkfConcept (the shared unavailable mapping — 403, 404 and a
+   * gone concept all land in the honest "unavailable" arm, never a dead
+   * link or a generic error). A hop dispatched for a superseded repo is
+   * dropped.
+   */
+  async browserLoadConcept({ commit, state }, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+    commit('setBrowserSelected', { conceptId, concept: null });
+    commit('setBrowserSelectedLoading', true);
+    try {
+      const meta = await documentOpener.fetchOkfConcept(repoId, conceptId);
+      if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+      commit('setBrowserSelected', { conceptId, concept: meta });
+      commit('setBrowserSelectedLoading', false);
+      return { ok: true };
+    } catch (err) {
+      if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+      commit('setBrowserSelectedLoading', false);
+      if (err && err.code === 'OKF_CONCEPT_UNAVAILABLE') {
+        commit('setBrowserSelectedUnavailable');
+        return { ok: false, code: 'UNAVAILABLE' };
+      }
+      commit('setBrowser', { error: err.message || 'browserLoadConcept failed' });
+      return { ok: false, code: 'FETCH_FAILED', message: err.message };
+    }
   }
 };
 
@@ -2176,6 +2366,8 @@ let okfRepoOps;
 let headTestService;
 let ragasService;
 let modelConfigService;
+// W9 — the browser's per-hop fetch rides the shared unavailable mapping.
+let documentOpener;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
@@ -2185,6 +2377,7 @@ function ensureServices() {
   if (!headTestService) headTestService = require('@/services/headTestService').default;
   if (!ragasService) ragasService = require('@/services/ragasService').default;
   if (!modelConfigService) modelConfigService = require('@/services/modelConfigService').default;
+  if (!documentOpener) documentOpener = require('@/utils/document-opener');
 }
 
 const actionsWithServices = {};

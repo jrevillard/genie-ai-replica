@@ -44,9 +44,16 @@
     :title="translate('okf.testingLab.title', 'Testing Lab')"
     size="auto"
     :actions="dialogActions"
+    :loading="openLoading"
     @close="$emit('close')"
     @action="onDialogAction"
   >
+    <!-- #1647: the Lab must never open silent — openLoading drives the
+         dialog's built-in loading overlay (DsDialog :loading) over the
+         three open loads (runs / ragas suites / fm history) until they
+         settle; on a fast local load it is a ~250 ms courtesy flash, on a
+         slow deployment it is honest feedback instead of a dead dialog. -->
+
     <p v-if="repo" class="okf-headtest__repo-line">
       <strong>{{ repo.name || repo.repo_id }}</strong>
       <span class="okf-headtest__meta-inline">
@@ -1422,6 +1429,11 @@ export default {
       pollSignal: { aborted: false },
       // 1-8g-x: live {phase, done, total} for the run progress bar.
       runProgress: null,
+      // #1647 (David, 2026-11-08): the Lab must never open silent — the
+      // overlay covers the three open loads (runs, ragas suites, fm
+      // history) until they settle, with a ~250 ms minimum-visible floor
+      // so a fast load does not flash. Per-leg timings ride legTiming.
+      openLoading: false,
       error: '',
       query: '',
       adversarial: false,
@@ -2096,9 +2108,35 @@ export default {
           this.revertHighlight = false;
           this.reverted = false;
           this.fmHistory = [];
-          this.refreshRuns();
-          this.refreshRagasSuites();
-          if (!this.readOnly) this.loadFrontmatterHistory();
+          // #1647: the three open loads run under the launch overlay, each
+          // timed through legTiming (the UX-5 measurement channel) so a slow
+          // leg on ANY deployment names itself in the console.
+          this.openLoading = true;
+          const tOpen = Date.now();
+          // Review round (finding 1): a close+reopen while the loads are
+          // still pending must not let the OLD invocation's tail clear the
+          // NEW open's overlay — only the latest open may settle the flag.
+          const openSeq = (this._openSeq = (this._openSeq || 0) + 1);
+          const timedLoad = async (leg, load) => {
+            const t0 = Date.now();
+            try {
+              await load;
+            } finally {
+              this.legTiming(leg, t0);
+            }
+          };
+          const loads = [
+            timedLoad('lab-open-runs', this.refreshRuns()),
+            timedLoad('lab-open-ragas', this.refreshRagasSuites()),
+            this.readOnly ? Promise.resolve() : timedLoad('lab-open-fm-history', this.loadFrontmatterHistory())
+          ];
+          await Promise.allSettled(loads);
+          // Minimum-visible floor: on fast loads the overlay must not flash
+          // (a 30 ms blink reads as a glitch, not as feedback).
+          const elapsed = Date.now() - tOpen;
+          if (elapsed < 250) await new Promise((r) => setTimeout(r, 250 - elapsed));
+          this.legTiming('lab-open', tOpen);
+          if (openSeq === this._openSeq) this.openLoading = false;
         } else if (!open) {
           // DIALOG CLOSE = stop the polls (round 18, #2101): every host
           // mounts this dialog with :visible, so it NEVER unmounts while the

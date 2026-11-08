@@ -1194,3 +1194,36 @@ describe('autocorrectRepo — rule 4 mirrors the lifecycle, failures are reporte
     expect(result.failures[0].error).toMatch(/not found/);
   });
 });
+
+// ── #1647 metrics ride-along: the repo_id read is index-served ──
+// countByIndexStatus backs the wizard/dashboard metrics read, which measured
+// 0.43-4.3 s on a 1112-concept repo without the persistent index.
+//
+// The ensure cache (treeIndexReady) is PER PROCESS and this file WARMS it —
+// the embedded getRepoMetrics test above now routes through
+// conformance-service, whose metrics read performs the same ensure. So the
+// cold-cache path is observed on a FRESH MODULE REGISTRY: jest.resetModules()
+// re-instantiates concept-meta-service (fresh Set) and re-runs the
+// db-connection-service mock factory (fresh mockDb). This describe is the
+// LAST in the file, so no other test observes the reset.
+describe('#1647: countByIndexStatus ensures the repo_id read index', () => {
+  let coldDb;
+  let coldMeta;
+
+  beforeEach(() => {
+    jest.resetModules();
+    coldDb = require('../shared-lib/db-connection-service').__mockDb;
+    coldMeta = require('../services/concept-meta-service');
+    coldDb._reset();
+  });
+
+  test('the count read ensures the persistent index once, then the cache holds', async () => {
+    const col = coldDb.collection('okf_concepts_meta');
+    const n = await coldMeta.countByIndexStatus('r-1647', 'parsed');
+    expect(n).toBe(0); // empty store → count 0, no crash
+    expect(col.ensureIndex).toHaveBeenCalledWith({ type: 'persistent', fields: ['repo_id'] });
+    // A second count is a cache hit — the ensure verdict is per process.
+    await coldMeta.countByIndexStatus('r-1647', 'published');
+    expect(col.ensureIndex).toHaveBeenCalledTimes(1);
+  });
+});

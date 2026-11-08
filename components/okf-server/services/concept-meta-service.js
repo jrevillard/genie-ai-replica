@@ -736,6 +736,9 @@ async function listOverCeiling(repo_id, ceiling, limit = 10) {
 async function countByIndexStatus(repo_id, index_status) {
   if (!repo_id || !index_status) return 0;
   const db = await getDb();
+  // #1647 ride-along: the FILTER m.repo_id read is index-served on large
+  // repos (same lazy index the W9 tree join uses; cached per process).
+  await ensureTreeIndex(db, 'okf_concepts_meta', ['repo_id']);
   const rows = await (
     await db.query(
       'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status == @st COLLECT WITH COUNT INTO n RETURN n',
@@ -1489,6 +1492,7 @@ module.exports = {
   purgeConceptIngestionLogs,
   listConceptsMeta,
   listConceptTree,
+  ensureTreeIndex,
   patchConceptMeta,
   patchConceptFields,
   requeueRepoForRedrain,

@@ -174,6 +174,10 @@ async function getRepoMetrics(repo_id) {
     span.setAttribute('okf.operation', 'metrics');
     const db = await getDb();
     const today = DateTime.now().toUTC().toISODate();
+    // #1647 ride-along: the FILTER d.repo_id read below is index-served on
+    // large repos (the W9 lazy index, reused; cached per process, non-fatal).
+    // Without it this endpoint measured 0.43-4.3 s on Bali (1112 concepts).
+    await conceptMetaService.ensureTreeIndex(db, 'okf_concepts_meta', ['repo_id']);
 
     // pii_hit_count counts concepts that are SCANNED, CARRY findings, and have
     // NO resolution recorded — i.e. work a curator still has to action. It was

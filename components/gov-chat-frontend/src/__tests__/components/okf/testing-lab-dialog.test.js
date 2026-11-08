@@ -2042,3 +2042,67 @@ describe('#80805 — poll-envelope messages render translated, server detail ver
     );
   });
 });
+
+describe('#1647: the Lab opens under the launch overlay, timed per leg', () => {
+  // The overlay lives INSIDE DsDialog (its built-in :loading slot), so these
+  // mounts stub DsDialog with the loading contract declared — the shared
+  // mountDialog stub swallows props and would make the overlay unobservable.
+  function mountOverlayDialog(props = {}) {
+    return mount(OkfTestingLabDialog, {
+      global: {
+        mocks: { $store: fakeStore() },
+        stubs: {
+          DsDialog: {
+            props: ['visible', 'loading'],
+            template: '<div class="dsd-stub"><div v-if="loading" data-testid="lab-open-overlay" /><slot /></div>'
+          },
+          DsTabs: { template: '<div><slot /></div>' },
+          DsInfoTip: true,
+          DsSpinner: true
+        }
+      },
+      props: { visible: true, repo: REPO, ...props }
+    });
+  }
+
+  it('overlay up while the three open loads are pending, down once settled', async () => {
+    const w = mountOverlayDialog();
+    // The visible watcher is immediate: overlay + all three dispatches have
+    // already fired by the time mount() returns.
+    expect(w.get('[data-testid="lab-open-overlay"]').exists()).toBe(true);
+    const actions = dispatch.mock.calls.map((c) => c[0]);
+    expect(actions).toContain('okf/headSuiteListRuns'); // refreshRuns (runs + saved suites)
+    expect(actions).toContain('okf/ragasListRuns'); // refreshRagasSuites
+    expect(actions).toContain('okf/frontmatterHistory'); // loadFrontmatterHistory
+    // Loads resolve on microtasks; the 250 ms anti-flicker floor is the only
+    // timer between settle and overlay-down.
+    await new Promise((r) => setTimeout(r, 300));
+    await w.vm.$nextTick();
+    expect(w.find('[data-testid="lab-open-overlay"]').exists()).toBe(false);
+    expect(w.vm.openLoading).toBe(false);
+  });
+
+  it('readOnly (wizard context) skips the fm-history leg but still overlays', async () => {
+    const w = mountOverlayDialog({ readOnly: true });
+    expect(w.get('[data-testid="lab-open-overlay"]').exists()).toBe(true);
+    const actions = dispatch.mock.calls.map((c) => c[0]);
+    expect(actions).toContain('okf/headSuiteListRuns');
+    expect(actions).toContain('okf/ragasListRuns');
+    expect(actions).not.toContain('okf/frontmatterHistory');
+    await new Promise((r) => setTimeout(r, 300));
+    await w.vm.$nextTick();
+    expect(w.vm.openLoading).toBe(false);
+  });
+
+  it('each open leg names itself on the [okf-lab-timing] console channel', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation(() => {});
+    const w = mountOverlayDialog();
+    await new Promise((r) => setTimeout(r, 300));
+    await w.vm.$nextTick();
+    const legs = debugSpy.mock.calls.filter((c) => c[0] === '[okf-lab-timing]').map((c) => c[1] && c[1].leg);
+    expect(legs).toEqual(
+      expect.arrayContaining(['lab-open-runs', 'lab-open-ragas', 'lab-open-fm-history', 'lab-open'])
+    );
+    debugSpy.mockRestore();
+  });
+});

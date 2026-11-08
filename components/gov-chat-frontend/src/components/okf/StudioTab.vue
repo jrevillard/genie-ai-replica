@@ -38,6 +38,11 @@
          every repository is grounded by. Read-only for non-admins (the
          posture must be visible to everyone), editable for tools-admin. -->
     <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
+    <!-- #948 (the narrowed Story 10.4): the cross-repo conformance-debt card.
+         READ-ONLY — a row click opens that repo via the same resume path the
+         dashboard uses; it never acts on the debt (the disposition's cap:
+         the per-repo popups stay the remediation surface). -->
+    <OkfConformanceDebtPanel v-if="view === 'dashboard'" class="okf-studio-tab__debt" @open="onResume" />
     <!-- The degraded-draft notice lives at the TAB level: the zip-import
          path lands on the dashboard without ever entering the wizard, so a
          wizard-only surface would stay quiet for it. The live region exists
@@ -224,6 +229,7 @@ import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
 import OkfRetrievalCard from './RetrievalCard.vue';
+import OkfConformanceDebtPanel from './ConformanceDebtPanel.vue';
 // #80931: the create-failure message is the SHARED composer (same as the
 // wizard's Entry step — one tested owner).
 import { describeCreateFailure } from './steps/failureMessages';
@@ -243,6 +249,7 @@ export default {
     OkfStudioDashboard,
     OkfStudioWizard,
     OkfRetrievalCard,
+    OkfConformanceDebtPanel,
     OkfRepoEditorShell
   },
   mixins: [translateMixin],

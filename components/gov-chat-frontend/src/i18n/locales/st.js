@@ -1605,6 +1605,23 @@ export default {
       openRepo: 'Bula polokelo',
       unknownVersion: 'Mofuta e sa tsebiseho'
     },
+    debt: {
+      title: 'Mokoloko oa bo phatlela',
+      loading: 'O se o bala…',
+      repoCount: '{n} repositori e nang le mehopolo',
+      refresh: 'Ntjhafatsa',
+      empty: 'Ha ho na mehopolo repositoring eo o ka e balang — ha ho na mokoloko.',
+      readFailed: 'Ha e khone ho bala mokoloko oa bo phatlela.',
+      truncated: 'Katalog ya difeela ya palo e fetang leqephe le leng — mela e tlileng holimo ha e bontshoa.',
+      col: {
+        repo: 'Respositori',
+        concepts: 'Mehopolo',
+        issues: 'Mathamatha',
+        stale: 'Feletsoeng',
+        pii: 'Ho tlaleha PII',
+        state: 'Boemo'
+      }
+    },
     retrieval: {
       title: 'Boemo bo ea bo phatlela',
       refresh: 'Ntjhafatsa',

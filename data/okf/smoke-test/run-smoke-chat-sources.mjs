@@ -345,6 +345,52 @@ async function main() {
     fail('no second concept to hop to — the walk assembled fewer than 2 rows');
   }
 
+  // --- 2.6 #948 (narrowed Story 10.4): the cross-repo conformance-debt
+  // aggregation. Read-only; the SAME default-deny authz composition GET
+  // /okf/repos uses — a wildcard admin sees the readable set (open AND
+  // restricted), a caller with no grant sees NONE (the Studio dashboard is
+  // an admin surface; the serving-read "open mode" family is a different
+  // verdict, deliberately not used here).
+  // SEMANTICS OWNER: the seeded open repo's concepts are scanned at ingest
+  // and carry pii_findings objects with EMPTY occurrences arrays — a clean
+  // repo must report pii_hit_count 0. (LENGTH of the pii_findings OBJECT
+  // counts its keys and counted every scanned-clean concept as debt; the
+  // occurrences discriminator is the fix this leg proves live.)
+  console.log('[2.6] #948 conformance-debt aggregation');
+  const debtAll = await call('GET', '/api/okf/repos/conformance-debt', ADMIN);
+  const debtRows = (debtAll.json && debtAll.json.items) || [];
+  const ownRow = debtRows.find((r) => r.repo_id === repoA.id);
+  if (debtAll.status === 200 && ownRow && ownRow.concept_count === 2) {
+    pass(
+      `admin aggregation lists the seeded open repo (concept_count=${ownRow.concept_count}, issues=${ownRow.conformance_issue_count}, pii=${ownRow.pii_hit_count})`
+    );
+  } else {
+    fail(`admin conformance-debt read: status=${debtAll.status}, ownRow=${JSON.stringify(ownRow || null).slice(0, 160)}`);
+  }
+  if (ownRow && ownRow.conformance_issue_count === 0 && ownRow.pii_hit_count === 0) {
+    pass('clean repo owes nothing: pii_hit_count reads the OCCURRENCES array, not the findings object');
+  } else if (ownRow) {
+    fail(`clean repo reported debt it does not owe (issues=${ownRow.conformance_issue_count}, pii=${ownRow.pii_hit_count})`);
+  }
+  if (ownRow && 'stale_concept_count' in ownRow && 'pii_hit_count' in ownRow && 'has_reserved_index' in ownRow) {
+    pass('debt rows carry the per-repo metric vocabulary (stale_concept_count/pii_hit_count/has_reserved_index)');
+  } else if (ownRow) {
+    fail(`debt row shape mismatch: ${Object.keys(ownRow).join(',')}`);
+  }
+  if (debtAll.status === 200 && debtRows.some((r) => r.repo_id === repoR.id)) {
+    pass('wildcard admin sees the RESTRICTED repo in its readable set (the admin scope satisfies the fence)');
+  } else {
+    fail('wildcard admin aggregation lacks the restricted repo row');
+  }
+  const debtScopeless = await call('GET', '/api/okf/repos/conformance-debt', SCOPELESS);
+  const scopeRows = (debtScopeless.json && debtScopeless.json.items) || [];
+  const seesAny = scopeRows.length > 0;
+  if (debtScopeless.status === 200 && !seesAny) {
+    pass('no-grant caller sees NONE (default-deny, the repo-list mirror) — restricted leaked: none');
+  } else {
+    fail(`scopeless conformance-debt: status=${debtScopeless.status}, rows=${JSON.stringify(scopeRows.map((r) => r.repo_id))}`);
+  }
+
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---
   console.log('[3] CAP-1 chat citation identity');
   // WAIT for the graph set to include this run's repo: the authz-resolver

@@ -187,6 +187,12 @@ async function getRepoMetrics(repo_id) {
     // cannot express this: it reads 'clean' both before and after a bulk
     // accept, because accepting RESOLVES the findings rather than removing
     // them, so the discriminator has to be the presence of pii_resolutions.
+    // The findings discriminator reads the OCCURRENCES array, not the
+    // pii_findings OBJECT (#948 review, found live): pii-service persists
+    // `pii_findings = {content_sig, occurrences, ...}` for EVERY scan — clean
+    // scans included — and ArangoDB's LENGTH of an OBJECT counts its keys,
+    // so LENGTH(pii_findings) was 2+ for every scanned-clean concept and the
+    // metric counted scanned-clean rows as debt.
     //
     // broken_link_count was removed rather than implemented. The product has no
     // broken-link concept anywhere: validation-service's issue types are
@@ -202,7 +208,7 @@ async function getRepoMetrics(repo_id) {
         has_reserved_index: LENGTH(FOR d IN docs FILTER d.concept_id == 'index' RETURN 1) > 0,
         pii_hit_count: SUM(
           FOR d IN docs
-          FILTER LENGTH(d.pii_findings || []) > 0 && LENGTH(d.pii_resolutions || []) == 0
+          FILTER LENGTH(d.pii_findings.occurrences || []) > 0 && LENGTH(d.pii_resolutions || []) == 0
           RETURN 1
         )
       }
@@ -221,4 +227,62 @@ async function getRepoMetrics(repo_id) {
   });
 }
 
-module.exports = { validateConcept, persistConformanceIssues, getRepoMetrics, HARD_ERROR_CODES };
+/** Cross-repo conformance debt (#948, David's 2026-11-05 disposition — the
+ * narrowed Story 10.4): ONE read-only aggregation over the CALLER'S readable
+ * repos. The row shape mirrors the per-repo getRepoMetrics exactly (same
+ * field names, same discriminators) so the Studio panel's numbers agree with
+ * the wizard's per-repo block. NO mutations live here — the per-repo popups
+ * remain the remediation surface.
+ *
+ * The COLLECT-INTO projection computes each row's booleans/lengths AT SCAN
+ * TIME so no full meta doc is ever materialized into the aggregation (the
+ * #1648 lesson, applied first-class here); the repo_id persistent index
+ * (W9 lazy ensure below, cached per process) serves the IN-list.
+ * The PII discriminator reads pii_findings.OCCURRENCES (not the object —
+ * ArangoDB LENGTH of an object counts its keys, and pii-service persists a
+ * findings object for EVERY scan, clean ones included; the per-repo
+ * getRepoMetrics carries the same fix in this MR so the two surfaces stay
+ * in one vocabulary). */
+async function getDebtByRepos(repoIds) {
+  if (!Array.isArray(repoIds) || repoIds.length === 0) return [];
+  return withSpan('okf.conformance.debt', async (span) => {
+    span.setAttribute('okf.operation', 'debt-aggregation');
+    span.setAttribute('okf.repo_count', repoIds.length);
+    const db = await getDb();
+    const today = DateTime.now().toUTC().toISODate();
+    // Index health first — same lazy ensure the tree/metrics reads use;
+    // non-fatal by design (the scan still serves without the index).
+    await conceptMetaService.ensureTreeIndex(db, COLLECTION, ['repo_id']);
+    const cursor = await db.query(aql`
+      LET ids = ${repoIds}
+      FOR d IN ${db.collection(COLLECTION)}
+      FILTER d.repo_id IN ids
+      COLLECT repo = d.repo_id INTO g = {
+        ci: LENGTH(d.conformance_issues || []),
+        stale: (d.stale_after != null && d.stale_after <= ${today}) ? 1 : 0,
+        pii: (LENGTH(d.pii_findings.occurrences || []) > 0 && LENGTH(d.pii_resolutions || []) == 0) ? 1 : 0,
+        isIndex: (d.concept_id == 'index') ? 1 : 0
+      }
+      RETURN {
+        repo_id: repo,
+        concept_count: LENGTH(g),
+        conformance_issue_count: SUM(g[*].ci),
+        stale_concept_count: SUM(g[*].stale),
+        pii_hit_count: SUM(g[*].pii),
+        has_reserved_index: LENGTH(g[* FILTER CURRENT.isIndex == 1]) > 0
+      }
+    `);
+    const rows = await cursor.all();
+    recordOp('debt', 'success');
+    logger.info('Conformance debt aggregated', { repos: rows.length });
+    return rows || [];
+  });
+}
+
+module.exports = {
+  validateConcept,
+  persistConformanceIssues,
+  getRepoMetrics,
+  getDebtByRepos,
+  HARD_ERROR_CODES
+};

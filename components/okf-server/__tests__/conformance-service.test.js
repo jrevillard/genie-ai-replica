@@ -9,7 +9,7 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 
 const dbService = require('../shared-lib/db-connection-service');
-const { validateConcept, persistConformanceIssues, getRepoMetrics } = require('../services/conformance-service');
+const { validateConcept, persistConformanceIssues, getRepoMetrics, getDebtByRepos } = require('../services/conformance-service');
 
 const db = dbService.__mockDb;
 
@@ -176,7 +176,11 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     expect(aql).toMatch(/pii_hit_count:\s*SUM\(/);
     // The discriminator must be the resolution record: pii_state reads 'clean'
     // both before and after a bulk accept, so filtering on it is meaningless.
-    expect(aql).toMatch(/LENGTH\(d\.pii_findings\s*\|\|\s*\[\]\)\s*>\s*0/);
+    // The findings side reads the OCCURRENCES array — pii-service persists a
+    // pii_findings OBJECT for every scan (clean ones included) and ArangoDB's
+    // LENGTH of an OBJECT counts its keys, so LENGTH(pii_findings) counted
+    // scanned-clean concepts as debt (#948 review, found live).
+    expect(aql).toMatch(/LENGTH\(d\.pii_findings\.occurrences\s*\|\|\s*\[\]\)\s*>\s*0/);
     expect(aql).toMatch(/LENGTH\(d\.pii_resolutions\s*\|\|\s*\[\]\)\s*==\s*0/);
   });
 
@@ -205,5 +209,53 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     const metrics = await getRepoMetrics('empty-repo');
     expect(metrics.concept_count).toBe(0);
     expect(metrics.has_reserved_index).toBe(false);
+  });
+});
+
+// ── #948 (narrowed disposition): cross-repo conformance-debt aggregation ──
+describe('conformance-service — getDebtByRepos (#948)', () => {
+  beforeEach(() => db._reset());
+
+  test('empty/absent repo list answers [] without touching the DB', async () => {
+    expect(await getDebtByRepos([])).toEqual([]);
+    expect(await getDebtByRepos(null)).toEqual([]);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  test('the aggregation AQL projects per-row fields and mirrors the per-repo metric names', async () => {
+    const row = {
+      repo_id: 'ra',
+      concept_count: 12,
+      conformance_issue_count: 4,
+      stale_concept_count: 1,
+      pii_hit_count: 0,
+      has_reserved_index: true
+    };
+    db.query.mockResolvedValue({ all: async () => [row] });
+    const rows = await getDebtByRepos(['ra', 'rb']);
+    expect(rows).toHaveLength(1);
+    // The row is the query's answer VERBATIM — the service adds nothing and
+    // drops nothing (the panel renders exactly what the aggregation computed).
+    expect(rows[0]).toEqual(row);
+    const arg = db.query.mock.calls[0][0];
+    const aqlText = typeof arg === 'string' ? arg : String(arg.query);
+    // The readable-repo IN-list rides the repo_id index (the lazy ensure ran
+    // ahead of the read — the same call the per-repo metrics path makes).
+    expect(aqlText).toContain('FILTER d.repo_id IN ids');
+    // COLLECT-INTO projection: the aggregation NEVER materializes full meta
+    // docs (the #1648 lesson, applied first-class on the new query).
+    expect(aqlText).toContain('COLLECT repo = d.repo_id INTO g = {');
+    // The five metric names mirror the per-repo getRepoMetrics EXACTLY, so
+    // the Studio panel's numbers agree with the wizard's per-repo block.
+    expect(aqlText).toContain('concept_count: LENGTH(g)');
+    expect(aqlText).toContain('conformance_issue_count: SUM(g[*].ci)');
+    expect(aqlText).toContain('stale_concept_count: SUM(g[*].stale)');
+    expect(aqlText).toContain('pii_hit_count: SUM(g[*].pii)');
+    expect(aqlText).toContain('has_reserved_index');
+    // The PII discriminator reads the OCCURRENCES array, never the findings
+    // OBJECT (ArangoDB LENGTH of an object counts keys; pii-service persists
+    // a findings object for every scan — the text is the SEMANTICS here, and
+    // the live smoke [2.6] leg owns the numeric proof on a clean repo).
+    expect(aqlText).toContain('LENGTH(d.pii_findings.occurrences || []) > 0');
   });
 });

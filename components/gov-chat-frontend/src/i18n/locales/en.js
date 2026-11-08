@@ -1591,6 +1591,23 @@ export default {
       openRepo: 'Open repository',
       unknownVersion: 'unknown version'
     },
+    debt: {
+      title: 'Conformance debt',
+      loading: 'Reading…',
+      repoCount: '{n} repo(s) with concepts',
+      refresh: 'Refresh',
+      empty: 'No concepts in any repository you can read — nothing to owe.',
+      readFailed: 'Could not read the conformance debt.',
+      truncated: 'The repository catalog exceeds one page — rows past the cap are not shown.',
+      col: {
+        repo: 'Repository',
+        concepts: 'Concepts',
+        issues: 'Issues',
+        stale: 'Stale',
+        pii: 'PII hits',
+        state: 'State'
+      }
+    },
     retrieval: {
       title: 'Retrieval posture',
       refresh: 'Refresh',

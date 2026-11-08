@@ -1764,7 +1764,9 @@ jest.mock('../services/conformance-service', () => ({
     stale_concept_count: 0,
     has_reserved_index: false,
     pii_hit_count: 0
-  })
+  }),
+  // #948 — the cross-repo debt aggregation the conformance-debt route calls.
+  getDebtByRepos: jest.fn().mockResolvedValue([])
 }));
 
 describe('GET /api/okf/repos/:repo_id/metrics (wizard-idempotency directive, 2026-09-04)', () => {
@@ -2258,5 +2260,28 @@ describe('POST /api/okf/repos/:repo_id/concepts/:concept_id/reingest', () => {
       .set('Authorization', TOKEN);
     expect(res.status).toBe(403);
     expect(reingestSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── #948 route-order contract (review round 1, finding 6) ──
+// The debt route is a LITERAL sibling of /:repo_id — Express would match
+// '/conformance-debt' as a repo_id if the param route were registered first.
+// The pin is behavioral: the DEBT handler runs (it pages the repo list and
+// aggregates) and getRepo never sees 'conformance-debt' as a repo id.
+describe('GET /api/okf/repos/conformance-debt (#948 route-order contract)', () => {
+  test('reaches the debt aggregation, never the /:repo_id handler', async () => {
+    authScoped(['okf:t1:r1:read']);
+    const conf = require('../services/conformance-service');
+    conf.getDebtByRepos.mockResolvedValueOnce([]);
+    repoService.list.mockResolvedValueOnce({
+      items: [{ repo_id: 'r1', name: 'R1', domain: 'social', lifecycle_state: 'publish' }],
+      next_cursor: null
+    });
+    const res = await request(createApp()).get('/api/okf/repos/conformance-debt').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([]);
+    expect(res.body.truncated).toBe(false);
+    expect(repoService.list).toHaveBeenCalled();
+    expect(repoService.getById).not.toHaveBeenCalledWith('conformance-debt', expect.anything());
   });
 });

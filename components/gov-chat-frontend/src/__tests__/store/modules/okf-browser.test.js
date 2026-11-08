@@ -1,12 +1,14 @@
 'use strict';
 
 /**
- * W9 (concept tree browse) — the okf store's browser slice: the progressive
- * index assembly (pages of 200, SEQUENTIAL offsets, per-page commits,
- * progress line), the honest unavailable arm (the 404 anti-enumeration
- * envelope), the stale guards (a superseded run never commits over a newer
- * one), and the per-hop CAP-2 fetch with its unavailable mapping. The
- * dialog rendering lives in concept-browser-dialog.test.js.
+ * W9 (concept tree browse) — the okf store's browser slice: LAZY index
+ * loading (David, 2026-11-08 — the open fetches ONLY the first page of 200,
+ * further pages extend on demand through browserExtendConceptTree with
+ * SEQUENTIAL offsets and the same stale guards), the honest unavailable arm
+ * (the 404 anti-enumeration envelope), the stale guards (a superseded run
+ * never commits over a newer one), and the per-hop CAP-2 fetch with its
+ * unavailable mapping. The dialog rendering lives in
+ * concept-browser-dialog.test.js.
  */
 
 const mockTreePage = jest.fn();
@@ -91,25 +93,52 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(mockFetchConcept).toHaveBeenCalledWith('r1', 'cited');
   });
 
-  test('the index assembles progressively: 450 total → 3 sequential pages, progress then cleared', async () => {
-    mockTreePage.mockImplementation(async (repoId, { offset }) => {
-      if (offset === 0) return page(450, 0, 200);
-      if (offset === 200) return page(450, 200, 200);
-      return page(450, 400, 50);
-    });
+  test('lazy loading: the open fetches ONLY the first page (200 of 450) — the rest on demand', async () => {
+    mockTreePage.mockImplementation(async (_repoId, { offset }) => page(450, offset, Math.min(200, 450 - offset)));
     const store = buildStore();
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'cited' });
     await new Promise((r) => setTimeout(r, 0));
     const b = store.state.okf.browser;
-    expect(b.concepts.length).toBe(450);
+    // David, 2026-11-08: the dialog must not wait for the whole repository —
+    // ONE page, then interactive; total stays true for the on-demand extends.
+    expect(b.concepts.length).toBe(200);
     expect(b.total).toBe(450);
     expect(b.loading).toBe(false);
-    expect(b.progress).toBeNull();
+    expect(b.treeComplete).toBe(false);
     expect(b.unavailable).toBe(false);
-    // The offsets walked sequentially — never one full-corpus payload.
     const offsets = mockTreePage.mock.calls.map((c) => c[1].offset);
-    expect(offsets).toEqual([0, 200, 400]);
-    mockTreePage.mock.calls.forEach((c) => expect(c[1].limit).toBe(200));
+    expect(offsets).toEqual([0]);
+  });
+
+  test('browserExtendConceptTree fetches the NEXT pages sequentially on demand, completing the tree', async () => {
+    mockTreePage.mockImplementation(async (_repoId, { offset }) => page(450, offset, Math.min(200, 450 - offset)));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c' });
+    await new Promise((r) => setTimeout(r, 0));
+    await store.dispatch('okf/browserExtendConceptTree', { repoId: 'r1' });
+    expect(store.state.okf.browser.concepts.length).toBe(400);
+    expect(store.state.okf.browser.treeComplete).toBe(false);
+    expect(store.state.okf.browser.extending).toBe(false);
+    await store.dispatch('okf/browserExtendConceptTree', { repoId: 'r1' });
+    const b = store.state.okf.browser;
+    expect(b.concepts.length).toBe(450);
+    expect(b.total).toBe(450);
+    expect(b.treeComplete).toBe(true); // the short page completed the tree
+    const offsets = mockTreePage.mock.calls.map((c) => c[1].offset);
+    expect(offsets).toEqual([0, 200, 400]); // sequential, never a full-corpus payload
+  });
+
+  test('browserExtendConceptTree refuses a completed tree and does not double-fetch while extending', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(2, offset, 2));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.state.okf.browser.treeComplete).toBe(true); // 2 rows < 200
+    const callsBefore = mockTreePage.mock.calls.length;
+    const done = await store.dispatch('okf/browserExtendConceptTree', { repoId: 'r1' });
+    expect(done.ok).toBe(false);
+    expect(done.code).toBe('STALE');
+    expect(mockTreePage.mock.calls.length).toBe(callsBefore);
   });
 
   test('a fenced/absent repo (null page = the 404 refusal) arms the honest unavailable state', async () => {
@@ -136,7 +165,7 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.loading).toBe(false);
   });
 
-  test('a short page ends the walk — a repo smaller than one page never fetches twice', async () => {
+  test('a repo smaller than one page completes the tree immediately — never a second fetch', async () => {
     mockTreePage.mockImplementation(async (_r, { offset }) => (offset === 0 ? page(2, 0, 2) : page(2, 5000, 0)));
     // A repo smaller than one page: the first page's short length ends it.
     const store = buildStore();
@@ -145,29 +174,27 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(mockTreePage).toHaveBeenCalledTimes(1);
   });
 
-  test('stale guard: a newer open supersedes an in-flight walk — the old pages never commit', async () => {
-    let releasePage2;
-    const page2 = new Promise((resolve) => {
-      releasePage2 = resolve;
+  test('stale guard: a newer open supersedes an in-flight first page — the old page never commits', async () => {
+    let releasePage1;
+    const page1 = new Promise((resolve) => {
+      releasePage1 = resolve;
     });
-    mockTreePage.mockImplementation(async (repoId, { offset }) => {
-      if (repoId === 'r1' && offset === 0) return page(400, 0, 200);
-      if (repoId === 'r1') return page2; // held until the test releases it
+    mockTreePage.mockImplementation(async (repoId) => {
+      if (repoId === 'r1') return page1; // held until the test releases it
       return page(1, 0, 1); // r2: one tiny page
     });
     const store = buildStore();
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c1' });
-    await new Promise((r) => setTimeout(r, 0)); // page 1 of r1 committed
-    expect(store.state.okf.browser.concepts.length).toBe(200);
+    await new Promise((r) => setTimeout(r, 0)); // r1's page still held
 
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r2', conceptId: 'c' });
     expect(store.state.okf.browser.repoId).toBe('r2');
     await new Promise((r) => setTimeout(r, 0));
     expect(store.state.okf.browser.concepts.length).toBe(1); // r2's page
 
-    // The old walk resolves now — it must NOT commit its pages over r2's,
+    // The old fetch resolves now — it must NOT commit its page over r2's,
     // and it must NOT clear r2's live flags on its way out.
-    releasePage2(page(400, 200, 200));
+    releasePage1(page(400, 0, 200));
     await new Promise((r) => setTimeout(r, 0));
     const b = store.state.okf.browser;
     expect(b.repoId).toBe('r2');
@@ -245,26 +272,22 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.selectedConcept.body).toBe('B body');
   });
 
-  test('closing the dialog cancels an in-flight walk — no further pages commit', async () => {
-    let releasePage2;
-    const page2 = new Promise((resolve) => {
-      releasePage2 = resolve;
+  test('closing the dialog cancels an in-flight page fetch — it never commits', async () => {
+    let releasePage1;
+    const page1 = new Promise((resolve) => {
+      releasePage1 = resolve;
     });
-    mockTreePage.mockImplementation(async (_r, { offset }) => {
-      if (offset === 0) return page(400, 0, 200);
-      return page2;
-    });
+    mockTreePage.mockImplementation(async () => page1);
     const store = buildStore();
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c' });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(store.state.okf.browser.concepts.length).toBe(200);
+    await new Promise((r) => setTimeout(r, 0)); // the first page is still held
     store.dispatch('okf/closeConceptBrowser');
     expect(store.state.okf.browser.visible).toBe(false);
-    // The held page resolves after the close — the walk must have exited via
+    // The held page resolves after the close — the fetch must have exited via
     // its stale guard and never commit it.
-    releasePage2(page(400, 200, 200));
+    releasePage1(page(400, 0, 200));
     await new Promise((r) => setTimeout(r, 0));
-    expect(store.state.okf.browser.concepts.length).toBe(200);
+    expect(store.state.okf.browser.concepts.length).toBe(0);
     // A fresh open resets cleanly (the stale generation never poisons it).
     mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r2', conceptId: 'x' });
@@ -272,6 +295,31 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.visible).toBe(true);
     expect(b.repoId).toBe('r2');
     expect(b.concepts.length).toBe(1);
+    expect(b.loading).toBe(false);
+  });
+
+  test('a superseded extension never commits into a newer open (stale generation)', async () => {
+    let releasePage1;
+    const page1 = new Promise((resolve) => {
+      releasePage1 = resolve;
+    });
+    mockTreePage.mockImplementation(async (_r, { offset }) => (offset === 0 ? page(200, 0, 200) : page1));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'c' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.state.okf.browser.concepts.length).toBe(200);
+    // An extension whose fetch is held; a NEW open resets the slice mid-flight.
+    const ext = store.dispatch('okf/browserExtendConceptTree', { repoId: 'r1' });
+    await new Promise((r) => setTimeout(r, 0));
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r2', conceptId: 'x' });
+    await new Promise((r) => setTimeout(r, 0));
+    releasePage1(page(400, 200, 200));
+    await ext;
+    const b = store.state.okf.browser;
+    expect(b.repoId).toBe('r2');
+    expect(b.concepts.length).toBe(1);
+    expect(b.extending).toBe(false);
     expect(b.loading).toBe(false);
   });
 });

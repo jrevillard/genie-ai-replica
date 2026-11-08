@@ -348,9 +348,11 @@ async function main() {
   // --- 2.6 #948 (narrowed Story 10.4): the cross-repo conformance-debt
   // aggregation. Read-only; the SAME default-deny authz composition GET
   // /okf/repos uses — a wildcard admin sees the readable set (open AND
-  // restricted), a caller with no grant sees NONE (the Studio dashboard is
-  // an admin surface; the serving-read "open mode" family is a different
-  // verdict, deliberately not used here).
+  // restricted); a caller with NO grant is refused at the router's okf:read
+  // gate with the SAME FORBIDDEN_SCOPE envelope GET / gives them (verified
+  // live: both answer 403 byte-identically for the scopeless user). The
+  // Studio dashboard is an admin surface; the serving-read "open mode"
+  // family is a different verdict, deliberately not used here.
   // SEMANTICS OWNER: the seeded open repo's concepts are scanned at ingest
   // and carry pii_findings objects with EMPTY occurrences arrays — a clean
   // repo must report pii_hit_count 0. (LENGTH of the pii_findings OBJECT
@@ -383,12 +385,18 @@ async function main() {
     fail('wildcard admin aggregation lacks the restricted repo row');
   }
   const debtScopeless = await call('GET', '/api/okf/repos/conformance-debt', SCOPELESS);
-  const scopeRows = (debtScopeless.json && debtScopeless.json.items) || [];
-  const seesAny = scopeRows.length > 0;
-  if (debtScopeless.status === 200 && !seesAny) {
-    pass('no-grant caller sees NONE (default-deny, the repo-list mirror) — restricted leaked: none');
+  const debtRepoList = await call('GET', '/api/okf/repos', SCOPELESS);
+  if (
+    debtScopeless.status === 403 &&
+    debtRepoList.status === 403 &&
+    debtScopeless.json &&
+    debtScopeless.json.error === 'FORBIDDEN_SCOPE'
+  ) {
+    pass('no-grant caller refused at the gate, IDENTICAL to the repo list (403 FORBIDDEN_SCOPE both)');
   } else {
-    fail(`scopeless conformance-debt: status=${debtScopeless.status}, rows=${JSON.stringify(scopeRows.map((r) => r.repo_id))}`);
+    fail(
+      `scopeless conformance-debt: debt=${debtScopeless.status}, list=${debtRepoList.status} — the gate mirror is broken`
+    );
   }
 
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---

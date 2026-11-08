@@ -380,10 +380,12 @@ async function listRepos(req, res, next) {
 
 /** Cross-repo conformance debt (#948, David's 2026-11-05 disposition — the
  * narrowed Story 10.4): the readable repo set via the SAME authz composition
- * listRepos uses — deriveScopeAuthz default-deny, so a caller with no grant
- * sees NOTHING here exactly as it sees nothing in GET /okf/repos (the
- * panel's home, the Studio dashboard, is an admin surface; the serving-read
- * "open mode" family is a DIFFERENT authz verdict and deliberately not used).
+ * listRepos uses — deriveScopeAuthz default-deny. A caller with NO grant is
+ * refused BEFORE this handler by the router-wide okf:read gate, with the
+ * same FORBIDDEN_SCOPE envelope GET /okf/repos gives them (verified live:
+ * both answer 403 byte-identically for the scopeless user) — the panel's
+ * home, the Studio dashboard, is an admin surface; the serving-read
+ * "open mode" family is a DIFFERENT authz verdict and deliberately not used.
  * ONE read-only aggregation AQL over those repos' meta rows. NO mutations —
  * the per-repo popups stay the remediation surface. Nothing is audited;
  * nothing is written beyond the lazy index ensure the read path already

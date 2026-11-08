@@ -38,7 +38,13 @@
             {{ $t('sidebar.relatedDocs') }}
           </h4>
           <div class="related-documents">
-            <DsCard v-for="doc in relatedDocuments" :key="doc.id" variant="flat" padding="md" class="document-item">
+            <DsCard
+              v-for="(doc, di) in relatedDocuments"
+              :key="doc.id"
+              variant="flat"
+              padding="md"
+              class="document-item"
+            >
               <div class="document-header" @click="openDocument(doc)">
                 <div class="document-icon">
                   <span class="file-type-badge" :data-tone="documentBadge(doc).tone">{{
@@ -67,6 +73,22 @@
                   <FileText :size="12" aria-hidden="true" />
                   <span class="document-origin__label">{{ originLabel(o) }}</span>
                   <ExternalLink :size="12" aria-hidden="true" />
+                </button>
+              </div>
+              <!-- W9 (concept tree browse): the browse affordance on a
+                   WORKING okf-concept card — one dialog (owned by the parent)
+                   opens from either surface, so the sidebar's citations get
+                   the same browse path the answer cards have. Emits to the
+                   parent; no repo identity (pre-CAP-1 row) → no affordance. -->
+              <div v-if="canBrowseSource(doc)" class="document-browse">
+                <button
+                  type="button"
+                  class="document-browse-btn"
+                  :data-testid="`document-browse-${di}`"
+                  @click.stop="browseSource(doc)"
+                >
+                  <Library :size="12" aria-hidden="true" />
+                  <span>{{ $t('chatbot.okfBrowseRepo') }}</span>
                 </button>
               </div>
               <div class="document-details">
@@ -152,10 +174,10 @@ import {
   openOkfSource,
   fileTypeBadge
 } from '../utils/document-opener.js';
-import { isOkfConceptSource, okfConceptBadge } from '../utils/okfCitation.js';
+import { isOkfConceptSource, okfConceptBadge, canBrowseSource } from '../utils/okfCitation.js';
 import notificationService from '../services/notificationService';
 import DsStateDisplay from './ds/StateDisplay.vue';
-import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages, ExternalLink } from '@lucide/vue';
+import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages, ExternalLink, Library } from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import SidebarHandle from './SidebarHandle.vue';
 import { SIDEBAR_DEFAULTS, SIDEBAR_MIN_WIDTHS, SIDEBAR_MAX_WIDTHS } from '../composables/sidebarLayout.js';
@@ -173,7 +195,8 @@ export default {
     ChevronDown,
     Files,
     DsStateDisplay,
-    Languages
+    Languages,
+    Library
   },
 
   props: {
@@ -212,7 +235,7 @@ export default {
       default: false
     }
   },
-  emits: ['open-document', 'update:width', 'update:collapsed'],
+  emits: ['open-document', 'browse-document', 'update:width', 'update:collapsed'],
 
   data() {
     return {
@@ -459,6 +482,19 @@ export default {
       }
     },
 
+    // ── W9 (concept tree browse) ─────────────────────────────────────────
+    // canBrowseSource is the SHARED predicate (utils/okfCitation.js — one
+    // definition for both surfaces, review r0); the sidebar only names the
+    // cited concept — the dialog itself is owned by the parent.
+    canBrowseSource,
+
+    // The dialog is owned by the parent (one instance for both surfaces);
+    // the sidebar only names the cited concept.
+    browseSource(doc) {
+      if (!this.canBrowseSource(doc)) return;
+      this.$emit('browse-document', doc);
+    },
+
     getAuthToken() {
       return this.$store.getters.accessToken || null;
     },
@@ -630,6 +666,31 @@ export default {
   white-space: nowrap;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+/* W9 (concept tree browse): the browse affordance under a working OKF
+   citation card — the same quiet secondary-row pattern as the origins. */
+.document-browse {
+  display: flex;
+  margin-bottom: var(--space-sm);
+}
+
+.document-browse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.document-browse-btn:hover {
+  background: var(--accent-muted);
 }
 
 .document-icon {

@@ -319,7 +319,9 @@ async function main() {
     if (rows.length < TREE_LIMIT || assembled.length >= treeTotal) break;
   }
   if (treeTotal === 2 && assembled.length === 2 && maxPage <= TREE_LIMIT) {
-    pass(`concept-tree index assembles in ${Math.ceil(2 / TREE_LIMIT)} pages of ≤${TREE_LIMIT} (total=${treeTotal}, never one payload)`);
+    pass(
+      `concept-tree index assembles in ${Math.ceil(2 / TREE_LIMIT)} pages of ≤${TREE_LIMIT} (total=${treeTotal}, never one payload)`
+    );
   } else {
     fail(`concept-tree walk: total=${treeTotal}, assembled=${assembled.length}, maxPage=${maxPage}`);
   }

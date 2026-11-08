@@ -2,7 +2,7 @@
 title: 'W9 — concept tree browse: paginated tree index + citizen modal viewer'
 type: 'feature'
 created: '2026-11-08'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b2bcbb5918ddd6b4ed0aae0bbbe149714adebecb'

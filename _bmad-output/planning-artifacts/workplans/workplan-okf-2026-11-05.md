@@ -126,14 +126,21 @@ the ORDER and the cross-stream slots.
   (trimmed, 500-char cap) + response. Retract purges NOTHING (D3 coherence —
   a divergence from EPIC-8's "delete/retract" wording, deliberate: the
   versions W7 retains carry their history).
-- **W9 — concept tree browse** — IMPLEMENTED, ON MR (branch
-  `feat/w9-concept-tree-browse`, 2026-11-08; closes **#1645**): the paginated
-  serving-read tree index (`GET /okf/repos/:id/concept-tree`, offset/limit,
-  author links only, the CAP-2 fence composition) + the citizen
+- **W9 — concept tree browse** — **MERGED to main 2026-11-08** (MR **!808**,
+  David, merge commit `f1765fc17`; #1645 closed by the merge, `status::done`):
+  the paginated serving-read tree index (`GET /okf/repos/:id/concept-tree`,
+  offset/limit, author links only, the CAP-2 fence composition) + the citizen
   `ConceptBrowserDialog` entered from BOTH citation surfaces (the D8 pass
   recorded in `ux-csr-w9-concept-browser.md`); three-layer review patched
   (`c52c7bd`, 9 findings fixed, 2 deferred #1643/#1644) and the full live
   smoke **12/12** with the new [2.5] browse leg.
+  **Post-merge amendment (David's live-testing directives), ON MR !809**
+  (`fix/w9-tree-large-repo`): LAZY LOADING — the dialog opens with only the
+  first tree page (200) + the focus document, further pages on demand; and
+  the large-repo read path — one batched edges scan per page (the correlated
+  join measured >300 s/page live) + lazy persistent indexes that heal
+  pre-index repos. #1646 filed separately (links die ~20 min idle — token
+  refresh bypass on the raw-fetch open paths; needs the operator repro).
 
 > **NOT A CSR WAVE — the concept-document ceiling (curation half).** It shipped on
 > its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576**) and is

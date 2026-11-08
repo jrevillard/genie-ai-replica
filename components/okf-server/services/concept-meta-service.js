@@ -496,6 +496,77 @@ async function listConceptsMeta(repo_id, opts = {}) {
   return { total: totalRows[0] || 0, offset, limit, concepts };
 }
 
+/** W9 (concept tree browse, 2026-11-08) — the PAGINATED TREE INDEX the
+ * citizen's modal browser walks. One page of the repo's concepts, each as
+ * {concept_id, title, links[]} where links are the OUTGOING AUTHOR edges
+ * ONLY (source=='author' on the repo graph's _LINKS_TO). This is the
+ * scale-safe split the spec freezes: author edges are ~13-16k per large
+ * repo and are the structure the settle path materialized deliberately;
+ * the raw parser edge set reaches 483k rows (Bali) and the meta rows' own
+ * links[] stay on the per-concept CAP-2 fetch, never in this index.
+ *
+ * Contract mirrors listConceptsMeta's paginated branch (offset/limit, clamp
+ * 1..500, default 200) so the client assembles with the same guards:
+ *   { total, offset, limit, concepts } — out-of-range offset yields an
+ * empty page with total still true (AQL LIMIT past the end), so a walker
+ * can never over-read the corpus and the whole repo needs ≤ ceil(total/200)
+ * pages, never one payload.
+ *
+ * Graph naming borrows the EDGE WRITER's own authority (edge-service
+ * graphNameForRepo — registry-derived, versioned; the OKF_${repo_id} string
+ * is its legacy fallback, never invented here). A repo whose graph was
+ * never drained (a steward reading a draft) has no _LINKS_TO collection:
+ * the index degrades to links: [] instead of erroring — the walk is
+ * content-complete through the list, the links are an affordance. */
+async function listConceptTree(repo_id, opts = {}) {
+  if (!repo_id) return { total: 0, offset: 0, limit: 200, concepts: [] };
+  const db = await getDb();
+  // Page size: default 200, clamp 1..500 — identical to listConceptsMeta.
+  const hasLimit = opts.limit !== undefined && opts.limit !== null && opts.limit !== '';
+  const limit = hasLimit ? Math.max(1, Math.min(500, parseInt(opts.limit, 10) || 1)) : 200;
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+  return withSpan('okf.concept_tree.list', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    span.setAttribute('okf.tree.offset', offset);
+    span.setAttribute('okf.tree.limit', limit);
+    const totalRows = await (
+      await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid COLLECT WITH COUNT INTO n RETURN n', {
+        rid: repo_id
+      })
+    ).all();
+    const total = totalRows[0] || 0;
+    // The graph name is the EDGE WRITER's derivation, not a local copy
+    // (lazy require — the edge service owns the naming rule; no import
+    // cycle: edge-service never imports this module).
+    const { graphNameForRepo } = require('./edge-service');
+    const graph = await graphNameForRepo(db, repo_id);
+    const edgeName = `${graph}_LINKS_TO`;
+    // House precedent (graph-lifecycle-service.js): .exists() is called BARE —
+    // an absent collection returns false (the no-graph degrade below), while a
+    // transient DB fault THROWS and surfaces as a 500 instead of silently
+    // serving a link-less index for a drained repo (review r0).
+    const edgesReady = await db.collection(edgeName).exists();
+    const PAGE =
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.title, m.concept_id LIMIT @offset, @limit ';
+    const rows = edgesReady
+      ? await (
+          await db.query(
+            `${PAGE}LET out = (FOR e IN \`${edgeName}\` FILTER e.from_concept_id == m.concept_id AND e.source == 'author' RETURN e.to_concept_id) RETURN { concept_id: m.concept_id, title: m.title, links: out }`,
+            { rid: repo_id, offset, limit }
+          )
+        ).all()
+      : await (
+          await db.query(`${PAGE}RETURN { concept_id: m.concept_id, title: m.title, links: [] }`, {
+            rid: repo_id,
+            offset,
+            limit
+          })
+        ).all();
+    span.setAttribute('okf.tree.returned', (rows || []).length);
+    return { total, offset, limit, concepts: rows || [] };
+  });
+}
+
 /** Resolve a concept's meta row by concept_id across ALL repos (the dataprep
  * completion callback knows only the concept_id — Story 4.8-amend content-only
  * chunking). null when absent or ambiguous. */
@@ -1371,6 +1442,7 @@ module.exports = {
   getConceptMetaFromAnyRepo,
   purgeConceptIngestionLogs,
   listConceptsMeta,
+  listConceptTree,
   patchConceptMeta,
   patchConceptFields,
   requeueRepoForRedrain,

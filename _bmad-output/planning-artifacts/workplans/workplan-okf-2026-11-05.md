@@ -126,8 +126,14 @@ the ORDER and the cross-stream slots.
   (trimmed, 500-char cap) + response. Retract purges NOTHING (D3 coherence —
   a divergence from EPIC-8's "delete/retract" wording, deliberate: the
   versions W7 retains carry their history).
-- **W9 — concept tree browse** (carries the D8 `create-ux-design` pass at story
-  time).
+- **W9 — concept tree browse** — IMPLEMENTED, ON MR (branch
+  `feat/w9-concept-tree-browse`, 2026-11-08; closes **#1645**): the paginated
+  serving-read tree index (`GET /okf/repos/:id/concept-tree`, offset/limit,
+  author links only, the CAP-2 fence composition) + the citizen
+  `ConceptBrowserDialog` entered from BOTH citation surfaces (the D8 pass
+  recorded in `ux-csr-w9-concept-browser.md`); three-layer review patched
+  (`c52c7bd`, 9 findings fixed, 2 deferred #1643/#1644) and the full live
+  smoke **12/12** with the new [2.5] browse leg.
 
 > **NOT A CSR WAVE — the concept-document ceiling (curation half).** It shipped on
 > its own branch (`feat/okf-concept-ceiling`, MR **!788**, issue **#1576**) and is

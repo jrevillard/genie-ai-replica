@@ -364,4 +364,8 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
   });
 }
 
-module.exports = { writeRepoConceptEdges, writeRepoAuthorLinks, normalizeConceptId };
+// W9 (concept tree browse): graphNameForRepo joins the exports — the tree
+// index derives the repo's CURRENT graph the same way the edge WRITER does,
+// so the reader and the writer can never disagree about which _LINKS_TO
+// holds the author edges (never invent OKF_${repo_id}).
+module.exports = { writeRepoConceptEdges, writeRepoAuthorLinks, normalizeConceptId, graphNameForRepo };

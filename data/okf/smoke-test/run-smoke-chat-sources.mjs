@@ -286,6 +286,65 @@ async function main() {
   if (fencedList.status === 403) pass('concept INDEX behind the strict editor gate (403 to a scopeless caller)');
   else fail(`restricted concept list as scopeless: expected 403 (strict gate), got ${fencedList.status}`);
 
+  // --- 2.5 W9 concept tree browse: the paginated serving-read index + one
+  // per-hop CAP-2 fetch. The index must page (never one full-corpus
+  // payload), serve a scopeless caller in open mode (the servingReads
+  // registration), and fence a RESTRICTED repo with the same 404 envelope
+  // as the concept GET.
+  console.log('[2.5] W9 concept-tree index (paginated serving read)');
+  const TREE_LIMIT = 1; // force pagination: repo A holds 2 concepts
+  let assembled = [];
+  let treeTotal = null;
+  let maxPage = 0;
+  for (let offset = 0; offset < 1000; offset += TREE_LIMIT) {
+    const p = await call(
+      'GET',
+      `/api/okf/repos/${repoA.id}/concept-tree?limit=${TREE_LIMIT}&offset=${offset}`,
+      SCOPELESS
+    );
+    if (p.status !== 200) {
+      fail(`concept-tree page offset=${offset}: expected 200, got ${p.status} ${p.text.slice(0, 120)}`);
+      break;
+    }
+    const page = p.json;
+    if (treeTotal === null) treeTotal = page.total;
+    const rows = Array.isArray(page.concepts) ? page.concepts : [];
+    maxPage = Math.max(maxPage, rows.length);
+    if (rows.length > TREE_LIMIT) fail(`concept-tree page offset=${offset} exceeded the requested bound`);
+    const shapeOk = rows.every(
+      (c) => c && typeof c.concept_id === 'string' && typeof c.title === 'string' && Array.isArray(c.links)
+    );
+    if (!shapeOk) fail(`concept-tree page offset=${offset} rows lack the {concept_id,title,links} contract`);
+    assembled = assembled.concat(rows);
+    if (rows.length < TREE_LIMIT || assembled.length >= treeTotal) break;
+  }
+  if (treeTotal === 2 && assembled.length === 2 && maxPage <= TREE_LIMIT) {
+    pass(
+      `concept-tree index assembles in ${Math.ceil(2 / TREE_LIMIT)} pages of ≤${TREE_LIMIT} (total=${treeTotal}, never one payload)`
+    );
+  } else {
+    fail(`concept-tree walk: total=${treeTotal}, assembled=${assembled.length}, maxPage=${maxPage}`);
+  }
+  const fencedTree = await call('GET', `/api/okf/repos/${repoR.id}/concept-tree`, SCOPELESS);
+  if (fencedTree.status === 404) {
+    pass('RESTRICTED repo concept-tree FENCED from the scopeless user (404, same envelope as the concept GET)');
+  } else {
+    fail(`restricted repo concept-tree as scopeless: expected 404, got ${fencedTree.status}`);
+  }
+  // One per-hop fetch: the second concept of the walk, through the CAP-2
+  // route (the browser's detail pane loads each hop exactly like this).
+  const hopId = assembled.length > 1 ? assembled[1].concept_id : null;
+  if (hopId) {
+    const hop = await call('GET', `/api/okf/repos/${repoA.id}/concepts/${hopId}`, SCOPELESS);
+    if (hop.status === 200 && hop.json && typeof hop.json.body === 'string') {
+      pass(`per-hop content fetch serves the walk (${hopId}, ${String(hop.json.body).length} chars)`);
+    } else {
+      fail(`per-hop fetch ${hopId}: status=${hop.status}`);
+    }
+  } else {
+    fail('no second concept to hop to — the walk assembled fewer than 2 rows');
+  }
+
   // --- 3. CAP-1: the chat answer's sources carry the full identity ---
   console.log('[3] CAP-1 chat citation identity');
   // WAIT for the graph set to include this run's repo: the authz-resolver
@@ -346,6 +405,14 @@ async function main() {
     pass('retracted repo concept read → 404 (the publication gate holds live)');
   } else {
     fail(`retracted repo concept read as scopeless: expected 404, got ${retractedRead.status}`);
+  }
+  // W9: the tree index is under the SAME publication gate — a retracted
+  // repo's index must refuse exactly like its concept reads.
+  const retractedTree = await call('GET', `/api/okf/repos/${repoA.id}/concept-tree`, SCOPELESS);
+  if (retractedTree.status === 404) {
+    pass('retracted repo concept-tree → 404 (the publication gate covers the index too)');
+  } else {
+    fail(`retracted repo concept-tree as scopeless: expected 404, got ${retractedTree.status}`);
   }
 
   // --- 4. Cleanup ---

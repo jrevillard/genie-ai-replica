@@ -15,6 +15,10 @@ const parserService = require('../services/parser-service');
 const scopeAuthzService = require('../services/scope-authz-service');
 const { getMeter } = require('../shared-lib/metrics');
 const { logger } = require('../shared-lib/logger');
+// W9 (concept tree browse): the serving-read route's OTel span. The shared
+// tracing lib is a no-op unless observability is on — safe to require at the
+// top like okf-routes does.
+const { withSpan } = require('../shared-lib/tracing');
 const {
   createSchema,
   updateSchema,
@@ -1036,6 +1040,12 @@ function callerIsStewardForRepo(req, repoId) {
   return isSuperAdmin || authorizedRepoIds === null || authorizedRepoIds.has(repoId);
 }
 
+/** The retrieval-serving state every citizen serving read requires (review
+ * r0: ONE definition — getConcept and getConceptTree must never drift). */
+function isServingRepo(repoDoc) {
+  return repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null;
+}
+
 /** The CAP-3 card projection: keep only whitelisted fields that exist. */
 function projectConceptCard(concept) {
   const card = {};
@@ -1071,7 +1081,7 @@ async function getConcept(req, res, next) {
     const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
     await assertRepoReadableByCaller(req, repoDoc);
     const steward = callerIsStewardForRepo(req, repo_id);
-    if (!steward && !(repoDoc.lifecycle_state === 'publish' && repoDoc.ingested_at != null)) {
+    if (!steward && !isServingRepo(repoDoc)) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
     const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
@@ -1093,6 +1103,48 @@ async function getConcept(req, res, next) {
     // synthetic field into the stored doc); the citizen gets the CAP-2 card
     // projection, which carries no ceiling and no steward fields.
     res.status(200).json(steward ? { ...concept, max_doc_chars: maxConceptDocChars() } : projectConceptCard(concept));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * W9 (concept tree browse, 2026-11-08) — GET /api/okf/repos/:repo_id/concept-tree.
+ * The PAGINATED tree index the citizen's modal browser walks: every concept
+ * of the repo as {concept_id, title, links[]} — outgoing AUTHOR links only
+ * (the parser-derived structure rides each concept's CAP-2 fetch, never the
+ * index; no full-corpus payload — offset/limit pagination with the
+ * listConceptsMeta clamp, default 200, max 500).
+ *
+ * The serving gates are getConcept's, byte-for-byte (this handler is a
+ * SERVING READ registered on the allowScopelessWhenOpen sub-router):
+ *   - readAuthzForService — the additive open-mode verdict (null =
+ *     unrestricted; closed mode keeps the exact list),
+ *   - assertRepoReadableByCaller — the 6-1c restricted fence (404 +
+ *     audit; foreign and fenced indistinguishable),
+ *   - the publication gate — non-steward callers get only the retrieval-
+ *     serving state (publish + ingested); same 404 envelope, NO audit row
+ *     (lifecycle traffic).
+ * A steward keeps the editor contract (a draft repo's tree reads — links
+ * degrade to [] when the graph was never drained). Out-of-range offset
+ * yields an empty page with total still true.
+ */
+async function getConceptTree(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    await withSpan('okf.api.concept_tree', async (span) => {
+      span.setAttribute('okf.repo_id', repo_id);
+      const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
+      await assertRepoReadableByCaller(req, repoDoc);
+      const steward = callerIsStewardForRepo(req, repo_id);
+      if (!steward && !isServingRepo(repoDoc)) {
+        throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+      }
+      const { limit, offset } = req.query || {};
+      const page = await conceptMetaService.listConceptTree(repo_id, { limit, offset });
+      span.setAttribute('okf.tree.total', page ? page.total : 0);
+      res.status(200).json(page);
+    });
   } catch (err) {
     next(err);
   }
@@ -2312,6 +2364,7 @@ module.exports = {
   acceptConceptLink,
   listConcepts,
   getConcept,
+  getConceptTree,
   inspectPii,
   remediatePii,
   acceptPii,

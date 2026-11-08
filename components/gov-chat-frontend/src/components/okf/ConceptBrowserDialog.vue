@@ -49,13 +49,6 @@
         />
         <span class="okf-browser__count" data-testid="okf-browser-count">{{ countLabel }}</span>
       </div>
-      <p v-if="progress" class="okf-browser__progress" data-testid="okf-browser-progress">
-        {{
-          translate('chatbot.okfBrowser.loading', 'Loading {done} of {total}…')
-            .replace('{done}', String(progress.done))
-            .replace('{total}', String(progress.total))
-        }}
-      </p>
       <p v-if="error" class="okf-browser__error" data-testid="okf-browser-error">{{ error }}</p>
 
       <div class="okf-browser__panes" :class="{ 'okf-browser__panes--list-only': !selectedConceptId }">
@@ -73,12 +66,17 @@
               <span class="okf-browser__row-title">{{ row.title || row.concept_id }}</span>
             </template>
           </DsTable>
+          <!-- David, 2026-11-08: lazy loading — the dialog never waits for
+               the whole repository. Show more extends the render window
+               in memory, and when the window reaches the loaded edge it
+               fetches the NEXT page on demand (browserExtendConceptTree);
+               it disappears once the tree is complete. -->
           <DsButton
-            v-if="visibleRows.length < filteredRows.length"
+            v-if="showMoreVisible"
             variant="secondary"
             class="okf-browser__show-more"
             data-testid="okf-browser-show-more"
-            @click="extendWindow"
+            @click="extend"
           >
             {{ translate('chatbot.okfBrowser.showMore', 'Show more') }}
           </DsButton>
@@ -175,8 +173,21 @@ export default {
     treeLoading() {
       return !!this.browser.loading;
     },
-    progress() {
-      return this.browser.progress || null;
+    /** Lazy loading (David, 2026-11-08): the loaded edge vs the true total. */
+    treeComplete() {
+      return !!this.browser.treeComplete;
+    },
+    treeExtending() {
+      return !!this.browser.extending;
+    },
+    moreInMemory() {
+      return this.filteredRows.length > this.visibleRows.length;
+    },
+    morePages() {
+      return !this.treeComplete && this.concepts.length < (this.browser.total || 0);
+    },
+    showMoreVisible() {
+      return this.moreInMemory || this.morePages;
     },
     unavailable() {
       return !!this.browser.unavailable;
@@ -298,7 +309,17 @@ export default {
         });
       }
     },
-    extendWindow() {
+    /** The on-demand affordance: extend the render window in memory; when
+     * the window reaches the loaded edge and pages remain, fetch the NEXT
+     * page first (David, 2026-11-08 — the dialog never waits for the whole
+     * repository, the rest loads as the citizen asks for it). */
+    async extend() {
+      if (this.moreInMemory) {
+        this.windowSize += WINDOW_STEP;
+        return;
+      }
+      if (!this.morePages || !this.browser.repoId) return;
+      await this.$store.dispatch('okf/browserExtendConceptTree', { repoId: this.browser.repoId });
       this.windowSize += WINDOW_STEP;
     },
     selectConcept(row) {
@@ -338,11 +359,6 @@ export default {
   color: var(--muted);
   font-size: var(--text-sm);
   white-space: nowrap;
-}
-.okf-browser__progress {
-  margin: 0 0 var(--space-sm);
-  font-size: var(--text-xs);
-  color: var(--muted);
 }
 .okf-browser__error {
   margin: 0 0 var(--space-sm);

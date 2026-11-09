@@ -32,7 +32,7 @@ const GRAPH = `OKF_${REPO}`;
  * The service queries by AQL SHAPE, not by call order:
  *  - the concept's own meta read (RETURN KEEP(...)),
  *  - the within-repo boundary probe (the link targets only, on the
- *    (repo_id, concept_id) index — #1179: a whole-set read made an N-concept
+ *    (repo_id, concept_id) index — a whole-set read made an N-concept
  *    drain pay N x N row reads),
  *  - the outgoing-edge cleanup read (RETURN e._key).
  *
@@ -53,9 +53,11 @@ function programQueries(metaRows, repos, options = {}) {
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
     if (isProbeQuery(aql)) {
-      // Exactly the conjunction the production probe must keep — a weakened
-      // operator or a dropped filter widens the answer to every repository.
-      const repoScoped = aql.includes('m.repo_id == @repo_id AND m.concept_id == c');
+      // The probe must keep BOTH conditions joined by AND — order-agnostic so
+      // a legitimate reformat is not punished, while a weakened operator or a
+      // dropped filter widens the answer to every repository.
+      const repoScoped =
+        aql.includes('m.repo_id == @repo_id') && aql.includes('m.concept_id == c') && /\bAND\b/.test(aql);
       const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
       const stored = new Set();
       for (const id of repoIds) for (const cid of repos[id] || []) stored.add(cid);
@@ -66,7 +68,7 @@ function programQueries(metaRows, repos, options = {}) {
     }
     if (aql.includes('RETURN e._key')) return { all: async () => cleanupKeys };
     // Anything else — including a reintroduced whole-set read — answers empty,
-    // which fails the written counts; the #1179 test pins the whole-set shape.
+    // which fails the written counts; a dedicated test pins the whole-set shape.
     return { all: async () => [] };
   });
 }
@@ -189,6 +191,9 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     expect(result.written).toBe(0);
     expect(Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {})).toHaveLength(0);
     expect(Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {})).toHaveLength(1);
+    // No links, no boundary query — a concept without links must not pay a
+    // round trip (the probe over an empty candidate list answers empty anyway).
+    expect(probes()).toHaveLength(0);
   });
 
   test('missing meta row → clean no-op (no crash into the ingest path)', async () => {
@@ -322,10 +327,13 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     expect(found).toHaveLength(1);
     const [aql, bindVars] = found[0];
     expect(aql).toContain('FOR c IN @candidates FOR m IN okf_concepts_meta');
-    // The conjunction IS the boundary: an OR (or a dropped filter) lets a
-    // concept of another repository answer the probe — the mock then answers
-    // unscoped and the G22 test fails.
-    expect(aql).toContain('m.repo_id == @repo_id AND m.concept_id == c');
+    // Both boundary operands must be present, joined by AND — checked
+    // order-agnostically so a correct reformat does not fail the suite (the
+    // mock enforces the same rule; an OR or a dropped filter answers unscoped
+    // and the G22 test fails).
+    expect(aql.includes('m.repo_id == @repo_id')).toBe(true);
+    expect(aql.includes('m.concept_id == c')).toBe(true);
+    expect(aql).toMatch(/\bAND\b/);
     expect(bindVars.repo_id).toBe(REPO);
     expect(bindVars.candidates).toEqual(links.flatMap((l) => [l.to_concept_id, `concepts/${l.to_concept_id}`]));
   });

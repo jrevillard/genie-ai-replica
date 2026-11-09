@@ -220,7 +220,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
     // so prefixed stored ids match bare link targets. PROBED on the
     // (repo_id, concept_id) unique index, for the link targets ONLY: the
-    // whole-set read made an N-concept drain pay N x N row reads (DW-450).
+    // whole-set read made an N-concept drain pay N x N row reads.
     // One query for all the targets — a nested FOR over the candidate list,
     // each candidate a seek on the unique index. Measured on this collection
     // (ArangoDB 3.12.4, production index set): past ~200 candidates the

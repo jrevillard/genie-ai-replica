@@ -3732,9 +3732,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(toViolations(blocks).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
   });
 
-  // Pins for the matcher's boundary decisions — the real CI file exercises
-  // none of these shapes today (every jest line is a single plain-scalar
-  // item, no test:e2e line exists, no line continuations), so without the
+  // Pins for the matcher's boundary decisions — no jest invocation in the
+  // real CI file uses these shapes today (none is a block-scalar chain, a
+  // test:e2e line, or split across a line continuation), so without the
   // pins below a reverted regex would pass the suite silently.
   test('a block-scalar item chaining a capped and an uncapped jest line fails', () => {
     const violations = toViolations([

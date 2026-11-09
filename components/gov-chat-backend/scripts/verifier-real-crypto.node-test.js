@@ -3,20 +3,21 @@
 //
 // Real-crypto tests for the shared OIDC verifier
 // (components/shared/lib/keycloak-auth-service.js — the single copy the
-// backend re-exports, DW-427). Runs on Node's built-in test runner:
+// backend re-exports). Runs on Node's built-in test runner:
 //
 //   node --test scripts/verifier-real-crypto.node-test.js
 //
 // WHY NOT JEST: the jest suites must stub `jose` entirely (the jest runtime
 // cannot require the ESM-only package), so a wrong-aud or alg-confusion token
 // can never be exercised through jose's real verification path there — the
-// exact gap DW-434 recorded against the pre-consolidation suites. Here the
+// exact gap the pre-consolidation jest suites carried (their jwtVerify stubs
+// never exercised jose's real verification). Here the
 // verifier loads for real; only the two HTTP legs (OIDC discovery + JWKS) are
 // served by a stubbed global.fetch, and the keys/tokens are real RSA/RS256
-// material built with the same jose package (DW-434's prescription:
+// material built with the same jose package (the prescription:
 // generateKeyPair + exportJWK, stubbed fetch, real wrong-aud token).
 //
-// The issuer cases are DW-435's public-API form: accept/reject on real-shaped
+// The issuer cases use the public-API form: accept/reject on real-shaped
 // tokens — never internal map-state assertions.
 
 const test = require('node:test');
@@ -139,7 +140,7 @@ const sign = async (claims, opts = {}) => {
   return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
 };
 
-test('DW-434: valid RS256 token verifies end-to-end (real signature path)', async () => {
+test('valid RS256 token verifies end-to-end (real signature path)', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
   const payload = await svc.verifyToken(token);
@@ -147,7 +148,7 @@ test('DW-434: valid RS256 token verifies end-to-end (real signature path)', asyn
   assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
 });
 
-test('DW-434: tampered signature is rejected (TOKEN_INVALID)', async () => {
+test('tampered signature is rejected (TOKEN_INVALID)', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
   const [h, p, sig] = token.split('.');
@@ -158,7 +159,7 @@ test('DW-434: tampered signature is rejected (TOKEN_INVALID)', async () => {
   );
 });
 
-test('DW-434: wrong-aud token with opts.audience is rejected as TOKEN_INVALID', async () => {
+test('wrong-aud token with opts.audience is rejected as TOKEN_INVALID', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims(DISCOVERY_ISSUER, { aud: 'other-client' }));
   await assert.rejects(
@@ -167,14 +168,14 @@ test('DW-434: wrong-aud token with opts.audience is rejected as TOKEN_INVALID', 
   );
 });
 
-test('DW-434: matching-aud token with opts.audience verifies', async () => {
+test('matching-aud token with opts.audience verifies', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims(DISCOVERY_ISSUER, { aud: 'genie-app' }));
   const payload = await svc.verifyToken(token, { audience: 'genie-app' });
   assert.equal(payload.aud, 'genie-app');
 });
 
-test('DW-434: a STALE alg-confusion token reports TOKEN_EXPIRED (expiry outranks alg)', async () => {
+test('a STALE alg-confusion token reports TOKEN_EXPIRED (expiry outranks alg)', async () => {
   // Reordering the two rejection branches (exp check above JOSEAlgNotAllowed)
   // changed observable behavior for a token that is BOTH expired and
   // alg-mismatched — this test is the mutation gate for that order.
@@ -190,7 +191,7 @@ test('DW-434: a STALE alg-confusion token reports TOKEN_EXPIRED (expiry outranks
   );
 });
 
-test('DW-434: HS256 alg-confusion token is rejected through the real path', async () => {
+test('HS256 alg-confusion token is rejected through the real path', async () => {
   const svc = loadVerifier();
   const hsToken = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
     .setProtectedHeader({ alg: 'HS256' })
@@ -205,7 +206,7 @@ test('DW-434: HS256 alg-confusion token is rejected through the real path', asyn
   );
 });
 
-test('DW-434: expired RS256 token maps to TOKEN_EXPIRED', async () => {
+test('expired RS256 token maps to TOKEN_EXPIRED', async () => {
   const svc = loadVerifier();
   const claims = baseClaims(DISCOVERY_ISSUER);
   claims.exp = Math.floor(Date.now() / 1000) - 10;
@@ -216,7 +217,7 @@ test('DW-434: expired RS256 token maps to TOKEN_EXPIRED', async () => {
   );
 });
 
-test('DW-435: issuer outside the discovery map is rejected as Unknown issuer', async () => {
+test('issuer outside the discovery map is rejected as Unknown issuer', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims('http://evil.example/realms/genie'));
   await assert.rejects(
@@ -225,7 +226,7 @@ test('DW-435: issuer outside the discovery map is rejected as Unknown issuer', a
   );
 });
 
-test('DW-435: KEYCLOAK_PUBLIC_URL alias is accepted on a real token', async () => {
+test('KEYCLOAK_PUBLIC_URL alias is accepted on a real token', async () => {
   const svc = loadVerifier({ KEYCLOAK_PUBLIC_URL: 'https://public.example/auth' });
   const publicIss = 'https://public.example/auth/realms/genie';
   const token = await sign(baseClaims(publicIss));
@@ -243,8 +244,8 @@ test('browser-issuer alias works WITHOUT the JWKS override (drift closed)', asyn
   assert.equal(payload.iss, browserIss);
 });
 
-test('PUBLIC_URL and BROWSER_ISSUER set TOGETHER: both issuers accepted (DW-431 class)', async () => {
-  // The original DW-431 bug: the two alias variables were one overwritten
+test('PUBLIC_URL and BROWSER_ISSUER set TOGETHER: both issuers accepted (both-aliases class)', async () => {
+  // The original sequential-overwrite bug: the two alias variables were one overwritten
   // string, so setting both rejected public-issuer tokens. The aliases are
   // independent map entries — a regression to sequential overwrite fails
   // this test on whichever issuer lost its entry.

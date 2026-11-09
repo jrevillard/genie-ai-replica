@@ -2,7 +2,7 @@
 
 // Validates Keycloak JWTs by delegating to the shared OIDC verifier
 // (components/shared/lib/keycloak-auth-service.js — the single copy, also
-// consumed by gov-chat-backend and okf-server; DW-427). This middleware keeps
+// consumed by gov-chat-backend and okf-server). This middleware keeps
 // only what is doc-repo-shaped: the public-path skip, Bearer extraction, the
 // error→HTTP mapping with the 401 root-cause log, and the per-component role
 // mapping (mapRole/authorizeRole — realm roles stay a per-component contract).

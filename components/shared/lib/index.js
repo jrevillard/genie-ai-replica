@@ -9,7 +9,6 @@ const erasureTombstone = require('./erasure-tombstone'); // GDPR erasure tombsto
 const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + client); unconditional so a missing submodule fails loudly with MODULE_NOT_FOUND
 const spanAttrs = require('./span-attrs'); // OTel span-attribute vocabulary, mirroring the OPEA overlay
 const tracingBaggage = require('./tracing-baggage'); // Propagator factory + baggage scope helper
-const keycloakAuthService = require('./keycloak-auth-service'); // Shared OIDC token verifier (jose/JWKS)
 
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
@@ -22,6 +21,5 @@ module.exports = {
   SecurityMiddleware,
   melt: meltModule,
   spanAttrs,
-  tracingBaggage,
-  keycloakAuthService
+  tracingBaggage
 };

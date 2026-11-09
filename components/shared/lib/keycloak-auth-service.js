@@ -143,21 +143,24 @@ async function init(idpUrl) {
   const discoveryTimeoutMs =
     Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout ? parsedTimeout : 5000;
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
-  let res;
+  // The abort timer covers the WHOLE discovery exchange — fetch AND body
+  // read: a host that accepts the connection and then stalls the response
+  // body would otherwise hang init past the configured budget.
+  let doc;
   try {
-    res = await fetch(discoveryUrl, { signal: controller.signal });
+    const res = await fetch(discoveryUrl, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
+    }
+    doc = await res.json();
   } catch (err) {
-    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`, {
-      cause: err
-    });
+    if (err.name === 'AbortError') {
+      throw new Error(`OIDC discovery timed out after ${discoveryTimeoutMs}ms`, { cause: err });
+    }
+    throw err; // network, HTTP-status and body-parse errors keep their message
   } finally {
     clearTimeout(discoveryTimer);
   }
-  if (!res.ok) {
-    throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
-  }
-
-  const doc = await res.json();
 
   if (!doc.issuer || !doc.jwks_uri) {
     throw new Error('OIDC discovery document missing required fields: issuer, jwks_uri');
@@ -233,8 +236,14 @@ async function init(idpUrl) {
     }
   }
 
-  initialized = true;
-  initFailedAt = 0;
+  // Only a PRIMARY init (or any init that registered an entry) may flip the
+  // lazy-init singleton: a partner-realm init under the pin registers
+  // nothing, and marking initialized there would leave the map empty with
+  // no retry path for the life of the process.
+  if (!(pinnedIssuer && realm !== KEYCLOAK_REALM)) {
+    initialized = true;
+    initFailedAt = 0;
+  }
 
   const acceptedIssuers = Array.from(issuerMap.keys());
   logger.info(

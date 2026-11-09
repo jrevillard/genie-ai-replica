@@ -47,7 +47,9 @@ function makeBearer(scopes = [], roles = [], sub = 'user-1') {
 /** Decode a bearer header's payload (the fixtures are synthetic — unverified).
  *  Mirrors the production decoder: an undecodable bearer yields null, not a throw. */
 function payloadOf(bearer) {
-  const token = String(bearer || '').replace(/^Bearer\s+/i, '');
+  const token = String(bearer || '')
+    .replace(/^\s*bearer\s+/i, '')
+    .trim();
   const part = token.split('.')[1];
   if (!part) return null;
   try {

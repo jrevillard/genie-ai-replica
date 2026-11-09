@@ -78,11 +78,7 @@ async function main() {
   const repos = await db
     .query('FOR r IN okf_repositories FILTER r.deleted_at == null RETURN r')
     .then((cur) => cur.all());
-  const slugify = (s) =>
-    String(s || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+  const { slugify } = require('../services/slug');
   const want = slugify(target);
   const repo = repos.find(
     (r) =>

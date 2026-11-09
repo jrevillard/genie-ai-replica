@@ -45,6 +45,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const { authedAxios } = require('./service-token');
 const config = require('../config');
 const { versionedGraphName } = require('./graph-lifecycle-service');
+const { slugify } = require('./slug');
 
 const META = 'okf_concepts_meta';
 
@@ -56,17 +57,8 @@ class ExportError extends Error {
   }
 }
 
-/** Filename-safe slug of the repo name for the bundle file name. */
-function slugFor(name) {
-  return (
-    String(name || 'repo')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 80) || 'repo'
-  );
-}
+/** Filename-safe slug of the repo name for the bundle file name (#1190 SSOT). */
+const slugFor = (name) => slugify(name, { cap: 80 }) || 'repo';
 
 /** The exported zip's file name — THE visible repo+version link (David:
  * "even if it is the name of the file, it can be established by association"). */

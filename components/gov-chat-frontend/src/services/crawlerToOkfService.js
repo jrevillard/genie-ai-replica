@@ -23,22 +23,11 @@
 import httpService from './httpService';
 
 /**
- * Slugify a URL or filename into a valid repo name (mirrors the okf-server
- * slug rules: lowercase, non-alphanumerics → '-', trim, ≤200 chars).
+ * NO client-side slugging (issue #1190): the controller applies the slug
+ * SSOT (okf-server services/slug.js) to the raw intent server-side, so
+ * there is exactly one grammar. The frontend sends the raw filename or
+ * seed URL; the server derives (and defaults) the repo name from it.
  */
-export function slugify(input) {
-  if (!input) return 'crawled-repository';
-  return (
-    String(input)
-      .toLowerCase()
-      .replace(/^https?:\/\/(www\.)?/, '') // strip scheme + www.
-      .replace(/\.(md|html|htm|txt)$/i, '') // strip extension if filename
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 200) || 'crawled-repository'
-  );
-}
 
 const crawlerToOkfService = {
   /**
@@ -62,7 +51,7 @@ const crawlerToOkfService = {
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
-    const baseName = slugify(filename || url);
+    const baseName = filename || url || null; // raw intent — see the #1190 note above
     const repoDomain = domain || 'general';
     const headers = actor && actor.sub ? { 'x-actor-sub': actor.sub } : {};
     // silent: true — the dialog/list owns the user-facing error; a raw

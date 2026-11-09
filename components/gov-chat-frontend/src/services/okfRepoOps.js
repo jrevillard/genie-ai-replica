@@ -26,7 +26,8 @@ import httpService from './httpService';
 import serviceTreeService from './serviceTreeService';
 import matter from 'gray-matter';
 
-/** Slug for new concept paths (same rules as crawlerToOkfService.slugify). */
+/** Slug for new concept paths: the okf-server slug grammar (issue #1190
+ * SSOT, cap 80) applied client-side for locally-minted concept paths. */
 export function slugifyConcept(input) {
   if (!input) return 'concept';
   return (

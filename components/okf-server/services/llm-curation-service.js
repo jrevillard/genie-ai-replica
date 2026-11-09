@@ -43,11 +43,7 @@ const DEFAULT_LANES = 4;
 const CURATION_TIMEOUT_MS = parseInt(process.env.OKF_CURATION_TIMEOUT_MS, 10) || 30000;
 const BODY_SNIPPET_CHARS = 1200;
 
-const slugify = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+const { slugify } = require('./slug');
 
 function debugEnabled() {
   return process.env.OKF_CONVERSION_DEBUG === '1';

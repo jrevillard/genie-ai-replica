@@ -1605,6 +1605,23 @@ export default {
       openRepo: 'Abrir repositório',
       unknownVersion: 'versão desconhecida'
     },
+    debt: {
+      title: 'Dívida de conformidade',
+      loading: 'Lendo…',
+      repoCount: '{n} repositório(s) com conceitos',
+      refresh: 'Atualizar',
+      empty: 'Sem conceitos em nenhum repositório que você possa ler — nada a dever.',
+      readFailed: 'Não foi possível ler a dívida de conformidade.',
+      truncated: 'O catálogo de repositórios excede uma página — as linhas além do limite não são mostradas.',
+      col: {
+        repo: 'Repositório',
+        concepts: 'Conceitos',
+        issues: 'Problemas',
+        stale: 'Obsoletos',
+        pii: 'Ocorrências de PII',
+        state: 'Estado'
+      }
+    },
     retrieval: {
       title: 'Postura de recuperação',
       refresh: 'Atualizar',

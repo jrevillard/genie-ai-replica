@@ -1599,6 +1599,23 @@ export default {
       openRepo: 'Buka repositori',
       unknownVersion: 'versi tidak diketahui'
     },
+    debt: {
+      title: 'Utang kesesuaian',
+      loading: 'Membaca…',
+      repoCount: '{n} repositori dengan konsep',
+      refresh: 'Segarkan',
+      empty: 'Tidak ada konsep di repositori mana pun yang bisa Anda baca — tidak ada utang.',
+      readFailed: 'Tidak dapat membaca utang kesesuaian.',
+      truncated: 'Katalog repositori melebihi satu halaman — baris di luar batas tidak ditampilkan.',
+      col: {
+        repo: 'Repositori',
+        concepts: 'Konsep',
+        issues: 'Masalah',
+        stale: 'Usang',
+        pii: 'Temuan PII',
+        state: 'Keadaan'
+      }
+    },
     retrieval: {
       title: 'Postur retrieval',
       refresh: 'Segarkan',

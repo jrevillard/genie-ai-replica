@@ -1557,6 +1557,23 @@ export default {
       openRepo: '打开知识库',
       unknownVersion: '未知版本'
     },
+    debt: {
+      title: '一致性债务',
+      loading: '读取中…',
+      repoCount: '{n} 个含概念的仓库',
+      refresh: '刷新',
+      empty: '您可读取的仓库中没有任何概念 — 无债务。',
+      readFailed: '无法读取一致性债务。',
+      truncated: '仓库目录超过一页 — 超出上限的行不会显示。',
+      col: {
+        repo: '仓库',
+        concepts: '概念',
+        issues: '问题',
+        stale: '过期',
+        pii: 'PII 命中',
+        state: '状态'
+      }
+    },
     retrieval: {
       title: '检索态势',
       refresh: '刷新',

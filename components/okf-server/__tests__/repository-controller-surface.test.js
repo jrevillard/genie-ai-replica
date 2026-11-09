@@ -18,6 +18,7 @@ jest.mock('../shared-lib/metrics', () => ({
 jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn() }));
 jest.mock('../services/repository-service', () => ({
   getById: jest.fn().mockResolvedValue({ repo_id: 'r1', name: 'R' }),
+  list: jest.fn().mockResolvedValue({ items: [], next_cursor: null }),
   create: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
   update: jest.fn().mockResolvedValue({ repo_id: 'r1' }),
   remove: jest.fn().mockResolvedValue({ repo_id: 'r1', status: 'deleted', deletion_reason: null }),
@@ -70,7 +71,8 @@ jest.mock('../services/concept-meta-service', () => {
   return { __esModule: true, default: base, ...base };
 });
 jest.mock('../services/conformance-service', () => ({
-  getRepoMetrics: jest.fn().mockResolvedValue({})
+  getRepoMetrics: jest.fn().mockResolvedValue({}),
+  getDebtByRepos: jest.fn().mockResolvedValue([])
 }));
 jest.mock('../services/crawl-conversion-service', () => ({
   startConversion: jest.fn().mockResolvedValue({})
@@ -191,6 +193,7 @@ jest.mock('../services/scope-authz-service', () => {
 
 const controller = require('../controllers/repository-controller');
 const repoService = require('../services/repository-service');
+const conformanceService = require('../services/conformance-service');
 const headTestService = require('../services/head-test-service');
 const headSuiteService = require('../services/head-suite-service');
 const studioDraftService = require('../services/studio-draft-service');
@@ -1299,6 +1302,83 @@ describe('repository-controller — W9 getConceptTree serving gates', () => {
     const boom = new Error('cursor died');
     conceptMetaService.listConceptTree.mockRejectedValueOnce(boom);
     const { next } = await drive(controller.getConceptTree, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).toHaveBeenCalledWith(boom);
+  });
+});
+
+// ── #948 (narrowed disposition): cross-repo conformance-debt aggregation ──
+describe('repository-controller — conformance-debt aggregation (#948)', () => {
+  beforeEach(() => {
+    // This suite resets mocks TARGETEDLY, not wholesale — clear the two this
+    // describe touches so prior tests' call records cannot leak in.
+    repoService.list.mockClear();
+    conformanceService.getDebtByRepos.mockClear();
+  });
+
+  it('pages the readable catalog, aggregates once, enriches rows with repo metadata', async () => {
+    repoService.list
+      .mockResolvedValueOnce({
+        items: [
+          { repo_id: 'ra', name: 'A', domain: 'health', lifecycle_state: 'publish' },
+          { repo_id: 'rb', name: 'B', domain: 'health', lifecycle_state: 'draft' }
+        ],
+        next_cursor: 'page-2'
+      })
+      .mockResolvedValueOnce({
+        items: [{ repo_id: 'rc', name: 'C', domain: 'social', lifecycle_state: 'review' }],
+        next_cursor: null
+      });
+    conformanceService.getDebtByRepos.mockResolvedValueOnce([
+      {
+        repo_id: 'ra',
+        concept_count: 12,
+        conformance_issue_count: 4,
+        stale_concept_count: 1,
+        pii_hit_count: 0,
+        has_reserved_index: true
+      },
+      {
+        repo_id: 'rc',
+        concept_count: 3,
+        conformance_issue_count: 0,
+        stale_concept_count: 0,
+        pii_hit_count: 2,
+        has_reserved_index: false
+      }
+    ]);
+    const { res } = await drive(controller.listConformanceDebt, { okfIsSuperAdmin: true });
+    expect(res.statusCode).toBe(200);
+    // The page loop followed next_cursor to exhaustion.
+    expect(repoService.list).toHaveBeenCalledTimes(2);
+    expect(repoService.list).toHaveBeenNthCalledWith(1, { authz: null, cursor: null, limit: 100 });
+    expect(repoService.list).toHaveBeenNthCalledWith(2, { authz: null, cursor: 'page-2', limit: 100 });
+    // ONE aggregation call over the UNION of pages.
+    expect(conformanceService.getDebtByRepos).toHaveBeenCalledTimes(1);
+    expect(conformanceService.getDebtByRepos).toHaveBeenCalledWith(['ra', 'rb', 'rc']);
+    // Rows carry the repo-list metadata; 'rb' has NO meta rows → omitted.
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items[0]).toMatchObject({ repo_id: 'ra', name: 'A', domain: 'health', lifecycle_state: 'publish' });
+    expect(res.body.items[1]).toMatchObject({ repo_id: 'rc', name: 'C', domain: 'social', lifecycle_state: 'review' });
+    expect(res.body.generated_at).toBeTruthy();
+  });
+
+  it('an empty readable catalog short-circuits before the aggregation', async () => {
+    // Default-deny G3: the scoped-no-grants caller's empty set → the service
+    // list returns no items → the controller answers [] and never aggregates.
+    const { res } = await drive(controller.listConformanceDebt, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.items).toEqual([]);
+    expect(conformanceService.getDebtByRepos).not.toHaveBeenCalled();
+  });
+
+  it('a service throw reaches next verbatim', async () => {
+    repoService.list.mockResolvedValueOnce({
+      items: [{ repo_id: 'ra', name: 'A', domain: 'health', lifecycle_state: 'publish' }],
+      next_cursor: null
+    });
+    const boom = new Error('debt scan died');
+    conformanceService.getDebtByRepos.mockRejectedValueOnce(boom);
+    const { next } = await drive(controller.listConformanceDebt);
     expect(next).toHaveBeenCalledWith(boom);
   });
 });

@@ -415,6 +415,22 @@ const repoOkfService = {
     return res && res.data && Array.isArray(res.data.rows) ? res.data.rows : [];
   },
 
+  /** Cross-repo conformance-debt aggregation (#948, David's 2026-11-05
+   *  disposition — the narrowed Story 10.4): ONE read-only read — per-repo
+   *  {issues, stale, pii} for every repo the caller can read, mirroring the
+   *  per-repo /metrics field names. NO mutations; the per-repo popups stay
+   *  the remediation surface. Returns the full envelope ({items, truncated})
+   *  — a catalog past the server's page cap reports truncated, and the panel
+   *  names it rather than silently dropping repos. */
+  async getConformanceDebt() {
+    const res = await httpService.get('/okf/repos/conformance-debt');
+    const body = res && res.data ? res.data : {};
+    return {
+      items: Array.isArray(body.items) ? body.items : [],
+      truncated: body.truncated === true
+    };
+  },
+
   /**
    * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's
    * CURRENT content returning per-occurrence {where, type, start, end, score}

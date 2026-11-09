@@ -1595,6 +1595,23 @@ export default {
       openRepo: 'Fungua ghala',
       unknownVersion: 'toleo lisilojulikana'
     },
+    debt: {
+      title: 'Deni la ufuasi',
+      loading: 'Inasoma…',
+      repoCount: 'Repo {n} zenye dhana',
+      refresh: 'Onyesha upya',
+      empty: 'Hakuna dhana katika hazina yoyote unayoweza kusoma — hakuna deni.',
+      readFailed: 'Haikuweza kusoma deni la ufuasi.',
+      truncated: 'Katalogi ya hazina inazidi ukurasa mmoja — safu zilizozidi hazionyeshwi.',
+      col: {
+        repo: 'Hazina',
+        concepts: 'Dhana',
+        issues: 'Matatizo',
+        stale: 'Yaliyopitwa na wakati',
+        pii: 'Matukio ya PII',
+        state: 'Hali'
+      }
+    },
     retrieval: {
       title: 'Hali ya u retrieval',
       refresh: 'Onyesha Upya',

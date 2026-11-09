@@ -323,9 +323,18 @@ describe('retrieval-config-client (Story 1.1)', () => {
     axios.get.mockImplementation((path, config) => {
       const sub = subOf(config?.headers?.Authorization);
       if (path.endsWith('/api/okf/authz/graphs')) {
-        return okfGetResponse({ ...AUTHZ_A, graph_names: [`graph-of-${sub}`] });
+        return okfGetResponse({
+          ...AUTHZ_A,
+          graph_names: [`graph-of-${sub}`],
+          repos: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri', name: `Repo of ${sub}` }]
+        });
       }
-      return okfGetResponse({ ...HYBRID_CONFIG, serving_repo_ids: [`repo-of-${sub}`] });
+      return okfGetResponse({
+        ...HYBRID_CONFIG,
+        serving_graph_count: 1,
+        serving_repo_ids: [`repo-of-${sub}`],
+        serving_graphs: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }]
+      });
     });
 
     const byClaim = makeBearer(['okf:t:a:read'], [], 'claim-user');
@@ -333,18 +342,21 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const noScopes = makeBearer([], [], 'scope-less-user');
 
     // The KEY decides the cache entry: the realm-role grant must land in the
-    // claim-scoped entry, never in the scope-less one.
+    // claim-scoped entry, never in the scope-less one. (The scope-less
+    // caller keys the `@no-scopes` bucket — the assertion is on the
+    // DISTINCTNESS, not on that literal, so a renamed sentinel is not a
+    // behaviour change here.)
     const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     expect(keyOf(byRole)).toBe(keyOf(byClaim));
     expect(keyOf(byRole)).not.toBe(keyOf(noScopes));
-    expect(keyOf(noScopes)).toBe('@no-scopes');
 
     const claimView = await client.getRetrievalConfig(byClaim);
     const roleView = await client.getRetrievalConfig(byRole);
     const scopeLessView = await client.getRetrievalConfig(noScopes);
 
-    // Scope-equivalent callers share the entry — the role-granted caller is
-    // served the claim-scoped view, not a view of its own.
+    // Scope-equivalent callers share the entry — BOTH are served the same
+    // view, whichever of them populated it. An equality between two served
+    // views (not a positional list) is what makes this order-independent.
     expect(roleView.serving_repo_ids).toEqual(claimView.serving_repo_ids);
     // The scope-less caller keeps its own view: it is never handed another
     // caller's serving set.

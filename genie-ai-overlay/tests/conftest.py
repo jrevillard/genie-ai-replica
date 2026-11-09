@@ -1,7 +1,9 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
+import json
 import os
 import sys
+import warnings
 from enum import Enum
 
 os.makedirs("reports", exist_ok=True)
@@ -9,6 +11,84 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Language-registry dereference for checkouts without symlink support
+# ---------------------------------------------------------------------------
+# chatqna/language-registry.json is a symlink to the backend's language-maps
+# file. A checkout made without symlink support (Windows without developer
+# mode / core.symlinks) materializes it as a plain text file whose body is
+# the link target; json.load then fails, the registry reads as empty, and
+# every request-path language resolves as unknown. Validate the registry
+# file the module will actually read (an operator-provided
+# LANGUAGE_REGISTRY_FILEPATH or the checked-in path); when it does not
+# parse, fall back to the checked-in registry when it parses, and follow its
+# link text otherwise — the same resolution the chatqna image performs at
+# build time (its Dockerfile copies the backend registry file explicitly,
+# not the symlink). A healthy checkout is untouched: the effective file
+# parses, no env var is set, and the module keeps its own default. The block
+# sits before every repo import on purpose: chatqna binds
+# LANGUAGE_REGISTRY_FILEPATH once at import, so anything importing it first
+# would freeze a possibly-degenerate path into the module.
+# warnings.warn, not stderr prints: pytest's default capture swallows
+# import-time stderr, and these diagnostics only surface in the warnings
+# summary.
+def _read_text(path):
+    """Read a small text file, tolerating absence and undecodable bytes."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except (OSError, ValueError):  # missing/unreadable file; undecodable bytes
+        return ""
+
+
+_registry_default = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json"))
+_probe_path = os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default)
+_body = _read_text(_probe_path)
+try:
+    json.loads(_body)
+except ValueError:
+    _fallback_body = _body if _probe_path == _registry_default else _read_text(_registry_default)
+    _resolved = ""
+    try:
+        json.loads(_fallback_body)
+        # The checked-in registry parses: it is the fallback for a broken
+        # override, whatever the checkout's symlink support.
+        _resolved = _registry_default
+    except ValueError:
+        _link_target = _fallback_body.strip()
+        if _link_target:
+            # Resolve the target against the chatqna dir and store an
+            # absolute path, so the env value never depends on the working
+            # directory surviving until the module import.
+            _resolved = os.path.abspath(os.path.join(os.path.dirname(_registry_default), _link_target))
+    if _resolved and os.path.isfile(_resolved):
+        if "LANGUAGE_REGISTRY_FILEPATH" in os.environ:
+            # An explicitly set override that does not parse is being
+            # replaced: say so, or the operator believes their registry was
+            # exercised when the checked-in one was. repr() keeps a
+            # multi-line value from forging diagnostic lines.
+            warnings.warn(
+                f"LANGUAGE_REGISTRY_FILEPATH={_probe_path!r} does not parse as JSON; "
+                f"using the registry at {_resolved!r}",
+                stacklevel=1,
+            )
+        else:
+            # The checkout itself is degenerate: say so, or the developer
+            # never learns the module reads the backend tree.
+            warnings.warn(
+                f"the checked-in language registry is a materialized symlink; following it to {_resolved!r}",
+                stacklevel=1,
+            )
+        os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
+    else:
+        warnings.warn(
+            f"the language registry at {_probe_path!r} could not be read or parsed as JSON "
+            "and no usable link target; chatqna will run with an empty language registry",
+            stacklevel=1,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Pre-populate the vendored ``comps`` module tree so that imports in OPEA

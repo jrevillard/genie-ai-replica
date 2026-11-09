@@ -8,33 +8,26 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import cv2
-import easyocr
 import numpy as np
 import pymupdf
 from comps import CustomLogger
 
 # Might need to check the path
 from comps.dataprep.src.utils import document_loader as origin_document_loader
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import (
-    AcceleratorDevice,
-    AcceleratorOptions,
-    EasyOcrOptions,
-    PdfPipelineOptions,
-)
-from docling.document_converter import (
-    DocumentConverter,
-    PdfFormatOption,
-)
+
+from tracing import setup_json_logging, setup_trace_logging
 
 logger = CustomLogger("genie-ai_prepare_doc_util")
-logflag = os.getenv("LOGFLAG", False)
+
+# Wire the logger into the JSON envelope like every other service logger
+# (the OPEA bracket format is not recognised by the collector's plain-text
+# severity path, so an unwired logger reaches VictoriaLogs as Unspecified).
+setup_trace_logging("genie-ai_prepare_doc_util")
+setup_json_logging("genie-ai_prepare_doc_util")
 
 # Remote docling-serve endpoint (when set, document processing is delegated to remote GPU node)
 DOCLING_ENDPOINT = os.getenv("DOCLING_ENDPOINT", "")
 DOCLING_ENDPOINT_TIMEOUT = int(os.getenv("DOCLING_ENDPOINT_TIMEOUT", 120))
-
-reader = easyocr.Reader(["en"])  # Can add more languages later
 
 
 def _resolve_docling_device(env_device, cuda_available=None):
@@ -61,6 +54,24 @@ def _resolve_docling_device(env_device, cuda_available=None):
 
 
 try:
+    # The easyocr and docling imports sit INSIDE the try so that a missing
+    # dependency is caught here — above the try they would raise before the
+    # handler exists, and the remedy below would never be logged.
+    import easyocr
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import (
+        AcceleratorDevice,
+        AcceleratorOptions,
+        EasyOcrOptions,
+        PdfPipelineOptions,
+    )
+    from docling.document_converter import (
+        DocumentConverter,
+        PdfFormatOption,
+    )
+
+    reader = easyocr.Reader(["en"])  # Can add more languages later
+
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
     ocr_options = EasyOcrOptions(lang=["en"])
 
@@ -89,7 +100,7 @@ try:
     docling_converter = DocumentConverter(format_options=format_options)
 
 except ImportError:
-    print("Please install docling and its dependencies: pip install docling easyocr")
+    logger.error("Please install docling and its dependencies: pip install docling easyocr")
     raise
 
 
@@ -168,7 +179,7 @@ async def docling_document_loader(doc_path):
     if doc_path.endswith(supported_extensions):
         return await load_with_docling(doc_path)
     else:
-        print(f"File type {doc_path} not supported by Docling")
+        logger.warning(f"File type {doc_path} not supported by Docling")
 
 
 def genieai_process_page(doc, idx):

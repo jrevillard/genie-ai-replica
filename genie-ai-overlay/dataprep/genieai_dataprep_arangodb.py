@@ -2139,9 +2139,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
 
     def _log_environment_variables(self):
-        """Debug: Print all critical environment variables at startup."""
+        """Log the critical environment variables at startup (LOGFLAG-gated).
+
+        The dump carries service endpoints, so it is emitted only when the
+        operator asked for it (LOGFLAG).
+
+        INFO, not DEBUG: the OPEA ``CustomLogger`` pins its logger at INFO
+        (``comps/cores/mega/logger.py``), and nothing in this service raises
+        it, so a ``debug()`` call is dropped before it reaches the handler —
+        a DEBUG-level dump would be invisible even with LOGFLAG set. INFO
+        is the level the LOGFLAG-gated dumps already use elsewhere in this
+        codebase (chatqna, reranker).
+        """
         with background_span("dataprep.log_environment_variables"):
-            logger.debug(
+            # The gate sits INSIDE the span: the span is an owned name the
+            # observability contract lists, so it is emitted on every startup
+            # even when the dump itself is not.
+            if not logflag:
+                return
+            logger.info(
                 f"GENIE-AI DATAPREP CONFIGURATION: "
                 f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
                 f"BACKEND={BACKEND_SERVICE_URL}, "

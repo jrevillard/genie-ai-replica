@@ -7,8 +7,17 @@ import os
 from comps import CustomLogger
 from opea_dataprep_loader import OpeaDataprepLoader
 
+from tracing import setup_json_logging, setup_trace_logging
+
 logger = CustomLogger("genie_dataprep_loader")
-logflag = os.getenv("LOGFLAG", False)
+
+# Wire the logger into the JSON envelope like every other service logger
+# (the OPEA bracket format is not recognised by the collector's plain-text
+# severity path, so an unwired logger reaches VictoriaLogs as Unspecified).
+setup_trace_logging("genie_dataprep_loader")
+setup_json_logging("genie_dataprep_loader")
+
+logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 
 class GenieDataprepLoader(OpeaDataprepLoader):

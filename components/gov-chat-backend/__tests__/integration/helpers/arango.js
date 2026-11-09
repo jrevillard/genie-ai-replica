@@ -21,9 +21,10 @@
 // prints — each suite passes HOOK_TIMEOUT_MS as the beforeAll hook
 // timeout (the hook that waits is what needs the budget; the per-test
 // timeout stays at the component default). The budget covers the full
-// wait plus the whole HTTP recreate (one half stalling to its abort at
-// WAIT_BUDGET_MS still surfaces the named verdict inside the hook) and
-// headroom besides. The seed's driver calls carry no abort: a stalled
+// wait plus the whole HTTP recreate when one half stalls to its abort at
+// WAIT_BUDGET_MS — the named verdict then surfaces inside the hook with
+// headroom (240s of 360s); only the all-stalls worst case reaches the
+// budget exactly. The seed's driver calls carry no abort: a stalled
 // one burns the rest of the budget and falls to Jest's generic timeout
 // with no per-call diagnostic — the accepted trade against an
 // unbounded hook.

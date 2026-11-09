@@ -139,9 +139,10 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
 
 /// The mocked API overrides every widget-test mount shares: both
 /// generated API clients answer through the test's mock HTTP client.
-// The return type cannot be named: riverpod 3 does not re-export the
-// `Override` type its own ProviderScope.overrides field is declared
-// with, so the inference lint is the price of sharing the list.
+// The return type cannot be named: flutter_riverpod's public export
+// re-exports its internals through a `show` list that omits `Override`
+// (the type ProviderScope.overrides itself is declared with), so the
+// inference lint is the price of sharing the list.
 // ignore: strict_top_level_inference
 apiOverrides(http.BaseClient mock) => [
   serviceCategoriesApiProvider.overrideWithValue(

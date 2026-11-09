@@ -697,7 +697,14 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     const id = await convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
 
     expect(id).toBe('user-1');
-    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+    // The whole call set is pinned, like the createUser siblings: the
+    // 201 path resolves, health-checks and assigns — nothing else.
+    expect(calls).toEqual([
+      `POST /auth/admin/realms/${REALM}/users`,
+      `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
+      `GET /auth/admin/realms/${REALM}/roles/admin`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+    ]);
   });
 
   test('a 409 whose account exists converges the password BEFORE assigning the roles', async () => {
@@ -759,7 +766,10 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     expect(caught.message).toMatch(/not fixture-healthy/);
     expect(caught.message).toMatch(/VERIFY_EMAIL/);
     expect(caught.message).toMatch(/check the realm import/);
-    // No roles were assigned to an account that failed the health gate.
+    // The password convergence RAN (the credential is fixed either way —
+    // that is what the comment above claims, so the call must be observed)
+    // and no role was assigned to an account that failed the gate.
+    expect(calls.some((call) => call.includes('reset-password'))).toBe(true);
     expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
   });
 
@@ -779,6 +789,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
 
     expect(caught.message).toMatch(/not fixture-healthy/);
     expect(caught.message).toMatch(/enabled=false/);
+    expect(calls.some((call) => call.includes('reset-password'))).toBe(true);
     expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
   });
 });

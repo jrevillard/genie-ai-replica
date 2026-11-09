@@ -47,8 +47,11 @@ async function waitForServer(url, headers, timeoutMs) {
     try {
       const response = await fetch(`${url}/_api/version`, {
         headers,
-        // A negative remaining (a scheduling stall between the loop check
-        // and this call) would wrap to an effectively-never timeout.
+        // AbortSignal.timeout THROWS RangeError on a negative delay: a
+        // scheduling stall between the loop check and this call would put
+        // that throw into lastError and mask the wait's real diagnostic.
+        // The clamp keeps the poll honest — 0 aborts at once, which is the
+        // right answer once the deadline has passed.
         signal: AbortSignal.timeout(Math.max(0, deadline - Date.now()))
       });
       if (response.ok) {

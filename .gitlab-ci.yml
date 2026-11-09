@@ -3433,7 +3433,7 @@ test:backend-arango:
     ARANGO_TEST_PASSWORD: "ci-husk-gate-placeholder"
     # jest-junit's env options override the package.json ones: the report
     # of THIS job must not overwrite the backend suite's report name.
-    JEST_JUNIT_OUTPUT_NAME: "jest-husk-arango.xml"
+    JEST_JUNIT_OUTPUT_NAME: "jest-integration-arango.xml"
   before_script:
     # Only the backend: this suite loads the script and the driver, nothing
     # from shared/lib.
@@ -3448,16 +3448,16 @@ test:backend-arango:
     # therefore the same wait-for-server safety — at zero extra services.
     # Capped like every other jest invocation (the worker-memory contract):
     # two files never exceed the two workers the cap allows anyway.
-    - npx jest __tests__/integration --maxWorkers=2 --workerIdleMemoryLimit=500MB --json --outputFile=reports/jest-husk-arango.json
-    # The suites SKIPS themselves when ARANGO_TEST_URL is unset: a job that
+    - npx jest __tests__/integration --maxWorkers=2 --workerIdleMemoryLimit=500MB --json --outputFile=reports/jest-integration-arango.json
+    # The suites SKIP themselves when ARANGO_TEST_URL is unset: a job that
     # lost the variable would go green having run nothing. The JSON report
     # says how many tests actually ran.
-    - node -e "const r = require('./reports/jest-husk-arango.json'); if (!r.numPassedTests) { console.error('no ArangoDB-backed test ran (' + r.numPassedTests + ' passed) — the suite was skipped'); process.exit(1); }"
+    - node -e "const r = require('./reports/jest-integration-arango.json'); if (!r.numPassedTests) { console.error('no ArangoDB-backed test ran (' + r.numPassedTests + ' passed) — the suites were skipped'); process.exit(1); }"
   artifacts:
     when: always
     expire_in: 7 days
     reports:
-      junit: components/gov-chat-backend/reports/jest-husk-arango.xml
+      junit: components/gov-chat-backend/reports/jest-integration-arango.xml
   rules:
     # MR pipelines: the gate matters when the script, its suite, the driver
     # version, the engine pin or the job itself changes — nothing else can

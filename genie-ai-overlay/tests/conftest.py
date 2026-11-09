@@ -238,7 +238,9 @@ except (OSError, ValueError):
             _link_target = ""
     _resolved = ""
     if _link_target:
-        _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_default), _link_target))
+        # Absolute: the env value must not depend on the working directory
+        # surviving until the module import.
+        _resolved = os.path.abspath(os.path.join(os.path.dirname(_registry_default), _link_target))
     if _resolved and os.path.isfile(_resolved):
         if "LANGUAGE_REGISTRY_FILEPATH" in os.environ:
             # An explicitly set override that does not parse is being
@@ -250,6 +252,14 @@ except (OSError, ValueError):
                 file=sys.stderr,
             )
         os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
+    else:
+        print(
+            "conftest: the language registry at "
+            f"{os.environ.get('LANGUAGE_REGISTRY_FILEPATH', _registry_default)} could not be read "
+            "or parsed as JSON and no link target resolved; chatqna will run with an empty "
+            "language registry",
+            file=sys.stderr,
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -50,7 +50,8 @@ const {
   waitForServer,
   recreateDatabase,
   dropDatabase,
-  databaseConfig
+  databaseConfig,
+  jsonBody
 } = require('./helpers/arango');
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
@@ -115,7 +116,7 @@ async function seed(db) {
       headers: { 'Content-Type': 'application/json', ...AUTH },
       body: JSON.stringify({ name, type })
     });
-    const body = await response.json();
+    const body = await jsonBody(response);
     if (body.error) {
       throw new Error(`creating ${name}: ${JSON.stringify(body)}`);
     }

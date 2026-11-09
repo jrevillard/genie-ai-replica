@@ -46,7 +46,9 @@ async function waitForServer(url, headers, timeoutMs) {
     try {
       const response = await fetch(`${url}/_api/version`, {
         headers,
-        signal: AbortSignal.timeout(deadline - Date.now())
+        // A negative remaining (a scheduling stall between the loop check
+        // and this call) would wrap to an effectively-never timeout.
+        signal: AbortSignal.timeout(Math.max(0, deadline - Date.now()))
       });
       if (response.ok) {
         return;
@@ -62,7 +64,8 @@ async function waitForServer(url, headers, timeoutMs) {
 
 // The body of an HTTP lifecycle answer, guarded: an intermediate proxy
 // answering 502 with an HTML page must surface as a named status, not as
-// a JSON parse error that hides it.
+// a JSON parse error that hides it. Exported: the suites' own HTTP calls
+// (the collection creations) read JSON answers too.
 async function jsonBody(response) {
   const text = await response.text();
   try {
@@ -111,4 +114,12 @@ function databaseConfig(url, databaseName, user, password) {
   return config;
 }
 
-module.exports = { WAIT_BUDGET_MS, authHeader, waitForServer, recreateDatabase, dropDatabase, databaseConfig };
+module.exports = {
+  WAIT_BUDGET_MS,
+  authHeader,
+  waitForServer,
+  recreateDatabase,
+  dropDatabase,
+  databaseConfig,
+  jsonBody
+};

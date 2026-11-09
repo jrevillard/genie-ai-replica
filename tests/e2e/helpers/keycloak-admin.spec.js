@@ -620,8 +620,14 @@ test.describe('createUser is the create-only path: no password convergence, no h
 
     expect(id).toBe('user-1');
     // The credentials went with the create itself: the create-only path
-    // never touches the password of the account afterwards.
-    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+    // resolves and assigns, and never touches the account afterwards —
+    // the whole call set is pinned, not only the absence of a reset.
+    expect(calls).toEqual([
+      `POST /auth/admin/realms/${REALM}/users`,
+      `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
+      `GET /auth/admin/realms/${REALM}/roles/admin`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+    ]);
   });
 
   test('a 409 whose account exists converges nothing — an account the realm left disabled still proceeds', async () => {

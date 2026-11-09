@@ -3,7 +3,7 @@ const loggerModule = require('./logger'); // Import the module object
 const securityHeaders = require('./security-headers');
 const SecurityMiddleware = require('./security-middleware');
 const dbService = require('./db-connection-service');
-const { isExpectedAbsence } = require('./arango-absence'); // canonical ArangoDB absence predicate
+const { isExpectedAbsence, hasNotFoundStatus } = require('./arango-absence'); // canonical ArangoDB absence predicate + the shared bare-404 status literal
 const validationUtils = require('./validation-utils'); // parsePositiveInt helper
 const erasureTombstone = require('./erasure-tombstone'); // GDPR erasure tombstone digest (erasure + provisioning contract)
 const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + client); unconditional so a missing submodule fails loudly with MODULE_NOT_FOUND
@@ -17,6 +17,7 @@ module.exports = {
   erasureTombstoneKey: erasureTombstone.erasureTombstoneKey,
   dbService,
   isExpectedAbsence,
+  hasNotFoundStatus,
   securityHeaders,
   SecurityMiddleware,
   melt: meltModule,

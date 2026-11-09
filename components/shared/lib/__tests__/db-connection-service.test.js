@@ -218,14 +218,41 @@ describe('!1072 — a document miss is an expected outcome, not an error', () =>
     expect(errorSpy).toHaveBeenCalled();
   });
 
-  it('_isExpectedAbsence separates absent from fault, and ignores loose message matches', () => {
-    expect(svc._isExpectedAbsence(docMiss)).toBe(true); // 1202
-    expect(svc._isExpectedAbsence(noMatch)).toBe(true); // 1204
-    expect(svc._isExpectedAbsence(bareNoMatch)).toBe(true); // no errorNum, exact message
-    expect(svc._isExpectedAbsence(collectionMiss)).toBe(false); // 1203 — a real fault
+  it('isExpectedAbsence separates absent from fault, and ignores loose message matches', () => {
+    // DW-433/#1163: the canonical predicate is shared/lib/arango-absence.js —
+    // asserted directly (the dbService seam export is gone), so this matrix
+    // and the consumer classifiers that delegate to the canonical cannot
+    // silently part ways.
+    const isExpectedAbsence = require('../arango-absence').isExpectedAbsence;
+    expect(isExpectedAbsence(docMiss)).toBe(true); // 1202
+    expect(isExpectedAbsence(noMatch)).toBe(true); // 1204
+    expect(isExpectedAbsence(Object.assign(new Error('no match'), { errorNum: 404, code: 404 }))).toBe(true); // the 3.12 simple-API miss
+    expect(
+      isExpectedAbsence(Object.assign(new Error('collection or view not found'), { errorNum: 404, code: 404 }))
+    ).toBe(false); // 404 WITHOUT the message stays a fault
+    expect(isExpectedAbsence(bareNoMatch)).toBe(true); // no errorNum, exact message
+    expect(isExpectedAbsence(collectionMiss)).toBe(false); // 1203 — a real fault
+    // The deliberate divergence from okf-server's isArangoNotFound: with no
+    // errorNum, a bare 404 status is NOT absence here — only the exact
+    // 'no match' message qualifies.
+    expect(isExpectedAbsence(Object.assign(new Error('nope'), { code: 404 }))).toBe(false);
+    expect(isExpectedAbsence(Object.assign(new Error('nope'), { statusCode: 404 }))).toBe(false);
     // A loose /not found/i would swallow these — the reason the predicate is narrow.
-    expect(svc._isExpectedAbsence(new Error('route not found'))).toBe(false);
-    expect(svc._isExpectedAbsence(new Error('gateway returned not found'))).toBe(false);
-    expect(svc._isExpectedAbsence(null)).toBe(false);
+    expect(isExpectedAbsence(new Error('route not found'))).toBe(false);
+    expect(isExpectedAbsence(new Error('gateway returned not found'))).toBe(false);
+    expect(isExpectedAbsence(null)).toBe(false);
+  });
+
+  it('hasNotFoundStatus matches exactly the bare HTTP-404 shapes the composites share', () => {
+    // The one literal both no-errorNum composites consume (okf-server
+    // isArangoNotFound, doc-repo isDocumentNotFound) — pinned at the owner so
+    // a driver-shape change here cannot silently flip a consumer.
+    const { hasNotFoundStatus } = require('../arango-absence');
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 404 }))).toBe(true);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { statusCode: 404 }))).toBe(true);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 500 }))).toBe(false);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { statusCode: 500 }))).toBe(false);
+    expect(hasNotFoundStatus(new Error('plain'))).toBe(false);
+    expect(hasNotFoundStatus(null)).toBe(false);
   });
 });

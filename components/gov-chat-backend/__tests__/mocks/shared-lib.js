@@ -22,7 +22,8 @@ module.exports = {
     warn: jest.fn(),
     debug: jest.fn()
   },
-  dbService: { getConnection: jest.fn(), _isExpectedAbsence: isExpectedAbsence },
+  dbService: { getConnection: jest.fn() },
+  isExpectedAbsence,
   securityHeaders: (req, res, next) => next(),
   SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
   reconfigureLogger: jest.fn(),

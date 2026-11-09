@@ -12,7 +12,7 @@
 //     (zero-hit by construction; the resolver is the isolation boundary).
 //
 // Cache: ≤30s TTL (mirrors the authz-resolver's SERVING_TTL_MS), keyed
-// (effective_scopes, ttl_window) — scope-equivalence inference is safe because
+// (ttl_window, endpoint kind, effective_scopes) — scope-equivalence inference is safe because
 // the authz-resolver already filters by the caller's authorized_repo_ids; the
 // cache is the latency optimization, NOT a separate authz layer. Keys are
 // NEVER the raw bearer token (no isolation benefit, unbounded memory).

@@ -28,9 +28,11 @@
  * the local name `_isExpectedAbsence` (private — consumers take it from the
  * shared-lib barrel), okf-server's isArangoNotFound delegates the
  * errorNum'd classification to it while keeping its own no-errorNum status
- * fallback, and document-repository's isDocumentNotFound ORs it with that
- * same status shape (see hasNotFoundStatus) — each consumer's no-errorNum
- * policy is deliberate and stays at the call site.
+ * fallback, document-repository's isDocumentNotFound ORs it with that
+ * same status shape (see hasNotFoundStatus), and gov-chat-backend's
+ * category reads consume it bare — no status fallback, a bare 404 stays
+ * a fault there. Each consumer's no-errorNum policy is deliberate and
+ * stays at the call site.
  *
  * @param {Error|Object} error - The error thrown by the driver.
  * @returns {Boolean} True when the error means "the row is not there".

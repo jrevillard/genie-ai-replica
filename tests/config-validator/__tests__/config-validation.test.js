@@ -3818,8 +3818,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   });
 
   test('the percentage form of the worker count is not satisfied by the cap', () => {
-    expect(violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd))
-      .toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
+    expect(
+      violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
+    ).toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
   });
 });
 

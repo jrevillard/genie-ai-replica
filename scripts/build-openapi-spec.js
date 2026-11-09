@@ -42,10 +42,10 @@ function buildSpec() {
   assert.ok(
     (spec.servers ?? []).some((s) => s?.url === process.env.API_URL),
     'no server entry carries the API_URL pin value — either a pin assignment' +
-      ' is missing from the env -i line in scripts/generate-api-client.sh, the' +
-      ' pin value is not a verbatim absolute http(s) URL (swagger-definition.js' +
-      ' normalizes or rejects it), or swagger-definition.js changed how it' +
-      ' builds the servers list.'
+      ' is missing from the env -i line in scripts/generate-api-client.sh, or' +
+      ' swagger-definition.js no longer serves the pin verbatim (it normalizes' +
+      ' or rejects non-absolute http(s) values, or changed how it builds the' +
+      ' servers list).'
   );
   const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
   for (const [label, url] of [

@@ -74,8 +74,9 @@ function releaseSlot() {
  * with the crawl 'source_document' stamp) and stamp okf_repo_id onto each
  * source file's doc-repo metadata (Story 3.6's additive field) so the UI can
  * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
- * them, it does not die for them. */
-async function stampSources(repoId, fileIds) {
+ * them, it does not die for them. metaByKey carries the import pre-flight's
+ * per-file doc-repo metadata so no second GET is issued when it is provided. */
+async function stampSources(repoId, fileIds, metaByKey) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
   // repo id so doc-repo's serve paths can refuse locally (no okf-server
@@ -98,10 +99,9 @@ async function stampSources(repoId, fileIds) {
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
-      const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
-        timeout: 10000
-      });
-      const f = docRepoFileOf(res);
+      // The import pre-flight already read every file's metadata — reuse the
+      // carried result; the GET remains for callers without a cache.
+      const f = (metaByKey && metaByKey.get(file_id)) || (await fetchDocMeta(file_id));
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -597,7 +597,8 @@ async function runDocumentsConversion(job) {
         baseResource: `${config.documentRepository.url}/api/files/${file_id}`
       };
       try {
-        const f = await fetchDocMeta(file_id);
+        // The pre-flight metadata rides on the job — no second GET here.
+        const f = (job.source_metas && job.source_metas.get(file_id)) || (await fetchDocMeta(file_id));
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;
@@ -895,6 +896,10 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // re-uploaded copies of one corpus can never fork the knowledge base.
   const db = await getDb();
   const candidateHashes = [];
+  // ONE metadata fetch per file: this pre-flight read is the import's single
+  // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
+  // the conversion (job.source_metas).
+  const metaByKey = new Map();
   for (const file_id of file_ids) {
     let meta;
     try {
@@ -902,6 +907,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         timeout: 10000
       });
       meta = docRepoFileOf(res);
+      metaByKey.set(file_id, meta);
     } catch (err) {
       throw Object.assign(
         new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
@@ -971,9 +977,9 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     started_at: new Date().toISOString()
   };
   await patchConversion(repo_id, queued);
-  await stampSources(repo_id, file_ids);
+  await stampSources(repo_id, file_ids, metaByKey);
 
-  const job = { repo_id, file_ids, requested_name, classification, actor: actor || null };
+  const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {
     await acquireSlot();
     try {

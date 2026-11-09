@@ -139,11 +139,37 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
       onRelatedDocumentsUpdate: (_) {},
     );
 
+/// The MaterialApp shell every widget-test mount shares: the i18n
+/// singleton drives the locale (the AnimatedBuilder rebuilds the app on
+/// a change), and the app's OWN ThemeData — a widget under a plain
+/// MaterialApp resolves text themes the shipped theme does not carry
+/// (the trap the mobile Visual Fidelity rule names). ONE copy so a
+/// mechanics change (a delegate, the theme resolution) lands once.
+///
+/// [buildHome] is a BUILDER, not a widget: the shell rebuilds the screen
+/// on every locale change, and a widget instance reused across rebuilds
+/// is not rebuilt at all.
+Widget testAppShell(
+  Widget Function() buildHome, {
+  List<Locale> supportedLocales = const [Locale('en')],
+  ThemeData? theme,
+}) => AnimatedBuilder(
+  animation: I18nService(),
+  builder: (context, _) => MaterialApp(
+    theme: theme ?? ThemeManager().lightTheme,
+    locale: I18nService().currentLocale,
+    supportedLocales: supportedLocales,
+    localizationsDelegates: const [
+      FallbackMaterialLocalizationsDelegate(),
+      FallbackWidgetsLocalizationsDelegate(),
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    home: buildHome(),
+  ),
+);
+
 /// Mounts the chatbot under the harness every chatbot widget test
-/// shares: the mocked APIs, the i18n singleton driving the locale, and
-/// the app's OWN ThemeData — a widget under a plain MaterialApp
-/// resolves text themes the shipped theme does not carry (the trap the
-/// mobile Visual Fidelity rule names).
+/// shares: the mocked APIs, and the app shell above.
 ///
 /// [buildHome] replaces the default screen — a test that mounts its own
 /// widgets around the chatbot (a service tree panel above it) passes
@@ -177,19 +203,10 @@ Future<void> pumpChatBot(
         if (queriesApi != null)
           queriesApiProvider.overrideWithValue(queriesApi),
       ],
-      child: AnimatedBuilder(
-        animation: I18nService(),
-        builder: (context, _) => MaterialApp(
-          theme: theme ?? ThemeManager().lightTheme,
-          locale: I18nService().currentLocale,
-          supportedLocales: supportedLocales,
-          localizationsDelegates: const [
-            FallbackMaterialLocalizationsDelegate(),
-            FallbackWidgetsLocalizationsDelegate(),
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: homeWith(chatBotUnderTest(chatKey)),
-        ),
+      child: testAppShell(
+        () => homeWith(chatBotUnderTest(chatKey)),
+        supportedLocales: supportedLocales,
+        theme: theme,
       ),
     ),
   );

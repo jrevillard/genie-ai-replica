@@ -1,16 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/main.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
 
@@ -27,19 +23,6 @@ import 'helpers/chatbot_harness.dart';
 // positional arguments — both String — compiles and would stay green
 // everywhere else). This file pumps the real MainScreen, drives the real
 // tree gesture, and asserts what lands in the chatbot.
-
-/// The single-category tree the scenario resolves against: one category
-/// with one labelled service (index 0).
-List<dynamic> sidebarTree() => <dynamic>[
-  {
-    'catKey': '2',
-    'name': 'Civil Registry',
-    'nameEN': 'Civil Registry',
-    'children': [
-      {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
-    ],
-  },
-];
 
 /// The REAL bundled configuration with NO Quick Help buttons: the
 /// chatbot still loads a config, but the context-bar assertions must not
@@ -70,23 +53,12 @@ Future<void> pumpMainScreen(WidgetTester tester, http.BaseClient mock) async {
           ChatHistoryApi(ApiClient()..client = mock),
         ),
       ],
-      child: AnimatedBuilder(
-        animation: I18nService(),
-        builder: (context, _) => MaterialApp(
-          theme: ThemeManager().lightTheme,
-          locale: I18nService().currentLocale,
-          supportedLocales: const [Locale('en')],
-          localizationsDelegates: const [
-            FallbackMaterialLocalizationsDelegate(),
-            FallbackWidgetsLocalizationsDelegate(),
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: MainScreen(
-            user: const {'id': 'user-1'},
-            isDarkMode: false,
-            toggleTheme: () {},
-            onLogout: () {},
-          ),
+      child: testAppShell(
+        () => MainScreen(
+          user: const {'id': 'user-1'},
+          isDarkMode: false,
+          toggleTheme: () {},
+          onLogout: () {},
         ),
       ),
     ),
@@ -125,7 +97,10 @@ void main() {
 
   testWidgets('a sidebar tree selection reaches the chatbot context through '
       'MainScreen\'s pass-through', (tester) async {
-    await pumpMainScreen(tester, QuickHelpTreeMockClient(sidebarTree()));
+    await pumpMainScreen(
+      tester,
+      QuickHelpTreeMockClient(quickHelpTreeFixture()),
+    );
 
     // Open the sidebar the way the app offers it: the left-edge swipe
     // (drawerEdgeDragWidth is 40, so the drag starts inside the edge).

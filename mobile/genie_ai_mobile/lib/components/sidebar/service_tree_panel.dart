@@ -668,8 +668,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       // The tile's own Material: the ListTile paints its background and
       // ink on the nearest Material ancestor, and the decorated Container
       // between them would hide both (the framework's ListTile warning).
+      // The radius keeps the newly visible ink clipped to the tile's
+      // rounded decoration.
       child: Material(
         type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(DsRadii.md),
         child: ListTile(
           // Test handle keyed by the panel's own selection identity
           // (category key + original child index — the same key space

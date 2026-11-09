@@ -234,12 +234,21 @@ except (OSError, ValueError):
         try:
             with open(_registry_default, encoding="utf-8") as _handle:
                 _link_target = _handle.read().strip()
-        except OSError:
+        except (OSError, ValueError):
             _link_target = ""
     _resolved = ""
     if _link_target:
         _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_default), _link_target))
     if _resolved and os.path.isfile(_resolved):
+        if "LANGUAGE_REGISTRY_FILEPATH" in os.environ:
+            # An explicitly set override that does not parse is being
+            # replaced: say so, or the operator believes their registry was
+            # exercised when the checked-in one was.
+            print(
+                f"conftest: LANGUAGE_REGISTRY_FILEPATH={os.environ['LANGUAGE_REGISTRY_FILEPATH']} "
+                f"does not parse as JSON; using the checked-in registry at {_resolved}",
+                file=sys.stderr,
+            )
         os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
 
 

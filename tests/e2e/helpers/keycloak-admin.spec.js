@@ -511,11 +511,7 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
   test('a 404 reset names the account as deleted between lookup and reset', async () => {
     routes = [
       ['POST', USERS_PATH, { status: 409, data: null }],
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { status: 404, data: null }],
     ];
 
@@ -778,11 +774,7 @@ test.describe('convergeUser keeps a transport break retryable', () => {
     // provisioning dies on a blip the budget exists to survive.
     routes = [
       ['POST', USERS_PATH, { status: 409, data: null }],
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
       ['POST', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }],
@@ -802,11 +794,7 @@ test.describe('convergeUser keeps a transport break retryable', () => {
     // the transient verdict, or the retry budget cannot see it.
     routes = [
       ['POST', USERS_PATH, { status: 409, data: null }],
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { throws: new Error('socket hang up') }],
     ];
 

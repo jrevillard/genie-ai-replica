@@ -59,7 +59,8 @@ except ValueError:
     except ValueError:
         _link_target = _fallback_body.strip()
         if _link_target:
-            # Absolute: the env value must not depend on the working
+            # Resolve the target against the chatqna dir and store an
+            # absolute path, so the env value never depends on the working
             # directory surviving until the module import.
             _resolved = os.path.abspath(os.path.join(os.path.dirname(_registry_default), _link_target))
     if _resolved and os.path.isfile(_resolved):

@@ -44,10 +44,12 @@ function makeBearer(scopes = [], roles = [], sub = 'user-1') {
   return `Bearer ${b64url({ alg: 'none' })}.${b64url(payload)}.sig`;
 }
 
-/** Decode a bearer header's payload (the fixtures are synthetic — unverified). */
+/** Decode a bearer header's payload (the fixtures are synthetic — unverified).
+ *  Mirrors the production decoder: a malformed bearer yields null, not a throw. */
 function payloadOf(bearer) {
   const token = String(bearer || '').replace(/^Bearer\s+/i, '');
-  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  const part = token.split('.')[1];
+  return part ? JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) : null;
 }
 
 const HYBRID_CONFIG = {
@@ -194,7 +196,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
   it('bearer isolation: two callers with different scopes get their own graph sets', async () => {
     const authzFor = (scopes) => ({ ...AUTHZ_A, graph_names: scopes });
-    const scopesOf = (authHeader) => payloadOf(authHeader).okf_scopes || [];
+    const scopesOf = (authHeader) => payloadOf(authHeader)?.okf_scopes || [];
     axios.get.mockImplementation((path, config) => {
       if (path.endsWith('/api/okf/authz/graphs')) {
         const scopes = scopesOf(config?.headers?.Authorization);
@@ -319,7 +321,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
     // observable — one shared payload would hide a cross-caller bleed behind
     // identical bytes.
     axios.get.mockImplementation((path, config) => {
-      const sub = payloadOf(config?.headers?.Authorization).sub;
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
       const serving = [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }];
       if (path.endsWith('/api/okf/authz/graphs')) {
         return okfGetResponse({

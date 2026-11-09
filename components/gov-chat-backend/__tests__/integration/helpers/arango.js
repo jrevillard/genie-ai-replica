@@ -18,10 +18,11 @@
 
 // The server wait's own budget must fit inside Jest's hook timeout, or
 // the hook dies with a generic timeout and the wait's diagnostic never
-// prints — each suite passes WAIT_BUDGET_MS * 1.5 as the beforeAll hook
+// prints — each suite passes HOOK_TIMEOUT_MS as the beforeAll hook
 // timeout (the hook that waits is what needs the budget; the per-test
 // timeout stays at the component default).
 const WAIT_BUDGET_MS = 120000;
+const HOOK_TIMEOUT_MS = WAIT_BUDGET_MS * 1.5;
 
 // The HTTP lifecycle calls carry the same credentials the driver does.
 // No user (the local no-auth database): no header at all.
@@ -116,6 +117,7 @@ function databaseConfig(url, databaseName, user, password) {
 
 module.exports = {
   WAIT_BUDGET_MS,
+  HOOK_TIMEOUT_MS,
   authHeader,
   waitForServer,
   recreateDatabase,

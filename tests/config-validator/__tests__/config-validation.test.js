@@ -3746,11 +3746,13 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   };
 
   test('every product-component jest invocation carries both cap flags', () => {
-    // The guard must SEE the class it protects: four capped jobs today.
+    // The guard must SEE the class it protects: five capped jobs today,
+    // test:backend-arango among them (a job deleted from the CI file
+    // would otherwise shrink this set without failing anything).
     // A silent-empty pass here would mean the extraction broke, not that
     // the pipeline is compliant.
     const invocations = toInvocations(ciBlocks());
-    expect(invocations.length).toBeGreaterThanOrEqual(4);
+    expect(invocations.length).toBeGreaterThanOrEqual(5);
 
     expect(toViolations(invocations).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
   });

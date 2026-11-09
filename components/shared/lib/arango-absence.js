@@ -9,6 +9,17 @@
  * an HTTP 404, and reporting them as "no such document" renders a broken
  * deployment as an empty result.
  *
+ * MEASURED against arangojs 10.1.2 + ArangoDB:
+ *   collection.document('MISSING')      -> errorNum 1202, code 404 -> absence
+ *   collection('nope').document()       -> errorNum 1203, code 404 -> FAULT
+ *   collection.firstExample(no match)   -> errorNum 1204           -> absence
+ * All three arrive with code 404 — only the errorNum (and, for the 3.12 miss
+ * below, the server's own message) separates absence from fault. 1203 (a
+ * MISSING COLLECTION, an infrastructure/configuration fault) deliberately
+ * stays OUT of the predicate so it keeps reaching the error log. The 1204
+ * shape cannot be provoked from arangojs 10 (firstExample was removed) — it
+ * is pinned in the fixtures of okf-server/__tests__/concept-meta-service.test.js.
+ *
  * It lives in its own module because every component that has to tell an
  * absence from a fault must use the SAME rules: ArangoDB 3.12 moved the
  * simple-query miss from 1204 to errorNum 404 with the message 'no match',

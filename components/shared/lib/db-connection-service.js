@@ -9,30 +9,10 @@ const { withBackgroundSpan } = require('./tracing-background');
 const { AqlToSqlTranslator } = require('./aql-to-sql');
 const { ArangoToArcadeGraphTranslator } = require('./arango-to-arcade-graph');
 
-// The canonical absence classifier lives in shared/lib/arango-absence.js:
-// every component that must tell an absence from a fault uses the SAME rules
-// (ArangoDB 3.12 moved the simple-query miss from 1204 to errorNum 404 with
-// the message 'no match', and each copy had to be found and fixed in
-// lockstep). The local name is kept so the call sites below stay unchanged.
-//
-// MEASURED against arangojs 10.1.2 + ArangoDB:
-//   collection.document('MISSING') -> errorNum 1202, code 404  -> expected
-//   collection('nope').document()   -> errorNum 1203, code 404  -> NOT expected
-//
-// 1203 is a MISSING COLLECTION — an infrastructure/configuration fault, and it
-// deliberately stays out of the predicate so it keeps reaching the error log.
-// All three arrive with code 404, so the errorNum is what separates them.
-//
-// 1204 ("no match") is ALSO expected: the driver throws it when a query matches
-// nothing (firstExample). That method was removed in arangojs 10, so it cannot
-// be provoked from this driver — the code is recorded in the fixtures of
-// okf-server/__tests__/concept-meta-service.test.js, which is where the
-// behaviour is actually pinned. It was nearly lost by trusting one measurement
-// over the fixtures; the full suite is what caught it.
-//
-// The message fallback is deliberately narrow — it is not the general
-// /not found/i used elsewhere, which would also swallow 1203 and gateway
-// route-not-found.
+// The canonical absence classifier lives in shared/lib/arango-absence.js —
+// one owner for the rules (its header carries the measured driver shapes and
+// the narrowness rationale). The local name is kept so the call sites below
+// stay unchanged.
 const { isExpectedAbsence: _isExpectedAbsence } = require('./arango-absence');
 
 /**

@@ -24,25 +24,11 @@
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock(
-  '../../shared-lib',
-  () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
-    },
-    // The service classifies an absence with the canonical predicate, imported
-    // from the same barrel this mock replaces. Mocking the connection without
-    // it would turn a missing row into a TypeError.
-    dbService: {
-      getConnection: jest.fn()
-    },
-    isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
-  }),
-  { virtual: true }
-);
+// Delegate the barrel surface to the central mock (same pattern as
+// service-category-service.test.js): one home for logger / dbService /
+// the real canonical isExpectedAbsence, so a barrel-surface change cannot
+// drift this suite away from the rest.
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
 const {
   WAIT_BUDGET_MS,

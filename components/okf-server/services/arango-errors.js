@@ -44,17 +44,14 @@
  * the echoed 404 AND the server's own 'no match' errorMessage. 1203 keeps its
  * own errorNum and stays excluded.
  */
-// ABSENCE-CLASSIFIER OWNER (DW-433 / #1163): the errorNum semantics above —
-// 1202 / 1204 / 404+'no match', every other errorNum a fault — have ONE
-// owner, shared/lib/arango-absence.js (deep import below: this component
-// never loads the shared barrel). This file keeps only its own no-errorNum
-// arm — the STATUS fallback: a raw HTTP or driver-level error carries the
-// 404 on .code / .statusCode, and that shape counts as absence here while
-// the canonical deliberately answers it with the narrow 'no match' message
-// rule (a bare 404 stays a fault on the backend/dbService paths).
-// repository-service.js ARANGO_NOT_FOUND / notFoundAsNull remains the
-// OLDER, LAXER control-flow twin (bare 404 and /not found/i count), kept
-// deliberately for the registry CRUD paths.
+// ABSENCE CLASSIFIER (DW-433 / #1163): the errorNum semantics — measured
+// above — have ONE owner, shared/lib/arango-absence.js (deep import below:
+// this component never loads the shared barrel). This file keeps only its
+// no-errorNum arm, the STATUS fallback, where it deliberately diverges from
+// the canonical (there, a bare 404 without the server's 'no match' message
+// stays a fault). repository-service.js ARANGO_NOT_FOUND / notFoundAsNull
+// remains the OLDER, LAXER control-flow twin (bare 404 and /not found/i
+// count), kept deliberately for the registry CRUD paths.
 const { isRetriableUpstreamError, RETRIABLE_STATUS } = require('./llm-transient-errors');
 const { isExpectedAbsence } = require('../shared-lib/arango-absence');
 

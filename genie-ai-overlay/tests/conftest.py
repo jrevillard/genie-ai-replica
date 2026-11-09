@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 # ---------------------------------------------------------------------------
 # Language-registry dereference for checkouts without symlink support
 # ---------------------------------------------------------------------------
@@ -33,22 +34,22 @@ import pytest
 # warnings.warn, not stderr prints: pytest's default capture swallows
 # import-time stderr, and these diagnostics only surface in the warnings
 # summary.
+def _read_text(path):
+    """Read a small text file, tolerating absence and undecodable bytes."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except (OSError, ValueError):  # missing/unreadable file; undecodable bytes
+        return ""
+
+
 _registry_default = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json"))
 _probe_path = os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default)
-_body = ""
+_body = _read_text(_probe_path)
 try:
-    with open(_probe_path, encoding="utf-8") as _handle:
-        _body = _handle.read()
     json.loads(_body)
-except (OSError, ValueError):
-    if _probe_path == _registry_default:
-        _fallback_body = _body
-    else:
-        try:
-            with open(_registry_default, encoding="utf-8") as _handle:
-                _fallback_body = _handle.read()
-        except (OSError, ValueError):
-            _fallback_body = ""
+except ValueError:
+    _fallback_body = _body if _probe_path == _registry_default else _read_text(_registry_default)
     _resolved = ""
     try:
         json.loads(_fallback_body)

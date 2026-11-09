@@ -19,7 +19,7 @@ import pytest
 import chatqna.genieai_chatqna as chatqna_module
 
 # The registry the module actually reads (conftest resolves it past a
-# degenerate symlink on checkouts without symlink support), not a
+# degenerate symlink on checkouts without symlink support), not an
 # independently recomputed path: these tests pin the maps production uses.
 LANGUAGE_REGISTRY_PATH = chatqna_module.LANGUAGE_REGISTRY_FILEPATH
 

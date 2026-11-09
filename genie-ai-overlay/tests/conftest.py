@@ -212,25 +212,27 @@ sys.modules.setdefault("docling.document_converter", MagicMock())
 # every request-path language resolves as unknown — 70+ chatqna
 # language-surface tests fail with the reporter's signature (a declared
 # English query landing on fallback_error/translated instead of
-# passthrough_english). Follow the link text when the checked-in file is not
-# valid JSON, the same dereference the chatqna image performs at build time
-# (COPY follows symlinks). A healthy checkout is untouched: the file parses,
-# no env var is set, and the module keeps its own default.
-if "LANGUAGE_REGISTRY_FILEPATH" not in os.environ:
-    _registry_path = os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json")
+# passthrough_english). Validate the registry file the module will actually
+# read (an operator-provided LANGUAGE_REGISTRY_FILEPATH or the checked-in
+# path); when it does not parse, follow the link text of the checked-in
+# path — the same resolution the chatqna image performs at build time (its
+# Dockerfile copies the backend registry file explicitly, not the symlink).
+# A healthy checkout is untouched: the effective file parses, no env var is
+# set, and the module keeps its own default.
+_registry_default = os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json")
+try:
+    with open(os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default), encoding="utf-8") as _handle:
+        json.load(_handle)
+except Exception:
     try:
-        with open(_registry_path, encoding="utf-8") as _handle:
-            json.load(_handle)
-    except Exception:
-        try:
-            with open(_registry_path, encoding="utf-8") as _handle:
-                _link_target = _handle.read().strip()
-        except OSError:
-            _link_target = ""
-        if _link_target:
-            _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_path), _link_target))
-            if os.path.isfile(_resolved):
-                os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
+        with open(_registry_default, encoding="utf-8") as _handle:
+            _link_target = _handle.read().strip()
+    except OSError:
+        _link_target = ""
+    if _link_target:
+        _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_default), _link_target))
+        if os.path.isfile(_resolved):
+            os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
 
 
 # ---------------------------------------------------------------------------

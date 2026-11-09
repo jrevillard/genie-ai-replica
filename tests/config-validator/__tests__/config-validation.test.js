@@ -14,6 +14,7 @@ const {
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
+const { extractCiShellBlocks } = require('../validators/extract-ci-shell');
 const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
@@ -3660,6 +3661,52 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
         })
       ])
     );
+  });
+});
+
+// --- Jest worker-memory cap contract (#1419) ---
+// The full component jest suites spawn one worker per test file, and a
+// worker's heap grows unboundedly over a run: on the runner's 4 GB job
+// cgroup a bare jest run OOMs mid-suite (#1404), and --maxWorkers=2 alone
+// was not enough either — the measured fix is BOTH flags on every
+// product-component invocation (#1412):
+//   npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB ...
+// Nothing else in CI checks what a script command IS (the shell gate only
+// runs bash -n), so a dropped flag used to re-enter the OOM class with no
+// failing job and no failing test. This contract fails the suite instead.
+describe('the jest worker-memory cap contract (#1419)', () => {
+  // `npm run test:ci` is NOT an invocation — the matcher keys on the
+  // pass-through (`npm test`) and direct (`npx jest`) spellings only.
+  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b)/;
+
+  // Out of the measured OOM class, pinned here rather than silently
+  // unmatched — a rename or a scope change to either job must fail this
+  // suite and force a conscious re-decision, not slip past the contract.
+  const EXEMPT_JOBS = new Set([
+    // One test file: jest spawns at most one worker per test file, so the
+    // run cannot fan out to the worker count the cap exists to bound.
+    'test:backend-arango',
+    // The validator harness itself (tests/config-validator), not a product
+    // component suite — its handful of test files never measured into the
+    // #1404/#1412 OOM class.
+    'config:validate'
+  ]);
+
+  test('every product-component jest invocation carries both cap flags', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+
+    const invocations = blocks.filter((b) => JEST_INVOCATION.test(b.text));
+    // The guard must SEE the class it protects: four capped jobs today.
+    // A silent-empty pass here would mean the extraction broke, not that
+    // the pipeline is compliant.
+    expect(invocations.length).toBeGreaterThanOrEqual(4);
+
+    const violations = invocations
+      .filter((b) => !EXEMPT_JOBS.has(b.owner))
+      .filter((b) => !b.text.includes('--maxWorkers=2') || !b.text.includes('--workerIdleMemoryLimit=500MB'));
+    expect(violations.map((b) => `${b.owner} (${b.key}): ${b.text.slice(0, 80)}`)).toEqual([]);
   });
 });
 

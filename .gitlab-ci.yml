@@ -3370,13 +3370,6 @@ docs:validate:
 
 test:backend:
   extends: .test_node
-  # sharp's install downloads libvips + its native binary from GitHub release
-  # assets, which are unreachable from the CI runner container (connection
-  # resets with "socket hang up"). Mirror both to npmmirror (verified reachable
-  # from the runner). CI-only: local devs keep the default hosts.
-  variables:
-    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
-    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
     # shared/lib must install too — backend requires shared/lib/victorialogs-transport
     # which requires winston-transport. Without shared/lib/node_modules, the test
@@ -3392,16 +3385,8 @@ test:backend:
     # --maxWorkers=2 alone left the per-worker heap growth unbounded.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  cache:
-    - key:
-        files:
-          - components/gov-chat-backend/package-lock.json
-        prefix: test-backend
-      paths:
-        - components/gov-chat-backend/node_modules/
-      fallback_keys:
-        - "test-backend-$CI_DEFAULT_BRANCH"
-        - "test-backend-"
+  # No cache (#1528): npm ci deletes node_modules before installing, so a
+  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/gov-chat-backend/reports/jest-backend.xml
@@ -3500,16 +3485,8 @@ test:frontend:
     # worker whose heap crosses the cap, keeping the job inside the limit.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  cache:
-    - key:
-        files:
-          - components/gov-chat-frontend/package-lock.json
-        prefix: test-frontend
-      paths:
-        - components/gov-chat-frontend/node_modules/
-      fallback_keys:
-        - "test-frontend-$CI_DEFAULT_BRANCH"
-        - "test-frontend-"
+  # No cache (#1528): npm ci deletes node_modules before installing, so a
+  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/gov-chat-frontend/reports/jest-frontend.xml
@@ -3535,16 +3512,8 @@ test:doc-repo:
     # cap is in #1412.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  cache:
-    - key:
-        files:
-          - components/document-repository/package-lock.json
-        prefix: test-doc-repo
-      paths:
-        - components/document-repository/node_modules/
-      fallback_keys:
-        - "test-doc-repo-$CI_DEFAULT_BRANCH"
-        - "test-doc-repo-"
+  # No cache (#1528): npm ci deletes node_modules before installing, so a
+  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/document-repository/reports/jest-docrepo.xml
@@ -3576,16 +3545,8 @@ test:okf-server:
     # Same worker-memory cap as test:frontend — see its note there (#1404).
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  cache:
-    - key:
-        files:
-          - components/okf-server/package-lock.json
-        prefix: test-okf-server
-      paths:
-        - components/okf-server/node_modules/
-      fallback_keys:
-        - "test-okf-server-$CI_DEFAULT_BRANCH"
-        - "test-okf-server-"
+  # No cache (#1528): npm ci deletes node_modules before installing, so a
+  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/okf-server/reports/jest-okf-server.xml

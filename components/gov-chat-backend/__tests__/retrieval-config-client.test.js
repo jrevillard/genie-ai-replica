@@ -1,11 +1,11 @@
 'use strict';
 
 // Story 1.1 — the BFF-side retrieval-config client (cache seam contract).
-// Pins: cache hit/miss/expiry, okf-server 5xx → last-known-good, 401
-// propagation (never cached), last-known-good default, bearer (scope)
-// isolation, no-eviction within a window, 403 → legacy default.
-// DW-428: a realm-role grant of a scope keys the claim-scoped cache entry,
-// never the scope-less one.
+// Pins: cache hit/miss/expiry, okf-server 5xx → the fail-closed composition
+// carrying the last-known mode, 401 propagation (never cached), legacy
+// default, bearer (scope) isolation, no-eviction within a window, 403 →
+// legacy default. DW-428: a realm-role grant of a scope keys the
+// claim-scoped cache entry, never the scope-less one.
 
 require('./setup-env');
 
@@ -302,12 +302,20 @@ describe('retrieval-config-client (Story 1.1)', () => {
   });
 
   it('malformed success body: degrades to the legacy default instead of throwing', async () => {
-    axios.get.mockReturnValue(okfGetResponse({ unexpected: true }));
+    // A vacuous mode (empty string passes a typeof check) is as garbled as
+    // an unexpected body — the deployment posture must never be an empty
+    // label, on success or in the last-known-good copy.
+    axios.get
+      .mockReturnValueOnce(okfGetResponse({ unexpected: true }))
+      .mockReturnValueOnce(okfGetResponse({ ...HYBRID_CONFIG, config: { mode: '' }, engaged: true }));
 
     const config = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    const vacuousMode = await client.getRetrievalConfig(makeBearer(['okf:t:a:read', 'okf:t:b:read']));
 
     expect(config.config.mode).toBe('legacy');
     expect(config.engaged).toBe(false);
+    expect(vacuousMode.config.mode).toBe('legacy');
+    expect(vacuousMode.engaged).toBe(false);
   });
 
   it('scope-equivalence: scope ORDER does not change the cache key', async () => {

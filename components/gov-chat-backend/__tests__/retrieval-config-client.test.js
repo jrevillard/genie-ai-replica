@@ -180,6 +180,12 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(degraded.serving_repo_ids).toEqual([]);
     expect(degraded.serving_graphs).toEqual([]);
     expect(degraded.warnings).toEqual([]);
+
+    // The failure-resolved value is cached for the window remainder — the
+    // degraded caller does not re-burn an upstream attempt on every call.
+    const again = await client.getRetrievalConfig(bearer);
+    expect(again).toBe(degraded);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the success + the one failure attempt
   });
 
   it("okf-server 5xx cross-caller: a failing caller is never served another caller's serving view", async () => {

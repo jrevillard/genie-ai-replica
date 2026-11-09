@@ -26,7 +26,8 @@
 // mode (source 'bff-last-known-good'), else the legacy default
 // (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
-// remainder of the TTL window — one upstream attempt per caller per window.
+// remainder of the TTL window — one upstream attempt per scope-equivalent
+// caller per window, best-effort under concurrent cold-window misses.
 // The last-known-good carries only the deployment-global posture (the
 // mode), never a per-caller view — the full invariant is stated at the
 // write site in getRetrievalConfig's onSuccess. The per-caller graph set

@@ -38,16 +38,19 @@ const GRAPH = `OKF_${REPO}`;
  *
  * `repos` maps a repo id to the concept ids it stores. The boundary probe is
  * simulated FAITHFULLY: the stored rows are answered from the repo the query
- * filters on — and from EVERY repo when the query does not filter on the repo
- * at all. A probe that lost its repo filter would therefore answer with a
- * concept of another repository, and the G22 test would fail.
+ * filters on — and from EVERY repo when the query does not. The scope check is
+ * the CONJUNCTION, not the presence of either condition: a probe that lost its
+ * repo filter, or that turned the `AND` into an `OR`, answers with concepts of
+ * other repositories, and the G22 test fails.
  */
 function programQueries(metaRows, repos, options = {}) {
   const cleanupKeys = options.cleanupKeys || [];
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
-    if (aql.includes('okf_concepts_meta') && aql.includes('m.concept_id IN')) {
-      const repoScoped = /m\.repo_id\s*==\s*@repo_id/.test(aql);
+    if (aql.includes('okf_concepts_meta') && aql.includes('FOR c IN @candidates')) {
+      // Exactly the conjunction the production probe must keep — a weakened
+      // operator or a dropped filter widens the answer to every repository.
+      const repoScoped = aql.includes('m.repo_id == @repo_id AND m.concept_id == c');
       const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
       const stored = new Set();
       for (const id of repoIds) for (const cid of repos[id] || []) stored.add(cid);
@@ -75,10 +78,10 @@ function metaRow(overrides = {}) {
   };
 }
 
-/** The boundary probe: the queries that look a concept id up. */
+/** The boundary probe: the queries that look the link targets up. */
 const probes = () =>
   mockDb.query.mock.calls.filter(
-    ([aql]) => typeof aql === 'string' && aql.includes('m.concept_id IN') && aql.includes('okf_concepts_meta')
+    ([aql]) => typeof aql === 'string' && aql.includes('FOR c IN @candidates') && aql.includes('okf_concepts_meta')
   );
 
 beforeEach(() => {
@@ -296,16 +299,20 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
         typeof aql === 'string' &&
         aql.includes('okf_concepts_meta') &&
         aql.includes('RETURN m.concept_id') &&
-        !aql.includes('m.concept_id IN')
+        !aql.includes('FOR c IN @candidates')
     );
     expect(wholeSetReads).toHaveLength(0);
-    // One probe query for all the targets: the IN list is index-served per
-    // value, so the row reads scale with the links and the round trips stay
-    // at one per concept.
+    // One probe query for all the targets: a nested FOR over the candidate
+    // list, each candidate a seek on the unique index, so the row reads scale
+    // with the links and the round trips stay at one per concept.
     const found = probes();
     expect(found).toHaveLength(1);
     const [aql, bindVars] = found[0];
-    expect(aql).toContain('okf_concepts_meta');
+    expect(aql).toContain('FOR c IN @candidates FOR m IN okf_concepts_meta');
+    // The conjunction IS the boundary: an OR (or a dropped filter) lets a
+    // concept of another repository answer the probe — the mock then answers
+    // unscoped and the G22 test fails.
+    expect(aql).toContain('m.repo_id == @repo_id AND m.concept_id == c');
     expect(bindVars.repo_id).toBe(REPO);
     expect(bindVars.candidates).toEqual(links.flatMap((l) => [l.to_concept_id, `concepts/${l.to_concept_id}`]));
   });

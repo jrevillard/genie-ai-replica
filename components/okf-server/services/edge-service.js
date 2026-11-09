@@ -221,9 +221,11 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // so prefixed stored ids match bare link targets. PROBED on the
     // (repo_id, concept_id) unique index, for the link targets ONLY: the
     // whole-set read made an N-concept drain pay N x N row reads (DW-450).
-    // One query for all the targets — the IN list is index-served per value,
-    // so the row reads scale with the links, and the round trips stay at one
-    // per concept.
+    // One query for all the targets — a nested FOR over the candidate list,
+    // each candidate a seek on the unique index (an IN list loses the compound
+    // index past a few hundred candidates; the seek stays covering at every
+    // size), so the row reads scale with the links and the round trips stay
+    // at one per concept.
     const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
     const repoConceptIds = new Set();
     try {
@@ -233,16 +235,14 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
         const candidates = targetIds.flatMap((t) => [t, `concepts/${t}`]);
         const rows = await (
           await db.query(
-            'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id IN @candidates RETURN m.concept_id',
+            'FOR c IN @candidates FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id == c RETURN m.concept_id',
             { repo_id, candidates }
           )
         ).all();
-        const targets = new Set(targetIds);
-        for (const row of rows) {
-          if (!row || !row.concept_id) continue;
-          const id = normalizeConceptId(row.concept_id);
-          if (targets.has(id)) repoConceptIds.add(id);
-        }
+        // Every hit is one of the candidates, whose normalized form IS the
+        // target that produced it — the normalized id is what the boundary
+        // check below compares against.
+        for (const row of rows) repoConceptIds.add(normalizeConceptId(row && row.concept_id));
       }
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });

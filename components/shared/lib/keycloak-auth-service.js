@@ -174,7 +174,7 @@ async function init(idpUrl) {
     // skipped so an alias can never widen acceptance past the pin. The JWKS
     // override still applies: it changes WHERE the keys come from, never
     // WHO is accepted.
-    // Primary-realm gated like the alias branches below (review round 2):
+    // Primary-realm gated like the alias branches below:
     // the pin names ONE issuer of the PRIMARY realm — an additional realm's
     // init re-running this branch would overwrite the pinned entry with ITS
     // realm's JWKS, the same clobber class the alias branches guard against.

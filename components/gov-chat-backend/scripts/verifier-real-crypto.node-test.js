@@ -228,7 +228,7 @@ test('checkUserStatusInKeycloak is present on the unified verifier', () => {
 });
 
 test('pin + additional realms: partner init must not clobber the pinned primary entry', async () => {
-  // Review round 2: the pin branch is primary-realm gated — the partner
+  // The pin branch is primary-realm gated — the partner
   // realm's init re-running it would overwrite the pinned issuer's JWKS with
   // the partner realm's keys (the multi-realm clobber class the alias
   // branches guard against).
@@ -268,7 +268,7 @@ test('additional realms without a pin: a partner-realm token verifies against it
 });
 
 test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {
-  // An unreachable discovery host: the stub 404s every URL for this issuer.
+  // An unreachable discovery host: the stub refuses every request (503).
   const svc = loadVerifier({ KEYCLOAK_URL: 'http://keycloak-unreachable:8080' });
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
   await assert.rejects(

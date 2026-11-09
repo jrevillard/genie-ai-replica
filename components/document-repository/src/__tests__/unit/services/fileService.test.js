@@ -1,23 +1,11 @@
 'use strict';
 
-// Mock shared-lib before requiring anything
-jest.mock('../../../__tests__/__mocks__/shared-lib', () => ({}), { virtual: true });
-jest.mock(
-  '../../../../shared-lib',
-  () => ({
-    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-    // Canonical absence classifier — required from the REAL shared/lib module
-    // so the not-found boundary is single-sourced (wave 8 mirrored it into a
-    // fixture; DW-433/#1163 found the fixture had already drifted behind the
-    // canonical). fileService's isDocumentNotFound delegates to it; a bare
-    // jest.fn() would return undefined and silently shift that boundary.
-    dbService: {
-      getConnection: jest.fn()
-    },
-    isExpectedAbsence: require('../../../../../shared/lib/arango-absence').isExpectedAbsence
-  }),
-  { virtual: true }
-);
+// shared-lib needs NO jest.mock here: the jest moduleNameMapper resolves
+// EVERY shared-lib require (the barrel and this file's direct requires of the
+// mock file alike) to src/__tests__/__mocks__/shared-lib.js, which re-exports
+// the REAL canonical isExpectedAbsence. An inline factory here duplicated the
+// mock file's surface and could drift from it — the same drift class
+// DW-433/#1163 just fixed (wave 8's hand-mirrored fixture).
 
 // Mock fs
 jest.mock('fs', () => ({

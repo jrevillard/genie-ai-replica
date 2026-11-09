@@ -431,6 +431,20 @@ const repoOkfService = {
     };
   },
 
+  /** The repo's unified validation report (#1650-C): the debt card's Issues
+   *  cell opens this in place — per-concept conformance, orphans,
+   *  near-duplicate groups and unlinked citations, each with severity +
+   *  remedy. Read-only. */
+  async getRepoValidation(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/validation`);
+    const body = res && res.data ? res.data : {};
+    return {
+      issues: Array.isArray(body.issues) ? body.issues : [],
+      summary: body.summary || null,
+      generated_at: body.generated_at || null
+    };
+  },
+
   /**
    * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's
    * CURRENT content returning per-occurrence {where, type, start, end, score}

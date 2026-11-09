@@ -696,8 +696,8 @@ async function transition(repoId, action, actor, opts = {}) {
           });
           throw new LifecycleError(
             'PUBLISH_NO_CHANGES',
-            `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
-              'or retract and publish again to force a new version',
+            `nothing has changed since version ${repo.version} — edit or annotate a concept first ` +
+              '(correcting PII via scan-and-accept also counts). Retracting and re-publishing does NOT force a new version.',
             409
           );
         }

@@ -1613,6 +1613,10 @@ export default {
       empty: 'Sem conceitos em nenhum repositório que você possa ler — nada a dever.',
       readFailed: 'Não foi possível ler a dívida de conformidade.',
       truncated: 'O catálogo de repositórios excede uma página — as linhas além do limite não são mostradas.',
+      issuesTitle: 'Problemas — {name}',
+      issuesLoading: 'Lendo a lista de problemas…',
+      issuesEmpty: 'Nada a corrigir — sem problemas abertos.',
+      issuesFailed: 'Não foi possível ler a lista de problemas.',
       col: {
         repo: 'Repositório',
         concepts: 'Conceitos',
@@ -1620,6 +1624,11 @@ export default {
         stale: 'Obsoletos',
         pii: 'Ocorrências de PII',
         state: 'Estado'
+      },
+      sev: {
+        blocker: 'Bloqueante',
+        error: 'Erro',
+        warning: 'Aviso'
       }
     },
     retrieval: {

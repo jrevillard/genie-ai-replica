@@ -114,6 +114,36 @@ describe('repoOkfService', () => {
       expect(url.startsWith('/api/')).toBe(false);
     });
   });
+
+  describe('getRepoValidation (#1650-C — the debt-panel issue viewer)', () => {
+    it('GETs /okf/repos/:id/validation (no /api prefix), encoding the id', async () => {
+      mockGet.mockResolvedValue({ data: { issues: [], summary: {}, generated_at: 't' } });
+      await repoOkfService.getRepoValidation('r/1 x');
+      const url = mockGet.mock.calls[0][0];
+      expect(url).toBe('/okf/repos/r%2F1%20x/validation');
+      expect(url.startsWith('/api/')).toBe(false);
+    });
+
+    it('unwraps { issues, summary, generated_at } from the response body', async () => {
+      const issues = [
+        { type: 'conformance', severity: 'warning', concept_id: 'c-1', code: 'X', message: 'm', remedy: 'r' }
+      ];
+      mockGet.mockResolvedValue({ data: { issues, summary: { total: 1 }, generated_at: '2026-11-09T00:00:00Z' } });
+      const out = await repoOkfService.getRepoValidation('r-1');
+      expect(out.issues).toEqual(issues);
+      expect(out.summary).toEqual({ total: 1 });
+      expect(out.generated_at).toBe('2026-11-09T00:00:00Z');
+    });
+
+    it('degrades a malformed body to empty issues / null summary instead of throwing in the caller', async () => {
+      mockGet.mockResolvedValue({ data: null });
+      const out = await repoOkfService.getRepoValidation('r-1');
+      expect(out).toEqual({ issues: [], summary: null, generated_at: null });
+      mockGet.mockResolvedValue({ data: { issues: 'not-an-array' } });
+      const out2 = await repoOkfService.getRepoValidation('r-1');
+      expect(out2.issues).toEqual([]);
+    });
+  });
 });
 
 describe('repoOkfService — Story #978 editor methods', () => {

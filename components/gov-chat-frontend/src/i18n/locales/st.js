@@ -1613,6 +1613,10 @@ export default {
       empty: 'Ha ho na mehopolo repositoring eo o ka e balang — ha ho na mokoloko.',
       readFailed: 'Ha e khone ho bala mokoloko oa bo phatlela.',
       truncated: 'Katalog ya difeela ya palo e fetang leqephe le leng — mela e tlileng holimo ha e bontshoa.',
+      issuesTitle: 'Mathamatha — {name}',
+      issuesLoading: 'O bala lenane la mathamatha…',
+      issuesEmpty: 'Ha ho na ho lokisoa — ha ho mathamatha a bulehileng.',
+      issuesFailed: 'Ha e khone ho bala lenane la mathamatha.',
       col: {
         repo: 'Respositori',
         concepts: 'Mehopolo',
@@ -1620,6 +1624,11 @@ export default {
         stale: 'Feletsoeng',
         pii: 'Ho tlaleha PII',
         state: 'Boemo'
+      },
+      sev: {
+        blocker: 'Thibang',
+        error: 'Phoso',
+        warning: 'Gosa'
       }
     },
     retrieval: {

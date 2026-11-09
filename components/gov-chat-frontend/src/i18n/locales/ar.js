@@ -1590,6 +1590,10 @@ export default {
       empty: 'لا توجد مفاهيم في أي مستودع يمكنك قراءته — لا ديون مستحقة.',
       readFailed: 'تعذّرت قراءة ديون المطابقة.',
       truncated: 'يتجاوز كتالوج المستودعات صفحة واحدة — الصفوف بعد الحد لا تُعرض.',
+      issuesTitle: 'المشكلات — {name}',
+      issuesLoading: 'جارٍ قراءة قائمة المشكلات…',
+      issuesEmpty: 'لا شيء لإصلاحه — لا مشكلات مفتوحة.',
+      issuesFailed: 'تعذّرت قراءة قائمة المشكلات.',
       col: {
         repo: 'المستودع',
         concepts: 'المفاهيم',
@@ -1597,6 +1601,11 @@ export default {
         stale: 'المتقادمة',
         pii: 'إصابات PII',
         state: 'الحالة'
+      },
+      sev: {
+        blocker: 'حاجب',
+        error: 'خطأ',
+        warning: 'تحذير'
       }
     },
     retrieval: {

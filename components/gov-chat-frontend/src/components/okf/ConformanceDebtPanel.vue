@@ -76,11 +76,19 @@
               <span v-if="row.domain" class="okf-debt__domain">{{ row.domain }}</span>
             </td>
             <td>{{ row.concept_count }}</td>
-            <td
-              :data-test-id="'debt-issues-' + row.repo_id"
-              :class="{ 'okf-debt__bad': row.conformance_issue_count > 0 }"
-            >
-              {{ row.conformance_issue_count }}
+            <td :class="{ 'okf-debt__bad': row.conformance_issue_count > 0 }">
+              <!-- #1650-C: the count is a VIEWER trigger — click to read the
+                   repo's actual issue list (the /validation report) without
+                   leaving the debt card. @click.stop: the ROW opens the repo;
+                   the CELL reads its issues. -->
+              <button
+                type="button"
+                class="okf-debt__issues-btn"
+                :data-test-id="'debt-issues-' + row.repo_id"
+                @click.stop="onViewIssues(row)"
+              >
+                {{ row.conformance_issue_count }}
+              </button>
             </td>
             <td :class="{ 'okf-debt__warn': row.stale_concept_count > 0 }">{{ row.stale_concept_count }}</td>
             <td :class="{ 'okf-debt__bad': row.pii_hit_count > 0 }">{{ row.pii_hit_count }}</td>
@@ -91,11 +99,47 @@
         </tbody>
       </table>
     </div>
+
+    <!-- #1650-C: the per-repo issue viewer. The report is the server's own
+         /validation payload (type, severity, concept, message, remedy) —
+         the SAME list the wizard's Validate step renders, read in place.
+         Read-only: a dialog that only looks. -->
+    <DsDialog
+      :visible="issuesRepo !== null"
+      :title="issuesDialogTitle"
+      size="md"
+      scrollable
+      :actions="issuesActions"
+      @close="issuesRepo = null"
+      @action="issuesRepo = null"
+    >
+      <p v-if="issuesError" class="okf-debt__error" role="alert">{{ issuesError }}</p>
+      <p v-else-if="issuesLoading" class="okf-debt__empty">
+        {{ translate('okf.debt.issuesLoading', 'Reading the issue list…') }}
+      </p>
+      <p v-else-if="!issuesRows.length" class="okf-debt__empty">
+        {{ translate('okf.debt.issuesEmpty', 'Nothing to fix — no open issues.') }}
+      </p>
+      <ul v-else class="okf-debt__issue-list" :data-test-id="'debt-issues-list-' + issuesRepo.repo_id">
+        <li v-for="(iss, i) in issuesRows" :key="i" class="okf-debt__issue-item">
+          <span class="okf-debt__issue-head">
+            <DsPill :variant="iss.severity === 'blocker' || iss.severity === 'error' ? 'danger' : 'warning'">
+              {{ translate('okf.debt.sev.' + iss.severity, iss.severity) }}
+            </DsPill>
+            <code v-if="iss.concept_id" class="okf-debt__issue-concept">{{ iss.concept_id }}</code>
+            <span v-if="iss.code" class="okf-debt__issue-code">{{ iss.code }}</span>
+          </span>
+          <span class="okf-debt__issue-message">{{ iss.message }}</span>
+          <span class="okf-debt__issue-remedy">{{ iss.remedy }}</span>
+        </li>
+      </ul>
+    </DsDialog>
   </section>
 </template>
 
 <script>
 import DsButton from '../ds/Button.vue';
+import DsDialog from '../ds/Dialog.vue';
 import DsPill from '../ds/Pill.vue';
 import translateMixin from '../../mixins/translateMixin';
 import repoOkfService from '../../services/repoOkfService';
@@ -113,7 +157,7 @@ function refusalMessage(err) {
 
 export default {
   name: 'OkfConformanceDebtPanel',
-  components: { DsButton, DsPill },
+  components: { DsButton, DsPill, DsDialog },
   mixins: [translateMixin],
   props: {
     /** The test handle for the Playwright surface. */
@@ -125,10 +169,25 @@ export default {
       loading: false,
       error: '',
       rows: [],
-      truncated: false
+      truncated: false,
+      // The per-repo issue viewer (#1650-C): the ROW object of the repo
+      // whose issues are open (null = closed), the fetched report, and the
+      // read's own error state (distinct from the card's).
+      issuesRepo: null,
+      issuesLoading: false,
+      issuesError: '',
+      issuesRows: []
     };
   },
   computed: {
+    issuesDialogTitle() {
+      if (!this.issuesRepo) return '';
+      const name = this.issuesRepo.name || this.issuesRepo.repo_id;
+      return this.translate('okf.debt.issuesTitle', 'Issues — {name}').replace('{name}', name);
+    },
+    issuesActions() {
+      return [{ key: 'close', label: this.translate('common.close', 'Close'), variant: 'secondary' }];
+    },
     /** Worst first: a lexicographic compare on (issues, stale, pii) — a
      *  positional encoding (issues × 10000 + …) would let 100+ stale outrank
      *  1 issue on a Bali-scale repo (review round 1, finding 4). */
@@ -159,6 +218,25 @@ export default {
     onOpen(row) {
       if (!row || !row.repo_id) return;
       this.$emit('open', row.repo_id);
+    },
+    /** #1650-C: open the viewer for ONE repo and read its /validation
+     *  report. The dialog is the only surface it feeds; a failed read
+     *  shows the error INSIDE the dialog (the card's rows stay untouched). */
+    async onViewIssues(row) {
+      if (!row || !row.repo_id) return;
+      this.issuesRepo = row;
+      this.issuesLoading = true;
+      this.issuesError = '';
+      this.issuesRows = [];
+      try {
+        const report = await repoOkfService.getRepoValidation(row.repo_id);
+        this.issuesRows = report.issues;
+      } catch (err) {
+        this.issuesError =
+          refusalMessage(err) || this.translate('okf.debt.issuesFailed', 'Could not read the issue list.');
+      } finally {
+        this.issuesLoading = false;
+      }
     },
     async onRefresh() {
       this.loading = true;
@@ -274,5 +352,51 @@ export default {
 .okf-debt__warn {
   color: var(--warning);
   font-weight: 700;
+}
+.okf-debt__issues-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.okf-debt__issue-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.okf-debt__issue-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+.okf-debt__issue-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.okf-debt__issue-concept {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.okf-debt__issue-code {
+  color: var(--muted);
+}
+.okf-debt__issue-message {
+  color: var(--fg);
+}
+.okf-debt__issue-remedy {
+  color: var(--muted);
 }
 </style>

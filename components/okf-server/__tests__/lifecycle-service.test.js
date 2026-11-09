@@ -551,6 +551,22 @@ describe('publish — mint + bundle export + serving cleared', () => {
     expect(exportBundle).not.toHaveBeenCalled();
   });
 
+  // #1650-B: the refusal's advice must be TRUE. The old message said
+  // "retract and publish again to mint a new version" — on a retracted repo
+  // publish is the ONLY exit back to serving, so the advice was a trap
+  // (measured live: El Salvador, 50 PII findings accepted, publish refused).
+  test('the no-op refusal names a workable remedy (PII acceptance counts); no retract advice (#1650-B)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 18, file_id: 'file-v18' }] });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    const err = await lifecycleService.transition(REPO, 'publish', {}).catch((e) => e);
+    expect(err.code).toBe('PUBLISH_NO_CHANGES');
+    expect(err.message).toContain('nothing has changed since version 18');
+    expect(err.message).toContain('correcting PII via scan-and-accept also counts');
+    // The trap must never come back: retracting does not force a version.
+    expect(err.message).toContain('Retracting and re-publishing does NOT force a new version');
+  });
+
   test('an interrupted publish (fingerprint matches, NO bundle for the version) retries instead of 409 (#78657)', async () => {
     seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
     currentFingerprint.mockResolvedValueOnce('same-fp');

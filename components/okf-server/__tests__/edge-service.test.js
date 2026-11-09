@@ -215,7 +215,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     expect(Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {})).toHaveLength(0);
     expect(logger.warn).toHaveBeenCalledWith(
       'Edge write: repo concept-set read failed — dropping all links',
-      expect.objectContaining({ repo_id: REPO, error: 'arango down' })
+      expect.objectContaining({ repo_id: REPO, concept_id: 'service_directory', error: 'arango down' })
     );
   });
 });

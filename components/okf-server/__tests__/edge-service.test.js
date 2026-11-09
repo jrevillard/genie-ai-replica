@@ -53,11 +53,15 @@ function programQueries(metaRows, repos, options = {}) {
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
     if (isProbeQuery(aql)) {
-      // The probe must keep BOTH conditions joined by AND — order-agnostic so
-      // a legitimate reformat is not punished, while a weakened operator or a
-      // dropped filter widens the answer to every repository.
+      // The probe must keep BOTH conditions joined by AND, with no OR at all —
+      // order-agnostic so a legitimate reformat is not punished, while a
+      // weakened operator or a dropped filter widens the answer to every
+      // repository.
       const repoScoped =
-        aql.includes('m.repo_id == @repo_id') && aql.includes('m.concept_id == c') && /\bAND\b/.test(aql);
+        aql.includes('m.repo_id == @repo_id') &&
+        aql.includes('m.concept_id == c') &&
+        /\bAND\b/.test(aql) &&
+        !/\bOR\b/.test(aql);
       const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
       const stored = new Set();
       for (const id of repoIds) for (const cid of repos[id] || []) stored.add(cid);
@@ -334,6 +338,7 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     expect(aql.includes('m.repo_id == @repo_id')).toBe(true);
     expect(aql.includes('m.concept_id == c')).toBe(true);
     expect(aql).toMatch(/\bAND\b/);
+    expect(aql).not.toMatch(/\bOR\b/);
     expect(bindVars.repo_id).toBe(REPO);
     expect(bindVars.candidates).toEqual(links.flatMap((l) => [l.to_concept_id, `concepts/${l.to_concept_id}`]));
   });

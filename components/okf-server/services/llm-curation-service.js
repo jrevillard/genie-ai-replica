@@ -53,7 +53,9 @@ function debugEnabled() {
 async function resolveAreaContext(domain) {
   const db = await dbService.getConnection('default');
   const cats = await (await db.query('FOR c IN serviceCategories RETURN {key: c._key, name: c.nameEN}')).all();
-  const hit = cats.find((c) => slugify(c.name) === slugify(domain));
+  const domainSlug = slugify(domain);
+  if (domainSlug === '') return null; // a degenerate domain matches no category (round 3: same hole the script guard closed)
+  const hit = cats.find((c) => slugify(c.name) === domainSlug);
   if (!hit) return null;
   const svcs = await (
     await db.query('FOR s IN services FILTER s.categoryId == @k SORT s.nameEN RETURN s.nameEN', {

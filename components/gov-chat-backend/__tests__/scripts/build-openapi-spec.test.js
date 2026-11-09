@@ -20,13 +20,18 @@
 require('../setup-env');
 // The generation envelope pins API_URL so the committed client carries a
 // deterministic absolute base path.
+const originalApiUrl = process.env.API_URL;
 process.env.API_URL = 'https://localhost';
 
-// setup-env.js does not set API_URL — this file introduced the pin, so it
-// removes it again when the file ends (Jest workers share process.env across
+// This file overwrote API_URL at load — restore whatever the environment
+// carried when the file started (Jest workers share process.env across
 // test files).
 afterAll(() => {
-  delete process.env.API_URL;
+  if (originalApiUrl === undefined) {
+    delete process.env.API_URL;
+  } else {
+    process.env.API_URL = originalApiUrl;
+  }
 });
 
 const { buildSpec } = require('../../../../scripts/build-openapi-spec');
@@ -74,7 +79,8 @@ describe('scripts/build-openapi-spec', () => {
 
   it.each([
     ['API_URL', /API_URL pin/],
-    ['KEYCLOAK_URL', /concrete URL/]
+    ['KEYCLOAK_URL', /concrete URL/],
+    ['KEYCLOAK_REALM', /concrete URL/]
   ])('fails loudly when the %s pin is missing', (pin, messagePattern) => {
     delete process.env[pin];
     jest.resetModules();

@@ -2875,7 +2875,7 @@ origin: !597 Jerome AI review (simplify, thread e5261db6, 2026-10-29)
 location: components/shared/lib/keycloak-auth-service.js, components/gov-chat-backend/services/keycloak-auth-service.js, components/document-repository/src/middlewares/keycloak-auth-middleware.js
 severity: high (drift already measurable)
 reason: Known drift: shared copy pins algorithms RS256 + KEYCLOAK_JWKS_URL/KEYCLOAK_BROWSER_ISSUER; backend copy pins no algorithms and lacks KEYCLOAK_BROWSER_ISSUER; doc-repo re-implements a third variant (role mapping stays per-component). Consolidation: backend becomes a thin re-export of the shared verifier (~460 lines removed); shared/lib barrel-exports the file; shared/lib package.json declares jose (consumers carry differing versions today). Acceptance spec = the reviewer's drift list. Mirroring comments stay until then.
-status: open
+status: RESOLVED — landed in !828 (backend thin re-export; doc-repo middleware delegates verification, role mapping stays per-component; barrel export + jose declared; browser-issuer alias and strict EXPECTED_ISSUER pin unified into the shared verifier)
 
 ### DW-428: parseOkfScopes backend copy misses the realm-role scope source — role-granted users key the authz cache as @no-scopes (cross-user cache collision in an authz path when OKF scopes go live)
 origin: !597 Jerome AI review (simplify/correctness, thread ff8828ba, 2026-10-29)
@@ -2931,14 +2931,14 @@ origin: !597 Jerome AI review (test-audit, thread e801498f, 2026-10-29)
 location: components/gov-chat-backend/__tests__ (issuer/audience tests), components/shared/lib/keycloak-auth-service.js (no home-component test at all)
 severity: medium (okf-server consumes the shared copy, whose own behaviour is unpinned where it lives)
 reason: Real-crypto tests against verifiers about to be consolidated (DW-427) would double the rework — land with the unification.
-status: open
+status: RESOLVED — landed in !828: real RS256 tokens drive the unified verifier through jose's real verification path (tampered signature, wrong-audience, HS256 alg-confusion, expiry) in a node --test suite (jest cannot require the ESM-only jose package).
 
 ### DW-435: Issuer-alias tests assert internal map state (_getJwksCache(issuer)) — replace with public-API accept/reject on real-shaped tokens
 origin: !597 Jerome AI review (test-audit, thread 60fd1ea8, 2026-10-29)
 location: components/gov-chat-backend/__tests__ (alias tests)
 severity: low
 reason: A broken alias-for-lookup key normalization passes the current 4 tests; verifyToken throwing 'Unknown issuer' on a token whose iss is not in the map is the observable contract. Same post-train pass as DW-434.
-status: open
+status: RESOLVED — landed in !828: the retired doc-repo split-url suite's subject (issuer aliases/pin) is pinned by public-API accept/reject tests on real-shaped tokens in the same node --test suite.
 
 ### DW-436: 'Bearer scope isolation' is implemented BY THE MOCK (stub retrieval-config-client resolves per-bearer) — add the owner-side contract test on the okf-server authz-resolver's intersection
 origin: !597 Jerome AI review (test-audit, thread ab7d3d5c, 2026-10-29)

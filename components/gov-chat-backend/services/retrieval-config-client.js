@@ -25,12 +25,11 @@
 // last-known-good config, else the legacy default (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
 // remainder of the TTL window — one upstream attempt per caller per window.
-// The last-known-good carries ONLY the deployment-global posture (mode +
-// source) — engaged, the serving_* fields and warnings are computed FROM the
-// caller's scopes and are never carried across callers: a degraded caller
-// keeps the fail-closed per-caller defaults. The per-caller graph set always
-// comes from the caller's own live authz call and is never served from
-// last-known-good.
+// The last-known-good carries only the deployment-global posture (mode +
+// source), never a per-caller view — the full invariant is stated at the
+// write site in getRetrievalConfig's onSuccess. The per-caller graph set
+// always comes from the caller's own live authz call and is never served
+// from last-known-good.
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
@@ -207,8 +206,7 @@ function effectiveScopesKey(bearerHeader) {
   // delimiter join would collide the single literal scope "a|b" with the
   // two-scope set {a, b} — the scope grammar is not delimiter-free, so a
   // collided pair would share one cache entry and one per-caller payload.
-  const parts = (isSuperAdmin ? ['@superadmin'] : []).concat(scopes);
-  return parts.length ? JSON.stringify(parts) : '@no-scopes';
+  return JSON.stringify((isSuperAdmin ? ['@superadmin'] : []).concat(scopes));
 }
 
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
@@ -257,7 +255,9 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
   const window = currentWindow();
-  const key = `${window}|${kind}|${effectiveScopesKey(bearerHeader)}`;
+  // JSON of the whole triple — injective without a per-segment
+  // delimiter-free invariant (the scopes segment legitimately contains '|').
+  const key = JSON.stringify([window, kind, effectiveScopesKey(bearerHeader)]);
 
   const hit = _cache.get(key);
   if (hit && hit.window === window) {

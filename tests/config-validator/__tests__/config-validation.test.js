@@ -3682,8 +3682,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // decision; nothing silently escapes the class.
   const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e)\w+|npm run test(?![:\w]))/;
   // A script item may chain commands (with `&&`, `||`, `;`, or a newline
-  // inside a block scalar); each command is checked on its own, so a
-  // capped invocation chained with an uncapped one still fails.
+  // inside a block scalar); shell line continuations (`\` + newline) join
+  // first, so one continued invocation is one command. Each command is
+  // checked on its own, so a capped invocation chained with an uncapped
+  // one still fails.
   const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
 
   // Out of the measured OOM class, pinned here rather than silently
@@ -3700,28 +3702,82 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     'config:validate'
   ]);
 
+  // The non-exempt jest commands of the given shell blocks — the same
+  // matcher, split, and flag check the real CI file goes through below.
+  const toInvocations = (blocks) =>
+    blocks
+      .filter((b) => !EXEMPT_JOBS.has(b.owner))
+      .flatMap((b) =>
+        b.text
+          .replace(/\\\n[ \t]*/g, ' ')
+          .split(COMMAND_SPLIT)
+          .filter((cmd) => JEST_INVOCATION.test(cmd))
+          .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
+      );
+  const toViolations = (blocks) =>
+    toInvocations(blocks).filter(
+      (inv) => !inv.cmd.includes('--maxWorkers=2') || !inv.cmd.includes('--workerIdleMemoryLimit=500MB')
+    );
+
   test('every product-component jest invocation carries both cap flags', () => {
     const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
     const { blocks, errors } = extractCiShellBlocks(content);
     expect(errors).toEqual([]);
 
-    const invocations = blocks
-      .filter((b) => !EXEMPT_JOBS.has(b.owner))
-      .flatMap((b) =>
-        b.text
-          .split(COMMAND_SPLIT)
-          .filter((cmd) => JEST_INVOCATION.test(cmd))
-          .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
-      );
     // The guard must SEE the class it protects: four capped jobs today.
     // A silent-empty pass here would mean the extraction broke, not that
     // the pipeline is compliant.
-    expect(invocations.length).toBeGreaterThanOrEqual(4);
+    expect(toInvocations(blocks).length).toBeGreaterThanOrEqual(4);
 
-    const violations = invocations.filter(
-      (inv) => !inv.cmd.includes('--maxWorkers=2') || !inv.cmd.includes('--workerIdleMemoryLimit=500MB')
-    );
-    expect(violations.map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
+    expect(toViolations(blocks).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
+  });
+
+  // Pins for the matcher's boundary decisions — the real CI file exercises
+  // none of these shapes today (every jest line is a single plain-scalar
+  // item, no test:e2e line exists, no line continuations), so without the
+  // pins below a reverted regex would pass the suite silently.
+  test('a block-scalar item chaining a capped and an uncapped jest line fails', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'script',
+        text: 'npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage\nnpm test -- --coverage'
+      }
+    ]);
+    expect(violations.map((v) => v.cmd)).toEqual(['npm test -- --coverage']);
+  });
+
+  test('an uncapped test:e2e line is out of the jest class (Playwright)', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'before_script',
+        text: 'cd components/gov-chat-frontend && npm run test:e2e'
+      }
+    ]);
+    expect(violations).toEqual([]);
+  });
+
+  test('an uncapped jest npm-script variant (test:contract) fails', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'before_script',
+        text: 'cd components/gov-chat-frontend && npm run test:contract'
+      }
+    ]);
+    expect(violations.map((v) => v.cmd)).toEqual(['npm run test:contract']);
+  });
+
+  test('a shell line continuation joins into one command', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'script',
+        text: 'npm test -- --maxWorkers=2 \\\n  --workerIdleMemoryLimit=500MB --coverage'
+      }
+    ]);
+    expect(violations).toEqual([]);
   });
 });
 

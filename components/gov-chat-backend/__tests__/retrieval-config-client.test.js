@@ -316,6 +316,16 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(config.engaged).toBe(false);
     expect(vacuousMode.config.mode).toBe('legacy');
     expect(vacuousMode.engaged).toBe(false);
+
+    // A malformed or vacuous response must leave the last-known-good copy
+    // untouched: no successful read happened in this window, so a later
+    // outage degrades to the plain legacy default — never to a mode a
+    // garbled body carried.
+    nowMs += REAL_TTL_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetError(503));
+    const afterOutage = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
+    expect(afterOutage.config.mode).toBe('legacy');
+    expect(afterOutage.source).toBe('bff-fail-closed-default');
   });
 
   it('scope-equivalence: scope ORDER does not change the cache key', async () => {

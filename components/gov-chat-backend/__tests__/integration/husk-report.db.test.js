@@ -45,12 +45,20 @@ const {
 // so the claim "an app field disqualifies the document" is checked against
 // the fields the app ACTUALLY writes, not against hand-copied names.
 const { USER_PREFERENCE_FIELDS, GOV_PROFILE_SECTIONS } = require('../../constants/jit-fields');
+const {
+  WAIT_BUDGET_MS,
+  authHeader,
+  waitForServer,
+  recreateDatabase,
+  dropDatabase,
+  databaseConfig
+} = require('./helpers/arango');
 
 // The suite waits for the database to answer (the CI service container is
 // RUNNING long before ArangoDB serves): the wait's own budget must fit
 // inside Jest's hook timeout, or the hook dies with a generic timeout and
-// the wait's diagnostic never prints — one constant keeps the invariant.
-const WAIT_BUDGET_MS = 120000;
+// the wait's diagnostic never prints — one constant keeps the invariant
+// (shared with the sibling suite through the helper).
 jest.setTimeout(WAIT_BUDGET_MS * 1.5);
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
@@ -112,32 +120,7 @@ const EXPECTED_HUSK_KEYS = ['husk-created-only', 'husk-deleted-false', 'husk-del
 
 // The HTTP calls (creating and dropping the database) carry the same
 // credentials the driver does.
-function authHeader() {
-  return {
-    Authorization: `Basic ${Buffer.from(`${TEST_USER}:${TEST_PASSWORD}`).toString('base64')}`
-  };
-}
-
-// The service container is RUNNING long before ArangoDB answers: the CI job
-// must wait for the server, not for the container. Bounded, and it fails
-// loudly instead of skipping.
-async function waitForServer(timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`${TEST_URL}/_api/version`, { headers: authHeader() });
-      if (response.ok) {
-        return;
-      }
-      lastError = new Error(`HTTP ${response.status}`);
-    } catch (err) {
-      lastError = err;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error(`ArangoDB at ${TEST_URL} did not answer within ${timeoutMs}ms: ${lastError?.message}`);
-}
+const AUTH = authHeader(TEST_USER, TEST_PASSWORD);
 
 const describeWithDatabase = TEST_URL ? describe : describe.skip;
 
@@ -151,45 +134,21 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
           'and this suite drives that script against the database.'
       );
     }
-    await waitForServer(WAIT_BUDGET_MS);
+    await waitForServer(TEST_URL, AUTH, WAIT_BUDGET_MS);
     const { Database } = require('arangojs');
     // The database is created over the HTTP API (arangojs 8's Database
-    // binds to an existing one; the same pattern the sibling suite uses)
-    // and dropped in afterAll. A database left behind by an interrupted
-    // run is dropped first: the test must be repeatable, and a drop that
-    // silently failed would surface later as an opaque duplicate error —
-    // so the drop result is checked and names the remedy.
-    const dropped = await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
-    if (!dropped.ok && dropped.status !== 404) {
-      throw new Error(
-        `dropping a stale ${DB_NAME} failed (HTTP ${dropped.status}) — remove it by hand ` +
-          `on ${TEST_URL} and re-run this suite.`
-      );
-    }
-    const created = await fetch(`${TEST_URL}/_api/database`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name: DB_NAME })
-    });
-    const createdBody = await created.json();
-    // The stale database was just dropped (checked above), so ANY create
-    // error is fatal — a tolerated 'duplicate' here would mean a concurrent
-    // run against the same throwaway database, which must not be raced.
-    if (createdBody.error) {
-      throw new Error(`creating ${DB_NAME}: ${JSON.stringify(createdBody)}`);
-    }
-    db = new Database({
-      url: TEST_URL,
-      databaseName: DB_NAME,
-      auth: { username: TEST_USER, password: TEST_PASSWORD }
-    });
+    // binds to an existing one) and dropped in afterAll: a database left
+    // behind by an interrupted run is dropped first, both halves checked
+    // (the shared helper).
+    await recreateDatabase(TEST_URL, DB_NAME, AUTH);
+    db = new Database(databaseConfig(TEST_URL, DB_NAME, TEST_USER, TEST_PASSWORD));
     await db.collection(COLLECTION).create();
   });
 
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database
     // binds to an existing one).
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
+    await dropDatabase(TEST_URL, DB_NAME, AUTH);
     // The driver's connection is closed: an open one keeps the test
     // process alive after the run.
     if (db) {

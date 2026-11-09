@@ -43,21 +43,29 @@ jest.mock(
   { virtual: true }
 );
 
+const {
+  WAIT_BUDGET_MS,
+  authHeader,
+  waitForServer,
+  recreateDatabase,
+  dropDatabase,
+  databaseConfig
+} = require('./helpers/arango');
+
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || '';
 const TEST_PASSWORD = process.env.ARANGO_TEST_PASSWORD || '';
 const DB_NAME = 'genie_tree_display_names_test';
 
+// The server wait's own budget must fit inside Jest's hook timeout, or
+// the hook dies with a generic timeout and the wait's diagnostic never
+// prints — one constant keeps the invariant (shared with the sibling
+// suite through the helper).
+jest.setTimeout(WAIT_BUDGET_MS * 1.5);
+
 // The HTTP calls (creating a database, creating a collection) carry the
 // same credentials the driver does.
-function authHeader() {
-  if (!TEST_USER) {
-    return {};
-  }
-  return {
-    Authorization: `Basic ${Buffer.from(`${TEST_USER}:${TEST_PASSWORD}`).toString('base64')}`
-  };
-}
+const AUTH = authHeader(TEST_USER, TEST_PASSWORD);
 
 const describeWithDatabase = TEST_URL ? describe : describe.skip;
 
@@ -109,7 +117,7 @@ async function seed(db) {
   ]) {
     const response = await fetch(`${TEST_URL}/_db/${DB_NAME}/_api/collection`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      headers: { 'Content-Type': 'application/json', ...AUTH },
       body: JSON.stringify({ name, type })
     });
     const body = await response.json();
@@ -129,31 +137,20 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
   let serviceCategoryService;
 
   beforeAll(async () => {
+    // The CI service container is RUNNING long before ArangoDB serves:
+    // the suite waits for the server, not for the container.
+    await waitForServer(TEST_URL, AUTH, WAIT_BUDGET_MS);
     // Loaded HERE and not at the top of the file: a SKIPPED suite must
     // not open a connection, and the driver keeps one open until it is
     // closed.
     const { Database } = require('arangojs');
     serviceCategoryService = require('../../services/service-category-service');
     // The database is created over the HTTP API (arangojs 8's Database
-    // binds to an existing one) and dropped in afterAll. A database left
-    // behind by an interrupted run is dropped first: the test must be
-    // repeatable.
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
-    const created = await fetch(`${TEST_URL}/_api/database`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name: DB_NAME })
-    });
-    const createdBody = await created.json();
-    if (createdBody.error && !String(createdBody.errorMessage).includes('duplicate')) {
-      throw new Error(`creating ${DB_NAME}: ${JSON.stringify(createdBody)}`);
-    }
-    db = new Database({
-      url: TEST_URL,
-      databaseName: DB_NAME,
-      username: TEST_USER || undefined,
-      password: TEST_PASSWORD || undefined
-    });
+    // binds to an existing one) and dropped in afterAll: a database
+    // left behind by an interrupted run is dropped first, both halves
+    // checked (the shared helper).
+    await recreateDatabase(TEST_URL, DB_NAME, AUTH);
+    db = new Database(databaseConfig(TEST_URL, DB_NAME, TEST_USER, TEST_PASSWORD));
     await seed(db);
     // The service is a singleton whose init() would dial the configured
     // ArangoDB; the test hands it THIS database instead.
@@ -164,7 +161,7 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database
     // binds to an existing one).
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
+    await dropDatabase(TEST_URL, DB_NAME, AUTH);
     // The driver's connection is closed: an open one keeps the test
     // process alive after the run.
     if (db) {

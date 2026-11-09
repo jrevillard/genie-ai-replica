@@ -69,3 +69,18 @@ describe('consumer bindings — the per-consumer profiles are pinned (#1190)', (
     expect(slugFor('')).toBe('repo');
   });
 });
+
+describe('sameSlug — degenerate equality owned once (#1190)', () => {
+  const { sameSlug } = require('../services/slug');
+
+  test("'' never equals '' — a degenerate input matches nothing", () => {
+    expect(sameSlug('', '')).toBe(false);
+    expect(sameSlug('日本語', '汉字')).toBe(false);
+  });
+
+  test('real equal slugs match, case-insensitively; real-vs-degenerate never', () => {
+    expect(sameSlug('Kenya Health', 'kenya-health')).toBe(true);
+    expect(sameSlug('Kenya Health', '')).toBe(false);
+    expect(sameSlug('', 'kenya-health')).toBe(false);
+  });
+});

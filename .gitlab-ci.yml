@@ -3436,6 +3436,12 @@ test:backend:
       changes:
         - "components/gov-chat-backend/**/*"
         - "components/shared/**/*"
+        # The backend suite also pins the OpenAPI spec extraction module
+        # (scripts/build-openapi-spec.js, __tests__/scripts/) — an MR
+        # touching only the module must still run the suite that guards
+        # its pin asserts (the drift gate alone cannot catch a weakened
+        # assert that leaves the spec unchanged).
+        - "scripts/*.js"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

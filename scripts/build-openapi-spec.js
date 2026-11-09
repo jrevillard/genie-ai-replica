@@ -67,7 +67,12 @@ module.exports = { buildSpec };
 if (require.main === module) {
   const output = process.argv[2];
   if (!output) {
-    console.error('usage: node scripts/build-openapi-spec.js <spec-output-path>');
+    console.error(
+      'usage: API_URL=<url> KEYCLOAK_URL=<url> KEYCLOAK_REALM=<realm> \\\n' +
+        '  node scripts/build-openapi-spec.js <spec-output-path>\n' +
+        '(the three pins are required — buildSpec asserts them; see the env -i' +
+        ' envelope in scripts/generate-api-client.sh)'
+    );
     process.exit(1);
   }
   const spec = buildSpec();

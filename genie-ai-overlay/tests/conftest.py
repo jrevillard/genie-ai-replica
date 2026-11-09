@@ -255,8 +255,8 @@ except (OSError, ValueError):
     else:
         print(
             "conftest: the language registry at "
-            f"{os.environ.get('LANGUAGE_REGISTRY_FILEPATH', _registry_default)} could not be read "
-            "or parsed as JSON and no link target resolved; chatqna will run with an empty "
+            f"{_probe_path} could not be read "
+            "or parsed as JSON and no usable link target; chatqna will run with an empty "
             "language registry",
             file=sys.stderr,
         )

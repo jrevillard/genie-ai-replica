@@ -22,9 +22,11 @@ require('../setup-env');
 // This file overwrites API_URL (the generation envelope's pin value) for
 // the suite below — the assignment happens in beforeAll, AFTER the module
 // imports have succeeded, so a load failure cannot leave the pin behind in
-// the shared Jest worker environment. The original is restored at file end
-// (Jest workers share process.env across test files).
-let originalApiUrl;
+// the shared Jest worker environment. The original is captured here (next
+// to the afterAll that restores it, whatever path the file takes — a
+// filtered run can execute afterAll without beforeAll) and restored at
+// file end (Jest workers share process.env across test files).
+const originalApiUrl = process.env.API_URL;
 
 afterAll(() => {
   if (originalApiUrl === undefined) {
@@ -43,7 +45,6 @@ describe('scripts/build-openapi-spec', () => {
   beforeAll(() => {
     // The generation envelope pins API_URL so the committed client carries
     // a deterministic absolute base path.
-    originalApiUrl = process.env.API_URL;
     process.env.API_URL = 'https://localhost';
     // Snapshot taken AFTER the pin assignment, so the restore puts back
     // exactly the pins the suite runs with — no second copy of the literal

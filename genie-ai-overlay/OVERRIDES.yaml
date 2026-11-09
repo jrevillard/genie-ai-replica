@@ -169,3 +169,11 @@ overrides:
     added_in: v1.5
     last_validated: v1.5
     test: tests/test_comps_llm_stream_offloop_patch.py
+  - override: build-patches.comps_dataprep_utils_logging_patch
+    disposition: still-needed
+    owner: genie-ai
+    justification: "Upstream comps/dataprep/src/utils.py (v1.5) ships 15 bare print() calls that reach the container console on the standard-loader path - a .doc/.ppt upload routes to its document_loader, whose load_doc/load_ppt print conversion progress raw, and the crawl/download helpers print fetch failures and debug dumps the same way. A print() bypasses the structured log path (python logging -> stdout -> fluentd -> OTel collector -> VictoriaLogs): no level, no logger name, no severity in the admin logs UI, and the repository-wide AST guard cannot see the vendored file because it ships in the image, not the repo. The patcher rewrites the 15 calls to the module's existing CustomLogger at image build time, carrying the arguments over verbatim (the printf-style calls were already broken under print() - extra positional args are space-joined, never substituted - and become correct lazy-format logging calls); the one exception is the two-arg dump print(\"response\", response), which needs the placeholder logging would otherwise reject at format time. Levels follow message semantics: progress -> info, failures -> warning, raw dumps -> debug. Content-anchored and fail-loud like the sibling patchers: a drifted or grown upstream file aborts the BUILD instead of shipping an image that still prints. Closing this entry needs upstream comps to route utils.py through its logger."
+    added_in: v1.5
+    last_validated: v1.5
+    test: tests/test_comps_dataprep_utils_logging_patch.py
+

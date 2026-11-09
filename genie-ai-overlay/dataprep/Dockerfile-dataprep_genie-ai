@@ -111,6 +111,21 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/s
 # Step B: Copy the entire OPEA 'comps' directory from the clone
 COPY --from=opea_base /src/comps/ /app/comps/
 
+# Step B.5: Route the vendored comps utils.py prints through its CustomLogger
+# (issue #1662). Upstream ships 15 bare print() calls that reach the container
+# console on the standard-loader path (.doc/.ppt conversion progress, crawl
+# fetch failures, debug dumps) — untyped output with no level, no logger name
+# and no severity in VictoriaLogs, exactly what #514 eliminated from the
+# repository's own dataprep code. The patcher rewrites them to the module's
+# existing CustomLogger("prepare_doc_util") in place; the file itself is not
+# in this repository, so the rewrite happens here, at build time.
+#
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if any expected line is
+# missing or an unexpected print() survives, rather than silently shipping an
+# image that still prints.
+COPY genie-ai-overlay/build-patches/comps_dataprep_utils_logging_patch.py /tmp/comps_dataprep_utils_logging_patch.py
+RUN python /tmp/comps_dataprep_utils_logging_patch.py && rm -f /tmp/comps_dataprep_utils_logging_patch.py
+
 # Step C/D: Bring the compiled Python dependency tree from the builder stage
 # (site-packages + console scripts). The interpreter itself (/usr/local/python)
 # comes from the same python:3.11-slim lineage, so the copied tree is ABI-compatible.

@@ -403,11 +403,13 @@ const keycloakAuthService = {
       }
 
       // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
-      // alg-confusion token) is deterministic: no key rotation can make the
-      // same token verify, so it must NOT go through the force-refresh path
-      // below. The refresh path rebuilds the JWKS cache, discarding jose's
-      // internal fetch cooldown — retrying every junk alg token there would
-      // turn unauthenticated traffic into a Keycloak fetch amplifier.
+      // alg-confusion token) is deterministic: jose rejects the header before
+      // any key resolution, so no key rotation can make the same token
+      // verify. It must NOT go through the force-refresh path below: forcing
+      // the refresh only zeroes the JWKS cache TTL, so sustained junk-alg
+      // traffic keeps the cache permanently invalidated and every
+      // LEGITIMATE token then pays a JWKS re-fetch plus a double
+      // verification.
       if (err.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
       }

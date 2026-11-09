@@ -178,9 +178,13 @@ test('DW-434: HS256 alg-confusion token is rejected through the real path', asyn
   const hsToken = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
     .setProtectedHeader({ alg: 'HS256' })
     .sign(Buffer.from('attacker-controlled-secret'));
+  // The message names the dedicated alg-rejection branch (jose rejects the
+  // header before any key resolution) — if the branch is ever deleted the
+  // token still ends TOKEN_INVALID via the retry path, so the message is
+  // the mutation-visible discriminator.
   await assert.rejects(
     () => svc.verifyToken(hsToken),
-    (err) => err.code === 'TOKEN_INVALID'
+    (err) => err.code === 'TOKEN_INVALID' && /algorithm not allowed/.test(err.message)
   );
 });
 

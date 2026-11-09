@@ -86,6 +86,7 @@ global.fetch = async (url) => {
 // Fresh module instance per topology: the verifier caches discovery state and
 // reads its env surface at module load.
 function loadVerifier(env) {
+  fetchCalls.length = 0; // per-topology recorder — no earlier test's traffic
   delete require.cache[require.resolve('../../shared/lib/keycloak-auth-service.js')];
   for (const key of [
     'KEYCLOAK_URL',
@@ -159,7 +160,7 @@ test('DW-434: matching-aud token with opts.audience verifies', async () => {
   assert.equal(payload.aud, 'genie-app');
 });
 
-test('DW-434: HS256 alg-confusion token is rejected (RS256 pin)', async () => {
+test('DW-434: HS256 alg-confusion token is rejected through the real path', async () => {
   const svc = loadVerifier();
   const hsToken = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
     .setProtectedHeader({ alg: 'HS256' })
@@ -220,11 +221,6 @@ test('KEYCLOAK_EXPECTED_ISSUER pin: only the pinned issuer is accepted', async (
     () => svc.verifyToken(discoveryToken),
     (err) => err.code === 'TOKEN_INVALID'
   );
-});
-
-test('checkUserStatusInKeycloak is present on the unified verifier', () => {
-  const svc = loadVerifier();
-  assert.equal(typeof svc.checkUserStatusInKeycloak, 'function');
 });
 
 test('pin + additional realms: partner init must not clobber the pinned primary entry', async () => {

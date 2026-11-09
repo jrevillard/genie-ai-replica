@@ -256,7 +256,8 @@ describe('Security Middleware Tests', () => {
       mockVerifyToken = jest.fn();
 
       jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-        verifyToken: (...args) => mockVerifyToken(...args)
+        verifyToken: (...args) => mockVerifyToken(...args),
+        getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
       }));
 
       jest.mock(

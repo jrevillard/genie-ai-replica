@@ -11,7 +11,9 @@ beforeEach(() => {
   // real-crypto suite — not here.
   mockVerifyToken = jest.fn();
   jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-    verifyToken: (...args) => mockVerifyToken(...args)
+    verifyToken: (...args) => mockVerifyToken(...args),
+    // The DIAG log reads the accepted set on every verification failure.
+    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
   }));
 
   const middleware = require('../../../middlewares/keycloak-auth-middleware');

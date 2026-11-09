@@ -86,7 +86,8 @@ global.fetch = async (url, opts) => {
       })
     };
   }
-  // The JWKS URIs share the discovery prefix — match them BEFORE it.
+  // The JWKS URIs share the discovery issuer prefix — the regex above is
+  // still safe because it only matches /.well-known/ discovery paths.
   if (u === JWKS_URI) {
     return { ok: true, status: 200, json: async () => JWKS, headers: new Map([['cache-control', 'no-store']]) };
   }
@@ -256,35 +257,32 @@ test('KEYCLOAK_EXPECTED_ISSUER pin: only the pinned issuer is accepted', async (
   );
 });
 
-test('pin + additional realms: partner init must not clobber the pinned primary entry', async () => {
-  // The pin branch is primary-realm gated — the partner
-  // realm's init re-running it would overwrite the pinned issuer's JWKS with
-  // the partner realm's keys (the multi-realm clobber class the alias
-  // branches guard against).
+test('pin + additional realms: partner realms are skipped, the pinned entry survives', async () => {
+  // The pin is the ONLY accepted issuer and belongs to the primary realm:
+  // a partner realm's init could only ever produce entries the pin discards
+  // (the multi-realm clobber class the primary-realm gate prevents), so
+  // initAllRealms skips the partner leg entirely — no discovery fetch, no
+  // misleading "initialized" log.
   const pinned = DISCOVERY_ISSUER;
   const svc = loadVerifier({
     KEYCLOAK_EXPECTED_ISSUER: pinned,
     KEYCLOAK_ADDITIONAL_REALMS: '["partner"]'
   });
-  // verifyToken triggers initAllRealms: primary init registers pin → primary
-  // JWKS, partner init must not touch the pinned entry.
   const primaryToken = await sign(baseClaims(pinned));
   const payload = await svc.verifyToken(primaryToken);
   assert.equal(payload.iss, pinned);
-  // The partner leg must have RUN: initAllRealms swallows additional-realm
-  // init failures (a warn), so a broken partner route would otherwise leave
-  // this test green without ever exercising the clobber path.
+  // The partner discovery leg must NOT have run.
   const partnerDiscoveryUrl = `${KEYCLOAK_URL}/realms/partner/.well-known/openid-configuration`;
   assert.ok(
-    fetchCalls.some((c) => c === partnerDiscoveryUrl),
-    'partner realm discovery was never fetched — the clobber path did not run'
+    !fetchCalls.some((c) => c === partnerDiscoveryUrl),
+    'partner realm discovery was fetched — the pin skip did not apply'
   );
   // A partner-realm token carries a different iss than the pin — rejected.
   const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
   const partnerToken = await sign(baseClaims(partnerIss), { partner: true });
   await assert.rejects(
     () => svc.verifyToken(partnerToken),
-    (err) => err.code === 'TOKEN_INVALID'
+    (err) => err.code === 'TOKEN_INVALID' && err.message === 'Unknown issuer'
   );
 });
 

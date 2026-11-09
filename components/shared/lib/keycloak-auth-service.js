@@ -236,7 +236,10 @@ async function init(idpUrl) {
   initialized = true;
   initFailedAt = 0;
 
-  logger.info(`[KeycloakAuth] Initialized: issuer=${doc.issuer}, jwks=${doc.jwks_uri}`);
+  const acceptedIssuers = Array.from(issuerMap.keys());
+  logger.info(
+    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${doc.jwks_uri}`
+  );
 
   return doc.issuer;
 }
@@ -253,6 +256,29 @@ async function initAllRealms() {
   await init();
 
   if (additionalRealms.length === 0) return;
+
+  // KEYCLOAK_JWKS_URL pins ONE certs URL — with additional realms, every
+  // realm's issuer would map to that one realm's keys. Visible at boot
+  // instead of only in the env NOTES.
+  if (process.env.KEYCLOAK_JWKS_URL) {
+    logger.warn(
+      "[KeycloakAuth] KEYCLOAK_JWKS_URL pins ONE realm's certs URL — additional realms " +
+        `(${additionalRealms.join(', ')}) would resolve to the wrong keys; leave the override unset on multi-realm deployments`
+    );
+  }
+
+  // Under the strict issuer pin, additional realms can never register: the
+  // pin is the ONLY accepted issuer and it belongs to the primary realm.
+  // Skipping their discovery legs avoids fetching documents whose entries
+  // would be discarded, and keeps the "Additional realm initialized" log
+  // from claiming success for realms the pin will always reject.
+  if (process.env.KEYCLOAK_EXPECTED_ISSUER) {
+    logger.warn(
+      '[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin set — skipping additional realms ' +
+        `(${additionalRealms.join(', ')}): tokens from any other issuer are rejected by the pin`
+    );
+    return;
+  }
 
   for (const realmName of additionalRealms) {
     const realmUrl = `${KEYCLOAK_URL}/realms/${realmName}`;
@@ -402,6 +428,17 @@ const keycloakAuthService = {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
+      // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
+      // jose checks signature BEFORE claims, so we must manually check exp from unverified payload.
+      // Expiry outranks an algorithm mismatch: a stale junk token reports
+      // TOKEN_EXPIRED (the semantically leading defect, and the client
+      // action — re-authenticate — is the same either way).
+      const now = Math.floor(Date.now() / 1000);
+      if (unverifiedExp && unverifiedExp < now) {
+        // Token is expired → immediate TOKEN_EXPIRED (no refresh)
+        throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
+      }
+
       // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
       // alg-confusion token) is deterministic: jose rejects the header before
       // any key resolution, so no key rotation can make the same token
@@ -412,14 +449,6 @@ const keycloakAuthService = {
       // second, equally-futile attempt.
       if (err.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
-      }
-
-      // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
-      // jose checks signature BEFORE claims, so we must manually check exp from unverified payload
-      const now = Math.floor(Date.now() / 1000);
-      if (unverifiedExp && unverifiedExp < now) {
-        // Token is expired → immediate TOKEN_EXPIRED (no refresh)
-        throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // Signature failure with valid exp → force-refresh JWKS and retry once

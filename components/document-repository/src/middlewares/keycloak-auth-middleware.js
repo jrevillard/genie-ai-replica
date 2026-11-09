@@ -113,7 +113,8 @@ const authenticateToken = async (req, res, next) => {
         err_code: err && err.code,
         err_message: err && err.message,
         token_issuer: (diagClaims && diagClaims.iss) || 'unparseable',
-        token_exp: (diagClaims && diagClaims.exp) || 0
+        token_exp: (diagClaims && diagClaims.exp) || 0,
+        accepted_issuers: keycloakAuthService.getConfiguredIssuers()
       });
       if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
         // Keycloak discovery down / init cooldown — NOT a bad token. Kept as

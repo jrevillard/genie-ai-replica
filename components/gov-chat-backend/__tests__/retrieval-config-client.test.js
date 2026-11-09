@@ -44,6 +44,12 @@ function makeBearer(scopes = [], roles = [], sub = 'user-1') {
   return `Bearer ${b64url({ alg: 'none' })}.${b64url(payload)}.sig`;
 }
 
+/** Decode a bearer header's payload (the fixtures are synthetic — unverified). */
+function payloadOf(bearer) {
+  const token = String(bearer || '').replace(/^Bearer\s+/i, '');
+  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+}
+
 const HYBRID_CONFIG = {
   config: { mode: 'hybrid' },
   source: 'database',
@@ -188,11 +194,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
   it('bearer isolation: two callers with different scopes get their own graph sets', async () => {
     const authzFor = (scopes) => ({ ...AUTHZ_A, graph_names: scopes });
-    const scopesOf = (authHeader) => {
-      const token = String(authHeader || '').replace(/^Bearer\s+/i, '');
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-      return payload.okf_scopes || [];
-    };
+    const scopesOf = (authHeader) => payloadOf(authHeader).okf_scopes || [];
     axios.get.mockImplementation((path, config) => {
       if (path.endsWith('/api/okf/authz/graphs')) {
         const scopes = scopesOf(config?.headers?.Authorization);
@@ -312,28 +314,25 @@ describe('retrieval-config-client (Story 1.1)', () => {
     ).toEqual(['okf:t:c:read']);
   });
 
-  it('role-granted scopes share the claim-scoped cache entry and never the @no-scopes one', async () => {
+  it("role-granted scopes share the claim-scoped cache entry, never the scope-less caller's entry", async () => {
     // The upstream answers PER CALLER, so "who was served what" is
     // observable — one shared payload would hide a cross-caller bleed behind
     // identical bytes.
-    const subOf = (bearer) => {
-      const token = String(bearer || '').replace(/^Bearer\s+/i, '');
-      return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).sub;
-    };
     axios.get.mockImplementation((path, config) => {
-      const sub = subOf(config?.headers?.Authorization);
+      const sub = payloadOf(config?.headers?.Authorization).sub;
+      const serving = [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }];
       if (path.endsWith('/api/okf/authz/graphs')) {
         return okfGetResponse({
           ...AUTHZ_A,
-          graph_names: [`graph-of-${sub}`],
-          repos: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri', name: `Repo of ${sub}` }]
+          graph_names: serving.map((g) => g.graph_name),
+          repos: serving.map((g) => ({ ...g, name: `Repo of ${sub}` }))
         });
       }
       return okfGetResponse({
         ...HYBRID_CONFIG,
-        serving_graph_count: 1,
-        serving_repo_ids: [`repo-of-${sub}`],
-        serving_graphs: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }]
+        serving_graph_count: serving.length,
+        serving_repo_ids: serving.map((g) => g.repo_id),
+        serving_graphs: serving
       });
     });
 
@@ -342,13 +341,13 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const noScopes = makeBearer([], [], 'scope-less-user');
 
     // The KEY decides the cache entry: the realm-role grant must land in the
-    // claim-scoped entry, never in the scope-less one. (The scope-less
-    // caller keys the `@no-scopes` bucket — the assertion is on the
-    // DISTINCTNESS, not on that literal, so a renamed sentinel is not a
-    // behaviour change here.)
+    // claim-scoped entry, never in the scope-less one.
     const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
-    expect(keyOf(byRole)).toBe(keyOf(byClaim));
-    expect(keyOf(byRole)).not.toBe(keyOf(noScopes));
+    const claimKey = keyOf(byClaim);
+    const roleKey = keyOf(byRole);
+    const noScopesKey = keyOf(noScopes);
+    expect(roleKey).toBe(claimKey);
+    expect(roleKey).not.toBe(noScopesKey);
 
     const claimView = await client.getRetrievalConfig(byClaim);
     const roleView = await client.getRetrievalConfig(byRole);

@@ -78,6 +78,14 @@ const USER_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1$`);
 const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
 const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
 const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
+// The lookup answer of a fixture-HEALTHY account (enabled, verified, no
+// pending action) — the state the converge contracts and the create-only
+// contract both resolve against.
+const HEALTHY_LOOKUP = [
+  'GET',
+  USERNAME_LOOKUP,
+  { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+];
 
 /**
  * The rejection a call produced, for the assertions that read its
@@ -607,11 +615,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
   test('a fresh create resolves the account, assigns the roles and returns the id', async () => {
     routes = [
       ['POST', USERS_PATH, { status: 201, data: null }],
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
       ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
     ];
@@ -685,11 +689,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // password it just set would be a wasted write on every first run.
     routes = [
       ['POST', USERS_PATH, { status: 201, data: null }],
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
       ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
     ];
@@ -707,11 +707,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // half-provisioned account behind.
     routes = [
       POST_USERS_409,
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-      ],
+      HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
       ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],

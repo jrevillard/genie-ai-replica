@@ -3707,11 +3707,6 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // unmatched — a rename or a scope change to either job must fail this
   // suite and force a conscious re-decision, not slip past the contract.
   const EXEMPT_JOBS = new Set([
-    // Two integration suites at most (the husk gate and the tree suite):
-    // jest spawns at most one worker per test file, so the run cannot fan
-    // out to the worker count the cap exists to bound — and each suite
-    // drives a handful of documents against its own throwaway database.
-    'test:backend-arango',
     // The validator harness itself (tests/config-validator) and the
     // new-config suite it runs via `npm run test:ci` — neither measured
     // into the #1404/#1412 OOM class. Capping them is a config:validate
@@ -3761,11 +3756,11 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   });
 
   test('the exempt jobs invoke jest exactly as their exemption reasons state', () => {
-    // The exemptions above justify a fixed invocation set (the
-    // integration-directory jest run; the validator harness and the
-    // new-config suite). The command pin makes that justification
-    // load-bearing: changing an exempt job's jest invocation changes
-    // this set and fails here, forcing a conscious re-decision.
+    // The exemptions above justify a fixed invocation set (the validator
+    // harness and the new-config suite). The pin makes that justification
+    // load-bearing: widening an exempt job's jest scope — an extra
+    // uncapped suite — changes this set and fails here, forcing a
+    // conscious re-decision.
     const exemptCmds = invocationsOf(ciBlocks())
       .filter((inv) => EXEMPT_JOBS.has(inv.owner))
       .map((inv) => inv.cmd)
@@ -3773,25 +3768,8 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(exemptCmds).toEqual([
       // config:validate: the validator harness, the new-config suite.
       'npm run test:ci',
-      'npm test',
-      // test:backend-arango: the whole integration directory (the husk
-      // gate and the tree suite — two files, at most two workers).
-      'npx jest __tests__/integration --json --outputFile=reports/jest-husk-arango.json'
+      'npm test'
     ]);
-  });
-
-  test('the exempted integration directory holds exactly the two known suites', () => {
-    // The test:backend-arango exemption is justified against the worker
-    // fan-out a jest run can reach — one worker per test file. A
-    // directory-scoped command does NOT move when a third file lands in
-    // the directory, so the command pin above cannot see that growth:
-    // the file COUNT itself is pinned here instead, and a new integration
-    // suite must re-decide the exemption consciously.
-    const files = fs
-      .readdirSync(path.join(ROOT, 'components/gov-chat-backend/__tests__/integration'))
-      .filter((f) => f.endsWith('.test.js'))
-      .sort();
-    expect(files).toEqual(['husk-report.db.test.js', 'tree-display-names.db.test.js']);
   });
 
   // Pins for the matcher's boundary decisions — no jest invocation in the

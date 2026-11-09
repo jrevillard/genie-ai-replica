@@ -152,7 +152,7 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
     // ArangoDB; the test hands it THIS database instead.
     serviceCategoryService.db = db;
     serviceCategoryService.initialized = true;
-  });
+  }, WAIT_BUDGET_MS * 1.5);
 
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database

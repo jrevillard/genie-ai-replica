@@ -136,7 +136,7 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     await recreateDatabase(TEST_URL, DB_NAME, AUTH);
     db = new Database(databaseConfig(TEST_URL, DB_NAME, TEST_USER, TEST_PASSWORD));
     await db.collection(COLLECTION).create();
-  });
+  }, WAIT_BUDGET_MS * 1.5);
 
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database

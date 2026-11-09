@@ -3446,7 +3446,9 @@ test:backend-arango:
     # The whole integration directory: the husk gate AND the sibling tree
     # suite, which shares the lifecycle scaffolding (helpers/arango.js) and
     # therefore the same wait-for-server safety — at zero extra services.
-    - npx jest __tests__/integration --json --outputFile=reports/jest-husk-arango.json
+    # Capped like every other jest invocation (the worker-memory contract):
+    # two files never exceed the two workers the cap allows anyway.
+    - npx jest __tests__/integration --maxWorkers=2 --workerIdleMemoryLimit=500MB --json --outputFile=reports/jest-husk-arango.json
     # The suites SKIPS themselves when ARANGO_TEST_URL is unset: a job that
     # lost the variable would go green having run nothing. The JSON report
     # says how many tests actually ran.

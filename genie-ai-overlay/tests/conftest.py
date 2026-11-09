@@ -209,30 +209,38 @@ sys.modules.setdefault("docling.document_converter", MagicMock())
 # file. A checkout made without symlink support (Windows without developer
 # mode / core.symlinks) materializes it as a plain text file whose body is
 # the link target; json.load then fails, the registry reads as empty, and
-# every request-path language resolves as unknown — 70+ chatqna
-# language-surface tests fail with the reporter's signature (a declared
-# English query landing on fallback_error/translated instead of
-# passthrough_english). Validate the registry file the module will actually
-# read (an operator-provided LANGUAGE_REGISTRY_FILEPATH or the checked-in
-# path); when it does not parse, follow the link text of the checked-in
-# path — the same resolution the chatqna image performs at build time (its
-# Dockerfile copies the backend registry file explicitly, not the symlink).
-# A healthy checkout is untouched: the effective file parses, no env var is
-# set, and the module keeps its own default.
+# every request-path language resolves as unknown. Validate the registry
+# file the module will actually read (an operator-provided
+# LANGUAGE_REGISTRY_FILEPATH or the checked-in path); when it does not
+# parse, follow the link text of the checked-in path — the same resolution
+# the chatqna image performs at build time (its Dockerfile copies the
+# backend registry file explicitly, not the symlink). A healthy checkout is
+# untouched: the effective file parses, no env var is set, and the module
+# keeps its own default.
 _registry_default = os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json")
+_probe_path = os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default)
+_body = ""
 try:
-    with open(os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default), encoding="utf-8") as _handle:
-        json.load(_handle)
-except Exception:
-    try:
-        with open(_registry_default, encoding="utf-8") as _handle:
-            _link_target = _handle.read().strip()
-    except OSError:
-        _link_target = ""
+    with open(_probe_path, encoding="utf-8") as _handle:
+        _body = _handle.read()
+    json.loads(_body)
+except (OSError, ValueError):
+    # The file the module would read does not parse: when the probe read the
+    # checked-in path, its body IS the candidate link text; a failed env
+    # override falls back to the checked-in path's own body.
+    if _probe_path == _registry_default:
+        _link_target = _body.strip()
+    else:
+        try:
+            with open(_registry_default, encoding="utf-8") as _handle:
+                _link_target = _handle.read().strip()
+        except OSError:
+            _link_target = ""
+    _resolved = ""
     if _link_target:
         _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_default), _link_target))
-        if os.path.isfile(_resolved):
-            os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
+    if _resolved and os.path.isfile(_resolved):
+        os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
 
 
 # ---------------------------------------------------------------------------

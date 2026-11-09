@@ -3832,6 +3832,32 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   });
 });
 
+// --- The ArangoDB integration directory's self-skip gate ---
+describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
+  // The test:backend-arango anti-skip gate counts numPassedTests across
+  // the whole integration directory: it proves an ArangoDB-backed test
+  // ran ONLY while every file in the directory skips itself when
+  // ARANGO_TEST_URL is unset. A self-running file would satisfy the
+  // count with zero database-backed tests. That property is enforced by
+  // convention in the suites, so this source pin is its only guard —
+  // the cheapest independent check that the CI gate's assumption holds.
+  test('every test file in __tests__/integration carries the URL gate', () => {
+    const dir = path.join(ROOT, 'components/gov-chat-backend/__tests__/integration');
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.test.js'))
+      .sort();
+    expect(files.length).toBeGreaterThanOrEqual(2);
+
+    for (const file of files) {
+      const source = fs.readFileSync(path.join(dir, file), 'utf-8');
+      if (!/TEST_URL\s*\?\s*describe\s*:\s*describe\.skip/.test(source)) {
+        throw new Error(`${file} must gate itself: const describeWithDatabase = TEST_URL ? describe : describe.skip`);
+      }
+    }
+  });
+});
+
 // --- parseGitlabCiJobChanges: block scoping ---
 describe('parseGitlabCiJobChanges', () => {
   const tempDirs = [];

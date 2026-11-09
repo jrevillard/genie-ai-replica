@@ -78,14 +78,14 @@ const USER_PATH = new RegExp(`/auth/admin/realms/${REALM}/users/user-1$`);
 const POST_USERS_409 = ['POST', USERS_PATH, { status: 409, data: null }];
 const USERNAME_LOOKUP_MISS = ['GET', USERNAME_LOOKUP, { status: 200, data: [] }];
 const EMAIL_PROBE = (data) => [['GET', EMAIL_LOOKUP, { status: 200, data }]];
+// The username-lookup answer for ONE account representation — the shape
+// every health/creation contract resolves against.
+const LOOKUP = (user) => ['GET', USERNAME_LOOKUP, { status: 200, data: [user] }];
+const HEALTHY_USER = () => ({ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true });
 // The lookup answer of a fixture-HEALTHY account (enabled, verified, no
 // pending action) — the state the converge contracts and the create-only
 // contract both resolve against.
-const HEALTHY_LOOKUP = [
-  'GET',
-  USERNAME_LOOKUP,
-  { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
-];
+const HEALTHY_LOOKUP = LOOKUP(HEALTHY_USER());
 
 /**
  * The rejection a call produced, for the assertions that read its
@@ -643,11 +643,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
     // and the call still answers with the id.
     routes = [
       POST_USERS_409,
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: false, emailVerified: false }] },
-      ],
+      LOOKUP({ ...HEALTHY_USER(), enabled: false, emailVerified: false }),
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
       ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
     ];
@@ -742,22 +738,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // before any role is assigned.
     routes = [
       POST_USERS_409,
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        {
-          status: 200,
-          data: [
-            {
-              id: 'user-1',
-              username: ADMIN_FIXTURE.username,
-              enabled: true,
-              emailVerified: true,
-              requiredActions: ['VERIFY_EMAIL'],
-            },
-          ],
-        },
-      ],
+      LOOKUP({ ...HEALTHY_USER(), requiredActions: ['VERIFY_EMAIL'] }),
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
     ];
 
@@ -777,11 +758,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // The other arm of the same gate: enabled=false is login-visible too.
     routes = [
       POST_USERS_409,
-      [
-        'GET',
-        USERNAME_LOOKUP,
-        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: false, emailVerified: true }] },
-      ],
+      LOOKUP({ ...HEALTHY_USER(), enabled: false }),
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
     ];
 

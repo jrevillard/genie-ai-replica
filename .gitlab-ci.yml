@@ -3436,10 +3436,11 @@ test:backend-arango:
     JEST_JUNIT_OUTPUT_NAME: "jest-integration-arango.xml"
   before_script:
     # Only the backend's node_modules: the husk gate loads the script and
-    # the driver; the tree suite additionally resolves the service's
-    # shared-lib barrel through the backend's own dependencies (they carry
-    # everything shared/lib needs today — a shared/lib dependency the
-    # backend lacks would fail HERE, at this install).
+    # the driver; the tree suite's virtual shared-lib mock intercepts the
+    # service's '../shared-lib' require (same resolved path as the mock's
+    # '../../shared-lib'), so no real shared/lib dependency is exercised
+    # in this job — that coupling lives in the Docker runtime image (see
+    # components/CLAUDE.md), not here.
     - cd "$CI_PROJECT_DIR/components/gov-chat-backend" && npm ci
   script:
     # before_script and script share one shell; this pins the cwd of the

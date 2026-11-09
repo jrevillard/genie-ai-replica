@@ -22,7 +22,9 @@
 // fallback); 403 means the caller holds no okf read scope OR the deployment
 // runs OKF_SCOPE_MODE=closed (default-deny) — either way the per-caller
 // serving view is empty by construction → legacy default; 5xx/network →
-// last-known-good config, else the legacy default (mode=legacy, engaged=false).
+// the locally synthesized fail-closed composition carrying the last-known
+// mode (source 'bff-last-known-good'), else the legacy default
+// (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
 // remainder of the TTL window — one upstream attempt per caller per window.
 // The last-known-good carries only the deployment-global posture (the
@@ -169,8 +171,8 @@ function parseOkfScopes(payload) {
   // NAMES that ARE scope strings. The okf-server copy folds
   // `realm_access.roles` in — a user granted a scope-shaped role directly or
   // through a GROUP carries it there — so this copy must see the same set.
-  // Missing it keyed a role-granted caller as `@no-scopes`, colliding with
-  // every scope-less caller on the shared authz cache entry.
+  // Missing it keyed a role-granted caller as scope-less (`[]`), colliding
+  // with every scope-less caller on the shared authz cache entry.
   if (p.realm_access && Array.isArray(p.realm_access.roles)) {
     p.realm_access.roles.forEach(push);
   }

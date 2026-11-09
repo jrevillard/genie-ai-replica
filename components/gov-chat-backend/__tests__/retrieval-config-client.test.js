@@ -176,6 +176,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
     // the degraded caller falls back to the fail-closed defaults instead
     // of being handed a serving view computed for a caller it may not be.
     expect(degraded.engaged).toBe(false);
+    expect(degraded.serving_graph_count).toBe(0);
     expect(degraded.serving_repo_ids).toEqual([]);
     expect(degraded.serving_graphs).toEqual([]);
     expect(degraded.warnings).toEqual([]);
@@ -359,7 +360,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
   // ROLE NAMES that ARE scopes into the scope set (Story 6-1c group grants —
   // a user whose only path to the role is group membership carries it in
   // realm_access.roles). The BFF copy must see the same set, or a
-  // role-granted caller keys the shared authz cache as `@no-scopes`,
+  // role-granted caller keys the shared authz cache as scope-less,
   // colliding with every scope-less caller.
   it('parseOkfScopes: a scope-shaped realm role lands in the parsed set', () => {
     expect(

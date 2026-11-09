@@ -652,6 +652,17 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     );
   });
 
+  it('convertFromCrawl: a name that slugs to nothing still records the slug fallback as requested_name (#1190)', async () => {
+    // A non-Latin/whitespace name passes the presence gate but produces no
+    // slug: requested_name is the SSOT fallback (NOT null, NOT the raw
+    // string) — the deterministic degenerate case, pinned.
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: '日本語' } });
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: 'crawled-repository' })
+    );
+  });
+
   it('convertFromCrawl: a non-string name falls back to the default, never String() coercion (#1190)', async () => {
     repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
     await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: {} } });

@@ -83,6 +83,10 @@ const ROLES = {
 const claimsFor = (roles) => ({
   sub: '11111111-1111-1111-1111-111111111111',
   iss: 'http://keycloak:8080/realms/genie',
+  // The verifier adds the iss_sub composite key to every verified payload —
+  // the mock mirrors the real return shape (round-1 lesson: a mock that
+  // misses a field of the real contract pins a lie).
+  iss_sub: 'http://keycloak:8080/realms/genie#11111111-1111-1111-1111-111111111111',
   exp: Math.floor(Date.now() / 1000) + 300,
   realm_access: { roles }
 });

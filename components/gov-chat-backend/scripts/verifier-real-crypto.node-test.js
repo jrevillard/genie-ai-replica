@@ -52,10 +52,12 @@ const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'R
 // fetches through global fetch too). Discovery docs are derived per realm
 // from the requested URL, so additional-realm inits get their own issuer and
 // JWKS — the shape a real multi-realm Keycloak serves.
+const fetchCalls = [];
 global.fetch = async (url) => {
   const u = String(url);
-  // An unreachable host 404s everything — the init-failure topology names its
-  // host 'unreachable' to land here.
+  fetchCalls.push(u);
+  // An unreachable host refuses every request (503) — the init-failure
+  // topology names its host 'unreachable' to land here.
   if (u.includes('unreachable')) {
     return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({}) };
   }
@@ -240,6 +242,14 @@ test('pin + additional realms: partner init must not clobber the pinned primary 
   const primaryToken = await sign(baseClaims(pinned));
   const payload = await svc.verifyToken(primaryToken);
   assert.equal(payload.iss, pinned);
+  // The partner leg must have RUN: initAllRealms swallows additional-realm
+  // init failures (a warn), so a broken partner route would otherwise leave
+  // this test green without ever exercising the clobber path.
+  const partnerDiscoveryUrl = `${KEYCLOAK_URL}/realms/partner/.well-known/openid-configuration`;
+  assert.ok(
+    fetchCalls.some((c) => c === partnerDiscoveryUrl),
+    'partner realm discovery was never fetched — the clobber path did not run'
+  );
   // A partner-realm token carries a different iss than the pin — rejected.
   const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
   const partnerToken = await sign(baseClaims(partnerIss), { partner: true });
@@ -247,6 +257,14 @@ test('pin + additional realms: partner init must not clobber the pinned primary 
     () => svc.verifyToken(partnerToken),
     (err) => err.code === 'TOKEN_INVALID'
   );
+});
+
+test('additional realms without a pin: a partner-realm token verifies against its own realm keys', async () => {
+  const svc = loadVerifier({ KEYCLOAK_ADDITIONAL_REALMS: '["partner"]' });
+  const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
+  const token = await sign(baseClaims(partnerIss), { partner: true });
+  const payload = await svc.verifyToken(token);
+  assert.equal(payload.iss, partnerIss);
 });
 
 test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {

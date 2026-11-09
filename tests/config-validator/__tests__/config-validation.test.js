@@ -3718,7 +3718,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 
   // Comments are stripped before matching: an unquoted `#` after
   // whitespace is a comment to bash, and CI comments cite commands
-  // (`# npm test alone OOMs`) that invoke nothing.
+  // (`# npm test alone OOMs`) that invoke nothing. The strip is
+  // quote-blind (a quoted `#` is kept by bash but stripped here); no
+  // quoted-# line invokes jest today, and a quote-aware lexer would
+  // exceed this heuristic guard.
   const STRIP_COMMENTS = /(^|\s)#.*$/gm;
   // The jest commands of the given shell blocks — the same matcher, split,
   // and flag check the real CI file goes through below.

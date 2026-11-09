@@ -70,8 +70,8 @@ if (require.main === module) {
     console.error(
       'usage: API_URL=<url> KEYCLOAK_URL=<url> KEYCLOAK_REALM=<realm> \\\n' +
         '  node scripts/build-openapi-spec.js <spec-output-path>\n' +
-        '(the three pins are required — buildSpec asserts them; see the env -i' +
-        ' envelope in scripts/generate-api-client.sh)'
+        '(the three pins are required; see the env -i envelope in' +
+        ' scripts/generate-api-client.sh)'
     );
     process.exit(1);
   }

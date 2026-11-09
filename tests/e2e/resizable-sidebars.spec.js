@@ -282,7 +282,7 @@ test.describe('Resizable sidebars behind one handle', () => {
         };
       }, { stripSel, buttonSel });
       expect(cursors.strip, `${stripSel}: the strip must advertise the drag`).toBe('col-resize');
-      expect(cursors.button, `${stripSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
+      expect(cursors.button, `${buttonSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
       // Without `touch-action: none` the browser claims a touch drag
       // as a scroll and `pointermove` never arrives.
       expect(cursors.stripTouch).toBe('none');

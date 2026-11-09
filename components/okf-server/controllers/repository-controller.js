@@ -329,7 +329,7 @@ async function convertFromCrawl(req, res, next) {
       // one was sent (the index concept title reads it — readable text, not
       // a slug), null when none did, so the title keeps its readable
       // default. The repo identity above carries the slug.
-      requested_name: typeof body.name === 'string' && body.name ? body.name : null,
+      requested_name: typeof body.name === 'string' && body.name.trim() ? body.name : null,
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });

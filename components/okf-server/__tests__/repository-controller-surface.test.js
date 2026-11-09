@@ -664,6 +664,17 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     );
   });
 
+  it('convertFromCrawl: a whitespace-only name is no name — requested_name stays null (#1190)', async () => {
+    // ' ' passes typeof-string but is not a caller name: the gate trims, so
+    // the index title keeps its readable default instead of a blank string.
+    require('../services/crawl-conversion-service').startConversion.mockClear();
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: '  ' } });
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: null })
+    );
+  });
+
   it('convertFromCrawl: a non-string name falls back to the default, never String() coercion (#1190)', async () => {
     repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
     await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: {} } });

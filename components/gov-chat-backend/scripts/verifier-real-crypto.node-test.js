@@ -57,6 +57,26 @@ const fetchCalls = [];
 global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
+  // A slow-body host resolves the fetch (ok:true) then hangs in json() —
+  // the response-body half of the abort window. Without the abort guard
+  // covering the body read, init would hang past the budget here.
+  if (u.includes('slow-body')) {
+    const bodyRealm = /\/realms\/([^/?#]+)\/\.well-known/.exec(u)[1];
+    return {
+      ok: true,
+      status: 200,
+      json: () =>
+        new Promise((resolve, reject) => {
+          const signal = opts && opts.signal;
+          if (signal) {
+            signal.addEventListener('abort', () =>
+              reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }))
+            );
+          }
+          // No timer: only the abort settles this promise.
+        })
+    };
+  }
   // A hanging host never answers — the fetch must honor the AbortController
   // signal, or the discovery-timeout guard could never fire in a test.
   if (u.includes('hang')) {
@@ -303,6 +323,20 @@ test('pin + additional realms: partner realms are skipped, the pinned entry surv
   );
 });
 
+test('pin + DIRECT partner init: the singleton is not poisoned by a registering-nothing init', async () => {
+  // init(url) called directly with a partner URL while the pin is set
+  // registers no issuer entry — it must NOT flip the lazy-init singleton,
+  // or every later verifyToken dies 'Unknown issuer' with the retry path
+  // permanently disabled. The pinned token must still verify afterwards.
+  const pinned = DISCOVERY_ISSUER;
+  const svc = loadVerifier({ KEYCLOAK_EXPECTED_ISSUER: pinned });
+  const partnerUrl = `${KEYCLOAK_URL}/realms/partner`;
+  await svc.init(partnerUrl);
+  const token = await sign(baseClaims(pinned));
+  const payload = await svc.verifyToken(token);
+  assert.equal(payload.iss, pinned);
+});
+
 test('additional realms without a pin: a partner-realm token verifies against its own realm keys', async () => {
   const svc = loadVerifier({ KEYCLOAK_ADDITIONAL_REALMS: '["partner"]' });
   const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
@@ -333,6 +367,25 @@ test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms de
     const elapsed = Date.now() - startedAt;
     assert.ok(elapsed >= 4900, `${badValue}: discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`);
   }
+});
+
+test('a stalled response BODY aborts within the discovery budget too', async () => {
+  // A host that accepts the connection and stalls the response body: the
+  // abort timer must stay armed across res.json(), not only across fetch().
+  // With the body read outside the guarded try this test hangs instead of
+  // failing — the CI job timeout is the backstop.
+  const svc = loadVerifier({
+    KEYCLOAK_DISCOVERY_TIMEOUT_MS: 'abc',
+    KEYCLOAK_URL: 'http://keycloak-slow-body:8080'
+  });
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  const startedAt = Date.now();
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
+  const elapsed = Date.now() - startedAt;
+  assert.ok(elapsed >= 4900, `body read hung past the budget (aborted after ${elapsed}ms)`);
 });
 
 test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {

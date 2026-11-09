@@ -36,9 +36,9 @@ const crawlerToOkfService = {
    *
    * @param {Object} input
    * @param {string} input.fileId       doc-repo file_id of the crawled .md
-   * @param {string} [input.url]        crawl seed URL (slug + provenance)
+   * @param {string} [input.url]        crawl seed URL (name + provenance source)
    * @param {string} [input.crawlJobId] crawl_job _key (audit provenance)
-   * @param {string} [input.filename]   original file_name (repo name slug)
+   * @param {string} [input.filename]   original file_name — sent RAW; the server derives the repo name from it
    * @param {string} [input.splitMode]  'B' per-page (default) | 'A' mega-concept
    * @param {string} [input.classification] 'heuristics' (default) | 'llm' | 'hybrid'
    * @param {Object} [input.actor]      auth hints (sub → x-actor-sub)

@@ -51,9 +51,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
 // The slug SSOT (#1190) — a leaf module, so the cycle with bundle-export
 // (which imports this module's helpers) never re-forms.
-const { slugify } = require('./slug');
-
-const slugFor = (name) => slugify(name, { cap: 80 }) || 'repo';
+const { slugFor } = require('./slug');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
 

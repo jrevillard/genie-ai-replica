@@ -310,7 +310,10 @@ async function convertFromCrawl(req, res, next) {
     // seed URL): the #1190 slug SSOT owns the grammar server-side now — the
     // frontend sends the raw intent. (convert-from-documents keeps its
     // user-typed display names verbatim.)
-    const requestedName = nameFromSource(body.name, 'crawled-repository');
+    const requestedName =
+      typeof body.name === 'string' && body.name
+        ? nameFromSource(body.name, 'crawled-repository')
+        : 'crawled-repository';
     const target = await resolveTargetRepo(
       { ...body, name: requestedName },
       authzForService(req),

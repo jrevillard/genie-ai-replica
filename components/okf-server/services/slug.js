@@ -55,4 +55,12 @@ function nameFromSource(value, fallback) {
   return slug || fallback || '';
 }
 
-module.exports = { slugify, nameFromSource };
+/**
+ * The repo-slug profile shared by graph-lifecycle and bundle-export:
+ * 80-char cap, 'repo' fallback. Feeds `OKF_<slug>_v<n>` graph names,
+ * bundle zip filenames and the `okf:t:<slug>:admin` ACL scope segment —
+ * one definition so the identity-visible grammar cannot drift per site.
+ */
+const slugFor = (name) => slugify(name, { cap: 80 }) || 'repo';
+
+module.exports = { slugify, nameFromSource, slugFor };

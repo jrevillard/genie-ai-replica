@@ -26,8 +26,9 @@ import httpService from './httpService';
 import serviceTreeService from './serviceTreeService';
 import matter from 'gray-matter';
 
-/** Slug for new concept paths: the okf-server slug grammar (issue #1190
- * SSOT, cap 80) applied client-side for locally-minted concept paths. */
+/** Slug for new concept paths: a client-side mirror of the okf-server base
+ * slug grammar (issue #1190 SSOT) for locally-minted concept paths. The
+ * 80-char cap is a LOCAL choice — the server's ingest grammar is uncapped. */
 export function slugifyConcept(input) {
   if (!input) return 'concept';
   return (

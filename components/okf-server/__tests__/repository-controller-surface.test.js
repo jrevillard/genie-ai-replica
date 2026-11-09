@@ -615,6 +615,37 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     );
   });
 
+  // Issue #1190: on the CREATE path the crawl endpoint applies the slug SSOT
+  // (nameFromSource) to the raw intent the frontend now sends — a client-side
+  // slugging regression (raw filename/URL stored as the repo name) must ship
+  // red. A non-string name falls back to the safe default, never String()
+  // coercion ('[object Object]').
+  it('convertFromCrawl create path derives the repo name via nameFromSource (#1190)', async () => {
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    const { res } = await drive(controller.convertFromCrawl, {
+      body: { file_id: 'f1', split_mode: 'B', name: 'https://www.example.com/Kenya Health.md' }
+    });
+    expect(res.statusCode).toBe(202);
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'example-com-kenya-health' }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: 'example-com-kenya-health' })
+    );
+  });
+
+  it('convertFromCrawl: a non-string name falls back to the default, never String() coercion (#1190)', async () => {
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: {} } });
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'crawled-repository' }),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
   it('acceptConceptLink: self-links, missing targets and missing sources are refused', async () => {
     const first = await drive(controller.acceptConceptLink, { body: { to_concept_id: 'c1' } });
     expect(first.next).toHaveBeenCalledWith(expect.any(ValidationError)); // self-link

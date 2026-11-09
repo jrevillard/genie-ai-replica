@@ -2,18 +2,15 @@
 
 /**
  * The spec extraction that feeds the mobile OpenAPI client generation
- * (scripts/generate-api-client.sh) lives in scripts/build-openapi-spec.js.
- * The generation runs it with placeholder pins (API_URL, KEYCLOAK_URL,
- * KEYCLOAK_REALM) baked into the committed Dart artifacts, and its sanity
- * asserts exist to fail loudly when a pin assignment is dropped from the
- * generation envelope — a broken apis glob or a missing pin would otherwise
- * ship a silently degraded client.
+ * (scripts/generate-api-client.sh) runs with placeholder pins (API_URL,
+ * KEYCLOAK_URL, KEYCLOAK_REALM) baked into the committed Dart artifacts;
+ * the pin asserts in scripts/build-openapi-spec.js exist so a dropped pin
+ * throws instead of shipping a silently degraded client.
  *
  * This suite requires the module directly and drives the same pins the
  * generation envelope sets (KEYCLOAK_URL/KEYCLOAK_REALM spellings mirror
- * setup-env.js, API_URL mirrors the generation script's pin value), then
- * asserts the positive spec shape AND the negative paths: a spec built
- * without a pin must throw the corresponding assert, not degrade silently.
+ * setup-env.js, API_URL mirrors the generation script's pin value) — the
+ * positive spec shape and the negative throw paths.
  *
  * swagger-definition.js reads process.env at require time, so each negative
  * case resets the module registry and re-requires the chain after deleting
@@ -36,17 +33,26 @@ const { buildSpec } = require('../../../../scripts/build-openapi-spec');
 
 describe('scripts/build-openapi-spec', () => {
   let spec;
+  // Snapshot taken AFTER this file's pin assignments, so the restore puts
+  // back exactly the pins the suite runs with — no second copy of the
+  // literal values to keep in sync with setup-env.js.
+  let savedPins;
 
   beforeAll(() => {
+    savedPins = ['API_URL', 'KEYCLOAK_URL', 'KEYCLOAK_REALM'].map((key) => [key, process.env[key]]);
     spec = buildSpec();
   });
 
   afterEach(() => {
     // The negative cases delete pins and reset the module registry; restore
     // the pinned environment so no case leaks state into another.
-    process.env.API_URL = 'https://localhost';
-    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
-    process.env.KEYCLOAK_REALM = 'genie';
+    for (const [key, value] of savedPins) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     jest.resetModules();
   });
 
@@ -66,17 +72,13 @@ describe('scripts/build-openapi-spec', () => {
     expect(flow.tokenUrl).not.toContain('undefined');
   });
 
-  it('fails loudly when the API_URL pin is missing', () => {
-    delete process.env.API_URL;
+  it.each([
+    ['API_URL', /API_URL pin/],
+    ['KEYCLOAK_URL', /concrete URL/]
+  ])('fails loudly when the %s pin is missing', (pin, messagePattern) => {
+    delete process.env[pin];
     jest.resetModules();
     const unpinned = require('../../../../scripts/build-openapi-spec');
-    expect(() => unpinned.buildSpec()).toThrow(/API_URL pin/);
-  });
-
-  it('fails loudly when the Keycloak pins are missing', () => {
-    delete process.env.KEYCLOAK_URL;
-    jest.resetModules();
-    const unpinned = require('../../../../scripts/build-openapi-spec');
-    expect(() => unpinned.buildSpec()).toThrow(/concrete URL/);
+    expect(() => unpinned.buildSpec()).toThrow(messagePattern);
   });
 });

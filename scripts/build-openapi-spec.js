@@ -12,8 +12,6 @@
  * a backend production dependency; the CI drift gate installs it at the
  * repository root, which the same resolution reaches by walking up), so the
  * module works from any working directory and with either install shape.
- * The backend suite requires this module directly — the pin asserts below
- * are under test there.
  */
 
 const assert = require('assert');

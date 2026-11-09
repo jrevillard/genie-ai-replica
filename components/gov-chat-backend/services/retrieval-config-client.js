@@ -271,7 +271,7 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
     const raw = await fetchUpstream(policy.path, bearerHeader, correlationId);
     entry = { window, value: policy.onSuccess(raw, opts) };
   } catch (err) {
-    const resolved = policy.onFailure(err, correlationId, window);
+    const resolved = policy.onFailure(err, correlationId);
     if (resolved.throw) throw resolved.error; // never cached — see docstring
     entry = { window, value: resolved.value };
   }

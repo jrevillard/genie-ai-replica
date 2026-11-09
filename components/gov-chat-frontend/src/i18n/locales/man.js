@@ -755,7 +755,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'Portal an kajoor',
+    eCitizen: 'Portal an jipañ',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
     drivingLicense: 'Moto Bula-Laisins'
@@ -1392,7 +1392,7 @@ export default {
     startBusinessPrompt:
       "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an kajinmour in kien. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an kōmpōnijen dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     findHealthcarePrompt:
-      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn mour eo an kajoor eo an ājmour im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn jipañ ko an ājmour im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     educationServicesPrompt:
       "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn kajin jikuul ko an jikuul, rejistōr eo an armij ro rej ekkatak, ak jikin ilo jikuul elapi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an kōṇōṇōd eo an jikuul ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     transportLicensesPrompt:

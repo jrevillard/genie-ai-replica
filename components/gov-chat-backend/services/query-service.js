@@ -396,8 +396,8 @@ class QueryService {
         if (label.toLowerCase().includes('passport')) {
           metadata.source_documents.push({
             document_id: `doc_passport_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/passport_application_ecitizen',
-            text: 'Link to the eCitizen portal for passport applications.',
+            url: 'http://example.com/docs/passport_application',
+            text: 'Link to the national portal for passport applications.',
             categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.93

@@ -74,11 +74,13 @@ def test_overlay_source_never_prints():
 
 @pytest.mark.asyncio
 async def test_unsupported_file_type_is_reported_as_a_warning():
-    """A file Docling cannot read is dropped — the log says so, at WARNING.
+    """A file Docling cannot read is refused — the log says so, at WARNING.
 
-    `docling_document_loader` returns None for an unsupported extension and
-    the caller turns that into zero chunks, so this message is the only
-    trace that the document was skipped.
+    The ingest caller routes only DOCLING_SUPPORTED_EXTENSIONS files here and
+    sends everything else to the standard loader, so this guard is the safety
+    net for a direct caller: it refuses the file at WARNING (logger.warning +
+    a None return) instead of feeding an unreadable path to the converter
+    (issue #1661 — the extension set itself has one owner).
     """
     from dataprep import genieai_dataprep_utils as utils
 

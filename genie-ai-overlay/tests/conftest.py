@@ -281,6 +281,18 @@ sys.modules.setdefault("docling.datamodel.base_models", MagicMock())
 sys.modules.setdefault("docling.datamodel.pipeline_options", MagicMock())
 sys.modules.setdefault("docling.document_converter", MagicMock())
 
+# The dataprep service from-imports DOCLING_SUPPORTED_EXTENSIONS from the
+# vendored utils module for its routing decision (issue #1661), so the stub
+# of comps.dataprep.src.genieai_dataprep_utils must carry the real value:
+# read it from the repo's own file rather than restating the tuple here,
+# which would be a third copy able to drift from production. The import sits
+# BELOW the heavy-dependency stubs above — the module's module-level
+# cv2/easyocr/pymupdf/docling imports resolve against them (the same real
+# module tests/test_dataprep_logging.py imports through `dataprep.`).
+from dataprep.genieai_dataprep_utils import DOCLING_SUPPORTED_EXTENSIONS as _real_docling_extensions
+
+sys.modules["comps.dataprep.src.genieai_dataprep_utils"].DOCLING_SUPPORTED_EXTENSIONS = _real_docling_extensions
+
 
 # ---------------------------------------------------------------------------
 # Autouse fixture — required env vars for every OPEA service

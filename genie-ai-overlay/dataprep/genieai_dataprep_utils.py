@@ -172,11 +172,16 @@ async def load_with_docling(doc_path: str) -> str:
     return content
 
 
+# The single owner of the docling-supported extension set. The ingest caller
+# (`genieai_dataprep_arangodb.py`) imports this constant to decide which files
+# are routed here; a second, restated tuple would let the two lists drift
+# apart and silently flip this guard between live and dead (issue #1661).
+DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
+
+
 async def docling_document_loader(doc_path):
     # Support for PDF, DOCX, PPTX, XLSX, HTML, Markdown, and Text
-    supported_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
-
-    if doc_path.endswith(supported_extensions):
+    if doc_path.endswith(DOCLING_SUPPORTED_EXTENSIONS):
         return await load_with_docling(doc_path)
     else:
         logger.warning(f"File type {doc_path} not supported by Docling")

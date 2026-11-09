@@ -52,9 +52,9 @@ const streamBaseUrl = 'http://mock';
 /// stream closes immediately — the send completes with an empty answer,
 /// which is all the wire assertions need.
 class _CapturingStreamClient extends QuickHelpTreeMockClient {
-  _CapturingStreamClient(super.tree, this.bodies);
+  _CapturingStreamClient(super.tree);
 
-  final List<String> bodies;
+  final List<String> bodies = [];
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -73,7 +73,7 @@ class _CapturingStreamClient extends QuickHelpTreeMockClient {
 Future<void> pumpMainScreen(
   WidgetTester tester,
   http.BaseClient mock, {
-  http.BaseClient? chatClient,
+  bool streaming = false,
 }) async {
   // The phone surface (the default test viewport is below the 1200px
   // wide-screen threshold): the sidebar lives in the drawer the binder
@@ -97,11 +97,11 @@ Future<void> pumpMainScreen(
           isDarkMode: false,
           toggleTheme: () {},
           onLogout: () {},
-          // A non-null client + base URL turn the chat's send path to
-          // STREAMING — the production shape — with the requests
-          // answering through the test's mock.
-          httpClient: chatClient,
-          streamBaseUrl: chatClient == null ? null : streamBaseUrl,
+          // [streaming] turns the chat's send path to the production
+          // STREAMING shape: the same mock answers both the generated
+          // API calls and the streaming sends.
+          httpClient: streaming ? mock : null,
+          streamBaseUrl: streaming ? streamBaseUrl : null,
         ),
       ),
     ),
@@ -116,8 +116,17 @@ Future<void> openSidebar(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// Taps the service row [index] of the expanded category 2, by the
-/// rows' test handles.
+/// Expands the category by its test handle (a second tap would collapse
+/// it — ExpansionTile toggles), then taps the service row [index] inside
+/// it, by the rows' test handles.
+Future<void> pickService(WidgetTester tester, int index) async {
+  await tester.tap(find.byKey(const Key('cat_2')));
+  await tester.pumpAndSettle();
+  await tapService(tester, index);
+}
+
+/// Taps the service row [index] of the expanded category 2 — the
+/// deselect gesture of the pass-through's clear branch.
 Future<void> tapService(WidgetTester tester, int index) async {
   await tester.tap(find.byKey(Key('svc_2_$index')));
   await tester.pumpAndSettle();
@@ -127,7 +136,7 @@ Future<void> tapService(WidgetTester tester, int index) async {
 /// header strip the component puts above its content — a tap there pops
 /// the drawer (the gesture a user makes to get back to the chat).
 Future<void> closeDrawer(WidgetTester tester) async {
-  await tester.tapAt(const Offset(400, 20));
+  await tester.tap(find.byKey(const Key('sidebar_close_strip')));
   await tester.pumpAndSettle();
 }
 
@@ -162,18 +171,15 @@ void main() {
     );
 
     await openSidebar(tester);
-    // Expand the category by its handle (a second tap would collapse it
-    // — ExpansionTile toggles), then pick its one service.
-    await tester.tap(find.byKey(const Key('cat_2')));
-    await tester.pumpAndSettle();
-    await tapService(tester, 0);
+    await pickService(tester, 0);
 
     // The selection's display name landed in the chat's context bar:
     // the call carried the payload's name as the POSITIONAL category
     // name (a swap with the category id would render 'Context: 2').
     expect(find.text('Context: Births'), findsOneWidget);
 
-    // Deselecting passes the clear payload through the same call.
+    // Deselecting passes the clear payload through the same call — the
+    // row tap toggles, the category stays expanded.
     await tapService(tester, 0);
 
     expect(find.text('Context: Births'), findsNothing);
@@ -182,15 +188,11 @@ void main() {
   testWidgets('the selection\'s EN scope travels the send wire', (
     tester,
   ) async {
-    final bodies = <String>[];
-    final mock = _CapturingStreamClient(quickHelpTreeFixture(), bodies);
-    await pumpMainScreen(tester, mock, chatClient: mock);
+    final mock = _CapturingStreamClient(quickHelpTreeFixture());
+    await pumpMainScreen(tester, mock, streaming: true);
 
     await openSidebar(tester);
-    // Expand the category (a second tap would collapse it), pick Births.
-    await tester.tap(find.byKey(const Key('cat_2')));
-    await tester.pumpAndSettle();
-    await tapService(tester, 0);
+    await pickService(tester, 0);
     await closeDrawer(tester);
     await sendQuestion(tester, 'tomato question');
 
@@ -198,8 +200,8 @@ void main() {
     // named arguments carry is what filters the corpus — a dropped
     // `categoryNameEn` or `serviceLabelsEn` sends this query unscoped
     // while the context bar still shows a scope.
-    expect(bodies, hasLength(1));
-    final body = jsonDecode(bodies.single) as Map<String, dynamic>;
+    expect(mock.bodies, hasLength(1));
+    final body = jsonDecode(mock.bodies.single) as Map<String, dynamic>;
     final context = body['context'] as Map<String, dynamic>;
     expect(context['categoryLabel'], 'Civil Registry');
     expect(context['serviceLabels'], ['Births']);
@@ -207,15 +209,11 @@ void main() {
   });
 
   testWidgets('a pick with no EN label cannot send', (tester) async {
-    final bodies = <String>[];
-    final mock = _CapturingStreamClient(treeWithLabellessService(), bodies);
-    await pumpMainScreen(tester, mock, chatClient: mock);
+    final mock = _CapturingStreamClient(treeWithLabellessService());
+    await pumpMainScreen(tester, mock, streaming: true);
 
     await openSidebar(tester);
-    // Expand the category, pick the label-less service.
-    await tester.tap(find.byKey(const Key('cat_2')));
-    await tester.pumpAndSettle();
-    await tapService(tester, 1);
+    await pickService(tester, 1);
     await closeDrawer(tester);
     await sendQuestion(tester, 'mystery question');
 
@@ -223,6 +221,6 @@ void main() {
     // (serviceCount 1) whose labels carry no EN name, and the refusal
     // must keep the question off the wire — a drop of the `serviceCount`
     // argument would empty the count and let this send through.
-    expect(bodies, isEmpty);
+    expect(mock.bodies, isEmpty);
   });
 }

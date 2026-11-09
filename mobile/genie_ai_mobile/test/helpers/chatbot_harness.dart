@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
@@ -139,12 +140,7 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
 
 /// The mocked API overrides every widget-test mount shares: both
 /// generated API clients answer through the test's mock HTTP client.
-// The return type cannot be named: flutter_riverpod's public export
-// re-exports its internals through a `show` list that omits `Override`
-// (the type ProviderScope.overrides itself is declared with), so the
-// inference lint is the price of sharing the list.
-// ignore: strict_top_level_inference
-apiOverrides(http.BaseClient mock) => [
+List<Override> apiOverrides(http.BaseClient mock) => [
   serviceCategoriesApiProvider.overrideWithValue(
     ServiceCategoriesApi(ApiClient()..client = mock),
   ),

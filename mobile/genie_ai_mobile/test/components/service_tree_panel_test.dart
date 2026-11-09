@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import '../helpers/chatbot_harness.dart';
 import '../helpers/theme_helper.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
@@ -350,13 +351,10 @@ void main() {
     // of the ink behaviour — the visible result itself is a device check,
     // outside what a widget test can see).
     resetThemeManager();
-    final api = ServiceCategoriesApi(
-      ApiClient()..client = _MockClient(jsonEncode(tree)),
-    );
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        overrides: apiOverrides(_MockClient(jsonEncode(tree))),
         child: MaterialApp(
           home: Scaffold(body: ServiceTreePanel(onSelectionChange: (s) {})),
         ),

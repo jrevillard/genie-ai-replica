@@ -40,9 +40,11 @@ function b64url(obj) {
   return Buffer.from(JSON.stringify(obj)).toString('base64url');
 }
 
-/** A syntactically-valid (unverified — cache-key only) JWT bearer header. */
-function makeBearer(scopes = [], roles = [], sub = 'user-1') {
-  const payload = { sub, okf_scopes: scopes, realm_access: { roles } };
+/** A syntactically-valid (unverified — cache-key only) JWT bearer header.
+ *  `extra` overrides/adds payload fields (e.g. a `scope` claim, or an
+ *  `okf_scopes` STRING instead of the default array). */
+function makeBearer(scopes = [], roles = [], sub = 'user-1', extra = {}) {
+  const payload = { sub, okf_scopes: scopes, realm_access: { roles }, ...extra };
   return `Bearer ${b64url({ alg: 'none' })}.${b64url(payload)}.sig`;
 }
 
@@ -149,7 +151,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
-  it('okf-server 5xx: serves the last-known-good config (identity-sanitized)', async () => {
+  it('okf-server 5xx: the degraded caller keeps the global posture and the fail-closed per-caller view', async () => {
     axios.get
       .mockReturnValueOnce(
         okfGetResponse({ ...HYBRID_CONFIG, config: { ...HYBRID_CONFIG.config, updated_by: 'steward-9' } })
@@ -162,14 +164,40 @@ describe('retrieval-config-client (Story 1.1)', () => {
     nowMs += REAL_TTL_MS + 1;
     const degraded = await client.getRetrievalConfig(bearer);
 
-    // Posture fields survive verbatim from the last-known-good...
-    expect(degraded.engaged).toBe(true);
+    // The deployment-global posture survives the outage: the mode the
+    // deployment was last known to run.
+    expect(degraded.config).toEqual({ mode: 'hybrid' });
+    // Everything else on the shared last-known-good copy is PER-CALLER
+    // state (it is computed by the okf-server FROM the caller's scopes) —
+    // the degraded caller falls back to the fail-closed defaults instead
+    // of being handed a serving view computed for a caller it may not be.
+    expect(degraded.engaged).toBe(false);
+    expect(degraded.serving_repo_ids).toEqual([]);
+    expect(degraded.serving_graphs).toEqual([]);
+    expect(degraded.warnings).toEqual([]);
+  });
+
+  it("okf-server 5xx cross-caller: a failing caller is never served another caller's serving view", async () => {
+    axios.get.mockImplementation((path, config) => {
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
+      if (sub === 'caller-b') return okfGetError(503);
+      return okfGetResponse({
+        ...HYBRID_CONFIG,
+        serving_repo_ids: [`repo-of-${sub}`],
+        serving_graphs: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }]
+      });
+    });
+
+    await client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-a'));
+    const degraded = await client.getRetrievalConfig(makeBearer([], [], 'caller-b'));
+
+    // The mode is deployment-global (shared posture is legitimate) — but
+    // caller-b's serving view is its own fail-closed one, never caller-a's.
     expect(degraded.config.mode).toBe('hybrid');
-    expect(degraded.serving_repo_ids).toEqual(['a', 'b']);
-    // ...but the shared LKG copy never carries the governing admin's sub:
-    // it is served to ANY caller on upstream failure, so the okf-server's
-    // per-caller updated_by redaction must hold on this side too.
-    expect(degraded.config.updated_by).toBeNull();
+    expect(degraded.engaged).toBe(false);
+    expect(degraded.serving_repo_ids).toEqual([]);
+    expect(degraded.serving_graphs).toEqual([]);
+    expect(degraded.warnings).toEqual([]);
   });
 
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {
@@ -275,6 +303,18 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
+  it('injective key: a scope set and a single literal scope containing the delimiter key differently', () => {
+    // The scope grammar is not constrained to the 4-part shape, so a single
+    // scope whose NAME contains the delimiter can exist. The key must be
+    // injective over scope LISTS: the set {a, b} and the one-scope list
+    // [a|b] must never join to the same bytes (they would share one cache
+    // entry and be served the same per-caller payload).
+    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+    const setKey = keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']));
+    const literalKey = keyOf(makeBearer(['okf:t:a:read|okf:t:b:read']));
+    expect(literalKey).not.toBe(setKey);
+  });
+
   it('super-admin posture is part of the key: same scopes, different realm roles → separate entries', async () => {
     axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
 
@@ -324,6 +364,26 @@ describe('retrieval-config-client (Story 1.1)', () => {
         realm_access: { roles: ['default-roles-genie', 'offline_access', 'okf:t:c:read'] }
       })
     ).toEqual(['okf:t:c:read']);
+  });
+
+  it('parseOkfScopes: the standard scope claim lands in the parsed set — same key as the array grant', () => {
+    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+    expect(keyOf(makeBearer([], [], 'u1', { scope: 'okf:t:a:read okf:t:b:read openid offline_access' }))).toBe(
+      keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
+    );
+    // Literal expectation — not routed through the parser under test.
+    expect(client._internals.parseOkfScopes({ scope: 'okf:t:a:read openid offline_access' })).toEqual(['okf:t:a:read']);
+  });
+
+  it('parseOkfScopes: a space-joined okf_scopes STRING attribute matches the array grant', () => {
+    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+    expect(keyOf(makeBearer([], [], 'u2', { okf_scopes: 'okf:t:a:read okf:t:b:read' }))).toBe(
+      keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
+    );
+    // Literal expectation — not routed through the parser under test.
+    expect(client._internals.parseOkfScopes({ okf_scopes: 'okf:t:a:read default-roles-genie' })).toEqual([
+      'okf:t:a:read'
+    ]);
   });
 
   it("role-granted scopes share the claim-scoped cache entry, never the scope-less caller's entry", async () => {

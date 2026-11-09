@@ -25,9 +25,12 @@
 // last-known-good config, else the legacy default (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
 // remainder of the TTL window — one upstream attempt per caller per window.
-// The last-known-good carries only the deployment-global POSTURE fields
-// (mode/serving/engaged/warnings); the per-caller graph set always comes from
-// the caller's own live authz call and is never served from last-known-good.
+// The last-known-good carries ONLY the deployment-global posture (mode +
+// source) — engaged, the serving_* fields and warnings are computed FROM the
+// caller's scopes and are never carried across callers: a degraded caller
+// keeps the fail-closed per-caller defaults. The per-caller graph set always
+// comes from the caller's own live authz call and is never served from
+// last-known-good.
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
@@ -200,7 +203,12 @@ function effectiveScopesKey(bearerHeader) {
     payload.realm_access.roles.includes('tools-admin')
   );
   const scopes = parseOkfScopes(payload).sort();
-  return (isSuperAdmin ? ['@superadmin'] : []).concat(scopes).join('|') || '@no-scopes';
+  // JSON serialization keeps the key INJECTIVE over scope lists: a bare
+  // delimiter join would collide the single literal scope "a|b" with the
+  // two-scope set {a, b} — the scope grammar is not delimiter-free, so a
+  // collided pair would share one cache entry and one per-caller payload.
+  const parts = (isSuperAdmin ? ['@superadmin'] : []).concat(scopes);
+  return parts.length ? JSON.stringify(parts) : '@no-scopes';
 }
 
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
@@ -300,12 +308,14 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           typeof raw.config.mode === 'string' &&
           typeof raw.engaged === 'boolean'
         ) {
-          // Exposure boundary (2026-10-16): okf-server nulls config.updated_by
-          // for non-superadmin callers, but the last-known-good copy is
-          // served to ANY caller on upstream failure — keep the admin's
-          // identity sub out of the shared copy (the BFF itself reads only
-          // the posture fields; this is defense in depth).
-          _lastGoodConfig = { ...raw, config: { ...raw.config, updated_by: null } };
+          // The last-known-good copy is served to ANY caller on upstream
+          // failure, so it carries ONLY the deployment-global posture
+          // (mode + source). Everything else in the response — engaged,
+          // serving_graph_count, serving_repo_ids, serving_graphs,
+          // warnings, config.updated_by — is computed BY the okf-server
+          // FROM this caller's scopes; carrying it in the shared copy
+          // would hand one caller's serving view to another on an outage.
+          _lastGoodConfig = { config: { mode: raw.config.mode }, source: raw.source };
           return raw;
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {
@@ -330,7 +340,18 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           status: status || err?.code || err?.message,
           last_known_good: Boolean(_lastGoodConfig)
         });
-        return { window, value: _lastGoodConfig || legacyDefaultConfig() };
+        if (!_lastGoodConfig) return { window, value: legacyDefaultConfig() };
+        // The global posture survives the outage; the per-caller view stays
+        // fail-closed (the shared copy never carried it).
+        const degraded = legacyDefaultConfig();
+        return {
+          window,
+          value: {
+            ...degraded,
+            config: { ...degraded.config, mode: _lastGoodConfig.config.mode },
+            source: _lastGoodConfig.source
+          }
+        };
       }
     },
     opts

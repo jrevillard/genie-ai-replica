@@ -18,14 +18,14 @@
  */
 
 require('../setup-env');
-// The generation envelope pins API_URL so the committed client carries a
-// deterministic absolute base path.
-const originalApiUrl = process.env.API_URL;
-process.env.API_URL = 'https://localhost';
 
-// This file overwrote API_URL at load — restore whatever the environment
-// carried when the file started (Jest workers share process.env across
-// test files).
+// This file overwrites API_URL (the generation envelope's pin value) for
+// the suite below — the assignment happens in beforeAll, AFTER the module
+// imports have succeeded, so a load failure cannot leave the pin behind in
+// the shared Jest worker environment. The original is restored at file end
+// (Jest workers share process.env across test files).
+let originalApiUrl;
+
 afterAll(() => {
   if (originalApiUrl === undefined) {
     delete process.env.API_URL;
@@ -38,12 +38,16 @@ const { buildSpec } = require('../../../../scripts/build-openapi-spec');
 
 describe('scripts/build-openapi-spec', () => {
   let spec;
-  // Snapshot taken AFTER this file's pin assignments, so the restore puts
-  // back exactly the pins the suite runs with — no second copy of the
-  // literal values to keep in sync with setup-env.js.
   let savedPins;
 
   beforeAll(() => {
+    // The generation envelope pins API_URL so the committed client carries
+    // a deterministic absolute base path.
+    originalApiUrl = process.env.API_URL;
+    process.env.API_URL = 'https://localhost';
+    // Snapshot taken AFTER the pin assignment, so the restore puts back
+    // exactly the pins the suite runs with — no second copy of the literal
+    // values to keep in sync with setup-env.js.
     savedPins = ['API_URL', 'KEYCLOAK_URL', 'KEYCLOAK_REALM'].map((key) => [key, process.env[key]]);
     spec = buildSpec();
   });

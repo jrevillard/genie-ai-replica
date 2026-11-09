@@ -209,6 +209,22 @@ test('browser-issuer alias works WITHOUT the JWKS override (drift closed)', asyn
   assert.equal(payload.iss, browserIss);
 });
 
+test('PUBLIC_URL and BROWSER_ISSUER set TOGETHER: both issuers accepted (DW-431 class)', async () => {
+  // The original DW-431 bug: the two alias variables were one overwritten
+  // string, so setting both rejected public-issuer tokens. The aliases are
+  // independent map entries — a regression to sequential overwrite fails
+  // this test on whichever issuer lost its entry.
+  const publicIss = 'https://public.example/auth/realms/genie';
+  const browserIss = 'https://localhost/auth/realms/genie';
+  const svc = loadVerifier({
+    KEYCLOAK_PUBLIC_URL: 'https://public.example/auth',
+    KEYCLOAK_BROWSER_ISSUER: browserIss
+  });
+  assert.equal((await svc.verifyToken(await sign(baseClaims(publicIss)))).iss, publicIss);
+  assert.equal((await svc.verifyToken(await sign(baseClaims(browserIss)))).iss, browserIss);
+  assert.equal((await svc.verifyToken(await sign(baseClaims(DISCOVERY_ISSUER)))).iss, DISCOVERY_ISSUER);
+});
+
 test('KEYCLOAK_EXPECTED_ISSUER pin: only the pinned issuer is accepted', async () => {
   const pinned = 'https://genie.example.org/auth/realms/genie';
   const svc = loadVerifier({ KEYCLOAK_EXPECTED_ISSUER: pinned });

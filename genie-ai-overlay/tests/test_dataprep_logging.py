@@ -15,9 +15,14 @@ The scan is AST-based, not a regex over the source text: a `print(` inside a
 docstring or a comment is not a logging call and must not fail the guard,
 and `builtins.print(...)` is the same evasion as a bare `print(...)`. The
 behavioural assertions cover the messages that replaced the last prints — a
-dropped file, a missing docling, and the startup config dump — so a
+dropped file, a missing dependency, and the startup config dump — so a
 regression to `print()` (or to the wrong level, or to an unwired logger) is
 caught, not just a reworded string.
+
+The guard's scope is the shared walk's: `overlay_source_files()` skips the
+directories OVERLAY_SKIP_DIRS excludes (tests, contracts, build-patches,
+reports, site and the virtualenvs) — code there is not covered by this
+guard.
 """
 
 import ast
@@ -53,7 +58,7 @@ def _print_call_lines(path: Path) -> list[int]:
 
 
 def test_overlay_source_never_prints():
-    """No `print()` call survives anywhere in the overlay's project source.
+    """No `print()` call survives in any file the shared overlay walk covers.
 
     The file walk is the shared `overlay_source_files()` helper, not a
     private one: every guard that answers "what is overlay source?" must
@@ -136,12 +141,45 @@ def test_missing_dependency_is_reported_before_the_import_error_propagates(missi
     with (
         patch("comps.CustomLogger") as mock_logger_class,
         patch.dict(sys.modules, missing),
+        # The wiring calls run at module level before the try — patch them so
+        # the fresh exec does not mutate the process-global logging tree.
+        patch("tracing.setup_trace_logging", MagicMock()),
+        patch("tracing.setup_json_logging", MagicMock()),
         pytest.raises(ImportError),
     ):
         spec.loader.exec_module(module)
 
     mock_logger_class.return_value.error.assert_called_once()
     assert "install docling" in mock_logger_class.return_value.error.call_args.args[0]
+
+
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [("true", True), ("TRUE", True), ("false", False), ("0", False), (None, False)],
+    ids=["true", "TRUE", "false", "0", "unset"],
+)
+def test_loader_logflag_parses_the_documented_boolean(env_value, expected):
+    """LOGFLAG=false must mean off for the loader, like it does for arangodb.
+
+    The two dataprep modules gate on the same variable; a truthy-string read
+    here made LOGFLAG=false silence arangodb while the loader kept logging.
+    """
+    loader_path = DATAPREP_DIR / "genieai_dataprep_loader.py"
+    spec = importlib.util.spec_from_file_location(f"logflag_parse_{expected}_{env_value}", loader_path)
+    module = importlib.util.module_from_spec(spec)
+    environ = {"PATH": "/usr/bin"}
+    if env_value is not None:
+        environ["LOGFLAG"] = env_value
+
+    with (
+        patch.dict(sys.modules, {"opea_dataprep_loader": MagicMock()}),
+        patch.dict("os.environ", environ, clear=True),
+        patch("tracing.setup_trace_logging", MagicMock()),
+        patch("tracing.setup_json_logging", MagicMock()),
+    ):
+        spec.loader.exec_module(module)
+
+    assert module.logflag is expected
 
 
 @pytest.mark.parametrize(

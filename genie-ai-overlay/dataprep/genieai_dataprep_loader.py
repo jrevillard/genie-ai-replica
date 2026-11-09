@@ -17,7 +17,7 @@ logger = CustomLogger("genie_dataprep_loader")
 setup_trace_logging("genie_dataprep_loader")
 setup_json_logging("genie_dataprep_loader")
 
-logflag = os.getenv("LOGFLAG", False)
+logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 
 class GenieDataprepLoader(OpeaDataprepLoader):

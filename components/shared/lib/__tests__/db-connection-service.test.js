@@ -242,4 +242,16 @@ describe('!1072 — a document miss is an expected outcome, not an error', () =>
     expect(isExpectedAbsence(new Error('gateway returned not found'))).toBe(false);
     expect(isExpectedAbsence(null)).toBe(false);
   });
+
+  it('hasNotFoundStatus matches exactly the bare HTTP-404 shapes the composites share', () => {
+    // The one literal both no-errorNum composites consume (okf-server
+    // isArangoNotFound, doc-repo isDocumentNotFound) — pinned at the owner so
+    // a driver-shape change here cannot silently flip a consumer.
+    const { hasNotFoundStatus } = require('../arango-absence');
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 404 }))).toBe(true);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { statusCode: 404 }))).toBe(true);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 500 }))).toBe(false);
+    expect(hasNotFoundStatus(new Error('plain'))).toBe(false);
+    expect(hasNotFoundStatus(null)).toBe(false);
+  });
 });

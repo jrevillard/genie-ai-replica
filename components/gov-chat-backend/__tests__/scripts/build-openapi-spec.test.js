@@ -23,10 +23,10 @@ require('../setup-env');
 // the suite below — the assignment happens in beforeAll, AFTER the module
 // imports have succeeded, so a load failure cannot leave the pin behind in
 // the shared Jest worker environment. The original is captured at file
-// scope so the afterAll below restores the true original even when the
-// describe's beforeAll never ran (a skipped describe) — a capture in
-// beforeAll would leave the restore deleting a real API_URL from the
-// shared worker env.
+// scope, before any hook, so the afterAll below restores the true original
+// whenever it fires — including a run where the describe's beforeAll never
+// did, where a capture in beforeAll would leave the restore deleting a
+// real API_URL from the shared worker env.
 const originalApiUrl = process.env.API_URL;
 
 afterAll(() => {

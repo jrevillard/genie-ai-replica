@@ -1277,7 +1277,9 @@ function buildMegaConcept(raw, fileId) {
       frontmatter: {
         type: 'topic',
         title: 'Crawled page',
-        sources: [{ kind: 'crawl', resource: null, file_id: fileId }]
+        // Born-right (#1651): the doc-repo file URL — a source entry without
+        // a resource is flagged by conformance and was unfixable in step 8.
+        sources: [{ kind: 'crawl', resource: `${config.documentRepository.url}/api/files/${fileId}`, file_id: fileId }]
       },
       body
     }
@@ -1303,7 +1305,11 @@ function splitBySourceMarkers(raw, fileId) {
       frontmatter: {
         type: 'topic',
         title,
-        sources: url ? [{ kind: 'crawl', resource: url, file_id: fileId }] : [{ kind: 'crawl', file_id: fileId }]
+        // No captured URL → the doc-repo file record is still a real
+        // resource (#1651): a resource-less entry is flagged by conformance.
+        sources: url
+          ? [{ kind: 'crawl', resource: url, file_id: fileId }]
+          : [{ kind: 'crawl', resource: `${config.documentRepository.url}/api/files/${fileId}`, file_id: fileId }]
       },
       body
     });

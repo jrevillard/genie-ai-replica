@@ -93,6 +93,15 @@ Multi-phase procedure in `docs/e2e-tests/`:
 
 **Important**: Phase K mutates realm settings. Cleanup steps K.5+K.6 MUST run after Phase K before proceeding to Phase L.
 
+### Demo Data Seeding
+
+Populate a fresh demo instance (knowledge hierarchy + docs corpus +
+aligned quickHelp config) with `deploy/demo-seed/genie-demo-seed.py`
+(data-driven: `demo-seed-config.json`). Runbook for agents:
+`.claude/rules/DEMO-SEEDING.md` — run `--dry-run` first; it deletes the
+existing hierarchy and replaces the frontend runtime config, so never
+against production without an explicit operator GO.
+
 ## Architecture
 
 For the full architecture overview with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](site/content/en/docs/architecture/architecture.md).

@@ -1,0 +1,470 @@
+{
+  "hierarchy": [
+    {
+      "nameEN": "Get started",
+      "nameFR": "Démarrage",
+      "services": [
+        [
+          "What is GENIE.AI?",
+          "Qu'est-ce que GENIE.AI ?"
+        ],
+        [
+          "Key Concepts",
+          "Concepts clés"
+        ],
+        [
+          "FAQ",
+          "FAQ"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Architecture",
+      "nameFR": "Architecture",
+      "services": [
+        [
+          "System Architecture",
+          "Architecture du système"
+        ],
+        [
+          "OPEA Microservices",
+          "Microservices OPEA"
+        ],
+        [
+          "Trust Boundaries",
+          "Frontières de confiance"
+        ]
+      ]
+    },
+    {
+      "nameEN": "RAG Pipeline",
+      "nameFR": "Pipeline RAG",
+      "services": [
+        [
+          "How RAG Works",
+          "Comment fonctionne le RAG"
+        ],
+        [
+          "Retrieval",
+          "Récupération"
+        ],
+        [
+          "Data Labelling",
+          "Étiquetage des données"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Deployment",
+      "nameFR": "Déploiement",
+      "services": [
+        [
+          "Docker Compose Setup",
+          "Déploiement Docker Compose"
+        ],
+        [
+          "Install Guide",
+          "Guide d'installation"
+        ],
+        [
+          "Topologies",
+          "Topologies"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Observability",
+      "nameFR": "Observabilité",
+      "services": [
+        [
+          "Overview",
+          "Aperçu"
+        ],
+        [
+          "Dashboards",
+          "Tableaux de bord"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Configuration",
+      "nameFR": "Configuration",
+      "services": [
+        [
+          "Deployment Flavors",
+          "Saveurs de déploiement"
+        ],
+        [
+          "Branding",
+          "Personnalisation de marque"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Knowledge Base",
+      "nameFR": "Base de connaissances",
+      "services": [
+        [
+          "OKF Studio",
+          "Studio OKF"
+        ],
+        [
+          "Access Control",
+          "Contrôle d'accès"
+        ],
+        [
+          "Document Lifecycle",
+          "Cycle de vie des documents"
+        ]
+      ]
+    },
+    {
+      "nameEN": "Operations",
+      "nameFR": "Exploitation",
+      "services": [
+        [
+          "Troubleshooting",
+          "Dépannage"
+        ],
+        [
+          "Updates",
+          "Mises à jour"
+        ],
+        [
+          "Security Hardening",
+          "Durcissement de la sécurité"
+        ]
+      ]
+    }
+  ],
+  "corpus": [
+    {
+      "path": "core/project-overview.md",
+      "category": "Get started"
+    },
+    {
+      "path": "get-started/welcome.md",
+      "category": "Get started"
+    },
+    {
+      "path": "get-started/concepts.md",
+      "category": "Get started"
+    },
+    {
+      "path": "get-started/faq.md",
+      "category": "Get started"
+    },
+    {
+      "path": "architecture/architecture.md",
+      "category": "Architecture"
+    },
+    {
+      "path": "architecture/opea-microservices.md",
+      "category": "Architecture"
+    },
+    {
+      "path": "architecture/trust-boundaries.md",
+      "category": "Architecture"
+    },
+    {
+      "path": "rag-pipeline/pipeline.md",
+      "category": "RAG Pipeline"
+    },
+    {
+      "path": "rag-pipeline/retrieval.md",
+      "category": "RAG Pipeline"
+    },
+    {
+      "path": "rag-pipeline/data-labeling.md",
+      "category": "RAG Pipeline"
+    },
+    {
+      "path": "rag-pipeline/ingestion.md",
+      "category": "RAG Pipeline"
+    },
+    {
+      "path": "deploy/docker-compose-setup.md",
+      "category": "Deployment"
+    },
+    {
+      "path": "deploy/install-guide.md",
+      "category": "Deployment"
+    },
+    {
+      "path": "deploy/topologies.md",
+      "category": "Deployment"
+    },
+    {
+      "path": "observe/overview.md",
+      "category": "Observability"
+    },
+    {
+      "path": "observe/dashboards.md",
+      "category": "Observability"
+    },
+    {
+      "path": "configure/deployment-flavors.md",
+      "category": "Configuration"
+    },
+    {
+      "path": "configure/branding-customization.md",
+      "category": "Configuration"
+    },
+    {
+      "path": "knowledge-base/okf-studio.md",
+      "category": "Knowledge Base"
+    },
+    {
+      "path": "knowledge-base/access-control.md",
+      "category": "Knowledge Base"
+    },
+    {
+      "path": "operate/troubleshooting.md",
+      "category": "Operations"
+    },
+    {
+      "path": "operate/updates.md",
+      "category": "Operations"
+    }
+  ],
+  "buttons": [
+    {
+      "id": "just-chat",
+      "title": {
+        "en": "Just Chat",
+        "fr": "Discuter"
+      },
+      "icon": {
+        "type": "file",
+        "value": "/config/quickhelp/just-chat.svg"
+      },
+      "category": null,
+      "styles": {
+        "backgroundColor": "#f0f9ff",
+        "hoverColor": "#e0f2fe",
+        "outlineColor": "#bae6fd"
+      },
+      "placement": "composer"
+    },
+    {
+      "id": "q-what-is-genie",
+      "title": {
+        "en": "What is GENIE.AI?",
+        "fr": "Qu'est-ce que GENIE.AI ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 3\"/></svg>"
+      },
+      "category": "Get started",
+      "styles": {
+        "backgroundColor": "#ecfdf5",
+        "hoverColor": "#d1fae5",
+        "outlineColor": "#a7f3d0"
+      },
+      "action": {
+        "visibleText": {
+          "en": "What is GENIE.AI and what is it designed for?",
+          "fr": "Qu'est-ce que GENIE.AI et à quoi est-il destiné ?"
+        },
+        "hiddenPrompt": {
+          "en": "What is GENIE.AI and what is it designed for?",
+          "fr": "Qu'est-ce que GENIE.AI et à quoi est-il destiné ?"
+        }
+      }
+    },
+    {
+      "id": "q-how-rag-works",
+      "title": {
+        "en": "How does RAG work?",
+        "fr": "Comment fonctionne le RAG ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 5h16l-6 7v5l-4 2v-7L4 5z\"/></svg>"
+      },
+      "category": "RAG Pipeline",
+      "styles": {
+        "backgroundColor": "#fff7ed",
+        "hoverColor": "#ffedd5",
+        "outlineColor": "#fed7aa"
+      },
+      "action": {
+        "visibleText": {
+          "en": "Explain how the RAG pipeline works in GENIE.AI, from the user query to the answer.",
+          "fr": "Explique comment fonctionne le pipeline RAG de GENIE.AI, de la requête à la réponse."
+        },
+        "hiddenPrompt": {
+          "en": "Explain how the RAG pipeline works in GENIE.AI, from the user query to the answer.",
+          "fr": "Explique comment fonctionne le pipeline RAG de GENIE.AI, de la requête à la réponse."
+        }
+      }
+    },
+    {
+      "id": "q-how-to-deploy",
+      "title": {
+        "en": "How do I deploy it?",
+        "fr": "Comment le déployer ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3c3 2 4 6 4 9l3 3-3 1-2 3-2-4h-0l-2 4-2-3-3-1 3-3c0-3 1-7 4-9z\"/><circle cx=\"12\" cy=\"9\" r=\"1.5\"/></svg>"
+      },
+      "category": "Deployment",
+      "styles": {
+        "backgroundColor": "#f5f3ff",
+        "hoverColor": "#ede9fe",
+        "outlineColor": "#ddd6fe"
+      },
+      "action": {
+        "visibleText": {
+          "en": "How do I deploy GENIE.AI with Docker Compose?",
+          "fr": "Comment déployer GENIE.AI avec Docker Compose ?"
+        },
+        "hiddenPrompt": {
+          "en": "How do I deploy GENIE.AI with Docker Compose?",
+          "fr": "Comment déployer GENIE.AI avec Docker Compose ?"
+        }
+      }
+    },
+    {
+      "id": "q-architecture",
+      "title": {
+        "en": "What is the architecture?",
+        "fr": "Quelle est l'architecture ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>"
+      },
+      "category": "Architecture",
+      "styles": {
+        "backgroundColor": "#fdf2f8",
+        "hoverColor": "#fce7f3",
+        "outlineColor": "#fbcfe8"
+      },
+      "action": {
+        "visibleText": {
+          "en": "Describe the architecture of GENIE.AI and its microservices.",
+          "fr": "Décris l'architecture de GENIE.AI et de ses microservices."
+        },
+        "hiddenPrompt": {
+          "en": "Describe the architecture of GENIE.AI and its microservices.",
+          "fr": "Décris l'architecture de GENIE.AI et de ses microservices."
+        }
+      }
+    },
+    {
+      "id": "q-observability",
+      "title": {
+        "en": "How do I observe it?",
+        "fr": "Comment observer le système ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>"
+      },
+      "category": "Observability",
+      "styles": {
+        "backgroundColor": "#eff6ff",
+        "hoverColor": "#dbeafe",
+        "outlineColor": "#bfdbfe"
+      },
+      "action": {
+        "visibleText": {
+          "en": "How does observability work in GENIE.AI (traces, logs, metrics)?",
+          "fr": "Comment fonctionne l'observabilité de GENIE.AI (traces, logs, métriques) ?"
+        },
+        "hiddenPrompt": {
+          "en": "How does observability work in GENIE.AI (traces, logs, metrics)?",
+          "fr": "Comment fonctionne l'observabilité de GENIE.AI (traces, logs, métriques) ?"
+        }
+      }
+    },
+    {
+      "id": "q-configuration",
+      "title": {
+        "en": "How do I configure it?",
+        "fr": "Comment le configurer ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 8h10M18 8h2M4 16h4M12 16h8\"/><circle cx=\"16\" cy=\"8\" r=\"2\"/><circle cx=\"10\" cy=\"16\" r=\"2\"/></svg>"
+      },
+      "category": "Configuration",
+      "styles": {
+        "backgroundColor": "#fefce8",
+        "hoverColor": "#fef9c3",
+        "outlineColor": "#fef08a"
+      },
+      "action": {
+        "visibleText": {
+          "en": "Which environment variables configure GENIE.AI?",
+          "fr": "Quelles variables d'environnement configurent GENIE.AI ?"
+        },
+        "hiddenPrompt": {
+          "en": "Which environment variables configure GENIE.AI?",
+          "fr": "Quelles variables d'environnement configurent GENIE.AI ?"
+        }
+      }
+    },
+    {
+      "id": "q-knowledge-base",
+      "title": {
+        "en": "What is the knowledge base?",
+        "fr": "Qu'est-ce que la base de connaissances ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z\"/><path d=\"M4 19a2 2 0 0 1 2-2h13\"/><path d=\"M9 7h6\"/></svg>"
+      },
+      "category": "Knowledge Base",
+      "styles": {
+        "backgroundColor": "#f0fdfa",
+        "hoverColor": "#ccfbf1",
+        "outlineColor": "#99f6e4"
+      },
+      "action": {
+        "visibleText": {
+          "en": "What is the OKF knowledge base in GENIE.AI and how do documents become concepts?",
+          "fr": "Qu'est-ce que la base de connaissances OKF de GENIE.AI et comment les documents deviennent-ils des concepts ?"
+        },
+        "hiddenPrompt": {
+          "en": "What is the OKF knowledge base in GENIE.AI and how do documents become concepts?",
+          "fr": "Qu'est-ce que la base de connaissances OKF de GENIE.AI et comment les documents deviennent-ils des concepts ?"
+        }
+      }
+    },
+    {
+      "id": "q-operations",
+      "title": {
+        "en": "How do I operate it?",
+        "fr": "Comment l'exploiter ?"
+      },
+      "icon": {
+        "type": "inline",
+        "value": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%234071cb\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 7a4 4 0 0 0-5.6 5.6L4 17v3h3l4.4-4.4A4 4 0 0 0 17 10l2 2 2-2-4-4 2-2-2-2-3 3z\"/></svg>"
+      },
+      "category": "Operations",
+      "styles": {
+        "backgroundColor": "#f8fafc",
+        "hoverColor": "#f1f5f9",
+        "outlineColor": "#e2e8f0"
+      },
+      "action": {
+        "visibleText": {
+          "en": "How do I operate GENIE.AI day to day (health checks, updates, troubleshooting)?",
+          "fr": "Comment exploiter GENIE.AI au quotidien (contrôles de santé, mises à jour, dépannage) ?"
+        },
+        "hiddenPrompt": {
+          "en": "How do I operate GENIE.AI day to day (health checks, updates, troubleshooting)?",
+          "fr": "Comment exploiter GENIE.AI au quotidien (contrôles de santé, mises à jour, dépannage) ?"
+        }
+      }
+    }
+  ],
+  "welcomeMessage": {
+    "en": "Welcome to GENIE.AI — ask me anything about the framework: architecture, RAG pipeline, deployment, operations.",
+    "fr": "Bienvenue sur GENIE.AI — posez-moi vos questions sur le framework : architecture, pipeline RAG, déploiement, exploitation."
+  }
+}

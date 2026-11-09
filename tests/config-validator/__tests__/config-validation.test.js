@@ -3677,16 +3677,24 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
 describe('the jest worker-memory cap contract (#1419)', () => {
   // The pass-through (`npm test`), direct (`npx jest`), and npm-script
   // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest —
-  // except `test:e2e*`, which is Playwright (root package.json), not jest.
-  // Any other unknown variant over-triggers and forces a conscious
-  // decision; nothing silently escapes the class.
-  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e)\w+|npm run test(?![:\w]))/;
+  // except the Playwright variants `test:e2e` and `test:e2e:list` (root
+  // package.json), which are excluded by exact name: any other variant,
+  // e2e-prefixed or not, over-triggers and forces a conscious decision;
+  // nothing unknown silently escapes the class.
+  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
   // A script item may chain commands (with `&&`, `||`, `;`, or a newline
   // inside a block scalar); shell line continuations (`\` + newline) join
-  // first, so one continued invocation is one command. Each command is
-  // checked on its own, so a capped invocation chained with an uncapped
-  // one still fails.
+  // first, so one continued invocation is one command. A single `|` or `&`
+  // is not treated as a separator — this is a heuristic guard on the job
+  // scripts' one-command-per-item house shape, not a shell parser. Each
+  // command is checked on its own, so a capped invocation chained with an
+  // uncapped one still fails.
   const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
+  // Flag presence with a value boundary: `--maxWorkers=2` must not be
+  // satisfied by `--maxWorkers=20` (a raised worker count re-enters the
+  // OOM class silently otherwise).
+  const FLAG_MAX_WORKERS = /--maxWorkers=2(?!\d)/;
+  const FLAG_IDLE_LIMIT = /--workerIdleMemoryLimit=500MB(?!\d)/;
 
   // Out of the measured OOM class, pinned here rather than silently
   // unmatched — a rename or a scope change to either job must fail this
@@ -3715,9 +3723,7 @@ describe('the jest worker-memory cap contract (#1419)', () => {
           .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
       );
   const toViolations = (blocks) =>
-    toInvocations(blocks).filter(
-      (inv) => !inv.cmd.includes('--maxWorkers=2') || !inv.cmd.includes('--workerIdleMemoryLimit=500MB')
-    );
+    toInvocations(blocks).filter((inv) => !FLAG_MAX_WORKERS.test(inv.cmd) || !FLAG_IDLE_LIMIT.test(inv.cmd));
 
   test('every product-component jest invocation carries both cap flags', () => {
     const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
@@ -3756,6 +3762,30 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       }
     ]);
     expect(violations).toEqual([]);
+  });
+
+  test('a raised worker count (--maxWorkers=20) is not satisfied by the cap', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'script',
+        text: 'npm test -- --maxWorkers=20 --workerIdleMemoryLimit=500MB --coverage'
+      }
+    ]);
+    expect(violations.map((v) => v.cmd)).toEqual([
+      'npm test -- --maxWorkers=20 --workerIdleMemoryLimit=500MB --coverage'
+    ]);
+  });
+
+  test('an unknown e2e-prefixed jest variant over-triggers (test:e2e-local)', () => {
+    const violations = toViolations([
+      {
+        owner: 'test:frontend',
+        key: 'before_script',
+        text: 'cd components/gov-chat-frontend && npm run test:e2e-local'
+      }
+    ]);
+    expect(violations.map((v) => v.cmd)).toEqual(['npm run test:e2e-local']);
   });
 
   test('an uncapped jest npm-script variant (test:contract) fails', () => {

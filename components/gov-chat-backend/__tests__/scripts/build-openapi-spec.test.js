@@ -24,8 +24,9 @@ require('../setup-env');
 // imports have succeeded, so a load failure cannot leave the pin behind in
 // the shared Jest worker environment. The original is captured here (next
 // to the afterAll that restores it, whatever path the file takes — a
-// filtered run can execute afterAll without beforeAll) and restored at
-// file end (Jest workers share process.env across test files).
+// future Jest or a structural skip may run the file-level afterAll without
+// the describe's beforeAll) and restored at file end (Jest workers share
+// process.env across test files).
 const originalApiUrl = process.env.API_URL;
 
 afterAll(() => {

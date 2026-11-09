@@ -251,6 +251,7 @@ describe('!1072 — a document miss is an expected outcome, not an error', () =>
     expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 404 }))).toBe(true);
     expect(hasNotFoundStatus(Object.assign(new Error('x'), { statusCode: 404 }))).toBe(true);
     expect(hasNotFoundStatus(Object.assign(new Error('x'), { code: 500 }))).toBe(false);
+    expect(hasNotFoundStatus(Object.assign(new Error('x'), { statusCode: 500 }))).toBe(false);
     expect(hasNotFoundStatus(new Error('plain'))).toBe(false);
     expect(hasNotFoundStatus(null)).toBe(false);
   });

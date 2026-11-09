@@ -3,15 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/main.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
 import 'helpers/chatbot_harness.dart';
+import 'helpers/test_app.dart';
 
 // MainScreen's own service-selection pass-through: the sidebar tree emits
 // a selection payload, `_onServiceSelected` translates it through the
@@ -46,14 +44,7 @@ Future<void> pumpMainScreen(WidgetTester tester, http.BaseClient mock) async {
   );
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        serviceCategoriesApiProvider.overrideWithValue(
-          ServiceCategoriesApi(ApiClient()..client = mock),
-        ),
-        chatHistoryApiProvider.overrideWithValue(
-          ChatHistoryApi(ApiClient()..client = mock),
-        ),
-      ],
+      overrides: apiOverrides(mock),
       child: testAppShell(
         () => MainScreen(
           user: const {'id': 'user-1'},
@@ -64,13 +55,6 @@ Future<void> pumpMainScreen(WidgetTester tester, http.BaseClient mock) async {
       ),
     ),
   );
-  await tester.pumpAndSettle();
-}
-
-/// Expands the category by its test handle (a second tap would collapse
-/// it — ExpansionTile toggles).
-Future<void> expandCategory(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('cat_2')));
   await tester.pumpAndSettle();
 }
 
@@ -108,17 +92,11 @@ void main() {
     await tester.dragFrom(const Offset(20, 300), const Offset(300, 0));
     await tester.pumpAndSettle();
 
-    await expandCategory(tester);
+    // Expand the category by its handle (a second tap would collapse it
+    // — ExpansionTile toggles), then pick its one service.
+    await tester.tap(find.byKey(const Key('cat_2')));
+    await tester.pumpAndSettle();
     await tapService(tester, 0);
-
-    // The row's ink follows its rounded decoration: the tile carries the
-    // shape the InkWell paints its highlight through (the structural
-    // half of the ink behaviour — the visible result itself is a device
-    // check, outside what a widget test can see).
-    expect(
-      tester.widget<ListTile>(find.byKey(const Key('svc_2_0'))).shape,
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.md)),
-    );
 
     // The selection's display name landed in the chat's context bar:
     // the call carried the payload's name as the POSITIONAL category

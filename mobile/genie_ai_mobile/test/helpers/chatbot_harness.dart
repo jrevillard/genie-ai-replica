@@ -2,18 +2,16 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'test_app.dart';
 import 'theme_helper.dart';
 
 // The chatbot widget tests' shared harness: the Quick Help tree fixture,
@@ -139,46 +137,30 @@ Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
       onRelatedDocumentsUpdate: (_) {},
     );
 
-/// The MaterialApp shell every widget-test mount shares: the i18n
-/// singleton drives the locale (the AnimatedBuilder rebuilds the app on
-/// a change), and the app's OWN ThemeData — a widget under a plain
-/// MaterialApp resolves text themes the shipped theme does not carry
-/// (the trap the mobile Visual Fidelity rule names). ONE copy so a
-/// mechanics change (a delegate, the theme resolution) lands once.
-///
-/// [buildHome] is a BUILDER, not a widget: the shell rebuilds the screen
-/// on every locale change, and a widget instance reused across rebuilds
-/// is not rebuilt at all.
-Widget testAppShell(
-  Widget Function() buildHome, {
-  List<Locale> supportedLocales = const [Locale('en')],
-  ThemeData? theme,
-}) => AnimatedBuilder(
-  animation: I18nService(),
-  builder: (context, _) => MaterialApp(
-    theme: theme ?? ThemeManager().lightTheme,
-    locale: I18nService().currentLocale,
-    supportedLocales: supportedLocales,
-    localizationsDelegates: const [
-      FallbackMaterialLocalizationsDelegate(),
-      FallbackWidgetsLocalizationsDelegate(),
-      GlobalCupertinoLocalizations.delegate,
-    ],
-    home: buildHome(),
+/// The mocked API overrides every widget-test mount shares: both
+/// generated API clients answer through the test's mock HTTP client.
+// The return type cannot be named: riverpod 3 does not re-export the
+// `Override` type its own ProviderScope.overrides field is declared
+// with, so the inference lint is the price of sharing the list.
+// ignore: strict_top_level_inference
+apiOverrides(http.BaseClient mock) => [
+  serviceCategoriesApiProvider.overrideWithValue(
+    ServiceCategoriesApi(ApiClient()..client = mock),
   ),
-);
+  chatHistoryApiProvider.overrideWithValue(
+    ChatHistoryApi(ApiClient()..client = mock),
+  ),
+];
 
 /// Mounts the chatbot under the harness every chatbot widget test
-/// shares: the mocked APIs, and the app shell above.
+/// shares: the mocked APIs, and [testAppShell]'s app shell.
 ///
 /// [buildHome] replaces the default screen — a test that mounts its own
 /// widgets around the chatbot (a service tree panel above it) passes a
 /// builder here, and that builder mounts the WIDGET [chatBotUnderTest]
 /// produces (the chatbot's constructor arguments live there, so a test
 /// mounts that widget, not a second copy of it). The parameter is a
-/// BUILDER, not a widget: the harness rebuilds the screen on every
-/// locale change, and a widget instance reused across rebuilds is not
-/// rebuilt at all.
+/// BUILDER, for the reason [testAppShell] documents.
 Future<void> pumpChatBot(
   WidgetTester tester,
   http.BaseClient mock, {
@@ -193,12 +175,7 @@ Future<void> pumpChatBot(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        serviceCategoriesApiProvider.overrideWithValue(
-          ServiceCategoriesApi(ApiClient()..client = mock),
-        ),
-        chatHistoryApiProvider.overrideWithValue(
-          ChatHistoryApi(ApiClient()..client = mock),
-        ),
+        ...apiOverrides(mock),
         if (queriesApi != null)
           queriesApiProvider.overrideWithValue(queriesApi),
       ],

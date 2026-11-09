@@ -654,6 +654,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     final tokens = ThemeManager().tokens;
 
     // Render Tile
+    // One radius for the row's decoration AND its ink shape: the ink
+    // follows the rounded decoration, so the two cannot be allowed to
+    // drift apart.
+    final BorderRadius rowRadius = BorderRadius.circular(DsRadii.md);
     return Container(
       // FIX: Added margin for better touch area and visual separation when selected
       margin: const EdgeInsets.symmetric(
@@ -663,7 +667,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       decoration: BoxDecoration(
         // FIX: Solid Primary color when selected (Standard Button Color)
         color: isSelected ? tokens.brand : Colors.transparent,
-        borderRadius: BorderRadius.circular(DsRadii.md),
+        borderRadius: rowRadius,
       ),
       // The tile's own Material: the ListTile paints its background and
       // ink on the nearest Material ancestor, and the decorated Container
@@ -676,11 +680,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
           // _selectedNodes tracks), so a test can drive one row without
           // reaching for its label text.
           key: Key('svc_${catKey}_$index'),
-          // The ink follows the row's rounded decoration instead of
-          // painting a square-cornered highlight past it.
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DsRadii.md),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: rowRadius),
           dense: true,
           contentPadding: const EdgeInsets.only(left: 48, right: DsSpacing.md),
           visualDensity: const VisualDensity(vertical: -2),

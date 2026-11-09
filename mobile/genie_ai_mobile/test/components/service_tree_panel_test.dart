@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import '../helpers/theme_helper.dart';
 import 'package:http/http.dart' as http;
@@ -341,6 +342,36 @@ void main() {
     // BOTH rows are picked: the same key under another category is
     // another scope.
     expect(emitted!['serviceCount'], 2);
+  });
+
+  testWidgets('a service row paints its ink through its rounded shape', (
+    tester,
+  ) async {
+    // The row's ink follows its rounded decoration: the tile carries the
+    // shape the InkWell paints its highlight through (the structural half
+    // of the ink behaviour — the visible result itself is a device check,
+    // outside what a widget test can see).
+    resetThemeManager();
+    final api = ServiceCategoriesApi(
+      ApiClient()..client = _MockClient(jsonEncode(tree)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        child: MaterialApp(
+          home: Scaffold(body: ServiceTreePanel(onSelectionChange: (s) {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Estado civil'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<ListTile>(find.byKey(const Key('svc_2_0'))).shape,
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.md)),
+    );
   });
 }
 

@@ -13,8 +13,7 @@ const { ArangoToArcadeGraphTranslator } = require('./arango-to-arcade-graph');
 // every component that must tell an absence from a fault uses the SAME rules
 // (ArangoDB 3.12 moved the simple-query miss from 1204 to errorNum 404 with
 // the message 'no match', and each copy had to be found and fixed in
-// lockstep). The local name is kept so the call sites below and the
-// `dbService._isExpectedAbsence` export stay unchanged.
+// lockstep). The local name is kept so the call sites below stay unchanged.
 //
 // MEASURED against arangojs 10.1.2 + ArangoDB:
 //   collection.document('MISSING') -> errorNum 1202, code 404  -> expected
@@ -1815,11 +1814,6 @@ class DatabaseService {
 // Create and export singleton instance
 logger.info('Creating enhanced singleton DatabaseService instance with COMPLETE RECOVERY');
 const dbService = new DatabaseService();
-// Exposed for the !1072 regression test. Attached BEFORE the freeze (assigning
-// onto a frozen object silently fails) and as an instance property rather than
-// a named export, so the singleton export shape every existing
-// `require('./db-connection-service')` caller sees is unchanged.
-dbService._isExpectedAbsence = _isExpectedAbsence;
 Object.freeze(dbService);
 
 module.exports = dbService;

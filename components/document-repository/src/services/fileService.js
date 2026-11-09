@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger, dbService } = require('../../shared-lib');
+const { logger, dbService, isExpectedAbsence } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler');
@@ -21,17 +21,18 @@ const CRAWL_KILL_WAIT_MS = appConfig.crawler?.killWaitMs || 30000;
 const CRAWL_KILL_POLL_MS = 500;
 
 // Definitive document absence, by the CANONICAL classifier (shared/lib's
-// _isExpectedAbsence: ArangoError 1202/1204, or the exact cursor 'no match'
-// message) plus the arangojs HTTP 404 shapes (err.statusCode on HTTP-layer
-// errors, err.code on driver errors — arangojs carries the HTTP status as
-// .code on driver-thrown errors, so the statusCode-only arm missed that
-// shape). The old loose /not found/i message test ALSO matched a MISSING
-// COLLECTION (errorNum 1203, "collection or view not found") and gateway
-// route-not-found — infrastructure faults that must be rethrown, not treated
-// as "job gone" (review 2026-10-29 round 3; mirrors crawlWorker.js).
+// isExpectedAbsence: ArangoError 1202/1204, the 3.12 errorNum 404 + 'no
+// match', or the exact 'no match' message) plus the arangojs HTTP 404 shapes
+// (err.statusCode on HTTP-layer errors, err.code on driver errors — arangojs
+// carries the HTTP status as .code on driver-thrown errors, so the
+// statusCode-only arm missed that shape). The old loose /not found/i message
+// test ALSO matched a MISSING COLLECTION (errorNum 1203, "collection or view
+// not found") and gateway route-not-found — infrastructure faults that must
+// be rethrown, not treated as "job gone" (review 2026-10-29 round 3; mirrors
+// crawlWorker.js).
 const isDocumentNotFound = (e) =>
   !!e &&
-  (dbService._isExpectedAbsence(e) ||
+  (isExpectedAbsence(e) ||
     // The HTTP-layer 404 shapes (statusCode on arangojs HTTP errors, code on
     // driver errors) exist only on errors WITHOUT an Arango errorNum. An
     // errorNum'd fault like 1203 (missing COLLECTION) is an infra error even

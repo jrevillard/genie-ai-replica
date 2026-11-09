@@ -33,13 +33,13 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    // The service classifies an absence with the canonical predicate — the
-    // same function the production db-connection-service exposes. Mocking
-    // the connection without it would turn a missing row into a TypeError.
+    // The service classifies an absence with the canonical predicate, imported
+    // from the same barrel this mock replaces. Mocking the connection without
+    // it would turn a missing row into a TypeError.
     dbService: {
-      getConnection: jest.fn(),
-      _isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
-    }
+      getConnection: jest.fn()
+    },
+    isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
   }),
   { virtual: true }
 );

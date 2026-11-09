@@ -33,16 +33,15 @@ module.exports = {
     error: jest.fn()
   },
   dbService: {
-    getConnection: jest.fn(),
-    // Canonical absence classifier (review 2026-10-29 round 3): fileService's
-    // isDocumentNotFound now delegates here, so the mock must behave like the
-    // real shared/lib function — a bare jest.fn() would return undefined and
-    // silently change which errors count as "document gone" (1203 / loose
-    // "not found" messages would fall through to the statusCode check only).
-    // Canonical absence classifier — single-sourced in the shared fixture
-    // (wave 8: the verbatim replica lived here AND in fileService.test.js).
-    _isExpectedAbsence: require('../fixtures/absence-classifier').isExpectedAbsence
+    getConnection: jest.fn()
   },
+  // Canonical absence classifier (review 2026-10-29 round 3): fileService's
+  // isDocumentNotFound delegates to it, imported from the same barrel this
+  // mock replaces — so the mock re-exports the REAL module (pure function,
+  // no deps — nothing to pull out of shared/lib/node_modules). A bare
+  // jest.fn() would return undefined and silently change which errors count
+  // as "document gone".
+  isExpectedAbsence: require('../../../../shared/lib/arango-absence').isExpectedAbsence,
   setScopeName: jest.fn(),
   // Each of these INVOKES its callback rather than returning undefined. A bare
   // `jest.fn()` turns a wrong assumption into a silent no-op: the shutdown

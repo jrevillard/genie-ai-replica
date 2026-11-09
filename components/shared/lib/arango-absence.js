@@ -13,8 +13,11 @@
  * absence from a fault must use the SAME rules: ArangoDB 3.12 moved the
  * simple-query miss from 1204 to errorNum 404 with the message 'no match',
  * and every copy of this predicate had to be found and fixed in lockstep.
- * The canonical copy lives here; `dbService._isExpectedAbsence` (in
- * db-connection-service.js) is the same function.
+ * The canonical copy lives here; db-connection-service.js imports it under
+ * the local name `_isExpectedAbsence` (private — consumers take it from the
+ * shared-lib barrel), and okf-server's isArangoNotFound delegates the
+ * errorNum'd classification to it while keeping its own no-errorNum status
+ * fallback.
  *
  * @param {Error|Object} error - The error thrown by the driver.
  * @returns {Boolean} True when the error means "the row is not there".

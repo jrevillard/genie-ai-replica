@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, isExpectedAbsence } = require('../shared-lib');
 const { NotFoundError, ValidationError, isClientError } = require('../middleware/errors');
 
 class ServiceCategoryService {
@@ -289,7 +289,7 @@ class ServiceCategoryService {
     try {
       document = await collection.document(key);
     } catch (error) {
-      if (dbService._isExpectedAbsence(error)) {
+      if (isExpectedAbsence(error)) {
         throw new NotFoundError(`${label} ${key} not found`);
       }
       throw error;
@@ -363,7 +363,7 @@ class ServiceCategoryService {
     if (isClientError(error)) {
       throw error;
     }
-    if (dbService._isExpectedAbsence(error)) {
+    if (isExpectedAbsence(error)) {
       // The race verdict rides on the typed error: without it, "vanished
       // between the check and the write" and "never existed" are
       // indistinguishable in the logs.

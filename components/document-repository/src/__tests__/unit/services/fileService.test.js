@@ -6,15 +6,15 @@ jest.mock(
   '../../../../shared-lib',
   () => ({
     logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-    // Canonical absence classifier — required from the shared fixture so the
-    // not-found boundary is single-sourced across test mocks (wave 8). The
-    // real semantics: fileService's isDocumentNotFound delegates to
-    // dbService._isExpectedAbsence; a bare jest.fn() would return undefined
-    // and silently shift that boundary.
+    // Canonical absence classifier — required from the REAL shared/lib module
+    // so the not-found boundary is single-sourced (wave 8 mirrored it into a
+    // fixture; DW-433/#1163 found the fixture had already drifted behind the
+    // canonical). fileService's isDocumentNotFound delegates to it; a bare
+    // jest.fn() would return undefined and silently shift that boundary.
     dbService: {
-      getConnection: jest.fn(),
-      _isExpectedAbsence: require('../../fixtures/absence-classifier').isExpectedAbsence
-    }
+      getConnection: jest.fn()
+    },
+    isExpectedAbsence: require('../../../../../shared/lib/arango-absence').isExpectedAbsence
   }),
   { virtual: true }
 );
@@ -565,13 +565,45 @@ describe('fileService', () => {
     it('_waitCrawlStopped: a missing collection (1203) is a real fault — rethrown, NOT absence', async () => {
       // The old loose /not found/i message test classified this as "job gone"
       // and let the delete proceed over a broken database. Canonical
-      // _isExpectedAbsence treats any errorNum other than 1202/1204 as a
+      // isExpectedAbsence treats any errorNum other than 1202/1204 as a
       // real fault (review 2026-10-29 round 3; mirrors crawlWorker.js).
       const mockDb = {
         collection: jest.fn().mockReturnValue({
           document: jest
             .fn()
             .mockRejectedValue(Object.assign(new Error('collection or view not found'), { errorNum: 1203 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).rejects.toThrow('collection or view not found');
+    });
+
+    it('_waitCrawlStopped: the ArangoDB 3.12 simple-API miss (errorNum 404 + "no match") counts as absence', async () => {
+      // The 3.12 server answers a firstExample miss with errorNum 404 and the
+      // server's own 'no match' message (live-reproduced 2026-11-02). This
+      // case could not be pinned before DW-433/#1163: the hand-mirrored test
+      // fixture had already drifted behind the canonical and lacked the arm.
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockRejectedValue(Object.assign(new Error('no match'), { errorNum: 404, code: 404 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
+    });
+
+    it('_waitCrawlStopped: errorNum 404 WITHOUT the no-match message stays a fault', async () => {
+      // 404 alone is what route/collection faults echo; only the server's own
+      // 'no match' message upgrades it to expected absence.
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest
+            .fn()
+            .mockRejectedValue(
+              Object.assign(new Error('collection or view not found: name: x'), { errorNum: 404, code: 404 })
+            )
         })
       };
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);

@@ -407,9 +407,9 @@ const keycloakAuthService = {
       // any key resolution, so no key rotation can make the same token
       // verify. It must NOT go through the force-refresh path below: forcing
       // the refresh only zeroes the JWKS cache TTL, so sustained junk-alg
-      // traffic keeps the cache permanently invalidated and every
-      // LEGITIMATE token then pays a JWKS re-fetch plus a double
-      // verification.
+      // traffic keeps the cache permanently invalidated, every LEGITIMATE
+      // token then pays a JWKS re-fetch, and each junk-alg token gets a
+      // second, equally-futile attempt.
       if (err.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
       }

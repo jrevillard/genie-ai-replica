@@ -275,7 +275,10 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   let entry;
   try {
     const raw = await fetchUpstream(policy.path, bearerHeader, correlationId);
-    entry = { window, value: policy.onSuccess(raw, opts) };
+    // The generated id reaches the policy callbacks even when the caller
+    // omitted one — the malformed-response warns would otherwise log a
+    // correlationId the upstream_ok debug line cannot be matched with.
+    entry = { window, value: policy.onSuccess(raw, { ...opts, correlationId }) };
   } catch (err) {
     const resolved = policy.onFailure(err, correlationId);
     if (resolved.throw) throw resolved.error; // never cached — see docstring

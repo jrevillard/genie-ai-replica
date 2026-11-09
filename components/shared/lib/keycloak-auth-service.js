@@ -133,9 +133,10 @@ async function init(idpUrl) {
   logger.info(`[KeycloakAuth] Fetching OIDC discovery from ${discoveryUrl}`);
 
   const controller = new AbortController();
-  // A non-numeric or non-positive value falls back to the default —
-  // parseInt('5s') is NaN and a NaN setTimeout fires immediately, which
-  // would abort every discovery before it starts.
+  // A non-numeric or non-positive value falls back to the default — a NaN
+  // setTimeout fires immediately, which would abort every discovery before
+  // it starts. parseInt prefix-parses ('10s' reads as 10 ms), so the value
+  // must be a bare integer.
   const parsedTimeout = parseInt(process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000', 10);
   const discoveryTimeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 5000;
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);

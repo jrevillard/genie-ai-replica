@@ -53,9 +53,22 @@ const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'R
 // from the requested URL, so additional-realm inits get their own issuer and
 // JWKS — the shape a real multi-realm Keycloak serves.
 const fetchCalls = [];
-global.fetch = async (url) => {
+global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
+  // A hanging host never answers — the fetch must honor the AbortController
+  // signal, or the discovery-timeout guard could never fire in a test.
+  if (u.includes('hang')) {
+    return new Promise((resolve, reject) => {
+      const signal = opts && opts.signal;
+      if (signal) {
+        signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }))
+        );
+      }
+      // No timer: only the abort settles this promise.
+    });
+  }
   // An unreachable host refuses every request (503) — the init-failure
   // topology names its host 'unreachable' to land here.
   if (u.includes('unreachable')) {
@@ -277,6 +290,29 @@ test('additional realms without a pin: a partner-realm token verifies against it
   const token = await sign(baseClaims(partnerIss), { partner: true });
   const payload = await svc.verifyToken(token);
   assert.equal(payload.iss, partnerIss);
+});
+
+test('non-numeric KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {
+  // A bare-integer requirement with a real failure mode: parseInt('abc') is
+  // NaN and a NaN setTimeout fires immediately — every discovery would abort
+  // at startup. The guard must fall back to the default budget, observable
+  // in the abort error message. A hanging discovery leg is the only way to
+  // make the abort (not a stub refusal) settle the fetch.
+  const svc = loadVerifier({
+    KEYCLOAK_DISCOVERY_TIMEOUT_MS: 'abc',
+    KEYCLOAK_URL: 'http://keycloak-hang:8080'
+  });
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  // The verifier wraps init failures, so the original budget is not on the
+  // public error — the DURATION is the discriminator: a NaN timeout aborts
+  // instantly, the fallback must let the fetch run for the default budget.
+  const startedAt = Date.now();
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
+  const elapsed = Date.now() - startedAt;
+  assert.ok(elapsed >= 4900, `discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`);
 });
 
 test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {

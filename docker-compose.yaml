@@ -802,6 +802,7 @@ services:
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON array
@@ -965,6 +966,7 @@ services:
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
       # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
       # alias stays only a late fallback. Mirrors the dataprep block.
@@ -1497,6 +1499,7 @@ services:
       # Strict issuer pin (the literal full issuer; when set, ONLY tokens with
       # this iss are accepted). See env Section on the split-URL OIDC vars.
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}

@@ -1588,6 +1588,10 @@ export default {
       empty: 'I seŋ nde repo nin nie cuŋgo te — i fɔ fen ŋe.',
       readFailed: 'I maŋ jañ i janfaŋ njeng.',
       truncated: 'Repo karataŋ kotoŋ i ye — kumandi kotoŋ ŋe maŋ neng.',
+      issuesTitle: 'Fen ŋe — {name}',
+      issuesLoading: 'Ndeŋ fen karataŋ…',
+      issuesEmpty: 'I maŋ fen ke — fen ŋe te.',
+      issuesFailed: 'I maŋ jañ fen karataŋ.',
       col: {
         repo: 'Repo',
         concepts: 'Cuŋgo',
@@ -1595,6 +1599,11 @@ export default {
         stale: 'Kumandi',
         pii: 'PII ŋe',
         state: 'Hal'
+      },
+      sev: {
+        blocker: 'Fen kotoŋ',
+        error: 'Cilila',
+        warning: 'Jeemɛ'
       }
     },
     retrieval: {

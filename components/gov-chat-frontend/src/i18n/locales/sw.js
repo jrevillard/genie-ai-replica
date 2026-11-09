@@ -1603,6 +1603,10 @@ export default {
       empty: 'Hakuna dhana katika hazina yoyote unayoweza kusoma — hakuna deni.',
       readFailed: 'Haikuweza kusoma deni la ufuasi.',
       truncated: 'Katalogi ya hazina inazidi ukurasa mmoja — safu zilizozidi hazionyeshwi.',
+      issuesTitle: 'Matatizo — {name}',
+      issuesLoading: 'Inasoma orodha ya matatizo…',
+      issuesEmpty: 'Hakuna cha kurekebisha — hakuna matatizo wazi.',
+      issuesFailed: 'Haikuweza kusoma orodha ya matatizo.',
       col: {
         repo: 'Hazina',
         concepts: 'Dhana',
@@ -1610,6 +1614,11 @@ export default {
         stale: 'Yaliyopitwa na wakati',
         pii: 'Matukio ya PII',
         state: 'Hali'
+      },
+      sev: {
+        blocker: 'Kizuizi',
+        error: 'Hitilafu',
+        warning: 'Onyo'
       }
     },
     retrieval: {

@@ -1616,6 +1616,10 @@ export default {
       empty: 'Keine Konzepte in einem lesbaren Repository — nichts offen.',
       readFailed: 'Der Konformitätsrückstand konnte nicht gelesen werden.',
       truncated: 'Der Repository-Katalog überschreitet eine Seite — Einträge darüber werden nicht angezeigt.',
+      issuesTitle: 'Probleme — {name}',
+      issuesLoading: 'Problemliste wird gelesen…',
+      issuesEmpty: 'Nichts zu beheben — keine offenen Probleme.',
+      issuesFailed: 'Die Problemliste konnte nicht gelesen werden.',
       col: {
         repo: 'Repository',
         concepts: 'Konzepte',
@@ -1623,6 +1627,11 @@ export default {
         stale: 'Veraltet',
         pii: 'PII-Treffer',
         state: 'Status'
+      },
+      sev: {
+        blocker: 'Blocker',
+        error: 'Fehler',
+        warning: 'Warnung'
       }
     },
     retrieval: {

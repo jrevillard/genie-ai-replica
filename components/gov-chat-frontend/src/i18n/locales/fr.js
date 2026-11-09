@@ -1618,6 +1618,10 @@ export default {
       empty: 'Aucun concept dans les dépôts que vous pouvez lire — rien à devoir.',
       readFailed: 'Impossible de lire la dette de conformité.',
       truncated: 'Le catalogue de dépôts dépasse une page — les entrées au-delà ne sont pas affichées.',
+      issuesTitle: 'Problèmes — {name}',
+      issuesLoading: 'Lecture de la liste des problèmes…',
+      issuesEmpty: 'Rien à corriger — aucun problème ouvert.',
+      issuesFailed: 'Impossible de lire la liste des problèmes.',
       col: {
         repo: 'Dépôt',
         concepts: 'Concepts',
@@ -1625,6 +1629,11 @@ export default {
         stale: 'Périmés',
         pii: 'Signalements PII',
         state: 'État'
+      },
+      sev: {
+        blocker: 'Bloquant',
+        error: 'Erreur',
+        warning: 'Avertissement'
       }
     },
     retrieval: {

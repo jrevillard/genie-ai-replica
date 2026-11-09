@@ -1565,6 +1565,10 @@ export default {
       empty: '您可读取的仓库中没有任何概念 — 无债务。',
       readFailed: '无法读取一致性债务。',
       truncated: '仓库目录超过一页 — 超出上限的行不会显示。',
+      issuesTitle: '问题 — {name}',
+      issuesLoading: '正在读取问题列表…',
+      issuesEmpty: '无需修复 — 没有未解决的问题。',
+      issuesFailed: '无法读取问题列表。',
       col: {
         repo: '仓库',
         concepts: '概念',
@@ -1572,6 +1576,11 @@ export default {
         stale: '过期',
         pii: 'PII 命中',
         state: '状态'
+      },
+      sev: {
+        blocker: '阻断',
+        error: '错误',
+        warning: '警告'
       }
     },
     retrieval: {

@@ -699,6 +699,24 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     ]);
   });
 
+  test('a fresh create resolving to an unhealthy account refuses to provision', async () => {
+    // The fixture-health gate runs on the FRESH-CREATE path too (the realm
+    // can attach required actions to brand-new users through its import):
+    // a 201 whose resolved account is unhealthy must refuse exactly like
+    // the 409 path, or a realm-mangled account provisions silently and
+    // dies minutes later at login.
+    routes = [
+      ['POST', USERS_PATH, { status: 201, data: null }],
+      LOOKUP({ ...HEALTHY_USER(), enabled: true, emailVerified: false }),
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
+
+    expect(caught.message).toMatch(/not fixture-healthy/);
+    expect(caught.message).toMatch(/emailVerified=false/);
+    expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
+  });
+
   test('a 409 whose account exists converges the password BEFORE assigning the roles', async () => {
     // The password convergence is the reason convergeUser exists (a stale
     // password surfaces only at login): on the already-exists path it must

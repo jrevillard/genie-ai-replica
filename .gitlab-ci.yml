@@ -4083,6 +4083,11 @@ config:validate:
         # the gate in the same pipeline, so a change under tests/e2e/ triggers
         # the job that runs it.
         - "tests/e2e/**/*"
+        # The integration self-skip pin (config-validation.test.js) reads the
+        # backend integration suites the same way: an MR adding an ungated
+        # file under __tests__/integration must fail the pin in its own
+        # pipeline, not as a red main pipeline after the merge.
+        - "components/gov-chat-backend/__tests__/integration/**/*"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

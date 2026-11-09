@@ -161,11 +161,14 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database
     // binds to an existing one).
-    await dropDatabase(TEST_URL, DB_NAME, AUTH);
-    // The driver's connection is closed: an open one keeps the test
-    // process alive after the run.
-    if (db) {
-      db.close();
+    try {
+      await dropDatabase(TEST_URL, DB_NAME, AUTH);
+    } finally {
+      // The driver's connection is closed: an open one keeps the test
+      // process alive after the run — closed even when the drop fails.
+      if (db) {
+        db.close();
+      }
     }
   }, HOOK_TIMEOUT_MS);
 

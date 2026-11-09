@@ -312,10 +312,7 @@ test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms de
       (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
     );
     const elapsed = Date.now() - startedAt;
-    assert.ok(
-      elapsed >= 4900,
-      `${badValue}: discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`
-    );
+    assert.ok(elapsed >= 4900, `${badValue}: discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`);
   }
 });
 

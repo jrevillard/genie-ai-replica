@@ -141,9 +141,7 @@ async function init(idpUrl) {
   const rawTimeout = (process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000').trim();
   const parsedTimeout = parseInt(rawTimeout, 10);
   const discoveryTimeoutMs =
-    Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout
-      ? parsedTimeout
-      : 5000;
+    Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout ? parsedTimeout : 5000;
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
   let res;
   try {

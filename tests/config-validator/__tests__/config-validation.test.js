@@ -3675,9 +3675,12 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
 // runs bash -n), so a dropped flag used to re-enter the OOM class with no
 // failing job and no failing test. This contract fails the suite instead.
 describe('the jest worker-memory cap contract (#1419)', () => {
-  // `npm run test:ci` is NOT an invocation — the matcher keys on the
-  // pass-through (`npm test`) and direct (`npx jest`) spellings only.
-  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b)/;
+  // The pass-through (`npm test`), direct (`npx jest`), and npm-script
+  // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest.
+  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test(:\w+)?\b)/;
+  // A script item may chain commands; each command is checked on its own,
+  // so a capped invocation chained with an uncapped one still fails.
+  const COMMAND_SPLIT = /\s*(?:&&|\|\||;)\s*/;
 
   // Out of the measured OOM class, pinned here rather than silently
   // unmatched — a rename or a scope change to either job must fail this
@@ -3686,9 +3689,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     // One test file: jest spawns at most one worker per test file, so the
     // run cannot fan out to the worker count the cap exists to bound.
     'test:backend-arango',
-    // The validator harness itself (tests/config-validator), not a product
-    // component suite — its handful of test files never measured into the
-    // #1404/#1412 OOM class.
+    // The validator harness itself (tests/config-validator) and the
+    // new-config suite it runs via `npm run test:ci` — neither measured
+    // into the #1404/#1412 OOM class. Capping them is a config:validate
+    // decision, not this contract.
     'config:validate'
   ]);
 
@@ -3697,16 +3701,23 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     const { blocks, errors } = extractCiShellBlocks(content);
     expect(errors).toEqual([]);
 
-    const invocations = blocks.filter((b) => JEST_INVOCATION.test(b.text));
+    const invocations = blocks
+      .filter((b) => !EXEMPT_JOBS.has(b.owner))
+      .flatMap((b) =>
+        b.text
+          .split(COMMAND_SPLIT)
+          .filter((cmd) => JEST_INVOCATION.test(cmd))
+          .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
+      );
     // The guard must SEE the class it protects: four capped jobs today.
     // A silent-empty pass here would mean the extraction broke, not that
     // the pipeline is compliant.
     expect(invocations.length).toBeGreaterThanOrEqual(4);
 
-    const violations = invocations
-      .filter((b) => !EXEMPT_JOBS.has(b.owner))
-      .filter((b) => !b.text.includes('--maxWorkers=2') || !b.text.includes('--workerIdleMemoryLimit=500MB'));
-    expect(violations.map((b) => `${b.owner} (${b.key}): ${b.text.slice(0, 80)}`)).toEqual([]);
+    const violations = invocations.filter(
+      (inv) => !inv.cmd.includes('--maxWorkers=2') || !inv.cmd.includes('--workerIdleMemoryLimit=500MB')
+    );
+    expect(violations.map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
   });
 });
 

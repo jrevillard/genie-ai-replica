@@ -81,9 +81,15 @@ async function jsonBody(response) {
 
 // The database lifecycle the suites open with: drop a database left
 // behind by an interrupted run (the test must be repeatable), then
-// create it fresh. Both halves checked — see the module comment.
+// create it fresh. Both halves checked — see the module comment. Each
+// HTTP call is bounded by the wait budget (a stalled connection must not
+// outlive the hook that called it and die as a generic Jest timeout).
 async function recreateDatabase(url, name, headers) {
-  const dropped = await fetch(`${url}/_api/database/${name}`, { method: 'DELETE', headers });
+  const dropped = await fetch(`${url}/_api/database/${name}`, {
+    method: 'DELETE',
+    headers,
+    signal: AbortSignal.timeout(WAIT_BUDGET_MS)
+  });
   if (!dropped.ok && dropped.status !== 404) {
     throw new Error(
       `dropping a stale ${name} failed (HTTP ${dropped.status}) — remove it by hand ` +
@@ -93,7 +99,8 @@ async function recreateDatabase(url, name, headers) {
   const created = await fetch(`${url}/_api/database`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name }),
+    signal: AbortSignal.timeout(WAIT_BUDGET_MS)
   });
   const createdBody = await jsonBody(created);
   if (createdBody.error) {
@@ -104,7 +111,11 @@ async function recreateDatabase(url, name, headers) {
 // The afterAll drop. A failure here leaves a database behind — caught
 // loudly by the next run's checked stale-drop above.
 async function dropDatabase(url, name, headers) {
-  await fetch(`${url}/_api/database/${name}`, { method: 'DELETE', headers });
+  await fetch(`${url}/_api/database/${name}`, {
+    method: 'DELETE',
+    headers,
+    signal: AbortSignal.timeout(WAIT_BUDGET_MS)
+  });
 }
 
 // The arangojs 8 connection config: auth lives in the `auth` option

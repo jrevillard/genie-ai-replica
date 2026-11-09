@@ -115,7 +115,10 @@ async function seed(db) {
     const response = await fetch(`${TEST_URL}/_db/${DB_NAME}/_api/collection`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...AUTH },
-      body: JSON.stringify({ name, type })
+      body: JSON.stringify({ name, type }),
+      // Bounded like the helper's lifecycle calls: a stalled connection
+      // must not outlive the hook that called it.
+      signal: AbortSignal.timeout(WAIT_BUDGET_MS)
     });
     const body = await jsonBody(response);
     if (body.error) {

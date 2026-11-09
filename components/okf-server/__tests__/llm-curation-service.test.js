@@ -683,18 +683,16 @@ describe('resolveAreaContext — degenerate domain guard (!830 round 3)', () => 
     // A non-Latin category name slugs to ''; a non-Latin domain slugs to ''
     // too — the unguarded equality used to resolve the WRONG Subject Area
     // and feed its labels into curation. Degenerate matches nothing.
-    mockDb = makeDb([], undefined, {});
-    mockDb.query = jest.fn(async (q) => ({
-      all: async () => (q.includes('serviceCategories') ? [{ key: 'cat-x', name: '日本語' }] : [])
-    }));
+    mockDb = {
+      query: jest.fn(async (q) => ({
+        all: async () => (q.includes('serviceCategories') ? [{ key: 'cat-x', name: '日本語' }] : [])
+      }))
+    };
     await expect(service.resolveAreaContext('日本語テスト')).resolves.toBeNull();
   });
 
   it('a real domain still resolves its category', async () => {
     mockDb = makeDb([], undefined, {});
-    mockDb.query = jest.fn(async (q) => ({
-      all: async () => (q.includes('serviceCategories') ? AREAS : q.includes('FOR s IN services') ? AREA_LABELS : [])
-    }));
     await expect(service.resolveAreaContext('Indonesia')).resolves.toMatchObject({ key: 'cat-9' });
   });
 });

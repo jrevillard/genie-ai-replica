@@ -7,6 +7,9 @@
  * API_URL/KEYCLOAK_URL/KEYCLOAK_REALM under env -i (the determinism
  * mechanism that keeps the committed Dart artifacts byte-identical across
  * regenerations) and invokes this module with the spec output path as argv.
+ * The pinned placeholder values land in the committed artifacts' cosmetics
+ * (ApiClient's basePath default, README server/OAuth URLs); the endpoint
+ * paths are env-independent, and the app overrides basePath at runtime.
  *
  * The swagger tooling resolves through the backend package (swagger-jsdoc is
  * a backend production dependency; the CI drift gate installs it at the
@@ -37,7 +40,7 @@ function buildSpec() {
     'the generated spec has no paths — the apis glob matched nothing.'
   );
   assert.ok(
-    (spec.servers ?? []).some((s) => s?.url === 'https://localhost'),
+    (spec.servers ?? []).some((s) => s?.url === process.env.API_URL),
     'no server entry carries the API_URL pin value — either a pin assignment' +
       ' is missing from the env -i line in scripts/generate-api-client.sh,' +
       ' or swagger-definition.js changed how it builds the servers list.'

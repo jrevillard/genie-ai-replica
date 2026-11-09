@@ -4225,7 +4225,7 @@ config:provisioning-harness:
 # GitLab subsystems before (see .claude/rules/CVE-REMEDIATION.md) and this
 # is the one dotfile a human hand-edits.
 .api_client_source_changes: &api_client_source_changes
-  [ "components/gov-chat-backend/**/*", "package.json", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "scripts/build-openapi-spec.js", "openapitools.json", ".gitlab-ci.yml" ]
+  [ "components/gov-chat-backend/**/*", "package.json", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "scripts/*.js", "openapitools.json", ".gitlab-ci.yml" ]
 
 config:api-client:
   extends: .node_base

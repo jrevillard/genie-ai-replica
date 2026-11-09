@@ -4,6 +4,8 @@
 // Pins: cache hit/miss/expiry, okf-server 5xx → last-known-good, 401
 // propagation (never cached), last-known-good default, bearer (scope)
 // isolation, no-eviction within a window, 403 → legacy default.
+// DW-428: a realm-role grant of a scope keys the claim-scoped cache entry,
+// never the scope-less one.
 
 require('./setup-env');
 
@@ -45,7 +47,8 @@ function makeBearer(scopes = [], roles = [], sub = 'user-1') {
 }
 
 /** Decode a bearer header's payload (the fixtures are synthetic — unverified).
- *  Mirrors the production decoder: an undecodable bearer yields null, not a throw. */
+ *  Mirrors decodeJwtPayload in services/retrieval-config-client.js — change
+ *  them together: an undecodable bearer yields null, not a throw. */
 function payloadOf(bearer) {
   const token = String(bearer || '')
     .replace(/^\s*bearer\s+/i, '')

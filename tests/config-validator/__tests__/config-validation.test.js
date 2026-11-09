@@ -3696,9 +3696,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // one across those separators still fails.
   const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
   // Flag presence with a value boundary: `--maxWorkers=2` must not be
-  // satisfied by `--maxWorkers=20` (a raised worker count re-enters the
-  // OOM class silently otherwise).
-  const FLAG_MAX_WORKERS = /--maxWorkers=2(?!\d)/;
+  // satisfied by a raised value (`--maxWorkers=20`, or the percentage
+  // form `--maxWorkers=2%`, which resolves to more workers on a
+  // multi-core runner and re-enters the OOM class silently).
+  const FLAG_MAX_WORKERS = /--maxWorkers=2(?![\d%])/;
   const FLAG_IDLE_LIMIT = /--workerIdleMemoryLimit=500MB(?!\d)/;
 
   // Out of the measured OOM class, pinned here rather than silently
@@ -3715,12 +3716,17 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     'config:validate'
   ]);
 
+  // Comments are stripped before matching: an unquoted `#` after
+  // whitespace is a comment to bash, and CI comments cite commands
+  // (`# npm test alone OOMs`) that invoke nothing.
+  const STRIP_COMMENTS = /(^|\s)#.*$/gm;
   // The jest commands of the given shell blocks — the same matcher, split,
   // and flag check the real CI file goes through below.
   const invocationsOf = (blocks) =>
     blocks.flatMap((b) =>
       b.text
         .replace(JOIN_CONTINUATIONS, ' ')
+        .replace(STRIP_COMMENTS, '$1')
         .split(COMMAND_SPLIT)
         .filter((cmd) => JEST_INVOCATION.test(cmd))
         .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
@@ -3804,6 +3810,16 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 
   test('a shell line continuation joins into one command', () => {
     expect(violationsFor('npm test -- --maxWorkers=2 \\\n  --workerIdleMemoryLimit=500MB --coverage')).toEqual([]);
+  });
+
+  test('a comment citing a command invokes nothing', () => {
+    expect(violationsFor('npm ci  # run npm test locally to repro')).toEqual([]);
+    expect(violationsFor('npm ci\n# npm test alone OOMs')).toEqual([]);
+  });
+
+  test('the percentage form of the worker count is not satisfied by the cap', () => {
+    expect(violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd))
+      .toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
   });
 });
 

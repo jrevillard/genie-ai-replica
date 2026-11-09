@@ -707,7 +707,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // dies minutes later at login.
     routes = [
       ['POST', USERS_PATH, { status: 201, data: null }],
-      LOOKUP({ ...HEALTHY_USER(), enabled: true, emailVerified: false }),
+      LOOKUP({ ...HEALTHY_USER(), emailVerified: false }),
     ];
 
     const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));

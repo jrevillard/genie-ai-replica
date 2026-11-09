@@ -3678,9 +3678,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // The pass-through (`npm test`), direct (`npx jest`), and npm-script
   // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest —
   // except the Playwright variants `test:e2e` and `test:e2e:list` (root
-  // package.json), which are excluded by exact name: any other variant,
-  // e2e-prefixed or not, over-triggers and forces a conscious decision;
-  // nothing unknown silently escapes the class.
+  // package.json), excluded by exact name; their colon-family siblings
+  // (test:e2e:<suffix>) follow that exclusion, while dash-suffixed and
+  // any other unknown variant over-triggers and forces a conscious
+  // decision rather than silently escaping the class.
   const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
   // A script item may chain commands (with `&&`, `||`, `;`, or a newline
   // inside a block scalar); shell line continuations (`\` + newline) join

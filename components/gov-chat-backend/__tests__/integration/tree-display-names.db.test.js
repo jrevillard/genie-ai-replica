@@ -167,7 +167,7 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
     if (db) {
       db.close();
     }
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it('names every entity — the locale, or the English one it falls back to', async () => {
     const tree = await serviceCategoryService.getAllCategoriesWithServices('fr');

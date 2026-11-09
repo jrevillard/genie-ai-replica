@@ -82,7 +82,7 @@ async function jsonBody(response) {
 // The database lifecycle the suites open with: drop a database left
 // behind by an interrupted run (the test must be repeatable), then
 // create it fresh. Both halves checked — see the module comment. Each
-// HTTP call is bounded by the wait budget (a stalled connection must not
+// HTTP call is bounded by the wait budget (a single stalled call must not
 // outlive the hook that called it and die as a generic Jest timeout).
 async function recreateDatabase(url, name, headers) {
   const dropped = await fetch(`${url}/_api/database/${name}`, {

@@ -148,7 +148,7 @@ describeWithDatabase('the husk report (against a real ArangoDB)', () => {
     if (db) {
       db.close();
     }
-  });
+  }, HOOK_TIMEOUT_MS);
 
   beforeEach(async () => {
     // Every test starts from the same corpus: the removal tests mutate it.

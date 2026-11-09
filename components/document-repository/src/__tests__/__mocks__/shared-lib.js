@@ -42,6 +42,8 @@ module.exports = {
   // jest.fn() would return undefined and silently change which errors count
   // as "document gone".
   isExpectedAbsence: require('../../../../shared/lib/arango-absence').isExpectedAbsence,
+  // Same story for the shared bare-404 status literal the composite ORs in.
+  hasNotFoundStatus: require('../../../../shared/lib/arango-absence').hasNotFoundStatus,
   setScopeName: jest.fn(),
   // Each of these INVOKES its callback rather than returning undefined. A bare
   // `jest.fn()` turns a wrong assumption into a silent no-op: the shutdown

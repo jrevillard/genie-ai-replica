@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger, dbService, isExpectedAbsence } = require('../../shared-lib');
+const { logger, dbService, isExpectedAbsence, hasNotFoundStatus } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler');
@@ -38,7 +38,7 @@ const isDocumentNotFound = (e) =>
     // errorNum'd fault like 1203 (missing COLLECTION) is an infra error even
     // when its HTTP code is 404 — rethrow, never "job gone" (review !622
     // wave 2 / #78676: the unguarded arms re-admitted exactly that case).
-    (e.errorNum == null && (e.statusCode === 404 || e.code === 404)));
+    (e.errorNum == null && hasNotFoundStatus(e)));
 
 class FileService {
   constructor() {

@@ -2920,7 +2920,7 @@ status: open
 
 ### DW-433: Arango "absent" classifier exists in FOUR variants with divergent no-errorNum fallbacks — one owner in shared/lib + 1202/1203/1204 matrix tests on both consumers; then _isExpectedAbsence goes private again
 origin: !597 Jerome AI review (test-audit, threads 2a4cb43e + e00bd322, 2026-10-29)
-location: components/shared/lib/db-connection-service.js (_isExpectedAbsence), components/okf-server/services/arango-errors.js, components/document-repository/src/workers/crawlWorker.js isDocumentNotFound
+location: components/shared/lib/arango-absence.js (the owner — `isExpectedAbsence` + `hasNotFoundStatus`), components/okf-server/services/arango-errors.js (isArangoNotFound), components/document-repository/src/services/fileService.js (isDocumentNotFound; consumed by crawlWorker)
 severity: medium (the same driver error classifies differently per layer — a 1203 collection-miss must fail open in crawls but read as "absent" elsewhere)
 reason: STATUS CORRECTION (round-3 review, 2026-10-29): wave 5 moved ~12 okf-server sites onto isArangoNotFound, so the original 14-site scope is overtaken — what REMAINS is only the shared/lib vs okf-server status-404 fallback divergence plus the test-only _isExpectedAbsence seam going private (its observable behaviour is already asserted). Pin the divergence matrix by tests on both consumers, then make the seam private.
 reason: crawlWorker already adopted the canonical classifier (this MR); okf-server's status-404 fallback still diverges from shared/lib's exact-message rule. Pin the matrix by tests on both consumers, then the test-only _isExpectedAbsence attachment on the frozen singleton can go private (its observable behaviour is already asserted).

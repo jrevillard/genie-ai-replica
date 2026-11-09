@@ -1,11 +1,14 @@
 'use strict';
 
-// shared-lib needs NO jest.mock here: the jest moduleNameMapper resolves
-// EVERY shared-lib require (the barrel and this file's direct requires of the
-// mock file alike) to src/__tests__/__mocks__/shared-lib.js, which re-exports
-// the REAL canonical isExpectedAbsence. An inline factory here duplicated the
-// mock file's surface and could drift from it — the same drift class
-// DW-433/#1163 just fixed (wave 8's hand-mirrored fixture).
+// shared-lib needs NO jest.mock here: the jest moduleNameMapper resolves the
+// barrel require — and this file's direct requires of the mock file (the
+// dbService grabs at the bottom) — to src/__tests__/__mocks__/shared-lib.js,
+// which re-exports the REAL canonical isExpectedAbsence and hasNotFoundStatus.
+// NOT everything routes to the mock: the mapper's first entry carves the
+// tracing helpers (tracing-background/tracing-baggage/pii-span-processor) out
+// to the real files. An inline factory here duplicated the mock file's
+// surface and could drift from it — the same drift class DW-433/#1163 just
+// fixed (wave 8's hand-mirrored fixture).
 
 // Mock fs
 jest.mock('fs', () => ({

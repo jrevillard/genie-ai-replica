@@ -57,4 +57,21 @@ function isExpectedAbsence(error) {
   );
 }
 
-module.exports = { isExpectedAbsence };
+/**
+ * The arangojs HTTP-404 shapes on an error that carries NO errorNum at all:
+ * the status rides on .statusCode (HTTP-layer errors) or .code (driver-thrown
+ * errors). The one literal every consumer composite shares — okf-server's
+ * isArangoNotFound answers a no-errorNum error with it, document-repository's
+ * isDocumentNotFound ORs it under the canonical — so a future driver-shape
+ * change is a single edit here. Whether that shape counts as absence is the
+ * CALL SITE's decision (that is the deliberate divergence between the two
+ * consumers), never this predicate's.
+ *
+ * @param {Error|Object} error - the thrown error (arangojs/ArangoError shape)
+ * @returns {Boolean} True when the error carries a bare HTTP 404 status.
+ */
+function hasNotFoundStatus(error) {
+  return !!error && (error.statusCode === 404 || error.code === 404);
+}
+
+module.exports = { isExpectedAbsence, hasNotFoundStatus };

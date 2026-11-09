@@ -53,13 +53,13 @@
 // remains the OLDER, LAXER control-flow twin (bare 404 and /not found/i
 // count), kept deliberately for the registry CRUD paths.
 const { isRetriableUpstreamError, RETRIABLE_STATUS } = require('./llm-transient-errors');
-const { isExpectedAbsence } = require('../shared-lib/arango-absence');
+const { isExpectedAbsence, hasNotFoundStatus } = require('../shared-lib/arango-absence');
 
 function isArangoNotFound(err) {
   if (!err) return false;
   if (err.errorNum != null) return isExpectedAbsence(err);
   // No errorNum (raw HTTP, or a driver-level error): fall back to the status.
-  return err.code === 404 || err.statusCode === 404;
+  return hasNotFoundStatus(err);
 }
 
 /** COLLECTION-level absence (errorNum 1203 — arangojs COLLECTION_NOT_FOUND,

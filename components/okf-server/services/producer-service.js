@@ -75,8 +75,8 @@ function releaseSlot() {
  * source file's doc-repo metadata (Story 3.6's additive field) so the UI can
  * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
  * them, it does not die for them. metaByKey carries the import pre-flight's
- * per-file doc-repo metadata so no second GET is issued when it carries the
- * file. */
+ * per-file doc-repo metadata, suppressing the per-file GET; when it does not
+ * carry the file, the GET remains the fallback. */
 async function stampSources(repoId, fileIds, metaByKey = {}) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the

@@ -31,6 +31,9 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const modelCache = require('./vllm-model-cache');
 const { withSpan } = require('../shared-lib/tracing');
+// #914 (b): the bounded sanitizer — prompt slices are sanitized, never the
+// steward-visible body. The flagged verdict rides the decision + counters.
+const { sanitizeForPrompt, boundSummary, scanInjections } = require('./injection-sanitizer');
 
 // Shared vocabulary (okf-vocabulary). CONTENT_TYPES only: this is what the
 // model may CHOOSE, so the reserved root type is deliberately not offered.
@@ -160,22 +163,35 @@ function buildCurationPrompt(concept, areaLabels) {
     NO_LABEL +
     '" if none fits) — ' +
     "never invent labels. The type is the entry's fundamental nature.";
-  const user =
-    'Title: ' +
-    (concept.title || concept.concept_id) +
-    '\n' +
-    'Content:\n' +
-    String(concept.body || '').slice(0, BODY_SNIPPET_CHARS);
+  // #914 (b): EVERY attacker-controlled field in this message is sanitized —
+  // the body slice AND the title (security-review MEDIUM: a poisoned title
+  // reached the prompt raw, forging turn boundaries with zero telemetry).
+  // The VERDICT is a scan of the RAW assembly (a scan of the sanitized parts
+  // would be blind to exactly what sanitize removed); the SEND carries the
+  // sanitized parts. Imperative prose is flagged, not stripped (a crawled
+  // document discussing prompt injection must not be mangled); the verdict
+  // rides the decision + counters so it stays visible.
+  const rawTitle = concept.title || concept.concept_id;
+  const rawBodySlice = String(concept.body || '').slice(0, BODY_SNIPPET_CHARS);
+  const promptFlagged = scanInjections('Title: ' + rawTitle + '\n' + 'Content:\n' + rawBodySlice).flagged;
+  const { text: bodySlice } = sanitizeForPrompt(rawBodySlice);
+  const { text: titleSafe } = sanitizeForPrompt(rawTitle);
+  const user = 'Title: ' + titleSafe + '\n' + 'Content:\n' + bodySlice;
   return {
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }
-    ]
+    ],
+    promptFlagged
   };
 }
 
 /** Parse + validate a curation response. Returns the SAFE subset only —
- * anything outside the bounded lists is dropped (bounded-growth rule). */
+ * anything outside the bounded lists is dropped (bounded-growth rule).
+ * #914 (b): the LLM-written summary is BOUNDED here (500-char cap, control/
+ * invisible chars stripped, delimiter tokens neutralized) so nothing can
+ * leave this function unbounded — an influenced summary is flagged, not
+ * trusted; the steward gate still reviews it. */
 function parseCurationResponse(raw, areaLabels) {
   let j;
   try {
@@ -185,9 +201,15 @@ function parseCurationResponse(raw, areaLabels) {
   }
   const type = TYPE_ENUM.includes(j.type) ? j.type : null;
   const label = areaLabels.includes(j.label) ? j.label : null;
-  const summary = typeof j.summary === 'string' && j.summary.trim() ? j.summary.trim() : null;
+  let summary = null;
+  let summaryFlagged = false;
+  if (typeof j.summary === 'string' && j.summary.trim()) {
+    const bounded = boundSummary(j.summary.trim());
+    summary = bounded.text || null;
+    summaryFlagged = bounded.flagged;
+  }
   const proposedOutsideList = Boolean(j.label) && label === null;
-  return { ok: true, type, label, summary, proposedOutsideList };
+  return { ok: true, type, label, summary, summaryFlagged, proposedOutsideList };
 }
 
 /** Lane-bounded worker pool. Never more than `lanes` concurrent LLM calls. */
@@ -327,7 +349,8 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
     labeled: 0,
     described: 0,
     typed: 0,
-    fallbacks: 0
+    fallbacks: 0,
+    injection_flagged: 0
   };
   const db = await dbService.getConnection('default');
   const rows = await (
@@ -508,6 +531,7 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
       if (decision.summary) stats.described += 1;
       if (decision.typeApplied) stats.typed += 1;
       if (decision.resolved_by === 'llm-error' || decision.resolved_by === 'llm-unparseable') stats.fallbacks += 1;
+      if (decision.injectionFlagged) stats.injection_flagged += 1;
       emit();
     });
   });
@@ -532,6 +556,8 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
       stats.typed +
       ' fallbacks=' +
       stats.fallbacks +
+      ' injection_flagged=' +
+      stats.injection_flagged +
       ' (repo=' +
       repo.repo_id +
       ' area=' +
@@ -551,14 +577,26 @@ async function curateOne(meta, { mode, areaLabels, areaOk }) {
     summary: null,
     method: mode,
     resolved_by: 'llm',
-    label_source: 'none'
+    label_source: 'none',
+    injectionFlagged: false
   };
   if (!areaOk) {
     decision.resolved_by = 'no-subject-area-labels';
     return decision;
   }
   try {
-    const { messages } = buildCurationPrompt(meta, areaLabels);
+    const { messages, promptFlagged } = buildCurationPrompt(meta, areaLabels);
+    if (promptFlagged) {
+      // #914 (b): visible, never silent — the flagged verdict is logged AND
+      // carried on the decision (applyDecision stamps the row's curation
+      // record; the pass counter sums it).
+      logger.warn(
+        'OKF curation: INJECTION PATTERNS in prompt slice for ' +
+          meta.concept_id +
+          ' — prompt sanitized, prose flagged (bounded vocabulary remains the defense)'
+      );
+    }
+    decision.injectionFlagged = Boolean(promptFlagged);
     if (debugEnabled()) {
       logger.debug('[curation:prompt] ' + meta.concept_id + ' :: ' + JSON.stringify(messages));
     }
@@ -574,6 +612,16 @@ async function curateOne(meta, { mode, areaLabels, areaOk }) {
     if (!parsed.ok) {
       decision.resolved_by = 'llm-unparseable';
       return decision;
+    }
+    // #914 (b): an INFLUENCED SUMMARY is flagged the same way a flagged
+    // prompt slice is — visible, persisted, reviewed by the steward gate.
+    if (parsed.summaryFlagged) {
+      logger.warn(
+        'OKF curation: INJECTION PATTERNS in LLM-written summary for ' +
+          meta.concept_id +
+          ' — summary bounded + persisted for steward review'
+      );
+      decision.injectionFlagged = true;
     }
     // TYPE TAXONOMY (David, 2026-09-08: "type: topic, entity, process, event,
     // source"): EVERY concept carries a taxonomy type — the LLM verdict
@@ -605,6 +653,9 @@ async function applyDecision(db, repo, meta, decision) {
   const patch = {
     curation: { method: decision.method, resolved_by: decision.resolved_by, label_source: decision.label_source }
   };
+  // #914 (b): the flagged verdict lands on the row's curation record — the
+  // Studio/editor surface reads it from there (visible, never silent).
+  if (decision.injectionFlagged) patch.curation.injection_flagged = true;
   if (decision.typeApplied) patch.type = decision.type;
   if (decision.summary) patch.summary = decision.summary;
   if (decision.label) {
@@ -725,20 +776,37 @@ async function proposeLinks(repo, concept_id) {
   const alreadyLinked = new Set(
     (Array.isArray(self.links) ? self.links : []).map((l) => String(l && l.to_concept_id).replace(/^concepts\//, ''))
   );
-  const catalog = peers.map((p) => `- ${p.id} — ${p.title || p.id}`).join('\n');
+  // #914 (b): every attacker-controlled field sanitized — the body slice,
+  // the document title AND the peer-title catalog (security-review MEDIUM:
+  // titles reached the prompt raw). The VERDICT scans the RAW assembly (a
+  // scan of sanitized parts is blind to what sanitize removed); the SEND
+  // carries the sanitized parts. Read-only path — the flag logs, no counter.
+  const catalog = peers
+    .map((p) => {
+      const { text: peerTitle } = sanitizeForPrompt(p.title || p.id);
+      return `- ${p.id} — ${peerTitle}`;
+    })
+    .join('\n');
+  const rawBodySlice = String(self.body || '').slice(0, LINK_SNIPPET_CHARS);
+  const rawUser =
+    'Document: ' +
+    (self.title || concept_id) +
+    '\nContent:\n' +
+    rawBodySlice +
+    '\n\nAvailable concepts:\n' +
+    peers.map((p) => `- ${p.id} — ${p.title || p.id}`).join('\n');
+  const { text: bodySlice } = sanitizeForPrompt(rawBodySlice);
+  const { text: docTitle } = sanitizeForPrompt(self.title || concept_id);
+  const user = 'Document: ' + docTitle + '\nContent:\n' + bodySlice + '\n\nAvailable concepts:\n' + catalog;
+  if (scanInjections(rawUser).flagged) {
+    logger.warn('OKF link proposals: INJECTION PATTERNS in prompt for ' + concept_id + ' — prompt sanitized');
+  }
   const system =
     'You are a knowledge-base curator. Answer with STRICT JSON only: ' +
     '{"links": [{"to_concept_id": "<id from the list>", "label": "<short anchor text>"}]}. ' +
     `Propose at most ${LINK_PROPOSAL_MAX} links, ONLY to ids from the provided list, ONLY where this document ` +
     'genuinely references or materially relates to the target. Return {"links": []} when nothing is related. ' +
     'Never invent ids.';
-  const user =
-    'Document: ' +
-    (self.title || concept_id) +
-    '\nContent:\n' +
-    String(self.body || '').slice(0, LINK_SNIPPET_CHARS) +
-    '\n\nAvailable concepts:\n' +
-    catalog;
   try {
     const raw = await withSpan('okf.llm.link-proposals', async (span) => {
       span.setAttribute('okf.repo_id', repo.repo_id);

@@ -3757,15 +3757,13 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       .filter((inv) => EXEMPT_JOBS.has(inv.owner))
       .map((inv) => inv.cmd)
       .sort();
-    expect(exemptCmds).toEqual(
-      [
-        // test:backend-arango: the single husk-report integration file.
-        'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json',
-        // config:validate: the validator harness, the new-config suite.
-        'npm test',
-        'npm run test:ci'
-      ].sort()
-    );
+    expect(exemptCmds).toEqual([
+      // config:validate: the validator harness, the new-config suite.
+      'npm run test:ci',
+      'npm test',
+      // test:backend-arango: the single husk-report integration file.
+      'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json'
+    ]);
   });
 
   // Pins for the matcher's boundary decisions — no jest invocation in the

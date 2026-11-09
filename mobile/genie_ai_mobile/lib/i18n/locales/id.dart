@@ -239,7 +239,7 @@ const Map<String, dynamic> idLocale = {
     "viewDetails": "Lihat Detail",
   },
   "services": {
-    "eCitizen": "Portal eCitizen",
+    "eCitizen": "Portal layanan",
     "taxFiling": "Sistem Pelaporan Pajak",
     "idApplication": "Permohonan ID",
     "businessReg": "Pendaftaran Bisnis",

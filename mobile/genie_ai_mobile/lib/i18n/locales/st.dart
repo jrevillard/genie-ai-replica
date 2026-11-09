@@ -239,7 +239,7 @@ const Map<String, dynamic> stLocale = {
     "viewDetails": "Sheba Dintlha",
   },
   "services": {
-    "eCitizen": "Phothale ya eCitizen",
+    "eCitizen": "Portal ea litšebeletso",
     "taxFiling": "Sistimi ya ho Pata Lekgetho",
     "idApplication": "Kopo ya ID",
     "businessReg": "Ngoliso ya Kgwebo",

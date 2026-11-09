@@ -239,7 +239,7 @@ const Map<String, dynamic> arLocale = {
     "viewDetails": "عرض التفاصيل",
   },
   "services": {
-    "eCitizen": "بوابة المواطن الإلكتروني",
+    "eCitizen": "بوابة الخدمات",
     "taxFiling": "نظام تقديم الإقرارات الضريبية",
     "idApplication": "طلب الهوية",
     "businessReg": "تسجيل الشركات",

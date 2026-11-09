@@ -239,7 +239,7 @@ const Map<String, dynamic> zhLocale = {
     "viewDetails": "查看详情",
   },
   "services": {
-    "eCitizen": "eCitizen 门户",
+    "eCitizen": "服务门户",
     "taxFiling": "税务申报系统",
     "idApplication": "身份证申请",
     "businessReg": "商业登记",

@@ -240,7 +240,7 @@ const Map<String, dynamic> bnLocale = {
     "viewDetails": "বিস্তারিত দেখুন",
   },
   "services": {
-    "eCitizen": "ই-সিটিজেন পোর্টাল",
+    "eCitizen": "সেবা পোর্টাল",
     "taxFiling": "ট্যাক্স ফাইলিং সিস্টেম",
     "idApplication": "আইডি আবেদন",
     "businessReg": "ব্যবসা নিবন্ধন",

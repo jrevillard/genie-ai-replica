@@ -245,7 +245,7 @@ const Map<String, dynamic> manLocale = {
     "viewDetails": "A fanani kumo je",
   },
   "services": {
-    "eCitizen": "Moo-portaloo",
+    "eCitizen": "Portal an jipañ",
     "taxFiling": "Takisi joong sisitemu",
     "idApplication": "Aydi (ID) nyininka",
     "businessReg": "Jula sefoo",

@@ -10,7 +10,7 @@
  * This suite requires the module directly and drives the same pins the
  * generation envelope sets (KEYCLOAK_URL/KEYCLOAK_REALM spellings mirror
  * setup-env.js, API_URL mirrors the generation script's pin value) — the
- * positive spec shape and the negative throw paths.
+ * positive spec shape and the pin asserts' negative throw paths.
  *
  * swagger-definition.js reads process.env at require time, so each negative
  * case resets the module registry and re-requires the chain after deleting

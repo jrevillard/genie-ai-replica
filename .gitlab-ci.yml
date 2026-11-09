@@ -3443,10 +3443,13 @@ test:backend-arango:
     # script section explicitly instead of depending on that.
     - cd "$CI_PROJECT_DIR/components/gov-chat-backend"
     - mkdir -p reports
-    - npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json
-    # The suite SKIPS itself when ARANGO_TEST_URL is unset: a job that lost
-    # the variable would go green having run nothing. The JSON report says
-    # how many tests actually ran.
+    # The whole integration directory: the husk gate AND the sibling tree
+    # suite, which shares the lifecycle scaffolding (helpers/arango.js) and
+    # therefore the same wait-for-server safety — at zero extra services.
+    - npx jest __tests__/integration --json --outputFile=reports/jest-husk-arango.json
+    # The suites SKIPS themselves when ARANGO_TEST_URL is unset: a job that
+    # lost the variable would go green having run nothing. The JSON report
+    # says how many tests actually ran.
     - node -e "const r = require('./reports/jest-husk-arango.json'); if (!r.numPassedTests) { console.error('no ArangoDB-backed test ran (' + r.numPassedTests + ' passed) — the suite was skipped'); process.exit(1); }"
   artifacts:
     when: always
@@ -3460,7 +3463,7 @@ test:backend-arango:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/gov-chat-backend/scripts/report-husk-user-docs.js"
-        - "components/gov-chat-backend/__tests__/integration/husk-report.db.test.js"
+        - "components/gov-chat-backend/__tests__/integration/**"
         - "components/gov-chat-backend/package.json"
         - "components/gov-chat-backend/package-lock.json"
         - "docker-compose.yaml"

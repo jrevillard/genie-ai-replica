@@ -863,8 +863,8 @@ KEYCLOAK_URL=https://localhost/auth
 #                           (the JWKS fetch host override still applies).
 #                           Default: unset. Used by: every consumer of the
 #                           shared verifier (backend, document-repository,
-#                           okf-server). Not wired in compose/ansible — set it
-#                           in the environment explicitly when needed.
+#                           okf-server). Compose: yes. Ansible: yes
+#                           (group_vars keycloak_expected_issuer).
 # Cloud/Swarm deployments where the public URL resolves internally: leave all unset.
 # KEYCLOAK_PUBLIC_URL=https://localhost/auth
 # KEYCLOAK_INTERNAL_URL=http://keycloak:8080

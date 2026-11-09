@@ -801,6 +801,7 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -961,6 +962,7 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
       # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
       # alias stays only a late fallback. Mirrors the dataprep block.
@@ -1486,10 +1488,12 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
-      # The shared OIDC verifier (DW-427) reads KEYCLOAK_REALM — the old appConfig
-      # security block (KC_REALM consumer) went away with the middleware's own
-      # verification code.
+      # The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy KC_REALM
+      # spelling).
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
+      # Strict issuer pin (the literal full issuer; when set, ONLY tokens with
+      # this iss are accepted). See env Section on the split-URL OIDC vars.
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}

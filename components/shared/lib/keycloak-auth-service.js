@@ -51,7 +51,7 @@ class TokenVerificationError extends Error {
  *
  * @param {string} jwksUri - The JWKS endpoint URL
  * @param {number} ttlMs - Cache TTL in milliseconds (default: 300000 = 5 minutes)
- * @returns {Function} A callable JWKS function with attached .forceRefresh() and ._isExpired() methods
+ * @returns {Function} A callable JWKS function with attached .forceRefresh() method
  *
  * The returned function has signature (protectedHeader, token) -> Promise<Key>
  * compatible with jose's jwtVerify(token, jwksFunction, options).
@@ -88,14 +88,6 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
    */
   jwksFn.forceRefresh = function () {
     createdAt = 0;
-  };
-
-  /**
-   * Check if the cache is expired
-   * @returns {boolean} True if cache is expired
-   */
-  jwksFn._isExpired = function () {
-    return Date.now() - createdAt > ttlMs;
   };
 
   return jwksFn;
@@ -163,25 +155,26 @@ async function init(idpUrl) {
     throw new Error('OIDC discovery document missing required fields: issuer, jwks_uri');
   }
 
-  const jwks = createJwksCache(doc.jwks_uri);
   const jwksOverride = process.env.KEYCLOAK_JWKS_URL;
   const pinnedIssuer = process.env.KEYCLOAK_EXPECTED_ISSUER;
+  // ONE JWKS source per init: the fetch-host override replaces the discovery
+  // URI when set (Keycloak publishes jwks_uri from the request hostname —
+  // KC_HOSTNAME — which inside service containers is often unreachable;
+  // operators point KEYCLOAK_JWKS_URL at a container-reachable host). It
+  // changes WHERE the keys come from, never WHO is accepted.
+  const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri);
 
   if (pinnedIssuer) {
-    // Strict issuer pin (doc-repo appConfig semantics, merged 2026-10-22):
-    // the pinned issuer is the ONLY accepted issuer — the discovery issuer
-    // and the PUBLIC_URL/BROWSER_ISSUER alias registrations below are
-    // skipped so an alias can never widen acceptance past the pin. The JWKS
-    // override still applies: it changes WHERE the keys come from, never
-    // WHO is accepted.
-    // Primary-realm gated like the alias branches below:
-    // the pin names ONE issuer of the PRIMARY realm — an additional realm's
+    // Strict issuer pin: the pinned issuer is the ONLY accepted issuer —
+    // the discovery issuer and the PUBLIC_URL/BROWSER_ISSUER alias
+    // registrations below are skipped so an alias can never widen acceptance
+    // past the pin. Primary-realm gated like the browser alias below: the
+    // pin names ONE issuer of the PRIMARY realm, and an additional realm's
     // init re-running this branch would overwrite the pinned entry with ITS
-    // realm's JWKS, the same clobber class the alias branches guard against.
-    // A partner-realm token carries a different iss than the pin and is
+    // realm's JWKS (the clobber class the alias gates prevent). A
+    // partner-realm token carries a different iss than the pin and is
     // rejected either way — that is what "accept ONLY this issuer" means.
     if (realm === KEYCLOAK_REALM) {
-      const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : jwks;
       issuerMap.set(pinnedIssuer, effectiveJwks);
       logger.info(
         `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
@@ -189,80 +182,46 @@ async function init(idpUrl) {
       );
     }
   } else {
-    issuerMap.set(doc.issuer, jwks);
+    issuerMap.set(doc.issuer, effectiveJwks);
 
-    // JWKS host override (David, 2026-09-15): Keycloak publishes its jwks_uri
-    // based on the request hostname (KC_HOSTNAME) — in local Docker it returns
-    // `http://localhost:8080/...` which is unreachable from inside service
-    // containers. Operators set KEYCLOAK_JWKS_URL to a container-reachable URL
-    // (e.g. http://keycloak:8080) and we register it under BOTH the discovery
-    // issuer and the public issuer so token lookup succeeds regardless of which
-    // issuer the JWT was minted with. No-op when unset.
+    // Alias a public-facing issuer for split internal/public OIDC URLs (e.g.
+    // local build behind Docker Desktop): the browser token iss
+    // (https://localhost) can differ from the discovery issuer fetched
+    // internally (http://kong:8000). Keyed by the realm ACTUALLY being
+    // initialized (see the derivation above): a partner realm's alias
+    // carries the partner realm's name, never the primary's — keying on
+    // KEYCLOAK_REALM instead would let the partner's init overwrite the
+    // primary alias with the partner JWKS (the multi-realm clobber class
+    // the realm derivation prevents). No-op if unset.
+    const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+    if (publicUrl) {
+      const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
+      if (publicIssuer !== doc.issuer) {
+        issuerMap.set(publicIssuer, effectiveJwks);
+        logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
+      }
+    }
+
+    // KEYCLOAK_BROWSER_ISSUER (value = the literal full issuer, e.g.
+    // https://localhost/auth/realms/genie): the browser tokens minted
+    // through the nginx /auth path carry a path-prefix alias issuer that
+    // neither the discovery issuer nor the public URL produces. By
+    // definition the PRIMARY realm's browser-facing issuer — one env var,
+    // one issuer: gating on the realm being initialized keeps
+    // KEYCLOAK_ADDITIONAL_REALMS inits from overwriting the shared alias
+    // with their own JWKS (same clobber class as above). No-op when unset.
+    const browserIssuer = process.env.KEYCLOAK_BROWSER_ISSUER;
+    if (browserIssuer && realm === KEYCLOAK_REALM && browserIssuer !== doc.issuer) {
+      issuerMap.set(browserIssuer, effectiveJwks);
+      logger.info(`[KeycloakAuth] Aliased browser issuer ${browserIssuer} -> same JWKS`);
+    }
+
     if (jwksOverride) {
-      const overrideJwks = createJwksCache(jwksOverride);
-      issuerMap.set(doc.issuer, overrideJwks);
-      // Register every plausible issuer alias so token lookups succeed regardless
-      // of which issuer the JWT carries:
-      //   - doc.issuer: the discovery-reported issuer (http://keycloak:8080 in local Docker)
-      //   - KEYCLOAK_PUBLIC_URL derived issuer: container-internal hostname (Docker DNS)
-      //   - KEYCLOAK_BROWSER_ISSUER: explicit browser-facing issuer (e.g. https://localhost/auth)
-      const publicUrlOverride = process.env.KEYCLOAK_PUBLIC_URL;
-      if (publicUrlOverride) {
-        // Keyed by the realm ACTUALLY being initialized (see the derivation
-        // above): a partner realm's override alias carries the partner realm's
-        // name, never the primary's.
-        const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${realm}`;
-        issuerMap.set(publicIssuerOverride, overrideJwks);
-      }
-      // KEYCLOAK_BROWSER_ISSUER is by definition the PRIMARY realm's
-      // browser-facing issuer — one env var, one issuer. Gate the alias on
-      // the realm actually being initialized: with KEYCLOAK_ADDITIONAL_REALMS,
-      // initAllRealms re-invokes this block per realm and the LAST realm's
-      // init would otherwise overwrite the shared alias with ITS override
-      // JWKS — every primary-realm browser token then verifies against the
-      // wrong realm's keys (mass 401s; the same clobber class the realm
-      // derivation above prevents). Review !622 round 11.
-      if (process.env.KEYCLOAK_BROWSER_ISSUER && realm === KEYCLOAK_REALM) {
-        issuerMap.set(process.env.KEYCLOAK_BROWSER_ISSUER, overrideJwks);
-      }
       logger.info(
         `[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} ` +
           `(overrides discovery ${doc.jwks_uri}; ` +
           `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
       );
-    }
-
-    // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local
-    // build behind Docker Desktop): the browser token iss (https://localhost) can
-    // differ from the discovery issuer fetched internally (http://kong:8000). Map
-    // the public issuer to the same JWKS so token lookup succeeds. No-op if unset.
-    // Registered ONLY when the realm being initialized IS the primary (realm ===
-    // KEYCLOAK_REALM): the alias is by definition the PRIMARY realm's public
-    // issuer, and registering it from an additional realm's init would clobber
-    // the primary alias with that realm's JWKS (the multi-realm bug this file's
-    // realm derivation prevents).
-    const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
-    if (publicUrl && realm === KEYCLOAK_REALM) {
-      const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
-      if (publicIssuer !== doc.issuer) {
-        issuerMap.set(publicIssuer, jwks);
-        logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
-      }
-    }
-
-    // KEYCLOAK_BROWSER_ISSUER without the JWKS override: the browser tokens
-    // minted through the nginx /auth path carry a path-prefix alias issuer
-    // that neither the discovery issuer nor the public URL produces
-    // (https://localhost/auth/realms/<realm>). Accepted it unconditionally in
-    // the doc-repo variant; the backend fork dropped it entirely — drift this
-    // file closes by honoring it on every consumer. Primary-realm gated like
-    // the public alias (same clobber argument); the has() guard keeps the
-    // override block's mapping (override JWKS) when that already registered
-    // the alias. No-op when unset.
-    const browserIssuer = process.env.KEYCLOAK_BROWSER_ISSUER;
-    if (browserIssuer && realm === KEYCLOAK_REALM && !issuerMap.has(browserIssuer)) {
-      issuerMap.set(browserIssuer, jwks);
-      logger.info(`[KeycloakAuth] Aliased browser issuer ${browserIssuer} -> same JWKS`);
     }
   }
 
@@ -404,17 +363,14 @@ const keycloakAuthService = {
     // 2. Check if token exp is still valid (not expired)
     // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
 
+    // The verified result is the claims payload plus the iss_sub composite
+    // key consumers key users/cache entries on.
+    const toResult = (payload) => ({ ...payload, iss_sub: `${payload.iss}#${payload.sub}` });
+
     try {
-      const verifiedPayload = await verifyWithJwt();
+      const result = toResult(await verifyWithJwt());
 
-      const issSub = `${verifiedPayload.iss}#${verifiedPayload.sub}`;
-
-      const result = {
-        ...verifiedPayload,
-        iss_sub: issSub
-      };
-
-      logger.debug(`[KeycloakAuth] Token verified for ${issSub}`);
+      logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
       return result;
     } catch (err) {
       // TokenVerificationError is re-thrown as-is
@@ -449,16 +405,9 @@ const keycloakAuthService = {
       // Signature failure with valid exp → force-refresh JWKS and retry once
       try {
         jwks.forceRefresh();
-        const verifiedPayload = await verifyWithJwt();
+        const result = toResult(await verifyWithJwt());
 
-        const issSub = `${verifiedPayload.iss}#${verifiedPayload.sub}`;
-
-        const result = {
-          ...verifiedPayload,
-          iss_sub: issSub
-        };
-
-        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${issSub}`);
+        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
         return result;
       } catch (retryErr) {
         // Retry failed → TOKEN_INVALID

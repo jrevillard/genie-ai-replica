@@ -61,7 +61,6 @@ global.fetch = async (url, opts) => {
   // the response-body half of the abort window. Without the abort guard
   // covering the body read, init would hang past the budget here.
   if (u.includes('slow-body')) {
-    const bodyRealm = /\/realms\/([^/?#]+)\/\.well-known/.exec(u)[1];
     return {
       ok: true,
       status: 200,

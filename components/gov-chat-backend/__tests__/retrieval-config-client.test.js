@@ -119,6 +119,10 @@ afterEach(() => {
 });
 
 describe('retrieval-config-client (Story 1.1)', () => {
+  // One accessor for the key derivation — closes over the `client` let, so
+  // every call reads the module generation the current beforeEach loaded.
+  const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+
   it('cache hit: the same caller within the TTL window hits upstream once', async () => {
     axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
 
@@ -322,7 +326,6 @@ describe('retrieval-config-client (Story 1.1)', () => {
     // injective over scope LISTS: the set {a, b} and the one-scope list
     // [a|b] must never join to the same bytes (they would share one cache
     // entry and be served the same per-caller payload).
-    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     const setKey = keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']));
     const literalKey = keyOf(makeBearer(['okf:t:a:read|okf:t:b:read']));
     expect(literalKey).not.toBe(setKey);
@@ -380,7 +383,6 @@ describe('retrieval-config-client (Story 1.1)', () => {
   });
 
   it('parseOkfScopes: the standard scope claim lands in the parsed set — same key as the array grant', () => {
-    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     expect(keyOf(makeBearer([], [], 'u1', { scope: 'okf:t:a:read okf:t:b:read openid offline_access' }))).toBe(
       keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
     );
@@ -389,7 +391,6 @@ describe('retrieval-config-client (Story 1.1)', () => {
   });
 
   it('parseOkfScopes: a space-joined okf_scopes STRING attribute matches the array grant', () => {
-    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     expect(keyOf(makeBearer([], [], 'u2', { okf_scopes: 'okf:t:a:read okf:t:b:read' }))).toBe(
       keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
     );
@@ -427,7 +428,6 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
     // The KEY decides the cache entry: the realm-role grant must land in the
     // claim-scoped entry, never in the scope-less one.
-    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     const claimKey = keyOf(byClaim);
     const roleKey = keyOf(byRole);
     const noScopesKey = keyOf(noScopes);

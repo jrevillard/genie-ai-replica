@@ -252,7 +252,8 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 
 /**
  * Resolve one endpoint through the window cache. On a cache miss the upstream
- * runs ONCE per window per (kind, scopes); the RESOLVED value — including a
+ * runs ONCE per window per (kind, scopes) — best-effort under concurrent
+ * cold-window misses; the RESOLVED value — including a
  * policy-resolved failure — is what gets cached. A 401 is NEVER cached: a
  * refreshed token of the same caller shares the scopes key, and a cached 401
  * would lock them out until the window rolls.

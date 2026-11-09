@@ -267,7 +267,7 @@ test.describe('Resizable sidebars behind one handle', () => {
     // chevron say so with the cursor: `pointer` on the chevron would
     // promise a click and deny the drag, on the one element the user
     // can actually see.
-    for (const [sel, buttonSel] of [
+    for (const [stripSel, buttonSel] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
     ]) {
@@ -281,8 +281,8 @@ test.describe('Resizable sidebars behind one handle', () => {
           buttonTouch: getComputedStyle(button).touchAction
         };
       }, { stripSel, buttonSel });
-      expect(cursors.strip, `${sel}: the strip must advertise the drag`).toBe('col-resize');
-      expect(cursors.button, `${sel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
+      expect(cursors.strip, `${stripSel}: the strip must advertise the drag`).toBe('col-resize');
+      expect(cursors.button, `${stripSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
       // Without `touch-action: none` the browser claims a touch drag
       // as a scroll and `pointermove` never arrives.
       expect(cursors.stripTouch).toBe('none');

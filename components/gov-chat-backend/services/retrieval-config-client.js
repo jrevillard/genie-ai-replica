@@ -214,7 +214,7 @@ function effectiveScopesKey(bearerHeader) {
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
 
 const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value } | { window, throw }
-let _lastGoodConfig = null; // last-known-good retrieval-config response
+let _lastGoodConfig = null; // deployment-global posture from the last good retrieval-config (mode only)
 
 function currentWindow() {
   return Math.floor(Date.now() / RETRIEVAL_CONFIG_TTL_MS);

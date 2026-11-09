@@ -106,7 +106,7 @@ describe('keycloak-auth-middleware', () => {
     });
 
     it('should delegate verification to the shared verifier with the raw token', async () => {
-      mockVerifyToken.mockResolvedValue({ payload: createMockPayload(['admin']) });
+      mockVerifyToken.mockResolvedValue(createMockPayload(['admin']));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
       });
@@ -136,34 +136,35 @@ describe('keycloak-auth-middleware', () => {
     });
 
     it('should map a claim-validation failure to 401 with the verifier message', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token claim validation failed' });
+      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token claim validation failed' }); // internal message
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer bad-claim-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token claim validation failed' })
+        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token verification failed' })
       );
     });
 
-    it('should return 401 when Keycloak discovery is unavailable (init failure)', async () => {
-      // The shared verifier surfaces init/cooldown failures as TOKEN_INVALID
-      // "temporarily unavailable" — the backend middleware's semantics. The
-      // middleware no longer carries its own 503 branch (DW-427).
+    it('should return 503 AUTH_SERVICE_UNAVAILABLE when Keycloak discovery is unavailable (init failure)', async () => {
+      // The shared verifier surfaces init/cooldown failures as
+      // AUTH_SERVICE_UNAVAILABLE; the middleware maps it to the doc-repo 503
+      // contract the frontend httpService handles (a Keycloak outage is not a
+      // bad token).
       mockVerifyToken.mockRejectedValue({
-        code: 'TOKEN_INVALID',
+        code: 'AUTH_SERVICE_UNAVAILABLE',
         message: 'Authentication service is temporarily unavailable'
       });
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer some-token' } }
       });
       await authenticateToken(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(503);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'TOKEN_INVALID',
-          message: 'Authentication service is temporarily unavailable'
+          error: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Authentication service unavailable'
         })
       );
     });
@@ -184,7 +185,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should attach user object for valid token with admin role', async () => {
       const payload = createMockPayload(['admin']);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -206,7 +207,7 @@ describe('keycloak-auth-middleware', () => {
     // gates. Pin the mapping here on the REAL middleware.
     it('should map the okf_scopes array claim onto req.user.okfScopes', async () => {
       const payload = { ...createMockPayload(['user']), okf_scopes: ['okf:t:repo-a:read', 'okf:t:*:admin'] };
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -219,7 +220,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should default req.user.okfScopes to [] when the claim is absent', async () => {
       const payload = createMockPayload(['user']); // no okf_scopes claim
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -232,7 +233,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should map dataprep-service role correctly', async () => {
       const payload = createMockPayload(['dataprep-service']);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -244,7 +245,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should map the okf-service role verbatim', async () => {
       const payload = createMockPayload(['default-roles-genie', 'offline_access', 'okf-service']);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer okf-service-token' } }
@@ -256,7 +257,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should map the tools-admin role verbatim', async () => {
       const payload = createMockPayload(['default-roles-genie', 'offline_access', 'tools-admin']);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer tools-admin-token' } }
@@ -268,7 +269,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should map user role with first letter capitalized', async () => {
       const payload = createMockPayload(['user']);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -280,7 +281,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should default to User when roles array is empty', async () => {
       const payload = createMockPayload([]);
-      mockVerifyToken.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }

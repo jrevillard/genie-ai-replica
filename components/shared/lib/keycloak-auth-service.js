@@ -174,12 +174,20 @@ async function init(idpUrl) {
     // skipped so an alias can never widen acceptance past the pin. The JWKS
     // override still applies: it changes WHERE the keys come from, never
     // WHO is accepted.
-    const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : jwks;
-    issuerMap.set(pinnedIssuer, effectiveJwks);
-    logger.info(
-      `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
-        (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${doc.jwks_uri})`)
-    );
+    // Primary-realm gated like the alias branches below (review round 2):
+    // the pin names ONE issuer of the PRIMARY realm — an additional realm's
+    // init re-running this branch would overwrite the pinned entry with ITS
+    // realm's JWKS, the same clobber class the alias branches guard against.
+    // A partner-realm token carries a different iss than the pin and is
+    // rejected either way — that is what "accept ONLY this issuer" means.
+    if (realm === KEYCLOAK_REALM) {
+      const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : jwks;
+      issuerMap.set(pinnedIssuer, effectiveJwks);
+      logger.info(
+        `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
+          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${doc.jwks_uri})`)
+      );
+    }
   } else {
     issuerMap.set(doc.issuer, jwks);
 
@@ -301,7 +309,7 @@ async function ensureInitialized() {
 
   // Within cooldown after a failure — skip retry
   if (initFailedAt && Date.now() - initFailedAt < INIT_RETRY_COOLDOWN) {
-    throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
+    throw new TokenVerificationError('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable');
   }
 
   // If an init is already in progress, wait for it
@@ -347,7 +355,7 @@ const keycloakAuthService = {
       await ensureInitialized();
     } catch (err) {
       if (err instanceof TokenVerificationError) throw err;
-      throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
+      throw new TokenVerificationError('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable');
     }
 
     // Extract unverified iss and exp to lookup in trusted issuer map (whitelist)

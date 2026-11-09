@@ -21,10 +21,12 @@ jest.mock(
   { virtual: true }
 );
 
-// The claims the shared verifier hands back — each test swaps them.
+// The claims the shared verifier hands back — each test swaps them. The
+// verifier RESOLVES TO THE PAYLOAD itself (claims + iss_sub), not a
+// `{ payload }` wrapper (that is jose's shape, one layer down).
 const mockClaimsHolder = { current: null };
 jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-  verifyToken: jest.fn(async () => ({ payload: mockClaimsHolder.current }))
+  verifyToken: jest.fn(async () => mockClaimsHolder.current)
 }));
 
 jest.mock('../../services/fileService', () => ({

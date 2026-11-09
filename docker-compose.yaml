@@ -1486,7 +1486,10 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
-      - KC_REALM=${KEYCLOAK_REALM:-genie}
+      # The shared OIDC verifier (DW-427) reads KEYCLOAK_REALM — the old appConfig
+      # security block (KC_REALM consumer) went away with the middleware's own
+      # verification code.
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}

@@ -30,26 +30,53 @@ const JWKS_URI = `${DISCOVERY_ISSUER}/protocol/openid-connect/certs`;
 
 // One RSA pair stands in for the realm's signing key, exported as JWK so the
 // stubbed JWKS document is byte-real (jose imports the keys exactly as it
-// would from a live Keycloak certs endpoint).
+// would from a live Keycloak certs endpoint). A SECOND pair stands in for an
+// additional ("partner") realm — different keys, so a cross-realm clobber of
+// a map entry cannot accidentally still verify.
 const { publicKey, privateKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'jwk' },
   privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
 });
+const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'jwk' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+});
 const JWKS = { keys: [{ ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }] };
+const PARTNER_JWKS_URI = `${KEYCLOAK_URL}/realms/partner/protocol/openid-connect/certs`;
+const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'RS256', use: 'sig' }] };
 
 // Stub both HTTP legs the verifier performs: OIDC discovery (fetch with an
 // AbortController signal) and the JWKS document (jose's createRemoteJWKSet
-// fetches through global fetch too). The discovery issuer tracks whatever
-// KC issuer topology the current test configures.
-let discoveryIssuer = DISCOVERY_ISSUER;
+// fetches through global fetch too). Discovery docs are derived per realm
+// from the requested URL, so additional-realm inits get their own issuer and
+// JWKS — the shape a real multi-realm Keycloak serves.
 global.fetch = async (url) => {
-  // The JWKS URI shares the discovery prefix — match it FIRST.
-  if (String(url) === JWKS_URI) {
+  const u = String(url);
+  // An unreachable host 404s everything — the init-failure topology names its
+  // host 'unreachable' to land here.
+  if (u.includes('unreachable')) {
+    return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({}) };
+  }
+  const realmMatch = /\/realms\/([^/?#]+)\/\.well-known/.exec(u);
+  if (realmMatch) {
+    const realmName = realmMatch[1];
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        issuer: `${KEYCLOAK_URL}/realms/${realmName}`,
+        jwks_uri: `${KEYCLOAK_URL}/realms/${realmName}/protocol/openid-connect/certs`
+      })
+    };
+  }
+  // The JWKS URIs share the discovery prefix — match them BEFORE it.
+  if (u === JWKS_URI) {
     return { ok: true, status: 200, json: async () => JWKS, headers: new Map([['cache-control', 'no-store']]) };
   }
-  if (String(url).startsWith(discoveryIssuer)) {
-    return { ok: true, status: 200, json: async () => ({ issuer: discoveryIssuer, jwks_uri: JWKS_URI }) };
+  if (u === PARTNER_JWKS_URI) {
+    return { ok: true, status: 200, json: async () => PARTNER_JWKS, headers: new Map([['cache-control', 'no-store']]) };
   }
   return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) };
 };
@@ -89,8 +116,11 @@ function baseClaims(iss, extra = {}) {
   };
 }
 
-const sign = async (claims, header = { alg: 'RS256', kid: 'test-key' }) =>
-  new SignJWT(claims).setProtectedHeader(header).sign(privateKey);
+const sign = async (claims, opts = {}) => {
+  const key = opts.partner ? partnerPrivateKey : privateKey;
+  const kid = opts.partner ? 'partner-key' : 'test-key';
+  return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
+};
 
 test('DW-434: valid RS256 token verifies end-to-end (real signature path)', async () => {
   const svc = loadVerifier();
@@ -159,7 +189,6 @@ test('DW-435: issuer outside the discovery map is rejected as Unknown issuer', a
 });
 
 test('DW-435: KEYCLOAK_PUBLIC_URL alias is accepted on a real token', async () => {
-  discoveryIssuer = DISCOVERY_ISSUER;
   const svc = loadVerifier({ KEYCLOAK_PUBLIC_URL: 'https://public.example/auth' });
   const publicIss = 'https://public.example/auth/realms/genie';
   const token = await sign(baseClaims(publicIss));
@@ -168,7 +197,6 @@ test('DW-435: KEYCLOAK_PUBLIC_URL alias is accepted on a real token', async () =
 });
 
 test('browser-issuer alias works WITHOUT the JWKS override (drift closed)', async () => {
-  discoveryIssuer = DISCOVERY_ISSUER;
   // The env value is the literal issuer (doc-repo semantics: pushed verbatim
   // into the accepted-issuer set), not a URL prefix to derive from.
   const browserIss = 'https://localhost/auth/realms/genie';
@@ -179,7 +207,6 @@ test('browser-issuer alias works WITHOUT the JWKS override (drift closed)', asyn
 });
 
 test('KEYCLOAK_EXPECTED_ISSUER pin: only the pinned issuer is accepted', async () => {
-  discoveryIssuer = DISCOVERY_ISSUER;
   const pinned = 'https://genie.example.org/auth/realms/genie';
   const svc = loadVerifier({ KEYCLOAK_EXPECTED_ISSUER: pinned });
   const pinnedToken = await sign(baseClaims(pinned));
@@ -196,6 +223,40 @@ test('KEYCLOAK_EXPECTED_ISSUER pin: only the pinned issuer is accepted', async (
 test('checkUserStatusInKeycloak is present on the unified verifier', () => {
   const svc = loadVerifier();
   assert.equal(typeof svc.checkUserStatusInKeycloak, 'function');
+});
+
+test('pin + additional realms: partner init must not clobber the pinned primary entry', async () => {
+  // Review round 2: the pin branch is primary-realm gated — the partner
+  // realm's init re-running it would overwrite the pinned issuer's JWKS with
+  // the partner realm's keys (the multi-realm clobber class the alias
+  // branches guard against).
+  const pinned = DISCOVERY_ISSUER;
+  const svc = loadVerifier({
+    KEYCLOAK_EXPECTED_ISSUER: pinned,
+    KEYCLOAK_ADDITIONAL_REALMS: '["partner"]'
+  });
+  // verifyToken triggers initAllRealms: primary init registers pin → primary
+  // JWKS, partner init must not touch the pinned entry.
+  const primaryToken = await sign(baseClaims(pinned));
+  const payload = await svc.verifyToken(primaryToken);
+  assert.equal(payload.iss, pinned);
+  // A partner-realm token carries a different iss than the pin — rejected.
+  const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
+  const partnerToken = await sign(baseClaims(partnerIss), { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(partnerToken),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {
+  // An unreachable discovery host: the stub 404s every URL for this issuer.
+  const svc = loadVerifier({ KEYCLOAK_URL: 'http://keycloak-unreachable:8080' });
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
 });
 
 // Sanity: the signing key verifies directly (guards against a silently broken

@@ -91,11 +91,11 @@ const authenticateToken = async (req, res, next) => {
     try {
       // verifyToken validates: signature (RS256), issuer (discovery issuer +
       // configured aliases), expiration, and not-before. The service hides
-      // Keycloak discovery/JWKS details; init failures surface as
-      // TOKEN_INVALID "Authentication service is temporarily unavailable" —
-      // the same 401 semantics the backend middleware ships.
-      const { payload } = await keycloakAuthService.verifyToken(token);
-      decoded = payload;
+      // Keycloak discovery/JWKS details and RESOLVES TO THE CLAIMS PAYLOAD
+      // itself (with an added iss_sub composite key). Init/cooldown failures
+      // throw TokenVerificationError AUTH_SERVICE_UNAVAILABLE — mapped to the
+      // 503 below, the doc-repo contract the frontend httpService handles.
+      decoded = await keycloakAuthService.verifyToken(token);
     } catch (err) {
       // [DIAG 2026-09-15] Publish 401 root cause — log full token-vs-expected
       // mismatch (issuer / signature / expiration) so the next 401 is
@@ -115,6 +115,17 @@ const authenticateToken = async (req, res, next) => {
         token_issuer: (diagClaims && diagClaims.iss) || 'unparseable',
         token_exp: (diagClaims && diagClaims.exp) || 0
       });
+      if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+        // Keycloak discovery down / init cooldown — NOT a bad token. Kept as
+        // the doc-repo 503 contract (frontend httpService handles this code);
+        // the backend middleware 401s the same condition — per-component
+        // HTTP mapping over the one shared verifier.
+        return res.status(503).json({
+          error: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Authentication service unavailable',
+          details: {}
+        });
+      }
       if (err && err.code === 'TOKEN_EXPIRED') {
         return res.status(401).json({
           error: 'TOKEN_EXPIRED',
@@ -122,9 +133,12 @@ const authenticateToken = async (req, res, next) => {
           details: {}
         });
       }
+      // Fixed client-facing message, matching the backend middleware — the
+      // verifier's internal message ('Unknown issuer', 'Cannot decode JWT
+      // payload', ...) stays in the DIAG log above.
       return res.status(401).json({
         error: 'TOKEN_INVALID',
-        message: (err && err.message) || 'Token verification failed',
+        message: 'Token verification failed',
         details: {}
       });
     }

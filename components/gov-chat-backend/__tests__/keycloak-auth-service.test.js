@@ -237,7 +237,7 @@ describe('keycloakAuthService', () => {
       const token = generateMockJwtString(mockJwtPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
+        code: 'AUTH_SERVICE_UNAVAILABLE',
         message: 'Authentication service is temporarily unavailable'
       });
     });

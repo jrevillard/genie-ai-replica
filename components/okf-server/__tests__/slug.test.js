@@ -18,6 +18,7 @@ describe('slugify — OKF slug SSOT', () => {
     expect(slugify(null)).toBe('');
     expect(slugify(undefined)).toBe('');
     expect(slugify({})).toBe(''); // junk types never become identities
+    expect(slugify('abc', null)).toBe('abc'); // null options tolerated
   });
 
   test('no fold by default: diacritics become dashes, non-Latin input returns empty', () => {

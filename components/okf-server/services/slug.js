@@ -26,11 +26,13 @@
  * NEVER String()-coerced — it is treated as empty (junk types must not
  * become identities).
  */
-function slugify(value, opts = {}) {
-  const { fold = false, cap = 0 } = opts;
+function slugify(value, opts) {
+  const { fold = false, cap = 0 } = opts || {};
   let s = typeof value === 'string' ? value : '';
   if (fold) {
-    s = s.normalize('NFKD').replace(/[̀-ͯ]/g, '');
+    // Escaped range: raw combining characters would not survive an
+    // editor/clipboard Unicode-normalization pass over this file.
+    s = s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
   }
   s = s
     .toLowerCase()

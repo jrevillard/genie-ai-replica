@@ -82,7 +82,9 @@ async function main() {
   const want = slugify(target);
   const repo = repos.find(
     (r) =>
-      r.repo_id === target || String(r.name || '').toLowerCase() === target.toLowerCase() || slugify(r.name) === want
+      r.repo_id === target ||
+      String(r.name || '').toLowerCase() === target.toLowerCase() ||
+      (want !== '' && slugify(r.name) === want) // a degenerate target matches nothing
   );
   if (!repo) {
     record(

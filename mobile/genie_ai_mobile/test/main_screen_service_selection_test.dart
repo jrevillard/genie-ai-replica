@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/main.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
@@ -109,6 +110,15 @@ void main() {
 
     await expandCategory(tester);
     await tapService(tester, 0);
+
+    // The row's ink follows its rounded decoration: the tile carries the
+    // shape the InkWell paints its highlight through (the structural
+    // half of the ink behaviour — the visible result itself is a device
+    // check, outside what a widget test can see).
+    expect(
+      tester.widget<ListTile>(find.byKey(const Key('svc_2_0'))).shape,
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.md)),
+    );
 
     // The selection's display name landed in the chat's context bar:
     // the call carried the payload's name as the POSITIONAL category

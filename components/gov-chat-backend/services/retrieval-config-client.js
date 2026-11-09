@@ -317,7 +317,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           typeof raw === 'object' &&
           raw.config &&
           typeof raw.config.mode === 'string' &&
-          raw.config.mode &&
+          raw.config.mode.trim() &&
           typeof raw.engaged === 'boolean'
         ) {
           // The last-known-good copy is served to ANY caller on upstream

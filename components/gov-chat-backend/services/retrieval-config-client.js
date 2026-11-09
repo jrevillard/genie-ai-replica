@@ -318,10 +318,10 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           // failure, so it carries only what the BFF consumes of the
           // deployment-global posture: the mode. Everything scope-derived
           // in the response (engaged, serving_graph_count, serving_repo_ids,
-          // serving_graphs, warnings, config.updated_by) is computed BY the
-          // okf-server FROM this caller's scopes — carrying it in the shared
-          // copy would hand one caller's serving view to another on an
-          // outage. Other global fields (revision, tuning caps) are simply
+          // serving_graphs, warnings) is computed BY the okf-server FROM
+          // this caller's scopes — carrying it in the shared copy would
+          // hand one caller's serving view to another on an outage. Other
+          // global fields (revision, tuning caps, updated_by) are simply
           // unconsumed here and stay out of the copy until a consumer needs
           // them — a field carried here must survive being served to every
           // caller, so it joins the copy together with its consumer.

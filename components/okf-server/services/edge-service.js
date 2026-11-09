@@ -218,15 +218,40 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     const links = Array.isArray(meta && meta.links) ? meta.links.filter((l) => l && l.to_concept_id) : [];
 
     // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
-    // so prefixed stored ids match bare link targets.
-    let repoConceptIds;
+    // so prefixed stored ids match bare link targets. PROBED on the
+    // (repo_id, concept_id) unique index, for the link targets ONLY: the
+    // whole-set read made an N-concept drain pay N x N row reads.
+    // One query for all the targets — a nested FOR over the candidate list,
+    // each candidate a seek on the unique index. Measured on this collection
+    // (ArangoDB 3.12.4, production index set): past ~200 candidates the
+    // planner switches an equivalent IN-list filter to the single-attribute
+    // repo_id index and pays one full-document lookup per repo row, while the
+    // per-candidate seek stays covering at every size measured. Row reads
+    // scale with the links and the round trips stay at one per concept.
+    const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
+    let repoConceptIds = new Set();
     try {
-      const rows = await (
-        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id RETURN m.concept_id', { repo_id })
-      ).all();
-      repoConceptIds = new Set(rows.map(normalizeConceptId));
+      if (targetIds.length > 0) {
+        // Both stored forms of every target: bare, and `concepts/`-prefixed (a
+        // subdirectory bundle stores the prefixed form).
+        const candidates = targetIds.flatMap((t) => [t, `concepts/${t}`]);
+        const rows = await (
+          await db.query(
+            'FOR c IN @candidates FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id == c RETURN m.concept_id',
+            { repo_id, candidates }
+          )
+        ).all();
+        // RETURN m.concept_id yields bare strings; each hit is one of the
+        // candidates, whose normalized form IS the target that produced it —
+        // the normalized id is what the boundary check below compares against.
+        repoConceptIds = new Set(rows.map(normalizeConceptId));
+      }
     } catch (err) {
-      logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });
+      logger.warn('Edge write: repo concept-set read failed — dropping all links', {
+        repo_id,
+        concept_id: cid,
+        error: err.message
+      });
       return { repo_id, concept_id: cid, written: 0, dropped: links.map((l) => l.to_concept_id) };
     }
 

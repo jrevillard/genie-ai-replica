@@ -1,9 +1,10 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // AUTOCORRECT for conformance findings (David, 2026-09-12): a sources[] entry
-// with an empty "resource" is filled determinately (concept provenance first,
-// sibling resource second), and the APPLY path re-parses the concept so
-// conformance_issues are recomputed — the finding actually clears.
+// with an empty "resource" is filled determinately (entry's own file_id first
+// [#1651], concept provenance second, sibling resource third), and the APPLY
+// path re-parses the concept so conformance_issues are recomputed — the
+// finding actually clears.
 
 jest.mock('../shared-lib/db-connection-service', () => {
   const mockDb = require('./mocks/arango-mock').createMockDb();
@@ -21,6 +22,7 @@ jest.mock('../shared-lib/metrics', () => ({
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const conceptMeta = require('../services/concept-meta-service');
+const config = require('../config');
 
 const ISSUE = {
   code: 'SOURCE_MISSING_RESOURCE',
@@ -117,6 +119,119 @@ describe('autocorrect SOURCE_MISSING_RESOURCE', () => {
     const out = await conceptMeta.autocorrectRepo('repoA', false);
     expect(out.applied).toBe(0);
     expect(out.changes).toHaveLength(0);
+  });
+});
+
+// #1651 (El Salvador, live 2026-11-09): the document-import index concept
+// carries `sources: [{kind, file_id}]` with NO resource anywhere — 50
+// conformance warnings, and the sheet answered "Nothing to fix" because the
+// planner declined SILENTLY when neither provenance nor sibling had a
+// resource. The own-file_id fill tier derives the exact URL a born-right
+// entry carries; the still-unfillable case surfaces the warning the rule's
+// comment always promised.
+describe('autocorrect SOURCE_MISSING_RESOURCE — file_id tier + the unfillable warning (#1651)', () => {
+  function programQuery() {
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => Object.values(mockDb._stores.okf_concepts_meta || {})
+    });
+  }
+
+  test('plan: the El Salvador shape — every entry fills from its OWN file_id (autocorrectRepo passes the doc-repo base)', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'index',
+      repo_id: 'repoA',
+      concept_id: 'index',
+      frontmatter: {
+        title: 'El Salvador',
+        type: 'index',
+        sources: [
+          { kind: 'document', file_id: '1791735067281_bbf1438e' },
+          { kind: 'document', file_id: '1791723245857_30099290' }
+        ]
+      },
+      body: '# ES\n',
+      sources: [{ kind: 'document', file_id: '1791735067281_bbf1438e' }], // provenance: ALSO resource-less
+      conformance_issues: [ISSUE]
+    });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    const change = out.changes[0].changes.find((c) => c.reason === 'SOURCE_MISSING_RESOURCE');
+    expect(change).toBeDefined();
+    const base = config.documentRepository.url;
+    // Each entry gets ITS OWN file URL — not the sibling's, not a shared one.
+    expect(change.after[0].resource).toBe(`${base}/api/files/1791735067281_bbf1438e`);
+    expect(change.after[1].resource).toBe(`${base}/api/files/1791723245857_30099290`);
+    expect(change.note).toContain('own file_id');
+    // Nothing was unfillable — the sheet stays free of SOURCE_UNFIXABLE noise.
+    expect(JSON.stringify(out.warnings)).not.toContain('SOURCE_UNFIXABLE');
+  });
+
+  test('plan: the own file_id beats the sibling tier (precision, not misattribution)', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'multi',
+      repo_id: 'repoA',
+      concept_id: 'multi',
+      frontmatter: {
+        title: 'M',
+        type: 'topic',
+        sources: [{ resource: 'https://sibling.example' }, { kind: 'document', file_id: 'own-9' }]
+      },
+      body: '# M\n',
+      conformance_issues: [ISSUE]
+    });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    const change = out.changes[0].changes.find((c) => c.reason === 'SOURCE_MISSING_RESOURCE');
+    // Entry 0 has no file_id of its own → provenance/sibling tier; entry 1's
+    // own file_id outranks copying the sibling's URL.
+    expect(change.after[1].resource).toBe(`${config.documentRepository.url}/api/files/own-9`);
+    expect(change.after[0].resource).toBe('https://sibling.example');
+  });
+
+  test('plan: truly unfillable → SOURCE_UNFIXABLE warnings, never a silent clean sheet', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'orphan',
+      repo_id: 'repoA',
+      concept_id: 'orphan',
+      frontmatter: {
+        title: 'O',
+        type: 'topic',
+        sources: [{ author: 'x' }, { kind: 'crawl', crawl_job_id: 'cj' }]
+      },
+      body: '# O\n',
+      conformance_issues: [ISSUE]
+    });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    // No SOURCES fix proposed (the unrelated MISSING_STATUS hygiene rule may
+    // still propose a status default — assert on the sources rule only).
+    const sourcesChange = out.changes.flatMap((c) => c.changes).find((c) => c.reason === 'SOURCE_MISSING_RESOURCE');
+    expect(sourcesChange).toBeUndefined();
+    const wrapped = out.warnings.find((w) => w.concept_id === 'orphan');
+    expect(wrapped).toBeDefined();
+    const rules = wrapped.warnings.map((x) => x.rule);
+    expect(rules).toEqual(['SOURCE_UNFIXABLE', 'SOURCE_UNFIXABLE']); // one per entry
+    expect(wrapped.warnings[0].message).toContain('Source entry 0');
+    expect(wrapped.warnings[1].message).toContain('Source entry 1');
+  });
+
+  test('apply: the file_id fill lands and the conformance issue recomputes away', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'index',
+      repo_id: 'repoA',
+      concept_id: 'index',
+      frontmatter: { title: 'I', type: 'index', sources: [{ kind: 'document', file_id: 'f-77' }] },
+      body: '# I\n',
+      sources: [{ kind: 'document', file_id: 'f-77' }],
+      conformance_issues: [ISSUE]
+    });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', false);
+    expect(out.applied).toBe(1);
+    const doc = mockDb._stores.okf_concepts_meta.index;
+    expect(doc.frontmatter.sources[0].resource).toBe(`${config.documentRepository.url}/api/files/f-77`);
+    const codes = (doc.conformance_issues || []).map((i) => i.code);
+    expect(codes).not.toContain('SOURCE_MISSING_RESOURCE');
   });
 });
 

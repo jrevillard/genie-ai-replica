@@ -712,7 +712,16 @@ async function runConversion(job) {
           frontmatter: {
             type: 'index',
             title: indexTitle,
-            sources: [{ kind: 'crawl', file_id, crawl_job_id: job.crawl_job_id || null }]
+            // Born-right (#1651): the index's source entry carries its
+            // doc-repo file URL — the per-page entries above already do.
+            sources: [
+              {
+                kind: 'crawl',
+                resource: `${config.documentRepository.url}/api/files/${file_id}`,
+                file_id,
+                crawl_job_id: job.crawl_job_id || null
+              }
+            ]
           },
           body: `# ${indexTitle}\n\nThis repository was created from a website crawl. The concepts below are the crawled pages, one per page.\n\n## Contents\n\n${contents}\n`
         }

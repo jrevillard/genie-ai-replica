@@ -318,7 +318,12 @@ describe('mode B — per-page streaming conversion', () => {
     });
     expect(index[0].body).toContain('[one](./a-example-one.md)');
     expect(index[0].body).toContain('[two](./b-example-two.md)');
-    expect(index[0].frontmatter.sources).toEqual([{ kind: 'crawl', file_id: 'f1', crawl_job_id: 'cj-1' }]);
+    // #1651: the index's source entry is born with its doc-repo resource URL
+    // (a resource-less entry is flagged by conformance and was unfixable in
+    // the autocorrect sheet).
+    expect(index[0].frontmatter.sources).toEqual([
+      { kind: 'crawl', resource: 'http://document-repository:3001/api/files/f1', file_id: 'f1', crawl_job_id: 'cj-1' }
+    ]);
   });
 
   test('progress patches follow queued -> downloading -> splitting -> adding -> done', async () => {

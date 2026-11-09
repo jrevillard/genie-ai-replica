@@ -4,6 +4,8 @@
 // Pins: cache hit/miss/expiry, okf-server 5xx → last-known-good, 401
 // propagation (never cached), last-known-good default, bearer (scope)
 // isolation, no-eviction within a window, 403 → legacy default.
+// DW-428: a realm-role grant of a scope keys the claim-scoped cache entry,
+// never the scope-less one.
 
 require('./setup-env');
 
@@ -42,6 +44,22 @@ function b64url(obj) {
 function makeBearer(scopes = [], roles = [], sub = 'user-1') {
   const payload = { sub, okf_scopes: scopes, realm_access: { roles } };
   return `Bearer ${b64url({ alg: 'none' })}.${b64url(payload)}.sig`;
+}
+
+/** Decode a bearer header's payload (the fixtures are synthetic — unverified).
+ *  Mirrors decodeJwtPayload in services/retrieval-config-client.js — change
+ *  them together: an undecodable bearer yields null, not a throw. */
+function payloadOf(bearer) {
+  const token = String(bearer || '')
+    .replace(/^\s*bearer\s+/i, '')
+    .trim();
+  const part = token.split('.')[1];
+  if (!part) return null;
+  try {
+    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
 }
 
 const HYBRID_CONFIG = {
@@ -188,11 +206,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
   it('bearer isolation: two callers with different scopes get their own graph sets', async () => {
     const authzFor = (scopes) => ({ ...AUTHZ_A, graph_names: scopes });
-    const scopesOf = (authHeader) => {
-      const token = String(authHeader || '').replace(/^Bearer\s+/i, '');
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-      return payload.okf_scopes || [];
-    };
+    const scopesOf = (authHeader) => payloadOf(authHeader)?.okf_scopes || [];
     axios.get.mockImplementation((path, config) => {
       if (path.endsWith('/api/okf/authz/graphs')) {
         const scopes = scopesOf(config?.headers?.Authorization);
@@ -312,18 +326,66 @@ describe('retrieval-config-client (Story 1.1)', () => {
     ).toEqual(['okf:t:c:read']);
   });
 
-  it('role-granted scopes share the claim-scoped cache entry and never the @no-scopes one', async () => {
-    axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+  it("role-granted scopes share the claim-scoped cache entry, never the scope-less caller's entry", async () => {
+    // The upstream answers PER CALLER, so "who was served what" is
+    // observable — one shared payload would hide a cross-caller bleed behind
+    // identical bytes.
+    axios.get.mockImplementation((path, config) => {
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
+      const serving = [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }];
+      if (path.endsWith('/api/okf/authz/graphs')) {
+        return okfGetResponse({
+          ...AUTHZ_A,
+          graph_names: serving.map((g) => g.graph_name),
+          repos: serving.map((g) => ({ ...g, name: `Repo of ${sub}` }))
+        });
+      }
+      return okfGetResponse({
+        ...HYBRID_CONFIG,
+        serving_graph_count: serving.length,
+        serving_repo_ids: serving.map((g) => g.repo_id),
+        serving_graphs: serving
+      });
+    });
 
-    const byClaim = makeBearer(['okf:t:a:read'], []);
-    const byRole = makeBearer([], ['okf:t:a:read']);
-    const noScopes = makeBearer([], []);
+    const byClaim = makeBearer(['okf:t:a:read'], [], 'claim-user');
+    const byRole = makeBearer([], ['okf:t:a:read'], 'role-user');
+    const noScopes = makeBearer([], [], 'scope-less-user');
 
-    await client.getRetrievalConfig(byClaim);
-    await client.getRetrievalConfig(byRole); // same effective scopes → cache hit
-    await client.getRetrievalConfig(noScopes); // distinct key — no cross-user bleed
+    // The KEY decides the cache entry: the realm-role grant must land in the
+    // claim-scoped entry, never in the scope-less one.
+    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+    const claimKey = keyOf(byClaim);
+    const roleKey = keyOf(byRole);
+    const noScopesKey = keyOf(noScopes);
+    expect(roleKey).toBe(claimKey);
+    expect(roleKey).not.toBe(noScopesKey);
 
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    const claimView = await client.getRetrievalConfig(byClaim);
+    const roleView = await client.getRetrievalConfig(byRole);
+    const scopeLessView = await client.getRetrievalConfig(noScopes);
+
+    // Scope-equivalent callers share the entry — BOTH are served the same
+    // view, whichever of them populated it. An equality between two served
+    // views (not a positional list) is what makes this order-independent.
+    expect(roleView.serving_repo_ids).toEqual(claimView.serving_repo_ids);
+    // The scope-less caller keeps its own view: it is never handed another
+    // caller's serving set.
+    expect(scopeLessView.serving_repo_ids).toEqual(['repo-of-scope-less-user']);
+
+    // The authorization boundary shares the key — a scope-less caller must
+    // not be handed the scoped caller's traversable graph set.
+    const graphsByClaim = await client.getAuthorizedGraphs(byClaim);
+    const graphsByRole = await client.getAuthorizedGraphs(byRole);
+    const graphsScopeLess = await client.getAuthorizedGraphs(noScopes);
+    expect(graphsByRole.graph_names).toEqual(graphsByClaim.graph_names);
+    expect(graphsScopeLess.graph_names).toEqual(['graph-of-scope-less-user']);
+
+    // Payload-independent tripwire: the role-granted caller never fetched its
+    // own entry on either cache kind — two misses per kind (claim caller +
+    // scope-less caller), so the count pins the cache-hit behaviour without
+    // depending on what the mock serves.
+    expect(axios.get).toHaveBeenCalledTimes(4);
   });
 
   // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base

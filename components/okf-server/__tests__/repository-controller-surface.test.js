@@ -642,11 +642,9 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     // 'Crawled knowledge base' index title from that null, not the slug.
     repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
     await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B' } });
-    expect(repoService.create).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'crawled-repository' }),
-      expect.anything(),
-      expect.anything()
-    );
+    // The create-path name for an absent caller name is pinned by the
+    // non-string test below (same nameFromSource arm) — this test's unique
+    // subject is the job record.
     expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
       expect.objectContaining({ requested_name: null })
     );

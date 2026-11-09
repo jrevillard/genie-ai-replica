@@ -165,8 +165,9 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const degraded = await client.getRetrievalConfig(bearer);
 
     // The deployment-global posture survives the outage: the mode the
-    // deployment was last known to run.
+    // deployment was last known to run, with its upstream source.
     expect(degraded.config).toEqual({ mode: 'hybrid' });
+    expect(degraded.source).toBe('database');
     // Everything else on the shared last-known-good copy is PER-CALLER
     // state (it is computed by the okf-server FROM the caller's scopes) —
     // the degraded caller falls back to the fail-closed defaults instead

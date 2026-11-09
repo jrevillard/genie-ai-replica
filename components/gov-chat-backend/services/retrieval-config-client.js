@@ -343,12 +343,11 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         if (!_lastGoodConfig) return { window, value: legacyDefaultConfig() };
         // The global posture survives the outage; the per-caller view stays
         // fail-closed (the shared copy never carried it).
-        const degraded = legacyDefaultConfig();
         return {
           window,
           value: {
-            ...degraded,
-            config: { ...degraded.config, mode: _lastGoodConfig.config.mode },
+            ...legacyDefaultConfig(),
+            config: { mode: _lastGoodConfig.config.mode },
             source: _lastGoodConfig.source
           }
         };

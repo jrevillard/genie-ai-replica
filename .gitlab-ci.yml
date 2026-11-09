@@ -3217,6 +3217,29 @@ lint:site-scripts:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Format the repository-root JavaScript scripts.  They live outside every
+# component directory, so no component's own lint job covers them; the
+# OpenAPI spec module is CI-critical code (it feeds the config:api-client
+# drift gate), so it gets the same Prettier gate as the rest of the
+# repository.  Prettier comes from components/shared/lib, which already
+# pins it -- no second copy to keep in sync. Stays outside
+# .lint_component: it runs shared/lib's pinned prettier over scripts/*.js,
+# not the component's own lint/format scripts.
+lint:root-scripts:
+  extends: .lint_node
+  before_script:
+    - cd components/shared/lib && npm ci
+  script:
+    - node ${CI_PROJECT_DIR}/components/shared/lib/node_modules/prettier/bin/prettier.cjs --check "${CI_PROJECT_DIR}/scripts/*.js"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "scripts/*.js"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 lint:python:
   image: python:3.11-slim
   stage: lint

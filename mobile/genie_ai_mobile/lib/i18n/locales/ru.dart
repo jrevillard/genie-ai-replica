@@ -239,7 +239,7 @@ const Map<String, dynamic> ruLocale = {
     "viewDetails": "Подробнее",
   },
   "services": {
-    "eCitizen": "Портал eCitizen",
+    "eCitizen": "Портал услуг",
     "taxFiling": "Система налоговой отчетности",
     "idApplication": "Заявка на ID",
     "businessReg": "Регистрация бизнеса",

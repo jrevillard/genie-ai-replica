@@ -239,7 +239,7 @@ const Map<String, dynamic> swLocale = {
     "viewDetails": "Angalia Maelezo",
   },
   "services": {
-    "eCitizen": "Tovuti ya eCitizen",
+    "eCitizen": "Lango la huduma",
     "taxFiling": "Mfumo wa Kulipa Ushuru",
     "idApplication": "Maombi ya Kitambulisho",
     "businessReg": "Usajili wa Biashara",

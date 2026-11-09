@@ -239,7 +239,7 @@ const Map<String, dynamic> thLocale = {
     "viewDetails": "ดูรายละเอียด",
   },
   "services": {
-    "eCitizen": "พอร์ทัล eCitizen",
+    "eCitizen": "พอร์ทัลบริการ",
     "taxFiling": "ระบบยื่นภาษี",
     "idApplication": "การขอทำบัตรประชาชน",
     "businessReg": "การจดทะเบียนธุรกิจ",

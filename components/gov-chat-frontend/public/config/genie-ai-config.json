@@ -362,7 +362,7 @@
         "bn": "স্বাগতম! আমি আজ কীভাবে পাবলিক সেবার ক্ষেত্রে আপনাকে সাহায্য করতে পারি?",
         "de": "Willkommen! Wie kann ich Ihnen heute bei den öffentlichen Diensten helfen?",
         "en": "Welcome! How can I assist you with public services today?",
-        "es": "¡Bienvenido! ¿Cómo puedo asistirte hoy con los servicios públicos?",
+        "es": "¡Bienvenido! ¿Cómo puedo ayudarle hoy con los servicios públicos?",
         "fr": "Bienvenue ! Comment puis-je vous aider aujourd'hui avec les services publics ?",
         "id": "Selamat datang! Bagaimana saya bisa membantu Anda dengan layanan publik hari ini?",
         "man": "Bismillay! Mbe ñaadi ka i makaamoo ning baaralu ibbaAmteta ab?",
@@ -809,20 +809,20 @@
             "category": "Housing & Urban Development",
             "action": {
               "visibleText": {
-                "ar": "أخبرني عن برامج الإسكان الميسورة التكلفة في كينيا",
-                "bn": "কেনিয়ায় সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন",
-                "de": "Erzählen Sie mir von erschwinglichen Wohnungsprogrammen in Kenia.",
+                "ar": "أخبرني عن برامج الإسكان الميسورة التكلفة",
+                "bn": "সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন",
+                "de": "Erzählen Sie mir von Programmen für bezahlbaren Wohnraum",
                 "en": "Tell me about affordable housing programs",
-                "es": "Cuénteme sobre programas de vivienda asequible en Kenia",
+                "es": "Cuénteme sobre los programas de vivienda asequible",
                 "fr": "Parlez-moi des programmes de logement abordable",
                 "id": "Beri tahu saya tentang program perumahan terjangkau",
-                "man": "Maa Keniya suw baaralu kang (affordable housing)",
-                "pt": "Conte-me sobre programas de habitação acessível no Quênia",
-                "ru": "Расскажите о доступных жилищных программах в Кении",
+                "man": "Maa suw baaralu kang (affordable housing)",
+                "pt": "Conte-me sobre programas de habitação acessível",
+                "ru": "Расскажите о программах доступного жилья",
                 "st": "Bolelle ka mananeo a matlo a theko e tlase",
                 "sw": "Niambie kuhusu programu za nyumba za bei nafuu",
-                "th": "บอกฉันเกี่ยวกับโปรแกรมที่อยู่อาศัยราคาไม่แพงในเคนยา",
-                "zh": "告诉我肯尼亚的负担得起的住房计划"
+                "th": "บอกฉันเกี่ยวกับโครงการที่อยู่อาศัยราคาไม่แพง",
+                "zh": "给我介绍一下负担得起的住房计划"
               },
               "hiddenPrompt": {
                 "ar": "تصرف كمستشار لبرامج الإسكان. اشرح التسجيل في برنامج الإسكان الميسر وعملية المساهمة الطوعية. هام: وجّه المستخدم إلى بوابة الإسكان الرسمية للاطلاع على المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",

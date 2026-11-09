@@ -241,7 +241,7 @@ const Map<String, dynamic> deLocale = {
     "viewDetails": "Details anzeigen",
   },
   "services": {
-    "eCitizen": "eCitizen Portal",
+    "eCitizen": "Dienste-Portal",
     "taxFiling": "Steuererklärungssystem",
     "idApplication": "Ausweisantrag",
     "businessReg": "Unternehmensregistrierung",

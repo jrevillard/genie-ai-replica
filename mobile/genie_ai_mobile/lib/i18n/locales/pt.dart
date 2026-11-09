@@ -239,7 +239,7 @@ const Map<String, dynamic> ptLocale = {
     "viewDetails": "Ver Detalhes",
   },
   "services": {
-    "eCitizen": "Portal eCitizen",
+    "eCitizen": "Portal de serviços",
     "taxFiling": "Sistema de Declaração de Impostos",
     "idApplication": "Solicitação de Identidade",
     "businessReg": "Registro de Empresas",

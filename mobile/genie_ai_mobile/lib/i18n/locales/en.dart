@@ -245,7 +245,7 @@ const Map<String, dynamic> enLocale = {
     "viewDetails": "View Details",
   },
   "services": {
-    "eCitizen": "eCitizen Portal",
+    "eCitizen": "Services Portal",
     "taxFiling": "Tax Filing System",
     "idApplication": "ID Application",
     "businessReg": "Business Registration",

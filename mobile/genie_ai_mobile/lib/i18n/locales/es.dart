@@ -240,7 +240,7 @@ const Map<String, dynamic> esLocale = {
     "viewDetails": "Ver detalles",
   },
   "services": {
-    "eCitizen": "Portal eCitizen",
+    "eCitizen": "Portal de servicios",
     "taxFiling": "Sistema de declaración de impuestos",
     "idApplication": "Solicitud de identificación",
     "businessReg": "Registro de empresas",

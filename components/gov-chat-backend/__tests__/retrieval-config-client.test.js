@@ -165,9 +165,12 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const degraded = await client.getRetrievalConfig(bearer);
 
     // The deployment-global posture survives the outage: the mode the
-    // deployment was last known to run, with its upstream source.
+    // deployment was last known to run. The source label names the LOCAL
+    // composition (the synthesized fail-closed fields are the BFF's own,
+    // not the upstream's response — an admin debugging the outage must
+    // not read source:'database' as the database declaring an empty view).
     expect(degraded.config).toEqual({ mode: 'hybrid' });
-    expect(degraded.source).toBe('database');
+    expect(degraded.source).toBe('bff-last-known-good');
     // Everything else on the shared last-known-good copy is PER-CALLER
     // state (it is computed by the okf-server FROM the caller's scopes) —
     // the degraded caller falls back to the fail-closed defaults instead

@@ -25,8 +25,8 @@
 // last-known-good config, else the legacy default (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
 // remainder of the TTL window — one upstream attempt per caller per window.
-// The last-known-good carries only the deployment-global posture (mode +
-// source), never a per-caller view — the full invariant is stated at the
+// The last-known-good carries only the deployment-global posture (the
+// mode), never a per-caller view — the full invariant is stated at the
 // write site in getRetrievalConfig's onSuccess. The per-caller graph set
 // always comes from the caller's own live authz call and is never served
 // from last-known-good.
@@ -255,9 +255,10 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
   const window = currentWindow();
-  // JSON of the whole triple — injective without a per-segment
-  // delimiter-free invariant (the scopes segment legitimately contains '|').
-  const key = JSON.stringify([window, kind, effectiveScopesKey(bearerHeader)]);
+  // Injective composite: window (digits) and kind (a hard-coded literal)
+  // never contain '|', and the scopes segment is a self-delimiting JSON
+  // document — the separator cannot shift a boundary between segments.
+  const key = `${window}|${kind}|${effectiveScopesKey(bearerHeader)}`;
 
   const hit = _cache.get(key);
   if (hit && hit.window === window) {
@@ -310,12 +311,12 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         ) {
           // The last-known-good copy is served to ANY caller on upstream
           // failure, so it carries ONLY the deployment-global posture
-          // (mode + source). Everything else in the response — engaged,
+          // (the mode). Everything else in the response — engaged,
           // serving_graph_count, serving_repo_ids, serving_graphs,
           // warnings, config.updated_by — is computed BY the okf-server
           // FROM this caller's scopes; carrying it in the shared copy
           // would hand one caller's serving view to another on an outage.
-          _lastGoodConfig = { config: { mode: raw.config.mode }, source: raw.source };
+          _lastGoodConfig = { config: { mode: raw.config.mode } };
           return raw;
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {
@@ -323,7 +324,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         });
         return legacyDefaultConfig();
       },
-      onFailure(err, cid, window) {
+      onFailure(err, cid) {
         const status = err?.response?.status;
         if (status === 401 || err instanceof OkfAuthzUnauthorizedError) {
           return { throw: true, error: new OkfAuthzUnauthorizedError(err.message) };
@@ -340,15 +341,16 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           status: status || err?.code || err?.message,
           last_known_good: Boolean(_lastGoodConfig)
         });
-        if (!_lastGoodConfig) return { window, value: legacyDefaultConfig() };
-        // The global posture survives the outage; the per-caller view stays
-        // fail-closed (the shared copy never carried it).
+        if (!_lastGoodConfig) return { value: legacyDefaultConfig() };
+        // The deployment-global posture survives the outage; everything
+        // else is locally synthesized (fail-closed) and says so: the
+        // source label marks the payload as the BFF's own last-known-good
+        // composition, not the upstream's.
         return {
-          window,
           value: {
             ...legacyDefaultConfig(),
             config: { mode: _lastGoodConfig.config.mode },
-            source: _lastGoodConfig.source
+            source: 'bff-last-known-good'
           }
         };
       }

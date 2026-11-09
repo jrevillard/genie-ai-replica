@@ -218,13 +218,22 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     const links = Array.isArray(meta && meta.links) ? meta.links.filter((l) => l && l.to_concept_id) : [];
 
     // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
-    // so prefixed stored ids match bare link targets.
-    let repoConceptIds;
+    // so prefixed stored ids match bare link targets. PROBED PER LINK TARGET on
+    // the (repo_id, concept_id) unique index: the whole-set read made an
+    // N-concept drain pay N x N row reads (DW-450), and only the link targets
+    // are ever consulted.
+    const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
+    const repoConceptIds = new Set();
     try {
-      const rows = await (
-        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id RETURN m.concept_id', { repo_id })
-      ).all();
-      repoConceptIds = new Set(rows.map(normalizeConceptId));
+      for (const target of targetIds) {
+        const rows = await (
+          await db.query(
+            'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND (m.concept_id == @cid OR m.concept_id == @prefixed) LIMIT 1 RETURN m.concept_id',
+            { repo_id, cid: target, prefixed: `concepts/${target}` }
+          )
+        ).all();
+        if (rows.length > 0) repoConceptIds.add(target);
+      }
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });
       return { repo_id, concept_id: cid, written: 0, dropped: links.map((l) => l.to_concept_id) };

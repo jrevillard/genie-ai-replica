@@ -3436,8 +3436,7 @@ test:backend-arango:
     JEST_JUNIT_OUTPUT_NAME: "jest-husk-arango.xml"
   before_script:
     # Only the backend: this suite loads the script and the driver, nothing
-    # from shared/lib. No cache: npm ci replaces node_modules wholesale, so
-    # a restored tree would be downloaded and deleted unused.
+    # from shared/lib.
     - cd "$CI_PROJECT_DIR/components/gov-chat-backend" && npm ci
   script:
     # before_script and script share one shell; this pins the cwd of the

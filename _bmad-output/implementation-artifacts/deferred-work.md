@@ -3040,10 +3040,10 @@ status: open
 
 ### DW-450: writeRepoConceptEdges fetches the repo's WHOLE concept-id set and builds a fresh Set on EVERY concept terminal callback — an N-concept drain pays N x N row reads (~1M rows at 1000 concepts) when the G22 cross-repo check only needs 'does this target exist'
 origin: !597 round-2 review (efficiency, thread af0c7728, 2026-10-29)
-location: components/okf-server/services/edge-service.js (~:111)
+location: components/okf-server/services/edge-service.js (writeRepoConceptEdges — the boundary probe, ~:225)
 severity: medium (drain-path efficiency; smallest fix = per-target FILTER m.concept_id == @t LIMIT 1 probe on the existing (repo_id, concept_id) unique index, evaluated for the concept's actual links, typically <20)
 reason: Changes the function's data flow (whole-set prefetch to per-target probes) on the drain path that DW-427/Dr sizing work also exercises — defer to the next edge-service touch so its diff stays single-purpose; the unique index makes the probe O(1) per link, no new cache introduced.
-status: open
+status: done 2026-11-09 (issue #1179, MR !817 — the whole-set read is replaced by one index-served probe over the concept's link targets; the boundary is unchanged)
 
 ### DW-451: chatqna's D1 grounding gate discriminates OKF-vs-legacy by string-parsing graph_name.startswith('OKF_') — a naming convention owned by dataprep/okf-server, re-parsed two service hops away as a grounding-policy input
 origin: !597 round-2 review (altitude, thread f36c4886, 2026-10-29)

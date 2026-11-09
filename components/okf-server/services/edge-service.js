@@ -218,21 +218,31 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     const links = Array.isArray(meta && meta.links) ? meta.links.filter((l) => l && l.to_concept_id) : [];
 
     // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
-    // so prefixed stored ids match bare link targets. PROBED PER LINK TARGET on
-    // the (repo_id, concept_id) unique index: the whole-set read made an
-    // N-concept drain pay N x N row reads (DW-450), and only the link targets
-    // are ever consulted.
+    // so prefixed stored ids match bare link targets. PROBED on the
+    // (repo_id, concept_id) unique index, for the link targets ONLY: the
+    // whole-set read made an N-concept drain pay N x N row reads (DW-450).
+    // One query for all the targets — the IN list is index-served per value,
+    // so the row reads scale with the links, and the round trips stay at one
+    // per concept.
     const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
     const repoConceptIds = new Set();
     try {
-      for (const target of targetIds) {
+      if (targetIds.length > 0) {
+        // Both stored forms of every target: bare, and `concepts/`-prefixed (a
+        // subdirectory bundle stores the prefixed form).
+        const candidates = targetIds.flatMap((t) => [t, `concepts/${t}`]);
         const rows = await (
           await db.query(
-            'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND (m.concept_id == @cid OR m.concept_id == @prefixed) LIMIT 1 RETURN m.concept_id',
-            { repo_id, cid: target, prefixed: `concepts/${target}` }
+            'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id IN @candidates RETURN m.concept_id',
+            { repo_id, candidates }
           )
         ).all();
-        if (rows.length > 0) repoConceptIds.add(target);
+        const targets = new Set(targetIds);
+        for (const row of rows) {
+          if (!row || !row.concept_id) continue;
+          const id = normalizeConceptId(row.concept_id);
+          if (targets.has(id)) repoConceptIds.add(id);
+        }
       }
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });

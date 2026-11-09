@@ -25,31 +25,44 @@ const edgeService = require('../services/edge-service');
 const { logger } = require('../shared-lib/logger');
 
 const REPO = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const OTHER_REPO = 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const GRAPH = `OKF_${REPO}`;
 
 /**
  * The service queries by AQL SHAPE, not by call order:
  *  - the concept's own meta read (RETURN KEEP(...)),
- *  - one PER-TARGET probe on the (repo_id, concept_id) index — the within-repo
- *    boundary check (#1179: a whole-set read made an N-concept drain pay
- *    N x N row reads),
+ *  - the within-repo boundary probe (the link targets only, on the
+ *    (repo_id, concept_id) index — #1179: a whole-set read made an N-concept
+ *    drain pay N x N row reads),
  *  - the outgoing-edge cleanup read (RETURN e._key).
+ *
+ * `repos` maps a repo id to the concept ids it stores. The boundary probe is
+ * simulated FAITHFULLY: the stored rows are answered from the repo the query
+ * filters on — and from EVERY repo when the query does not filter on the repo
+ * at all. A probe that lost its repo filter would therefore answer with a
+ * concept of another repository, and the G22 test would fail.
  */
-function programQueries(metaRows, repoConceptIds, options = {}) {
-  const inRepo = new Set(repoConceptIds);
+function programQueries(metaRows, repos, options = {}) {
   const cleanupKeys = options.cleanupKeys || [];
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
-    if (aql.includes('RETURN m.concept_id')) {
-      // The per-target probe: a hit iff the repo holds that concept under
-      // either stored form (bare or `concepts/`-prefixed).
-      const hit = inRepo.has(bindVars.cid) || inRepo.has(bindVars.prefixed);
-      return { all: async () => (hit ? [{ concept_id: bindVars.cid }] : []) };
+    if (aql.includes('okf_concepts_meta') && aql.includes('m.concept_id IN')) {
+      const repoScoped = /m\.repo_id\s*==\s*@repo_id/.test(aql);
+      const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
+      const stored = new Set();
+      for (const id of repoIds) for (const cid of repos[id] || []) stored.add(cid);
+      const candidates = bindVars.candidates || [];
+      return { all: async () => candidates.filter((c) => stored.has(c)).map((c) => ({ concept_id: c })) };
     }
+    // A whole-set read (every concept id of the repo) — the shape #1179 removed.
+    if (aql.includes('RETURN m.concept_id')) return { all: async () => [] };
     if (aql.includes('RETURN e._key')) return { all: async () => cleanupKeys };
     return { all: async () => [] };
   });
 }
+
+/** The repo's stored concept ids, under the bare form. */
+const inRepo = (...ids) => ({ [REPO]: ids });
 
 function metaRow(overrides = {}) {
   return {
@@ -61,6 +74,12 @@ function metaRow(overrides = {}) {
     ...overrides
   };
 }
+
+/** The boundary probe: the queries that look a concept id up. */
+const probes = () =>
+  mockDb.query.mock.calls.filter(
+    ([aql]) => typeof aql === 'string' && aql.includes('m.concept_id IN') && aql.includes('okf_concepts_meta')
+  );
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -78,7 +97,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
           ]
         })
       ],
-      ['service_directory', 'index', 'huduma_kenya']
+      inRepo('service_directory', 'index', 'huduma_kenya')
     );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {
       file_id: 'file-1',
@@ -104,7 +123,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
   test('the bundle ROOT (is_index) is stamped on its ENTITY vertex (Story 4.8-amend)', async () => {
     programQueries(
       [metaRow({ concept_id: 'index', is_index: true, links: [{ to_concept_id: 'huduma_kenya', label: 'Huduma' }] })],
-      ['index', 'huduma_kenya']
+      inRepo('index', 'huduma_kenya')
     );
     await edgeService.writeRepoConceptEdges(REPO, 'index', { file_id: 'file-idx', bundle_version: 1 });
     const entities = Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {});
@@ -123,7 +142,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
           ]
         })
       ],
-      ['service_directory', 'index'] // 'other_repo_concept' NOT in the set
+      inRepo('service_directory', 'index') // 'other_repo_concept' NOT in the repo
     );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(1);
@@ -148,7 +167,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     });
     programQueries(
       [metaRow({ links: [{ to_concept_id: 'index', label: 'Current' }] })],
-      ['service_directory', 'index'],
+      inRepo('service_directory', 'index'),
       { cleanupKeys: ['e_stale'] }
     );
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
@@ -158,7 +177,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
   });
 
   test('no-links concept: no edges, but the ENTITY vertex is still ensured', async () => {
-    programQueries([metaRow({ links: [] })], ['service_directory']);
+    programQueries([metaRow({ links: [] })], inRepo('service_directory'));
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(0);
     expect(Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {})).toHaveLength(0);
@@ -166,7 +185,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
   });
 
   test('missing meta row → clean no-op (no crash into the ingest path)', async () => {
-    programQueries([], ['service_directory']);
+    programQueries([], inRepo('service_directory'));
     const result = await edgeService.writeRepoConceptEdges(REPO, 'ghost', {});
     expect(result).toMatchObject({ written: 0, dropped: [] });
   });
@@ -176,7 +195,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
       if (aql.includes('RETURN KEEP(m,')) {
         return { all: async () => [metaRow({ links: [{ to_concept_id: 'x', label: 'X' }] })] };
       }
-      if (aql.includes('RETURN m.concept_id')) throw new Error('arango down');
+      if (aql.includes('m.concept_id IN')) throw new Error('arango down');
       return { all: async () => [] };
     });
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
@@ -190,10 +209,9 @@ describe('edgeService — review fixes (2026-08-17)', () => {
   test('P1: canonicalizes concepts/-prefixed link targets against a prefixed stored set (no silent edge loss)', async () => {
     // Stored concept ids are `concepts/`-prefixed (subdirectory bundle); link
     // targets are bare (parser strips ./ from the href). Both must normalize.
-    programQueries(
-      [metaRow({ links: [{ to_concept_id: 'index', label: 'Index' }] })],
-      ['concepts/service_directory', 'concepts/index']
-    );
+    programQueries([metaRow({ links: [{ to_concept_id: 'index', label: 'Index' }] })], {
+      [REPO]: ['concepts/service_directory', 'concepts/index']
+    });
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(1);
     expect(result.dropped).toEqual([]);
@@ -210,14 +228,17 @@ describe('edgeService — review fixes (2026-08-17)', () => {
       label: 'Old',
       repo_id: REPO
     });
-    programQueries([metaRow({ links: [] })], ['service_directory'], { cleanupKeys: ['e_stale'] });
+    programQueries([metaRow({ links: [] })], inRepo('service_directory'), { cleanupKeys: ['e_stale'] });
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(0);
     expect(Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {})).toHaveLength(0); // stale edge gone
   });
 
   test('P3+P4: ensures TARGET entity vertices + writes the audit row', async () => {
-    programQueries([metaRow({ links: [{ to_concept_id: 'index', label: 'I' }] })], ['service_directory', 'index']);
+    programQueries(
+      [metaRow({ links: [{ to_concept_id: 'index', label: 'I' }] })],
+      inRepo('service_directory', 'index')
+    );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', { file_id: 'f1' });
     expect(result.written).toBe(1);
     const entities = Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {});
@@ -238,7 +259,7 @@ describe('edgeService — review fixes (2026-08-17)', () => {
           ]
         })
       ],
-      ['service_directory', 'index']
+      inRepo('service_directory', 'index')
     );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(1);
@@ -246,13 +267,13 @@ describe('edgeService — review fixes (2026-08-17)', () => {
   });
 
   test('P6: idempotent ENTITY upsert — a second write keeps ONE source vertex (same _key)', async () => {
-    programQueries([metaRow({ links: [] })], ['service_directory']);
+    programQueries([metaRow({ links: [] })], inRepo('service_directory'));
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     const keys = Object.keys(mockDb._stores[`${GRAPH}_ENTITY`] || {});
     expect(keys).toHaveLength(1);
     const before = keys[0];
     // second write (same concept) — still one vertex, same key
-    programQueries([metaRow({ links: [] })], ['service_directory']);
+    programQueries([metaRow({ links: [] })], inRepo('service_directory'));
     mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] }));
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     const keys2 = Object.keys(mockDb._stores[`${GRAPH}_ENTITY`] || {});
@@ -261,12 +282,9 @@ describe('edgeService — review fixes (2026-08-17)', () => {
 });
 
 describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179)', () => {
-  test('the repo concept set is PROBED per link target, never fetched whole (no N x N row reads)', async () => {
+  test('the repo concept set is NEVER fetched whole — the boundary is probed for the link targets only', async () => {
     const links = Array.from({ length: 12 }, (_, i) => ({ to_concept_id: `concept_${i}`, label: `L${i}` }));
-    programQueries(
-      [metaRow({ links })],
-      links.map((l) => l.to_concept_id)
-    );
+    programQueries([metaRow({ links })], inRepo('service_directory', ...links.map((l) => l.to_concept_id)));
 
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
 
@@ -274,19 +292,22 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     // The whole-set read — one query returning EVERY concept id of the repo —
     // is what made an N-concept drain pay N x N row reads. It must be gone.
     const wholeSetReads = mockDb.query.mock.calls.filter(
-      ([aql]) => typeof aql === 'string' && aql.includes('RETURN m.concept_id') && !aql.includes('@cid')
+      ([aql]) =>
+        typeof aql === 'string' &&
+        aql.includes('okf_concepts_meta') &&
+        aql.includes('RETURN m.concept_id') &&
+        !aql.includes('m.concept_id IN')
     );
     expect(wholeSetReads).toHaveLength(0);
-    // One point probe per DISTINCT link target, each index-served by
-    // (repo_id, concept_id) — the count scales with the links, not the repo.
-    const probes = mockDb.query.mock.calls.filter(
-      ([aql]) => typeof aql === 'string' && aql.includes('RETURN m.concept_id') && aql.includes('@cid')
-    );
-    expect(probes).toHaveLength(12);
-    for (const [, bindVars] of probes) {
-      expect(bindVars.repo_id).toBe(REPO);
-      expect(bindVars.cid).toMatch(/^concept_\d+$/);
-    }
+    // One probe query for all the targets: the IN list is index-served per
+    // value, so the row reads scale with the links and the round trips stay
+    // at one per concept.
+    const found = probes();
+    expect(found).toHaveLength(1);
+    const [aql, bindVars] = found[0];
+    expect(aql).toContain('okf_concepts_meta');
+    expect(bindVars.repo_id).toBe(REPO);
+    expect(bindVars.candidates).toEqual(links.flatMap((l) => [l.to_concept_id, `concepts/${l.to_concept_id}`]));
   });
 
   test('a link target OUTSIDE the repo is still dropped — the probe never widens the boundary', async () => {
@@ -299,7 +320,9 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
           ]
         })
       ],
-      ['service_directory', 'in_repo']
+      // 'other_repo' is a concept of ANOTHER repository: the probe filters on
+      // the repo, so it must not be found.
+      { ...inRepo('service_directory', 'in_repo'), [OTHER_REPO]: ['other_repo'] }
     );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(1);
@@ -308,7 +331,7 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     expect(edges).toHaveLength(1);
   });
 
-  test('a duplicate link target is probed ONCE (no repeated probes of the same id)', async () => {
+  test('a duplicate link target is probed ONCE (the candidate list holds no duplicate)', async () => {
     programQueries(
       [
         metaRow({
@@ -318,12 +341,11 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
           ]
         })
       ],
-      ['service_directory', 'index']
+      inRepo('service_directory', 'index')
     );
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
-    const probes = mockDb.query.mock.calls.filter(
-      ([aql]) => typeof aql === 'string' && aql.includes('RETURN m.concept_id') && aql.includes('@cid')
-    );
-    expect(probes).toHaveLength(1);
+    const found = probes();
+    expect(found).toHaveLength(1);
+    expect(found[0][1].candidates).toEqual(['index', 'concepts/index']);
   });
 });

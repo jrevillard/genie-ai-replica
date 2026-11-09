@@ -9,7 +9,6 @@ const TurndownService = require('turndown');
 const cheerio = require('cheerio');
 const langdetect = require('langdetect');
 const { URL: UrlParser } = require('url');
-const { pruneLinkDenseBlocks } = require('./content-pruning');
 
 // Initialize Turndown once per thread
 const turndownService = new TurndownService({
@@ -41,10 +40,14 @@ parentPort.on('message', (task) => {
     $('a:contains("Book")').remove();
     $('button').remove();
 
-    // Heuristic: Remove link-heavy/text-light divs (navigation chrome).
-    // A block that carries a heading, or that follows one, is a section's link
-    // list ("See also", "Related") — the page's cross-links — and is exempt.
-    pruneLinkDenseBlocks($);
+    // Heuristic: Remove link-heavy/text-light divs
+    $('div').each((i, el) => {
+      const linkCount = $(el).find('a').length;
+      const textLength = $(el).text().trim().length;
+      if (linkCount > 5 && textLength / linkCount < 15) {
+        $(el).remove();
+      }
+    });
 
     // --- 2. Fix Relative Paths ---
     // Fix Images

@@ -59,8 +59,12 @@ def test_overlay_source_never_prints():
     private one: every guard that answers "what is overlay source?" must
     answer it the same way (tests/conftest.py).
     """
-    offenders = {str(path.relative_to(OVERLAY_ROOT)): _print_call_lines(path) for path in overlay_source_files()}
-    assert {name: lines for name, lines in offenders.items() if lines} == {}
+    offenders = {
+        str(path.relative_to(OVERLAY_ROOT)): lines
+        for path in overlay_source_files()
+        if (lines := _print_call_lines(path))
+    }
+    assert offenders == {}
 
 
 @pytest.mark.asyncio
@@ -140,8 +144,16 @@ def test_missing_dependency_is_reported_before_the_import_error_propagates(missi
     assert "install docling" in mock_logger_class.return_value.error.call_args.args[0]
 
 
-def test_utils_logger_is_wired_into_the_json_envelope():
-    """The utils logger is registered with the trace + JSON wiring like the service loggers.
+@pytest.mark.parametrize(
+    ("module_path", "logger_name"),
+    [
+        (UTILS_PATH, "genie-ai_prepare_doc_util"),
+        (DATAPREP_DIR / "genieai_dataprep_loader.py", "genie_dataprep_loader"),
+    ],
+    ids=["utils", "loader"],
+)
+def test_service_loggers_are_wired_into_the_json_envelope(module_path, logger_name):
+    """The dataprep loggers are registered with the trace + JSON wiring like every service logger.
 
     An unwired logger emits the OPEA bracket format, which the collector's
     plain-text severity path does not recognise — its records reach
@@ -150,17 +162,18 @@ def test_utils_logger_is_wired_into_the_json_envelope():
     assumes the trace filter is already in place, so trace-before-json is
     part of the contract.
     """
-    spec = importlib.util.spec_from_file_location("genieai_dataprep_utils_wiring", UTILS_PATH)
+    spec = importlib.util.spec_from_file_location(f"wiring_under_test_{logger_name}", module_path)
     module = importlib.util.module_from_spec(spec)
     wiring = MagicMock()
 
     with (
+        patch.dict(sys.modules, {"opea_dataprep_loader": MagicMock()}),
         patch("tracing.setup_trace_logging", wiring.setup_trace_logging),
         patch("tracing.setup_json_logging", wiring.setup_json_logging),
     ):
         spec.loader.exec_module(module)
 
     assert wiring.mock_calls == [
-        call.setup_trace_logging("genie-ai_prepare_doc_util"),
-        call.setup_json_logging("genie-ai_prepare_doc_util"),
+        call.setup_trace_logging(logger_name),
+        call.setup_json_logging(logger_name),
     ]

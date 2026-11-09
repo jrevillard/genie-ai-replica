@@ -17,6 +17,7 @@ describe('slugify — OKF slug SSOT', () => {
     expect(slugify('')).toBe('');
     expect(slugify(null)).toBe('');
     expect(slugify(undefined)).toBe('');
+    expect(slugify({})).toBe(''); // junk types never become identities
   });
 
   test('no fold by default: diacritics become dashes, non-Latin input returns empty', () => {
@@ -50,5 +51,6 @@ describe('nameFromSource — repo name from raw filename/URL', () => {
     expect(nameFromSource('y'.repeat(400), 'fb')).toHaveLength(200);
     expect(nameFromSource('', 'fb')).toBe('fb');
     expect(nameFromSource('日本語.md', 'fb')).toBe('fb');
+    expect(nameFromSource({}, 'fb')).toBe('fb'); // never String() coercion
   });
 });

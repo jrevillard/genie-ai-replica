@@ -22,11 +22,13 @@
  *   cap  — truncate to N characters AFTER trimming (0 = no cap).
  *
  * Returns the empty string for empty/non-Latin input; callers apply their
- * own fallback ('concept', 'repo', 'crawl-page-N', …).
+ * own fallback ('concept', 'repo', 'crawl-page-N', …). Non-string input is
+ * NEVER String()-coerced — it is treated as empty (junk types must not
+ * become identities).
  */
 function slugify(value, opts = {}) {
   const { fold = false, cap = 0 } = opts;
-  let s = String(value || '');
+  let s = typeof value === 'string' ? value : '';
   if (fold) {
     s = s.normalize('NFKD').replace(/[̀-ͯ]/g, '');
   }
@@ -47,9 +49,9 @@ function slugify(value, opts = {}) {
  */
 function nameFromSource(value, fallback) {
   const slug = slugify(
-    String(value || '')
-      .replace(/^https?:\/\/(www\.)?/i, '')
-      .replace(/\.(md|html?|txt)$/i, ''),
+    typeof value === 'string' && value
+      ? value.replace(/^https?:\/\/(www\.)?/i, '').replace(/\.(md|html?|txt)$/i, '')
+      : '',
     { cap: 200 }
   );
   return slug || fallback || '';

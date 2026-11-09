@@ -22,17 +22,15 @@
 
 import httpService from './httpService';
 
-/**
- * NO client-side slugging (issue #1190): the controller applies the slug
- * SSOT (okf-server services/slug.js) to the raw intent server-side, so
- * there is exactly one grammar. The frontend sends the raw filename or
- * seed URL; the server derives (and defaults) the repo name from it.
- */
-
 const crawlerToOkfService = {
   /**
    * Trigger the server-side conversion. Returns as soon as the repo exists
    * (202) — progress is polled separately via repoOkfService.get(repoId).
+   *
+   * NO client-side slugging (issue #1190): the server applies the slug SSOT
+   * (okf-server services/slug.js) to the raw intent, so there is exactly one
+   * grammar — the name sent here is the RAW filename or seed URL, and the
+   * server derives (and defaults) the repo name from it.
    *
    * @param {Object} input
    * @param {string} input.fileId       doc-repo file_id of the crawled .md
@@ -51,7 +49,7 @@ const crawlerToOkfService = {
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
-    const baseName = filename || url || null; // raw intent — see the #1190 note above
+    const baseName = filename || url || null; // raw intent — the server owns the grammar (#1190)
     const repoDomain = domain || 'general';
     const headers = actor && actor.sub ? { 'x-actor-sub': actor.sub } : {};
     // silent: true — the dialog/list owns the user-facing error; a raw

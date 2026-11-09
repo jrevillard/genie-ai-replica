@@ -27,7 +27,7 @@ const {
   piiAckSchema
 } = require('../validators/repository-validator');
 const lifecycleService = require('../services/lifecycle-service');
-const { nameFromSource } = require('../services/slug');
+const { nameFromSource, slugFor } = require('../services/slug');
 const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
 const conformanceService = require('../services/conformance-service');
@@ -197,7 +197,7 @@ async function createRepo(req, res, next) {
     // scope (other tenants, repo-uuid scopes) is preserved untouched.
     // Idempotent: an already-slugged scope matches the filter and is re-added
     // exactly once.
-    const domainSlug = bundleExportService.slugFor(input.domain);
+    const domainSlug = slugFor(input.domain);
     const callerScopes = ((input.acl && input.acl.required_scopes) || []).filter(
       (s) => !(typeof s === 'string' && /^okf:t:[^:]+:(read|admin)$/.test(s))
     );
@@ -244,7 +244,7 @@ async function createRepo(req, res, next) {
  */
 async function resolveTargetRepo(body, authz, actor, defaultName) {
   const repoDomain = body.domain || 'general';
-  const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
+  const acl = { required_scopes: [`okf:t:${slugFor(repoDomain)}:admin`] };
   const baseName = typeof body.name === 'string' && body.name ? body.name : defaultName;
   if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
     const existing = await repoService.getById(body.repo_id.trim(), { authz });
@@ -310,10 +310,7 @@ async function convertFromCrawl(req, res, next) {
     // seed URL): the #1190 slug SSOT owns the grammar server-side now — the
     // frontend sends the raw intent. (convert-from-documents keeps its
     // user-typed display names verbatim.)
-    const requestedName =
-      typeof body.name === 'string' && body.name
-        ? nameFromSource(body.name, 'crawled-repository')
-        : 'crawled-repository';
+    const requestedName = nameFromSource(body.name, 'crawled-repository');
     const target = await resolveTargetRepo(
       { ...body, name: requestedName },
       authzForService(req),

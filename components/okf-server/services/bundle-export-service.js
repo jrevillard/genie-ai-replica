@@ -241,4 +241,4 @@ async function exportBundle(repo, actor) {
   });
 }
 
-module.exports = { exportBundle, buildBundleZip, bundleFileName, slugFor, ExportError };
+module.exports = { exportBundle, buildBundleZip, bundleFileName, ExportError };

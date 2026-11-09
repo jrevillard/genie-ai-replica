@@ -88,7 +88,6 @@ jest.mock('../services/lifecycle-service', () => ({
   transition: jest.fn().mockResolvedValue({ repo_id: 'r1' })
 }));
 jest.mock('../services/bundle-export-service', () => ({
-  slugFor: jest.fn().mockReturnValue('general'),
   buildBundleZip: jest.fn().mockResolvedValue({ buffer: Buffer.from('zip-bytes') }),
   bundleFileName: jest.fn().mockReturnValue('repo-v3.zip')
 }));

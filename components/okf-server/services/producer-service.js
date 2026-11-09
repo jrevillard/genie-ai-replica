@@ -76,7 +76,7 @@ function releaseSlot() {
  * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
  * them, it does not die for them. metaByKey carries the import pre-flight's
  * per-file doc-repo metadata so no second GET is issued when it is provided. */
-async function stampSources(repoId, fileIds, metaByKey) {
+async function stampSources(repoId, fileIds, metaByKey = {}) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
   // repo id so doc-repo's serve paths can refuse locally (no okf-server
@@ -99,9 +99,7 @@ async function stampSources(repoId, fileIds, metaByKey) {
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
-      // The import pre-flight already read every file's metadata — reuse the
-      // carried result; the GET remains for callers without a cache.
-      const f = (metaByKey && metaByKey[file_id]) || (await fetchDocMeta(file_id));
+      const f = metaByKey[file_id] || (await fetchDocMeta(file_id));
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -597,8 +595,7 @@ async function runDocumentsConversion(job) {
         baseResource: `${config.documentRepository.url}/api/files/${file_id}`
       };
       try {
-        // The pre-flight metadata rides on the job — no second GET here.
-        const f = (job.source_metas && job.source_metas[file_id]) || (await fetchDocMeta(file_id));
+        const f = job.source_metas[file_id];
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;

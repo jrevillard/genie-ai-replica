@@ -325,11 +325,11 @@ async function convertFromCrawl(req, res, next) {
       url: body.url || null,
       crawl_job_id: body.crawl_job_id || null,
       split_mode: body.split_mode,
-      // The job record carries the SLUG of the caller's intent (the same
-      // derived name the repo was created with); null when no name was sent,
-      // so the index concept keeps its readable default title instead of the
-      // slug (round-2 pin).
-      requested_name: typeof body.name === 'string' && body.name ? requestedName : null,
+      // The job record carries the CALLER's intent: the raw name string when
+      // one was sent (the index concept title reads it — readable text, not
+      // a slug), null when none did, so the title keeps its readable
+      // default. The repo identity above carries the slug.
+      requested_name: typeof body.name === 'string' && body.name ? body.name : null,
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });

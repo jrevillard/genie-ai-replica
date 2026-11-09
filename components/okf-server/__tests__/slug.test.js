@@ -55,3 +55,17 @@ describe('nameFromSource — repo name from raw filename/URL', () => {
     expect(nameFromSource({}, 'fb')).toBe('fb'); // never String() coercion
   });
 });
+
+describe('consumer bindings — the per-consumer profiles are pinned (#1190)', () => {
+  const { slugFor } = require('../services/slug');
+  const tableConcepts = require('../services/converters/tableConcepts');
+
+  test('tableConcepts binds the tabular grammar to cap 60', () => {
+    expect(tableConcepts.slugify('x'.repeat(100))).toHaveLength(60);
+  });
+
+  test('slugFor binds the repo profile to cap 80 with the repo fallback', () => {
+    expect(slugFor('y'.repeat(100))).toHaveLength(80);
+    expect(slugFor('')).toBe('repo');
+  });
+});

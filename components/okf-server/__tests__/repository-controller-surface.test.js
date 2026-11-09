@@ -630,8 +630,10 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
       expect.anything(),
       expect.anything()
     );
+    // The job record carries the CALLER's string (readable index title);
+    // the repo identity carries the slug.
     expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_name: 'example-com-kenya-health' })
+      expect.objectContaining({ requested_name: 'https://www.example.com/Kenya Health.md' })
     );
   });
 
@@ -650,14 +652,15 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     );
   });
 
-  it('convertFromCrawl: a name that slugs to nothing still records the slug fallback as requested_name (#1190)', async () => {
-    // A non-Latin/whitespace name passes the presence gate but produces no
-    // slug: requested_name is the SSOT fallback (NOT null, NOT the raw
-    // string) — the deterministic degenerate case, pinned.
+  it('convertFromCrawl: a non-Latin name is recorded raw as requested_name (#1190)', async () => {
+    // A non-Latin name passes the presence gate: requested_name is the raw
+    // caller string (the repo name independently falls back to
+    // 'crawled-repository') — pinned so the gate cannot drift to null or a
+    // slugged value.
     repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
     await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: '日本語' } });
     expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_name: 'crawled-repository' })
+      expect.objectContaining({ requested_name: '日本語' })
     );
   });
 

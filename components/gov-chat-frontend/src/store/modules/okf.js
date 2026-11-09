@@ -662,9 +662,9 @@ const actions = {
    *
    * @param {Object} payload
    * @param {string} payload.fileId       doc-repo file_id of the crawled .md
-   * @param {string} [payload.url]        crawled URL (slug + title source)
+   * @param {string} [payload.url]        crawled URL (name + title source, sent RAW — the server slugs)
    * @param {string} [payload.crawlJobId] crawl_job _key (audit)
-   * @param {string} [payload.filename]   original file_name (preferred title)
+   * @param {string} [payload.filename]   original file_name (preferred title, sent RAW — the server slugs)
    * @param {Object} [payload.actor]      auth hints (sub → x-actor-sub)
    * @param {string} [payload.domain]     subject area (defaults to 'general')
    * @returns {Promise<Object>} { ok, repo?, code?, message? }

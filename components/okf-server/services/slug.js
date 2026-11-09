@@ -7,8 +7,11 @@
  *
  * One leaf module (requires nothing) so every consumer — including the
  * cycle-excused graph-lifecycle/bundle-export pair — shares the same
- * grammar. Consumers keep their exact current semantics through the
- * options: no stored identity changes in the unification.
+ * grammar. Consumers keep their exact current STRING semantics through
+ * the options: no stored identity changes in the unification. (The
+ * non-string contract is NEW: junk types were String()-coerced before —
+ * {} became 'object-object' — and are now empty; no current call site
+ * passes a non-string.)
  *
  * Grammar: lowercase, every run of non-[a-z0-9] characters becomes ONE
  * dash, leading/trailing dashes trimmed. (A separate run-collapse pass is
@@ -67,4 +70,14 @@ function nameFromSource(value, fallback) {
  */
 const slugFor = (name) => slugify(name, { cap: 80 }) || 'repo';
 
-module.exports = { slugify, nameFromSource, slugFor };
+/**
+ * Slug equality with the degenerate case owned once: two inputs are the
+ * same slug only when BOTH slug to a non-empty value — '' never equals ''
+ * (a degenerate input matches nothing, not every other degenerate input).
+ */
+const sameSlug = (a, b) => {
+  const x = slugify(a);
+  return x !== '' && x === slugify(b);
+};
+
+module.exports = { slugify, nameFromSource, slugFor, sameSlug };

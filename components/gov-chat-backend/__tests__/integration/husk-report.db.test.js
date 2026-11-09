@@ -54,13 +54,6 @@ const {
   databaseConfig
 } = require('./helpers/arango');
 
-// The suite waits for the database to answer (the CI service container is
-// RUNNING long before ArangoDB serves): the wait's own budget must fit
-// inside Jest's hook timeout, or the hook dies with a generic timeout and
-// the wait's diagnostic never prints — one constant keeps the invariant
-// (shared with the sibling suite through the helper).
-jest.setTimeout(WAIT_BUDGET_MS * 1.5);
-
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || 'root';
 const TEST_PASSWORD = process.env.ARANGO_TEST_PASSWORD || '';

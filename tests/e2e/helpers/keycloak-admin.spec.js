@@ -645,7 +645,16 @@ test.describe('createUser is the create-only path: no password convergence, no h
     const id = await createUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
 
     expect(id).toBe('user-1');
-    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+    // The WHOLE call set is pinned, not only the absence of a password
+    // reset: no follow-up write on the existing account (a repair of the
+    // disabled representation, a second create) would otherwise slip past
+    // the "tolerates the conflict and moves on" contract.
+    expect(calls).toEqual([
+      `POST /auth/admin/realms/${REALM}/users`,
+      `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
+      `GET /auth/admin/realms/${REALM}/roles/admin`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+    ]);
   });
 
   test('a create the realm refuses is reported as-is, with no follow-up read', async () => {
@@ -656,6 +665,10 @@ test.describe('createUser is the create-only path: no password convergence, no h
     const caught = await rejection(createUser('tok', REALM, ADMIN_USER));
 
     expect(caught.message).toMatch(/Failed to create user testadmin: HTTP 400/);
+    // The status contract: a 4xx create refusal is PERMANENT (the retry
+    // budget must not burn on it) and carries the status for the callers.
+    expect(caught.transient).toBeFalsy();
+    expect(caught.httpStatus).toBe(400);
     expect(calls.some((call) => call.startsWith('GET'))).toBe(false);
   });
 });

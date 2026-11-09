@@ -16,9 +16,10 @@
  *   ARANGO_TEST_URL=https://arango:8529 ARANGO_TEST_USER=root \
  *   ARANGO_TEST_PASSWORD=… npx jest __tests__/integration
  *
- * The suite has no database of its own (the CI runs it without one), and
- * this test creates its OWN database and drops it afterwards — it never
- * touches the one the application uses.
+ * The suite has no database of its own: the CI job points ARANGO_TEST_URL
+ * at the job's own ArangoDB service container, and this test creates its
+ * OWN throwaway database and drops it afterwards — it never touches the
+ * one the application uses.
  */
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
@@ -56,12 +57,6 @@ const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || '';
 const TEST_PASSWORD = process.env.ARANGO_TEST_PASSWORD || '';
 const DB_NAME = 'genie_tree_display_names_test';
-
-// The server wait's own budget must fit inside Jest's hook timeout, or
-// the hook dies with a generic timeout and the wait's diagnostic never
-// prints — one constant keeps the invariant (shared with the sibling
-// suite through the helper).
-jest.setTimeout(WAIT_BUDGET_MS * 1.5);
 
 // The HTTP calls (creating a database, creating a collection) carry the
 // same credentials the driver does.

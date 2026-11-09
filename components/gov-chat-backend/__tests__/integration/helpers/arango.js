@@ -18,8 +18,10 @@
 
 // The server wait's own budget must fit inside Jest's hook timeout, or
 // the hook dies with a generic timeout and the wait's diagnostic never
-// prints — each suite sets jest.setTimeout(WAIT_BUDGET_MS * 1.5).
+// prints — importing this helper sets the hook timeout to fit the budget
+// (one home for the invariant; every real-DB suite needs it).
 const WAIT_BUDGET_MS = 120000;
+jest.setTimeout(WAIT_BUDGET_MS * 1.5);
 
 // The HTTP lifecycle calls carry the same credentials the driver does.
 // No user (the local no-auth database): no header at all.
@@ -34,13 +36,18 @@ function authHeader(user, password) {
 
 // The service container is RUNNING long before ArangoDB answers: the CI
 // job must wait for the server, not for the container. Bounded, and it
-// fails loudly instead of skipping.
+// fails loudly instead of skipping. Every poll is bounded TOO (a fetch
+// with no signal can stall on the headers far past the deadline — the
+// poll that hangs must not outlive the wait).
 async function waitForServer(url, headers, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${url}/_api/version`, { headers });
+      const response = await fetch(`${url}/_api/version`, {
+        headers,
+        signal: AbortSignal.timeout(deadline - Date.now())
+      });
       if (response.ok) {
         return;
       }
@@ -51,6 +58,18 @@ async function waitForServer(url, headers, timeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error(`ArangoDB at ${url} did not answer within ${timeoutMs}ms: ${lastError?.message}`);
+}
+
+// The body of an HTTP lifecycle answer, guarded: an intermediate proxy
+// answering 502 with an HTML page must surface as a named status, not as
+// a JSON parse error that hides it.
+async function jsonBody(response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`HTTP ${response.status} returned a non-JSON body: ${text.slice(0, 120)}`, { cause: err });
+  }
 }
 
 // The database lifecycle the suites open with: drop a database left
@@ -69,7 +88,7 @@ async function recreateDatabase(url, name, headers) {
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify({ name })
   });
-  const createdBody = await created.json();
+  const createdBody = await jsonBody(created);
   if (createdBody.error) {
     throw new Error(`creating ${name}: ${JSON.stringify(createdBody)}`);
   }

@@ -3707,8 +3707,10 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // unmatched — a rename or a scope change to either job must fail this
   // suite and force a conscious re-decision, not slip past the contract.
   const EXEMPT_JOBS = new Set([
-    // One test file: jest spawns at most one worker per test file, so the
-    // run cannot fan out to the worker count the cap exists to bound.
+    // Two integration suites at most (the husk gate and the tree suite):
+    // jest spawns at most one worker per test file, so the run cannot fan
+    // out to the worker count the cap exists to bound — and each suite
+    // drives a handful of documents against its own throwaway database.
     'test:backend-arango',
     // The validator harness itself (tests/config-validator) and the
     // new-config suite it runs via `npm run test:ci` — neither measured
@@ -3772,8 +3774,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       // config:validate: the validator harness, the new-config suite.
       'npm run test:ci',
       'npm test',
-      // test:backend-arango: the single husk-report integration file.
-      'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json'
+      // test:backend-arango: the whole integration directory (the husk
+      // gate and the tree suite — two files, at most two workers).
+      'npx jest __tests__/integration --json --outputFile=reports/jest-husk-arango.json'
     ]);
   });
 

@@ -603,6 +603,171 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
   });
 });
 
+test.describe('createUser is the create-only path: no password convergence, no health gate', () => {
+  test('a fresh create resolves the account, assigns the roles and returns the id', async () => {
+    routes = [
+      ['POST', USERS_PATH, { status: 201, data: null }],
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+      ],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+    ];
+
+    const id = await createUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
+
+    expect(id).toBe('user-1');
+    // The credentials went with the create itself: the create-only path
+    // never touches the password of the account afterwards.
+    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+  });
+
+  test('a 409 whose account exists converges nothing — an account the realm left disabled still proceeds', async () => {
+    // THE contract distinction from convergeUser: createUser tolerates the
+    // conflict and moves on. It does not converge the password of the
+    // existing account (an unconverged password surfaces at login, far
+    // from the create — which is why convergeUser exists) and it does not
+    // gate on fixture health: an unhealthy account still gets its roles
+    // and the call still answers with the id.
+    routes = [
+      POST_USERS_409,
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: false, emailVerified: false }] },
+      ],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+    ];
+
+    const id = await createUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
+
+    expect(id).toBe('user-1');
+    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+  });
+
+  test('a create the realm refuses is reported as-is, with no follow-up read', async () => {
+    // Neither 201 nor 409: there is no account to resolve and no conflict
+    // to diagnose — the failure is the verdict.
+    routes = [['POST', USERS_PATH, { status: 400, data: { error: 'Realm min password length not met' } }]];
+
+    const caught = await rejection(createUser('tok', REALM, ADMIN_USER));
+
+    expect(caught.message).toMatch(/Failed to create user testadmin: HTTP 400/);
+    expect(calls.some((call) => call.startsWith('GET'))).toBe(false);
+  });
+});
+
+test.describe('convergeUser on a fresh create and on an existing account', () => {
+  test('a fresh create answers the id without a password reset', async () => {
+    // On the 201 path the credentials went with the create: converging a
+    // password it just set would be a wasted write on every first run.
+    routes = [
+      ['POST', USERS_PATH, { status: 201, data: null }],
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+      ],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+    ];
+
+    const id = await convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
+
+    expect(id).toBe('user-1');
+    expect(calls.some((call) => call.includes('reset-password'))).toBe(false);
+  });
+
+  test('a 409 whose account exists converges the password BEFORE assigning the roles', async () => {
+    // The password convergence is the reason convergeUser exists (a stale
+    // password surfaces only at login): on the already-exists path it must
+    // run — and before the roles, so a broken convergence never leaves a
+    // half-provisioned account behind.
+    routes = [
+      POST_USERS_409,
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: true, emailVerified: true }] },
+      ],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+    ];
+
+    const id = await convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
+
+    expect(id).toBe('user-1');
+    const resetIndex = calls.findIndex((call) => call.includes('reset-password'));
+    const rolesIndex = calls.findIndex((call) => call.includes('role-mappings'));
+    expect(resetIndex).toBeGreaterThan(-1);
+    expect(rolesIndex).toBeGreaterThan(resetIndex);
+    // The converged credential is the fixture's, not a temporary one the
+    // browser login would refuse.
+    const resetBody = bodies[resetIndex];
+    expect(resetBody).toEqual({ type: 'password', value: ADMIN_FIXTURE.password, temporary: false });
+  });
+
+  test('an account carrying a required action refuses to provision, naming the state', async () => {
+    // Fixture health: the browser session depends on a login-visible
+    // account (enabled, verified, no pending action). An unhealthy one is
+    // a realm-import problem — provisioning it would die minutes later at
+    // login, far from the cause. The password convergence runs BEFORE the
+    // health gate (the credential is fixed either way); the gate refuses
+    // before any role is assigned.
+    routes = [
+      POST_USERS_409,
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        {
+          status: 200,
+          data: [
+            {
+              id: 'user-1',
+              username: ADMIN_FIXTURE.username,
+              enabled: true,
+              emailVerified: true,
+              requiredActions: ['VERIFY_EMAIL'],
+            },
+          ],
+        },
+      ],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
+
+    expect(caught.message).toMatch(/not fixture-healthy/);
+    expect(caught.message).toMatch(/VERIFY_EMAIL/);
+    expect(caught.message).toMatch(/check the realm import/);
+    // No roles were assigned to an account that failed the health gate.
+    expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
+  });
+
+  test('a disabled account refuses to provision, naming the state', async () => {
+    // The other arm of the same gate: enabled=false is login-visible too.
+    routes = [
+      POST_USERS_409,
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        { status: 200, data: [{ id: 'user-1', username: ADMIN_FIXTURE.username, enabled: false, emailVerified: true }] },
+      ],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
+
+    expect(caught.message).toMatch(/not fixture-healthy/);
+    expect(caught.message).toMatch(/enabled=false/);
+    expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
+  });
+});
+
 test.describe('convergeUser keeps a transport break retryable', () => {
   test('a transport break during the role assignment stays transient, so the retry budget can save the provisioning', async () => {
     // The role assignment runs on EVERY converge: a break there must carry

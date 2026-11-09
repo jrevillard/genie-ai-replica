@@ -227,7 +227,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // size), so the row reads scale with the links and the round trips stay
     // at one per concept.
     const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
-    const repoConceptIds = new Set();
+    let repoConceptIds = new Set();
     try {
       if (targetIds.length > 0) {
         // Both stored forms of every target: bare, and `concepts/`-prefixed (a
@@ -239,12 +239,10 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
             { repo_id, candidates }
           )
         ).all();
-        // Every hit is one of the candidates, whose normalized form IS the
-        // target that produced it — the normalized id is what the boundary
-        // check below compares against.
-        for (const row of rows) {
-          if (row && row.concept_id) repoConceptIds.add(normalizeConceptId(row.concept_id));
-        }
+        // RETURN m.concept_id yields bare strings; each hit is one of the
+        // candidates, whose normalized form IS the target that produced it —
+        // the normalized id is what the boundary check below compares against.
+        repoConceptIds = new Set(rows.map(normalizeConceptId));
       }
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });

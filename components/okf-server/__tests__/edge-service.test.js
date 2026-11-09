@@ -43,21 +43,26 @@ const GRAPH = `OKF_${REPO}`;
  * repo filter, or that turned the `AND` into an `OR`, answers with concepts of
  * other repositories, and the G22 test fails.
  */
+/** The boundary probe, by its exact production literals — shared by the mock
+ * (which answers it) and the tests (which count it). */
+const isProbeQuery = (aql) =>
+  typeof aql === 'string' && aql.includes('FOR c IN @candidates') && aql.includes('FOR m IN okf_concepts_meta FILTER');
+
 function programQueries(metaRows, repos, options = {}) {
   const cleanupKeys = options.cleanupKeys || [];
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
-    if (aql.includes('FOR c IN @candidates') && aql.includes('FOR m IN okf_concepts_meta FILTER')) {
-      // The mock keys on the exact literals of the production probe: the
-      // collection phrase (so a renamed collection does not get answered),
-      // and exactly the conjunction the probe must keep — a weakened operator
-      // or a dropped filter widens the answer to every repository.
+    if (isProbeQuery(aql)) {
+      // Exactly the conjunction the production probe must keep — a weakened
+      // operator or a dropped filter widens the answer to every repository.
       const repoScoped = aql.includes('m.repo_id == @repo_id AND m.concept_id == c');
       const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
       const stored = new Set();
       for (const id of repoIds) for (const cid of repos[id] || []) stored.add(cid);
       const candidates = bindVars.candidates || [];
-      return { all: async () => candidates.filter((c) => stored.has(c)).map((c) => ({ concept_id: c })) };
+      // RETURN m.concept_id yields bare strings, not objects — the mock must
+      // answer the shape the driver actually returns.
+      return { all: async () => candidates.filter((c) => stored.has(c)) };
     }
     // A whole-set read (every concept id of the repo) — the shape #1179 removed.
     if (aql.includes('RETURN m.concept_id')) return { all: async () => [] };
@@ -81,10 +86,7 @@ function metaRow(overrides = {}) {
 }
 
 /** The boundary probe: the queries that look the link targets up. */
-const probes = () =>
-  mockDb.query.mock.calls.filter(
-    ([aql]) => typeof aql === 'string' && aql.includes('FOR c IN @candidates') && aql.includes('okf_concepts_meta')
-  );
+const probes = () => mockDb.query.mock.calls.filter(([aql]) => isProbeQuery(aql));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -289,7 +291,6 @@ describe('edgeService — review fixes (2026-08-17)', () => {
     const before = keys[0];
     // second write (same concept) — still one vertex, same key
     programQueries([metaRow({ links: [] })], inRepo('service_directory'));
-    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] }));
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     const keys2 = Object.keys(mockDb._stores[`${GRAPH}_ENTITY`] || {});
     expect(keys2).toEqual([before]);

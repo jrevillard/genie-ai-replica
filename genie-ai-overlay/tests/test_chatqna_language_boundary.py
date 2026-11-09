@@ -352,7 +352,10 @@ class TestLanguageMapShape:
         """The single-source claim rests on the chatqna-side file being the
         backend's file, not a copy of it: a materialized symlink (a stale
         snapshot under an old revision) would pass every derivation test on
-        both sides while the two runtimes serve different lists."""
+        both sides while the two runtimes serve different lists. The subject
+        is the checked-in chatqna-side file itself — not the env-resolved
+        registry — so an operator override cannot mask a checkout where the
+        two trees drifted."""
         backend_registry = os.path.join(
             os.path.dirname(chatqna_module.__file__),
             "..",
@@ -364,7 +367,17 @@ class TestLanguageMapShape:
             "language-maps",
             "language-registry.json",
         )
-        assert os.path.samefile(LANGUAGE_REGISTRY_PATH, backend_registry)
+        checked_in_registry = os.path.join(os.path.dirname(chatqna_module.__file__), "language-registry.json")
+        try:
+            with open(checked_in_registry, encoding="utf-8") as handle:
+                json.load(handle)
+        except ValueError:
+            # A checkout without symlink support materialized the link as
+            # its link text: the single-source claim is unenforceable on
+            # this file, and conftest pointed the module at the backend
+            # file instead.
+            pytest.skip("checked-in registry is a materialized symlink stub; conftest resolves it")
+        assert os.path.samefile(checked_in_registry, backend_registry)
 
 
 def fake_translation_client():

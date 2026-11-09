@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import warnings
 from enum import Enum
 
 os.makedirs("reports", exist_ok=True)
@@ -10,6 +11,75 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Language-registry dereference for checkouts without symlink support
+# ---------------------------------------------------------------------------
+# chatqna/language-registry.json is a symlink to the backend's language-maps
+# file. A checkout made without symlink support (Windows without developer
+# mode / core.symlinks) materializes it as a plain text file whose body is
+# the link target; json.load then fails, the registry reads as empty, and
+# every request-path language resolves as unknown. Validate the registry
+# file the module will actually read (an operator-provided
+# LANGUAGE_REGISTRY_FILEPATH or the checked-in path); when it does not
+# parse, fall back to the checked-in registry when it parses, and follow its
+# link text otherwise — the same resolution the chatqna image performs at
+# build time (its Dockerfile copies the backend registry file explicitly,
+# not the symlink). A healthy checkout is untouched: the effective file
+# parses, no env var is set, and the module keeps its own default. The block
+# sits before every repo import on purpose: chatqna binds
+# LANGUAGE_REGISTRY_FILEPATH once at import, so anything importing it first
+# would freeze a possibly-degenerate path into the module.
+# warnings.warn, not stderr prints: pytest's default capture swallows
+# import-time stderr, and these diagnostics only surface in the warnings
+# summary.
+_registry_default = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json"))
+_probe_path = os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default)
+_body = ""
+try:
+    with open(_probe_path, encoding="utf-8") as _handle:
+        _body = _handle.read()
+    json.loads(_body)
+except (OSError, ValueError):
+    if _probe_path == _registry_default:
+        _fallback_body = _body
+    else:
+        try:
+            with open(_registry_default, encoding="utf-8") as _handle:
+                _fallback_body = _handle.read()
+        except (OSError, ValueError):
+            _fallback_body = ""
+    _resolved = ""
+    try:
+        json.loads(_fallback_body)
+        # The checked-in registry parses: it is the fallback for a broken
+        # override, whatever the checkout's symlink support.
+        _resolved = _registry_default
+    except ValueError:
+        _link_target = _fallback_body.strip()
+        if _link_target:
+            # Absolute: the env value must not depend on the working
+            # directory surviving until the module import.
+            _resolved = os.path.abspath(os.path.join(os.path.dirname(_registry_default), _link_target))
+    if _resolved and os.path.isfile(_resolved):
+        if "LANGUAGE_REGISTRY_FILEPATH" in os.environ:
+            # An explicitly set override that does not parse is being
+            # replaced: say so, or the operator believes their registry was
+            # exercised when the checked-in one was. repr() keeps a
+            # multi-line value from forging diagnostic lines.
+            warnings.warn(
+                f"LANGUAGE_REGISTRY_FILEPATH={_probe_path!r} does not parse as JSON; "
+                f"using the checked-in registry at {_resolved}",
+                stacklevel=1,
+            )
+        os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
+    else:
+        warnings.warn(
+            f"the language registry at {_probe_path!r} could not be read or parsed as JSON "
+            "and no usable link target; chatqna will run with an empty language registry",
+            stacklevel=1,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Pre-populate the vendored ``comps`` module tree so that imports in OPEA
@@ -201,65 +271,6 @@ sys.modules.setdefault("docling.datamodel", MagicMock())
 sys.modules.setdefault("docling.datamodel.base_models", MagicMock())
 sys.modules.setdefault("docling.datamodel.pipeline_options", MagicMock())
 sys.modules.setdefault("docling.document_converter", MagicMock())
-
-# ---------------------------------------------------------------------------
-# Language-registry dereference for checkouts without symlink support
-# ---------------------------------------------------------------------------
-# chatqna/language-registry.json is a symlink to the backend's language-maps
-# file. A checkout made without symlink support (Windows without developer
-# mode / core.symlinks) materializes it as a plain text file whose body is
-# the link target; json.load then fails, the registry reads as empty, and
-# every request-path language resolves as unknown. Validate the registry
-# file the module will actually read (an operator-provided
-# LANGUAGE_REGISTRY_FILEPATH or the checked-in path); when it does not
-# parse, follow the link text of the checked-in path — the same resolution
-# the chatqna image performs at build time (its Dockerfile copies the
-# backend registry file explicitly, not the symlink). A healthy checkout is
-# untouched: the effective file parses, no env var is set, and the module
-# keeps its own default.
-_registry_default = os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json")
-_probe_path = os.environ.get("LANGUAGE_REGISTRY_FILEPATH", _registry_default)
-_body = ""
-try:
-    with open(_probe_path, encoding="utf-8") as _handle:
-        _body = _handle.read()
-    json.loads(_body)
-except (OSError, ValueError):
-    # The file the module would read does not parse: when the probe read the
-    # checked-in path, its body IS the candidate link text; a failed env
-    # override falls back to the checked-in path's own body.
-    if _probe_path == _registry_default:
-        _link_target = _body.strip()
-    else:
-        try:
-            with open(_registry_default, encoding="utf-8") as _handle:
-                _link_target = _handle.read().strip()
-        except (OSError, ValueError):
-            _link_target = ""
-    _resolved = ""
-    if _link_target:
-        # Absolute: the env value must not depend on the working directory
-        # surviving until the module import.
-        _resolved = os.path.abspath(os.path.join(os.path.dirname(_registry_default), _link_target))
-    if _resolved and os.path.isfile(_resolved):
-        if "LANGUAGE_REGISTRY_FILEPATH" in os.environ:
-            # An explicitly set override that does not parse is being
-            # replaced: say so, or the operator believes their registry was
-            # exercised when the checked-in one was.
-            print(
-                f"conftest: LANGUAGE_REGISTRY_FILEPATH={os.environ['LANGUAGE_REGISTRY_FILEPATH']} "
-                f"does not parse as JSON; using the checked-in registry at {_resolved}",
-                file=sys.stderr,
-            )
-        os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
-    else:
-        print(
-            "conftest: the language registry at "
-            f"{_probe_path} could not be read "
-            "or parsed as JSON and no usable link target; chatqna will run with an empty "
-            "language registry",
-            file=sys.stderr,
-        )
 
 
 # ---------------------------------------------------------------------------

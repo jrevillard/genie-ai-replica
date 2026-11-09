@@ -242,7 +242,9 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
         // Every hit is one of the candidates, whose normalized form IS the
         // target that produced it — the normalized id is what the boundary
         // check below compares against.
-        for (const row of rows) repoConceptIds.add(normalizeConceptId(row && row.concept_id));
+        for (const row of rows) {
+          if (row && row.concept_id) repoConceptIds.add(normalizeConceptId(row.concept_id));
+        }
       }
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });

@@ -47,9 +47,11 @@ function programQueries(metaRows, repos, options = {}) {
   const cleanupKeys = options.cleanupKeys || [];
   mockDb.query.mockImplementation(async (aql, bindVars = {}) => {
     if (aql.includes('RETURN KEEP(m,')) return { all: async () => metaRows };
-    if (aql.includes('okf_concepts_meta') && aql.includes('FOR c IN @candidates')) {
-      // Exactly the conjunction the production probe must keep — a weakened
-      // operator or a dropped filter widens the answer to every repository.
+    if (aql.includes('FOR c IN @candidates') && aql.includes('FOR m IN okf_concepts_meta FILTER')) {
+      // The mock keys on the exact literals of the production probe: the
+      // collection phrase (so a renamed collection does not get answered),
+      // and exactly the conjunction the probe must keep — a weakened operator
+      // or a dropped filter widens the answer to every repository.
       const repoScoped = aql.includes('m.repo_id == @repo_id AND m.concept_id == c');
       const repoIds = repoScoped ? [bindVars.repo_id] : Object.keys(repos);
       const stored = new Set();
@@ -198,11 +200,21 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
       if (aql.includes('RETURN KEEP(m,')) {
         return { all: async () => [metaRow({ links: [{ to_concept_id: 'x', label: 'X' }] })] };
       }
-      if (aql.includes('m.concept_id IN')) throw new Error('arango down');
+      // The boundary probe itself fails — the catch must drop every link.
+      if (aql.includes('FOR c IN @candidates')) throw new Error('arango down');
       return { all: async () => [] };
     });
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result).toMatchObject({ written: 0, dropped: ['x'] });
+    // The fail-closed path RETURNS — no edge cleanup, no ENTITY vertex ensure.
+    // (Dropping the early return would still answer written:0 with every link
+    // dropped, because the empty boundary set refuses them all; only the
+    // skipped vertex/cleanup work tells the two apart.)
+    expect(Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {})).toHaveLength(0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Edge write: repo concept-set read failed — dropping all links',
+      expect.objectContaining({ repo_id: REPO, error: 'arango down' })
+    );
   });
 });
 

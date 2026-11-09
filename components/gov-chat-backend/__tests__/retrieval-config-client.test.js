@@ -45,11 +45,16 @@ function makeBearer(scopes = [], roles = [], sub = 'user-1') {
 }
 
 /** Decode a bearer header's payload (the fixtures are synthetic — unverified).
- *  Mirrors the production decoder: a malformed bearer yields null, not a throw. */
+ *  Mirrors the production decoder: an undecodable bearer yields null, not a throw. */
 function payloadOf(bearer) {
   const token = String(bearer || '').replace(/^Bearer\s+/i, '');
   const part = token.split('.')[1];
-  return part ? JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) : null;
+  if (!part) return null;
+  try {
+    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
 }
 
 const HYBRID_CONFIG = {

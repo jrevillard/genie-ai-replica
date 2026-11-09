@@ -380,6 +380,12 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const graphsScopeLess = await client.getAuthorizedGraphs(noScopes);
     expect(graphsByRole.graph_names).toEqual(graphsByClaim.graph_names);
     expect(graphsScopeLess.graph_names).toEqual(['graph-of-scope-less-user']);
+
+    // Payload-independent tripwire: the role-granted caller never fetched its
+    // own entry on either cache kind — two misses per kind (claim caller +
+    // scope-less caller), so the count pins the cache-hit behaviour without
+    // depending on what the mock serves.
+    expect(axios.get).toHaveBeenCalledTimes(4);
   });
 
   // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base

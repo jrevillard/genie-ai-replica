@@ -3841,10 +3841,15 @@ describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
   // count with zero database-backed tests. That property is enforced by
   // convention in the suites, so this source pin is its only guard —
   // the cheapest independent check that the CI gate's assumption holds.
+  // The scan is recursive (jest's testMatch picks up nested test files
+  // too) and text-level: it proves the gate LINE is present, not that
+  // every test in the file sits inside the gated describe — a file
+  // carrying the line plus a top-level test would still need the CI
+  // gate itself to catch.
   test('every test file in __tests__/integration carries the URL gate', () => {
     const dir = path.join(ROOT, 'components/gov-chat-backend/__tests__/integration');
     const files = fs
-      .readdirSync(dir)
+      .readdirSync(dir, { recursive: true })
       .filter((f) => f.endsWith('.test.js'))
       .sort();
     expect(files.length).toBeGreaterThanOrEqual(2);

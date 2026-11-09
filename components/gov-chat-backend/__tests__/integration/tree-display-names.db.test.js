@@ -51,8 +51,7 @@ const {
   waitForServer,
   recreateDatabase,
   dropDatabase,
-  databaseConfig,
-  jsonBody
+  databaseConfig
 } = require('./helpers/arango');
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
@@ -105,6 +104,9 @@ const TAXONOMY = {
 async function seed(db) {
   // The schema the migration creates: categoryServices is an EDGE
   // collection (type 3), the rest are document collections (type 2).
+  // Created through the same driver handle the tests use (the husk
+  // suite's idiom) — the handle carries the credentials and the
+  // connection the lifecycle calls above already established.
   for (const [name, type] of [
     ['serviceCategories', 2],
     ['services', 2],
@@ -112,18 +114,7 @@ async function seed(db) {
     ['serviceCategoryTranslations', 2],
     ['serviceTranslations', 2]
   ]) {
-    const response = await fetch(`${TEST_URL}/_db/${DB_NAME}/_api/collection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...AUTH },
-      body: JSON.stringify({ name, type }),
-      // Bounded like the helper's lifecycle calls: a stalled connection
-      // must not outlive the hook that called it.
-      signal: AbortSignal.timeout(WAIT_BUDGET_MS)
-    });
-    const body = await jsonBody(response);
-    if (body.error) {
-      throw new Error(`creating ${name}: ${JSON.stringify(body)}`);
-    }
+    await db.collection(name).create({ type });
   }
   await db.collection('serviceCategories').saveAll(TAXONOMY.categories);
   await db.collection('services').saveAll(TAXONOMY.services);

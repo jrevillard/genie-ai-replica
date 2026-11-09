@@ -20,9 +20,13 @@
 // the hook dies with a generic timeout and the wait's diagnostic never
 // prints — each suite passes HOOK_TIMEOUT_MS as the beforeAll hook
 // timeout (the hook that waits is what needs the budget; the per-test
-// timeout stays at the component default).
+// timeout stays at the component default). The hook budget covers the
+// full wait PLUS one stalled lifecycle call (each call aborts at
+// WAIT_BUDGET_MS with its named diagnostic); two stalled calls in a
+// row fall to Jest's generic timeout — the accepted trade against an
+// unbounded hook.
 const WAIT_BUDGET_MS = 120000;
-const HOOK_TIMEOUT_MS = WAIT_BUDGET_MS * 1.5;
+const HOOK_TIMEOUT_MS = WAIT_BUDGET_MS * 3;
 
 // The HTTP lifecycle calls carry the same credentials the driver does.
 // No user (the local no-auth database): no header at all.
@@ -68,8 +72,8 @@ async function waitForServer(url, headers, timeoutMs) {
 
 // The body of an HTTP lifecycle answer, guarded: an intermediate proxy
 // answering 502 with an HTML page must surface as a named status, not as
-// a JSON parse error that hides it. Exported: the suites' own HTTP calls
-// (the collection creations) read JSON answers too.
+// a JSON parse error that hides it. Module-private: the suites drive the
+// database through the arangojs driver once the handle exists.
 async function jsonBody(response) {
   const text = await response.text();
   try {
@@ -136,6 +140,5 @@ module.exports = {
   waitForServer,
   recreateDatabase,
   dropDatabase,
-  databaseConfig,
-  jsonBody
+  databaseConfig
 };

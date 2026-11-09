@@ -313,24 +313,50 @@ describe('retrieval-config-client (Story 1.1)', () => {
   });
 
   it('role-granted scopes share the claim-scoped cache entry and never the @no-scopes one', async () => {
-    axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+    // The upstream answers PER CALLER, so "who was served what" is
+    // observable — one shared payload would hide a cross-caller bleed behind
+    // identical bytes.
+    const subOf = (bearer) => {
+      const token = String(bearer || '').replace(/^Bearer\s+/i, '');
+      return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).sub;
+    };
+    axios.get.mockImplementation((path, config) => {
+      const sub = subOf(config?.headers?.Authorization);
+      if (path.endsWith('/api/okf/authz/graphs')) {
+        return okfGetResponse({ ...AUTHZ_A, graph_names: [`graph-of-${sub}`] });
+      }
+      return okfGetResponse({ ...HYBRID_CONFIG, serving_repo_ids: [`repo-of-${sub}`] });
+    });
 
-    const byClaim = makeBearer(['okf:t:a:read'], []);
-    const byRole = makeBearer([], ['okf:t:a:read']);
-    const noScopes = makeBearer([], []);
+    const byClaim = makeBearer(['okf:t:a:read'], [], 'claim-user');
+    const byRole = makeBearer([], ['okf:t:a:read'], 'role-user');
+    const noScopes = makeBearer([], [], 'scope-less-user');
 
-    await client.getRetrievalConfig(byClaim);
-    await client.getRetrievalConfig(byRole); // same effective scopes → cache hit
-    await client.getRetrievalConfig(noScopes); // distinct key — no cross-user bleed
+    // The KEY decides the cache entry: the realm-role grant must land in the
+    // claim-scoped entry, never in the scope-less one.
+    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+    expect(keyOf(byRole)).toBe(keyOf(byClaim));
+    expect(keyOf(byRole)).not.toBe(keyOf(noScopes));
+    expect(keyOf(noScopes)).toBe('@no-scopes');
 
-    // WHICH callers reached upstream, not how many: the collision world
-    // (role-granted caller keyed as `@no-scopes`) and the fixed world both
-    // issue two upstream calls, so a call count cannot tell them apart. The
-    // role-granted bearer must never reach upstream at all — it is served
-    // from the claim-scoped entry — and the scope-less bearer must reach it
-    // on its own.
-    const upstreamBearers = axios.get.mock.calls.map((call) => call[1].headers.Authorization);
-    expect(upstreamBearers).toEqual([byClaim, noScopes]);
+    const claimView = await client.getRetrievalConfig(byClaim);
+    const roleView = await client.getRetrievalConfig(byRole);
+    const scopeLessView = await client.getRetrievalConfig(noScopes);
+
+    // Scope-equivalent callers share the entry — the role-granted caller is
+    // served the claim-scoped view, not a view of its own.
+    expect(roleView.serving_repo_ids).toEqual(claimView.serving_repo_ids);
+    // The scope-less caller keeps its own view: it is never handed another
+    // caller's serving set.
+    expect(scopeLessView.serving_repo_ids).toEqual(['repo-of-scope-less-user']);
+
+    // The authorization boundary shares the key — a scope-less caller must
+    // not be handed the scoped caller's traversable graph set.
+    const graphsByClaim = await client.getAuthorizedGraphs(byClaim);
+    const graphsByRole = await client.getAuthorizedGraphs(byRole);
+    const graphsScopeLess = await client.getAuthorizedGraphs(noScopes);
+    expect(graphsByRole.graph_names).toEqual(graphsByClaim.graph_names);
+    expect(graphsScopeLess.graph_names).toEqual(['graph-of-scope-less-user']);
   });
 
   // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base

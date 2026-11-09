@@ -125,8 +125,9 @@ Future<void> pickService(WidgetTester tester, int index) async {
   await tapService(tester, index);
 }
 
-/// Taps the service row [index] of the expanded category 2 — the
-/// deselect gesture of the pass-through's clear branch.
+/// Taps the service row [index] of the expanded category 2, by the
+/// rows' test handles — the pick half of [pickService] and the toggle
+/// gesture of the pass-through's clear branch.
 Future<void> tapService(WidgetTester tester, int index) async {
   await tester.tap(find.byKey(Key('svc_2_$index')));
   await tester.pumpAndSettle();

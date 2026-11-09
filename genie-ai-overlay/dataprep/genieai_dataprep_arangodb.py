@@ -2151,9 +2151,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         is the level the LOGFLAG-gated dumps already use elsewhere in this
         codebase (chatqna, reranker).
         """
-        if not logflag:
-            return
         with background_span("dataprep.log_environment_variables"):
+            # The gate sits INSIDE the span: the span is an owned name the
+            # observability contract lists, so it is emitted on every startup
+            # even when the dump itself is not.
+            if not logflag:
+                return
             logger.info(
                 f"GENIE-AI DATAPREP CONFIGURATION: "
                 f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "

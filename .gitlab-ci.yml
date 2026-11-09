@@ -3217,8 +3217,8 @@ lint:site-scripts:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
-# Format the repository-root JavaScript scripts.  They live outside every
-# component directory, so no component's own lint job covers them; the
+# Format the top-level scripts/*.js of the repository.  They live outside
+# every component directory, so no component's own lint job covers them; the
 # OpenAPI spec module is CI-critical code (it feeds the config:api-client
 # drift gate), so it gets the same Prettier gate as the rest of the
 # repository.  Prettier comes from components/shared/lib, which already
@@ -4225,7 +4225,7 @@ config:provisioning-harness:
 # GitLab subsystems before (see .claude/rules/CVE-REMEDIATION.md) and this
 # is the one dotfile a human hand-edits.
 .api_client_source_changes: &api_client_source_changes
-  [ "components/gov-chat-backend/**/*", "package.json", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "openapitools.json", ".gitlab-ci.yml" ]
+  [ "components/gov-chat-backend/**/*", "package.json", "mobile/genie_ai_mobile/openapi_client/**/*", "mobile/genie_ai_mobile/openapi_client/.openapi-generator-ignore", "scripts/generate-api-client.sh", "scripts/build-openapi-spec.js", "openapitools.json", ".gitlab-ci.yml" ]
 
 config:api-client:
   extends: .node_base

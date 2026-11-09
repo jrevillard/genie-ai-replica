@@ -25,6 +25,13 @@ require('../setup-env');
 // deterministic absolute base path.
 process.env.API_URL = 'https://localhost';
 
+// setup-env.js does not set API_URL — this file introduced the pin, so it
+// removes it again when the file ends (Jest workers share process.env across
+// test files).
+afterAll(() => {
+  delete process.env.API_URL;
+});
+
 const { buildSpec } = require('../../../../scripts/build-openapi-spec');
 
 describe('scripts/build-openapi-spec', () => {

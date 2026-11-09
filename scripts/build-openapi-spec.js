@@ -23,12 +23,12 @@ const { createRequire } = require('module');
 
 const BACKEND_DIR = path.resolve(__dirname, '..', 'components', 'gov-chat-backend');
 
-function buildSpec(backendDir = BACKEND_DIR) {
-  const backendRequire = createRequire(path.join(backendDir, 'package.json'));
+function buildSpec() {
+  const backendRequire = createRequire(path.join(BACKEND_DIR, 'package.json'));
   const swaggerJsdoc = backendRequire('swagger-jsdoc');
   const spec = swaggerJsdoc({
     definition: backendRequire('./swagger-definition'),
-    apis: [path.join(backendDir, 'routes', '*.js')]
+    apis: [path.join(BACKEND_DIR, 'routes', '*.js')]
   });
   // Sanity checks: a broken apis glob yields a spec with zero paths, and a
   // pin assignment dropped from the env -i line shows up as an 'undefined'

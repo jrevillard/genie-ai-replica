@@ -566,6 +566,20 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const index = allConcepts.find((c) => c.path === 'index.md');
     expect(index).toBeTruthy();
     expect(index.frontmatter.type).toBe('index');
+    // #1651: born-right — every index sources entry carries its doc-repo
+    // resource URL (resource-less entries were flagged by conformance and
+    // unfixable in the autocorrect sheet).
+    expect(index.frontmatter.sources).toHaveLength(2);
+    expect(index.frontmatter.sources[0]).toMatchObject({
+      kind: 'document',
+      file_id: 'f1',
+      resource: 'http://document-repository:3001/api/files/f1'
+    });
+    expect(index.frontmatter.sources[1]).toMatchObject({
+      kind: 'document',
+      file_id: 'f2',
+      resource: 'http://document-repository:3001/api/files/f2'
+    });
     expect(allConcepts.indexOf(index)).toBeGreaterThan(
       allConcepts.indexOf(allConcepts.find((c) => c.path === 'beta.md'))
     );

@@ -732,7 +732,15 @@ async function runDocumentsConversion(job) {
             frontmatter: {
               type: 'index',
               title: indexTitle,
-              sources: file_ids.map((file_id) => ({ kind: 'document', file_id }))
+              // Born-right (#1651): every sources entry carries its resource —
+              // the same baseResource shape every topic concept gets below —
+              // or the conformance validator flags all 50 and the autocorrect
+              // sheet has nothing derivable to propose (El Salvador, live).
+              sources: file_ids.map((file_id) => ({
+                kind: 'document',
+                file_id,
+                resource: `${config.documentRepository.url}/api/files/${file_id}`
+              }))
             },
             body:
               `# ${indexTitle}\n\nThis repository was imported from ${file_ids.length} document(s). ` +

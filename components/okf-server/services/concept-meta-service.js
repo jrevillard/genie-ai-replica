@@ -25,6 +25,7 @@ const { DateTime } = require('luxon');
 const matter = require('gray-matter');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
+const config = require('../config');
 const modelCache = require('./vllm-model-cache');
 
 const { withSpan } = require('../shared-lib/tracing');
@@ -1252,8 +1253,14 @@ const { ALL_TYPES, CONTENT_TYPES, STATUS_VALUES } = require('./okf-vocabulary');
 const AUTOCORRECT_TYPE_ENUM = ALL_TYPES;
 const AUTOCORRECT_STATUS_ENUM = STATUS_VALUES;
 
-/** Plan an autocorrect pass for one concept's frontmatter. Pure — no DB. */
-function planAutocorrectForConcept(meta) {
+/** Plan an autocorrect pass for one concept's frontmatter. Pure — no DB.
+ * `opts.docRepoBase` (optional) enables the #1651 fill tier: a sources entry
+ * carrying only a `file_id` gets its own doc-repository file URL as the
+ * resource — the same construction the import writers stamp (producer-service
+ * baseResource), so the repair derives exactly what a born-right entry would
+ * carry. */
+function planAutocorrectForConcept(meta, opts = {}) {
+  const docRepoBase = opts.docRepoBase || null;
   const changes = [];
   const warnings = [];
   const fm = meta.frontmatter || {};
@@ -1286,10 +1293,14 @@ function planAutocorrectForConcept(meta) {
   } else {
     // SOURCE_MISSING_RESOURCE fix (David, 2026-09-12: "automatically fix
     // conformance issues like this"): a sources[] entry with an empty
-    // "resource" gets one determinately — the concept's own provenance
-    // (meta.sources, stamped by the crawl conversion) first, then the first
-    // non-empty sibling resource. When neither can supply one, the issue is
-    // surfaced as a warning (the gate treats warnings as advisory).
+    // "resource" gets one determinately — (#1651 ladder, most precise first)
+    // the entry's OWN file_id (the doc-repo file URL, the exact value a
+    // born-right entry carries), then the concept's provenance (meta.sources,
+    // stamped by the crawl conversion), then the first non-empty sibling
+    // resource. When none can supply one the entry is surfaced as a WARNING —
+    // the old `if (!fill) return s` declined silently, the sheet read
+    // "Nothing to fix", and El Salvador's 50 issues sat unfixable behind a
+    // false clean bill (measured live 2026-11-09).
     const provenance = (meta.sources || []).map((s) => s && s.resource).find((r) => r && String(r).trim());
     let sibling = null;
     for (const s of fm.sources) {
@@ -1299,22 +1310,38 @@ function planAutocorrectForConcept(meta) {
       }
     }
     let touched = false;
-    const fixed = fm.sources.map((s) => {
+    const unfillable = [];
+    const fixed = fm.sources.map((s, i) => {
       if (s && (!s.resource || !String(s.resource).trim())) {
-        const fill = String(provenance || sibling || '').trim();
-        if (!fill) return s;
+        const ownFileId = s.file_id && String(s.file_id).trim();
+        const fill =
+          ownFileId && docRepoBase
+            ? `${docRepoBase}/api/files/${ownFileId}`
+            : String(provenance || sibling || '').trim();
+        if (!fill) {
+          unfillable.push(i);
+          return s;
+        }
         touched = true;
         return { ...s, resource: fill };
       }
       return s;
     });
+    for (const i of unfillable) {
+      warnings.push({
+        rule: 'SOURCE_UNFIXABLE',
+        severity: 'warning',
+        message: `Source entry ${i} has no resource and none can be derived (no file_id, no provenance) — fix it in the editor`
+      });
+    }
     if (touched) {
+      const anyOwnFileId = docRepoBase && fm.sources.some((s) => s && s.file_id && String(s.file_id).trim());
       changes.push({
         field: 'sources',
         before: fm.sources,
         after: fixed,
         reason: 'SOURCE_MISSING_RESOURCE',
-        note: `resource filled from ${provenance ? 'concept provenance' : 'sibling source entry'}`
+        note: `resource filled from ${anyOwnFileId ? "each entry's own file_id" : provenance ? 'concept provenance' : 'sibling source entry'}`
       });
     }
   }
@@ -1422,13 +1449,16 @@ async function autocorrectRepo(repo_id, dry_run = true) {
   const col = db.collection(COLLECTION);
   const cursor = await db.query(aql`FOR m IN ${col} FILTER m.repo_id == ${repo_id} RETURN m`);
   const concepts = await cursor.all();
+  // #1651: the doc-repo base enables the own-file_id fill tier — the URL a
+  // born-right sources entry carries (producer-service baseResource shape).
+  const docRepoBase = config.documentRepository && config.documentRepository.url;
   const allChanges = [];
   const allWarnings = [];
   const failures = [];
   let appliedCount = 0;
   let failedCount = 0;
   for (const meta of concepts) {
-    const { changes, warnings } = planAutocorrectForConcept(meta);
+    const { changes, warnings } = planAutocorrectForConcept(meta, { docRepoBase });
     if (changes.length > 0) {
       allChanges.push({ concept_id: meta.concept_id, changes });
     }

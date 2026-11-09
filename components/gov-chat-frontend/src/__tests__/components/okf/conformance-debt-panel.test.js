@@ -1,6 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// #948 (the narrowed Story 10.4) — the cross-repo conformance-debt panel.
+// #948 (the narrowed Story 10.4) — the cross-repo conformance-debt panel —
+// extended by #1650-C with the per-repo issue viewer.
 //
 // WHAT THIS SUITE PINS:
 //   1. WORST FIRST — the rows render sorted by outstanding debt (issues
@@ -9,12 +10,17 @@
 //   2. EMPTY vs FAILURE are different states (the #80805 lesson): a clean
 //      catalog renders the empty sentence; a failed read renders the error
 //      and DROPS the stale rows (an old count must never read as current).
-//   3. READ-ONLY (the disposition's cap): the only affordance is Refresh;
-//      a row click emits `open` with the repo_id (the dashboard's resume
-//      path) and nothing acts on the debt.
+//   3. READ-ONLY (the disposition's cap): the only affordances are Refresh
+//      and the per-row issue viewer (a reader, not a mutator); a row click
+//      emits `open` with the repo_id (the dashboard's resume path) and
+//      nothing acts on the debt.
 //   4. The TRUNCATION marker renders when the server's page cap was hit
 //      (review round 1, finding 5) — a silent absence would read as a
 //      clean ledger.
+//   5. THE ISSUE VIEWER (#1650-C): clicking a row's issues count opens a
+//      dialog fed by the repo's /validation report; a failed read shows the
+//      error INSIDE the dialog (the card's rows stay untouched); the
+//      issues-button click must NOT also open the repo (@click.stop).
 
 import { mount } from '@vue/test-utils';
 import ConformanceDebtPanel from '@/components/okf/ConformanceDebtPanel.vue';
@@ -23,7 +29,8 @@ import repoOkfService from '@/services/repoOkfService';
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
   default: {
-    getConformanceDebt: jest.fn()
+    getConformanceDebt: jest.fn(),
+    getRepoValidation: jest.fn()
   }
 }));
 
@@ -47,12 +54,31 @@ function envelope(items, truncated = false) {
   return { items, truncated };
 }
 
+/** The /validation report body the viewer reads (getRepoValidation). */
+function report(issues) {
+  return { issues, summary: { total: issues.length }, generated_at: '2026-11-09T00:00:00Z' };
+}
+
 const DS_STUBS = {
   DsButton: {
     props: ['variant', 'small', 'disabled'],
     template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>'
   },
-  DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' }
+  DsPill: { props: ['variant'], template: '<span class="pill"><slot /></span>' },
+  // Faithful-enough stub: renders only when visible, shows the title, the
+  // slot, and one button per declared action that emits `action` with the
+  // key — the panel closes the viewer through that event.
+  DsDialog: {
+    props: ['visible', 'title', 'size', 'scrollable', 'actions'],
+    emits: ['close', 'action'],
+    template: `<div v-if="visible" class="ds-dialog-stub" :data-test-id="'dialog-' + title">
+      <h3>{{ title }}</h3>
+      <slot />
+      <button v-for="a in (actions || [])" :key="a.key" :data-test-id="'dialog-action-' + a.key" @click="$emit('action', a.key)">
+        {{ a.label }}
+      </button>
+    </div>`
+  }
 };
 
 function mountPanel(response) {
@@ -137,9 +163,10 @@ it('READ-ONLY: a row click emits open(repo_id); no mutation affordance exists', 
   await w.vm.$nextTick();
   await w.find('[data-test-id="debt-row-r-2"]').trigger('click');
   expect(w.emitted('open')).toEqual([['r-2']]);
-  // The only button on the panel is the read refresh.
+  // The buttons are the read refresh and the two issue-viewer triggers (one
+  // per row, carrying each row's issue count) — readers, never mutators.
   const buttons = w.findAll('button').map((b) => b.text().trim());
-  expect(buttons).toEqual(['Refresh']);
+  expect(buttons).toEqual(['Refresh', '0', '0']);
 });
 
 it('a truncated catalog names the cap instead of reading as a clean ledger', async () => {
@@ -154,4 +181,102 @@ it('a truncated catalog names the cap instead of reading as a clean ledger', asy
   await flush();
   await w2.vm.$nextTick();
   expect(w2.find('[role="status"]').exists()).toBe(false);
+});
+
+it('#1650-C: the issues button opens the viewer and renders the /validation report', async () => {
+  const w = mountPanel(
+    envelope([
+      row({ repo_id: 'r-el-sal', name: 'El Salvador', conformance_issue_count: 2 }),
+      row({ repo_id: 'r-other', conformance_issue_count: 0 })
+    ])
+  );
+  await flush();
+  await w.vm.$nextTick();
+  repoOkfService.getRepoValidation.mockResolvedValueOnce(
+    report([
+      {
+        type: 'conformance',
+        severity: 'warning',
+        concept_id: 'c-1',
+        code: 'SOURCE_MISSING_RESOURCE',
+        message: 'source resource gone',
+        remedy: 're-crawl'
+      },
+      {
+        type: 'conformance',
+        severity: 'blocker',
+        concept_id: 'c-2',
+        code: 'PII_STATE_ERROR',
+        message: 'unresolved PII',
+        remedy: 'accept or redact'
+      }
+    ])
+  );
+  await w.find('[data-test-id="debt-issues-r-el-sal"]').trigger('click');
+  await flush();
+  await w.vm.$nextTick();
+  // The viewer read exactly this repo's report.
+  expect(repoOkfService.getRepoValidation).toHaveBeenCalledWith('r-el-sal');
+  const dialog = w.find('[data-test-id^="dialog-"]');
+  expect(dialog.exists()).toBe(true);
+  expect(dialog.find('[data-test-id="debt-issues-list-r-el-sal"]').exists()).toBe(true);
+  // Both issues render with their concept, code, message and remedy.
+  const items = dialog.findAll('.okf-debt__issue-item');
+  expect(items).toHaveLength(2);
+  expect(items[0].text()).toContain('c-1');
+  expect(items[0].text()).toContain('SOURCE_MISSING_RESOURCE');
+  expect(items[0].text()).toContain('re-crawl');
+  expect(items[1].text()).toContain('PII_STATE_ERROR');
+  // The issues-button click must NOT also open the repo (@click.stop).
+  expect(w.emitted('open')).toBeUndefined();
+});
+
+it('#1650-C: a failed validation read shows the error INSIDE the dialog; the card rows stay', async () => {
+  const w = mountPanel(envelope([row({ repo_id: 'r-x', name: 'X', conformance_issue_count: 1 })]));
+  await flush();
+  await w.vm.$nextTick();
+  repoOkfService.getRepoValidation.mockRejectedValueOnce({ message: 'validation boom' });
+  await w.find('[data-test-id="debt-issues-r-x"]').trigger('click');
+  await flush();
+  await w.vm.$nextTick();
+  const dialog = w.find('[data-test-id^="dialog-"]');
+  expect(dialog.exists()).toBe(true);
+  // The error lives inside the dialog, not on the card.
+  expect(dialog.find('[role="alert"]').exists()).toBe(true);
+  expect(dialog.text()).toContain('validation boom');
+  expect(dialog.find('[data-test-id="debt-issues-list-r-x"]').exists()).toBe(false);
+  // The card's rows and its own error state are untouched.
+  expect(w.find('[data-test-id="debt-row-r-x"]').exists()).toBe(true);
+  expect(w.vm.error).toBe('');
+});
+
+it('#1650-C: closing the viewer clears it (the Close action)', async () => {
+  const w = mountPanel(envelope([row({ repo_id: 'r-y', conformance_issue_count: 1 })]));
+  await flush();
+  await w.vm.$nextTick();
+  repoOkfService.getRepoValidation.mockResolvedValueOnce(
+    report([{ type: 'orphan', severity: 'warning', concept_id: 'c-9', message: 'not linked', remedy: 'link it' }])
+  );
+  await w.find('[data-test-id="debt-issues-r-y"]').trigger('click');
+  await flush();
+  await w.vm.$nextTick();
+  expect(w.find('[data-test-id^="dialog-"]').exists()).toBe(true);
+  await w.find('[data-test-id="dialog-action-close"]').trigger('click');
+  await w.vm.$nextTick();
+  expect(w.find('[data-test-id^="dialog-"]').exists()).toBe(false);
+});
+
+it('#1650-C: a repo whose report is empty renders the nothing-to-fix state', async () => {
+  const w = mountPanel(envelope([row({ repo_id: 'r-clean2', conformance_issue_count: 1 })]));
+  await flush();
+  await w.vm.$nextTick();
+  repoOkfService.getRepoValidation.mockResolvedValueOnce(report([]));
+  await w.find('[data-test-id="debt-issues-r-clean2"]').trigger('click');
+  await flush();
+  await w.vm.$nextTick();
+  const dialog = w.find('[data-test-id^="dialog-"]');
+  expect(dialog.exists()).toBe(true);
+  expect(dialog.find('[data-test-id="debt-issues-list-r-clean2"]').exists()).toBe(false);
+  expect(dialog.text()).toContain('Nothing to fix');
+  expect(dialog.find('[role="alert"]').exists()).toBe(false);
 });

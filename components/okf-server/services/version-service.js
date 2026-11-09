@@ -53,15 +53,48 @@ const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors')
 const { createHash } = require('node:crypto');
 
 /**
- * Fingerprint a concept set for publish idempotency: one sha256 over the
- * SORTED `concept_id:content_hash` pairs. Order-independent (the sampler does
- * not return rows in a stable order) and derived from the STORED canonical
- * content_hash, never a recomputed body hash — so it moves only when the
- * publishable content actually moves.
+ * Fingerprint a concept set for publish idempotency (#1650, the fp:2 format):
+ * one sha256 over the SORTED per-concept lines, each carrying what PUBLISH
+ * CERTIFIES — the canonical `content_hash` (the body) PLUS the state the
+ * mint's gates read: `pii_state`, a code:severity signature of
+ * `conformance_issues`, and a sorted `type:count` signature of
+ * `pii_hits_summary`. The v1 format hashed only `concept_id:content_hash`,
+ * which made the no-op publish guard blind to resolution-only changes:
+ * accepting PII findings (resolutions + pii_state) moved nothing, and a
+ * retracted repo's re-entry publish — the ONLY path back to serving — was
+ * refused as a no-op (measured live, El Salvador 2026-11-09). Order-
+ * independent (the sampler does not return rows in a stable order) and
+ * derived from the STORED canonical values, never recomputed ones.
+ *
+ * The summary is flattened to `type:count` pairs, NOT stringified: a partial
+ * whole-file accept leaves pii_state 'hit' while SHRINKING the summary
+ * (pii-service's partial path), and a raw `${obj}` would collapse every
+ * object to "[object Object]" — the residual blindness the security review
+ * caught before this shipped.
  */
+const FINGERPRINT_FORMAT = 'fp:2';
+
 function fingerprintOf(concepts) {
-  const parts = (concepts || []).map((c) => `${c.concept_id}:${c.content_hash || ''}`).sort();
-  return createHash('sha256').update(parts.join('\n')).digest('hex');
+  const sig = (issues) =>
+    (Array.isArray(issues) ? issues : [])
+      .filter((i) => i && i.code)
+      .map((i) => `${i.code}:${i.severity || 'warning'}`)
+      .sort()
+      .join(',');
+  const summarySig = (summary) => {
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return '';
+    return Object.keys(summary)
+      .sort()
+      .map((k) => `${k}:${summary[k]}`)
+      .join(',');
+  };
+  const parts = (concepts || [])
+    .map(
+      (c) =>
+        `${c.concept_id}:${c.content_hash || ''}:${c.pii_state || 'unknown'}:${sig(c.conformance_issues)}:${summarySig(c.pii_hits_summary)}`
+    )
+    .sort();
+  return `${FINGERPRINT_FORMAT}:${createHash('sha256').update(parts.join('\n')).digest('hex')}`;
 }
 
 /** The fingerprint of the concepts as they stand RIGHT NOW (live meta rows). */
@@ -79,7 +112,7 @@ async function currentFingerprint(repoId) {
   const concepts = await (
     await db.query(
       `FOR m IN ${META} FILTER m.repo_id == @repo_id
-         RETURN { concept_id: m.concept_id, content_hash: m.content_hash }`,
+         RETURN { concept_id: m.concept_id, content_hash: m.content_hash, pii_state: m.pii_state, conformance_issues: m.conformance_issues, pii_hits_summary: m.pii_hits_summary }`,
       { repo_id: repoId }
     )
   ).all();

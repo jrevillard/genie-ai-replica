@@ -1599,6 +1599,10 @@ export default {
       empty: 'No concepts in any repository you can read — nothing to owe.',
       readFailed: 'Could not read the conformance debt.',
       truncated: 'The repository catalog exceeds one page — rows past the cap are not shown.',
+      issuesTitle: 'Issues — {name}',
+      issuesLoading: 'Reading the issue list…',
+      issuesEmpty: 'Nothing to fix — no open issues.',
+      issuesFailed: 'Could not read the issue list.',
       col: {
         repo: 'Repository',
         concepts: 'Concepts',
@@ -1606,6 +1610,11 @@ export default {
         stale: 'Stale',
         pii: 'PII hits',
         state: 'State'
+      },
+      sev: {
+        blocker: 'Blocker',
+        error: 'Error',
+        warning: 'Warning'
       }
     },
     retrieval: {

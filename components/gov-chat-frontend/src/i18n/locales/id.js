@@ -1607,6 +1607,10 @@ export default {
       empty: 'Tidak ada konsep di repositori mana pun yang bisa Anda baca — tidak ada utang.',
       readFailed: 'Tidak dapat membaca utang kesesuaian.',
       truncated: 'Katalog repositori melebihi satu halaman — baris di luar batas tidak ditampilkan.',
+      issuesTitle: 'Masalah — {name}',
+      issuesLoading: 'Membaca daftar masalah…',
+      issuesEmpty: 'Tidak ada yang perlu diperbaiki — tidak ada masalah terbuka.',
+      issuesFailed: 'Tidak dapat membaca daftar masalah.',
       col: {
         repo: 'Repositori',
         concepts: 'Konsep',
@@ -1614,6 +1618,11 @@ export default {
         stale: 'Usang',
         pii: 'Temuan PII',
         state: 'Keadaan'
+      },
+      sev: {
+        blocker: 'Pemblokir',
+        error: 'Kesalahan',
+        warning: 'Peringatan'
       }
     },
     retrieval: {

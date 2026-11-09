@@ -514,8 +514,14 @@ describe('versionService.list/get (4.5 diff/list backing)', () => {
 // wholesale and never runs the real one. These tests run the real thing
 // against the driver-shaped mock (whose .all() is async, like the real
 // driver) so that gap cannot reopen.
+//
+// #1650 (fp:2): the format is now PREFIXED. Old manifests carry a bare hex
+// fingerprint; a bare-hex stored fingerprint never equals an `fp:2:`-prefixed
+// live one, so the first publish after this ships mints N+1 exactly once —
+// the migration is the prefix mismatch itself, honest because the new format
+// certifies MORE than the old one did.
 describe('currentFingerprint — the publish idempotency guard (regression)', () => {
-  test('awaits Cursor.all() and returns a sha256 hex, not a Promise', async () => {
+  test('awaits Cursor.all() and returns an fp:2-prefixed sha256, not a Promise', async () => {
     mockDb.query.mockResolvedValueOnce({
       all: async () => [
         { concept_id: 'b', content_hash: 'h2' },
@@ -524,7 +530,17 @@ describe('currentFingerprint — the publish idempotency guard (regression)', ()
     });
     const fp = await versionService.currentFingerprint(REPO);
     expect(typeof fp).toBe('string');
-    expect(fp).toMatch(/^[0-9a-f]{64}$/);
+    expect(fp).toMatch(/^fp:2:[0-9a-f]{64}$/);
+  });
+
+  test('#1650: the query reads what publish certifies (pii_state, conformance, pii summary)', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    await versionService.currentFingerprint(REPO);
+    const aql = mockDb.query.mock.calls[0][0];
+    expect(aql).toContain('content_hash');
+    expect(aql).toContain('pii_state');
+    expect(aql).toContain('conformance_issues');
+    expect(aql).toContain('pii_hits_summary');
   });
 
   test('order-independent: the same rows in a different order hash identically', async () => {
@@ -547,9 +563,110 @@ describe('currentFingerprint — the publish idempotency guard (regression)', ()
     expect(before).not.toBe(after);
   });
 
-  test('an empty repo yields the sha256 of an empty string, not a throw', async () => {
+  test('an empty repo yields an fp:2 fingerprint, not a throw', async () => {
     mockDb.query.mockResolvedValueOnce({ all: async () => [] });
-    await expect(versionService.currentFingerprint(REPO)).resolves.toMatch(/^[0-9a-f]{64}$/);
+    await expect(versionService.currentFingerprint(REPO)).resolves.toMatch(/^fp:2:[0-9a-f]{64}$/);
+  });
+});
+
+// #1650 — the defect this format exists for: v1 hashed only
+// {concept_id, content_hash}, so EVERYTHING the publish gates read but the
+// body hash cannot see was invisible to the no-op guard. David accepted all
+// 50 PII findings on a retracted El Salvador and the guard refused the
+// re-entry publish ("nothing has changed") — the only road back to serving.
+describe('currentFingerprint — fp:2 certifies what publish certifies (#1650-A)', () => {
+  // Each call gets ONE query; the rows are the repo's whole state.
+  const fingerprintOf = async (rows) => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => rows });
+    return versionService.currentFingerprint(REPO);
+  };
+
+  test('a pii_state flip changes the fingerprint even though no body moved', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1' };
+    const before = await fingerprintOf([{ ...base, pii_state: 'hit' }]);
+    const after = await fingerprintOf([{ ...base, pii_state: 'clean' }]);
+    expect(before).not.toBe(after);
+  });
+
+  test('a conformance issue appearing changes it; the SAME issues in another order do not', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1', pii_state: 'clean' };
+    const before = await fingerprintOf([base]);
+    const withIssue = await fingerprintOf([
+      { ...base, conformance_issues: [{ code: 'SOURCE_MISSING_RESOURCE', severity: 'warning' }] }
+    ]);
+    expect(before).not.toBe(withIssue);
+    const reordered = await fingerprintOf([
+      {
+        ...base,
+        conformance_issues: [
+          { code: 'B_SECOND', severity: 'warning' },
+          { code: 'A_FIRST', severity: 'error' }
+        ]
+      }
+    ]);
+    const reorderedAgain = await fingerprintOf([
+      {
+        ...base,
+        conformance_issues: [
+          { code: 'A_FIRST', severity: 'error' },
+          { code: 'B_SECOND', severity: 'warning' }
+        ]
+      }
+    ]);
+    expect(reordered).toBe(reorderedAgain);
+  });
+
+  test('a severity escalation changes it (a warning resolved to clean is not the same publish)', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1', pii_state: 'clean' };
+    const warn = await fingerprintOf([base]);
+    const escalated = await fingerprintOf([
+      { ...base, conformance_issues: [{ code: 'X', severity: 'error' }] },
+      { concept_id: 'b', content_hash: 'h2', pii_state: 'clean' }
+    ]);
+    expect(warn).not.toBe(escalated);
+  });
+
+  test('a pii_hits_summary change moves it (findings re-counted after a re-scan)', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1', pii_state: 'clean' };
+    const before = await fingerprintOf([base]);
+    const after = await fingerprintOf([{ ...base, pii_hits_summary: { EMAIL_ADDRESS: 2 } }]);
+    expect(before).not.toBe(after);
+  });
+
+  // Security-review residual, closed pre-ship: a PARTIAL whole-file accept
+  // leaves pii_state 'hit' while SHRINKING the summary — a raw `${obj}`
+  // stringification would render every summary "[object Object]" and the
+  // publish would still be refused as a no-op. The sorted type:count
+  // signature sees the shrink.
+  test('a summary SHRINK while pii_state stays hit (partial accept) moves it', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1', pii_state: 'hit' };
+    const before = await fingerprintOf([{ ...base, pii_hits_summary: { EMAIL_ADDRESS: 3, PHONE_NUMBER: 1 } }]);
+    const after = await fingerprintOf([{ ...base, pii_hits_summary: { EMAIL_ADDRESS: 1 } }]);
+    expect(before).not.toBe(after);
+  });
+
+  test('the summary signature is key-order independent', async () => {
+    const base = { concept_id: 'a', content_hash: 'h1', pii_state: 'hit' };
+    const one = await fingerprintOf([{ ...base, pii_hits_summary: { A: 1, B: 2 } }]);
+    const two = await fingerprintOf([{ ...base, pii_hits_summary: { B: 2, A: 1 } }]);
+    expect(one).toBe(two);
+  });
+
+  test('accepting the LAST PII hit — the exact El Salvador shape — yields a NEW fingerprint', async () => {
+    // Same bodies both times; only pii_state + the (now resolved) summary differ.
+    const concept = { concept_id: 'a', content_hash: 'h1' };
+    const flagged = await fingerprintOf([{ ...concept, pii_state: 'hit', pii_hits_summary: { EMAIL_ADDRESS: 1 } }]);
+    const accepted = await fingerprintOf([{ ...concept, pii_state: 'clean' }]);
+    expect(flagged).not.toBe(accepted);
+  });
+});
+
+describe('mintVersion — the manifest stamps the fp:2 fingerprint (#1650-A)', () => {
+  test('content_fingerprint carries the format prefix, so v1 manifests (bare hex) differ by shape', async () => {
+    seedRepo();
+    programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]);
+    await versionService.mintVersion(REPO);
+    expect(mockDb._stores.okf_versions[`${REPO}_1`].content_fingerprint).toMatch(/^fp:2:[0-9a-f]{64}$/);
   });
 });
 

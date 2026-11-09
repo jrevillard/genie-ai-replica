@@ -9,7 +9,12 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 
 const dbService = require('../shared-lib/db-connection-service');
-const { validateConcept, persistConformanceIssues, getRepoMetrics, getDebtByRepos } = require('../services/conformance-service');
+const {
+  validateConcept,
+  persistConformanceIssues,
+  getRepoMetrics,
+  getDebtByRepos
+} = require('../services/conformance-service');
 
 const db = dbService.__mockDb;
 

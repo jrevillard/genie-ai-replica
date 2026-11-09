@@ -1329,8 +1329,22 @@ describe('repository-controller — conformance-debt aggregation (#948)', () => 
         next_cursor: null
       });
     conformanceService.getDebtByRepos.mockResolvedValueOnce([
-      { repo_id: 'ra', concept_count: 12, conformance_issue_count: 4, stale_concept_count: 1, pii_hit_count: 0, has_reserved_index: true },
-      { repo_id: 'rc', concept_count: 3, conformance_issue_count: 0, stale_concept_count: 0, pii_hit_count: 2, has_reserved_index: false }
+      {
+        repo_id: 'ra',
+        concept_count: 12,
+        conformance_issue_count: 4,
+        stale_concept_count: 1,
+        pii_hit_count: 0,
+        has_reserved_index: true
+      },
+      {
+        repo_id: 'rc',
+        concept_count: 3,
+        conformance_issue_count: 0,
+        stale_concept_count: 0,
+        pii_hit_count: 2,
+        has_reserved_index: false
+      }
     ]);
     const { res } = await drive(controller.listConformanceDebt, { okfIsSuperAdmin: true });
     expect(res.statusCode).toBe(200);

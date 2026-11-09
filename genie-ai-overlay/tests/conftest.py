@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
+import json
 import os
 import sys
 from enum import Enum
@@ -200,6 +201,36 @@ sys.modules.setdefault("docling.datamodel", MagicMock())
 sys.modules.setdefault("docling.datamodel.base_models", MagicMock())
 sys.modules.setdefault("docling.datamodel.pipeline_options", MagicMock())
 sys.modules.setdefault("docling.document_converter", MagicMock())
+
+# ---------------------------------------------------------------------------
+# Language-registry dereference for checkouts without symlink support
+# ---------------------------------------------------------------------------
+# chatqna/language-registry.json is a symlink to the backend's language-maps
+# file. A checkout made without symlink support (Windows without developer
+# mode / core.symlinks) materializes it as a plain text file whose body is
+# the link target; json.load then fails, the registry reads as empty, and
+# every request-path language resolves as unknown — 70+ chatqna
+# language-surface tests fail with the reporter's signature (a declared
+# English query landing on fallback_error/translated instead of
+# passthrough_english). Follow the link text when the checked-in file is not
+# valid JSON, the same dereference the chatqna image performs at build time
+# (COPY follows symlinks). A healthy checkout is untouched: the file parses,
+# no env var is set, and the module keeps its own default.
+if "LANGUAGE_REGISTRY_FILEPATH" not in os.environ:
+    _registry_path = os.path.join(os.path.dirname(__file__), "..", "chatqna", "language-registry.json")
+    try:
+        with open(_registry_path, encoding="utf-8") as _handle:
+            json.load(_handle)
+    except Exception:
+        try:
+            with open(_registry_path, encoding="utf-8") as _handle:
+                _link_target = _handle.read().strip()
+        except OSError:
+            _link_target = ""
+        if _link_target:
+            _resolved = os.path.normpath(os.path.join(os.path.dirname(_registry_path), _link_target))
+            if os.path.isfile(_resolved):
+                os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved
 
 
 # ---------------------------------------------------------------------------

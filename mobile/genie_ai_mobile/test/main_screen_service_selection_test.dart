@@ -42,8 +42,13 @@ List<dynamic> treeWithLabellessService() =>
     quickHelpTreeFixture()
       ..first['children'].add({'_key': 'svc-2', 'name': 'Mystery'});
 
+/// The base URL pumpMainScreen hands MainScreen, beside the path the
+/// capture matches: ONE pair, so a change to either cannot drift past
+/// the other.
+const streamBaseUrl = 'http://mock';
+
 /// The harness tree client with a CAPTURING streaming endpoint: the
-/// bodies of the /api/queries/stream POSTs are recorded verbatim and the
+/// bodies of the streaming query POSTs are recorded verbatim and the
 /// stream closes immediately — the send completes with an empty answer,
 /// which is all the wire assertions need.
 class _CapturingStreamClient extends QuickHelpTreeMockClient {
@@ -53,7 +58,7 @@ class _CapturingStreamClient extends QuickHelpTreeMockClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (request.url.path.endsWith('/api/queries/stream')) {
+    if (request.url.toString() == '$streamBaseUrl/api/queries/stream') {
       bodies.add(utf8.decode((request as http.Request).bodyBytes));
       return http.StreamedResponse(
         http.ByteStream.fromBytes(utf8.encode('')),
@@ -96,7 +101,7 @@ Future<void> pumpMainScreen(
           // STREAMING — the production shape — with the requests
           // answering through the test's mock.
           httpClient: chatClient,
-          streamBaseUrl: chatClient == null ? null : 'http://mock',
+          streamBaseUrl: chatClient == null ? null : streamBaseUrl,
         ),
       ),
     ),

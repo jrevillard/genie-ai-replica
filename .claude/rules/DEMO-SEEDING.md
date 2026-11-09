@@ -53,7 +53,10 @@ mints its own admin token through the documented temp-ROPC dance
 5. `GET /api/files` is paginated (10/page).
 6. The frontend config is mounted via a subPath ConfigMap — updating the
    CM needs a rollout RESTART; the script does it. Restore baseline:
-   `kubectl -n <ns> rollout undo deploy/<frontend> && kubectl -n <ns> delete cm genie-demo-config`.
+   undo TWICE (patch + restart each create a revision; a single undo
+   keeps the mount and deleting the CM would break future pod starts),
+   then delete the CM: `kubectl -n <ns> rollout undo deploy/<frontend>;
+   kubectl -n <ns> rollout undo deploy/<frontend>; kubectl -n <ns> delete cm genie-demo-config`.
 7. The frontend validates its config against the schema embedded in the
    document — quickHelp buttons REQUIRE `styles` + `action.hiddenPrompt`.
 

@@ -47,7 +47,9 @@ KC_ADMIN_USER=admin KC_ADMIN_PASS=... DEMO_ADMIN_PASS=... \
 # plan only (no writes)
 python3 -I genie-demo-seed.py --dry-run
 
-# config swap only (hierarchy/files untouched)
+# config swap only (hierarchy/files untouched). If --base-config is not
+# given (default /tmp/k3s-config.json does not exist), the script fetches
+# the live config from the frontend pod itself.
 python3 -I genie-demo-seed.py --skip-reset --skip-upload --skip-ingest --apply-config
 
 # re-ingest only (files already uploaded)
@@ -81,8 +83,12 @@ python3 -I genie-demo-seed.py --labels-mode family
    exhausted or you silently miss files.
 6. **subPath ConfigMap mounts never refresh.** Updating the CM content
    does not reach a running pod; the script applies + RESTARTS the
-   frontend deployment every time. Restore baseline:
-   `kubectl -n genieai rollout undo deploy/<fe> && kubectl -n genieai delete cm genie-demo-config`.
+   frontend deployment every time. Restore baseline: the patch and the
+   restart EACH create a rollout revision, so undo TWICE (a single undo
+   lands on the patched template and deleting the CM then breaks
+   mounting), then delete the CM:
+   `kubectl -n genieai rollout undo deploy/<fe>; kubectl -n genieai rollout undo deploy/<fe>; kubectl -n genieai delete cm genie-demo-config`
+   (or a single `rollout undo --to-revision=<pre-patch>`).
 7. **Config schema is self-validating.** The frontend validates
    `/config/genie-ai-config.json` against the schema embedded in the
    document; quickHelp buttons REQUIRE `styles` +

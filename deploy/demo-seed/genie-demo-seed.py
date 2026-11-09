@@ -145,12 +145,24 @@ def mint_token():
         with urllib.request.urlopen(req, timeout=30) as r:
             tok = json.loads(r.read().decode())['access_token']
     finally:
-        req = urllib.request.Request(
-            f'{KC_URL}/auth/admin/realms/{KC_REALM}/clients/{cid}',
-            method='PUT', data=json.dumps({'directAccessGrantsEnabled': False}).encode(),
-            headers={'Authorization': 'Bearer ' + admin_tok,
-                     'Content-Type': 'application/json'})
-        urllib.request.urlopen(req, timeout=30)
+        # REVERT is the security-critical half of the dance: retry once,
+        # and if it still fails, scream — the realm would keep password
+        # grants enabled on the web client.
+        for attempt in (1, 2):
+            try:
+                req = urllib.request.Request(
+                    f'{KC_URL}/auth/admin/realms/{KC_REALM}/clients/{cid}',
+                    method='PUT', data=json.dumps({'directAccessGrantsEnabled': False}).encode(),
+                    headers={'Authorization': 'Bearer ' + admin_tok,
+                             'Content-Type': 'application/json'})
+                urllib.request.urlopen(req, timeout=30)
+                break
+            except Exception as exc:
+                if attempt == 2:
+                    print(f'   !!! SECURITY: temp-ROPC revert FAILED after retry '
+                          f'({exc}) — directAccessGrantsEnabled is still TRUE on '
+                          f'client {cid}; disable it manually in Keycloak NOW.')
+                    raise
     claims = json.loads(b64.urlsafe_b64decode(
         tok.split('.')[1] + '=' * (-len(tok.split('.')[1]) % 4)))
     if 'admin' not in (claims.get('realm_access') or {}).get('roles', []):
@@ -258,15 +270,23 @@ def files_via_arango():
 
 def list_demo_files():
     """All demo files, PAGINATED — GET /api/files defaults to page size 10,
-    which silently hides everything past the first page."""
+    which silently hides everything past the first page. A 401 past page 1
+    re-mints and RETRIES the page: returning a partial list here would
+    leave old demo files unpurged (duplicates on the next run)."""
     out = []
     page = 1
+    minted = 0
     while True:
         st, body = http_json(DOCREPO, f'/api/files?page={page}&limit=50')
-        if st == 401 or st == 403:
+        if st in (401, 403):
             if page == 1:
                 return files_via_arango()
-            break
+            fresh_token()
+            minted += 1
+            if minted > 3:
+                sys.exit('token keeps expiring mid-pagination — aborting rather '
+                         'than purging/uploading against a PARTIAL file list')
+            continue
         if st != 200:
             sys.exit(f'cannot list files: HTTP {st} {str(body)[:200]}')
         items = [f for f in unwrap_list(body)
@@ -340,8 +360,20 @@ def phase_hierarchy(dry):
 
 # --- Phase 3: upload the corpus ---------------------------------------------
 
+def preflight_corpus():
+    """All corpus files must exist BEFORE any destructive step: the purge
+    runs first, and a bad DOCS_ROOT would otherwise leave the instance
+    with zero demo content."""
+    missing = [rel for rel, _ in CORPUS
+               if not os.path.isfile(os.path.join(DOCS_ROOT, rel))]
+    if missing:
+        sys.exit('corpus files missing under DOCS_ROOT=' + DOCS_ROOT +
+                 ' (nothing has been touched yet):\n  ' + '\n  '.join(missing))
+
+
 def phase_upload(dry, labels_mode):
     print('== Phase 3: upload corpus')
+    preflight_corpus()
     old = list_demo_files()
     for f in old:
         fid = f.get('file_id')
@@ -384,6 +416,15 @@ def phase_upload(dry, labels_mode):
                 'labels': ','.join(labels),
                 'language': 'en',
             })
+        if st in (401, 403):
+            fresh_token()
+            st, body = http_multipart(
+                DOCREPO, '/api/files/upload', 'file', name, content,
+                fields={
+                    'author': DEMO_MARKER,
+                    'labels': ','.join(labels),
+                    'language': 'en',
+                })
         fid = None
         if isinstance(body, dict):
             data = body.get('data') or {}
@@ -421,7 +462,15 @@ def phase_ingest(file_ids, poll_minutes, dry):
                 accepted.append(fid)
                 break
             if st in (401, 403):
+                before = TOKEN
                 fresh_token()
+                if TOKEN == before:
+                    # GENIE_TOKEN-only mode: re-minting returned the same
+                    # stale token — 40 more attempts would fail identically.
+                    rejected[fid] = (401, 'token expired and no KC_* env for '
+                                          'self-minting — refresh GENIE_TOKEN')
+                    break
+                time.sleep(2)
                 continue
             if st == 429:
                 time.sleep(min(30, 5 + attempt * 5))
@@ -437,6 +486,7 @@ def phase_ingest(file_ids, poll_minutes, dry):
         sys.exit('nothing accepted for ingest')
 
     deadline = time.time() + poll_minutes * 60
+    last_status = {}
     while True:
         time.sleep(20)
         files = {f.get('file_id'): f for f in list_demo_files()}
@@ -445,10 +495,9 @@ def phase_ingest(file_ids, poll_minutes, dry):
             f = files.get(fid) or {}
             s = (f.get('dataprep') or {}).get('status') or '?'
             states.setdefault(s, []).append(f.get('file_name'))
+        last_status = states
         running = sum(len(v) for k, v in states.items() if k not in INGEST_TERMINAL)
-        print(f'   poll: {{k: len(v) for k, v in states.items()}} running={running}'
-              .replace('{k: len(v) for k, v in states.items()}',
-                       str({k: len(v) for k, v in states.items()})))
+        print(f'   poll: { {k: len(v) for k, v in states.items()} } running={running}')
         if running == 0:
             for k, v in states.items():
                 if k in INGEST_FAILED:
@@ -458,11 +507,8 @@ def phase_ingest(file_ids, poll_minutes, dry):
             print(f'   TIMEOUT after {poll_minutes} min — remaining: '
                   f'{ {k: v for k, v in states.items() if k not in INGEST_TERMINAL} }')
             break
-    files = {f.get('file_id'): f for f in list_demo_files()}
-    done = sum(1 for fid in accepted
-               if (files.get(fid, {}).get('dataprep') or {}).get('status') in INGEST_TERMINAL)
-    failed = [files[fid]['file_name'] for fid in accepted
-              if (files.get(fid, {}).get('dataprep') or {}).get('status') in INGEST_FAILED]
+    done = sum(len(v) for k, v in last_status.items() if k in INGEST_TERMINAL)
+    failed = [n for k, v in last_status.items() if k in INGEST_FAILED for n in v]
     print(f'   ingested: {done}/{len(accepted)}; failed: {len(failed)}')
 
 
@@ -479,10 +525,30 @@ def build_config(base_config_path):
     return cfg
 
 
-def phase_config(base_config_path, apply):
+def fetch_live_config():
+    """The current frontend config, read from the running pod — the base a
+    config-only swap surgically updates when no --base-config file exists."""
+    import subprocess
+    out = subprocess.run(
+        ['kubectl', 'exec', '-n', KUBE_NS, KUBE_FE, '--',
+         'cat', FE_CONFIG_PATH], capture_output=True, text=True, check=True)
+    return out.stdout
+
+
+def phase_config(base_config_path, apply, dry):
     print('== Phase 5: quickHelp config')
+    if not os.path.isfile(base_config_path):
+        print(f'   base config {base_config_path} not found — '
+              f'fetching the live config from the frontend pod')
+        base_config_path = os.path.join(HERE, 'live-config.json')
+        with open(base_config_path, 'w') as fh:
+            fh.write(fetch_live_config())
     cfg = build_config(base_config_path)
     out = os.path.join(HERE, 'genie-ai-config.json')
+    if dry:
+        print(f'   [dry] would write {out} and '
+              f'{"apply + restart the frontend" if apply else "stop here"}')
+        return
     with open(out, 'w') as fh:
         json.dump(cfg, fh, indent=2, ensure_ascii=False)
         fh.write('\n')
@@ -514,8 +580,15 @@ def phase_config(base_config_path, apply):
     subprocess.run(['kubectl', '-n', KUBE_NS, 'rollout', 'status', KUBE_FE,
                     '--timeout=300s'], check=True)
     print(f'   applied + restarted: ConfigMap {cm} at {FE_CONFIG_PATH}')
-    print(f'   restore baseline: kubectl -n {KUBE_NS} rollout undo {KUBE_FE} '
-          f'&& kubectl -n {KUBE_NS} delete configmap {cm}')
+    # The patch and the restart EACH create a rollout revision: a single
+    # undo lands on the patched template (mount still present) and then
+    # deleting the CM would leave the deployment unmountable. Undo must
+    # reach the revision BEFORE the patch.
+    print(f'   restore baseline: kubectl -n {KUBE_NS} rollout undo {KUBE_FE} twice '
+          f'(patch + restart each created a revision), then '
+          f'kubectl -n {KUBE_NS} delete configmap {cm}')
+    print(f'   (or: kubectl -n {KUBE_NS} rollout undo {KUBE_FE} '
+          f'--to-revision=<revision before this run>)')
 
 
 # --------------------------------------------------------------------------
@@ -541,7 +614,24 @@ def main():
                     help='current genie-ai-config.json to surgically update')
     args = ap.parse_args()
 
-    if KC_ADMIN_USER and KC_ADMIN_PASS and DEMO_ADMIN_PASS:
+    # Offline config validation — before any network call or destructive
+    # step: corpus categories and button categories must reference names
+    # this config actually defines, or scoping ships dead.
+    cat_names = {c['nameEN'] for c in HIERARCHY}
+    bad_corpus = [rel for rel, cat in CORPUS if cat not in cat_names]
+    bad_buttons = [b['id'] for b in BUTTONS
+                   if b.get('category') is not None and b['category'] not in cat_names]
+    if bad_corpus or bad_buttons:
+        sys.exit('config references categories absent from hierarchy '
+                 f'(dead scoping): corpus={bad_corpus} buttons={bad_buttons}')
+
+    if args.dry_run:
+        if not TOKEN:
+            # Minting performs REAL realm writes (temp ROPC) — a dry run
+            # does not; reads still need a token.
+            sys.exit('--dry-run performs reads only: set GENIE_TOKEN (fresh admin '
+                     'JWT) instead of KC_* env, so no realm mutation happens')
+    elif KC_ADMIN_USER and KC_ADMIN_PASS and DEMO_ADMIN_PASS:
         fresh_token()
     if not TOKEN:
         sys.exit('no usable admin token')
@@ -560,7 +650,7 @@ def main():
         file_ids = phase_upload(args.dry_run, args.labels_mode)
     if file_ids and not args.skip_ingest:
         phase_ingest(file_ids, args.poll_minutes, args.dry_run)
-    phase_config(args.base_config, args.apply_config)
+    phase_config(args.base_config, args.apply_config, args.dry_run)
     print('== done')
 
 

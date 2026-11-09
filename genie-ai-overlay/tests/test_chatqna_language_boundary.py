@@ -337,10 +337,12 @@ class TestLanguageMapShape:
 
     def test_the_derived_maps_come_from_the_shipped_registry(self):
         """The names and the scripts the service serves are exactly the ones
-        the registry file next to this module holds — in the source tree a
-        symlink into the backend tree, in the image a COPY of the same file.
-        Asserting the full derivation (not just non-emptiness) is what keeps
-        the maps honest if a hardcoded fallback table ever appears."""
+        the registry the module reads holds — LANGUAGE_REGISTRY_PATH, i.e.
+        the module-adjacent file (a symlink into the backend tree on a
+        healthy checkout, the backend file itself past conftest's
+        dereference, an operator override when one is set). Asserting the
+        full derivation (not just non-emptiness) is what keeps the maps
+        honest if a hardcoded fallback table ever appears."""
         with open(LANGUAGE_REGISTRY_PATH, encoding="utf-8") as handle:
             languages = json.load(handle)["languages"]
         assert chatqna_module.language_codes_map() == {code: language["name"] for code, language in languages.items()}
@@ -376,7 +378,7 @@ class TestLanguageMapShape:
             # its link text: the single-source claim is unenforceable on
             # this file, and conftest pointed the module at the backend
             # file instead.
-            pytest.skip("checked-in registry is a materialized symlink stub; conftest resolves it")
+            pytest.skip("checked-in registry does not parse as JSON here; the single-source claim is unenforceable")
         assert os.path.samefile(checked_in_registry, backend_registry)
 
 

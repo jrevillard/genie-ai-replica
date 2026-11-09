@@ -70,7 +70,14 @@ except ValueError:
             # multi-line value from forging diagnostic lines.
             warnings.warn(
                 f"LANGUAGE_REGISTRY_FILEPATH={_probe_path!r} does not parse as JSON; "
-                f"using the checked-in registry at {_resolved}",
+                f"using the registry at {_resolved!r}",
+                stacklevel=1,
+            )
+        else:
+            # The checkout itself is degenerate: say so, or the developer
+            # never learns the module reads the backend tree.
+            warnings.warn(
+                f"the checked-in language registry is a materialized symlink; following it to {_resolved!r}",
                 stacklevel=1,
             )
         os.environ["LANGUAGE_REGISTRY_FILEPATH"] = _resolved

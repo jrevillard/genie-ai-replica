@@ -3676,11 +3676,15 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
 // failing job and no failing test. This contract fails the suite instead.
 describe('the jest worker-memory cap contract (#1419)', () => {
   // The pass-through (`npm test`), direct (`npx jest`), and npm-script
-  // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest.
-  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test(:\w+)?\b)/;
-  // A script item may chain commands; each command is checked on its own,
-  // so a capped invocation chained with an uncapped one still fails.
-  const COMMAND_SPLIT = /\s*(?:&&|\|\||;)\s*/;
+  // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest —
+  // except `test:e2e*`, which is Playwright (root package.json), not jest.
+  // Any other unknown variant over-triggers and forces a conscious
+  // decision; nothing silently escapes the class.
+  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e)\w+|npm run test(?![:\w]))/;
+  // A script item may chain commands (with `&&`, `||`, `;`, or a newline
+  // inside a block scalar); each command is checked on its own, so a
+  // capped invocation chained with an uncapped one still fails.
+  const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
 
   // Out of the measured OOM class, pinned here rather than silently
   // unmatched — a rename or a scope change to either job must fail this

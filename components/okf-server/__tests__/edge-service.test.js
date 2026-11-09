@@ -64,9 +64,9 @@ function programQueries(metaRows, repos, options = {}) {
       // answer the shape the driver actually returns.
       return { all: async () => candidates.filter((c) => stored.has(c)) };
     }
-    // A whole-set read (every concept id of the repo) — the shape #1179 removed.
-    if (aql.includes('RETURN m.concept_id')) return { all: async () => [] };
     if (aql.includes('RETURN e._key')) return { all: async () => cleanupKeys };
+    // Anything else — including a reintroduced whole-set read — answers empty,
+    // which fails the written counts; the #1179 test pins the whole-set shape.
     return { all: async () => [] };
   });
 }
@@ -203,7 +203,7 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
         return { all: async () => [metaRow({ links: [{ to_concept_id: 'x', label: 'X' }] })] };
       }
       // The boundary probe itself fails — the catch must drop every link.
-      if (aql.includes('FOR c IN @candidates')) throw new Error('arango down');
+      if (isProbeQuery(aql)) throw new Error('arango down');
       return { all: async () => [] };
     });
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
@@ -312,7 +312,7 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
         typeof aql === 'string' &&
         aql.includes('okf_concepts_meta') &&
         aql.includes('RETURN m.concept_id') &&
-        !aql.includes('FOR c IN @candidates')
+        !isProbeQuery(aql)
     );
     expect(wholeSetReads).toHaveLength(0);
     // One probe query for all the targets: a nested FOR over the candidate

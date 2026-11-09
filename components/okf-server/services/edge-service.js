@@ -222,10 +222,12 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // (repo_id, concept_id) unique index, for the link targets ONLY: the
     // whole-set read made an N-concept drain pay N x N row reads (DW-450).
     // One query for all the targets — a nested FOR over the candidate list,
-    // each candidate a seek on the unique index (an IN list loses the compound
-    // index past a few hundred candidates; the seek stays covering at every
-    // size), so the row reads scale with the links and the round trips stay
-    // at one per concept.
+    // each candidate a seek on the unique index. Measured on this collection
+    // (ArangoDB 3.12.4, production index set): past ~200 candidates the
+    // planner switches an equivalent IN-list filter to the single-attribute
+    // repo_id index and pays one full-document lookup per repo row, while the
+    // per-candidate seek stays covering at every size measured. Row reads
+    // scale with the links and the round trips stay at one per concept.
     const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
     let repoConceptIds = new Set();
     try {
@@ -245,7 +247,11 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
         repoConceptIds = new Set(rows.map(normalizeConceptId));
       }
     } catch (err) {
-      logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });
+      logger.warn('Edge write: repo concept-set read failed — dropping all links', {
+        repo_id,
+        concept_id: cid,
+        error: err.message
+      });
       return { repo_id, concept_id: cid, written: 0, dropped: links.map((l) => l.to_concept_id) };
     }
 

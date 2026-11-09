@@ -323,7 +323,14 @@ describe('retrieval-config-client (Story 1.1)', () => {
     await client.getRetrievalConfig(byRole); // same effective scopes → cache hit
     await client.getRetrievalConfig(noScopes); // distinct key — no cross-user bleed
 
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    // WHICH callers reached upstream, not how many: the collision world
+    // (role-granted caller keyed as `@no-scopes`) and the fixed world both
+    // issue two upstream calls, so a call count cannot tell them apart. The
+    // role-granted bearer must never reach upstream at all — it is served
+    // from the claim-scoped entry — and the scope-less bearer must reach it
+    // on its own.
+    const upstreamBearers = axios.get.mock.calls.map((call) => call[1].headers.Authorization);
+    expect(upstreamBearers).toEqual([byClaim, noScopes]);
   });
 
   // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base

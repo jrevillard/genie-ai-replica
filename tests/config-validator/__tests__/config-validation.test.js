@@ -14,6 +14,7 @@ const {
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
+const { extractCiShellBlocks } = require('../validators/extract-ci-shell');
 const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
@@ -3660,6 +3661,177 @@ describe('the e2e KEYCLOAK_VERIFY_EMAIL posture pin (#1330)', () => {
         })
       ])
     );
+  });
+});
+
+// --- Jest worker-memory cap contract (#1419) ---
+// The full component jest suites spawn one worker per test file, and a
+// worker's heap grows unboundedly over a run: on the runner's 4 GB job
+// cgroup a bare jest run OOMs mid-suite (#1404), and --maxWorkers=2 alone
+// was not enough either — the measured fix is BOTH flags on every
+// product-component invocation (#1412):
+//   npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB ...
+// Nothing else in CI checks what a script command IS (the shell gate only
+// runs bash -n), so a dropped flag used to re-enter the OOM class with no
+// failing job and no failing test. This contract fails the suite instead.
+describe('the jest worker-memory cap contract (#1419)', () => {
+  // The pass-through (`npm test`), direct (`npx jest`), and npm-script
+  // (`npm run test`, `npm run test:<variant>`) spellings all invoke jest —
+  // except the Playwright variants `test:e2e` and `test:e2e:list` (root
+  // package.json), excluded by exact name; their colon-family siblings
+  // (test:e2e:<suffix>) follow that exclusion, while dash-suffixed and
+  // any other unknown variant over-triggers and forces a conscious
+  // decision rather than silently escaping the class. The exclusion
+  // assumes only the root package defines Playwright test:e2e* scripts
+  // (#1674 tracks the pin for that assumption).
+  const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
+  // Shell line continuations (`\` + newline) join after comments are
+  // stripped (bash ends a comment at the newline), so one continued
+  // invocation is one command.
+  const JOIN_CONTINUATIONS = /\\\n[ \t]*/g;
+  // A script item may chain commands (with `&&`, `||`, `;`, or a newline
+  // inside a block scalar). A single `|` or `&` is not treated as a
+  // separator — this is a heuristic guard on the job scripts'
+  // one-command-per-item house shape, not a shell parser. Each command is
+  // checked on its own, so a capped invocation chained with an uncapped
+  // one across those separators still fails.
+  const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
+  // Flag presence with a value boundary: `--maxWorkers=2` must not be
+  // satisfied by a raised value (`--maxWorkers=20`), nor by the
+  // percentage form `--maxWorkers=2%`, whose worker count is a function
+  // of the runner's core count instead of the measured constant 2.
+  const FLAG_MAX_WORKERS = /--maxWorkers=2(?![\d%])/;
+  const FLAG_IDLE_LIMIT = /--workerIdleMemoryLimit=500MB(?!\d)/;
+
+  // Out of the measured OOM class, pinned here rather than silently
+  // unmatched — a rename or a scope change to either job must fail this
+  // suite and force a conscious re-decision, not slip past the contract.
+  const EXEMPT_JOBS = new Set([
+    // One test file: jest spawns at most one worker per test file, so the
+    // run cannot fan out to the worker count the cap exists to bound.
+    'test:backend-arango',
+    // The validator harness itself (tests/config-validator) and the
+    // new-config suite it runs via `npm run test:ci` — neither measured
+    // into the #1404/#1412 OOM class. Capping them is a config:validate
+    // decision, not this contract.
+    'config:validate'
+  ]);
+
+  // Comments are stripped BEFORE continuations are joined: bash ends a
+  // comment at the newline (a trailing backslash inside a comment is
+  // inert), so a comment must not swallow the following line. The strip
+  // is quote-blind (a quoted `#` is kept by bash but stripped here); no
+  // quoted-# line invokes jest today, and a quote-aware lexer would
+  // exceed this heuristic guard.
+  const STRIP_COMMENTS = /(^|\s)#.*$/gm;
+  // The jest commands of the given shell blocks — the same matcher, split,
+  // and flag check the real CI file goes through below.
+  const invocationsOf = (blocks) =>
+    blocks.flatMap((b) =>
+      b.text
+        .replace(STRIP_COMMENTS, '$1')
+        .replace(JOIN_CONTINUATIONS, ' ')
+        .split(COMMAND_SPLIT)
+        .filter((cmd) => JEST_INVOCATION.test(cmd))
+        .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
+    );
+  const toInvocations = (blocks) => invocationsOf(blocks).filter((inv) => !EXEMPT_JOBS.has(inv.owner));
+  const toViolations = (invocations) =>
+    invocations.filter((inv) => !FLAG_MAX_WORKERS.test(inv.cmd) || !FLAG_IDLE_LIMIT.test(inv.cmd));
+  // One script-item text through the same pipeline, for the pins below.
+  const violationsFor = (text) => toViolations(toInvocations([{ owner: 'test:frontend', key: 'script', text }]));
+  // The real CI file through the same extractor, for the file-backed tests.
+  const ciBlocks = () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    return blocks;
+  };
+
+  test('every product-component jest invocation carries both cap flags', () => {
+    // The guard must SEE the class it protects: four capped jobs today.
+    // A silent-empty pass here would mean the extraction broke, not that
+    // the pipeline is compliant.
+    const invocations = toInvocations(ciBlocks());
+    expect(invocations.length).toBeGreaterThanOrEqual(4);
+
+    expect(toViolations(invocations).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
+  });
+
+  test('the exempt jobs invoke jest exactly as their exemption reasons state', () => {
+    // The exemptions above justify a fixed invocation set (one single-file
+    // jest run; the validator harness and the new-config suite). The pin
+    // makes that justification load-bearing: widening an exempt job's
+    // jest scope — a second test file, an extra uncapped suite — changes
+    // this set and fails here, forcing a conscious re-decision.
+    const exemptCmds = invocationsOf(ciBlocks())
+      .filter((inv) => EXEMPT_JOBS.has(inv.owner))
+      .map((inv) => inv.cmd)
+      .sort();
+    expect(exemptCmds).toEqual([
+      // config:validate: the validator harness, the new-config suite.
+      'npm run test:ci',
+      'npm test',
+      // test:backend-arango: the single husk-report integration file.
+      'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json'
+    ]);
+  });
+
+  // Pins for the matcher's boundary decisions — no jest invocation in the
+  // real CI file uses these shapes today (none is a block-scalar chain, a
+  // test:e2e line, or split across a line continuation), so without the
+  // pins below a reverted regex would pass the suite silently.
+  test('a block-scalar item chaining a capped and an uncapped jest line fails', () => {
+    expect(
+      violationsFor('npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage\nnpm test -- --coverage').map(
+        (v) => v.cmd
+      )
+    ).toEqual(['npm test -- --coverage']);
+  });
+
+  test('an uncapped test:e2e line is out of the jest class (Playwright)', () => {
+    expect(violationsFor('cd components/gov-chat-frontend && npm run test:e2e')).toEqual([]);
+  });
+
+  test('a raised worker count (--maxWorkers=20) is not satisfied by the cap', () => {
+    expect(
+      violationsFor('npm test -- --maxWorkers=20 --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
+    ).toEqual(['npm test -- --maxWorkers=20 --workerIdleMemoryLimit=500MB --coverage']);
+  });
+
+  test('an unknown e2e-prefixed jest variant over-triggers (test:e2e-local)', () => {
+    expect(violationsFor('cd components/gov-chat-frontend && npm run test:e2e-local').map((v) => v.cmd)).toEqual([
+      'npm run test:e2e-local'
+    ]);
+  });
+
+  test('an uncapped jest npm-script variant (test:contract) fails', () => {
+    expect(violationsFor('cd components/gov-chat-frontend && npm run test:contract').map((v) => v.cmd)).toEqual([
+      'npm run test:contract'
+    ]);
+  });
+
+  test('a shell line continuation joins into one command', () => {
+    expect(violationsFor('npm test -- --maxWorkers=2 \\\n  --workerIdleMemoryLimit=500MB --coverage')).toEqual([]);
+  });
+
+  test('a comment citing a command invokes nothing', () => {
+    expect(violationsFor('npm ci  # run npm test locally to repro')).toEqual([]);
+    expect(violationsFor('npm ci\n# npm test alone OOMs')).toEqual([]);
+  });
+
+  test('a comment does not swallow the invocation on the following line', () => {
+    // Bash ends the comment at the newline (the trailing backslash is
+    // inert), so the uncapped jest run below executes and must be caught.
+    expect(violationsFor('# see npm test \\\nnpm test -- --coverage').map((v) => v.cmd)).toEqual([
+      'npm test -- --coverage'
+    ]);
+  });
+
+  test('the percentage form of the worker count is not satisfied by the cap', () => {
+    expect(
+      violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
+    ).toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
   });
 });
 

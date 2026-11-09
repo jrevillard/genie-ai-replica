@@ -15,8 +15,8 @@
  * a backend production dependency; the CI drift gate installs it at the
  * repository root, which the same resolution reaches by walking up), so the
  * module works from any working directory and with either install shape.
- * POSIX only (Linux/macOS), like the generation shell script — the route
- * glob is built with platform separators and the envelope is POSIX-only.
+ * POSIX only (Linux/macOS), like the generation shell script — the env -i
+ * envelope cannot run on Windows, and the module is untested there.
  */
 
 const assert = require('assert');

@@ -304,7 +304,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
   it('malformed success body: degrades to the legacy default instead of throwing', async () => {
     // A vacuous mode (empty string passes a typeof check) is as garbled as
     // an unexpected body — the deployment posture must never be an empty
-    // label, on success or in the last-known-good copy.
+    // label on a response the caller sees.
     axios.get
       .mockReturnValueOnce(okfGetResponse({ unexpected: true }))
       .mockReturnValueOnce(okfGetResponse({ ...HYBRID_CONFIG, config: { mode: '' }, engaged: true }));

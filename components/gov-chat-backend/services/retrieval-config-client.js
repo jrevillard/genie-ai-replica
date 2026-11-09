@@ -208,12 +208,14 @@ function effectiveScopesKey(bearerHeader) {
   // delimiter join would collide the single literal scope "a|b" with the
   // two-scope set {a, b} — the scope grammar is not delimiter-free, so a
   // collided pair would share one cache entry and one per-caller payload.
-  return JSON.stringify((isSuperAdmin ? ['@superadmin'] : []).concat(scopes));
+  // The admin flag is a named field, never a member of the scope list —
+  // the encoding must not depend on what a scope string can be.
+  return JSON.stringify({ admin: isSuperAdmin, scopes });
 }
 
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
 
-const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value } | { window, throw }
+const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value }
 let _lastGoodConfig = null; // deployment-global posture from the last good retrieval-config (mode only)
 
 function currentWindow() {
@@ -289,9 +291,10 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
  * serving_repo_ids, serving_graphs, engaged, warnings} — the response verbatim
  * from the okf-server (the `engaged` flag is the AUTHORITATIVE engagement
  * signal; this client never re-computes the gate). On a 5xx/network failure:
- * last-known-good, else the legacy default. On 403: the legacy default (the
- * caller holds no okf read scope → empty per-caller serving view by
- * construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
+ * the fail-closed composition carrying the last-known mode (source
+ * 'bff-last-known-good'), else the legacy default. On 403: the legacy
+ * default (the caller holds no okf read scope → empty per-caller serving
+ * view by construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
  */
 async function getRetrievalConfig(bearerHeader, opts = {}) {
   if (!OKF_ENABLED) return legacyDefaultConfig();
@@ -312,12 +315,16 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           typeof raw.engaged === 'boolean'
         ) {
           // The last-known-good copy is served to ANY caller on upstream
-          // failure, so it carries ONLY the deployment-global posture
-          // (the mode). Everything else in the response — engaged,
-          // serving_graph_count, serving_repo_ids, serving_graphs,
-          // warnings, config.updated_by — is computed BY the okf-server
-          // FROM this caller's scopes; carrying it in the shared copy
-          // would hand one caller's serving view to another on an outage.
+          // failure, so it carries only what the BFF consumes of the
+          // deployment-global posture: the mode. Everything scope-derived
+          // in the response (engaged, serving_graph_count, serving_repo_ids,
+          // serving_graphs, warnings, config.updated_by) is computed BY the
+          // okf-server FROM this caller's scopes — carrying it in the shared
+          // copy would hand one caller's serving view to another on an
+          // outage. Other global fields (revision, tuning caps) are simply
+          // unconsumed here and stay out of the copy until a consumer needs
+          // them — a field carried here must survive being served to every
+          // caller, so it joins the copy together with its consumer.
           _lastGoodConfig = { config: { mode: raw.config.mode } };
           return raw;
         }

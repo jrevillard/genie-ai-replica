@@ -197,8 +197,10 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const degraded = await client.getRetrievalConfig(makeBearer([], [], 'caller-b'));
 
     // The mode is deployment-global (shared posture is legitimate) — but
-    // caller-b's serving view is its own fail-closed one, never caller-a's.
+    // caller-b's serving view is its own fail-closed one, never caller-a's,
+    // and the source label names the local composition, not the upstream.
     expect(degraded.config.mode).toBe('hybrid');
+    expect(degraded.source).toBe('bff-last-known-good');
     expect(degraded.engaged).toBe(false);
     expect(degraded.serving_repo_ids).toEqual([]);
     expect(degraded.serving_graphs).toEqual([]);
@@ -472,7 +474,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
       process.env.OKF_ENABLED = '0';
       try {
         // The flag is read once at module load — reload the client under the
-        // parked env (beforeEach already loaded it with the flag unset) and
+        // parked env (beforeEach loaded it with the flag ENABLED) and
         // bind the axios mock of the SAME registry generation for the assertion.
         jest.resetModules();
         const parked = require('../services/retrieval-config-client');

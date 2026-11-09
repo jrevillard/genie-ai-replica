@@ -89,7 +89,7 @@ try:
     docling_converter = DocumentConverter(format_options=format_options)
 
 except ImportError:
-    print("Please install docling and its dependencies: pip install docling easyocr")
+    logger.error("Please install docling and its dependencies: pip install docling easyocr")
     raise
 
 
@@ -168,7 +168,7 @@ async def docling_document_loader(doc_path):
     if doc_path.endswith(supported_extensions):
         return await load_with_docling(doc_path)
     else:
-        print(f"File type {doc_path} not supported by Docling")
+        logger.warning(f"File type {doc_path} not supported by Docling")
 
 
 def genieai_process_page(doc, idx):

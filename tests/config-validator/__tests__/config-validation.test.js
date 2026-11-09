@@ -3713,18 +3713,17 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     'config:validate'
   ]);
 
-  // The non-exempt jest commands of the given shell blocks — the same
-  // matcher, split, and flag check the real CI file goes through below.
-  const toInvocations = (blocks) =>
-    blocks
-      .filter((b) => !EXEMPT_JOBS.has(b.owner))
-      .flatMap((b) =>
-        b.text
-          .replace(JOIN_CONTINUATIONS, ' ')
-          .split(COMMAND_SPLIT)
-          .filter((cmd) => JEST_INVOCATION.test(cmd))
-          .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
-      );
+  // The jest commands of the given shell blocks — the same matcher, split,
+  // and flag check the real CI file goes through below.
+  const invocationsOf = (blocks) =>
+    blocks.flatMap((b) =>
+      b.text
+        .replace(JOIN_CONTINUATIONS, ' ')
+        .split(COMMAND_SPLIT)
+        .filter((cmd) => JEST_INVOCATION.test(cmd))
+        .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
+    );
+  const toInvocations = (blocks) => invocationsOf(blocks).filter((inv) => !EXEMPT_JOBS.has(inv.owner));
   const toViolations = (invocations) =>
     invocations.filter((inv) => !FLAG_MAX_WORKERS.test(inv.cmd) || !FLAG_IDLE_LIMIT.test(inv.cmd));
   // One script-item text through the same pipeline, for the pins below.
@@ -3742,6 +3741,31 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(invocations.length).toBeGreaterThanOrEqual(4);
 
     expect(toViolations(invocations).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
+  });
+
+  test('the exempt jobs invoke jest exactly as their exemption reasons state', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+
+    // The exemptions above justify a fixed invocation set (one single-file
+    // jest run; the validator harness and the new-config suite). The pin
+    // makes that justification load-bearing: widening an exempt job's
+    // jest scope — a second test file, an extra uncapped suite — changes
+    // this set and fails here, forcing a conscious re-decision.
+    const exemptCmds = invocationsOf(blocks)
+      .filter((inv) => EXEMPT_JOBS.has(inv.owner))
+      .map((inv) => inv.cmd)
+      .sort();
+    expect(exemptCmds).toEqual(
+      [
+        // test:backend-arango: the single husk-report integration file.
+        'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json',
+        // config:validate: the validator harness, the new-config suite.
+        'npm test',
+        'npm run test:ci'
+      ].sort()
+    );
   });
 
   // Pins for the matcher's boundary decisions — no jest invocation in the

@@ -3681,7 +3681,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // package.json), excluded by exact name; their colon-family siblings
   // (test:e2e:<suffix>) follow that exclusion, while dash-suffixed and
   // any other unknown variant over-triggers and forces a conscious
-  // decision rather than silently escaping the class.
+  // decision rather than silently escaping the class. The exclusion
+  // assumes only the root package defines Playwright test:e2e* scripts
+  // (#1674 tracks the pin for that assumption).
   const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
   // Shell line continuations (`\` + newline) join first, so one continued
   // invocation is one command.
@@ -3691,7 +3693,7 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // separator — this is a heuristic guard on the job scripts'
   // one-command-per-item house shape, not a shell parser. Each command is
   // checked on its own, so a capped invocation chained with an uncapped
-  // one still fails.
+  // one across those separators still fails.
   const COMMAND_SPLIT = /\s*(?:\n|&&|\|\||;)\s*/;
   // Flag presence with a value boundary: `--maxWorkers=2` must not be
   // satisfied by `--maxWorkers=20` (a raised worker count re-enters the

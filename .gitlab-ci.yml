@@ -177,6 +177,8 @@ workflow:
 .test_node:
   extends: .node_base
   stage: test
+  # No cache (#1528): npm ci deletes node_modules before installing, so a
+  # restored tree is never read — same reasoning as .lint_component (#1413).
   variables:
     NODE_ENV: test
   artifacts:
@@ -3385,8 +3387,6 @@ test:backend:
     # --maxWorkers=2 alone left the per-worker heap growth unbounded.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  # No cache (#1528): npm ci deletes node_modules before installing, so a
-  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/gov-chat-backend/reports/jest-backend.xml
@@ -3485,8 +3485,6 @@ test:frontend:
     # worker whose heap crosses the cap, keeping the job inside the limit.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  # No cache (#1528): npm ci deletes node_modules before installing, so a
-  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/gov-chat-frontend/reports/jest-frontend.xml
@@ -3512,8 +3510,6 @@ test:doc-repo:
     # cap is in #1412.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  # No cache (#1528): npm ci deletes node_modules before installing, so a
-  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/document-repository/reports/jest-docrepo.xml
@@ -3545,8 +3541,6 @@ test:okf-server:
     # Same worker-memory cap as test:frontend — see its note there (#1404).
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
-  # No cache (#1528): npm ci deletes node_modules before installing, so a
-  # restored tree is never read — same reasoning as .lint_component (#1413).
   artifacts:
     reports:
       junit: components/okf-server/reports/jest-okf-server.xml

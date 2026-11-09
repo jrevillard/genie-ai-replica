@@ -101,7 +101,7 @@ async function stampSources(repoId, fileIds, metaByKey) {
     try {
       // The import pre-flight already read every file's metadata — reuse the
       // carried result; the GET remains for callers without a cache.
-      const f = (metaByKey && metaByKey.get(file_id)) || (await fetchDocMeta(file_id));
+      const f = (metaByKey && metaByKey[file_id]) || (await fetchDocMeta(file_id));
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -598,7 +598,7 @@ async function runDocumentsConversion(job) {
       };
       try {
         // The pre-flight metadata rides on the job — no second GET here.
-        const f = (job.source_metas && job.source_metas.get(file_id)) || (await fetchDocMeta(file_id));
+        const f = (job.source_metas && job.source_metas[file_id]) || (await fetchDocMeta(file_id));
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;
@@ -899,15 +899,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // ONE metadata fetch per file: this pre-flight read is the import's single
   // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
   // the conversion (job.source_metas).
-  const metaByKey = new Map();
+  const metaByKey = {};
   for (const file_id of file_ids) {
     let meta;
     try {
-      const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
-        timeout: 10000
-      });
-      meta = docRepoFileOf(res);
-      metaByKey.set(file_id, meta);
+      meta = await fetchDocMeta(file_id);
+      metaByKey[file_id] = meta;
     } catch (err) {
       throw Object.assign(
         new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),

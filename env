@@ -856,11 +856,20 @@ KEYCLOAK_URL=https://localhost/auth
 #                           Default: unset. Used by: document-repository middleware
 #                           + okf-server (shared verifier). Compose: yes.
 #                           Ansible: yes.
+#   KEYCLOAK_EXPECTED_ISSUER — strict issuer pin (the LITERAL full issuer URL).
+#                           When set, the shared verifier accepts ONLY tokens
+#                           with this iss — the discovery issuer and the
+#                           PUBLIC_URL/BROWSER_ISSUER aliases are ignored
+#                           (the JWKS fetch host override still applies).
+#                           Default: unset. Used by: every consumer of the
+#                           shared verifier (backend, document-repository,
+#                           okf-server). Not wired in compose/ansible — set it
+#                           in the environment explicitly when needed.
 # Cloud/Swarm deployments where the public URL resolves internally: leave all unset.
 # KEYCLOAK_PUBLIC_URL=https://localhost/auth
 # KEYCLOAK_INTERNAL_URL=http://keycloak:8080
 # KEYCLOAK_JWKS_URL=http://keycloak:8080
-# KEYCLOAK_BROWSER_ISSUER=https://localhost/auth
+# KEYCLOAK_BROWSER_ISSUER=https://localhost/auth/realms/genie
 
 # OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make
 # the okf-server reject tokens whose aud does not include it (requires the realm

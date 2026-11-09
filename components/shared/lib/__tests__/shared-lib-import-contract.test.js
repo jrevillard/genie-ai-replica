@@ -18,6 +18,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// The shared verifier (keycloak-auth-service) requires `jose` — an ESM-only
+// package the jest runtime cannot require. The scan below LOADS every shared
+// module it checks (to inspect real exported member names), so stub `jose`
+// here; the stub never executes verifier logic, it only lets the module load.
+jest.mock('jose', () => ({ jwtVerify: jest.fn(), createRemoteJWKSet: jest.fn() }));
+
 const COMPONENTS = path.resolve(__dirname, '..', '..', '..');
 const SHARED_LIB = path.join(COMPONENTS, 'shared', 'lib');
 const SCANNED = ['gov-chat-backend', 'document-repository'];

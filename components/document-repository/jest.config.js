@@ -45,6 +45,12 @@ module.exports = {
     // `dbService`, so a mocked `createGeniePropagator` would be `undefined`
     // and this component would fail to boot exactly the way the backend did.
     '^\\.\\./shared-lib/(tracing-background|tracing-baggage|pii-span-processor)$': '<rootDir>/../shared/lib/$1.js',
+    // The auth middleware's verification core is the REAL shared verifier
+    // (DW-427): suites stand in for it at the module boundary
+    // (jest.mock('../../shared-lib/keycloak-auth-service')), so it must
+    // resolve to the real file here — the catch-all mock barrel below has no
+    // verifyToken and a middleware bound to it would 500 on first request.
+    '^\\.\\./\\.\\./shared-lib/keycloak-auth-service$': '<rootDir>/../shared/lib/keycloak-auth-service.js',
     // Everything else in shared-lib still goes to the mock barrel, so require
     // chains inside src/ never touch the real filesystem path (which Docker
     // drops /lib/ from) and the existing suites keep their stubs.

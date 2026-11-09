@@ -75,8 +75,12 @@ describe('keycloakAuthService', () => {
 
       expect(result).toBeDefined();
       expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
-      // Discovery was called lazily
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/realms/genie/.well-known/openid-configuration');
+      // Discovery was called lazily (with the AbortController signal the
+      // discovery-timeout guard passes)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/realms/genie/.well-known/openid-configuration',
+        expect.objectContaining({ signal: expect.anything() })
+      );
       expect(mockJwtVerify).toHaveBeenCalledWith(
         token,
         expect.any(Function),

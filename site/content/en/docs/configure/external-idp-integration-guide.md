@@ -470,7 +470,7 @@ This is **expected** for IdP-only users — Keycloak does not grant a default re
 
 ### User signed in but the JWT is rejected by the backend (`401 TOKEN_INVALID`)
 
-- The IdP's clock and Keycloak's clock may be skewed. The backend's JWT verifier (`components/gov-chat-backend/services/keycloak-auth-service.js`) calls `jose.jwtVerify` **without a `clockTolerance`** — the jose default is `0` seconds, so even small skew produces an `iAT` / `nBF` / `exp` rejection. Check NTP sync on the gateway node and on the IdP host.
+- The IdP's clock and Keycloak's clock may be skewed. The backend's JWT verifier (`components/shared/lib/keycloak-auth-service.js`, the shared copy the backend re-exports) calls `jose.jwtVerify` **without a `clockTolerance`** — the jose default is `0` seconds, so even small skew produces an `iAT` / `nBF` / `exp` rejection. Check NTP sync on the gateway node and on the IdP host.
 - Keycloak may have rotated its signing keys. The backend caches the JWKS for 5 minutes (`JWKS_CACHE_TTL` in `keycloak-auth-service.js`); wait one cache cycle, or restart the backend (`docker service update --force genieai_backend`) to force an immediate re-fetch from `<issuer>/protocol/openid-connect/certs`.
 - The IdP token's signature algorithm may not be supported by Keycloak. Keycloak's default is `RS256`. Change the realm's token signature algorithm under **Realm settings → Tokens → Access token signature algorithm** in the admin console.
 

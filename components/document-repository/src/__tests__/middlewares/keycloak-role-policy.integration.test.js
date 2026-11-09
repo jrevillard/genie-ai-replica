@@ -1,12 +1,13 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // The auth-claims boundary for the service roles, driven through the REAL
-// keycloak-auth-middleware — only jose's JWT verification is stubbed; mapRole,
-// authorizeRole and the rolePolicy lists are the code under test. Every other
-// suite in the component mocks the whole middleware, which left the verbatim
-// service-role mappings (okf-service, tools-admin) untested anywhere: the
-// exact failure mode where mapRole falls through to the roles[0]-derived
-// 'Default-roles-genie' scalar and every grant dies for real tokens.
+// keycloak-auth-middleware — only the shared verifier's verifyToken is
+// stubbed; mapRole, authorizeRole and the rolePolicy lists are the code under
+// test. Every other suite in the component mocks the whole middleware, which
+// left the verbatim service-role mappings (okf-service, tools-admin)
+// untested anywhere: the exact failure mode where mapRole falls through to
+// the roles[0]-derived 'Default-roles-genie' scalar and every grant dies for
+// real tokens.
 
 'use strict';
 
@@ -20,16 +21,11 @@ jest.mock(
   { virtual: true }
 );
 
-// The claims the stubbed jwtVerify hands back — each test swaps them.
+// The claims the shared verifier hands back — each test swaps them.
 const mockClaimsHolder = { current: null };
-jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn(() => ({ stub: 'jwks' })),
-  jwtVerify: jest.fn(async () => ({ payload: mockClaimsHolder.current }))
+jest.mock('../../shared-lib/keycloak-auth-service', () => ({
+  verifyToken: jest.fn(async () => ({ payload: mockClaimsHolder.current }))
 }));
-
-// The middleware derives the JWKS/issuer URLs from these at first use.
-process.env.KEYCLOAK_URL = 'http://keycloak:8080';
-process.env.KC_REALM = 'genie';
 
 jest.mock('../../services/fileService', () => ({
   uploadFile: jest.fn(),

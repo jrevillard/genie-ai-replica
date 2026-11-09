@@ -245,20 +245,18 @@ describe('Security Middleware Tests', () => {
   });
 
   describe('Authentication middleware rejects unauthenticated requests', () => {
-    // Reset modules so keycloak-auth-middleware is re-required fresh
+    // Reset modules so keycloak-auth-middleware is re-required fresh. The
+    // verification core is the shared OIDC verifier — stubbed here at the
+    // module boundary (the jose-level behavior is pinned in the verifier's
+    // own suites).
+    let mockVerifyToken;
+
     beforeEach(() => {
       jest.resetModules();
+      mockVerifyToken = jest.fn();
 
-      jest.mock('jose', () => ({
-        createRemoteJWKSet: jest.fn(),
-        jwtVerify: jest.fn()
-      }));
-
-      jest.mock('../../config/appConfig', () => ({
-        security: {
-          keycloakUrl: 'https://localhost/auth',
-          keycloakRealm: 'genie'
-        }
+      jest.mock('../../shared-lib/keycloak-auth-service', () => ({
+        verifyToken: (...args) => mockVerifyToken(...args)
       }));
 
       jest.mock(
@@ -298,9 +296,7 @@ describe('Security Middleware Tests', () => {
     });
 
     it('should return 401 when JWT signature is invalid', async () => {
-      const jose = require('jose');
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockRejectedValue(new Error('Invalid signature'));
+      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token verification failed' });
 
       const { authenticateToken } = require('../../middlewares/keycloak-auth-middleware');
 
@@ -315,11 +311,7 @@ describe('Security Middleware Tests', () => {
     });
 
     it('should return 401 for expired tokens', async () => {
-      const jose = require('jose');
-      jose.createRemoteJWKSet.mockReturnValue({});
-      const expiredError = new Error('JWT expired');
-      expiredError.name = 'JWTExpired';
-      jose.jwtVerify.mockRejectedValue(expiredError);
+      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_EXPIRED', message: 'Token has expired' });
 
       const { authenticateToken } = require('../../middlewares/keycloak-auth-middleware');
 

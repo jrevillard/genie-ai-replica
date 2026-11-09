@@ -668,17 +668,19 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       // The tile's own Material: the ListTile paints its background and
       // ink on the nearest Material ancestor, and the decorated Container
       // between them would hide both (the framework's ListTile warning).
-      // The radius keeps the newly visible ink clipped to the tile's
-      // rounded decoration.
       child: Material(
         type: MaterialType.transparency,
-        borderRadius: BorderRadius.circular(DsRadii.md),
         child: ListTile(
           // Test handle keyed by the panel's own selection identity
           // (category key + original child index — the same key space
           // _selectedNodes tracks), so a test can drive one row without
           // reaching for its label text.
           key: Key('svc_${catKey}_$index'),
+          // The ink follows the row's rounded decoration instead of
+          // painting a square-cornered highlight past it.
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.md),
+          ),
           dense: true,
           contentPadding: const EdgeInsets.only(left: 48, right: DsSpacing.md),
           visualDensity: const VisualDensity(vertical: -2),

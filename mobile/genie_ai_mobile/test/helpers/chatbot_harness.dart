@@ -172,14 +172,13 @@ Widget testAppShell(
 /// shares: the mocked APIs, and the app shell above.
 ///
 /// [buildHome] replaces the default screen — a test that mounts its own
-/// widgets around the chatbot (a service tree panel above it) passes
-/// them here. It receives the chatbot WIDGET to mount — the
-/// constructor's arguments stay in [chatBotUnderTest], and a builder
-/// that wants the chatbot under test mounts THIS widget, not a second
-/// copy. It is a
-/// BUILDER, not a widget: the harness rebuilds the
-/// screen on every locale change, and a widget instance reused across
-/// rebuilds is not rebuilt at all.
+/// widgets around the chatbot (a service tree panel above it) passes a
+/// builder here, and that builder mounts the WIDGET [chatBotUnderTest]
+/// produces (the chatbot's constructor arguments live there, so a test
+/// mounts that widget, not a second copy of it). The parameter is a
+/// BUILDER, not a widget: the harness rebuilds the screen on every
+/// locale change, and a widget instance reused across rebuilds is not
+/// rebuilt at all.
 Future<void> pumpChatBot(
   WidgetTester tester,
   http.BaseClient mock, {

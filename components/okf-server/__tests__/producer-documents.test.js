@@ -353,6 +353,28 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
   });
 
+  it('fetches each source file metadata ONCE — the pre-flight read feeds stamp + conversion', async () => {
+    // The import pipeline reads a file's metadata at THREE points (pre-flight
+    // verification, source stamping, conversion) but doc-repo serves it from
+    // ONE GET — the pre-flight response is carried through the later stages.
+    mockDocs({ f1: 'alpha.md', f2: 'beta.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1', 'f2'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const metaGets = authedAxios.get.mock.calls.filter((c) => !String(c[0]).endsWith('/download'));
+    const downloads = authedAxios.get.mock.calls.filter((c) => String(c[0]).endsWith('/download'));
+    const stamps = authedAxios.patch.mock.calls.filter((c) => String(c[0]).includes('/api/files/'));
+    expect(metaGets).toHaveLength(2); // ONE per file — a re-fetch per stage regresses this to 6
+    expect(downloads).toHaveLength(2); // the content transfer itself
+    expect(stamps).toHaveLength(2); // okf_repo_id still stamped on every file
+  });
+
   it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
     // The gate is closed (no VLLM_ENDPOINT): the topics leg degrades. The
     // import still lands, but the operator must SEE it — the conversion

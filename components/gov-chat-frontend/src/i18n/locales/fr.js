@@ -1610,6 +1610,23 @@ export default {
       openRepo: 'Ouvrir le référentiel',
       unknownVersion: 'version inconnue'
     },
+    debt: {
+      title: 'Dette de conformité',
+      loading: 'Lecture…',
+      repoCount: '{n} dépôt(s) avec concepts',
+      refresh: 'Actualiser',
+      empty: 'Aucun concept dans les dépôts que vous pouvez lire — rien à devoir.',
+      readFailed: 'Impossible de lire la dette de conformité.',
+      truncated: 'Le catalogue de dépôts dépasse une page — les entrées au-delà ne sont pas affichées.',
+      col: {
+        repo: 'Dépôt',
+        concepts: 'Concepts',
+        issues: 'Problèmes',
+        stale: 'Périmés',
+        pii: 'Signalements PII',
+        state: 'État'
+      }
+    },
     retrieval: {
       title: 'Posture de récupération',
       refresh: 'Actualiser',

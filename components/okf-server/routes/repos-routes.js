@@ -17,6 +17,12 @@ const accessCtrl = require('../controllers/access-controller');
 
 // List / Read — scope-filtered in the controller (default-deny, G3).
 router.get('/', ctrl.listRepos);
+// CROSS-REPO CONFORMANCE DEBT (#948, David's 2026-11-05 disposition — the
+// narrowed Story 10.4): ONE read-only aggregation over every repo the caller
+// can read, mirroring the per-repo /metrics semantics. NO mutations; the
+// per-repo popups stay the remediation surface. Registered BEFORE /:repo_id
+// (Express matches the param route first otherwise and shadows this path).
+router.get('/conformance-debt', ctrl.listConformanceDebt);
 router.get('/:repo_id', ctrl.getRepo);
 
 // Story 10.5 — the wizard's resumable curation draft. ALL THREE verbs live

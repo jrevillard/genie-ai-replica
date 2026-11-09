@@ -1580,6 +1580,23 @@ export default {
       openRepo: 'Jikin kakwōn aigh',
       unknownVersion: 'Locaa gynnydd'
     },
+    debt: {
+      title: 'I janfaŋ njeng',
+      loading: 'Ndeŋ…',
+      repoCount: '{n} repo(ri) nie cuŋgo',
+      refresh: 'Kurandi',
+      empty: 'I seŋ nde repo nin nie cuŋgo te — i fɔ fen ŋe.',
+      readFailed: 'I maŋ jañ i janfaŋ njeng.',
+      truncated: 'Repo karataŋ kotoŋ i ye — kumandi kotoŋ ŋe maŋ neng.',
+      col: {
+        repo: 'Repo',
+        concepts: 'Cuŋgo',
+        issues: 'Fen ŋe',
+        stale: 'Kumandi',
+        pii: 'PII ŋe',
+        state: 'Hal'
+      }
+    },
     retrieval: {
       title: 'Gbangbang njeng',
       refresh: 'Kurandi',

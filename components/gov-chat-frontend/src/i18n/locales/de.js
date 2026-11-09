@@ -1608,6 +1608,23 @@ export default {
       openRepo: 'Repository öffnen',
       unknownVersion: 'unbekannte Version'
     },
+    debt: {
+      title: 'Konformitätsrückstand',
+      loading: 'Wird gelesen…',
+      repoCount: '{n} Repository(-ies) mit Konzepten',
+      refresh: 'Aktualisieren',
+      empty: 'Keine Konzepte in einem lesbaren Repository — nichts offen.',
+      readFailed: 'Der Konformitätsrückstand konnte nicht gelesen werden.',
+      truncated: 'Der Repository-Katalog überschreitet eine Seite — Einträge darüber werden nicht angezeigt.',
+      col: {
+        repo: 'Repository',
+        concepts: 'Konzepte',
+        issues: 'Probleme',
+        stale: 'Veraltet',
+        pii: 'PII-Treffer',
+        state: 'Status'
+      }
+    },
     retrieval: {
       title: 'Abruf-Haltung',
       refresh: 'Aktualisieren',

@@ -654,6 +654,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     final tokens = ThemeManager().tokens;
 
     // Render Tile
+    // One radius for the row's decoration AND its ink shape: the ink
+    // follows the rounded decoration, so the two cannot be allowed to
+    // drift apart.
+    final BorderRadius rowRadius = BorderRadius.circular(DsRadii.md);
     return Container(
       // FIX: Added margin for better touch area and visual separation when selected
       margin: const EdgeInsets.symmetric(
@@ -663,39 +667,51 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       decoration: BoxDecoration(
         // FIX: Solid Primary color when selected (Standard Button Color)
         color: isSelected ? tokens.brand : Colors.transparent,
-        borderRadius: BorderRadius.circular(DsRadii.md),
+        borderRadius: rowRadius,
       ),
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.only(left: 48, right: DsSpacing.md),
-        visualDensity: const VisualDensity(vertical: -2),
+      // The tile's own Material: the ListTile paints its background and
+      // ink on the nearest Material ancestor, and the decorated Container
+      // between them would hide both (the framework's ListTile warning).
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          // Test handle keyed by the panel's own selection identity
+          // (category key + original child index — the same key space
+          // _selectedNodes tracks), so a test can drive one row without
+          // reaching for its label text.
+          key: Key('svc_${catKey}_$index'),
+          shape: RoundedRectangleBorder(borderRadius: rowRadius),
+          dense: true,
+          contentPadding: const EdgeInsets.only(left: 48, right: DsSpacing.md),
+          visualDensity: const VisualDensity(vertical: -2),
 
-        title: Text(
-          serviceName,
-          style: TextStyle(
-            fontSize: ThemeManager().tokens.textSm,
-            color: isSelected ? tokens.accentFg : tokens.fg,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          title: Text(
+            serviceName,
+            style: TextStyle(
+              fontSize: ThemeManager().tokens.textSm,
+              color: isSelected ? tokens.accentFg : tokens.fg,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
+
+          subtitle: isSearchMatch
+              ? Text(
+                  tr("sidebar.matchFound"),
+                  style: TextStyle(
+                    fontSize: ThemeManager().tokens.textXs,
+                    color: isSelected ? tokens.fg70 : tokens.muted,
+                  ),
+                )
+              : null,
+
+          trailing: isSelected
+              ? Icon(Icons.check_circle, size: 16, color: tokens.accentFg)
+              : null,
+
+          // Tap Handler - Passes the raw serviceItem AND catKey to logic
+          onTap: () =>
+              _toggleChildSelection(category, serviceItem, index, catKey),
         ),
-
-        subtitle: isSearchMatch
-            ? Text(
-                tr("sidebar.matchFound"),
-                style: TextStyle(
-                  fontSize: ThemeManager().tokens.textXs,
-                  color: isSelected ? tokens.fg70 : tokens.muted,
-                ),
-              )
-            : null,
-
-        trailing: isSelected
-            ? Icon(Icons.check_circle, size: 16, color: tokens.accentFg)
-            : null,
-
-        // Tap Handler - Passes the raw serviceItem AND catKey to logic
-        onTap: () =>
-            _toggleChildSelection(category, serviceItem, index, catKey),
       ),
     );
   }

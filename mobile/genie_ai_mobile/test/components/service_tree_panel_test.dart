@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import '../helpers/chatbot_harness.dart';
 import '../helpers/theme_helper.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
@@ -341,6 +343,43 @@ void main() {
     // BOTH rows are picked: the same key under another category is
     // another scope.
     expect(emitted!['serviceCount'], 2);
+  });
+
+  testWidgets('a service row carries its rounded ink shape', (tester) async {
+    // The row's ink follows its rounded decoration: the tile carries the
+    // shape the InkWell paints its highlight through, ON the row's own
+    // transparency Material (without it the ink would paint on the
+    // Scaffold's Material, behind the decorated Container — invisible
+    // again). Both halves are structure; the visible result itself is a
+    // device check, outside what a widget test can see.
+    resetThemeManager();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: apiOverrides(_MockClient(jsonEncode(tree))),
+        child: MaterialApp(
+          home: Scaffold(body: ServiceTreePanel(onSelectionChange: (s) {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Estado civil'));
+    await tester.pumpAndSettle();
+
+    final rowTile = find.byKey(const Key('svc_2_0'));
+    expect(
+      tester.widget<ListTile>(rowTile).shape,
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.md)),
+    );
+    // The NEAREST Material above the tile is the row's own transparency
+    // wrapper — the ancestor the ink paints on.
+    final nearestMaterial = find
+        .ancestor(of: rowTile, matching: find.byType(Material))
+        .first;
+    expect(
+      tester.widget<Material>(nearestMaterial).type,
+      MaterialType.transparency,
+    );
   });
 }
 

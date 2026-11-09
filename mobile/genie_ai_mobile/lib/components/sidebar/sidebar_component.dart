@@ -292,6 +292,7 @@ class _SidebarComponentState extends State<SidebarComponent>
               // ADDED: GestureDetector to capture taps on the transparent header area
               // This allows the user to close the drawer by tapping the "visible" navbar
               GestureDetector(
+                key: const Key('sidebar_close_strip'),
                 onTap: () {
                   // Standard way to close a Drawer
                   Navigator.of(context).pop();

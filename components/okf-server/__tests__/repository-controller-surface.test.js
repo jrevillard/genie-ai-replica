@@ -635,6 +635,23 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     );
   });
 
+  it('convertFromCrawl: an absent name keeps requested_name null — the index title keeps its readable default (#1190)', async () => {
+    // Round-2 regression pin: the controller derives the repo name for
+    // targeting, but the conversion job's requested_name stays null when the
+    // caller sent no name — crawl-conversion renders the readable
+    // 'Crawled knowledge base' index title from that null, not the slug.
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B' } });
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'crawled-repository' }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: null })
+    );
+  });
+
   it('convertFromCrawl: a non-string name falls back to the default, never String() coercion (#1190)', async () => {
     repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
     await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: {} } });

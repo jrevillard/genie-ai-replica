@@ -315,7 +315,7 @@ async function convertFromCrawl(req, res, next) {
       { ...body, name: requestedName },
       authzForService(req),
       actor,
-      'crawled-repository'
+      requestedName
     );
     if (target.failure) return res.status(target.failure.status).json(target.failure.payload);
     const repo = target.repo;
@@ -325,7 +325,10 @@ async function convertFromCrawl(req, res, next) {
       url: body.url || null,
       crawl_job_id: body.crawl_job_id || null,
       split_mode: body.split_mode,
-      requested_name: requestedName,
+      // The job record keeps the CALLER's intent: null when no name was sent,
+      // so the index concept keeps its readable default title instead of the
+      // slug (round-2 pin).
+      requested_name: typeof body.name === 'string' && body.name ? requestedName : null,
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });

@@ -27,8 +27,11 @@ import serviceTreeService from './serviceTreeService';
 import matter from 'gray-matter';
 
 /** Slug for new concept paths: a client-side mirror of the okf-server base
- * slug grammar (issue #1190 SSOT) for locally-minted concept paths. The
- * 80-char cap is a LOCAL choice — the server's ingest grammar is uncapped. */
+ * slug grammar (issue #1190 SSOT) for locally-minted concept paths. Two
+ * LOCAL divergences from the server's ingest grammar, both deliberate:
+ * the 80-char cap (ingest is uncapped) and no NFKD fold ('Café' stays
+ * 'caf' here, 'cafe' server-side) — identity-visible across creation
+ * venues; relocation to shared/lib is tracked in #1692. */
 export function slugifyConcept(input) {
   if (!input) return 'concept';
   return (

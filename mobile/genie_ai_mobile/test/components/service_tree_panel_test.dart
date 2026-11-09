@@ -344,9 +344,7 @@ void main() {
     expect(emitted!['serviceCount'], 2);
   });
 
-  testWidgets('a service row carries its rounded ink shape', (
-    tester,
-  ) async {
+  testWidgets('a service row carries its rounded ink shape', (tester) async {
     // The row's ink follows its rounded decoration: the tile carries the
     // shape the InkWell paints its highlight through (the structural half
     // of the ink behaviour — the visible result itself is a device check,

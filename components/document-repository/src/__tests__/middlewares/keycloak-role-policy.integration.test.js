@@ -26,7 +26,11 @@ jest.mock(
 // `{ payload }` wrapper (that is jose's shape, one layer down).
 const mockClaimsHolder = { current: null };
 jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-  verifyToken: jest.fn(async () => mockClaimsHolder.current)
+  verifyToken: jest.fn(async () => mockClaimsHolder.current),
+  // The middleware's DIAG failure path reads this — carried for parity with
+  // the other verifier-boundary mocks so a future rejection test here cannot
+  // crash inside the catch block.
+  getConfiguredIssuers: () => ['http://keycloak:8080/realms/genie']
 }));
 
 jest.mock('../../services/fileService', () => ({

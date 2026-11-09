@@ -174,6 +174,22 @@ test('DW-434: matching-aud token with opts.audience verifies', async () => {
   assert.equal(payload.aud, 'genie-app');
 });
 
+test('DW-434: a STALE alg-confusion token reports TOKEN_EXPIRED (expiry outranks alg)', async () => {
+  // Reordering the two rejection branches (exp check above JOSEAlgNotAllowed)
+  // changed observable behavior for a token that is BOTH expired and
+  // alg-mismatched — this test is the mutation gate for that order.
+  const svc = loadVerifier();
+  const claims = baseClaims(DISCOVERY_ISSUER);
+  claims.exp = Math.floor(Date.now() / 1000) - 10;
+  const staleHsToken = await new SignJWT(claims)
+    .setProtectedHeader({ alg: 'HS256' })
+    .sign(Buffer.from('attacker-controlled-secret'));
+  await assert.rejects(
+    () => svc.verifyToken(staleHsToken),
+    (err) => err.code === 'TOKEN_EXPIRED'
+  );
+});
+
 test('DW-434: HS256 alg-confusion token is rejected through the real path', async () => {
   const svc = loadVerifier();
   const hsToken = await new SignJWT(baseClaims(DISCOVERY_ISSUER))

@@ -24,7 +24,7 @@ import ast
 import importlib.util
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -81,8 +81,15 @@ async def test_unsupported_file_type_is_reported_as_a_warning():
     assert "not supported by Docling" in fake_logger.warning.call_args.args[0]
 
 
-def test_environment_dump_respects_logflag():
-    """The startup config dump is emitted only when LOGFLAG asks for it."""
+def test_environment_dump_respects_logflag(captured_spans):
+    """The startup config dump is emitted only when LOGFLAG asks for it.
+
+    The LOGFLAG gate sits INSIDE the span on purpose: the span is an owned
+    name whose emission is part of the observability contract, so it must
+    exist on every startup even when the dump itself is off. The first
+    assertion pins that — it is the only net that catches the gate drifting
+    back above the span (a logger-only assertion passes in both shapes).
+    """
     import dataprep.genieai_dataprep_arangodb as dp_module
 
     receiver = dp_module.GenieArangoDataprep.__new__(dp_module.GenieArangoDataprep)
@@ -90,6 +97,9 @@ def test_environment_dump_respects_logflag():
     with patch.object(dp_module, "logflag", False), patch.object(dp_module, "logger") as fake_logger:
         dp_module.GenieArangoDataprep._log_environment_variables(receiver)
     fake_logger.info.assert_not_called()
+    assert [span.name for span in captured_spans("dataprep.log_environment_variables")] == [
+        "dataprep.log_environment_variables"
+    ]
 
     with patch.object(dp_module, "logflag", True), patch.object(dp_module, "logger") as fake_logger:
         dp_module.GenieArangoDataprep._log_environment_variables(receiver)
@@ -97,27 +107,31 @@ def test_environment_dump_respects_logflag():
     assert "GENIE-AI DATAPREP CONFIGURATION" in fake_logger.info.call_args.args[0]
 
 
-def test_missing_docling_is_reported_before_the_import_error_propagates():
-    """A genuinely missing docling is logged at ERROR — then the ImportError still propagates.
+@pytest.mark.parametrize("missing_module", ["docling", "easyocr"])
+def test_missing_dependency_is_reported_before_the_import_error_propagates(missing_module):
+    """A missing remedy-named dependency is logged at ERROR — then the ImportError still propagates.
 
     The message is the operator's remedy ("pip install docling easyocr"),
     and it must be visible: the process dies on the re-raise, so the log
-    line is the only place the remedy appears. The docling imports sit
-    inside the module's try block so this failure is caught there — above
-    it, a missing docling would die at the top-level import before the
-    handler exists. `sys.modules["docling"] = None` makes every docling
-    import raise ImportError, which is what a missing package does.
+    line is the only place the remedy appears. The easyocr and docling
+    imports sit inside the module's try block so this failure is caught
+    there — above it, a missing package would die at the top-level import
+    before the handler exists. Nulling the module's sys.modules entries
+    makes every import of it raise ImportError, which is what a missing
+    package does.
     """
     spec = importlib.util.spec_from_file_location("genieai_dataprep_utils_under_test", UTILS_PATH)
     module = importlib.util.module_from_spec(spec)
-    # Null every docling entry the interpreter has already cached: a from-import
-    # consults sys.modules for the full name first, so nulling only the parent
-    # package would not raise.
-    missing_docling = {name: None for name in list(sys.modules) if name == "docling" or name.startswith("docling.")}
+    # Null every cached entry of the module under test: a from-import
+    # consults sys.modules for the full name first, so nulling only the
+    # parent package would not raise.
+    missing = {
+        name: None for name in list(sys.modules) if name == missing_module or name.startswith(missing_module + ".")
+    }
 
     with (
         patch("comps.CustomLogger") as mock_logger_class,
-        patch.dict(sys.modules, missing_docling),
+        patch.dict(sys.modules, missing),
         pytest.raises(ImportError),
     ):
         spec.loader.exec_module(module)
@@ -132,16 +146,21 @@ def test_utils_logger_is_wired_into_the_json_envelope():
     An unwired logger emits the OPEA bracket format, which the collector's
     plain-text severity path does not recognise — its records reach
     VictoriaLogs with severity Unspecified and never appear in the admin
-    Errors/Warnings tiles.
+    Errors/Warnings tiles. The order matters too: setup_json_logging
+    assumes the trace filter is already in place, so trace-before-json is
+    part of the contract.
     """
     spec = importlib.util.spec_from_file_location("genieai_dataprep_utils_wiring", UTILS_PATH)
     module = importlib.util.module_from_spec(spec)
+    wiring = MagicMock()
 
     with (
-        patch("tracing.setup_trace_logging") as mock_trace_wiring,
-        patch("tracing.setup_json_logging") as mock_json_wiring,
+        patch("tracing.setup_trace_logging", wiring.setup_trace_logging),
+        patch("tracing.setup_json_logging", wiring.setup_json_logging),
     ):
         spec.loader.exec_module(module)
 
-    mock_trace_wiring.assert_called_once_with("genie-ai_prepare_doc_util")
-    mock_json_wiring.assert_called_once_with("genie-ai_prepare_doc_util")
+    assert wiring.mock_calls == [
+        call.setup_trace_logging("genie-ai_prepare_doc_util"),
+        call.setup_json_logging("genie-ai_prepare_doc_util"),
+    ]

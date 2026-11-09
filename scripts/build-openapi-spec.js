@@ -15,8 +15,8 @@
  * a backend production dependency; the CI drift gate installs it at the
  * repository root, which the same resolution reaches by walking up), so the
  * module works from any working directory and with either install shape.
- * POSIX only (Linux/macOS), like the generation shell script — the env -i
- * envelope cannot run on Windows, and the module is untested there.
+ * POSIX only (Linux/macOS), like the generation shell script — the module
+ * is untested elsewhere.
  */
 
 const assert = require('assert');
@@ -73,8 +73,7 @@ if (require.main === module) {
       'usage: API_URL=<url> KEYCLOAK_URL=<url> KEYCLOAK_REALM=<realm> \\\n' +
         '  node scripts/build-openapi-spec.js <spec-output-path>\n' +
         '(the three pins are required; see the env -i envelope in' +
-        ' scripts/generate-api-client.sh; POSIX only, like the generation' +
-        ' script)'
+        ' scripts/generate-api-client.sh; POSIX only)'
     );
     process.exit(1);
   }

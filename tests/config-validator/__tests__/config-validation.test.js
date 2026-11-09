@@ -3707,9 +3707,6 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // unmatched — a rename or a scope change to either job must fail this
   // suite and force a conscious re-decision, not slip past the contract.
   const EXEMPT_JOBS = new Set([
-    // One test file: jest spawns at most one worker per test file, so the
-    // run cannot fan out to the worker count the cap exists to bound.
-    'test:backend-arango',
     // The validator harness itself (tests/config-validator) and the
     // new-config suite it runs via `npm run test:ci` — neither measured
     // into the #1404/#1412 OOM class. Capping them is a config:validate
@@ -3749,21 +3746,23 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   };
 
   test('every product-component jest invocation carries both cap flags', () => {
-    // The guard must SEE the class it protects: four capped jobs today.
+    // The guard must SEE the class it protects: five capped jobs today,
+    // test:backend-arango among them (a job deleted from the CI file
+    // would otherwise shrink this set without failing anything).
     // A silent-empty pass here would mean the extraction broke, not that
     // the pipeline is compliant.
     const invocations = toInvocations(ciBlocks());
-    expect(invocations.length).toBeGreaterThanOrEqual(4);
+    expect(invocations.length).toBeGreaterThanOrEqual(5);
 
     expect(toViolations(invocations).map((inv) => `${inv.owner} (${inv.key}): ${inv.cmd.slice(0, 80)}`)).toEqual([]);
   });
 
   test('the exempt jobs invoke jest exactly as their exemption reasons state', () => {
-    // The exemptions above justify a fixed invocation set (one single-file
-    // jest run; the validator harness and the new-config suite). The pin
-    // makes that justification load-bearing: widening an exempt job's
-    // jest scope — a second test file, an extra uncapped suite — changes
-    // this set and fails here, forcing a conscious re-decision.
+    // The exemptions above justify a fixed invocation set (the validator
+    // harness and the new-config suite). The pin makes that justification
+    // load-bearing: widening an exempt job's jest scope — an extra
+    // uncapped suite — changes this set and fails here, forcing a
+    // conscious re-decision.
     const exemptCmds = invocationsOf(ciBlocks())
       .filter((inv) => EXEMPT_JOBS.has(inv.owner))
       .map((inv) => inv.cmd)
@@ -3771,9 +3770,7 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(exemptCmds).toEqual([
       // config:validate: the validator harness, the new-config suite.
       'npm run test:ci',
-      'npm test',
-      // test:backend-arango: the single husk-report integration file.
-      'npx jest __tests__/integration/husk-report.db.test.js --json --outputFile=reports/jest-husk-arango.json'
+      'npm test'
     ]);
   });
 
@@ -3832,6 +3829,37 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(
       violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
     ).toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
+  });
+});
+
+// --- The ArangoDB integration directory's self-skip gate ---
+describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
+  // The test:backend-arango anti-skip gate counts numPassedTests across
+  // the whole integration directory: it proves an ArangoDB-backed test
+  // ran ONLY while every file in the directory skips itself when
+  // ARANGO_TEST_URL is unset. A self-running file would satisfy the
+  // count with zero database-backed tests. That property is enforced by
+  // convention in the suites, so this source pin is its only guard —
+  // the cheapest independent check that the CI gate's assumption holds.
+  // The scan is recursive (jest's testMatch picks up nested test files
+  // too) and text-level: it proves the gate LINE is present, not that
+  // every test in the file sits inside the gated describe — a file
+  // carrying the line plus a top-level test would still need the CI
+  // gate itself to catch.
+  test('every test file in __tests__/integration carries the URL gate', () => {
+    const dir = path.join(ROOT, 'components/gov-chat-backend/__tests__/integration');
+    const files = fs
+      .readdirSync(dir, { recursive: true })
+      .filter((f) => f.endsWith('.test.js'))
+      .sort();
+    expect(files.length).toBeGreaterThanOrEqual(2);
+
+    for (const file of files) {
+      const source = fs.readFileSync(path.join(dir, file), 'utf-8');
+      if (!/TEST_URL\s*\?\s*describe\s*:\s*describe\.skip/.test(source)) {
+        throw new Error(`${file} must gate itself: const describeWithDatabase = TEST_URL ? describe : describe.skip`);
+      }
+    }
   });
 });
 

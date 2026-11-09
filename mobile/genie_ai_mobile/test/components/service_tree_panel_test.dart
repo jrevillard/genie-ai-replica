@@ -344,7 +344,7 @@ void main() {
     expect(emitted!['serviceCount'], 2);
   });
 
-  testWidgets('a service row paints its ink through its rounded shape', (
+  testWidgets('a service row carries its rounded ink shape', (
     tester,
   ) async {
     // The row's ink follows its rounded decoration: the tile carries the

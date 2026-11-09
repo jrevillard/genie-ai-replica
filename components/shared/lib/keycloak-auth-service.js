@@ -133,12 +133,17 @@ async function init(idpUrl) {
   logger.info(`[KeycloakAuth] Fetching OIDC discovery from ${discoveryUrl}`);
 
   const controller = new AbortController();
-  // A non-numeric or non-positive value falls back to the default — a NaN
-  // setTimeout fires immediately, which would abort every discovery before
-  // it starts. parseInt prefix-parses ('10s' reads as 10 ms), so the value
-  // must be a bare integer.
-  const parsedTimeout = parseInt(process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000', 10);
-  const discoveryTimeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 5000;
+  // The value must be a bare positive integer — anything else falls back to
+  // the default. Two ways to get it wrong, both fatal: a NaN setTimeout
+  // fires immediately, and parseInt prefix-parses ('10s' reads as 10 ms —
+  // an instant-abort loop), so the parsed value must round-trip to the raw
+  // string to be trusted.
+  const rawTimeout = (process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000').trim();
+  const parsedTimeout = parseInt(rawTimeout, 10);
+  const discoveryTimeoutMs =
+    Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout
+      ? parsedTimeout
+      : 5000;
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
   let res;
   try {
@@ -397,6 +402,16 @@ const keycloakAuthService = {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
         }
         throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
+      }
+
+      // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
+      // alg-confusion token) is deterministic: no key rotation can make the
+      // same token verify, so it must NOT go through the force-refresh path
+      // below. The refresh path rebuilds the JWKS cache, discarding jose's
+      // internal fetch cooldown — retrying every junk alg token there would
+      // turn unauthenticated traffic into a Keycloak fetch amplifier.
+      if (err.name === 'JOSEAlgNotAllowed') {
+        throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
       }
 
       // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision

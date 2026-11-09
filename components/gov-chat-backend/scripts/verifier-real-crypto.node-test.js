@@ -292,27 +292,31 @@ test('additional realms without a pin: a partner-realm token verifies against it
   assert.equal(payload.iss, partnerIss);
 });
 
-test('non-numeric KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {
-  // A bare-integer requirement with a real failure mode: parseInt('abc') is
-  // NaN and a NaN setTimeout fires immediately — every discovery would abort
-  // at startup. The guard must fall back to the default budget, observable
-  // in the abort error message. A hanging discovery leg is the only way to
-  // make the abort (not a stub refusal) settle the fetch.
-  const svc = loadVerifier({
-    KEYCLOAK_DISCOVERY_TIMEOUT_MS: 'abc',
-    KEYCLOAK_URL: 'http://keycloak-hang:8080'
-  });
+test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {
+  // A bare-integer requirement with two real failure modes: parseInt('abc')
+  // is NaN (a NaN setTimeout fires immediately) and parseInt('10s') is 10
+  // (an instant-abort loop at 10 ms). The guard must fall back to the
+  // default budget for both — the DURATION is the discriminator, since the
+  // verifier wraps init failures and the budget is not on the public error.
+  // A hanging discovery leg is the only way to make the abort (not a stub
+  // refusal) settle the fetch.
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
-  // The verifier wraps init failures, so the original budget is not on the
-  // public error — the DURATION is the discriminator: a NaN timeout aborts
-  // instantly, the fallback must let the fetch run for the default budget.
-  const startedAt = Date.now();
-  await assert.rejects(
-    () => svc.verifyToken(token),
-    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
-  );
-  const elapsed = Date.now() - startedAt;
-  assert.ok(elapsed >= 4900, `discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`);
+  for (const badValue of ['abc', '10s']) {
+    const svc = loadVerifier({
+      KEYCLOAK_DISCOVERY_TIMEOUT_MS: badValue,
+      KEYCLOAK_URL: 'http://keycloak-hang:8080'
+    });
+    const startedAt = Date.now();
+    await assert.rejects(
+      () => svc.verifyToken(token),
+      (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+    );
+    const elapsed = Date.now() - startedAt;
+    assert.ok(
+      elapsed >= 4900,
+      `${badValue}: discovery aborted after ${elapsed}ms — the 5000ms fallback did not apply`
+    );
+  }
 });
 
 test('init failure surfaces as AUTH_SERVICE_UNAVAILABLE (doc-repo 503 contract)', async () => {

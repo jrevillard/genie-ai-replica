@@ -869,9 +869,8 @@ KEYCLOAK_URL=https://localhost/auth
 #                           discovery leg ALWAYS targets ${KEYCLOAK_URL}; the
 #                           JWKS fetch host override above does not move it —
 #                           KEYCLOAK_URL must be container-reachable). Must be
-#                           a bare integer (parseInt prefix-parses: '10s' is
-#                           read as 10 ms); non-numeric or non-positive values
-#                           fall back to the default. Default: 5000.
+#                           a bare integer — anything else ('10s', 'abc',
+#                           '0', '-5') falls back to the default. Default: 5000.
 #                           Compose: yes. Ansible: yes
 #                           (group_vars keycloak_discovery_timeout_ms).
 #                           NOTES: KEYCLOAK_JWKS_URL pins ONE certs URL — with

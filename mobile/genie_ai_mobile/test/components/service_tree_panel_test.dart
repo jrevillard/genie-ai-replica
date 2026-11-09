@@ -347,9 +347,11 @@ void main() {
 
   testWidgets('a service row carries its rounded ink shape', (tester) async {
     // The row's ink follows its rounded decoration: the tile carries the
-    // shape the InkWell paints its highlight through (the structural half
-    // of the ink behaviour — the visible result itself is a device check,
-    // outside what a widget test can see).
+    // shape the InkWell paints its highlight through, ON the row's own
+    // transparency Material (without it the ink would paint on the
+    // Scaffold's Material, behind the decorated Container — invisible
+    // again). Both halves are structure; the visible result itself is a
+    // device check, outside what a widget test can see.
     resetThemeManager();
 
     await tester.pumpWidget(
@@ -364,9 +366,19 @@ void main() {
     await tester.tap(find.text('Estado civil'));
     await tester.pumpAndSettle();
 
+    final rowTile = find.byKey(const Key('svc_2_0'));
     expect(
-      tester.widget<ListTile>(find.byKey(const Key('svc_2_0'))).shape,
+      tester.widget<ListTile>(rowTile).shape,
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.md)),
+    );
+    // The NEAREST Material above the tile is the row's own transparency
+    // wrapper — the ancestor the ink paints on.
+    final nearestMaterial = find
+        .ancestor(of: rowTile, matching: find.byType(Material))
+        .first;
+    expect(
+      tester.widget<Material>(nearestMaterial).type,
+      MaterialType.transparency,
     );
   });
 }

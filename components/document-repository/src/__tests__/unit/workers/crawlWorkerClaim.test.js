@@ -94,7 +94,10 @@ describe('crawl worker job claim', () => {
     // is closed before the file goes.
     if (claimWrite()) {
       await waitFor(
-        () => jobCollection.update.mock.calls.some((c) => c[1] && c[1].status === 'Failed'),
+        // The job leaves 'Crawling' when it is finalized — 'Succeeded',
+        // 'Failed' or 'Killed'. Any status other than 'Crawling' means the
+        // chain settled, whatever the outcome was.
+        () => jobCollection.update.mock.calls.some((c) => c[1] && c[1].status && c[1].status !== 'Crawling'),
         'the crawl job to reach its terminal status'
       );
     }

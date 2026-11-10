@@ -248,6 +248,23 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     expect(result.bundle_version).toBe(3);
   });
 
+  test('D1: a Pending zip of an import IN FLIGHT is not a stale marker — the mint does not reconcile it', async () => {
+    // The import stores its bundle zip before it parses the concepts (issue
+    // #1709), so a Pending bundle can belong to a RUNNING import. Reconciling
+    // it would report a drain that never happened — the zip's conversion
+    // record ('adding' → 'done'/'failed') is the in-flight signal.
+    seedRepo({ version: 2, conversion: { status: 'adding' } });
+    // The reconcile's Pending probe is SKIPPED, so the snapshot is the first
+    // query the mint runs.
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).not.toContain("dataprep.status == 'Pending'");
+  });
+
   test('D1: mint proceeds when no Pending files exist', async () => {
     seedRepo({ version: 2 });
     programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]); // gates [](auto) + snapshot

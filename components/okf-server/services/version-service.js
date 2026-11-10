@@ -272,11 +272,20 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // proceed. (Pre-ingest repos have no Pending zips by construction.)
     // Delegated to backingFileService.markIngested — the same flip the settle
     // path uses (same condition, same endpoint, non-fatal); one definition.
+    //
+    // A ZIP IMPORT IN FLIGHT is not that: the import stores its bundle zip
+    // before it parses the concepts (issue #1709), so a Pending bundle can
+    // belong to a running import. Reconciling it would report a drain that
+    // never happened — the zip's conversion record ('adding' → 'done'/'failed')
+    // is the in-flight signal, and it is written by the same import that
+    // stores the bundle.
+    const importInFlight = !!(repo.conversion && repo.conversion.status === 'adding');
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (
-      await drainInFlight(
+      !importInFlight &&
+      (await drainInFlight(
         `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
-      )
+      ))
     ) {
       try {
         const res = await backingFileService.markIngested(repo_id);

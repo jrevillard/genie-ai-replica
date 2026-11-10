@@ -1501,13 +1501,6 @@ services:
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
-      # The container's local time is pinned to UTC (#1710). Every timestamp
-      # this service STORES is UTC already (`new Date().toISOString()`), but
-      # the container's local clock otherwise follows the host's TZ — so a
-      # local-time rendering (a log line, `date` in a shell) can disagree
-      # with the stored stamp by exactly the host's UTC offset. UTC here
-      # makes the two agree whatever the host's zone is.
-      - TZ=UTC
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}
       # Mirrors the backend block — same operator-override path for

@@ -1284,6 +1284,26 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping
   });
 });
 
+describe("the bundle-id cache (issue #1709: the repo's CURRENT bundle doc)", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('the cache is "first answer wins" until it is invalidated', async () => {
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-1');
+    // A second bundle was stored for the repo — the resolution would now
+    // answer differently.
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-2' }] } });
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-1'); // still cached
+    expect(authedAxios.get).toHaveBeenCalledTimes(1);
+    // The invalidation is what makes the worker address the CURRENT bundle:
+    // without it the drain's verdicts and the bundle state machine keep
+    // hitting the FIRST bundle the repo ever had.
+    worker.invalidateBundleFileCache(REPO);
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
+    expect(authedAxios.get).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('ingestWorker.start (bootstrap guard)', () => {
   afterEach(() => worker.stop());
 

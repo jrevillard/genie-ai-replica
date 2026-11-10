@@ -36,6 +36,10 @@ const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
+// The worker's bundle-id cache points at the repo's CURRENT bundle doc; a new
+// bundle zip invalidates it (the worker mirrors the drain's verdicts into that
+// doc and drives its Pending -> Ingesting -> Ingested state machine).
+const { invalidateBundleFileCache } = require('../workers/ingestWorker');
 
 // !1081 — 200 was wrong for almost every real deployment. It is checked AFTER
 // the document-ceiling split, so the operator's "how many documents did I pick"
@@ -866,6 +870,10 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       summary.bundle_stored = bundleFileName;
       bundleDocFileId = bres.data && bres.data.file_id;
       summary.bundle_file_id = bundleDocFileId;
+      // The repo's CURRENT bundle is the one just stored — drop the worker's
+      // cached id for it so the drain mirrors into this bundle and drives
+      // THIS bundle's state machine, not the previous import's.
+      invalidateBundleFileCache(repo_id);
       logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: bundleDocFileId });
     } catch (err) {
       summary.bundle_storage_error = err.message;

@@ -799,7 +799,22 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // ZIP's file_id, with the concept_id embedded in the message — the UI's
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
-const _bundleFileCache = new Map(); // repo_id -> bundle file_id (one bundle per repo)
+const _bundleFileCache = new Map(); // repo_id -> bundle file_id (the repo's CURRENT bundle)
+
+/**
+ * Drop the cached bundle id of a repo — its bundle doc changed (a new zip was
+ * stored for it).
+ *
+ * The cache is a "first answer wins" one: without this, the FIRST bundle a
+ * repo ever had stays cached for the life of the process, so after a re-import
+ * the worker's own ingestion-log mirror and the bundle state machine keep
+ * addressing the stale doc — the current bundle never leaves 'Pending' and
+ * its Ingestion Log never receives the drain's verdicts (issue #1709).
+ */
+function invalidateBundleFileCache(repoId) {
+  _bundleFileCache.delete(repoId);
+}
+
 async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
@@ -1847,6 +1862,7 @@ module.exports = {
   _unclaimAttempt,
   claimNextJob,
   getBundleFileId,
+  invalidateBundleFileCache,
   jobWindowMs,
   reapGraceMs
 };

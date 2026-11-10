@@ -52,12 +52,25 @@ const SHAPES = [
   {
     marker: ' copy',
     glob: '**/* copy*',
-    samples: ['docs/readme copy', 'docs/readme copy.md', 'docs/readme copy 2', 'docs/readme copy 2.tar.gz']
+    samples: [
+      'docs/readme copy',
+      'docs/readme copy.md',
+      'docs/readme copy 2',
+      'docs/readme copy 2.tar.gz',
+      'docs/readme copy (2)',
+      'docs/readme copy (3).tar.gz'
+    ]
   },
   {
     marker: 'copy)',
     glob: '**/*copy)*',
-    samples: ['docs/readme (copy)', 'docs/readme (copy).md', 'docs/readme (another copy)', 'docs/readme (copy) (2)']
+    samples: [
+      'docs/readme (copy)',
+      'docs/readme (copy).md',
+      'docs/readme (another copy)',
+      'docs/readme (copy) (2)',
+      'docs/readme (copy) 2'
+    ]
   }
 ];
 
@@ -132,7 +145,8 @@ const ignoredByRepoRules = (paths) => {
 
 // The semantics `rules:changes` matches with: Ruby's File.fnmatch with
 // FNM_PATHNAME — `*` never crosses a `/`, and a `**` segment matches zero or
-// more directory segments.
+// more directory segments. A trailing `**` (e.g. `a/**`) is not modeled; no
+// shape uses one, and a shape that starts to must extend this helper with it.
 const globSegment = (segment) =>
   new RegExp(
     `^${segment

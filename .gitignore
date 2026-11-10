@@ -115,17 +115,21 @@ Thumbs.db
 #
 # The marker is reserved: a file that legitimately carries one (a real source
 # called "deep copy.js") must be renamed, not forced in — `git add -f` gets it
-# past this layer and straight into the gate.
+# past this layer and straight into the gate. Negation rules further down this
+# file win over these (last match wins), so a fixture that legitimately needs
+# a copy-shaped name can negate it — the pipeline gate still flags it.
 * - Copy
 * - Copy.*
 * - Copy ([0-9]*
 * - Copy [0-9]*
 * copy
 * copy.*
+* copy ([0-9]*
 * copy [0-9]*
 *copy)
 *copy).*
 *copy) ([0-9]*
+*copy) [0-9]*
 
 # Temporary files
 *.tmp

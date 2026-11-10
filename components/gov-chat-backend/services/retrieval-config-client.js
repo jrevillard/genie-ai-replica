@@ -395,13 +395,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // ('hybrid', 'okf_only'), so a padded value must not reach them —
         // nor the last-known-good copy, which is served on a later outage.
         const mode = typeof raw?.config?.mode === 'string' ? raw.config.mode.trim() : '';
-        const shapeOk = !!(
-          raw &&
-          typeof raw === 'object' &&
-          raw.config &&
-          mode &&
-          typeof raw.engaged === 'boolean'
-        );
+        const shapeOk = !!(raw && typeof raw === 'object' && raw.config && mode && typeof raw.engaged === 'boolean');
         if (shapeOk && modeIsDeclared(raw, mode)) {
           // The last-known-good copy is served to ANY caller on upstream
           // failure, so it carries only what the BFF consumes of the

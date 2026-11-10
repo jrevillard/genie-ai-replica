@@ -49,19 +49,9 @@ const { logger } = require('../shared-lib/logger');
 const { isArangoNotFound, isArangoCollectionNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
-
-// Local copy of bundle-export-service's slugFor — importing it back would
-// create a require cycle (bundle-export imports this module's helpers).
-function slugFor(name) {
-  return (
-    String(name || 'repo')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 80) || 'repo'
-  );
-}
+// The slug SSOT (#1190) — a leaf module, so the cycle with bundle-export
+// (which imports this module's helpers) never re-forms.
+const { slugFor } = require('./slug');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
 

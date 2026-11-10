@@ -18,8 +18,6 @@ jest.mock('../shared-lib/db-connection-service', () => {
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
 jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
-// The real slugFor is exercised (imported from bundle-export-service).
-jest.mock('../services/bundle-export-service', () => jest.requireActual('../services/bundle-export-service'));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const {

@@ -43,11 +43,7 @@ const DEFAULT_LANES = 4;
 const CURATION_TIMEOUT_MS = parseInt(process.env.OKF_CURATION_TIMEOUT_MS, 10) || 30000;
 const BODY_SNIPPET_CHARS = 1200;
 
-const slugify = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+const { sameSlug } = require('./slug');
 
 function debugEnabled() {
   return process.env.OKF_CONVERSION_DEBUG === '1';
@@ -57,7 +53,9 @@ function debugEnabled() {
 async function resolveAreaContext(domain) {
   const db = await dbService.getConnection('default');
   const cats = await (await db.query('FOR c IN serviceCategories RETURN {key: c._key, name: c.nameEN}')).all();
-  const hit = cats.find((c) => slugify(c.name) === slugify(domain));
+  // sameSlug owns the degenerate case: a domain that slugs to empty
+  // matches nothing (#1190 — never a false Subject Area).
+  const hit = cats.find((c) => sameSlug(domain, c.name));
   if (!hit) return null;
   const svcs = await (
     await db.query('FOR s IN services FILTER s.categoryId == @k SORT s.nameEN RETURN s.nameEN', {

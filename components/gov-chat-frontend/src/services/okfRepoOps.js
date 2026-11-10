@@ -26,7 +26,12 @@ import httpService from './httpService';
 import serviceTreeService from './serviceTreeService';
 import matter from 'gray-matter';
 
-/** Slug for new concept paths (same rules as crawlerToOkfService.slugify). */
+/** Slug for new concept paths: a client-side mirror of the okf-server base
+ * slug grammar (issue #1190 SSOT) for locally-minted concept paths. Two
+ * LOCAL divergences from the server's ingest grammar, both deliberate:
+ * the 80-char cap (ingest is uncapped) and no NFKD fold ('Café' stays
+ * 'caf' here, 'cafe' server-side) — identity-visible across creation
+ * venues; relocation to shared/lib is tracked in #1692. */
 export function slugifyConcept(input) {
   if (!input) return 'concept';
   return (
@@ -116,6 +121,12 @@ export async function loadSubjectAreaOptions(repoDomains = []) {
  * names ('Water Supply') since the hierarchy-driven wave (defense-in-depth;
  * server-side normalization lands separately). Empty input falls back to
  * 'general' so a scope segment is never blank.
+ *
+ * A MIRROR of the server's scope-segment grammar (services/slug.js slugFor,
+ * #1190) with two local divergences: no 80-char cap and a 'general'
+ * fallback (the server's is 'repo'). Currently masked — createRepo strips
+ * client okf:t:* scopes and recomputes server-side — but keep the pairing
+ * in mind before any path starts trusting client scopes (#1692).
  */
 function slugScopeDomain(input) {
   return (

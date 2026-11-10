@@ -164,8 +164,8 @@ def test_fails_loud_when_only_a_docstring_carries_the_assignment(tmp_path):
     a column-0 text regex would accept the same line sitting inside a
     module docstring while the real assignment is gone — every print site
     still matches, the build ships, and the first rewritten call NameErrors.
-    Both other guard-drift tests fail under a text regex too, so this one
-    is what makes the AST anchor mutation-visible.
+    Both other guard-drift tests stay green under a text regex too, so this
+    one is what makes the AST anchor mutation-visible.
     """
     body = _fixture_module(UPSTREAM_SITES).replace(
         'logger = CustomLogger("prepare_doc_util")\n',

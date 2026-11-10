@@ -135,9 +135,8 @@ const ignoredByRepoRules = (paths) => {
 };
 
 // The semantics `rules:changes` matches with: Ruby's File.fnmatch with
-// FNM_PATHNAME — `*` never crosses a `/`, and a `**` segment matches zero or
-// more directory segments. A trailing `**` (e.g. `a/**`) is not modeled; no
-// shape uses one, and a shape that starts to must extend this helper with it.
+// FNM_PATHNAME — `*` never crosses a `/`, and a `**` segment (leading or
+// trailing) matches zero or more directory segments.
 const globSegment = (segment) =>
   new RegExp(
     `^${segment
@@ -177,7 +176,7 @@ describe('stray copy artifacts (#516)', () => {
   });
 
   it('refuses to stage a copy artifact', () => {
-    const samples = SHAPES.flatMap(samplesOf);
+    const samples = [...SHAPES.flatMap(samplesOf), ...EXTRA_COPIES];
     const ignored = ignoredByRepoRules(samples).map((entry) => entry.path);
     expect(ignored.sort()).toEqual([...samples].sort());
   });

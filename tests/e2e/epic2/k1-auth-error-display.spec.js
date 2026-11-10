@@ -54,6 +54,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
           `k1 afterAll: accessTokenLifespan restore failed — the genie realm is left at a ` +
             `mutated lifespan that every later suite inherits. Restore it manually, then re-run. ` +
             `Cause: ${e.message}`,
+          { cause: e },
         );
       }
     }

@@ -129,8 +129,20 @@ const keycloakAuthMiddleware = {
         next();
       } catch (err) {
         if (err.code === 'TOKEN_EXPIRED') {
-          // Check user status in Keycloak via UserInfo to determine if disabled/deleted
-          if (token && tokenIssuer && tokenPayload) {
+          // Check user status in Keycloak via UserInfo to determine if disabled/deleted.
+          // tokenIssuer comes from the UNVERIFIED payload. Today the shared
+          // verifier resolves the issuer map BEFORE reporting expiry, so a
+          // TOKEN_EXPIRED error always names an already-trusted iss — this
+          // allow-list is defense-in-depth: should that ordering ever change
+          // (or a caller bypass verifyToken), the probe still refuses to GET
+          // `${issuer}/protocol/openid-connect/userinfo` for a non-configured
+          // issuer.
+          if (
+            token &&
+            tokenIssuer &&
+            tokenPayload &&
+            keycloakAuthService.getConfiguredIssuers().includes(tokenIssuer)
+          ) {
             const statusResult = await keycloakAuthService.checkUserStatusInKeycloak(token, tokenIssuer);
             if (statusResult && statusResult.disabled) {
               // Update ArangoDB user to reflect disabled status

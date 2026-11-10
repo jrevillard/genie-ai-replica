@@ -22,7 +22,6 @@ const { chromium } = require('playwright');
 const { loginViaUI } = require('./helpers/chatbot');
 const { waitForBannerSettled } = require('./helpers/welcome');
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
 // Four viewports: 1775×886 is the reference and 1920×960 is what the user
 // sees in production, so the welcome banner's full-bleed is proven at both;
@@ -284,8 +283,8 @@ const audit = () => {
         // sizing has to survive. Capture the open state as the default
         // and the collapsed states only at the desktop sizes — narrow
         // widths already pin the sidebar.
-        let openOverlayWidth = null;
-        let collapsedOverlayWidth = null;
+        let openOverlayWidth;
+        let collapsedOverlayWidth;
         if (sidebar.collapsed) {
           // Snapshot the open width before any clicks so we can compare
           // against it afterwards; a "collapsed" capture that did not

@@ -1,31 +1,20 @@
-let jose, authenticateToken, authorizeRole, isPublicRoute, PUBLIC_PATHS;
+let authenticateToken, authorizeRole, isPublicRoute, PUBLIC_PATHS;
+let mockVerifyToken;
+const makeVerifierMock = require('../../helpers/verifierMock');
+let mockVerifier;
 
-// Re-require middleware before each test to reset module-level JWKS cache
+// Re-require middleware before each test
 beforeEach(() => {
   jest.resetModules();
 
-  jest.mock('jose', () => ({
-    createRemoteJWKSet: jest.fn(),
-    jwtVerify: jest.fn()
-  }));
+  // The verification core is the shared OIDC verifier (DW-427); the mock
+  // stands in for it at the module boundary. Issuer/alias/pin semantics are
+  // that module's contract, pinned in the backend verifier suite and the
+  // real-crypto suite — not here.
+  mockVerifier = makeVerifierMock();
+  mockVerifyToken = mockVerifier.verifyToken;
+  jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
 
-  jest.mock('../../../config/appConfig', () => ({
-    security: {
-      keycloakUrl: 'https://localhost/auth',
-      keycloakRealm: 'genie'
-    }
-  }));
-
-  jest.mock('../../../../shared-lib', () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn()
-    }
-  }));
-
-  jose = require('jose');
   const middleware = require('../../../middlewares/keycloak-auth-middleware');
   authenticateToken = middleware.authenticateToken;
   authorizeRole = middleware.authorizeRole;
@@ -99,6 +88,7 @@ describe('keycloak-auth-middleware', () => {
       await authenticateToken(req, res, next);
       expect(next).toHaveBeenCalledWith();
       expect(res.status).not.toHaveBeenCalled();
+      expect(mockVerifyToken).not.toHaveBeenCalled();
     });
 
     it('should return 401 when Authorization header is missing', async () => {
@@ -116,12 +106,18 @@ describe('keycloak-auth-middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
-    it('should return 401 for expired token (JWTExpired)', async () => {
-      jose.createRemoteJWKSet.mockReturnValue({});
-      const expiredError = new Error('JWT expired');
-      expiredError.name = 'JWTExpired';
-      jose.jwtVerify.mockRejectedValue(expiredError);
+    it('should delegate verification to the shared verifier with the raw token', async () => {
+      mockVerifyToken.mockResolvedValue(createMockPayload(['admin']));
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer valid-token' } }
+      });
+      await authenticateToken(req, res, next);
+      expect(mockVerifyToken).toHaveBeenCalledWith('valid-token');
+      expect(next).toHaveBeenCalledWith();
+    });
 
+    it('should return 401 TOKEN_EXPIRED when the verifier reports an expired token', async () => {
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_EXPIRED', 'Token has expired'));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer expired-token' } }
       });
@@ -130,10 +126,8 @@ describe('keycloak-auth-middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_EXPIRED' }));
     });
 
-    it('should return 401 for invalid token', async () => {
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockRejectedValue(new Error('Invalid signature'));
-
+    it('should return 401 TOKEN_INVALID when verification fails', async () => {
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token verification failed'));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer invalid-token' } }
       });
@@ -142,39 +136,71 @@ describe('keycloak-auth-middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
-    it('should return 401 for claim validation failure (JWTClaimValidationFailed)', async () => {
-      jose.createRemoteJWKSet.mockReturnValue({});
-      const claimError = new Error('claim validation failed');
-      claimError.name = 'JWTClaimValidationFailed';
-      jose.jwtVerify.mockRejectedValue(claimError);
-
+    it('should map a claim-validation failure to the fixed 401 message (not the verifier message)', async () => {
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token claim validation failed')); // internal message
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer bad-claim-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token claim validation failed' })
+        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token verification failed' })
       );
     });
 
-    it('should return 503 when JWKS initialization fails', async () => {
-      jose.createRemoteJWKSet.mockImplementation(() => {
-        throw new Error('Network error');
-      });
-
+    it('should return 503 AUTH_SERVICE_UNAVAILABLE when Keycloak discovery is unavailable (init failure)', async () => {
+      // The shared verifier surfaces init/cooldown failures as
+      // AUTH_SERVICE_UNAVAILABLE; the middleware maps it to the doc-repo 503
+      // contract the frontend httpService handles (a Keycloak outage is not a
+      // bad token).
+      mockVerifyToken.mockRejectedValue(
+        mockVerifier.rejection('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable')
+      );
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer some-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'AUTH_SERVICE_UNAVAILABLE' }));
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Authentication service unavailable'
+        })
+      );
+      // The outage is warn-level with no token diagnostics — the error-level
+      // DIAG payload stays reserved for genuine 401 root causes.
+      const { logger } = require('../../../__tests__/__mocks__/shared-lib');
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[KEYCLOAK-AUTH] verifier unavailable',
+        expect.objectContaining({
+          path: '/api/files',
+          err_message: 'Authentication service is temporarily unavailable'
+        })
+      );
+    });
+
+    it('should log the 401 root cause (token issuer) for a failed verification', async () => {
+      const { logger } = require('../../../__tests__/__mocks__/shared-lib');
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Unknown issuer'));
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer wrong-issuer-token' } }
+      });
+      await authenticateToken(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(logger.error).toHaveBeenCalledWith(
+        '[KEYCLOAK-AUTH] verifyToken failed',
+        expect.objectContaining({
+          err_code: 'TOKEN_INVALID',
+          err_name: 'TokenVerificationError',
+          token_issuer: 'unparseable'
+        })
+      );
     });
 
     it('should attach user object for valid token with admin role', async () => {
       const payload = createMockPayload(['admin']);
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -187,16 +213,6 @@ describe('keycloak-auth-middleware', () => {
       expect(req.user.role).toBe('Admin');
       expect(req.user.iss).toBe('https://localhost/auth/realms/genie');
       expect(req.user.roles).toEqual(['admin']);
-
-      // Verify jwtVerify was called with correct issuer
-      expect(jose.jwtVerify).toHaveBeenCalledWith(
-        'valid-token',
-        expect.anything(),
-        expect.objectContaining({
-          issuer: ['https://localhost/auth/realms/genie'], // array — the middleware validates against the base+alias issuer set
-          requiredClaims: ['iss', 'exp']
-        })
-      );
     });
 
     // D4 (review fix 2026-11-07): the okf_scopes claim mapping runs in this
@@ -206,8 +222,7 @@ describe('keycloak-auth-middleware', () => {
     // gates. Pin the mapping here on the REAL middleware.
     it('should map the okf_scopes array claim onto req.user.okfScopes', async () => {
       const payload = { ...createMockPayload(['user']), okf_scopes: ['okf:t:repo-a:read', 'okf:t:*:admin'] };
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -220,8 +235,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should default req.user.okfScopes to [] when the claim is absent', async () => {
       const payload = createMockPayload(['user']); // no okf_scopes claim
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -232,40 +246,9 @@ describe('keycloak-auth-middleware', () => {
       expect(req.user.okfScopes).toEqual([]);
     });
 
-    it('should accept service account token with dataprep-service-client azp', async () => {
-      const payload = {
-        ...createMockPayload(['dataprep-service']),
-        azp: 'dataprep-service-client'
-      };
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
-
-      const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer service-account-token' } }
-      });
-      await authenticateToken(req, res, next);
-      expect(next).toHaveBeenCalledWith();
-      expect(req.user.role).toBe('dataprep-service');
-    });
-
-    it('should accept token without azp claim (some flows omit it)', async () => {
-      const payload = { ...createMockPayload(['admin']) };
-      delete payload.azp;
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
-
-      const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer no-azp-token' } }
-      });
-      await authenticateToken(req, res, next);
-      expect(next).toHaveBeenCalledWith();
-      expect(req.user.role).toBe('Admin');
-    });
-
     it('should map dataprep-service role correctly', async () => {
       const payload = createMockPayload(['dataprep-service']);
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -275,10 +258,33 @@ describe('keycloak-auth-middleware', () => {
       expect(req.user.role).toBe('dataprep-service');
     });
 
+    it('should map the okf-service role verbatim', async () => {
+      const payload = createMockPayload(['default-roles-genie', 'offline_access', 'okf-service']);
+      mockVerifyToken.mockResolvedValue(payload);
+
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer okf-service-token' } }
+      });
+      await authenticateToken(req, res, next);
+
+      expect(req.user.role).toBe('okf-service');
+    });
+
+    it('should map the tools-admin role verbatim', async () => {
+      const payload = createMockPayload(['default-roles-genie', 'offline_access', 'tools-admin']);
+      mockVerifyToken.mockResolvedValue(payload);
+
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer tools-admin-token' } }
+      });
+      await authenticateToken(req, res, next);
+
+      expect(req.user.role).toBe('tools-admin');
+    });
+
     it('should map user role with first letter capitalized', async () => {
       const payload = createMockPayload(['user']);
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -290,8 +296,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should default to User when roles array is empty', async () => {
       const payload = createMockPayload([]);
-      jose.createRemoteJWKSet.mockReturnValue({});
-      jose.jwtVerify.mockResolvedValue({ payload });
+      mockVerifyToken.mockResolvedValue(payload);
 
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer valid-token' } }
@@ -340,65 +345,5 @@ describe('keycloak-auth-middleware', () => {
       middleware(req, res, next);
       expect(next).toHaveBeenCalledWith();
     });
-  });
-});
-
-describe('keycloak-auth-middleware issuer override', () => {
-  beforeEach(() => {
-    jest.resetModules();
-
-    jest.mock('jose', () => ({
-      createRemoteJWKSet: jest.fn(),
-      jwtVerify: jest.fn()
-    }));
-
-    // The edge terminates TLS and tokens carry the public issuer, while the
-    // JWKS is only reachable in-cluster.
-    jest.mock('../../../config/appConfig', () => ({
-      security: {
-        keycloakUrl: 'https://keycloak.genieai.svc.cluster.local:8080',
-        keycloakRealm: 'genie',
-        keycloakExpectedIssuer: 'https://genie.example.org/auth/realms/genie'
-      }
-    }));
-
-    jest.mock('../../../../shared-lib', () => ({
-      logger: {
-        info: jest.fn(),
-        error: jest.fn(),
-        debug: jest.fn(),
-        warn: jest.fn()
-      }
-    }));
-  });
-
-  it('validates the token against the pinned issuer while the JWKS stays in-cluster', async () => {
-    const localJose = require('jose');
-    const { authenticateToken } = require('../../../middlewares/keycloak-auth-middleware');
-    localJose.createRemoteJWKSet.mockReturnValue({});
-    localJose.jwtVerify.mockResolvedValue({
-      payload: {
-        sub: 'user-123',
-        iss: 'https://genie.example.org/auth/realms/genie',
-        realm_access: { roles: ['admin'] },
-        exp: Math.floor(Date.now() / 1000) + 3600
-      }
-    });
-
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
-    const next = jest.fn();
-    await authenticateToken(
-      { originalUrl: '/api/files', headers: { authorization: 'Bearer edge-token' }, user: undefined },
-      res,
-      next
-    );
-
-    expect(next).toHaveBeenCalledWith();
-    expect(localJose.jwtVerify).toHaveBeenCalledWith(
-      'edge-token',
-      expect.anything(),
-      expect.objectContaining({ issuer: ['https://genie.example.org/auth/realms/genie'] })
-    );
-    expect(localJose.createRemoteJWKSet.mock.calls[0][0].toString()).toContain('keycloak.genieai.svc.cluster.local');
   });
 });

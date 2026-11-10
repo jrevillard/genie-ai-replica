@@ -142,6 +142,27 @@ COPY --from=deps_builder /usr/local/bin /usr/local/bin
 COPY genie-ai-overlay/build-patches/unstructured_html_pi_patch.py /tmp/unstructured_html_pi_patch.py
 RUN python /tmp/unstructured_html_pi_patch.py && rm -f /tmp/unstructured_html_pi_patch.py
 
+# Step E.6: Route the vendored comps utils.py prints through its CustomLogger
+# (issue #1662). Upstream ships 15 bare print() calls that reach the container
+# console on the standard-loader path (.doc/.ppt conversion progress, crawl
+# fetch failures, debug dumps) — untyped output with no level, no logger name
+# and no severity in VictoriaLogs, exactly what #514 eliminated from the
+# repository's own dataprep code. The patcher rewrites them to the module's
+# existing CustomLogger("prepare_doc_util") in place; the file itself is not
+# in this repository, so the rewrite happens here, at build time. Sits with
+# the sibling patcher AFTER the multi-GB dependency COPY layers so editing
+# the patcher does not invalidate and re-run them (both patchers are
+# stdlib-only; this one needs only the base interpreter and /app/comps from
+# Step B, the sibling needs the site-packages this position already has).
+#
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if the expected
+# CustomLogger("prepare_doc_util") assignment is missing (renamed symbol or
+# logger name — the repo wires the rewritten records by that name), if any
+# expected line is missing, or if an unexpected print() survives, rather
+# than silently shipping an image that still prints.
+COPY genie-ai-overlay/build-patches/comps_dataprep_utils_logging_patch.py /tmp/comps_dataprep_utils_logging_patch.py
+RUN python /tmp/comps_dataprep_utils_logging_patch.py && rm -f /tmp/comps_dataprep_utils_logging_patch.py
+
 # EasyOCR models from the builder stage (served from /home/user/.EasyOCR at runtime)
 RUN mkdir -p /home/user/.EasyOCR
 COPY --from=deps_builder /opt/easyocr/model /home/user/.EasyOCR/model

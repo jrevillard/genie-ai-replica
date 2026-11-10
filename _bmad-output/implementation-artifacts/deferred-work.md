@@ -2875,7 +2875,7 @@ origin: !597 Jerome AI review (simplify, thread e5261db6, 2026-10-29)
 location: components/shared/lib/keycloak-auth-service.js, components/gov-chat-backend/services/keycloak-auth-service.js, components/document-repository/src/middlewares/keycloak-auth-middleware.js
 severity: high (drift already measurable)
 reason: Known drift: shared copy pins algorithms RS256 + KEYCLOAK_JWKS_URL/KEYCLOAK_BROWSER_ISSUER; backend copy pins no algorithms and lacks KEYCLOAK_BROWSER_ISSUER; doc-repo re-implements a third variant (role mapping stays per-component). Consolidation: backend becomes a thin re-export of the shared verifier (~460 lines removed); shared/lib barrel-exports the file; shared/lib package.json declares jose (consumers carry differing versions today). Acceptance spec = the reviewer's drift list. Mirroring comments stay until then.
-status: open
+status: RESOLVED — landed in !828 (backend thin re-export; doc-repo middleware delegates verification, role mapping stays per-component; jose declared in shared/lib; browser-issuer alias and strict EXPECTED_ISSUER pin unified into the shared verifier). The barrel-export clause was dropped during review: the verifier is heavyweight (ESM-only jose), so it is deep-import only per the components/CLAUDE.md import contract
 
 ### DW-428: parseOkfScopes backend copy misses the realm-role scope source — role-granted users key the authz cache as @no-scopes (cross-user cache collision in an authz path when OKF scopes go live)
 origin: !597 Jerome AI review (simplify/correctness, thread ff8828ba, 2026-10-29)
@@ -2931,14 +2931,14 @@ origin: !597 Jerome AI review (test-audit, thread e801498f, 2026-10-29)
 location: components/gov-chat-backend/__tests__ (issuer/audience tests), components/shared/lib/keycloak-auth-service.js (no home-component test at all)
 severity: medium (okf-server consumes the shared copy, whose own behaviour is unpinned where it lives)
 reason: Real-crypto tests against verifiers about to be consolidated (DW-427) would double the rework — land with the unification.
-status: open
+status: RESOLVED — landed in !828: real RS256 tokens drive the unified verifier through jose's real verification path (tampered signature, wrong-audience, HS256 alg-confusion, expiry) in a node --test suite (jest cannot require the ESM-only jose package).
 
 ### DW-435: Issuer-alias tests assert internal map state (_getJwksCache(issuer)) — replace with public-API accept/reject on real-shaped tokens
 origin: !597 Jerome AI review (test-audit, thread 60fd1ea8, 2026-10-29)
 location: components/gov-chat-backend/__tests__ (alias tests)
 severity: low
 reason: A broken alias-for-lookup key normalization passes the current 4 tests; verifyToken throwing 'Unknown issuer' on a token whose iss is not in the map is the observable contract. Same post-train pass as DW-434.
-status: open
+status: RESOLVED — landed in !828: the retired doc-repo split-url suite's subject (issuer aliases/pin) is pinned by public-API accept/reject tests on real-shaped tokens in the same node --test suite.
 
 ### DW-436: 'Bearer scope isolation' is implemented BY THE MOCK (stub retrieval-config-client resolves per-bearer) — add the owner-side contract test on the okf-server authz-resolver's intersection
 origin: !597 Jerome AI review (test-audit, thread ab7d3d5c, 2026-10-29)
@@ -3072,3 +3072,28 @@ location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-
 severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
 reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
 status: open
+
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: Restored conversations and earlier-turn messages never resolve OKF citation titles/origins — the title resolver dispatches only from sendStream's onSources and patches only the last message, so reopened conversations render raw concept-id titles with no origin rows (epic slice-3 "best-effort resolve persisted rows" remaining scope; hard requirement "never a dead link" already holds).
+  evidence: Verified in review (B6+E5, triage row 19): dispatch site is conversation.js sendStream only; patchSource touches entry.messages.at(-1); before the batch those rows were dead links (#1598) — the landing strictly improves them. Fix = dispatch the resolver on rehydrate + generalize patchSource to patch by message id; epic-level follow-up, not a merge defect.
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: CAP-1 identity enrichment joins okf_concepts_meta only on the chunk search leg — graph-routed queries (search_start threaded from chatqna routing into the edge/node traversal legs) cite OKF chunks without repo_id/bundle_version, degrading those citations to id-titles with no origin rows (graceful, no dead link).
+  evidence: Verified in review (B7, triage row 20): the join lives inside `if search_start == "chunk"` (genieai_retriever_arangodb.py); routing can select graph modes for OKF graphs (they carry author/parser _LINKS_TO edges). Fix = apply the same meta join to the traversal legs' results; epic FR-001 remaining scope, track with the W9+ waves.
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: Read-level per-repo scope holders receive the FULL steward meta row (pii_scan_error, last_worker_error, ingest bookkeeping) rather than the CAP-2 card — pre-existing semantics the batch's citizen projection did not narrow (the diff only ADDED the citizen path).
+  evidence: Verified in review (B16+SR-O3, triage row 21): pre-diff callers got the same full row via the same handler; security traced it as documented steward intent ("a scope naming THIS repo" = editor's working set). If ops internals should not reach read-level editors, that is a product decision on the steward-class definition — operator's call, pre-existing surface.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-csr-w9-concept-tree-browse.md`
+  summary: epic-9-context.md still says both author and parser edges are walkable; the approved W9 spec and the implementation narrowed the tree index to AUTHOR edges only — the compiled context doc needs the one-line amendment when next touched.
+  evidence: epic-9-context.md "Technical Decisions" vs the approved spec's Design Notes (author edges 13-16k per large repo; raw parser edge collections reach 483k rows on Bali — the index must never join them). Fix edits an agent-context file, so it defers per the review rules.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-csr-w9-concept-tree-browse.md`
+  summary: the st locale mixes two nouns for "concept" inside the concept browser dialog — 'maikutlo' in the filter/count strings vs 'kgopolo' in related/unavailable/column strings; needs a native Sesotho review before normalizing.
+  evidence: st.js chatbot.okfBrowser block ('Fetsa maikutlo…', 'maikutlo a {n}' vs 'Mekgopolo e amanang', 'Kgopolo ena ha e fumanehe.'). Guessing the morphology would violate the verbatim-i18n rule (locale text inserted only as verified text).
+
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1709**
+  summary: dataprep's worker-kick ingestion-log writes drop and mis-key on the current build — zero primaries for 4/5 concepts, all retract rows and all bundle mirrors missing for import-path repos, while the same kick against a wizard-shaped repo writes both channels perfectly and the August runs on the pre-rebuild image were green. The admin Ingestion Log tab is blind for every drained OKF repo.
+  evidence: the smoke harness's completeness assert is the sentinel (14-run evidence trail + the single-kick probe in the MR description); David ruled the harness stays STRICT with the known red named in its failure message.
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1710**
+  summary: doc-repo stamps host-local time (UTC+7) with a `Z` suffix — every `ingestion_log`/`files` timestamp is 7 h off; any AQL time-window filter in real UTC misses the rows, and the first diagnosis pass chased a phantom "no rows written since September" on it.
+  evidence: a probe POST at real 14:17Z persisted as `2026-11-09T21:17:06.480Z`; dataprep runs true UTC and the two services disagree by the TZ offset. Fix = `TZ=UTC` on the doc-repo compose service (one line) + a gotcha note in DEBUGGING-TRACING.md.

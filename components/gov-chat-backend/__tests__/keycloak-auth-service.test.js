@@ -75,8 +75,12 @@ describe('keycloakAuthService', () => {
 
       expect(result).toBeDefined();
       expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
-      // Discovery was called lazily
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/realms/genie/.well-known/openid-configuration');
+      // Discovery was called lazily (with the AbortController signal the
+      // discovery-timeout guard passes)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/realms/genie/.well-known/openid-configuration',
+        expect.objectContaining({ signal: expect.anything() })
+      );
       expect(mockJwtVerify).toHaveBeenCalledWith(
         token,
         expect.any(Function),
@@ -227,14 +231,17 @@ describe('keycloakAuthService', () => {
       jest.restoreAllMocks();
     });
 
-    it('should return temporarily unavailable after init failure', async () => {
+    it('should return temporarily unavailable after init failure, with the init detail preserved', async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
 
       const token = generateMockJwtString(mockJwtPayload);
 
+      // The wrapped message is what callers' DIAG logs print — the init
+      // failure's own detail (here the discovery HTTP status) must ride
+      // along, or an operator debugging a 503 sees only the generic text.
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Authentication service is temporarily unavailable'
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: expect.stringMatching(/^Authentication service is temporarily unavailable \(.*Bad Gateway.*\)$/)
       });
     });
 
@@ -247,8 +254,13 @@ describe('keycloakAuthService', () => {
       await keycloakAuthService.verifyToken(token).catch(() => {});
       const fetchCountAfterFirst = mockFetch.mock.calls.length;
 
-      // Second call within cooldown — should NOT call fetch again
-      await keycloakAuthService.verifyToken(token).catch(() => {});
+      // Second call within cooldown — should NOT call fetch again, and the
+      // rejection still names the original failure (the DIAG log must carry
+      // the cause even while init retries are suppressed).
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: expect.stringMatching(/^Authentication service is temporarily unavailable \(.*Bad Gateway.*\)$/)
+      });
       expect(mockFetch.mock.calls.length).toBe(fetchCountAfterFirst);
     });
 
@@ -303,6 +315,31 @@ describe('keycloakAuthService', () => {
       await keycloakAuthService.init();
       const issuers = keycloakAuthService.getConfiguredIssuers();
       expect(issuers).toContain('http://localhost:8080/realms/genie');
+    });
+
+    it('warns when KEYCLOAK_DISCOVERY_TIMEOUT_MS is discarded and stays silent for a valid value', async () => {
+      // The bare-integer guard silently falls back to the default budget —
+      // the warn is the operator's only signal that their value was
+      // discarded, so it must fire for garbage and stay quiet for '5000'
+      // spelled out.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn');
+      const original = process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS;
+      try {
+        process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = 'abc';
+        await keycloakAuthService.init();
+        expect(warnSpy.mock.calls.some(([m]) => String(m).includes('not a bare positive integer'))).toBe(true);
+
+        warnSpy.mockClear();
+        keycloakAuthService._resetForTesting();
+        process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = '5000';
+        await keycloakAuthService.init();
+        expect(warnSpy.mock.calls.some(([m]) => String(m).includes('not a bare positive integer'))).toBe(false);
+      } finally {
+        if (original === undefined) delete process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS;
+        else process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = original;
+        warnSpy.mockRestore();
+      }
     });
 
     it('should throw if discovery fetch fails', async () => {
@@ -804,10 +841,12 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null when UserInfo returns unexpected status', async () => {
+    it('should return null when a 2xx UserInfo response carries no body', async () => {
+      // axios rejects non-2xx by default, so a resolved response is always
+      // 2xx — the only non-active 2xx shape left is a bodyless one.
       mockAxiosGet.mockResolvedValue({
-        status: 500, // Unexpected status
-        data: {}
+        status: 204,
+        data: undefined
       });
 
       const result = await keycloakAuthService.checkUserStatusInKeycloak(
@@ -877,6 +916,41 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
+    it('strips control characters and line separators from the logged WWW-Authenticate tail', async () => {
+      // The sanitizer owns a log-forging guard on server-controlled header
+      // input: C0, C1 (U+0085 survives many naive filters) and Unicode line
+      // separators must not reach the log line — and the header content that
+      // survives must still be there to diagnose the ambiguity.
+      // The service logs through the REAL shared/lib winston logger (the
+      // virtual '../shared-lib' mock covers only the barrel), so spy there.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn');
+      mockAxiosGet.mockRejectedValue({
+        response: {
+          status: 401,
+          headers: {
+            'www-authenticate':
+              'Bearer realm="genie", error="invalid_token", error_description="Token expired"\u2028\u0085Injected\nline'
+          }
+        }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+      const warnCall = warnSpy.mock.calls.find(([msg]) => String(msg).includes('WWW-Authenticate'));
+      expect(warnCall).toBeDefined();
+      const tail = String(warnCall[0]);
+      expect(tail).toContain('error_description="Token expired"');
+      for (const banned of ['\u2028', '\u0085', '\n', 'Injected\nline']) {
+        expect(tail).not.toContain(banned);
+      }
+      warnSpy.mockRestore();
+    });
+
     it('should stay null when a 401 WWW-Authenticate names another reason (expired token)', async () => {
       mockAxiosGet.mockRejectedValue({
         response: {
@@ -895,7 +969,15 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should return { active: false, disabled: true } when UserInfo returns 403', async () => {
+    it('should stay null when UserInfo returns 403 (no corroborated disable)', async () => {
+      // A 403 means the token was ACCEPTED but lacks the scopes/roles the
+      // UserInfo endpoint requires (an active user), and anything on the
+      // path (proxy, WAF, rate limiter) can answer 403 too. Keycloak reports
+      // a real disable as 401 with the WWW-Authenticate challenge (pinned
+      // above); the caller soft-deletes accounts on a confirmed disable, so
+      // an uncorroborated 403 must not trigger it.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
       mockAxiosGet.mockRejectedValue({
         response: { status: 403 }
       });
@@ -905,7 +987,9 @@ describe('keycloakAuthService', () => {
         'http://localhost:8080/realms/genie'
       );
 
-      expect(result).toEqual({ active: false, disabled: true });
+      expect(result).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('403'));
+      warnSpy.mockRestore();
     });
   });
 });

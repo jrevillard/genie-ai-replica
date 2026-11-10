@@ -1,10 +1,14 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // keycloak-auth-service.js — Shared OIDC token verifier (jose/JWKS) for all Node services.
-// Supports split internal/public OIDC URLs via KEYCLOAK_PUBLIC_URL issuer alias.
+// Issuer surface: the OIDC discovery issuer plus KEYCLOAK_PUBLIC_URL and
+// KEYCLOAK_BROWSER_ISSUER aliases (split internal/public OIDC URLs), with
+// KEYCLOAK_JWKS_URL as the JWKS fetch-host override and KEYCLOAK_EXPECTED_ISSUER
+// as a strict single-issuer pin.
 'use strict';
 
 const { jwtVerify, createRemoteJWKSet } = require('jose');
+const axios = require('axios');
 const { logger } = require('./logger');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
@@ -47,7 +51,7 @@ class TokenVerificationError extends Error {
  *
  * @param {string} jwksUri - The JWKS endpoint URL
  * @param {number} ttlMs - Cache TTL in milliseconds (default: 300000 = 5 minutes)
- * @returns {Function} A callable JWKS function with attached .forceRefresh() and ._isExpired() methods
+ * @returns {Function} A callable JWKS function with attached .forceRefresh() method
  *
  * The returned function has signature (protectedHeader, token) -> Promise<Key>
  * compatible with jose's jwtVerify(token, jwksFunction, options).
@@ -86,14 +90,6 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
     createdAt = 0;
   };
 
-  /**
-   * Check if the cache is expired
-   * @returns {boolean} True if cache is expired
-   */
-  jwksFn._isExpired = function () {
-    return Date.now() - createdAt > ttlMs;
-  };
-
   return jwksFn;
 }
 
@@ -109,6 +105,7 @@ const issuerMap = new Map();
  */
 let initPromise = null;
 let initFailedAt = 0;
+let initFailureReason = null;
 let initialized = false;
 
 /**
@@ -129,7 +126,7 @@ async function init(idpUrl) {
   // per-realm issuer aliases below on KEYCLOAK_REALM instead let the PARTNER
   // realm's init overwrite the PRIMARY realm's public-issuer alias with the
   // partner JWKS — every primary-realm browser token carrying the public
-  // issuer then verified against the wrong realm's keys (review 2026-10-29).
+  // issuer then verified against the wrong realm's keys.
   const realmMatch = /\/realms\/([^/?#]+)/.exec(baseUrl);
   const realm = realmMatch ? realmMatch[1] : KEYCLOAK_REALM;
   const discoveryUrl = `${baseUrl}/.well-known/openid-configuration`;
@@ -137,95 +134,153 @@ async function init(idpUrl) {
   logger.info(`[KeycloakAuth] Fetching OIDC discovery from ${discoveryUrl}`);
 
   const controller = new AbortController();
-  const discoveryTimeoutMs = parseInt(process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000', 10);
+  // The value must be a bare positive integer — anything else falls back to
+  // the default. Two ways to get it wrong, both fatal: a NaN setTimeout
+  // fires immediately, and parseInt prefix-parses ('10s' reads as 10 ms —
+  // an instant-abort loop), so the parsed value must round-trip to the raw
+  // string to be trusted.
+  const rawTimeout = (process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000').trim();
+  const parsedTimeout = parseInt(rawTimeout, 10);
+  // Bare positive integer AND within setTimeout's range: Node clamps delays
+  // above 2^31-1 ms to 1 ms — an "effectively never" value would abort every
+  // discovery instantly, the same failure class as a prefix-parsed '10s'.
+  const MAX_TIMEOUT_MS = 2147483647;
+  const discoveryTimeoutMs =
+    Number.isFinite(parsedTimeout) &&
+    parsedTimeout > 0 &&
+    parsedTimeout <= MAX_TIMEOUT_MS &&
+    String(parsedTimeout) === rawTimeout
+      ? parsedTimeout
+      : 5000;
+  if (discoveryTimeoutMs === 5000 && rawTimeout !== '5000' && process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS) {
+    logger.warn(
+      `KEYCLOAK_DISCOVERY_TIMEOUT_MS='${process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS}' is not a bare positive integer within the timer range — using the 5000ms default`
+    );
+  }
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
-  let res;
+  // The abort timer covers the WHOLE discovery exchange — fetch AND body
+  // read: a host that accepts the connection and then stalls the response
+  // body would otherwise hang init past the configured budget.
+  let doc;
   try {
-    res = await fetch(discoveryUrl, { signal: controller.signal });
+    const res = await fetch(discoveryUrl, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
+    }
+    doc = await res.json();
   } catch (err) {
-    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`, {
-      cause: err
-    });
+    if (err.name === 'AbortError') {
+      throw new Error(`OIDC discovery timed out after ${discoveryTimeoutMs}ms`, { cause: err });
+    }
+    // Network, HTTP-status and body-parse errors keep their message but
+    // gain the failing leg's context — a bare 'fetch failed' from an
+    // additional realm is indistinguishable from any other realm's.
+    throw new Error(`OIDC discovery from ${discoveryUrl} failed: ${err.message}`, { cause: err });
   } finally {
     clearTimeout(discoveryTimer);
   }
-  if (!res.ok) {
-    throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
-  }
-
-  const doc = await res.json();
 
   if (!doc.issuer || !doc.jwks_uri) {
     throw new Error('OIDC discovery document missing required fields: issuer, jwks_uri');
   }
 
-  const jwks = createJwksCache(doc.jwks_uri);
-  issuerMap.set(doc.issuer, jwks);
-
-  // JWKS host override (David, 2026-09-15): Keycloak publishes its jwks_uri
-  // based on the request hostname (KC_HOSTNAME) — in local Docker it returns
-  // `http://localhost:8080/...` which is unreachable from inside service
-  // containers. Operators set KEYCLOAK_JWKS_URL to a container-reachable URL
-  // (e.g. http://keycloak:8080) and we register it under BOTH the discovery
-  // issuer and the public issuer so token lookup succeeds regardless of which
-  // issuer the JWT was minted with. No-op when unset.
   const jwksOverride = process.env.KEYCLOAK_JWKS_URL;
-  if (jwksOverride) {
-    const overrideJwks = createJwksCache(jwksOverride);
-    issuerMap.set(doc.issuer, overrideJwks);
-    // Register every plausible issuer alias so token lookups succeed regardless
-    // of which issuer the JWT carries:
-    //   - doc.issuer: the discovery-reported issuer (http://keycloak:8080 in local Docker)
-    //   - KEYCLOAK_PUBLIC_URL derived issuer: container-internal hostname (Docker DNS)
-    //   - KEYCLOAK_BROWSER_ISSUER: explicit browser-facing issuer (e.g. https://localhost/auth)
-    const publicUrlOverride = process.env.KEYCLOAK_PUBLIC_URL;
-    if (publicUrlOverride) {
-      // Keyed by the realm ACTUALLY being initialized (see the derivation
-      // above): a partner realm's override alias carries the partner realm's
-      // name, never the primary's.
-      const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${realm}`;
-      issuerMap.set(publicIssuerOverride, overrideJwks);
+  const pinnedIssuer = process.env.KEYCLOAK_EXPECTED_ISSUER;
+  const sizeBefore = issuerMap.size;
+  // ONE JWKS source per init: the fetch-host override replaces the discovery
+  // URI when set (Keycloak publishes jwks_uri from the request hostname —
+  // KC_HOSTNAME — which inside service containers is often unreachable;
+  // operators point KEYCLOAK_JWKS_URL at a container-reachable host). It
+  // changes WHERE the keys come from, never WHO is accepted.
+  const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri);
+
+  if (pinnedIssuer) {
+    // Strict issuer pin: the pinned issuer is the ONLY accepted issuer —
+    // the discovery issuer and the PUBLIC_URL/BROWSER_ISSUER alias
+    // registrations below are skipped so an alias can never widen acceptance
+    // past the pin. Primary-realm gated like the browser alias below: the
+    // pin names ONE issuer of the PRIMARY realm, and an additional realm's
+    // init re-running this branch would overwrite the pinned entry with ITS
+    // realm's JWKS (the clobber class the alias gates prevent). A
+    // partner-realm token carries a different iss than the pin and is
+    // rejected either way — that is what "accept ONLY this issuer" means.
+    if (realm === KEYCLOAK_REALM) {
+      issuerMap.set(pinnedIssuer, effectiveJwks);
+      logger.info(
+        `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
+          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${doc.jwks_uri})`)
+      );
     }
-    // KEYCLOAK_BROWSER_ISSUER is by definition the PRIMARY realm's
-    // browser-facing issuer — one env var, one issuer. Gate the alias on
-    // the realm actually being initialized: with KEYCLOAK_ADDITIONAL_REALMS,
-    // initAllRealms re-invokes this block per realm and the LAST realm's
-    // init would otherwise overwrite the shared alias with ITS override
-    // JWKS — every primary-realm browser token then verifies against the
-    // wrong realm's keys (mass 401s; the same clobber class the realm
-    // derivation above prevents). Review !622 round 11.
-    if (process.env.KEYCLOAK_BROWSER_ISSUER && realm === KEYCLOAK_REALM) {
-      issuerMap.set(process.env.KEYCLOAK_BROWSER_ISSUER, overrideJwks);
+  } else {
+    issuerMap.set(doc.issuer, effectiveJwks);
+
+    // Alias a public-facing issuer for split internal/public OIDC URLs (e.g.
+    // local build behind Docker Desktop): the browser token iss
+    // (https://localhost) can differ from the discovery issuer fetched
+    // internally (http://kong:8000). Keyed by the realm ACTUALLY being
+    // initialized (see the derivation above): a partner realm's alias
+    // carries the partner realm's name, never the primary's — keying on
+    // KEYCLOAK_REALM instead would let the partner's init overwrite the
+    // primary alias with the partner JWKS (the multi-realm clobber class
+    // the realm derivation prevents). No-op if unset.
+    const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+    if (publicUrl) {
+      const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
+      if (publicIssuer !== doc.issuer) {
+        issuerMap.set(publicIssuer, effectiveJwks);
+        logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
+      }
     }
-    logger.info(
-      `[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} ` +
-        `(overrides discovery ${doc.jwks_uri}; ` +
-        `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
+
+    // KEYCLOAK_BROWSER_ISSUER (value = the literal full issuer, e.g.
+    // https://localhost/auth/realms/genie): the browser tokens minted
+    // through the nginx /auth path carry a path-prefix alias issuer that
+    // neither the discovery issuer nor the public URL produces. By
+    // definition the PRIMARY realm's browser-facing issuer — one env var,
+    // one issuer: gating on the realm being initialized keeps
+    // KEYCLOAK_ADDITIONAL_REALMS inits from overwriting the shared alias
+    // with their own JWKS (same clobber class as above). No-op when unset.
+    const browserIssuer = process.env.KEYCLOAK_BROWSER_ISSUER;
+    if (browserIssuer && realm === KEYCLOAK_REALM && browserIssuer !== doc.issuer) {
+      issuerMap.set(browserIssuer, effectiveJwks);
+      logger.info(`[KeycloakAuth] Aliased browser issuer ${browserIssuer} -> same JWKS`);
+    }
+
+    if (jwksOverride) {
+      logger.info(
+        `[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} ` +
+          `(overrides discovery ${doc.jwks_uri}; ` +
+          `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
+      );
+    }
+  }
+
+  // An init that registers no entry must not flip the lazy-init singleton:
+  // under the strict issuer pin a partner-realm init registers nothing, and
+  // marking initialized there would leave the map empty with no retry path
+  // for the life of the process.
+  if (issuerMap.size > sizeBefore) {
+    initialized = true;
+    initFailedAt = 0;
+    initFailureReason = null;
+  } else if (pinnedIssuer && realm !== KEYCLOAK_REALM) {
+    // A partner-realm init under the pin registers nothing whether or not
+    // the primary has already registered the pin — the identical silent
+    // no-registration either way, so both are loud. On the no-args primary
+    // init this means KEYCLOAK_REALM is unset or unusable (the realm then
+    // derives from the URL and cannot equal the undefined KEYCLOAK_REALM the
+    // pin gate compares against). Throwing arms the retry cooldown; failing
+    // silently here would re-run full discovery on every single token.
+    throw new Error(
+      `KEYCLOAK_EXPECTED_ISSUER (${pinnedIssuer}) matches no registered issuer — ` +
+        `check KEYCLOAK_REALM against the discovery URL's realm`
     );
   }
 
-  // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local
-  // build behind Docker Desktop): the browser token iss (https://localhost) can
-  // differ from the discovery issuer fetched internally (http://kong:8000). Map
-  // the public issuer to the same JWKS so token lookup succeeds. No-op if unset.
-  // Registered ONLY when the realm being initialized IS the primary (realm ===
-  // KEYCLOAK_REALM): the alias is by definition the PRIMARY realm's public
-  // issuer, and registering it from an additional realm's init would clobber
-  // the primary alias with that realm's JWKS (the multi-realm bug this file's
-  // realm derivation prevents).
-  const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
-  if (publicUrl && realm === KEYCLOAK_REALM) {
-    const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
-    if (publicIssuer !== doc.issuer) {
-      issuerMap.set(publicIssuer, jwks);
-      logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
-    }
-  }
-
-  initialized = true;
-  initFailedAt = 0;
-
-  logger.info(`[KeycloakAuth] Initialized: issuer=${doc.issuer}, jwks=${doc.jwks_uri}`);
+  const acceptedIssuers = Array.from(issuerMap.keys());
+  logger.info(
+    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${doc.jwks_uri}`
+  );
 
   return doc.issuer;
 }
@@ -242,6 +297,29 @@ async function initAllRealms() {
   await init();
 
   if (additionalRealms.length === 0) return;
+
+  // KEYCLOAK_JWKS_URL pins ONE certs URL — with additional realms, every
+  // realm's issuer would map to that one realm's keys. Surfaced on the
+  // verifier's first use (init is lazy), not at container boot.
+  if (process.env.KEYCLOAK_JWKS_URL) {
+    logger.warn(
+      "[KeycloakAuth] KEYCLOAK_JWKS_URL pins ONE realm's certs URL — additional realms " +
+        `(${additionalRealms.join(', ')}) would resolve to the wrong keys; leave the override unset on multi-realm deployments`
+    );
+  }
+
+  // Under the strict issuer pin, additional realms can never register: the
+  // pin is the ONLY accepted issuer and it belongs to the primary realm.
+  // Skipping their discovery legs avoids fetching documents whose entries
+  // would be discarded, and keeps the "Additional realm initialized" log
+  // from claiming success for realms the pin will always reject.
+  if (process.env.KEYCLOAK_EXPECTED_ISSUER) {
+    logger.warn(
+      '[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin set — skipping additional realms ' +
+        `(${additionalRealms.join(', ')}): tokens from any other issuer are rejected by the pin`
+    );
+    return;
+  }
 
   for (const realmName of additionalRealms) {
     const realmUrl = `${KEYCLOAK_URL}/realms/${realmName}`;
@@ -263,9 +341,15 @@ async function initAllRealms() {
 async function ensureInitialized() {
   if (initialized) return;
 
-  // Within cooldown after a failure — skip retry
+  // Within cooldown after a failure — skip retry. The first failure's
+  // detail (why init failed) rides along: this message is what callers'
+  // DIAG logs print, and without it a 503 during the cooldown window
+  // names no cause at all.
   if (initFailedAt && Date.now() - initFailedAt < INIT_RETRY_COOLDOWN) {
-    throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
+    throw new TokenVerificationError(
+      'AUTH_SERVICE_UNAVAILABLE',
+      `Authentication service is temporarily unavailable (${initFailureReason || 'init failed previously'})`
+    );
   }
 
   // If an init is already in progress, wait for it
@@ -277,6 +361,7 @@ async function ensureInitialized() {
     })
     .catch((err) => {
       initFailedAt = Date.now();
+      initFailureReason = err.message;
       initPromise = null;
       throw err;
     });
@@ -311,7 +396,14 @@ const keycloakAuthService = {
       await ensureInitialized();
     } catch (err) {
       if (err instanceof TokenVerificationError) throw err;
-      throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
+      // The original message rides along: this message is what the callers'
+      // DIAG logs print, and init failures carry operator-actionable detail
+      // (discovery unreachable, the KEYCLOAK_EXPECTED_ISSUER pin-mismatch
+      // remedy). Clients only ever see the fixed 503/401 bodies, never this.
+      throw new TokenVerificationError(
+        'AUTH_SERVICE_UNAVAILABLE',
+        `Authentication service is temporarily unavailable (${err.message})`
+      );
     }
 
     // Extract unverified iss and exp to lookup in trusted issuer map (whitelist)
@@ -333,7 +425,7 @@ const keycloakAuthService = {
 
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
-      // Opt-in audience binding (RFC 8707, Story 6.1): when the caller supplies
+      // Opt-in audience binding (RFC 8707): when the caller supplies
       // an `audience`, jose additionally validates the token's `aud` claim.
       // Omitted → no audience check (the historical resource-server behavior —
       // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
@@ -360,17 +452,14 @@ const keycloakAuthService = {
     // 2. Check if token exp is still valid (not expired)
     // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
 
+    // The verified result is the claims payload plus the iss_sub composite
+    // key consumers key users/cache entries on.
+    const toResult = (payload) => ({ ...payload, iss_sub: `${payload.iss}#${payload.sub}` });
+
     try {
-      const verifiedPayload = await verifyWithJwt();
+      const result = toResult(await verifyWithJwt());
 
-      const issSub = `${verifiedPayload.iss}#${verifiedPayload.sub}`;
-
-      const result = {
-        ...verifiedPayload,
-        iss_sub: issSub
-      };
-
-      logger.debug(`[KeycloakAuth] Token verified for ${issSub}`);
+      logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
       return result;
     } catch (err) {
       // TokenVerificationError is re-thrown as-is
@@ -395,26 +484,34 @@ const keycloakAuthService = {
       }
 
       // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
-      // jose checks signature BEFORE claims, so we must manually check exp from unverified payload
+      // jose checks signature BEFORE claims, so we must manually check exp from unverified payload.
+      // Expiry outranks an algorithm mismatch: a stale junk token reports
+      // TOKEN_EXPIRED (the semantically leading defect, and the client
+      // action — re-authenticate — is the same either way).
       const now = Math.floor(Date.now() / 1000);
       if (unverifiedExp && unverifiedExp < now) {
         // Token is expired → immediate TOKEN_EXPIRED (no refresh)
         throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
+      // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
+      // alg-confusion token) is deterministic: jose rejects the header before
+      // any key resolution, so no key rotation can make the same token
+      // verify. It must NOT go through the force-refresh path below: forcing
+      // the refresh only zeroes the JWKS cache TTL, so sustained junk-alg
+      // traffic keeps the cache permanently invalidated, every LEGITIMATE
+      // token then pays a JWKS re-fetch, and each junk-alg token gets a
+      // second, equally-futile attempt.
+      if (err.name === 'JOSEAlgNotAllowed') {
+        throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
+      }
+
       // Signature failure with valid exp → force-refresh JWKS and retry once
       try {
         jwks.forceRefresh();
-        const verifiedPayload = await verifyWithJwt();
+        const result = toResult(await verifyWithJwt());
 
-        const issSub = `${verifiedPayload.iss}#${verifiedPayload.sub}`;
-
-        const result = {
-          ...verifiedPayload,
-          iss_sub: issSub
-        };
-
-        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${issSub}`);
+        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
         return result;
       } catch (retryErr) {
         // Retry failed → TOKEN_INVALID
@@ -451,12 +548,88 @@ const keycloakAuthService = {
     return issuer;
   },
 
-  // No checkUserStatusInKeycloak here — do not re-add it to this fork.
-  // The live implementation is the backend copy
-  // (components/gov-chat-backend/services/keycloak-auth-service.js): a 401
-  // carrying WWW-Authenticate error="invalid_token",
-  // error_description="User disabled" means the user is disabled; any other
-  // 401 stays ambiguous.
+  /**
+   * Check user status in Keycloak via UserInfo endpoint.
+   * Called when token validation fails with 401 to determine if the user was
+   * disabled/deleted.
+   * @param {string} token - The rejected access/refresh token
+   * @param {string} issuer - The token's issuer URL
+   * @returns {Promise<{active: boolean, disabled: boolean}>} User status from Keycloak, or null if check failed
+   */
+  async checkUserStatusInKeycloak(token, issuer) {
+    try {
+      const userInfoUrl = `${issuer}/protocol/openid-connect/userinfo`;
+      const response = await axios.get(userInfoUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        },
+        timeout: 3000
+      });
+
+      // axios rejects non-2xx by default, so a resolved response is always
+      // 2xx — a body is the active-user answer.
+      if (response.data) {
+        return { active: true, disabled: false };
+      }
+
+      // Unexpected response
+      logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
+      return null;
+    } catch (error) {
+      // 403 does NOT confirm a disable: Keycloak answers a disabled user 401
+      // with the WWW-Authenticate challenge handled below, while a 403 means
+      // the token was ACCEPTED but lacks the scopes/roles the UserInfo
+      // endpoint requires (an active user) — and anything else on the path
+      // (proxy, WAF, rate limiter) can answer 403 too. The middleware acts
+      // destructively on a confirmed disable (soft-deletes the account), so
+      // an uncorroborated 403 stays ambiguous, like an uncorroborated 401.
+      if (error.response && error.response.status === 403) {
+        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null');
+        return null;
+      }
+      // 401 is ambiguous: an expired token and a disabled user both answer
+      // 401. Act only when the challenge names the disable: WWW-Authenticate
+      // carrying BOTH error="invalid_token" and error_description="User
+      // disabled" is the confirmed-disable answer; anything else (expired
+      // token, bad signature) stays ambiguous.
+      if (error.response && error.response.status === 401) {
+        const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
+        // Require BOTH the challenge code and the description: the
+        // middleware acts destructively on a confirmed disable
+        // (soft-deletes the account), so one fragment alone is not proof.
+        const disabled =
+          typeof wwwAuthenticate === 'string' &&
+          /error="invalid_token"/i.test(wwwAuthenticate) &&
+          /error_description="user disabled"/i.test(wwwAuthenticate);
+        if (disabled) {
+          return { active: false, disabled: true };
+        }
+        // Still ambiguous. When a WWW-Authenticate was present but named no
+        // reason we act on, log it — the generic "may be expired" alone
+        // would hide that the header simply did not match. Control
+        // characters (C0, C1, Unicode line separators) stripped and the
+        // value bounded: a challenge is server-controlled log input.
+        const headerNote =
+          typeof wwwAuthenticate === 'string'
+            ? ` (WWW-Authenticate: ${wwwAuthenticate
+                // Stripping control characters IS this regex's purpose.
+                // eslint-disable-next-line no-control-regex
+                .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
+                .slice(0, 200)})`
+            : '';
+        logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+        return null;
+      }
+      // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        logger.warn(`[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`);
+      } else {
+        logger.error(`[KeycloakAuth] Keycloak UserInfo check failed: ${error.message}`);
+      }
+      return null;
+    }
+  },
 
   TokenVerificationError,
 
@@ -475,6 +648,7 @@ const keycloakAuthService = {
     issuerMap.clear();
     initPromise = null;
     initFailedAt = 0;
+    initFailureReason = null;
     initialized = false;
   },
 

@@ -68,17 +68,11 @@ const config = {
     allowedStatuses: ['pending', 'active'] // Allowed statuses for labels - not sure what this is for; David F
   },
 
-  // Security configuration
-  security: {
-    keycloakUrl: process.env.KEYCLOAK_URL,
-    keycloakRealm: process.env.KC_REALM,
-    // Overrides the issuer claim validated on incoming tokens. Set when
-    // tokens are issued for a public origin that differs from the
-    // in-cluster KEYCLOAK_URL (edge proxy or port-forward in front):
-    // JWKS keeps resolving in-cluster while `iss` must match the public
-    // issuer. Defaults to `${KEYCLOAK_URL}/realms/${KC_REALM}`.
-    keycloakExpectedIssuer: process.env.KEYCLOAK_EXPECTED_ISSUER || null
-  },
+  // NOTE: no Keycloak/security block — token verification lives in the shared
+  // OIDC verifier (components/shared/lib/keycloak-auth-service.js), which
+  // reads its env surface (KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_PUBLIC_URL,
+  // KEYCLOAK_BROWSER_ISSUER, KEYCLOAK_JWKS_URL, KEYCLOAK_EXPECTED_ISSUER)
+  // directly; the auth middleware only delegates to it.
 
   //Controls whether or not the clamav service is used for uploaded documents
   virusScanning: process.env.VIRUS_SCANNING === 'true' || false,

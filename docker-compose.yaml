@@ -801,9 +801,13 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
-      # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
+      # Additional Keycloak realms for multi-realm token validation (JSON array
+      # of realm names, e.g. ["partner"] — the shared verifier parses an array;
+      # a JSON map is ignored with a warning).
       # NOTE: Docker Swarm ${VAR:-{}} breaks due to nested braces. Use env file or set empty string.
       - KEYCLOAK_ADDITIONAL_REALMS
       # Keycloak proxy service account — restricted permissions for user/role management
@@ -961,6 +965,8 @@ services:
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
       # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
       # alias stays only a late fallback. Mirrors the dataprep block.
@@ -1479,14 +1485,21 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
-      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
-      # JWKS is fetched via a different (internal) URL; KEYCLOAK_JWKS_URL pins
-      # the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds another accepted
-      # issuer alongside it. No-op when unset (cloud).
+      # Split-URL OIDC (the shared OIDC verifier): KEYCLOAK_PUBLIC_URL and
+      # KEYCLOAK_BROWSER_ISSUER each ADD an accepted issuer alias (they never
+      # override one another — set both together); KEYCLOAK_JWKS_URL pins the
+      # JWKS fetch host; KEYCLOAK_EXPECTED_ISSUER is the strict override that
+      # reduces acceptance to ONE issuer. No-op when unset (cloud).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
-      - KC_REALM=${KEYCLOAK_REALM:-genie}
+      # The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy KC_REALM
+      # spelling).
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
+      # Strict issuer pin (the literal full issuer; when set, ONLY tokens with
+      # this iss are accepted). See env Section on the split-URL OIDC vars.
+      - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
+      - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}

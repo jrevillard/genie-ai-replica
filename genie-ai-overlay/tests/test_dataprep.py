@@ -309,6 +309,57 @@ class TestLoadAndChunk:
         assert result == ["Title Content"]
 
     @pytest.mark.asyncio
+    async def test_docling_method_unsupported_extension_routes_to_standard_loader(self):
+        """A .doc under CONTENT_EXTRACTION_METHOD=docling goes to the standard loader.
+
+        The caller owns the routing: only the extensions docling_document_loader
+        supports reach it; everything else takes the standard loader, which reads
+        .doc/.ppt. Routing an unsupported extension into the docling loader would
+        drop the document to zero chunks behind a warning (issue #1661).
+        """
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "legacy.doc"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        mock_doc = MagicMock(page_content="Legacy doc content")
+        splitter = MagicMock()
+        splitter.create_documents.return_value = [mock_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "docling"),
+            patch.object(dp_module, "docling_document_loader", new_callable=AsyncMock) as docling_loader,
+            patch.object(
+                dp_module,
+                "document_loader",
+                new_callable=AsyncMock,
+                return_value="Legacy doc content",
+            ) as standard_loader,
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert result == ["Legacy doc content"]
+        docling_loader.assert_not_called()
+        standard_loader.assert_awaited_once()
+
+    def test_docling_extension_set_has_a_single_owner(self):
+        """The caller's docling filter IS the loader's exported constant, not a restatement.
+
+        Two independent copies of the same tuple drift: extend one and not the
+        other, and the loader's unsupported-extension guard silently turns live
+        or dead with behaviour no test exercises through the real caller
+        (issue #1661). Identity (not equality) pins the single owner.
+        """
+        from dataprep import genieai_dataprep_utils as utils
+
+        assert dp_module.DOCLING_SUPPORTED_EXTENSIONS is utils.DOCLING_SUPPORTED_EXTENSIONS
+
+    @pytest.mark.asyncio
     async def test_empty_content_returns_empty(self):
         """Empty content from loader returns empty list."""
         dp = create_dataprep()

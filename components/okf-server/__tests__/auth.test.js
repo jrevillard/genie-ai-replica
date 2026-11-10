@@ -60,6 +60,31 @@ describe('auth middleware (authenticate)', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('maps AUTH_SERVICE_UNAVAILABLE to a fixed body — the init detail stays in the log, not the response', async () => {
+    // The verifier's init-failure message carries operator detail (discovery
+    // hostname, HTTP status, the pin-mismatch remedy). The middleware logs it
+    // whole and sends a fixed body — an unauthenticated caller must not be
+    // able to read internal topology out of a rejected request.
+    keycloakAuthService.verifyToken.mockRejectedValue(
+      Object.assign(
+        new Error(
+          'Authentication service is temporarily unavailable (OIDC discovery from http://keycloak:8080/realms/genie/.well-known/openid-configuration failed: getaddrinfo ENOTFOUND keycloak)'
+        ),
+        { code: 'AUTH_SERVICE_UNAVAILABLE', name: 'TokenVerificationError' }
+      )
+    );
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    const next = jest.fn();
+    await authenticate(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'AUTH_SERVICE_UNAVAILABLE',
+      message: 'Authentication service unavailable'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
 });
 
 // ─── Story 6.1: scope resolution + opt-in audience ───────────────────────────

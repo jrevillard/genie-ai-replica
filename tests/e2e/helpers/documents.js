@@ -182,7 +182,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   try {
     token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
   } catch (e) {
-    throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`);
+    throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`, { cause: e });
   }
 
   // The search param narrows the list to the prefix itself, so one page
@@ -194,7 +194,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch (e) {
-    throw new Error(`cleanup: file list failed — no test document was deleted: ${e.message}`);
+    throw new Error(`cleanup: file list failed — no test document was deleted: ${e.message}`, { cause: e });
   }
   if (listRes.status !== 200) {
     throw new Error(`cleanup: file list failed with HTTP ${listRes.status} — no test document was deleted`);

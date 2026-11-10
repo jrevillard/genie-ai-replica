@@ -21,11 +21,10 @@
 //   cd C:/Dev/builds/main && npx playwright test --config=D:/ITU-Gitlab/playwright.config.js
 
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, request, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
-const CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'genie-app';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
 const USER = 'okf-judge-e2e';
 const PW = 'JudgeE2ePass123!';

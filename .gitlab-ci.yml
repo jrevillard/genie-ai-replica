@@ -3252,6 +3252,30 @@ lint:config-validator:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# ESLint gate over the Playwright suite. The suite's specs and helpers
+# lived outside every lint pass, so an undeclared binding inside a
+# page.evaluate argument only surfaced as a ReferenceError minutes into
+# a venue run — `no-undef` turns that whole class into a seconds-fast
+# lint failure. Stays outside .lint_component: the package ships lint
+# scripts only, no Prettier gate (the existing files were never
+# prettier-formatted; reformatting them is not this change's scope).
+lint:e2e:
+  extends: .lint_node
+  script:
+    - cd tests/e2e && npm ci
+    - npm run lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "tests/e2e/**/*"
+        # the suite's eslint.config.js requires this one shared file —
+        # the gate's only dependency outside tests/e2e
+        - "components/shared/eslint-rules-base.js"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Format the scripts of the documentation site.  They live outside every
 # component directory, so no component's own lint job covers them; the
 # checker is CI-critical code, so it gets the same Prettier gate as the rest

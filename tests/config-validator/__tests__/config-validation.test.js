@@ -3780,6 +3780,24 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     ]);
   });
 
+  test('exactly the known jobs invoke jest (#1670)', () => {
+    // The template pin counts who EXTENDS the template; this pin counts
+    // who RUNS jest — a fifth job that hand-copies the capped line
+    // without extending the template passes the sweep (its line carries
+    // the flags) and passes the template pin (the user set is unchanged),
+    // but fails here: adding a jest-invoking job, by any spelling, must
+    // grow this set through a conscious edit.
+    const owners = [...new Set(invocationsOf(ciBlocks()).map((inv) => inv.owner))].sort();
+    expect(owners).toEqual([
+      'config:validate',
+      'test:backend',
+      'test:backend-arango',
+      'test:doc-repo',
+      'test:frontend',
+      'test:okf-server'
+    ]);
+  });
+
   // Pins for the matcher's boundary decisions — no jest invocation in the
   // real CI file uses these shapes today (none is a block-scalar chain, a
   // test:e2e line, or split across a line continuation), so without the
@@ -3851,8 +3869,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // invocation: it runs node, not jest. The predicate is pinned to the
   // report reader of test:backend-arango — a new jest-touching node -e
   // command matches TEST_RUNNER_LOOKING but not this predicate, so it
-  // fails the accounting below.
-  const isJestReportReader = (cmd) => cmd.startsWith('node -e') && cmd.includes('reports/jest-integration');
+  // fails the accounting below. The node -e token may carry a prefix
+  // (`timeout 300 node -e ...`), so the match is position-independent.
+  const isJestReportReader = (cmd) => /(^|\s)node -e\b/.test(cmd) && cmd.includes('reports/jest-integration');
   // Every command of the given shell blocks — no JEST_INVOCATION filter.
   const commandsOf = (blocks) => blocks.flatMap((b) => splitCommands(b.text));
 

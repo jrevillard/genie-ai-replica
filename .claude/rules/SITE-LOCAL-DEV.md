@@ -73,12 +73,11 @@ node --test scripts/check-links.test.mjs
 ```
 
 The scripts themselves are formatted with Prettier (`lint:site-scripts`, stage
-`lint`); run the same check locally with the Prettier pinned in
-`components/shared/lib`:
+`lint`); the gate's command and glob live in the repo-root package.json — run
+the same check locally with:
 
 ```bash
-node components/shared/lib/node_modules/prettier/bin/prettier.cjs \
-  --check "site/scripts/*.mjs"
+npm run format:site-scripts:check
 ```
 
 ## Theming

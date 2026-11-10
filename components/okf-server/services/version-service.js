@@ -281,9 +281,10 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // stores the bundle. The record is SHARED with the crawl conversion, so
     // `status === 'adding'` alone is not enough: the crawl's own 'adding'
     // windows (flush, curating) must not read as a zip import. `concepts_total`
-    // is the discriminator — only a zip import writes it, and the crawl's
-    // start patch clears it, so a repo zip-imported ONCE does not carry the
-    // marker into a later crawl through the record's MERGE.
+    // is the discriminator — only the zip import pairs it with status
+    // 'adding' (the producer writes it standalone at 'classifying'), and the
+    // crawl's start patch clears it, so a repo zip-imported ONCE does not
+    // carry the marker into a later crawl through the record's MERGE.
     const zipImportInFlight = !!(
       repo.conversion &&
       repo.conversion.status === 'adding' &&

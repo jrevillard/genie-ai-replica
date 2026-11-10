@@ -1327,6 +1327,26 @@ describe("the bundle-id cache (issue #1709: the repo's CURRENT bundle doc)", () 
     expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
     expect(authedAxios.get).toHaveBeenCalledTimes(2);
   });
+
+  test('an invalidation of ANOTHER repo does not discard this repo in-flight resolution', async () => {
+    // The epoch counters are per repo: repo B storing a bundle must not
+    // throw away repo A's just-resolved answer (a global counter would —
+    // the resolution re-GETs on every read and the cache stays cold).
+    const OTHER_REPO = `${REPO}-other`;
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    authedAxios.get.mockImplementation(() => gate.then(() => ({ data: { data: [{ file_id: 'bundle-a' }] } })));
+    const inFlight = worker.getBundleFileId(REPO); // cache miss -> GET in flight
+    worker.invalidateBundleFileCache(OTHER_REPO); // an unrelated repo re-imports
+    release();
+    expect(await inFlight).toBe('bundle-a');
+    // The resolution survived: the next read for THIS repo is served from
+    // the cache (the epoch did not move for it).
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-a');
+    expect(authedAxios.get).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ingestWorker.start (bootstrap guard)', () => {

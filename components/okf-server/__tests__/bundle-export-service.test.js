@@ -161,6 +161,11 @@ describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25
     const repo = { repo_id: REPO, name: 'Demo Repo', version: 1, graph_name: `OKF_${REPO}` };
     await bundleExportService.exportBundle(repo, { sub: 'steward-1' });
     expect(invalidateBundleFileCache).toHaveBeenCalledWith(REPO);
+    // The drop must land AFTER the store POST — invalidating before the new
+    // doc exists would let the drain re-seed the PREVIOUS bundle's id.
+    expect(authedAxios.post.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateBundleFileCache.mock.invocationCallOrder[0]
+    );
   });
 
   test('a repo that IS already drained exports its zip as Ingested', async () => {

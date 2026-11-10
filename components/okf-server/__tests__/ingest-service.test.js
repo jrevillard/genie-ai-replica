@@ -64,7 +64,8 @@ jest.mock('../services/service-token', () => ({
 // The worker's bundle-id cache (the repo's CURRENT bundle doc): the import
 // stores a NEW bundle zip, so it must drop the cached id — otherwise the
 // drain keeps mirroring into the first bundle the repo ever had (#1709).
-// Only the export ingest-service imports is mocked; extend when it uses more.
+// Only the export ingest-service imports — `invalidateBundleFileCache` — is
+// mocked; extend when it uses more.
 jest.mock('../workers/ingestWorker', () => ({
   invalidateBundleFileCache: jest.fn()
 }));

@@ -109,10 +109,10 @@ const authenticateToken = async (req, res, next) => {
       if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
         // Keycloak discovery down / init cooldown — NOT a bad token. Kept as
         // the doc-repo 503 contract (frontend httpService handles this code);
-        // the backend middleware 401s the same condition — per-component
-        // HTTP mapping over the one shared verifier. Warn-level with no
-        // token diagnostics: an outage must not flood the error stream with
-        // per-request entries and bury genuine 401 root causes.
+        // the backend middleware maps the same condition to the same 503 —
+        // per-component HTTP mapping over the one shared verifier. Warn-level
+        // with no token diagnostics: an outage must not flood the error
+        // stream with per-request entries and bury genuine 401 root causes.
         logger.warn('[KEYCLOAK-AUTH] verifier unavailable', {
           path,
           err_message: err && err.message

@@ -505,6 +505,14 @@ describe('keycloakAuthService', () => {
   });
 
   describe('verifyToken with force-refresh on signature failure', () => {
+    // The rotation candidate: jose's "no key matches this kid" — the key set
+    // may be stale because the realm rotated its keys.
+    const unknownKidError = () => {
+      const err = new Error('no key found matching the kid');
+      err.name = 'JWKSNoMatchingKey';
+      return err;
+    };
+
     beforeEach(() => {
       // Reset mocks
       mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
@@ -515,10 +523,9 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should force-refresh JWKS on signature failure with valid exp and retry once', async () => {
-      const signatureError = new Error('Signature verification failed');
+    it('should force-refresh JWKS on an unknown kid (rotation candidate) and retry once', async () => {
       mockJwtVerify
-        .mockRejectedValueOnce(signatureError) // First call: signature fails
+        .mockRejectedValueOnce(unknownKidError()) // First call: kid not in the key set
         .mockResolvedValueOnce({
           // Second call: succeeds after refresh
           payload: mockJwtPayload,
@@ -538,11 +545,44 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(2);
     });
 
+    it('should NOT force-refresh on a resolved-kid signature failure (junk-signature flood)', async () => {
+      // A resolved kid whose signature does not verify can never become
+      // valid through rotation. Refreshing the key set only zeroes the JWKS
+      // cache TTL, so a flood of junk-signature tokens would make every
+      // legitimate token pay a fresh JWKS fetch (#1703).
+      mockJwtVerify.mockRejectedValue(new Error('signature verification failed'));
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // jwtVerify called once — no refresh, no retry
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT force-refresh an unknown-kid token with no exp claim (never rotatable)', async () => {
+      // A missing exp can never pass jose's requiredClaims ['iss','exp'], so
+      // it can never be a rotation case: fast-fail, no refresh.
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+
+      // exp: undefined → the encoded payload carries NO exp claim
+      const token = generateMockJwtString({ exp: undefined });
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
     it('should reject with TOKEN_INVALID when retry also fails', async () => {
-      const signatureError = new Error('Signature verification failed');
       mockJwtVerify
-        .mockRejectedValueOnce(signatureError) // First call: fails
-        .mockRejectedValueOnce(signatureError); // Retry: also fails
+        .mockRejectedValueOnce(unknownKidError()) // First call: unknown kid
+        .mockRejectedValueOnce(unknownKidError()); // Retry: also fails
 
       mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
 
@@ -593,6 +633,21 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    it('should not force-refresh an unknown-kid token whose exp has passed', async () => {
+      // The expiry outranks the rotation candidate: an expired token is
+      // TOKEN_EXPIRED, and the key set is left alone.
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+
+      const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
+      });
+
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
     it('should reject with TOKEN_INVALID on JWTClaimValidationFailed (iss mismatch)', async () => {
       const claimError = new Error('iss claim validation failed');
       claimError.name = 'JWTClaimValidationFailed';
@@ -611,8 +666,7 @@ describe('keycloakAuthService', () => {
     });
 
     it('should succeed on retry after force-refresh', async () => {
-      const signatureError = new Error('Signature verification failed');
-      mockJwtVerify.mockRejectedValueOnce(signatureError).mockResolvedValueOnce({
+      mockJwtVerify.mockRejectedValueOnce(unknownKidError()).mockResolvedValueOnce({
         payload: mockJwtPayload,
         protectedHeader: { alg: 'RS256' }
       });
@@ -627,8 +681,7 @@ describe('keycloakAuthService', () => {
     });
 
     it('should handle forceRefresh errors gracefully', async () => {
-      const signatureError = new Error('Signature verification failed');
-      mockJwtVerify.mockRejectedValue(signatureError);
+      mockJwtVerify.mockRejectedValue(unknownKidError());
 
       // Mock forceRefresh to throw (network error scenario)
       mockCreateRemoteJWKSet.mockImplementation(() => {

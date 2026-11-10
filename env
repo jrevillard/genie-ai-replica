@@ -852,6 +852,19 @@ KEYCLOAK_URL=https://localhost/auth
 #                           Default: unset. Used by: okf-server (shared verifier)
 #                           + document-repository middleware. Compose: yes.
 #                           Ansible: yes.
+#   KEYCLOAK_DISCOVERY_URL — pins the host the OIDC DISCOVERY document is
+#                           fetched from (same shape as KEYCLOAK_URL — a base
+#                           URL; the realm path is appended to it). The
+#                           verifier ALWAYS needs the discovery document:
+#                           KEYCLOAK_JWKS_URL only replaces the certs leg.
+#                           It moves WHERE the document comes from, never WHO
+#                           is accepted (the accepted issuers still come from
+#                           that document + the aliases above).
+#                           Default: unset (= KEYCLOAK_URL).
+#                           Used by: every consumer of the shared verifier
+#                           (backend, document-repository, okf-server).
+#                           Compose: yes. Ansible: yes
+#                           (group_vars keycloak_discovery_url).
 #   KEYCLOAK_BROWSER_ISSUER — a second accepted issuer alongside the pinned one.
 #                           Default: unset. Used by: document-repository middleware
 #                           + okf-server (shared verifier). Compose: yes.
@@ -866,7 +879,8 @@ KEYCLOAK_URL=https://localhost/auth
 #                           okf-server). Compose: yes. Ansible: yes
 #                           (group_vars keycloak_expected_issuer).
 #   KEYCLOAK_DISCOVERY_TIMEOUT_MS — OIDC discovery fetch budget in ms (the
-#                           discovery leg ALWAYS targets ${KEYCLOAK_URL}; the
+#                           discovery leg targets ${KEYCLOAK_DISCOVERY_URL} when
+#                           set, else ${KEYCLOAK_URL}; without that override the
 #                           JWKS fetch host override above does not move it —
 #                           KEYCLOAK_URL must be container-reachable). Must be
 #                           a bare integer — anything else ('10s', 'abc',
@@ -874,13 +888,16 @@ KEYCLOAK_URL=https://localhost/auth
 #                           Compose: yes. Ansible: yes
 #                           (group_vars keycloak_discovery_timeout_ms).
 #                           NOTES: KEYCLOAK_JWKS_URL pins ONE certs URL — with
-#                           KEYCLOAK_ADDITIONAL_REALMS every realm's issuers
-#                           would map to that one realm's keys, so multi-realm
-#                           deployments must leave the override unset.
+#                           KEYCLOAK_ADDITIONAL_REALMS the additional realms
+#                           are SKIPPED (every realm's issuer would map to that
+#                           one realm's keys), so their tokens are rejected
+#                           with 'Unknown issuer'. Multi-realm deployments
+#                           must leave the override unset.
 # Cloud/Swarm deployments where the public URL resolves internally: leave all unset.
 # KEYCLOAK_PUBLIC_URL=https://localhost/auth
 # KEYCLOAK_INTERNAL_URL=http://keycloak:8080
 # KEYCLOAK_JWKS_URL=http://keycloak:8080
+# KEYCLOAK_DISCOVERY_URL=http://keycloak:8080
 # KEYCLOAK_BROWSER_ISSUER=https://localhost/auth/realms/genie
 
 # OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make

@@ -3,8 +3,9 @@
 // keycloak-auth-service.js — Shared OIDC token verifier (jose/JWKS) for all Node services.
 // Issuer surface: the OIDC discovery issuer plus KEYCLOAK_PUBLIC_URL and
 // KEYCLOAK_BROWSER_ISSUER aliases (split internal/public OIDC URLs), with
-// KEYCLOAK_JWKS_URL as the JWKS fetch-host override and KEYCLOAK_EXPECTED_ISSUER
-// as a strict single-issuer pin.
+// KEYCLOAK_JWKS_URL as the JWKS fetch-host override, KEYCLOAK_DISCOVERY_URL
+// as the discovery fetch-host override and KEYCLOAK_EXPECTED_ISSUER as a
+// strict single-issuer pin.
 'use strict';
 
 const { jwtVerify, createRemoteJWKSet } = require('jose');
@@ -13,6 +14,16 @@ const { logger } = require('./logger');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
+// KEYCLOAK_DISCOVERY_URL overrides WHERE the OIDC discovery document is
+// fetched from. Same shape as KEYCLOAK_URL (a base URL — the realm path is
+// appended to it). It exists for split-URL deployments, where the public
+// KEYCLOAK_URL is not reachable from the container network while the
+// internal Keycloak is (#1712). Unset = KEYCLOAK_URL, i.e. the historical
+// behaviour. It moves WHERE the discovery document comes from, never WHO is
+// accepted: the accepted issuers still come from that document (plus the
+// KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases).
+const KEYCLOAK_DISCOVERY_URL = process.env.KEYCLOAK_DISCOVERY_URL;
+const DISCOVERY_BASE_URL = (KEYCLOAK_DISCOVERY_URL || KEYCLOAK_URL || '').replace(/\/+$/, '');
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 
@@ -79,7 +90,26 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
       inner = createRemoteJWKSet(new URL(_jwksUri));
       createdAt = Date.now();
     }
-    return inner(protectedHeader, token);
+    try {
+      return await inner(protectedHeader, token);
+    } catch (err) {
+      // This wrapper is the ONLY network call of the verification path: a
+      // failure here is the AUTH SERVICE's, never the token's. The single
+      // token-side error this leg can raise is an unknown kid
+      // (JWKSNoMatchingKey — the key set may simply be stale), which the
+      // caller treats as a rotation candidate. Everything else (a refused
+      // connection, a non-200 response, an unparsable body, a timeout) is
+      // an outage: it must NOT be reported as a bad token, or the consumers
+      // answer 401 and send every user to the login page during an
+      // infrastructure outage (#1723).
+      if (err && err.name === 'JWKSNoMatchingKey') {
+        throw err;
+      }
+      throw new TokenVerificationError(
+        'AUTH_SERVICE_UNAVAILABLE',
+        `Authentication service is temporarily unavailable (JWKS fetch failed: ${err && err.message})`
+      );
+    }
   }
 
   /**
@@ -115,10 +145,10 @@ let initialized = false;
  * @throws {Error} If discovery fetch fails
  */
 async function init(idpUrl) {
-  if (!idpUrl && !KEYCLOAK_URL) {
-    throw new Error('KEYCLOAK_URL environment variable is required for OIDC discovery');
+  if (!idpUrl && !DISCOVERY_BASE_URL) {
+    throw new Error('KEYCLOAK_URL (or KEYCLOAK_DISCOVERY_URL) environment variable is required for OIDC discovery');
   }
-  const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
+  const baseUrl = idpUrl || `${DISCOVERY_BASE_URL}/realms/${KEYCLOAK_REALM}`;
   // The realm ACTUALLY being initialized, derived from the idpUrl's
   // /realms/<name> suffix; falls back to the module-level KEYCLOAK_REALM when
   // idpUrl is absent (the primary init call is init() with no args).
@@ -299,13 +329,20 @@ async function initAllRealms() {
   if (additionalRealms.length === 0) return;
 
   // KEYCLOAK_JWKS_URL pins ONE certs URL — with additional realms, every
-  // realm's issuer would map to that one realm's keys. Surfaced on the
-  // verifier's first use (init is lazy), not at container boot.
+  // realm's issuer would map to that one realm's keys, so every
+  // partner-realm token would fail signature verification (misleadingly)
+  // for the life of the deployment. The additional realms are SKIPPED,
+  // exactly as under the strict issuer pin below: a partner token then
+  // fails with the clear 'Unknown issuer' instead of a misleading
+  // signature failure, and the accepted-issuer set says exactly which
+  // realms this deployment serves (#1701).
   if (process.env.KEYCLOAK_JWKS_URL) {
     logger.warn(
-      "[KeycloakAuth] KEYCLOAK_JWKS_URL pins ONE realm's certs URL — additional realms " +
-        `(${additionalRealms.join(', ')}) would resolve to the wrong keys; leave the override unset on multi-realm deployments`
+      "[KeycloakAuth] KEYCLOAK_JWKS_URL pins ONE realm's certs URL — skipping additional realms " +
+        `(${additionalRealms.join(', ')}): their tokens would verify against the wrong keys; ` +
+        'leave the override unset on multi-realm deployments'
     );
+    return;
   }
 
   // Under the strict issuer pin, additional realms can never register: the
@@ -322,7 +359,7 @@ async function initAllRealms() {
   }
 
   for (const realmName of additionalRealms) {
-    const realmUrl = `${KEYCLOAK_URL}/realms/${realmName}`;
+    const realmUrl = `${DISCOVERY_BASE_URL}/realms/${realmName}`;
     try {
       await init(realmUrl);
       logger.info(`[KeycloakAuth] Additional realm initialized: ${realmName}`);
@@ -506,21 +543,35 @@ const keycloakAuthService = {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
       }
 
-      // Signature failure with valid exp → force-refresh JWKS and retry once
-      try {
-        jwks.forceRefresh();
-        const result = toResult(await verifyWithJwt());
+      // Rotation candidate ONLY: an unknown kid (JWKSNoMatchingKey) — the
+      // key set may be stale because the realm rotated its keys. A RESOLVED
+      // kid whose signature does not verify can never become valid through
+      // rotation, so the key set is NOT refreshed for it: the refresh zeroes
+      // the cache TTL, so a flood of junk-signature tokens would otherwise
+      // re-fetch the JWKS from Keycloak on nearly every request (#1703).
+      // A token without a usable exp is not a rotation candidate either —
+      // jose's requiredClaims ('iss','exp') would reject it anyway, so it
+      // is fast-failed instead of refreshed.
+      const rotationCandidate =
+        err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
+      if (rotationCandidate) {
+        try {
+          jwks.forceRefresh();
+          const result = toResult(await verifyWithJwt());
 
-        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
-        return result;
-      } catch (retryErr) {
-        // Retry failed → TOKEN_INVALID
-        if (retryErr instanceof TokenVerificationError) {
-          throw retryErr;
+          logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
+          return result;
+        } catch (retryErr) {
+          // Retry failed → TOKEN_INVALID
+          if (retryErr instanceof TokenVerificationError) {
+            throw retryErr;
+          }
+          logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
+          throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
         }
-        logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
-        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
+
+      throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
     }
   },
 

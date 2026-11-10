@@ -54,6 +54,11 @@ const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'R
 // from the requested URL, so additional-realm inits get their own issuer and
 // JWKS — the shape a real multi-realm Keycloak serves.
 const fetchCalls = [];
+// Mid-life outage switch: the JWKS endpoint starts REFUSING requests after a
+// successful init — the topology #1723 describes (the key set is cached, the
+// auth service goes down, and the next key-set fetch must be classified as an
+// outage rather than as a bad token).
+let jwksDown = false;
 global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
@@ -102,6 +107,9 @@ global.fetch = async (url, opts) => {
   }
   // The JWKS URIs share the discovery issuer prefix — the regex above is
   // still safe because it only matches /.well-known/ discovery paths.
+  if (jwksDown && u.includes('/protocol/openid-connect/certs')) {
+    return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({}) };
+  }
   if (u === JWKS_URI) {
     return { ok: true, status: 200, json: async () => JWKS, headers: new Map([['cache-control', 'no-store']]) };
   }
@@ -115,6 +123,7 @@ global.fetch = async (url, opts) => {
 // reads its env surface at module load.
 function loadVerifier(env) {
   fetchCalls.length = 0; // per-topology recorder — no earlier test's traffic
+  jwksDown = false; // per-topology outage switch
   delete require.cache[require.resolve('../../shared/lib/keycloak-auth-service.js')];
   for (const key of [
     'KEYCLOAK_URL',
@@ -123,6 +132,7 @@ function loadVerifier(env) {
     'KEYCLOAK_PUBLIC_URL',
     'KEYCLOAK_BROWSER_ISSUER',
     'KEYCLOAK_JWKS_URL',
+    'KEYCLOAK_DISCOVERY_URL',
     'KEYCLOAK_EXPECTED_ISSUER',
     'KEYCLOAK_DISCOVERY_TIMEOUT_MS'
   ]) {
@@ -355,6 +365,138 @@ test('additional realms without a pin: a partner-realm token verifies against it
   const token = await sign(baseClaims(partnerIss), { partner: true });
   const payload = await svc.verifyToken(token);
   assert.equal(payload.iss, partnerIss);
+});
+
+test('JWKS_URL override + additional realms: the partner realm is skipped and its token reports Unknown issuer', async () => {
+  // #1701: the override pins ONE realm's certs URL — every realm's issuer
+  // would map to those keys, so a partner token failed SIGNATURE
+  // verification (misleadingly) for the life of the deployment. The
+  // additional realms are now skipped, exactly as under the strict issuer
+  // pin: the partner token fails with the clear 'Unknown issuer'.
+  const svc = loadVerifier({
+    KEYCLOAK_JWKS_URL: JWKS_URI,
+    KEYCLOAK_ADDITIONAL_REALMS: '["partner"]'
+  });
+  const partnerDiscoveryUrl = `${KEYCLOAK_URL}/realms/partner/.well-known/openid-configuration`;
+  const primaryToken = await sign(baseClaims(DISCOVERY_ISSUER));
+  const payload = await svc.verifyToken(primaryToken);
+  assert.equal(payload.iss, DISCOVERY_ISSUER);
+  assert.ok(
+    !fetchCalls.some((c) => c === partnerDiscoveryUrl),
+    'partner realm discovery was fetched — the JWKS override did not skip the additional realms'
+  );
+  const partnerIss = `${KEYCLOAK_URL}/realms/partner`;
+  const partnerToken = await sign(baseClaims(partnerIss), { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(partnerToken),
+    (err) => err.code === 'TOKEN_INVALID' && err.message === 'Unknown issuer'
+  );
+});
+
+test('KEYCLOAK_DISCOVERY_URL moves the discovery leg; the issuer surface is unchanged', async () => {
+  // #1712: the verifier ALWAYS needs the discovery document — the JWKS
+  // fetch-host override replaces only the certs leg. The discovery leg now
+  // targets the override, and the accepted issuers still come from the
+  // document that leg returned.
+  const svc = loadVerifier({ KEYCLOAK_DISCOVERY_URL: 'http://internal-kc:8080' });
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  const payload = await svc.verifyToken(token);
+  assert.equal(payload.iss, DISCOVERY_ISSUER);
+  assert.ok(
+    fetchCalls.includes('http://internal-kc:8080/realms/genie/.well-known/openid-configuration'),
+    `the discovery leg did not target the override: ${JSON.stringify(fetchCalls)}`
+  );
+  assert.ok(
+    !fetchCalls.includes(`${DISCOVERY_ISSUER}/.well-known/openid-configuration`),
+    'the discovery leg still targeted KEYCLOAK_URL'
+  );
+});
+
+test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not a bad token', async () => {
+  // #1723: once initialized, the verifier classified a JWKS fetch failure as
+  // TOKEN_INVALID — a 401 that sends every user to the login page during an
+  // infrastructure outage. The key-set leg is the verifier's own network
+  // call: its failure is the AUTH SERVICE's, not the token's.
+  const svc = loadVerifier();
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  assert.equal((await svc.verifyToken(token)).sub, 'user-1');
+
+  jwksDown = true; // the auth service goes down
+
+  // An unknown kid forces the next key-set fetch (the rotation path).
+  const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(rotated),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
+});
+
+test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector)', async () => {
+  // #1703: the force-refresh carve-out fired on EVERY junk-signature token,
+  // zeroing the JWKS cache TTL — the key set was re-fetched from Keycloak on
+  // effectively every request, and every legitimate interleaved token paid a
+  // fresh fetch. A resolved kid with a bad signature can never become valid
+  // through rotation, so it must not touch the cache.
+  const svc = loadVerifier();
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await svc.verifyToken(token); // warm: the key set is fetched once
+  const jwksFetches = () => fetchCalls.filter((c) => c === JWKS_URI).length;
+  const before = jwksFetches();
+  assert.equal(before, 1);
+
+  const [h, p, sig] = token.split('.');
+  const flipped = `${sig.slice(0, -2)}${sig.endsWith('AA') ? 'BB' : 'AA'}`;
+  for (let i = 0; i < 5; i++) {
+    await assert.rejects(
+      () => svc.verifyToken(`${h}.${p}.${flipped}`),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  }
+  // No re-fetch for the junk class...
+  assert.equal(jwksFetches(), before);
+  // ...and the legitimate token still verifies on the cached key set.
+  assert.equal((await svc.verifyToken(token)).sub, 'user-1');
+  assert.equal(jwksFetches(), before);
+});
+
+test('an unknown-kid token with no exp claim is fast-failed without a key-set refresh', async () => {
+  // #1703 addendum: a missing exp can never pass jose's requiredClaims
+  // ('iss','exp'), so it can never be a rotation case — it must not trigger a
+  // key-set refresh either.
+  const svc = loadVerifier();
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await svc.verifyToken(token); // warm
+  const jwksFetches = () => fetchCalls.filter((c) => c === JWKS_URI).length;
+  const before = jwksFetches();
+
+  const claims = baseClaims(DISCOVERY_ISSUER);
+  delete claims.exp;
+  const unknownKid = await sign(claims, { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(unknownKid),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+  assert.equal(jwksFetches(), before);
+});
+
+test('an unknown-kid token (rotation candidate) refreshes the key set — the price of rotation recovery', async () => {
+  // The rotation candidate KEEPS its refresh path (D3): an unknown kid may
+  // be a rotated key, and a realm that reuses a kid with new key material has
+  // no other recovery path than a refresh. The cost is one key-set fetch per
+  // unknown-kid token — the residual amplification this wave accepts
+  // deliberately (recorded in the MR body).
+  const svc = loadVerifier();
+  const warm = await sign(baseClaims(DISCOVERY_ISSUER));
+  await svc.verifyToken(warm); // warm: one fetch
+  const jwksFetches = () => fetchCalls.filter((c) => c === JWKS_URI).length;
+  const before = jwksFetches();
+
+  const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+  assert.ok(jwksFetches() > before, 'the rotation candidate did not refresh the key set');
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

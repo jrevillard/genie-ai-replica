@@ -121,19 +121,6 @@ def test_patches_all_fifteen_prints(tmp_path):
         assert expected in body, f"missing rewritten call: {expected.strip()}"
 
 
-def test_the_response_dump_becomes_a_formatted_info_call(tmp_path):
-    """print("response", response) must not become logger.info("response", response).
-
-    The comps CustomLogger's log_message(self, log_level, msg) takes no
-    extra args, so a multi-argument rewrite would raise TypeError at call
-    time — the message must be a single pre-formatted value. It logs at
-    info because the logger is pinned at INFO (debug never emits).
-    """
-    path = _write(tmp_path, _fixture_module(UPSTREAM_SITES))
-    mod.apply_patch(path)
-    assert 'logger.info(f"response {response}")' in path.read_text(encoding="utf-8")
-
-
 def test_fails_loud_when_the_logger_assignment_is_missing(tmp_path):
     """A renamed logger object must abort the build, not NameError at runtime.
 

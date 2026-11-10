@@ -272,11 +272,46 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // proceed. (Pre-ingest repos have no Pending zips by construction.)
     // Delegated to backingFileService.markIngested — the same flip the settle
     // path uses (same condition, same endpoint, non-fatal); one definition.
+    //
+    // A ZIP IMPORT IN FLIGHT is not that: the import stores its bundle zip
+    // before it parses the concepts (issue #1709), so a Pending bundle can
+    // belong to a running import. Reconciling it would report a drain that
+    // never happened — the zip's conversion record ('adding' → 'done'/'failed')
+    // is the in-flight signal, and it is written by the same import that
+    // stores the bundle. The record is SHARED with the crawl conversion, so
+    // `status === 'adding'` alone is not enough: the crawl's own 'adding'
+    // windows (flush, curating) must not read as a zip import. `concepts_total`
+    // is the discriminator — only the zip import pairs it with status
+    // 'adding' (the producer writes it standalone at 'classifying'), and the
+    // crawl's start patch clears it, so a repo zip-imported ONCE does not
+    // carry the marker into a later crawl through the record's MERGE.
+    //
+    // The skip is AGE-BOUNDED on the record's started_at: nothing clears a
+    // record whose import CRASHED mid-run (no reaper for the conversion
+    // doc), and an 'adding' marker frozen forever would permanently disable
+    // this reconcile — the self-heal would be dead for that repo. An import
+    // runs minutes; anything still 'adding' after a day is a crashed run,
+    // and its Pending bundle (if any) is exactly the stale marker the
+    // reconcile exists for. No / unparsable started_at = no proof of a live
+    // run = reconcile runs. The bound is TWO-SIDED (absolute distance): a
+    // stamp far in the FUTURE (clock skew, a bogus writer) proves no more
+    // than a stale one, so it is treated as unproven; a small forward skew
+    // stays inside the window and reads as a live run.
+    const ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const startedAtMs = repo.conversion ? Date.parse(repo.conversion.started_at) : NaN;
+    const zipImportInFlight = !!(
+      repo.conversion &&
+      repo.conversion.status === 'adding' &&
+      repo.conversion.concepts_total != null &&
+      !Number.isNaN(startedAtMs) &&
+      Math.abs(Date.now() - startedAtMs) < ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS
+    );
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (
-      await drainInFlight(
+      !zipImportInFlight &&
+      (await drainInFlight(
         `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
-      )
+      ))
     ) {
       try {
         const res = await backingFileService.markIngested(repo_id);

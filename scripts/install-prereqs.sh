@@ -61,9 +61,9 @@ KC_OPERATOR_CPU_LIMIT="${KC_OPERATOR_CPU_LIMIT:-1000m}"
 # only needs a CRD that serves `postgresql.cnpg.io/v1`, which 1.24.0 does
 # — it is the combination the laptop cluster runs.
 CNPG_VERSION="${CNPG_VERSION:-0.22.0}"
-ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.5}"
+ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.7}"
 SEALED_SECRETS_VERSION="${SEALED_SECRETS_VERSION:-0.40.0}"
-CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.18.2}"
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.21.3}"
 # Helm CHART version of vm/victoria-metrics-operator (this chart ships
 # app v0.75.0 — the version that serves VLSingle/VTSingle under
 # operator.victoriametrics.com/v1, which this chart's CRs require).

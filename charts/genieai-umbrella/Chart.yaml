@@ -6,12 +6,26 @@ description: |
   per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
   genie-ai-deploy repo.
 type: application
-version: 0.2.169
+version: 0.2.170
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two versions on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.169
+appVersion: 0.2.170
+# The Kubernetes versions the chart is validated on: CI renders and
+# dry-runs against 1.33 (kind) and the laptop cluster runs 1.37 (Calico,
+# policies enforced). Helm refuses an install outside the range, with
+# the range named in the error — a cluster too old (or too new, before
+# the stack's own components support it) is a configuration error, not a
+# runtime surprise.
+#
+# The bound is a PLATFORM contract, not a claim that every pinned
+# component supports the whole range: Keycloak's tested range ends at
+# 1.34 and cert-manager's at 1.36, so 1.35+ runs them in their
+# upstream best-effort mode. The range says where the chart is
+# exercised, and site/content/en/docs/deploy/kubernetes.md says what
+# the components upstream guarantee.
+kubeVersion: ">=1.33.0-0 <1.38.0-0"
 keywords:
   - genie-ai
   - umbrella

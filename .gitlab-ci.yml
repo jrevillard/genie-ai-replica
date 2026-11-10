@@ -3994,7 +3994,18 @@ test:flutter:
 # the rendered API manifest. kubeconform is shipped as a tarball so install
 # directly from stdin.
 chart:lint:
-  image: dtzar/helm-kubectl:3.16.0
+  # helm 4.3.0 — the same helm the chart is developed against locally.
+  # The pipeline and the workstation must render the chart with the
+  # SAME helm: helm 3 and helm 4 differ in template semantics, and a
+  # chart that only ever renders green on one of them is a chart
+  # nobody can trust on the other. The tag is pinned (never `latest`:
+  # a mutable tag changes the pipeline without a commit).
+  # The Kubernetes version is passed EXPLICITLY to every render and
+  # lint below (--kube-version): without it helm compares the
+  # chart's kubeVersion constraint against the Kubernetes version
+  # COMPILED INTO the helm binary, so the same chart renders on one
+  # machine and fails on another.
+  image: dtzar/helm-kubectl:4.3.0
   stage: test
   interruptible: true
   before_script:
@@ -4119,7 +4130,7 @@ chart:lint:
     # a copied file the template does not list is never rendered, and a
     # listed file that is missing inlines as an empty dashboard.
     - ./scripts/sync-chart-dashboards.sh --check || { echo "grafana dashboard drift - run 'make chart-dashboards' and commit the result"; exit 1; }
-    - helm lint charts/genieai-umbrella --strict
+    - helm lint charts/genieai-umbrella --strict --kube-version 1.33.0
     # The render-time guards, EXERCISED. `helm lint --strict` downgrades
     # every `fail()` to an INFO line and still exits 0 (helm 3.16.3
     # prints `level=INFO msg="funcMap fail"` for each guard it hits), and
@@ -4134,7 +4145,7 @@ chart:lint:
     # "Mail is not optional"): SHAPE values, nothing here reaches a
     # cluster.
     - >-
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       > /tmp/rendered.yaml
     # Full-surface render (render-only, no install cost): with defaults
     # opea.enabled / observability.metrics / traces / grafana are all OFF,
@@ -4142,7 +4153,7 @@ chart:lint:
     # merges green. This is the gate that catches the class of defect the
     # base render cannot see.
     - >-
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered-full.yaml
@@ -4165,7 +4176,7 @@ chart:lint:
     # the same thing, or a surface is covered in one job and missing
     # from the other for reasons nobody wrote down.
     - >-
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       $(cat charts/ci/render-full-flags)
       --set clusterProfile=prod
       --set ingress.tls.enabled=true
@@ -4178,7 +4189,7 @@ chart:lint:
     # endpoint, model Deployment, NetworkPolicy port and model-cache PVC
     # differs between the two modes.
     - >-
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
@@ -4316,7 +4327,7 @@ chart:contract:
     - helm dependency update charts/genieai-umbrella
   script:
     - >-
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       > /tmp/rendered.yaml
     # Extract the gateway OpenTelemetryCollector's inline config map and
     # swap the in-cluster VL endpoint for the smoke's container placeholder.
@@ -4487,7 +4498,18 @@ chart:parity:
   # Docker daemon (helm + python only). In the group it parked a 17 s
   # render-and-compare behind the two kind boots and delayed the
   # merge-gating crd-validate with it.
-  image: dtzar/helm-kubectl:3.16.0
+  # helm 4.3.0 — the same helm the chart is developed against locally.
+  # The pipeline and the workstation must render the chart with the
+  # SAME helm: helm 3 and helm 4 differ in template semantics, and a
+  # chart that only ever renders green on one of them is a chart
+  # nobody can trust on the other. The tag is pinned (never `latest`:
+  # a mutable tag changes the pipeline without a commit).
+  # The Kubernetes version is passed EXPLICITLY to every render and
+  # lint below (--kube-version): without it helm compares the
+  # chart's kubeVersion constraint against the Kubernetes version
+  # COMPILED INTO the helm binary, so the same chart renders on one
+  # machine and fails on another.
+  image: dtzar/helm-kubectl:4.3.0
   stage: test
   retry:
     max: 1
@@ -4503,7 +4525,7 @@ chart:parity:
     # they only exist when the tier is enabled. A GPU node host is needed
     # because the external mode refuses to render without one.
     - >
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags)
       --set opea.enabled=true
       --set okf.enabled=true
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
@@ -4615,7 +4637,7 @@ chart:crd-validate:
     - ./scripts/install-prereqs.sh --with-grafana
     - |
       set -e
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags) \
         $(cat charts/ci/render-full-flags) \
         --set opea.gpu.mode=in-cluster \
         > /tmp/crd-validate.yaml
@@ -4630,7 +4652,7 @@ chart:crd-validate:
     # with helm lint, kubeconform and the CI YAML parse all green.
     - |
       set -e
-      helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags) \
+      helm template test charts/genieai-umbrella -n genieai --kube-version 1.33.0 $(cat charts/ci/render-base-flags) \
         $(cat charts/ci/render-full-flags) \
         --set clusterProfile=prod \
         --set ingress.tls.enabled=true \

@@ -185,6 +185,23 @@ contractual evidence — a fresh clone does not carry them.)
   in a different one); mutation-tested: rule removed → the backend
   policy loses its 443 line and the case fails. The docs site
   paragraph covers both knobs together.
+- **The platform contract is now declared (chart 0.2.170)** — the chart
+  now declares `kubeVersion: ">=1.33.0-0 <1.38.0-0"`: Helm refuses an
+  install outside the range and names the range in the error, instead
+  of the cluster's own version deciding what breaks. The range is where
+  the chart is EXERCISED (CI renders and dry-runs against 1.33 in kind;
+  the laptop cluster runs 1.37 with Calico enforcing the policies), not
+  a claim that every pinned component supports the whole range: the
+  upstream matrices are Keycloak tested up to 1.34 and cert-manager up
+  to 1.36, so 1.35+ runs them in their best-effort mode — the docs
+  page says so, and 1.33/1.34 are the versions every component
+  covers. Two pins moved with it: cert-manager v1.18.2 (EOL since
+  2026-03-10, its tested range ended at 1.33) → v1.21.3, and
+  kube-arangodb 1.4.5 → 1.4.7 (its Kubernetes libraries moved to
+  1.35.8). The kubectl the chart downloads stays at v1.33: it serves
+  every cluster in the range, so it pins the range's LOW bound, and
+  the only commands the hooks run (`get ns`, `describe ns`, `create -f`
+  of an Event) are on stable APIs.
 - **The vendored dependency tarballs no longer block a rebase** — the
   branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
   replay recreated them as untracked files and the merge refused to

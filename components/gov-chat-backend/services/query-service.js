@@ -693,11 +693,16 @@ class QueryService {
       // The SERVER's engaged flag is the gate — read, never re-derived.
       const engaged = config?.engaged === true;
       const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
+      // A composition the BFF synthesized locally (an upstream outage, a 403,
+      // a malformed body) carries no upstream truth: its serving set is
+      // UNKNOWN, not empty. The source label tells the two apart (#1687).
+      const degraded = retrievalConfigClient.isBffSynthesized(config);
       logger.info('QueryService.fanout_config_resolved', {
         queryId,
         correlationId,
         mode,
         engaged,
+        source: config?.source,
         serving_graph_count: config?.serving_graph_count,
         serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
         warnings: warnings.length
@@ -761,11 +766,18 @@ class QueryService {
         }
         if (!engaged) {
           // Structured telemetry for the admin dashboard (NOT surfaced to the
-          // user chat).
+          // user chat). A degraded composition does NOT mean "the deployment
+          // serves zero graphs" — it means the upstream could not be reached,
+          // so the serving set is UNKNOWN (#1687): a distinct warning code,
+          // or the dashboard reads an outage as a misconfiguration.
           logger.warn('QueryService.fanout_warning', {
             queryId,
             correlationId,
-            fanout: { warning: 'okf_only_zero_serving', mode, engaged },
+            fanout: {
+              warning: degraded ? 'okf_only_serving_unknown' : 'okf_only_zero_serving',
+              mode,
+              engaged
+            },
             server_warnings: warnings
           });
         }

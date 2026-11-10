@@ -44,6 +44,11 @@ jest.mock('worker_threads', () => ({
 jest.mock('../services/retrieval-config-client', () => ({
   getRetrievalConfig: jest.fn(),
   getAuthorizedGraphs: jest.fn(),
+  // Mirrors the real predicate: the source labels the BFF synthesizes locally
+  // (an upstream outage, a 403) vs the ones the okf-server stamps.
+  isBffSynthesized: jest.fn(
+    (config) => config?.source === 'bff-last-known-good' || config?.source === 'bff-fail-closed-default'
+  ),
   OkfAuthzUnauthorizedError: class OkfAuthzUnauthorizedError extends Error {
     constructor(message) {
       super(message);
@@ -206,6 +211,36 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       expect.objectContaining({
         fanout: { warning: 'okf_only_zero_serving', mode: 'okf_only', engaged: false }
       })
+    );
+  });
+
+  it('OKF_ONLY_DEGRADED: a locally synthesized composition is NOT reported as "the deployment serves zero graphs"', async () => {
+    // The upstream could not be reached, so the BFF served its last-known-good
+    // posture. The serving set is UNKNOWN (not empty): the warning code and
+    // the source label must say so, or the dashboard reads an outage as a
+    // misconfigured deployment.
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({
+        config: { mode: 'okf_only' },
+        source: 'bff-last-known-good',
+        engaged: false,
+        serving_graph_count: 0,
+        warnings: []
+      })
+    );
+
+    await queryService.initStreamQuery(makeQueryData(), BEARER);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'QueryService.fanout_warning',
+      expect.objectContaining({
+        fanout: { warning: 'okf_only_serving_unknown', mode: 'okf_only', engaged: false }
+      })
+    );
+    // The resolved line carries the source label — the honest provenance.
+    expect(logger.info).toHaveBeenCalledWith(
+      'QueryService.fanout_config_resolved',
+      expect.objectContaining({ source: 'bff-last-known-good', mode: 'okf_only', engaged: false })
     );
   });
 

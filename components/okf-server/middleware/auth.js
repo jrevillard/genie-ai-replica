@@ -85,16 +85,23 @@ async function authenticate(req, res, next) {
   } catch (err) {
     logger.error('OKF auth error', { error: err.message, path: req.path });
     if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
-      // The verifier's init-failure message carries operator detail
-      // (discovery hostname, HTTP status, the pin-mismatch remedy): the
-      // full text belongs in the log above, never in a body an
-      // unauthenticated caller can read.
-      return res.status(401).json({
+      // Keycloak is unreachable (discovery/JWKS init failure) — NOT a bad
+      // token. 503, the doc-repo contract the frontend httpService handles:
+      // a 401 here would tell the client its session had died and send it
+      // to the login page during an infrastructure outage. The verifier's
+      // init-failure message carries operator detail (discovery hostname,
+      // HTTP status, the pin-mismatch remedy): the full text belongs in the
+      // log above, never in a body an unauthenticated caller can read.
+      return res.status(503).json({
         error: 'AUTH_SERVICE_UNAVAILABLE',
         message: 'Authentication service unavailable'
       });
     }
-    return res.status(401).json({ error: 'TOKEN_INVALID', message: err.message });
+    // Any other verification failure is a genuine token failure: 401
+    // TOKEN_INVALID with a FIXED message. The verifier's internal text
+    // (issuer mismatch, JWKS key id, decoding detail) stays in the log above
+    // and never reaches the client.
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed' });
   }
 }
 

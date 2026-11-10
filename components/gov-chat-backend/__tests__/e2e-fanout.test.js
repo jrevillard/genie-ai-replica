@@ -62,6 +62,11 @@ jest.mock('../services/translation-service', () => ({
 jest.mock('../services/retrieval-config-client', () => ({
   getRetrievalConfig: jest.fn(),
   getAuthorizedGraphs: jest.fn(),
+  // Mirrors the real predicate: the source labels the BFF synthesizes locally
+  // (an upstream outage, a 403) vs the ones the okf-server stamps.
+  isBffSynthesized: jest.fn(
+    (config) => config?.source === 'bff-last-known-good' || config?.source === 'bff-fail-closed-default'
+  ),
   OkfAuthzUnauthorizedError: class OkfAuthzUnauthorizedError extends Error {
     constructor(message) {
       super(message);

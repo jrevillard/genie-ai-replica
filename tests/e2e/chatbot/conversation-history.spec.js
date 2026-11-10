@@ -53,6 +53,9 @@ test.describe('Conversation history persistence', () => {
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
     // The cleanup's mint + list + delete sweep outlives the 60s hook default.
+    // The budget covers it: the mint (≈135s on a stalled stack) plus the list
+    // plus ONE round of parallel deletes (one 30s request cap), and the token
+    // the sweep holds outlives it too — the realm issues it for 300s.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     // A failing cleanup FAILS: a conversation left behind poisons later
@@ -74,7 +77,19 @@ test.describe('Conversation history persistence', () => {
     });
     if (listRes && listRes.status === 200) {
       const list = listRes.data.conversations || listRes.data;
-      targets = (Array.isArray(list) ? list : []).filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id);
+      const page = Array.isArray(list) ? list : [];
+      // A full page means there may be conversations beyond it: the sweep
+      // cannot enumerate them, so the ones it cannot see must not be
+      // deleted silently. The ids captured in-flight are still deleted
+      // below, and the unenumerated ones are named.
+      if (page.length >= 50) {
+        listFailure =
+          'the conversation list hit the 50-entry page cap — the sweep cannot enumerate every ' +
+          'conversation it must remove';
+        targets = [...createdConversationIds];
+      } else {
+        targets = page.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id);
+      }
     } else {
       listFailure = listFailure || `list returned ${listRes ? listRes.status : 'no response'}`;
       // Fall back to the ids captured in-flight so the deletes still run,
@@ -82,19 +97,28 @@ test.describe('Conversation history persistence', () => {
       targets = [...createdConversationIds];
     }
 
-    const undeleted = [];
-    for (const convId of targets) {
-      try {
-        const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.status < 200 || res.status >= 300) {
-          undeleted.push({ id: convId, cause: `DELETE returned ${res.status}` });
-        }
-      } catch (err) {
-        undeleted.push({ id: convId, cause: err.message });
-      }
-    }
+    // The deletes run CONCURRENTLY: each one is capped at the 30 s request
+    // timeout, so a sequential sweep of a full page costs 50 × 30 s — more
+    // than the hook's budget and more than the realm's access-token
+    // lifespan, and the tail of it would run on an expired token. One
+    // round of parallel deletes costs one cap instead of N.
+    const undeleted = (
+      await Promise.all(
+        targets.map(async (convId) => {
+          try {
+            const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.status < 200 || res.status >= 300) {
+              return { id: convId, cause: `DELETE returned ${res.status}` };
+            }
+            return null;
+          } catch (err) {
+            return { id: convId, cause: err.message };
+          }
+        })
+      )
+    ).filter(Boolean);
     if (listFailure) {
       throw new Error(
         `cleanup could not enumerate leftover conversations (${listFailure}) — ` +

@@ -40,6 +40,12 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // stack — past the 60s project timeout the hook otherwise runs under.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
+    // Both cleanups run, and BOTH failures are reported: a throw from the
+    // first one used to abort the hook and skip the second, so the next
+    // suite inherited the mutated lifespan AND the stray user while the
+    // report named only the lifespan.
+    const failures = [];
+
     // Restore the lifespan only when it was actually captured AND K.2
     // could have mutated it — afterAll runs even when beforeAll threw,
     // and guessing 300 would rewrite a deployment running something else.
@@ -50,11 +56,9 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       } catch (e) {
         // Failing cleanup, never silent: if K.2 ran, a failed restore leaves
         // the realm at its 10s lifespan, poisoning every suite after.
-        throw new Error(
-          `k1 afterAll: accessTokenLifespan restore failed — the genie realm is left at a ` +
-            `mutated lifespan that every later suite inherits. Restore it manually, then re-run. ` +
-            `Cause: ${e.message}`,
-          { cause: e },
+        failures.push(
+          `accessTokenLifespan restore failed — the genie realm is left at a mutated lifespan that ` +
+            `every later suite inherits. Restore it manually, then re-run. Cause: ${e.message}`
         );
       }
     }
@@ -64,8 +68,21 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // only because createUser tolerates the 409, so the failure must be
     // visible, not swallowed.
     if (noRolesUserId) {
-      const token = await getAdminToken();
-      await deleteUser(token, 'genie', noRolesUserId);
+      try {
+        const token = await getAdminToken();
+        await deleteUser(token, 'genie', noRolesUserId);
+      } catch (e) {
+        failures.push(
+          `the no-roles user ${noRolesUserId} was not deleted — it stays in the realm for the next ` +
+            `run. Cause: ${e.message}`
+        );
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new Error(
+        `k1 afterAll: ${failures.length} cleanup(s) failed — every leftover is named: ${failures.join(' | ')}`
+      );
     }
   });
 

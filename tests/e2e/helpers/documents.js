@@ -77,14 +77,42 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
 }
 
 /**
+ * The status predicate the admin table applies CLIENT-SIDE
+ * (AdminDashboard.vue `filteredDocuments`): a document matches the
+ * selected status when its dataprep status, lowercased and trimmed,
+ * equals it. The list request carries NO status parameter, so the
+ * response payload is the WHOLE page and the table renders the payload's
+ * subset of the selected status.
+ *
+ * @param {object} file - one document of the /api/files payload
+ * @param {string} status - the selected status
+ * @returns {boolean} whether the table would list the document
+ */
+function matchesStatus(file, status) {
+  const wanted = String(status).toLowerCase().trim();
+  return Boolean(file.dataprep) && String(file.dataprep.status).toLowerCase().trim() === wanted;
+}
+
+/**
  * Hold until the rendered document table rows ARE the payload of a
  * /api/files response. getDocumentTableRows reads once, without
  * retrying — a response the table has not painted is not a settled
  * state, and a single-shot read before this hold can see the rows from
  * BEFORE the request. Takes the awaited Playwright Response.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Response} filesResponse
+ * @param {object} [options]
+ * @param {string} [options.status] - The status the table filters on.
+ *        Without it the table lists the whole payload; with it the table
+ *        lists the payload's documents of that status, and comparing the
+ *        rows with the WHOLE payload could only hold on a page whose
+ *        documents all carry that status.
  */
-async function waitForTableRowsSettled(page, filesResponse) {
-  const expectedNames = ((await filesResponse.json()).data || [])
+async function waitForTableRowsSettled(page, filesResponse, { status } = {}) {
+  const payload = (await filesResponse.json()).data || [];
+  const expectedNames = payload
+    .filter((f) => (status === undefined ? true : matchesStatus(f, status)))
     .map((f) => f.file_name)
     .sort();
   await expect
@@ -168,10 +196,13 @@ async function getDocumentTableRows(page) {
  * design, so the deletes run with a browser-session token (the master admin
  * token is minted for the wrong issuer — the document-repository validates
  * realm tokens only). Pass `{ browser }` from the afterAll fixture to reuse
- * the worker's browser instead of launching a throwaway one. The mint plus
- * list plus delete sweep outlives the 60s hook default — callers must set
+ * the worker's browser instead of launching a throwaway one. The sweep
+ * outlives the 60s hook default — callers must set
  * `test.setTimeout(SESSION_MINT_TIMEOUT_MS)` as the first line of the hook
- * (see tests/e2e/helpers/auth.js).
+ * (see tests/e2e/helpers/auth.js). That budget covers the sweep: the mint
+ * (≈135s on a stalled stack) plus the list plus ONE round of parallel
+ * deletes (one 30s request cap), and the token the sweep holds outlives it
+ * too — the realm issues it for 300s.
  * @param {string} [prefix] - File-name prefix to delete
  * @param {object} [options]
  * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
@@ -208,22 +239,33 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   }
 
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-  const failures = [];
-  for (const f of testFiles) {
-    const file_id = f.file_id || f._key || f.id;
-    let res = null;
-    let cause = null;
-    try {
-      res = await request('DELETE', `/api/files/${file_id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch (e) {
-      cause = e.message;
-    }
-    if (!res || res.status < 200 || res.status >= 300) {
-      failures.push(`${f.file_name}: ${cause || `HTTP ${res ? res.status : 'no response'}`}`);
-    }
-  }
+  // The deletes run CONCURRENTLY. Every one of them is capped at the
+  // 30 s request timeout, so a sequential sweep of a full page costs
+  // 50 × 30 s — more than the hook's budget AND more than the realm's
+  // access-token lifespan, and the tail of it would run on an expired
+  // token. One round of parallel deletes costs one cap instead of N, so
+  // the sweep fits the budget the hook already carries and the token it
+  // already holds. The API page is the bound: the endpoint validates
+  // limit <= 50 and a full page is refused above, so the sweep never
+  // fans out wider than the page it enumerated.
+  const failures = (
+    await Promise.all(
+      testFiles.map(async (f) => {
+        const file_id = f.file_id || f._key || f.id;
+        try {
+          const res = await request('DELETE', `/api/files/${file_id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.status < 200 || res.status >= 300) {
+            return `${f.file_name}: HTTP ${res.status}`;
+          }
+          return null;
+        } catch (e) {
+          return `${f.file_name}: ${e.message}`;
+        }
+      })
+    )
+  ).filter(Boolean);
   if (failures.length > 0) {
     throw new Error(
       `cleanup: ${failures.length} of ${testFiles.length} test documents were not deleted — ` +

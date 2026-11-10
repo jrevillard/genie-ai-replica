@@ -25,13 +25,10 @@ jest.mock(
 // verifier RESOLVES TO THE PAYLOAD itself (claims + iss_sub), not a
 // `{ payload }` wrapper (that is jose's shape, one layer down).
 const mockClaimsHolder = { current: null };
-jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-  verifyToken: jest.fn(async () => mockClaimsHolder.current),
-  // The middleware's DIAG failure path reads this — carried for parity with
-  // the other verifier-boundary mocks so a future rejection test here cannot
-  // crash inside the catch block.
-  getConfiguredIssuers: () => ['http://keycloak:8080/realms/genie']
-}));
+const makeVerifierMock = require('../helpers/verifierMock');
+const mockVerifier = makeVerifierMock();
+mockVerifier.verifyToken.mockImplementation(async () => mockClaimsHolder.current);
+jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
 
 jest.mock('../../services/fileService', () => ({
   uploadFile: jest.fn(),

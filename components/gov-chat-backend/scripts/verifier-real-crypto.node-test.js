@@ -153,6 +153,18 @@ const sign = async (claims, opts = {}) => {
   return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
 };
 
+test('azp tolerance: a valid token with a foreign azp verifies (no authorized-party check)', async () => {
+  // Service accounts (dataprep-service, okf-service) carry an azp that
+  // differs from any audience — the resource-server contract accepts any
+  // valid token in the trusted realm regardless of azp. This test is the
+  // executable guard for that tolerance: a hardening pass adding azp
+  // validation fails here before service-account tokens start 401ing.
+  const svc = loadVerifier();
+  const token = await sign(baseClaims(DISCOVERY_ISSUER, { azp: 'some-other-client' }));
+  const payload = await svc.verifyToken(token);
+  assert.equal(payload.azp, 'some-other-client');
+});
+
 test('valid RS256 token verifies end-to-end (real signature path)', async () => {
   const svc = loadVerifier();
   const token = await sign(baseClaims(DISCOVERY_ISSUER));

@@ -1,5 +1,7 @@
 let authenticateToken, authorizeRole, isPublicRoute, PUBLIC_PATHS;
 let mockVerifyToken;
+const makeVerifierMock = require('../../helpers/verifierMock');
+let mockVerifier;
 
 // Re-require middleware before each test
 beforeEach(() => {
@@ -9,12 +11,9 @@ beforeEach(() => {
   // stands in for it at the module boundary. Issuer/alias/pin semantics are
   // that module's contract, pinned in the backend verifier suite and the
   // real-crypto suite — not here.
-  mockVerifyToken = jest.fn();
-  jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-    verifyToken: (...args) => mockVerifyToken(...args),
-    // The DIAG log reads the accepted set on every verification failure.
-    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
-  }));
+  mockVerifier = makeVerifierMock();
+  mockVerifyToken = mockVerifier.verifyToken;
+  jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
 
   const middleware = require('../../../middlewares/keycloak-auth-middleware');
   authenticateToken = middleware.authenticateToken;

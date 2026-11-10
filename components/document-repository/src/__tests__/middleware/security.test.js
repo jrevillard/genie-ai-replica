@@ -250,15 +250,14 @@ describe('Security Middleware Tests', () => {
     // module boundary (the jose-level behavior is pinned in the verifier's
     // own suites).
     let mockVerifyToken;
+    const makeVerifierMock = require('../helpers/verifierMock');
 
     beforeEach(() => {
       jest.resetModules();
-      mockVerifyToken = jest.fn();
+      const mockVerifier = makeVerifierMock();
+      mockVerifyToken = mockVerifier.verifyToken;
 
-      jest.mock('../../shared-lib/keycloak-auth-service', () => ({
-        verifyToken: (...args) => mockVerifyToken(...args),
-        getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
-      }));
+      jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
 
       jest.mock(
         '../../../shared-lib',

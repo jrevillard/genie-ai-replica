@@ -140,11 +140,20 @@ async function init(idpUrl) {
   // string to be trusted.
   const rawTimeout = (process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000').trim();
   const parsedTimeout = parseInt(rawTimeout, 10);
+  // Bare positive integer AND within setTimeout's range: Node clamps delays
+  // above 2^31-1 ms to 1 ms — an "effectively never" value would abort every
+  // discovery instantly, the same failure class as a prefix-parsed '10s'.
+  const MAX_TIMEOUT_MS = 2147483647;
   const discoveryTimeoutMs =
-    Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout ? parsedTimeout : 5000;
+    Number.isFinite(parsedTimeout) &&
+    parsedTimeout > 0 &&
+    parsedTimeout <= MAX_TIMEOUT_MS &&
+    String(parsedTimeout) === rawTimeout
+      ? parsedTimeout
+      : 5000;
   if (discoveryTimeoutMs === 5000 && rawTimeout !== '5000' && process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS) {
     logger.warn(
-      `KEYCLOAK_DISCOVERY_TIMEOUT_MS='${process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS}' is not a bare positive integer — using the 5000ms default`
+      `KEYCLOAK_DISCOVERY_TIMEOUT_MS='${process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS}' is not a bare positive integer within the timer range — using the 5000ms default`
     );
   }
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);

@@ -28,9 +28,29 @@ jest.mock('@/services/ragasService', () => ({
   }
 }));
 jest.mock('@/composables/useChartTheme', () => ({
-  useChartTheme: () => ({
-    getCssVarStrings: () => ({ fg: '#fff', border: '#333', chartColors: ['#1f6feb', '#2ecc71', '#e67e22', '#e74c3c'] })
-  })
+  useChartTheme: () => {
+    // The real resolved-payload shape since admin-ux T1 (review F8): the old
+    // {fg, border} var()-string map is gone — getCssVarStrings is now an alias
+    // of getResolvedTheme, and chartColors is the derived categorical ramp.
+    const resolved = {
+      isDarkMode: false,
+      textColor: '#111318',
+      backgroundColor: '#ffffff',
+      borderColor: '#333333',
+      gridColor: '#555555',
+      accentColor: '#1f6feb',
+      mutedColor: '#888888',
+      brandColor: '#1f6feb',
+      statusColors: { success: '#2ecc71', warning: '#e67e22', danger: '#e74c3c', info: '#1f6feb' },
+      chartColors: ['#1f6feb', '#2ecc71', '#e67e22', '#e74c3c', '#8e44ad', '#16a085', '#c0392b', '#2c3e50']
+    };
+    return {
+      theme: 'system',
+      isDarkMode: false,
+      getResolvedTheme: () => resolved,
+      getCssVarStrings: () => resolved
+    };
+  }
 }));
 
 const dispatch = jest.fn();

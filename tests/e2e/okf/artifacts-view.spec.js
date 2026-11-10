@@ -23,9 +23,10 @@
 //
 // WHY IT LIVES HERE (tests/e2e/okf/) and not in tests/e2e/documents/: the
 // artifacts are the OKF lifecycle's output, so the surface only exists on
-// an OKF-enabled deployment (OKF_ENABLED=1). The CI e2e job runs the
-// core profile with the OKF pillar parked and keeps tests/e2e/okf/ out of
-// its invocation for exactly that reason (see .gitlab-ci.yml).
+// an OKF-enabled deployment (OKF_ENABLED=1). The local run executes the
+// whole tree — this directory included — against whatever venue it is
+// pointed at, so on a core-profile venue the spec skips ITSELF, with the
+// venue's own profile as the reason (#1742).
 //
 // Run against the local build (OKF_ENABLED=1):
 //   cd C:/Dev/builds/main && npx playwright test \
@@ -33,6 +34,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
 
 /** The artifacts the interception serves. Two of them: one complete, one
  *  without a bundle_version (the version must read "unknown", not a
@@ -63,6 +65,15 @@ test.describe('the OKF artifacts view', () => {
   // The labels under test are translated (admin.documents.status*); pin the
   // locale so the exact wording is fixed.
   test.use({ locale: 'en-US' });
+
+  // The artifacts view is an OKF surface: a deployment whose OKF pillar is
+  // parked does not render it, and this spec would fail looking for a
+  // surface that never appears. It SKIPS WITH A REASON instead (#1742), and
+  // the reason is the venue's own profile — read from the runtime config
+  // the frontend itself reads — not a guess.
+  test.beforeEach(async () => {
+    test.skip(!(await okfEnabled()), await okfParkedReason());
+  });
 
   /**
    * Log in as the admin, intercept the two reads the surface performs, and

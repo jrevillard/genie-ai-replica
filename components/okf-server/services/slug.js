@@ -71,6 +71,17 @@ function nameFromSource(value, fallback) {
 const slugFor = (name) => slugify(name, { cap: 80 }) || 'repo';
 
 /**
+ * The caller's NAME INTENT for a repository: a non-blank string, verbatim.
+ * A whitespace-only name is NO name (#1699) — it becomes null so the caller
+ * applies its own default (the repository's default name, the index
+ * concept's readable title). One blank check for every converting path: the
+ * crawl path slugs its artifact-derived name through nameFromSource, the
+ * documents path keeps user-typed display names verbatim, and both must
+ * refuse a blank the same way.
+ */
+const intentName = (value) => (typeof value === 'string' && value.trim() ? value : null);
+
+/**
  * Slug equality with the degenerate case owned once: two inputs are the
  * same slug only when BOTH slug to a non-empty value — '' never equals ''
  * (a degenerate input matches nothing, not every other degenerate input).
@@ -80,4 +91,4 @@ const sameSlug = (a, b) => {
   return x !== '' && x === slugify(b);
 };
 
-module.exports = { slugify, nameFromSource, slugFor, sameSlug };
+module.exports = { slugify, nameFromSource, slugFor, sameSlug, intentName };

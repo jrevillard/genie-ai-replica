@@ -1,10 +1,22 @@
 /**
- * useChartTheme - Shared composable for chart theme detection
+ * useChartTheme - Shared composable for chart theme detection and RESOLVED colors.
  *
- * Provides CSS variable reference strings for chart libraries that support
- * them natively (ApexCharts, D3 SVG). No runtime color resolution needed.
+ * Chart libraries cannot resolve CSS var() references: ECharts paints to canvas
+ * (fillStyle parses CSS colors, not references) and ApexCharts applies config
+ * colors as SVG presentation attributes (var() is invalid there — css-variables-1).
+ * The old "CSS variable reference strings" contract therefore never worked: the
+ * strings silently fell back wherever they reached SVG attributes or canvas, and
+ * the hardcoded stock palette ignored --brand and every deployment flavour.
+ *
+ * The bridge now returns RESOLVED colors: each token is read through a hidden
+ * probe element (utils/chartColors.js — works for any token definition, including
+ * theme-variables.css's relative-OKLch chains), and the categorical ramp is
+ * derived from --brand + the status tokens by expressions the browser evaluates.
+ * Call getResolvedTheme() (or the getCssVarStrings() alias) at render time; the
+ * theme MutationObserver below fires onThemeChange so callers re-render.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { buildBrandRamp, resolveChartTokens } from '../utils/chartColors';
 
 /**
  * Detect the current theme mode from DOM/localStorage/system preference.
@@ -30,7 +42,7 @@ function detectThemeMode() {
  * @param {Object} [options]
  * @param {Function} [options.onThemeChange] - Callback when theme changes (for re-rendering)
  * @param {boolean} [options.listenToSystem] - Also listen to OS preference changes
- * @returns {{ theme: import('vue').Ref<string>, isDarkMode: import('vue').ComputedRef<boolean>, getCssVarStrings: Function }}
+ * @returns {{ theme: import('vue').Ref<string>, isDarkMode: import('vue').ComputedRef<boolean>, getResolvedTheme: Function, getCssVarStrings: Function }}
  */
 export function useChartTheme(options = {}) {
   const { onThemeChange, listenToSystem = false } = options;
@@ -42,20 +54,41 @@ export function useChartTheme(options = {}) {
   let systemChangeHandler = null;
 
   /**
-   * Return CSS variable reference strings for chart config.
-   * ApexCharts and D3 SVG elements consume these directly.
+   * Return the RESOLVED chart theme: concrete color strings read from the live
+   * tokens, plus the brand-derived categorical ramp. Safe for canvas fillStyle,
+   * SVG presentation attributes, D3 attr() — every channel charts use.
    */
-  function getCssVarStrings() {
+  function getResolvedTheme() {
+    const tokens = resolveChartTokens();
+    const accentColor = tokens['--accent'];
+    const statuses = {
+      success: tokens['--success'],
+      warning: tokens['--warning'],
+      danger: tokens['--danger'],
+      info: tokens['--info']
+    };
     return {
       isDarkMode: isDarkMode.value,
-      textColor: 'var(--fg)',
-      backgroundColor: 'var(--surface)',
-      borderColor: 'var(--border)',
-      gridColor: 'var(--border-light)',
-      accentColor: 'var(--accent)',
-      mutedColor: 'var(--muted)',
-      chartColors: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4']
+      textColor: tokens['--fg'],
+      backgroundColor: tokens['--surface'],
+      borderColor: tokens['--border'],
+      gridColor: tokens['--border-light'],
+      accentColor,
+      mutedColor: tokens['--muted'],
+      brandColor: tokens['--brand'],
+      statusColors: statuses,
+      chartColors: buildBrandRamp({ accent: accentColor, brand: tokens['--brand'], statuses, fg: tokens['--fg'] })
     };
+  }
+
+  /**
+   * Backward-compatible alias — now returns RESOLVED colors (the historic
+   * 'var(--x)' string contract never resolved outside stylesheets). STILL
+   * LIVE: RagasPanel.vue consumes it; the chart components were migrated to
+   * getResolvedTheme in T1. Do not delete without migrating RagasPanel first.
+   */
+  function getCssVarStrings() {
+    return getResolvedTheme();
   }
 
   function handleThemeMutation() {
@@ -106,7 +139,7 @@ export function useChartTheme(options = {}) {
     }
   });
 
-  return { theme, isDarkMode, getCssVarStrings };
+  return { theme, isDarkMode, getResolvedTheme, getCssVarStrings };
 }
 
 export default useChartTheme;

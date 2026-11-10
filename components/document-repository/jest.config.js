@@ -50,14 +50,19 @@ module.exports = {
     // (jest.mock('../../shared-lib/keycloak-auth-service')), so it must
     // resolve to the real file here — the catch-all mock barrel below has no
     // verifyToken and a middleware bound to it would 500 on first request.
-    // TRAP: the real verifier requires `jose`, which this component does NOT
-    // declare — a suite that loads the middleware WITHOUT
-    // jest.mock('../../shared-lib/keycloak-auth-service') dies here with
-    // MODULE_NOT_FOUND in CI after a clean install (the test:doc-repo job
-    // installs only this component's node_modules; a dev machine may carry a
-    // hoisted stray jose that masks it). Every suite must stand in for the verifier
-    // at that module boundary, as all three existing ones do.
+    // TRAP: a suite that loads the middleware WITHOUT standing in for the
+    // verifier at its module boundary loads the real verifier and dies on
+    // `jose` (not declared here) — the `^jose$` entry below makes that
+    // failure deterministic; the stub file and the verifierTrap suite tell
+    // the full story.
     '^\\.\\./\\.\\./shared-lib/keycloak-auth-service$': '<rootDir>/../shared/lib/keycloak-auth-service.js',
+    // `jose` is required by the REAL shared verifier above, and this
+    // component does NOT declare it: a suite that loads the auth middleware
+    // without standing in for the verifier dies with MODULE_NOT_FOUND (in
+    // clean CI only — a dev machine may carry a hoisted stray `jose`). The
+    // stub makes the failure deterministic and local (#1707); the stub file
+    // and the verifierTrap suite carry the full story.
+    '^jose$': '<rootDir>/src/__tests__/__mocks__/jose-not-a-dependency.js',
     // Everything else in shared-lib still goes to the mock barrel, so require
     // chains inside src/ never touch the real filesystem path (which Docker
     // drops /lib/ from) and the existing suites keep their stubs.

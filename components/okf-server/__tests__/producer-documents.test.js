@@ -39,6 +39,7 @@ const { Readable } = require('stream');
 const { logger } = require('../shared-lib/logger');
 
 const producer = require('../services/producer-service');
+const docRepoClient = require('../services/doc-repo-client');
 const lifecycle = require('../services/lifecycle-service');
 const { convertXlsx } = require('../services/converters/xlsxSheetConverter');
 const XLSX = require('xlsx');
@@ -84,7 +85,12 @@ function programQuery() {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Drain the in-flight conversions BEFORE resetting the shared mocks — a
+  // runner left alive by an earlier test deletes the registry entry when it
+  // ends, and that would delete the NEXT test's reservation (the registry is
+  // load-bearing for the 409 assertions).
+  await Promise.all(Array.from(producer.live.values(), (p) => p.catch(() => {})));
   jest.clearAllMocks();
   producer.live.delete(RID);
   programQuery();
@@ -373,6 +379,181 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(metaGets).toHaveLength(2); // ONE per file — a re-fetch per stage regresses this to 6
     expect(downloads).toHaveLength(2); // the content transfer itself
     expect(stamps).toHaveLength(2); // okf_repo_id still stamped on every file
+  });
+
+  it('refuses a SECOND start for the same repo while the first is still stamping its sources', async () => {
+    // ONE conversion per repo. The guard's window: the check and the runner's
+    // registration are separated by the queued patch + the per-file source
+    // stamping (one doc-repo PATCH per file). A second start that slipped
+    // through that window imported the corpus twice (issue #1684). The stamp
+    // is HELD here, so the window is open deterministically — no timing, no
+    // polling.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    authedAxios.patch.mockImplementation(async () => {
+      if (!parked) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return { status: 200 };
+    });
+
+    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await stamping; // the first import is parked inside its stamping stage
+    const second = await producer
+      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      .catch((err) => err);
+    releaseStamp();
+    await first;
+    await producer.live.get(RID);
+    // Restore the module's default stamp mock — clearAllMocks() clears the
+    // CALL history but keeps the implementation.
+    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
+    expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+  });
+
+  it('a FAILED start writes the terminal record while the reservation is still held, then releases it', async () => {
+    // The write-before-release ordering is the point of the failed-start
+    // record: the producer's patch REPLACES the conversion object, so a
+    // failed write landing after a concurrent start's own 'queued' record
+    // would clobber it. The start fails in the STAMP stage here — the queued
+    // patch before it succeeds, so the failed record can be written.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const dbService = require('../shared-lib/db-connection-service');
+    let failGetDb = false;
+    let reservationHeldAtWrite = null;
+    const programQueryImpl = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      const patch = bind && bind.patch;
+      if (text && text.includes('UPDATE doc WITH { conversion') && patch) {
+        if (patch.status === 'failed') {
+          // The failed record is written while the repo must STILL be reserved.
+          reservationHeldAtWrite = producer.live.has(RID);
+        }
+        if (patch.status === 'queued') {
+          // The queued patch is the last stage before the stamping: arm the
+          // failure so the stamp's own db connection rejects.
+          failGetDb = true;
+        }
+      }
+      return programQueryImpl(q, bind);
+    });
+    dbService.getConnection.mockImplementation(async () => {
+      if (failGetDb) {
+        failGetDb = false; // one-shot: only the stamp's connection fails
+        throw new Error('db down');
+      }
+      return mockDb;
+    });
+
+    try {
+      await expect(
+        producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      ).rejects.toThrow(/db down/);
+
+      // The terminal record: status, the counters the UI reads, and the
+      // shape its sibling failure records carry.
+      const patches = mockDb.query.mock.calls.map((c) => (c[1] && c[1].patch) || null).filter(Boolean);
+      const failed = patches[patches.length - 1];
+      expect(failed).toMatchObject({
+        status: 'failed',
+        code: 'CONVERSION_FAILED',
+        files_done: 0,
+        files_total: 1,
+        per_file: []
+      });
+      expect(typeof failed.started_at).toBe('string');
+      // The reservation was still held while that record was written.
+      expect(reservationHeldAtWrite).toBe(true);
+      // And it is released afterwards — the repo is free again.
+      expect(producer.live.has(RID)).toBe(false);
+      const fresh = await producer
+        .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+        .catch((err) => err);
+      // The fresh start got PAST the guard — it fails in the stamp stage
+      // again (the failure re-arms at its own queued patch), not with 409.
+      expect(fresh && fresh.message).toMatch(/db down/);
+    } finally {
+      dbService.getConnection.mockImplementation(() => Promise.resolve(mockDb));
+    }
+  });
+
+  it('a slot-acquire rejection releases the reservation instead of 409-locking the repo', async () => {
+    // The slot acquire sits INSIDE the runner's try: a rejection there must
+    // still release the reservation, or the repo stays 409-locked forever
+    // and `await live.get(repo_id)` never settles. acquireSlot cannot reject
+    // today — this pins the guard against a future acquire that can.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const crawlConversion = require('../services/crawl-conversion-service');
+    const releaseSpy = jest.spyOn(crawlConversion, 'releaseSlot');
+    const acquireSpy = jest.spyOn(crawlConversion, 'acquireSlot').mockRejectedValueOnce(new Error('slot boom'));
+    try {
+      await expect(
+        producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      ).resolves.toMatchObject({ status: 'queued' });
+      const inFlight = producer.live.get(RID);
+      if (inFlight) await inFlight.catch(() => {});
+      expect(producer.live.has(RID)).toBe(false);
+      expect(releaseSpy).not.toHaveBeenCalled(); // no slot was ever taken
+    } finally {
+      acquireSpy.mockRestore();
+      releaseSpy.mockRestore();
+    }
+  });
+
+  it('a CRAWL conversion in flight refuses a documents conversion for the same repo', async () => {
+    // ONE conversion per repo, whichever path started it: the two paths write
+    // the SAME repo.conversion record (the crawl merges its patch, the
+    // producer replaces it), so running both on one repo leaves a record that
+    // describes neither run.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    const realGet = authedAxios.get.getMockImplementation();
+    authedAxios.get.mockImplementation(async (url, opts) => {
+      // The crawl's provenance stamp is the FIRST metadata GET; park it so
+      // the crawl conversion stays in flight.
+      if (!parked && !String(url).endsWith('/download')) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return realGet(url, opts);
+    });
+
+    const crawl = require('../services/crawl-conversion-service');
+    const crawlRun = crawl.startConversion({ repo_id: RID, file_id: 'f1', split_mode: 'B' });
+    await stamping; // the crawl conversion is parked inside its provenance stamp
+    const crawlInFlight = crawl.live.get(RID); // the conversion's completion promise
+    const documents = await producer
+      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      .catch((err) => err);
+    releaseStamp();
+    await crawlRun;
+    if (crawlInFlight) await crawlInFlight.catch(() => {});
+    authedAxios.get.mockImplementation(realGet);
+    expect(documents).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
   it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
@@ -760,25 +941,48 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
   });
 });
 
-describe('producer-service — docRepoFileOf (shared doc-repo envelope unwrap)', () => {
-  // The unwrap is shared by lifecycle-service and crawl-conversion-service —
-  // a diverging copy that handled only {file} | {data} silently degraded the
-  // {data: {file}} shape to id-only stamping (review 2026-10-29). Pin all
-  // three shipped shapes through the SINGLE helper.
+describe('doc-repo-client — fetchDocMeta (the ONE doc-repo metadata fetch + envelope unwrap)', () => {
+  // The fetch + the unwrap are shared by the importer, the crawl stamper and
+  // the SOURCES-BUSY gate — a diverging copy that handled only {file} | {data}
+  // silently degraded the {data: {file}} shape to id-only stamping (review
+  // 2026-10-29). Pin all three shipped shapes through the SINGLE
+  // implementation (issue #1686).
   const file = { file_id: 'f-1', file_name: 'a.pdf', dataprep: { status: 'Ingested' } };
 
   test.each([
     ['{file}', { data: { file } }],
     ['{data: {file}}', { data: { data: { file } } }],
     ['{data}', { data: { data: file } }]
-  ])('unwraps the %s envelope to the file doc', (_shape, res) => {
-    expect(producer.docRepoFileOf(res)).toBe(file);
+  ])('unwraps the %s envelope to the file doc', async (_shape, res) => {
+    authedAxios.get.mockResolvedValueOnce(res);
+    await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toBe(file);
   });
 
-  test('degrades to {} on absent/empty responses (never throws)', () => {
-    expect(producer.docRepoFileOf(null)).toEqual({});
-    expect(producer.docRepoFileOf(undefined)).toEqual({});
-    expect(producer.docRepoFileOf({})).toEqual({});
+  test('degrades to {} on an empty response (never throws)', async () => {
+    authedAxios.get.mockResolvedValueOnce({});
+    await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toEqual({});
+  });
+});
+
+// ── the import metadata cache (#1685) ───────────────────────────────────────
+
+describe('producer-service — the source metadata cache (stampSources)', () => {
+  // Distinct repo id: this file's mock store has no per-test reset, so a
+  // shared id would leak acl/source_documents state across tests.
+  const R3 = '88888888-8888-4888-8888-888888888803';
+  it('a prototype-named file id resolves to NOTHING inherited — the doc-repo GET still fires', async () => {
+    // A plain-object cache resolves 'constructor' to Object.prototype.constructor
+    // — TRUTHY — so the GET fallback never fired and the file was stamped
+    // with NULL metadata (issue #1685). The cache is null-prototype and read
+    // with an own-property lookup.
+    await mockDb.collection('okf_repositories').save({ repo_id: R3 });
+    authedAxios.get.mockResolvedValueOnce({
+      data: { file: { file_id: 'constructor', file_name: 'real.md', size: 12 } }
+    });
+    await producer.stampSources(R3, ['constructor']);
+    expect(authedAxios.get).toHaveBeenCalledWith(expect.stringContaining('/api/files/constructor'), expect.anything());
+    const repoDoc = await mockDb.collection('okf_repositories').document(R3);
+    expect(repoDoc.source_documents[0].file_name).toBe('real.md');
   });
 });
 

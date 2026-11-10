@@ -210,6 +210,8 @@ export default {
     close: 'Kwala dashboto',
     edit: 'Fetola',
     manage: 'Laola',
+    retry: 'Leka hape',
+    measuring: 'E lekola…',
     systemUptime: 'Nako ya ho sebetsa ha Sistimi',
     avgResponseTime: 'Nako e Bohareng ya Karabelo',
     errorRate: 'Sekgahla sa Diphoso',
@@ -259,7 +261,14 @@ export default {
       cpu: 'Tshebediso ya CPU',
       memory: 'Tshebediso ya Memori',
       storage: 'Tshebediso ya Polokelo',
-      network: 'Bandwidth ya Marangrang'
+      network: 'Bandwidth ya Marangrang',
+      unavailable: 'Tšebeliso ya mehlodi ha e fumanehe hona joale.'
+    },
+    health: {
+      unavailable: 'Bophelo ba sistimi ha bo fumanehe hona joale.'
+    },
+    dbStats: {
+      unavailable: 'Lipalo-palo tsa polokelo ya data ha li fumanehe hona joale.'
     },
     databaseManagement: 'Tsamaiso ya Datha (Database)',
     databaseSize: 'Boholo ba Datha (Database)',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Ho lekolwa ha tshireletso ho phethetswe ka katleho',
-        loading: 'E matha tekolo ya tshireletso...'
+        loading: 'E matha tekolo ya tshireletso...',
+        refreshFailed: 'Sekolo sa tsireletso se phethiloe, empa ho nchafatsa liphetho ho hlolehile'
       },
       cancel: 'Hlakola',
       save: 'Boloka Diphetoho'
@@ -385,11 +395,13 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Ha ho na lilog tse tshoanang le patlo ya hao',
+        searchFailed: 'Patlo ya li-log e hlolehile',
         resultsFound: "Ho fumanwe dikeno tsa log tse {'{'}count{'}'}",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
+      loadingMetrics: 'E kenya lintlha tsa tsireletso…',
       title: 'Tlhokomelo ya Tshireletso',
       securityScan: 'Tekolo ya Tshireletso',
       runningSecurityScan: 'E Matha Tekolo...',
@@ -441,7 +453,8 @@ export default {
       lineNumbers: 'Dinomoro tsa Mela',
       showLess: 'Bontsha tse Nnyane',
       showMore: 'Bontsha Mathata kaofela',
-      lastScanJustNow: 'Hona jwale'
+      lastScanJustNow: 'Hona jwale',
+      unavailable: 'Lintlha tsa tsireletso ha li fumanehe hona joale.'
     },
     hierarchy: {
       title: 'Tsamaiso ya Tharollo ya Tsebo (ela hloko: e dula e le ka Senyesemane - eketsa diphetolelo)',

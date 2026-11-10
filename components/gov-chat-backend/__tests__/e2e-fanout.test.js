@@ -59,17 +59,16 @@ jest.mock('../services/translation-service', () => ({
 }));
 
 // The retrieval posture client — stubbed per scenario.
-jest.mock('../services/retrieval-config-client', () => ({
-  getRetrievalConfig: jest.fn(),
-  getAuthorizedGraphs: jest.fn(),
-  OkfAuthzUnauthorizedError: class OkfAuthzUnauthorizedError extends Error {
-    constructor(message) {
-      super(message);
-      this.statusCode = 401;
-      this.code = 'OKF_UNAUTHORIZED';
-    }
-  }
-}));
+jest.mock('../services/retrieval-config-client', () => {
+  // The REAL module for everything but the network calls (see the fan-out
+  // suite): the exported predicates must not be re-implemented in the mock.
+  const actual = jest.requireActual('../services/retrieval-config-client');
+  return {
+    ...actual,
+    getRetrievalConfig: jest.fn(),
+    getAuthorizedGraphs: jest.fn()
+  };
+});
 
 // Keycloak middleware — pass-through authenticated user (the fan-out carrier
 // reads the RAW bearer header for the okf-server calls).

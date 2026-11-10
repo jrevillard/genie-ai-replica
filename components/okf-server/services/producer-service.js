@@ -27,6 +27,7 @@ const { isArangoNotFound } = require('./arango-errors');
 const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
+const { fetchDocMeta } = require('./doc-repo-client');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
 // FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
 // xlsx, plus LLM topics summarised from the dictionary columns. Async (one
@@ -44,7 +45,20 @@ const MAX_FILES = Math.max(1, parseInt(process.env.OKF_MAX_IMPORT_FILES, 10) || 
 const MAX_SEGMENTS_PER_FILE = 200;
 const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 
-const live = new Map(); // repo_id -> in-flight runner (same registry discipline as crawl)
+// The SHARED conversion registry — ONE in-flight conversion per repo_id,
+// whichever path started it (documents or crawl). It lives in
+// crawl-conversion-service, next to the shared FIFO slot: the producer
+// requires the crawl service (the crawl service must NOT require the
+// producer — that direction is circular), so this is the one place both
+// paths can share. It matters: a crawl conversion and a documents conversion
+// write the SAME repo.conversion record (the crawl merges its patch, the
+// producer replaces it), so running both on one repo leaves a record that
+// describes neither run (issue #1684).
+//
+// The RESERVATION is the guard: the entry is claimed synchronously, BEFORE
+// the awaited stages below, so a second start for the same repo cannot slip
+// through a check-then-set window and import the corpus twice.
+const live = crawlConversion.live;
 
 async function getDb() {
   return dbService.getConnection();
@@ -70,14 +84,28 @@ function releaseSlot() {
 
 // ── source stamping ─────────────────────────────────────────────────────────
 
+/** The doc-repo metadata for one source file: the import pre-flight's cached
+ * copy when it carries the file, else a fresh GET. The cache is a FAST PATH,
+ * not a contract — a caller that omits an entry gets the GET (issue #1691).
+ * The lookup is an OWN-property read: a plain object resolves
+ * 'constructor'/'__proto__' to an INHERITED value — truthy — so a cache miss
+ * would silently skip the GET and stamp null metadata (issue #1685). */
+async function sourceMeta(cache, file_id) {
+  const cached = cache && Object.prototype.hasOwnProperty.call(cache, file_id) ? cache[file_id] : undefined;
+  return cached || (await fetchDocMeta(file_id));
+}
+
 /** Stamp the repo doc with source_documents[] (kind 'document' — never collides
  * with the crawl 'source_document' stamp) and stamp okf_repo_id onto each
  * source file's doc-repo metadata (Story 3.6's additive field) so the UI can
  * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
  * them, it does not die for them. metaByKey carries the import pre-flight's
  * per-file doc-repo metadata, suppressing the per-file GET; when it does not
- * carry the file, the GET remains the fallback. */
-async function stampSources(repoId, fileIds, metaByKey = {}) {
+ * carry the file, the GET remains the fallback. The cache is read with an
+ * OWN-property lookup and defaults to a null-prototype object, so a
+ * prototype-named file id can never resolve to an inherited value (issue
+ * #1685). */
+async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
   // repo id so doc-repo's serve paths can refuse locally (no okf-server
@@ -100,7 +128,7 @@ async function stampSources(repoId, fileIds, metaByKey = {}) {
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
-      const f = metaByKey[file_id] || (await fetchDocMeta(file_id));
+      const f = await sourceMeta(metaByKey, file_id);
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -228,20 +256,6 @@ async function propagateRestrictedToSources(repoId, restricted) {
 }
 
 // ── fetch + convert ─────────────────────────────────────────────────────────
-
-/** doc-repo GET /api/files/:id response envelopes have varied across versions
- * ({file}, {data: {file}}, {data}) — unwrap every shape the fleet ships. */
-function docRepoFileOf(res) {
-  const d = (res && res.data) || {};
-  return d.file || (d.data && d.data.file) || d.data || d || {};
-}
-
-async function fetchDocMeta(fileId) {
-  const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}`, {
-    timeout: 10000
-  });
-  return docRepoFileOf(res);
-}
 
 /** Stream /download into a Buffer with a hard byte cap (crawl-parity: the
  * content-length is often absent, so the cap is enforced on accumulation). */
@@ -596,7 +610,11 @@ async function runDocumentsConversion(job) {
         baseResource: `${config.documentRepository.url}/api/files/${file_id}`
       };
       try {
-        const f = job.source_metas[file_id];
+        // SELF-SUFFICIENT metadata (issue #1691): the caller's cache is a fast
+        // path, not a contract — a caller that omits an entry gets the
+        // doc-repo GET instead of a per-file TypeError swallowed by the
+        // per-file catch (every file reported CONVERSION_FAILED).
+        const f = await sourceMeta(job.source_metas, file_id);
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;
@@ -896,8 +914,10 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   const candidateHashes = [];
   // ONE metadata fetch per file: this pre-flight read is the import's single
   // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
-  // the conversion (job.source_metas).
-  const metaByKey = {};
+  // the conversion (job.source_metas). The cache is null-prototype: a plain
+  // object resolves a prototype-named file id to an INHERITED value (issue
+  // #1685).
+  const metaByKey = Object.create(null);
   for (const file_id of file_ids) {
     let meta;
     try {
@@ -956,12 +976,11 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   }
 
   await crawlConversion.sweepInterruptedOnce();
-  if (live.has(repo_id)) {
-    throw Object.assign(new Error('a conversion is already running for this repository — wait for it to finish'), {
-      code: 'CONVERSION_IN_FLIGHT',
-      status: 409
-    });
-  }
+  // ONE conversion per repo at a time, whichever path started it — claimed
+  // synchronously by the one shared guard implementation (issue #1684), so
+  // the repo is invisible to a second start for the whole of the awaited
+  // window below (the queued patch + the per-file source stamping).
+  const settleInFlight = crawlConversion.reserveConversion(repo_id);
 
   const queued = {
     status: 'queued',
@@ -971,13 +990,46 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     error: null,
     started_at: new Date().toISOString()
   };
-  await patchConversion(repo_id, queued);
-  await stampSources(repo_id, file_ids, metaByKey);
+  try {
+    await patchConversion(repo_id, queued);
+    await stampSources(repo_id, file_ids, metaByKey);
+  } catch (err) {
+    // The conversion record must not claim a queued run that has no worker:
+    // the interrupted-conversion sweep is one-shot per process and has
+    // already run, so nothing else would ever close this record. It is
+    // written BEFORE the reservation is released — this patch REPLACES the
+    // whole conversion object, so a write landing after a concurrent start's
+    // own record would clobber it.
+    try {
+      await patchConversion(repo_id, {
+        status: 'failed',
+        error: err.message,
+        code: err.code || 'CONVERSION_FAILED',
+        files_done: 0,
+        files_total: file_ids.length,
+        per_file: [],
+        started_at: queued.started_at,
+        finished_at: new Date().toISOString()
+      });
+    } catch (patchErr) {
+      logger.warn('Failed-start record could not be written (non-fatal)', {
+        repo_id,
+        error: patchErr.message
+      });
+    }
+    // The reservation must not outlive a failed start — the repo is free again.
+    crawlConversion.releaseConversion(repo_id, settleInFlight);
+    throw err;
+  }
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {
-    await acquireSlot();
+    let acquired = false;
     try {
+      // The slot acquire is INSIDE the try: a rejection there must still
+      // release the reservation, or the repo stays 409-locked forever.
+      await acquireSlot();
+      acquired = true;
       await withSpan('okf.documents.conversion', async (span) => {
         span.setAttribute('okf.repo_id', repo_id);
         span.setAttribute('okf.files_total', file_ids.length);
@@ -986,11 +1038,15 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     } catch {
       // Terminal state already recorded by runDocumentsConversion.
     } finally {
-      releaseSlot();
-      live.delete(repo_id);
+      if (acquired) releaseSlot();
+      crawlConversion.releaseConversion(repo_id, settleInFlight);
     }
   })();
-  live.set(repo_id, runner);
+  // The runner swallows its own errors (the terminal state is recorded by
+  // runDocumentsConversion); this guard keeps a rejection raised in its
+  // finally from surfacing as an unhandled rejection — Node 22 treats those
+  // as fatal.
+  runner.catch(() => {});
   return queued;
 }
 
@@ -1001,9 +1057,7 @@ function isTerminal(conversion) {
 module.exports = {
   startDocumentsConversion,
   isTerminal,
-  live,
-  // shared doc-repo envelope unwrap (lifecycle-service + crawl-conversion-service)
-  docRepoFileOf,
+  live, // the SHARED conversion registry (documents + crawl), see crawl-conversion-service
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,

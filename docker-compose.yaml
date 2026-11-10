@@ -795,11 +795,14 @@ services:
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to
       # the same JWKS when discovery is fetched via a different (internal) URL;
-      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_DISCOVERY_URL pins
+      # the host the OIDC discovery document is fetched from;
+      # KEYCLOAK_BROWSER_ISSUER adds
       # a second accepted issuer alongside it. No-op when unset (cloud) —
       # mirrors the okf-server block.
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
@@ -959,11 +962,13 @@ services:
       - SERVICE_NAME=genie-okf-server
       - NODE_ENV=production
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS;
-      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds a second accepted
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_DISCOVERY_URL pins the host the OIDC
+      # discovery document is fetched from; KEYCLOAK_BROWSER_ISSUER adds a second accepted
       # issuer alongside it. No-op in cloud (equals KEYCLOAK_URL); active where internal/public
       # issuers differ (local build).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_EXPECTED_ISSUER=${KEYCLOAK_EXPECTED_ISSUER:-}
       - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
@@ -1488,10 +1493,13 @@ services:
       # Split-URL OIDC (the shared OIDC verifier): KEYCLOAK_PUBLIC_URL and
       # KEYCLOAK_BROWSER_ISSUER each ADD an accepted issuer alias (they never
       # override one another — set both together); KEYCLOAK_JWKS_URL pins the
-      # JWKS fetch host; KEYCLOAK_EXPECTED_ISSUER is the strict override that
+      # JWKS fetch host; KEYCLOAK_DISCOVERY_URL pins the host the OIDC
+      # discovery document is fetched from; KEYCLOAK_EXPECTED_ISSUER is the
+      # strict override that
       # reduces acceptance to ONE issuer. No-op when unset (cloud).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-}
       - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       # The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy KC_REALM
       # spelling).

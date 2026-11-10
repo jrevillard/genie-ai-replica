@@ -27,7 +27,7 @@ const {
   piiAckSchema
 } = require('../validators/repository-validator');
 const lifecycleService = require('../services/lifecycle-service');
-const { nameFromSource, slugFor } = require('../services/slug');
+const { intentName, nameFromSource, slugFor } = require('../services/slug');
 const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
 const conformanceService = require('../services/conformance-service');
@@ -245,7 +245,9 @@ async function createRepo(req, res, next) {
 async function resolveTargetRepo(body, authz, actor, defaultName) {
   const repoDomain = body.domain || 'general';
   const acl = { required_scopes: [`okf:t:${slugFor(repoDomain)}:admin`] };
-  const baseName = typeof body.name === 'string' && body.name ? body.name : defaultName;
+  // A blank name is no name (#1699): intentName() turns it into null, so the
+  // repository keeps its default name instead of being called '  '.
+  const baseName = intentName(body.name) || defaultName;
   if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
     const existing = await repoService.getById(body.repo_id.trim(), { authz });
     if (!existing || existing.deleted_at) {
@@ -329,7 +331,7 @@ async function convertFromCrawl(req, res, next) {
       // one was sent (the index concept title reads it — readable text, not
       // a slug), null when none did, so the title keeps its readable
       // default (a blank name is no name). The repo identity above carries the slug.
-      requested_name: typeof body.name === 'string' && body.name.trim() ? body.name : null,
+      requested_name: intentName(body.name),
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });
@@ -367,7 +369,9 @@ async function convertFromDocuments(req, res, next) {
     await producerService.startDocumentsConversion({
       repo_id: repo.repo_id,
       file_ids: fileIds,
-      requested_name: body.name || null,
+      // The caller's intent, verbatim — a BLANK name is no name (it would
+      // become a blank index concept title, issue #1699).
+      requested_name: intentName(body.name),
       classification,
       actor
     });

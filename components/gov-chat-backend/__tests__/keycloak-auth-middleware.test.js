@@ -166,6 +166,31 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('should return 503 AUTH_SERVICE_UNAVAILABLE when the auth service is unreachable', async () => {
+    // The verifier reports an infrastructure outage as AUTH_SERVICE_UNAVAILABLE.
+    // Answering 401 here would send every user to the login page — the
+    // frontend's httpService treats 401 as "your session died" (silent token
+    // refresh, then a redirect to Keycloak). 503 is the contract it handles,
+    // and the same one the document repository already answers.
+    req.headers.authorization = 'Bearer valid-token';
+    const err = new Error('Authentication service is temporarily unavailable (JWKS fetch failed: fetch failed)');
+    err.code = 'AUTH_SERVICE_UNAVAILABLE';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    // Fixed body: the internal detail stays in the log, never in the response.
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'AUTH_SERVICE_UNAVAILABLE',
+      message: 'Authentication service unavailable',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
+    // No introspection probe on an outage — Keycloak is the thing that is down.
+    expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+  });
+
   it('should call Keycloak introspection on TOKEN_EXPIRED and mark user as deleted when disabled', async () => {
     // Create a valid JWT format token for issuer extraction
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');

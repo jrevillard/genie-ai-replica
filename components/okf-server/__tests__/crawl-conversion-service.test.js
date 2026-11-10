@@ -326,6 +326,20 @@ describe('mode B — per-page streaming conversion', () => {
     ]);
   });
 
+  test('the crawl start patch clears the zip-import marker (concepts_total) from the shared record', async () => {
+    // The repo's conversion record is SHARED with the zip import, which
+    // carries `concepts_total` for as long as the MERGE keeps it. The mint
+    // reads `status === 'adding' && concepts_total != null` as "a zip import
+    // is in flight" (#1709), so a crawl on a repo that was zip-imported once
+    // must hand the record over cleanly — its start patch nulls the marker.
+    mockSource(MD);
+    await startJob();
+    await waitForTerminal();
+    const start = allPatches().find((p) => p.status === 'downloading');
+    expect(start).toBeTruthy();
+    expect(start).toHaveProperty('concepts_total', null);
+  });
+
   test('progress patches follow queued -> downloading -> splitting -> adding -> done', async () => {
     mockSource(MD);
     await startJob();

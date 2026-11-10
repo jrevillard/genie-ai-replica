@@ -207,6 +207,8 @@ export default {
     userManagement: 'Gerenciamento de Usuários',
     systemAdministration: 'Administração do Sistema',
     manage: 'Gerenciar',
+    retry: 'Repetir',
+    measuring: 'A medir…',
     loading: 'Carregando...',
     close: 'Fechar painel',
     edit: 'Editar',
@@ -259,7 +261,14 @@ export default {
       cpu: 'Uso de CPU',
       memory: 'Uso de Memória',
       storage: 'Uso de Armazenamento',
-      network: 'Largura de Banda de Rede'
+      network: 'Largura de Banda de Rede',
+      unavailable: 'A utilização de recursos está indisponível neste momento.'
+    },
+    health: {
+      unavailable: 'O estado do sistema está indisponível neste momento.'
+    },
+    dbStats: {
+      unavailable: 'As estatísticas da base de dados estão indisponíveis neste momento.'
     },
     databaseManagement: 'Gerenciamento de Banco de Dados',
     databaseSize: 'Tamanho do Banco de Dados',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Varredura de segurança concluída com sucesso',
-        loading: 'Executando varredura de segurança...'
+        loading: 'Executando varredura de segurança...',
+        refreshFailed: 'A verificação terminou, mas a atualização dos resultados falhou'
       },
       cancel: 'Cancelar',
       save: 'Salvar Alterações'
@@ -385,12 +395,14 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Nenhum log corresponde aos seus critérios de busca',
+        searchFailed: 'A pesquisa de registos falhou',
         resultsFound: "Encontradas {'{'}count{'}'} entradas de log",
         degraded:
           'Mostrando resultados parciais devido a uma interrupção do VictoriaLogs. Algumas entradas de registro recentes podem estar faltando.'
       }
     },
     security: {
+      loadingMetrics: 'A carregar os dados de segurança…',
       title: 'Monitoramento de Segurança',
       securityScan: 'Varredura de Segurança',
       runningSecurityScan: 'Executando Varredura...',
@@ -442,7 +454,8 @@ export default {
       lineNumbers: 'Números das Linhas',
       showLess: 'Mostrar Menos',
       showMore: 'Mostrar Todos os Problemas',
-      lastScanJustNow: 'Agora mesmo'
+      lastScanJustNow: 'Agora mesmo',
+      unavailable: 'Os dados de segurança estão indisponíveis neste momento.'
     },
     hierarchy: {
       title: 'Gerenciamento da Hierarquia de Conhecimento (nota: sempre em inglês - adicionar traduções)',

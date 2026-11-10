@@ -57,10 +57,10 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme({
+    const { theme, getResolvedTheme } = useChartTheme({
       listenToSystem: true
     });
-    return { theme, getCssVarStrings };
+    return { theme, getResolvedTheme };
   },
   data() {
     return {
@@ -538,8 +538,8 @@ export default {
         return; // Prevents ApexCharts from rendering when container is collapsed
       }
 
-      // Get theme information
-      const theme = this.getCssVarStrings();
+      // Get resolved theme information (concrete colors — canvas/SVG cannot resolve var())
+      const theme = this.getResolvedTheme();
 
       // Create explicit center label style based on theme
       const centerLabelStyle = {
@@ -558,8 +558,9 @@ export default {
         return this.truncateText(item.categoryName, nameMaxLength);
       });
 
-      // Get colors for chart
-      const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4'];
+      // Get colors from the brand-derived categorical ramp (T1: was the hardcoded
+      // ECharts stock palette, identical in every theme and every deployment flavour)
+      const colors = theme.chartColors;
 
       // Set up chart options - DISABLE BUILT-IN TOOLTIPS COMPLETELY
       this.chartOptions = {

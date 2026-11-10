@@ -4099,8 +4099,11 @@ config:validate:
     # The config-validator suite includes the shell-syntax gate (#1306,
     # #1322): it shell-extracts the .gitlab-ci.yml script blocks and runs
     # `bash -n` on each. The node:22-alpine image ships no bash — without
-    # this install the gate throws instead of running.
-    - apk add --no-cache bash
+    # this install the gate throws instead of running. The suite's #1674
+    # pin enumerates the tracked package.jsons with `git ls-files`, and
+    # the image ships no git either — without it that pin fails with
+    # "git: not found" instead of validating.
+    - apk add --no-cache bash git
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
     - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm ci

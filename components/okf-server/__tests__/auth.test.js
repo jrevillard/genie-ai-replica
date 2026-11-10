@@ -71,11 +71,20 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
     // A genuine verification failure IS error-level (the outage's warn-level
-    // carve-out covers only AUTH_SERVICE_UNAVAILABLE).
-    expect(logger.error).toHaveBeenCalledWith('OKF auth error', expect.objectContaining({ path: '/api/okf' }));
+    // carve-out covers only AUTH_SERVICE_UNAVAILABLE), and the operator detail
+    // stays in the log — it must never be dropped, that is the only place it
+    // survives.
+    expect(logger.error).toHaveBeenCalledWith(
+      'OKF auth error',
+      expect.objectContaining({ path: '/api/okf', error: 'signature invalid' })
+    );
   });
 
   test('a falsy verified payload: the same fixed 401 body shape', async () => {
@@ -155,10 +164,15 @@ describe('auth middleware (authenticate)', () => {
     });
     expect(next).not.toHaveBeenCalled();
     // WARN, not ERROR: an outage must not flood the error stream with
-    // per-request entries and bury genuine 401 root causes.
+    // per-request entries and bury genuine 401 root causes. The operator
+    // detail stays in the log — it is the only place it survives, and it is
+    // what names the discovery hostname and the remedy.
     expect(logger.warn).toHaveBeenCalledWith(
       'OKF auth service unavailable',
-      expect.objectContaining({ path: '/api/okf' })
+      expect.objectContaining({
+        path: '/api/okf',
+        error: expect.stringContaining('Authentication service is temporarily unavailable')
+      })
     );
     expect(logger.error).not.toHaveBeenCalled();
   });

@@ -242,6 +242,32 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     );
   });
 
+  it('MALFORMED_UPSTREAM: a garbled upstream body is distinguishable from an outage by the synthesis reason', async () => {
+    // Both unknown-posture reasons share the fail-closed source label and the
+    // legacy mode — the reason is the ONLY thing that tells a transport
+    // outage from a broken upstream payload. A warning payload that hardcoded
+    // one reason would make the other invisible.
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({
+        config: { mode: 'legacy' },
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'malformed_response',
+        engaged: false
+      })
+    );
+
+    await queryService.initStreamQuery(makeQueryData(), BEARER);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'QueryService.fanout_warning',
+      expect.objectContaining({
+        fanout: { warning: 'posture_unknown', mode: 'legacy', engaged: false },
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'malformed_response'
+      })
+    );
+  });
+
   it('LEGACY_BY_DESIGN: a parked OKF stack and a scope-less caller stay WARNING-FREE (their legacy answer is the correct posture)', async () => {
     // The by-design defaults share the fail-closed source label with the
     // genuinely unknown cases, but they carry their own synthesis reason:
@@ -295,7 +321,12 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'QueryService.fanout_warning',
       expect.objectContaining({
-        fanout: { warning: 'posture_unknown', mode: 'hybrid', engaged: false }
+        fanout: { warning: 'posture_unknown', mode: 'hybrid', engaged: false },
+        // The source label is what separates "serving a stale last-known-good
+        // posture" from "serving the plain fail-closed default" — the two
+        // share the warning code and the reason.
+        source: 'bff-last-known-good',
+        synthesis_reason: 'upstream_unreachable'
       })
     );
   });

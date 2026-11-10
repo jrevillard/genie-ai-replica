@@ -837,13 +837,12 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   // follow it (the PII scan is ~100 s per concept), so the ingest worker can
   // drain a concept before this import's bundle doc exists. dataprep's
   // bundle-log mirror resolves the repo's bundle by (repo_id,
-  // is_bundle=true) and CACHES the first answer it gets, so a drain that
+  // is_bundle=true) and caches POSITIVE answers (failures retry), so a drain that
   // starts before the bundle doc lands resolves the PREVIOUS import's bundle
   // and mirrors every stage row of this run into it — the admin Ingestion Log
   // of the current bundle stays empty. Storing the bundle first closes that
   // window: the repo's newest bundle doc is this import's by the time the
   // first concept can be claimed.
-  let bundleDocFileId = null;
   if (typeof (input || {}).zip === 'string' && input.zip) {
     const bundleFileName = (input && input.bundle_name) || `${repo.name || 'repo'}-bundle.zip`;
     try {
@@ -868,13 +867,12 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
         { timeout: ENQUEUE_TIMEOUT_MS }
       );
       summary.bundle_stored = bundleFileName;
-      bundleDocFileId = bres.data && bres.data.file_id;
-      summary.bundle_file_id = bundleDocFileId;
+      summary.bundle_file_id = bres.data && bres.data.file_id;
       // The repo's CURRENT bundle is the one just stored — drop the worker's
       // cached id for it so the drain mirrors into this bundle and drives
       // THIS bundle's state machine, not the previous import's.
       invalidateBundleFileCache(repo_id);
-      logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: bundleDocFileId });
+      logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: summary.bundle_file_id });
     } catch (err) {
       summary.bundle_storage_error = err.message;
       logger.error('Import 4g bundle-zip store failed (isolated, non-fatal)', { repo_id, error: err.message });
@@ -1010,16 +1008,16 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   // zip at Pending and bricked the publish. The bundle doc itself is stored
   // BEFORE the concepts are parsed (see the ORDERING note above) — only this
   // status flip waits for the enqueue tally.
-  if (summary.enqueued === 0 && bundleDocFileId) {
+  if (summary.enqueued === 0 && summary.bundle_file_id) {
     try {
       await authedAxios.patch(
-        `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleDocFileId)}/status`,
+        `${config.documentRepository.url}/api/files/${encodeURIComponent(summary.bundle_file_id)}/status`,
         { dataprep: { status: 'Ingested' } },
         { timeout: 10000 }
       );
       logger.info('Bundle zip born Ingested (zero enqueues — nothing in flight)', {
         repo_id,
-        bundle_file_id: bundleDocFileId
+        bundle_file_id: summary.bundle_file_id
       });
     } catch (patchErr) {
       logger.warn('Bundle born-Ingested patch failed (non-fatal)', { repo_id, error: patchErr.message });

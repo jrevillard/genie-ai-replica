@@ -22,10 +22,15 @@ jest.mock('../services/service-token', () => {
   const _delete = jest.fn().mockResolvedValue({});
   return { __esModule: true, authedAxios: { get, post, patch, delete: _delete }, getServiceToken: jest.fn() };
 });
+// The worker's bundle-id cache: storing a new bundle zip makes the stored doc
+// the repo's CURRENT bundle, so the cached id must be dropped — the drain's
+// verdicts otherwise keep mirroring into the previous bundle (#1709).
+jest.mock('../workers/ingestWorker', () => ({ invalidateBundleFileCache: jest.fn() }));
 
 const AdmZip = require('adm-zip');
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const { authedAxios } = require('../services/service-token');
+const { invalidateBundleFileCache } = require('../workers/ingestWorker');
 const bundleExportService = require('../services/bundle-export-service');
 
 const REPO = 'aaaa2222-bbbb-4ccc-8ddd-eeeeeeee0002';
@@ -138,6 +143,24 @@ describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25
       { dataprep: { status: 'Pending' } },
       expect.anything()
     );
+  });
+
+  test('drops the worker bundle-id cache for the repo after storing (#1709)', async () => {
+    seedMeta('index', { is_index: true, frontmatter: { type: 'index', title: 'Index' } });
+    seedMeta('alpha');
+    programMeta([
+      { concept_id: 'alpha', title: 'T alpha', frontmatter: { type: 'topic' }, body: '# alpha' },
+      {
+        concept_id: 'index',
+        title: 'Index',
+        frontmatter: { type: 'index', title: 'Index' },
+        body: '# index',
+        is_index: true
+      }
+    ]);
+    const repo = { repo_id: REPO, name: 'Demo Repo', version: 1, graph_name: `OKF_${REPO}` };
+    await bundleExportService.exportBundle(repo, { sub: 'steward-1' });
+    expect(invalidateBundleFileCache).toHaveBeenCalledWith(REPO);
   });
 
   test('a repo that IS already drained exports its zip as Ingested', async () => {

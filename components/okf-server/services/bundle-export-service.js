@@ -157,9 +157,7 @@ async function exportBundle(repo, actor) {
       );
       fileId = res && res.data && res.data.file_id;
       // The published zip is the repo's CURRENT bundle doc — drop the worker's
-      // cached id for it, so the drain's verdicts and the bundle state machine
-      // address this zip and not the previous one (the comment above promises
-      // this refresh; it was never wired).
+      // cached id for it (same rationale as the ingest-service import path).
       invalidateBundleFileCache(repoId);
     } catch (err) {
       const status = err && err.response && err.response.status;

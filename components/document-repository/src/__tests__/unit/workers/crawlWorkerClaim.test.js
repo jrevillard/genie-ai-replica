@@ -134,8 +134,8 @@ describe('crawl worker job claim', () => {
       crawlWorker.start();
       await waitFor(() => Boolean(claimWrite()), "the crawl worker's claim write");
 
-      expect(claimWrite()).toBeDefined();
-      expect(claimWrite()[0]).toBe('job-1');
+      const claim = claimWrite();
+      expect(claim[0]).toBe('job-1');
     } finally {
       access.mockRestore();
     }

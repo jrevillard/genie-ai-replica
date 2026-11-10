@@ -267,33 +267,24 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     expect(mockDb.query.mock.calls[0][0]).not.toContain("dataprep.status == 'Pending'");
   });
 
-  test('D1: an in-flight CRAWL conversion does NOT mask a stale Pending bundle (concepts_total is zip-only)', async () => {
-    // The crawl conversion shares the repo's `conversion` record and writes
-    // only bytes/pages progress — it is not a zip import, so a Pending bundle
-    // under it is still the stale marker the reconcile exists for.
-    seedRepo({ version: 2, conversion: { status: 'adding', bytes_done: 10, pages_done: 2 } });
+  // The crawl conversion shares the repo's `conversion` record and writes
+  // only bytes/pages progress — it is not a zip import, so a Pending bundle
+  // under it is still the stale marker the reconcile exists for. The record
+  // is MERGE-patched, so a repo zip-imported once keeps `concepts_total`
+  // unless the crawl's start patch clears it — and it does
+  // (crawl-conversion-service), so by the time a mint runs during a crawl
+  // the marker is an explicit null. `!= null` treats null and absent alike;
+  // both shapes pin that.
+  test.each([
+    ['an in-flight CRAWL conversion (no zip marker)', { status: 'adding', bytes_done: 10, pages_done: 2 }],
+    [
+      'a record whose zip marker the crawl already cleared',
+      { status: 'adding', bytes_done: 10, pages_done: 2, concepts_total: null }
+    ]
+  ])('D1: %s does NOT mask a stale Pending bundle', async (_label, conversion) => {
+    seedRepo({ version: 2, conversion });
     mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
     // The stale-zip reconcile runs (its doc-repo PATCH is best-effort here).
-    mockDb.query.mockResolvedValueOnce({
-      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
-    });
-    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
-    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
-    expect(result.bundle_version).toBe(3);
-    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
-  });
-
-  test('D1: a record whose zip marker the crawl already cleared does not mask the reconcile', async () => {
-    // The conversion record is MERGE-patched, so a repo zip-imported once
-    // keeps `concepts_total` unless the crawl's start patch clears it — and
-    // it does (crawl-conversion-service), so by the time a mint runs during a
-    // crawl the marker is an explicit null. `!= null` treats null and absent
-    // alike; this pins the mint against the cleared-marker shape.
-    seedRepo({
-      version: 2,
-      conversion: { status: 'adding', bytes_done: 10, pages_done: 2, concepts_total: null }
-    });
-    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
     mockDb.query.mockResolvedValueOnce({
       all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
     });

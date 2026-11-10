@@ -800,11 +800,12 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
 const _bundleFileCache = new Map(); // repo_id -> bundle file_id (the repo's CURRENT bundle)
-// Bumped on every invalidation. A resolution that STARTED before the last
+// Per-repo epoch counters. A resolution that STARTED before its repo's last
 // invalidation must not re-seed the cache afterwards: it raced the store and
 // resolved the PREVIOUS bundle — caching it would re-poison the cache for the
-// process lifetime, right back to the #1709 symptom.
-let _bundleFileCacheEpoch = 0;
+// process lifetime, right back to the #1709 symptom. Scoped per repo so one
+// repo's re-import does not discard another repo's in-flight resolution.
+const _bundleFileCacheEpoch = new Map();
 
 /**
  * Drop the cached bundle id of a repo — its bundle doc changed (a new zip was
@@ -822,13 +823,13 @@ let _bundleFileCacheEpoch = 0;
  */
 function invalidateBundleFileCache(repoId) {
   _bundleFileCache.delete(repoId);
-  _bundleFileCacheEpoch += 1;
+  _bundleFileCacheEpoch.set(repoId, (_bundleFileCacheEpoch.get(repoId) || 0) + 1);
 }
 
 async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
-  const epochAtStart = _bundleFileCacheEpoch;
+  const epochAtStart = _bundleFileCacheEpoch.get(repoId) || 0;
   // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
   // Doc-repo returns { data: [...], pagination: {...} } (no `items`/`files` key).
   const resp = await authedAxios.get(
@@ -840,7 +841,7 @@ async function getBundleFileId(repoId) {
   if (!bundle || !bundle.file_id) {
     throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
   }
-  if (epochAtStart === _bundleFileCacheEpoch) {
+  if (epochAtStart === (_bundleFileCacheEpoch.get(repoId) || 0)) {
     _bundleFileCache.set(repoId, bundle.file_id);
   }
   return bundle.file_id;

@@ -125,7 +125,7 @@ async function init(idpUrl) {
   // per-realm issuer aliases below on KEYCLOAK_REALM instead let the PARTNER
   // realm's init overwrite the PRIMARY realm's public-issuer alias with the
   // partner JWKS — every primary-realm browser token carrying the public
-  // issuer then verified against the wrong realm's keys (review 2026-10-29).
+  // issuer then verified against the wrong realm's keys.
   const realmMatch = /\/realms\/([^/?#]+)/.exec(baseUrl);
   const realm = realmMatch ? realmMatch[1] : KEYCLOAK_REALM;
   const discoveryUrl = `${baseUrl}/.well-known/openid-configuration`;
@@ -171,7 +171,10 @@ async function init(idpUrl) {
     if (err.name === 'AbortError') {
       throw new Error(`OIDC discovery timed out after ${discoveryTimeoutMs}ms`, { cause: err });
     }
-    throw err; // network, HTTP-status and body-parse errors keep their message
+    // Network, HTTP-status and body-parse errors keep their message but
+    // gain the failing leg's context — a bare 'fetch failed' from an
+    // additional realm is indistinguishable from any other realm's.
+    throw new Error(`OIDC discovery from ${discoveryUrl} failed: ${err.message}`, { cause: err });
   } finally {
     clearTimeout(discoveryTimer);
   }
@@ -258,8 +261,10 @@ async function init(idpUrl) {
   if (issuerMap.size > sizeBefore) {
     initialized = true;
     initFailedAt = 0;
-  } else if (pinnedIssuer && !issuerMap.has(pinnedIssuer)) {
-    // The pin names an issuer no init registered — on the no-args primary
+  } else if (pinnedIssuer && realm !== KEYCLOAK_REALM) {
+    // A partner-realm init under the pin registers nothing whether or not
+    // the primary has already registered the pin — the identical silent
+    // no-registration either way, so both are loud. On the no-args primary
     // init this means KEYCLOAK_REALM is unset or unusable (the realm then
     // derives from the URL and cannot equal the undefined KEYCLOAK_REALM the
     // pin gate compares against). Throwing arms the retry cooldown; failing

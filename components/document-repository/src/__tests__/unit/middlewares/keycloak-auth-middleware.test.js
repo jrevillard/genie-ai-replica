@@ -136,7 +136,7 @@ describe('keycloak-auth-middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
-    it('should map a claim-validation failure to 401 with the verifier message', async () => {
+    it('should map a claim-validation failure to the fixed 401 message (not the verifier message)', async () => {
       mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token claim validation failed')); // internal message
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer bad-claim-token' } }

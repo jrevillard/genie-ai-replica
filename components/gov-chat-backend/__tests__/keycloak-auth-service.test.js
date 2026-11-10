@@ -623,8 +623,12 @@ describe('keycloakAuthService', () => {
       // The floor is why a rotation that lands inside the window is picked
       // up by the NEXT refresh. Without that in the log, a burst of 401s
       // around a key rotation is indistinguishable from a burst of junk
-      // tokens.
+      // tokens. The clock is frozen for the two calls so a stalled runner
+      // cannot push the second one past the 1000 ms window — the same
+      // wall-clock dependence the node suite's burst assertion tolerates.
       const warns = captureWarns();
+      const realNow = Date.now();
+      const clockSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
       mockJwtVerify.mockRejectedValue(unknownKidError());
       const token = generateMockJwtString(mockJwtPayload);
 
@@ -642,6 +646,7 @@ describe('keycloakAuthService', () => {
         expect(logged).toContain('key-set refresh floored');
         expect(logged).not.toContain(token);
       } finally {
+        clockSpy.mockRestore();
         warns.restore();
       }
     });

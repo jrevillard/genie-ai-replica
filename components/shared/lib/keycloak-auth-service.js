@@ -40,12 +40,13 @@ const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 //     certificate endpoint was hit once per junk token.
 //
 //   - Inside the window, a rotation is picked up by the NEXT refresh, not
-//     by the one the rotated token triggers: a token naming a key id the
-//     realm has just published is rejected ONCE (401) when an unrelated
-//     unknown-kid token consumed the floor in the preceding second. That
-//     window is the price of the bound — jose's own cooldown has the very
-//     same property, with a 30 s window instead of 1 s, and the realm's
-//     rotation recovery is no faster than the refresh that observes it.
+//     by the one the rotated token triggers: tokens naming a key id the
+//     realm has just published are rejected (401) until the next refresh
+//     runs, when an unrelated unknown-kid token consumed the floor in the
+//     preceding second. That window is the price of the bound — jose's own
+//     cooldown has the very same property, with a 30 s window instead of
+//     1 s, and the realm's rotation recovery is no faster than the refresh
+//     that observes it.
 const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
 
 /**
@@ -68,8 +69,9 @@ const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
  * names). The divergence is one-way — this filter can only under-report an
  * outage (a bad token where jose would say "no usable key"), never invent
  * one — so a healthy key set is never misread as a broken realm. Tightening
- * it toward jose would flip that direction and turn every valid token into a
- * 503.
+ * it toward jose would flip that direction: any token that reaches this
+ * check with a key set jose itself would refuse (an `ext: false` key, a
+ * non-unique key_ops list) would be answered 503 instead of 401.
  */
 function keySetHasUsableKey(jwks) {
   if (!jwks || !Array.isArray(jwks.keys)) return true;

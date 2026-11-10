@@ -3931,7 +3931,10 @@ describe('the test:e2e name exclusion stays root-only (#1674)', () => {
       .filter(Boolean);
     // The guard must SEE the class it protects; a silent-empty pass would
     // mean the enumeration broke, not that the packages are compliant.
-    expect(tracked.length).toBeGreaterThanOrEqual(8);
+    // The floor sits well below the current population (8), so removing
+    // one package.json is a non-event while a broken enumeration still
+    // fails loudly.
+    expect(tracked.length).toBeGreaterThanOrEqual(5);
     const offenders = [];
     for (const rel of tracked) {
       const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf-8')).scripts || {};

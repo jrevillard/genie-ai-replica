@@ -178,6 +178,78 @@ expect_render_contains() {
   echo "PASS: ${label} — rendered output carries the assertion"
 }
 
+# expect_route_match <label> <path-value> [flags...]
+#   The backend's HTTPRoute rule must carry an EXACT match on <path-value>.
+#
+#   Why Exact and not PathPrefix: Gateway API matches a PathPrefix on PATH
+#   ELEMENTS — "/api-docs" covers "/api-docs" and "/api-docs/..." but NOT
+#   "/api-docs.json", which is a different element. nginx in the Compose
+#   deployment matches by RAW prefix ("location /api-docs"), so the two
+#   edges do not express a prefix the same way, and the gap only shows on
+#   the Kubernetes side. Live evidence on the 1.37 cluster: the edge
+#   answered "/api-docs.json" with the SPA's index.html (text/html) while
+#   the backend answers the same path with application/json.
+#
+#   The needle is SCOPED to the rule block that names the backend: the
+#   render carries the path value only inside that rule, so the assertion
+#   discriminates (removing the rule drops the value) instead of matching
+#   the same text somewhere else in the manifest.
+expect_route_match() {
+  local label="$1" value="$2"; shift 2
+  render_capture "$@"
+  if [ "${GUARD_RC}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render FAILED:"
+    printf '%s\n' "${GUARD_OUTPUT}" | head -6
+    fails=$((fails + 1))
+    return
+  fi
+  # The rule block that routes to the backend: the HTTPRoute rule whose
+  # backendRefs name the backend Service. The render carries a Service
+  # named "backend" too, so the selector must be the ROUTE rule.
+  #
+  # The rules are siblings under "rules:", each one a "- matches:" list
+  # followed by its "backendRefs:". A rule is recognised by its
+  # "- name: backend" inside backendRefs — so the block is captured
+  # BACKWARDS: awk keeps the pending rule in a buffer and prints it only
+  # once the backend name has been seen in it.
+  local block
+  block="$(printf '%s' "${GUARD_OUTPUT}" | awk '
+    # a rule starts at its "- matches:" line
+    /^ +- matches:/ { pending = $0 "\n"; next }
+    # inside a rule: keep the lines until the rule is resolved
+    pending != "" {
+      pending = pending $0 "\n"
+      # the backend reference resolves the rule
+      if ($0 ~ /^ +- name: backend$/) { printf "%s", pending; exit }
+      # a new rule starts before this one was resolved: drop it
+      if ($0 ~ /^ +- matches:/) { pending = $0 "\n" }
+    }
+  ')"
+  if [ -z "${block}" ]; then
+    echo "FAIL: ${label} — the render carries no route rule to the backend"
+    fails=$((fails + 1))
+    return
+  fi
+  # The path value must be there, and the rule that carries it must be an
+  # Exact one: a PathPrefix on the same value would NOT cover the
+  # element, so the type is part of the assertion, not decoration.
+  if ! printf '%s' "${block}" | grep -qF "value: ${value}"; then
+    echo "FAIL: ${label} — the backend route rule does not route ${value}:"
+    printf '%s\n' "${block}" | head -12
+    fails=$((fails + 1))
+    return
+  fi
+  local exact
+  exact="$(printf '%s\n' "${block}" | grep -B1 -F "value: ${value}" | grep -cE "^ +type: Exact$" || true)"
+  if [ "${exact:-0}" -lt 1 ]; then
+    echo "FAIL: ${label} — ${value} is not matched by an Exact rule:"
+    printf '%s\n' "${block}" | head -12
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — the backend route carries an Exact match on ${value}"
+}
+
 # expect_doc_contains_all <label> <kind[:name-substring]> [needle...] -- [flags...]
 #   The render must SUCCEED and the FIRST document matching the selector
 #   must carry EVERY needle. Render-global needles are blind when a
@@ -862,10 +934,17 @@ expect_doc_contains_all "the backend's external HTTPS egress reaches its own pol
   "port: 443" \
   -- $(valid_flags)
 
-# 32. The documented valid configuration must still render: a guard that
+# 32. The OpenAPI document must reach the BACKEND: "/api-docs.json" is
+#     its own path element, so the PathPrefix rules on "/api-docs" do
+#     not cover it and the request falls through to the SPA catch-all
+#     (the edge answered it with the app's index.html).
+expect_route_match "the OpenAPI document is routed to the backend" \
+  "/api-docs.json" \
+  $(valid_flags)
+
+# 33. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
-
 if [ "${fails}" -ne 0 ]; then
   echo
   echo "${fails} render guard(s) did not behave as documented."

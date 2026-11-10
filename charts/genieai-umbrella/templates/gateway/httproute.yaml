@@ -87,6 +87,21 @@ spec:
         - path:
             type: PathPrefix
             value: /api-docs/
+        # "/api-docs.json" — the OpenAPI document itself — needs its OWN
+        # Exact rule: Gateway API's PathPrefix matches on PATH ELEMENTS
+        # ("/api-docs" covers "/api-docs" and "/api-docs/..."), so
+        # "/api-docs.json" matches neither "/api-docs" nor
+        # "/api-docs/" and fell through to the SPA catch-all, which
+        # answered it with the app's index.html. The live evidence: the
+        # edge returned `content-type: text/html` for a JSON document
+        # (the backend answers the same path with application/json).
+        # nginx in the Compose deployment routes it by a RAW prefix
+        # ("location /api-docs"), which is why the Compose venue never
+        # showed the gap — the two edges do not express a prefix the
+        # same way, and this rule is the one the Gateway API needs.
+        - path:
+            type: Exact
+            value: /api-docs.json
       timeouts:
         backendRequest: 1h10m
       backendRefs:

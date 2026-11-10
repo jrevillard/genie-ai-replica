@@ -198,6 +198,8 @@ export default {
   },
   admin: {
     manage: 'إدارة',
+    retry: 'إعادة المحاولة',
+    measuring: 'جارٍ القياس…',
     huduma: 'Genie AI',
     dashboard: 'لوحة التحكم',
     system: 'النظام',
@@ -259,7 +261,14 @@ export default {
       cpu: 'استخدام وحدة المعالجة المركزية',
       memory: 'استخدام الذاكرة',
       storage: 'استخدام التخزين',
-      network: 'عرض النطاق الترددي للشبكة'
+      network: 'عرض النطاق الترددي للشبكة',
+      unavailable: 'استخدام الموارد غير متاح الآن.'
+    },
+    health: {
+      unavailable: 'حالة النظام غير متاحة الآن.'
+    },
+    dbStats: {
+      unavailable: 'إحصاءات قاعدة البيانات غير متاحة الآن.'
     },
     databaseManagement: 'إدارة قاعدة البيانات',
     databaseSize: 'حجم قاعدة البيانات',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'تم إكمال فحص الأمان بنجاح',
-        loading: 'جاري تشغيل فحص الأمان...'
+        loading: 'جاري تشغيل فحص الأمان...',
+        refreshFailed: 'اكتمل الفحص لكن فشل تحديث النتائج'
       },
       cancel: 'إلغاء',
       save: 'حفظ التغييرات'
@@ -385,6 +395,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'لم يتم العثور على سجلات مطابقة لمعايير البحث الخاصة بك',
+        searchFailed: 'فشل البحث في السجلات',
         resultsFound: "تم العثور على {'{'}count{'}'} مدخلات سجل",
         degraded: 'يتم عرض نتائج جزئية بسبب انقطاع VictoriaLogs. قد تكون بعض إدخالات السجل الحديثة مفقودة.'
       }
@@ -440,7 +451,8 @@ export default {
       lineNumbers: 'أرقام الأسطر',
       showLess: 'إظهار أقل',
       showMore: 'إظهار جميع المشكلات',
-      lastScanJustNow: 'الآن'
+      lastScanJustNow: 'الآن',
+      unavailable: 'بيانات الأمان غير متاحة الآن.'
     },
     userEdit: {},
     hierarchy: {

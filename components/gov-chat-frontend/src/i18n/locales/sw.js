@@ -210,6 +210,8 @@ export default {
     close: 'Funga dashibodi',
     edit: 'Hariri',
     manage: 'Simamia',
+    retry: 'Jaribu tena',
+    measuring: 'Inapima…',
     systemUptime: 'Muda wa Uendeshaji wa Mfumo',
     avgResponseTime: 'Wastani wa Muda wa Majibu',
     errorRate: 'Kiwango cha Hitilafu',
@@ -259,7 +261,14 @@ export default {
       cpu: 'Matumizi ya CPU',
       memory: 'Matumizi ya Kumbukumbu',
       storage: 'Matumizi ya Hifadhi',
-      network: 'Upeo wa Mtandao'
+      network: 'Upeo wa Mtandao',
+      unavailable: 'Matumizi ya rasilimali hayapatikani kwa sasa.'
+    },
+    health: {
+      unavailable: 'Hali ya mfumo haipatikani kwa sasa.'
+    },
+    dbStats: {
+      unavailable: 'Takwimu za hifadhidata hazipatikani kwa sasa.'
     },
     databaseManagement: 'Usimamizi wa Hifadhidata',
     databaseSize: 'Ukubwa wa Hifadhidata',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Ukaguzi wa usalama umekamilika',
-        loading: 'Inafanya ukaguzi wa usalama...'
+        loading: 'Inafanya ukaguzi wa usalama...',
+        refreshFailed: 'Uchanganuzi umekamilika, lakini kuburudisha matokeo kumeshindikana'
       },
       cancel: 'Ghairi',
       save: 'Hifadhi Mabadiliko'
@@ -385,6 +395,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
+        searchFailed: 'Utafutaji wa logi umeshindikana',
         resultsFound: "Imepatikana {'{'}count{'}'} viingizo vya kumbukumbu",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
@@ -440,7 +451,8 @@ export default {
       lineNumbers: 'Nambari za Mistari',
       showLess: 'Onyesha Kidogo',
       showMore: 'Onyesha Masuala Yote',
-      lastScanJustNow: 'Muda mfupi uliopita'
+      lastScanJustNow: 'Muda mfupi uliopita',
+      unavailable: 'Taarifa za usalama hazipatikani kwa sasa.'
     },
     hierarchy: {
       title: 'Usimamizi wa Uongozi wa Maarifa (dondoo: daima kwa Kiingereza - ongeza tafsiri)',

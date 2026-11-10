@@ -437,13 +437,15 @@ export default {
         } else {
           this.searchResults = [];
         }
-        this.$emit('search-results', this.searchResults);
+        this.$emit('search-results', this.searchResults, null);
       } catch (error) {
         console.error('Error searching logs:', error);
         this.searchError = error.message || 'An error occurred while searching logs';
         this.searchResults = [];
         this.lastResponseDegraded = false;
-        this.$emit('search-results', []);
+        // The second argument carries the failure to the shell — an empty
+        // payload alone read as a clean no-hit there (review H5 round 2).
+        this.$emit('search-results', [], this.searchError);
       } finally {
         this.isSearching = false;
       }

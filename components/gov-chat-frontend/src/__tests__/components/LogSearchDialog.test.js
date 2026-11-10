@@ -841,6 +841,9 @@ describe('LogSearchDialog', () => {
       expect(wrapper.emitted('search-results')).toBeTruthy();
       expect(wrapper.emitted('search-results')).toHaveLength(1);
       expect(wrapper.emitted('search-results')[0][0]).toHaveLength(3);
+      // REVIEW round-2 F3: the second argument is the error channel — a
+      // success emit carries null so the shell toasts success, not error.
+      expect(wrapper.emitted('search-results')[0][1]).toBeNull();
     });
 
     it('emits "search-results" with empty array on search error', async () => {
@@ -854,6 +857,9 @@ describe('LogSearchDialog', () => {
 
       expect(wrapper.emitted('search-results')).toBeTruthy();
       expect(wrapper.emitted('search-results')[0][0]).toEqual([]);
+      // REVIEW round-2 F3: the error rides the second argument — without it
+      // the shell cannot tell "no matches" from "the search itself failed".
+      expect(wrapper.emitted('search-results')[0][1]).toBe('API Error');
     });
 
     it('emits "search-results" even when no logs found', async () => {
@@ -869,6 +875,8 @@ describe('LogSearchDialog', () => {
 
       expect(wrapper.emitted('search-results')).toBeTruthy();
       expect(wrapper.emitted('search-results')[0][0]).toEqual([]);
+      // A clean no-hit search is not a failure — the second argument is null.
+      expect(wrapper.emitted('search-results')[0][1]).toBeNull();
     });
 
     it('renders the error state — never the empty state — on a failed search', async () => {

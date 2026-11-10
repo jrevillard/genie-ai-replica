@@ -210,6 +210,8 @@ export default {
     close: 'ড্যাশবোর্ড বন্ধ করুন',
     edit: 'সম্পাদনা করুন',
     manage: 'পরিচালনা',
+    retry: 'পুনরায় চেষ্টা করুন',
+    measuring: 'পরিমাপ চলছে…',
     systemUptime: 'সিস্টেম আপটাইম',
     avgResponseTime: 'গড় প্রতিক্রিয়া সময়',
     errorRate: 'ত্রুটির হার',
@@ -259,7 +261,14 @@ export default {
       cpu: 'CPU ব্যবহার',
       memory: 'মেমরি ব্যবহার',
       storage: 'স্টোরেজ ব্যবহার',
-      network: 'নেটওয়ার্ক ব্যান্ডউইথ'
+      network: 'নেটওয়ার্ক ব্যান্ডউইথ',
+      unavailable: 'রিসোর্স ব্যবহার এই মুহূর্তে অনুপলব্ধ।'
+    },
+    health: {
+      unavailable: 'সিস্টেমের অবস্থা এই মুহূর্তে অনুপলব্ধ।'
+    },
+    dbStats: {
+      unavailable: 'ডাটাবেস পরিসংখ্যান এই মুহূর্তে অনুপলব্ধ।'
     },
     databaseManagement: 'ডেটাবেস ম্যানেজমেন্ট',
     databaseSize: 'ডেটাবেসের আকার',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'সিকিউরিটি স্ক্যান সফলভাবে সম্পন্ন হয়েছে',
-        loading: 'সিকিউরিটি স্ক্যান চালানো হচ্ছে...'
+        loading: 'সিকিউরিটি স্ক্যান চালানো হচ্ছে...',
+        refreshFailed: 'স্ক্যান সম্পন্ন হয়েছে, তবে ফলাফল রিফ্রেশ করা যায়নি'
       },
       cancel: 'বাতিল করুন',
       save: 'পরিবর্তনগুলো সেভ করুন'
@@ -385,6 +395,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'আপনার অনুসন্ধানের মানদণ্ডের সাথে কোনো লগ মেলেনি',
+        searchFailed: 'লগ অনুসন্ধান ব্যর্থ হয়েছে',
         resultsFound: "{'{'}count{'}'} টি লগ এন্ট্রি পাওয়া গেছে",
         degraded:
           'VictoriaLogs এর বিভ্রাটের কারণে আংশিক ফলাফল দেখানো হচ্ছে। কিছু সাম্প্রতিক লগ এন্ট্রি অনুপস্থিত থাকতে পারে।'
@@ -441,7 +452,8 @@ export default {
       lineNumbers: 'লাইন নম্বরসমূহ',
       showLess: 'কম দেখান',
       showMore: 'সব সমস্যা দেখান',
-      lastScanJustNow: 'এইমাত্র'
+      lastScanJustNow: 'এইমাত্র',
+      unavailable: 'নিরাপত্তা তথ্য এই মুহূর্তে অনুপলব্ধ।'
     },
     hierarchy: {
       title: 'জ্ঞান অনুক্রম পরিচালনা (নোট: সর্বদা ইংরেজি - অনুবাদ যোগ করুন)',

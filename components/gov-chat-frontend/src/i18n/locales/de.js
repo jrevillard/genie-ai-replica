@@ -210,6 +210,8 @@ export default {
     close: 'Dashboard schließen',
     edit: 'Bearbeiten',
     manage: 'Verwalten',
+    retry: 'Erneut versuchen',
+    measuring: 'Messung läuft…',
     systemUptime: 'Systembetriebszeit',
     avgResponseTime: 'Durchschnittliche Antwortzeit',
     errorRate: 'Fehlerquote',
@@ -259,7 +261,14 @@ export default {
       cpu: 'CPU-Nutzung',
       memory: 'Speicherauslastung',
       storage: 'Speicherverbrauch',
-      network: 'Netzwerkbandbreite'
+      network: 'Netzwerkbandbreite',
+      unavailable: 'Die Ressourcennutzung ist derzeit nicht verfügbar.'
+    },
+    health: {
+      unavailable: 'Der Systemzustand ist derzeit nicht verfügbar.'
+    },
+    dbStats: {
+      unavailable: 'Die Datenbankstatistiken sind derzeit nicht verfügbar.'
     },
     databaseManagement: 'Datenbankverwaltung',
     databaseSize: 'Datenbankgröße',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Sicherheitsscan erfolgreich abgeschlossen',
-        loading: 'Sicherheitsscan wird durchgeführt...'
+        loading: 'Sicherheitsscan wird durchgeführt...',
+        refreshFailed: 'Der Scan ist abgeschlossen, aber das Aktualisieren der Ergebnisse schlug fehl'
       },
       cancel: 'Abbrechen',
       save: 'Änderungen speichern'
@@ -385,6 +395,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Keine Protokolle entsprechen Ihren Suchkriterien',
+        searchFailed: 'Die Protokollsuche ist fehlgeschlagen',
         resultsFound: "{'{'}count{'}'} Protokolleinträge gefunden",
         degraded:
           'Aufgrund eines VictoriaLogs-Ausfalls werden nur teilweise Ergebnisse angezeigt. Einige kürzliche Protokolleinträge fehlen möglicherweise.'
@@ -442,7 +453,8 @@ export default {
       lineNumbers: 'Zeilennummern',
       showLess: 'Weniger anzeigen',
       showMore: 'Alle Probleme anzeigen',
-      lastScanJustNow: 'Gerade eben'
+      lastScanJustNow: 'Gerade eben',
+      unavailable: 'Die Sicherheitsdaten sind derzeit nicht verfügbar.'
     },
     hierarchy: {
       title: 'Wissenshierarchie-Verwaltung (Hinweis: immer Englisch - Übersetzungen hinzufügen)',

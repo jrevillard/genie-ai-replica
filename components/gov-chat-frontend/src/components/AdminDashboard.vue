@@ -49,7 +49,7 @@
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>
               <div class="stat-value" data-test-id="stat-monthly-active-users-value">
-                {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
+                {{ mauLabel }}
               </div>
               <div v-if="trend('activeUsers', true)" class="stat-trend" :class="trend('activeUsers', true).className">
                 <span>{{ trend('activeUsers', true).arrow }} {{ trend('activeUsers', true).value }}</span>
@@ -941,12 +941,19 @@
 
                   <!-- REVIEW H2: a failed fetch used to install the all-zero
                        "clean bill" and read as "system appears secure". The
-                       error state renders FIRST; the details render only from
-                       a real response. Also fixed in passing: the tile read
+                       loading state renders during a load/retry, the error
+                       state after a failure, and the details only from a real
+                       response. Also fixed in passing: the tile read
                        `securityMetrics.lastScan` while the loader writes
                        `lastSecurityScan` — the value has been rendering empty. -->
                   <DsStateDisplay
-                    v-if="securityMetricsError || securityDetailsError"
+                    v-if="securityLoading"
+                    type="loading"
+                    :message="translate('admin.security.loadingMetrics', 'Loading security data…')"
+                    data-test-id="security-loading"
+                  />
+                  <DsStateDisplay
+                    v-else-if="securityMetricsError || securityDetailsError"
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
                     data-test-id="security-error"
@@ -1927,6 +1934,10 @@ export default {
       dbStatsError: false,
       securityMetricsError: false,
       securityDetailsError: false,
+      // REVIEW round-2 F4: the security card had NO loading state of its own
+      // (the old loading display is gated on runSecurityScan only), so a tab
+      // load or a retry rendered a blank card until the response landed.
+      securityLoading: false,
 
       // Month-over-month deltas, computed server-side against the stored
       // analytics collection. `null` means "not computable" (the previous
@@ -2039,6 +2050,14 @@ export default {
       return this.metrics.avgResponseTime === null || this.metrics.avgResponseTime === undefined
         ? '\u2014'
         : `${this.metrics.avgResponseTime}ms`;
+    },
+    // REVIEW round-2 F2: the MAU tile rendered `(metrics.monthlyActiveUsers
+    // ?? 0)` \u2014 a fabricated 0 for unmeasured data, the exact lie the other
+    // three tiles stopped telling.
+    mauLabel() {
+      return this.metrics.monthlyActiveUsers === null || this.metrics.monthlyActiveUsers === undefined
+        ? '\u2014'
+        : this.metrics.monthlyActiveUsers.toLocaleString();
     },
     // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
     // the frontend entrypoint from OKF_ENABLED — the image default is DARK
@@ -2685,10 +2704,7 @@ export default {
           // A response without a metrics object is a failed load too —
           // treat it exactly like a rejection (review H1).
           this.healthLoadError = true;
-          this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
-          this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
-          this.healthServices = null;
-          this.resourceUsage = null;
+          this.resetHealthSurfaces();
           this.showNotification('Failed to parse system health data', 'error');
         }
       } catch (error) {
@@ -2698,10 +2714,7 @@ export default {
         // tiles go to dashes and the cards to their error states with a
         // retry affordance.
         this.healthLoadError = true;
-        this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
-        this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
-        this.healthServices = null;
-        this.resourceUsage = null;
+        this.resetHealthSurfaces();
         this.showNotification('Failed to load system health data', 'error');
       } finally {
         this.isLoading = false;
@@ -2809,6 +2822,22 @@ export default {
             return;
           }
           await this.loadSecurityDetails(); // This fetches all necessary details
+          // REVIEW round-2 F1: loadSecurityDetails swallows its own errors
+          // (it sets securityDetailsError). If the refresh failed, the scan
+          // ran server-side but its results never landed — surface the error
+          // state; do NOT stamp a fabricated "Just now" clean bill over it.
+          if (this.securityDetailsError) {
+            this.securityMetricsError = true;
+            this.securityMetrics = null;
+            this.showNotification(
+              this.translate(
+                'admin.operations.runSecurityScan.refreshFailed',
+                'The scan completed, but refreshing its results failed'
+              ),
+              'error'
+            );
+            return;
+          }
           // REVIEW H2: the tile update used to write `lastScan` — the loader's
           // key is `lastSecurityScan`, so the write landed on a dead field and
           // the visible value never moved. It also crashed on a null
@@ -2872,13 +2901,21 @@ export default {
       }
     },
 
-    // Handle search results from the LogSearchDialog component
-    handleSearchResults(results) {
+    // Handle search results from the LogSearchDialog component. The second
+    // argument is the dialog's searchError — a failed search must not toast
+    // "No logs matched" (review H5 round 2: the empty payload used to read
+    // as a clean no-hit while the dialog showed its error panel).
+    handleSearchResults(results, searchError) {
       // Store the search results
       this.searchResults = results;
 
       // Notify the user about the results
-      if (results.length === 0) {
+      if (searchError) {
+        this.showNotification(
+          `${this.translate('admin.logsSection.logSearch.searchFailed', 'The log search failed')}: ${searchError}`,
+          'error'
+        );
+      } else if (results.length === 0) {
         this.showNotification(
           this.translate('admin.logsSection.logSearch.noResultsFound', 'No logs matched your search criteria'),
           'info'
@@ -2905,6 +2942,7 @@ export default {
     async loadSecurityMetrics() {
       try {
         this.isLoading = true;
+        this.securityLoading = true;
         const response = await adminDashboardService.getSecurityMetrics();
         if (response && response.data) {
           this.securityMetricsError = false;
@@ -2930,17 +2968,19 @@ export default {
         this.securityMetrics = null;
       } finally {
         this.isLoading = false;
+        this.securityLoading = false;
       }
     },
 
     /**
      * Retry the security surfaces after an error state (review H2). The
-     * metrics loader chains the details loader on success, so one call
+     * flags are NOT pre-cleared here: the loading state takes over while the
+     * fetch runs, and only a success clears the error flags — clearing them
+     * up-front would blank the error card before anything better exists.
+     * The metrics loader chains the details loader on success, so one call
      * re-populates both.
      */
     async retrySecurity() {
-      this.securityMetricsError = false;
-      this.securityDetailsError = false;
       await this.loadSecurityMetrics();
     },
 
@@ -2964,20 +3004,29 @@ export default {
       this.loadDataForTab(this.activeTab); // Call the helper
     },
 
+    // REVIEW round-2 F7: one reset, two failure paths (payload-shape and
+    // rejection) — drift between copies is how a stale or fabricated
+    // surface survives a failed load.
+    resetHealthSurfaces() {
+      this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
+      this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
+      this.healthServices = null;
+      this.resourceUsage = null;
+    },
+
     // Load database statistics
     async loadDatabaseStats() {
       try {
         const response = await databaseOperationsService.getDatabaseStats();
         const payload = response && response.data;
-        // The backend answers 200 with `{success:false, ...}` when ArangoDB
-        // itself failed — that payload carries no figures, and rendering it
-        // would blank the two fields (review H3).
-        if (payload && payload.success !== false && payload.databaseSize !== undefined) {
-          this.dbStats = payload;
-          this.dbStatsError = false;
-        } else {
-          throw new Error((payload && payload.message) || 'Database stats unavailable');
+        // Figure-less payload: the wired backend (adminDashboardService
+        // .getDatabaseStats) either returns real figures or THROWS — so a
+        // payload without them is a contract break, not a state to render.
+        if (!payload || payload.databaseSize === undefined) {
+          throw new Error('Database stats payload had no figures');
         }
+        this.dbStats = payload;
+        this.dbStatsError = false;
       } catch (error) {
         console.error('Error loading database stats:', error);
         // REVIEW H3: the failure used to be swallowed with a log line,

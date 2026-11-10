@@ -210,6 +210,8 @@ export default {
     close: 'Cerrar panel de control',
     edit: 'Editar',
     manage: 'Administrar',
+    retry: 'Reintentar',
+    measuring: 'Midiendo…',
     systemUptime: 'Tiempo de Actividad del Sistema',
     avgResponseTime: 'Tiempo de Respuesta Promedio',
     errorRate: 'Tasa de Error',
@@ -259,7 +261,14 @@ export default {
       cpu: 'Uso de CPU',
       memory: 'Uso de Memoria',
       storage: 'Uso de Almacenamiento',
-      network: 'Ancho de Banda de Red'
+      network: 'Ancho de Banda de Red',
+      unavailable: 'El uso de recursos no está disponible ahora mismo.'
+    },
+    health: {
+      unavailable: 'El estado del sistema no está disponible ahora mismo.'
+    },
+    dbStats: {
+      unavailable: 'Las estadísticas de la base de datos no están disponibles ahora mismo.'
     },
     databaseManagement: 'Gestión de Base de Datos',
     databaseSize: 'Tamaño de la Base de Datos',
@@ -330,7 +339,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Escaneo de seguridad completado con éxito',
-        loading: 'Ejecutando escaneo de seguridad...'
+        loading: 'Ejecutando escaneo de seguridad...',
+        refreshFailed: 'El análisis terminó, pero la actualización de los resultados falló'
       },
       cancel: 'Cancelar',
       save: 'Guardar Cambios'
@@ -384,6 +394,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No se encontraron registros que coincidan con sus criterios de búsqueda',
+        searchFailed: 'La búsqueda de registros falló',
         resultsFound: "Encontradas {'{'}count{'}'} entradas de registro",
         degraded:
           'Mostrando resultados parciales debido a una interrupción de VictoriaLogs. Es posible que falten algunas entradas de registro recientes.'
@@ -441,7 +452,8 @@ export default {
       lineNumbers: 'Números de Línea',
       showLess: 'Mostrar Menos',
       showMore: 'Mostrar Todos los Problemas',
-      lastScanJustNow: 'Justo ahora'
+      lastScanJustNow: 'Justo ahora',
+      unavailable: 'Los datos de seguridad no están disponibles ahora mismo.'
     },
     hierarchy: {
       title: 'Gestión de la Jerarquía de Conocimiento (nota: siempre en inglés - añadir traducciones)',

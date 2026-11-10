@@ -1125,6 +1125,9 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.uptimeLabel).toBe('—');
       expect(wrapper.vm.responseTimeLabel).toBe('—');
       expect(wrapper.vm.errorRateLabel).toBe('—');
+      // REVIEW round-2 F2: the MAU tile was the last fabricated boot value
+      // (hardcoded 1,247) — it renders a dash too until analytics load.
+      expect(wrapper.vm.mauLabel).toBe('—');
       expect(wrapper.vm.healthServices).toBeNull();
       expect(wrapper.vm.resourceUsage).toBeNull();
       expect(wrapper.vm.dbStats).toBeNull();
@@ -1172,11 +1175,12 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.dbStats).toBeNull();
     });
 
-    it('loadDatabaseStats treats a success:false payload as a failure', async () => {
+    it('loadDatabaseStats treats a figure-less payload as a failure', async () => {
       const dbMock = require('../../services/databaseOperationsService').getDatabaseStats;
-      // The backend answers 200 with {success:false} when ArangoDB itself
-      // failed — no figures in the payload (review H3).
-      dbMock.mockResolvedValueOnce({ data: { success: false, message: 'Arango connection refused' } });
+      // REVIEW round-2 F6: the `success:false` guard was dead code — the
+      // wired backend service either returns real figures or THROWS; a
+      // payload without figures is a contract break, not a renderable state.
+      dbMock.mockResolvedValueOnce({ data: {} });
       const wrapper = createAdminDashboardWrapper();
 
       await wrapper.vm.loadDatabaseStats();
@@ -1207,6 +1211,29 @@ describe('AdminDashboard', () => {
 
       expect(wrapper.vm.securityMetrics.lastSecurityScan).toBe('Just now');
       expect(wrapper.vm.securityMetrics.vulnerabilities).toEqual({ critical: 0, medium: 0, low: 0 });
+    });
+
+    it('runSecurityScan surfaces an error state when refreshing the results fails', async () => {
+      // REVIEW round-2 F1: the scan ran server-side, but loadSecurityDetails
+      // rejected — stamping "Just now" with stale zero counts would be a
+      // fabricated clean bill over a failed refresh. The component must
+      // enter the error state instead.
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.loadSecurityMetrics(); // base mock: a metrics object exists
+      mockRunSecurityScan.mockResolvedValueOnce({ success: true, data: {} });
+      mockGetSecurityDetails.mockRejectedValueOnce(new Error('Scan store down'));
+
+      await wrapper.vm.runSecurityScan();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetailsError).toBe(true);
+      expect(wrapper.vm.securityMetricsError).toBe(true);
+      expect(wrapper.vm.securityMetrics).toBeNull();
+      // No fabricated "Just now" may land anywhere in the stale tiles.
+      const toasts = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      const errorToast = toasts.find(([, p]) => p.type === 'error');
+      expect(errorToast).toBeTruthy();
+      expect(errorToast[1].message).toContain('refresh');
     });
 
     it('loadSecurityDetails maps patternMatches out of the severity buckets', async () => {
@@ -1815,6 +1842,26 @@ describe('AdminDashboard', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.handleSearchResults([]);
       expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'info' }));
+    });
+
+    it('shows an error toast (not success/info) when the search itself failed', async () => {
+      // REVIEW round-2 F3: the dialog now reports its own failure via the
+      // second emit argument. An error payload must not fall through the
+      // empty-array branch and toast "no results" — that reads as a clean
+      // search that merely found nothing.
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.activeTab = 'logs';
+      const before = mockEventBusEmit.mock.calls.length;
+      wrapper.vm.handleSearchResults([], 'VictoriaLogs unreachable');
+
+      expect(wrapper.vm.searchResults).toEqual([]);
+      // Only the toasts THIS call produced — the mount's own notifications
+      // (if any) must not mask the branch under test.
+      const toasts = mockEventBusEmit.mock.calls.slice(before).filter((c) => c[0] === 'notification:show');
+      const errorToast = toasts.find(([, p]) => p.type === 'error');
+      expect(errorToast).toBeTruthy();
+      expect(errorToast[1].message).toContain('VictoriaLogs unreachable');
+      expect(toasts.some(([, p]) => p.type === 'success' || p.type === 'info')).toBe(false);
     });
 
     it('stores search results and shows success notification', () => {

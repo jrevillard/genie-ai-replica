@@ -120,6 +120,20 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
+  test('tolerates the client-side re-wrap of the race — the wording is all that survives', async () => {
+    // `route.fetch()` re-wraps its failure CLIENT-side into a plain
+    // Error with a "route.fetch: " prefix: neither the class nor the
+    // name survives, only the wording. Measured on the venue — the
+    // guard recognised the name and the constructor, rethrew this
+    // shape, and the teardown error landed in the NEXT test.
+    const { page } = pageState({ contextClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('route.fetch: Request context disposed.');
+      })
+    ).resolves.toBeUndefined();
+  });
+
   test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {
     // The same two halves, on the pipeline wording: the wording alone is
     // not the verdict. A defect on a live target must surface, whatever

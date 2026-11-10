@@ -29,7 +29,9 @@
  *   It also fires when the browser process dies — though Playwright
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
- *   crashed browser fails the spec on its other awaits either way.
+ *   crashed browser fails the spec on its other awaits either way. The
+ *   error arrives in three shapes (class, name, or the client's
+ *   re-wrapped wording) — `isTargetClosedError` reads all three.
  *
  * Only their conjunction is the named race. The error check reads the
  * constructor name and the message (the message form is the same
@@ -70,21 +72,29 @@ function isTargetGone(page) {
  * both of its client-side close event and of the protocol answer a dead
  * target produces.
  *
- * The check reads the NAME, not only the constructor: an in-process
- * throw carries the class, but a route callback's error is raised in the
- * server and crosses the pipeline as {message, stack, name}, so the
- * client rebuilds it as a plain Error with the class lost and the name
- * kept (`route.fetch()`'s "Request context disposed." arrives with the
- * name TargetClosedError). This is Playwright's own discrimination —
- * its `isTargetClosedError` accepts the instance or the name — and the
- * message form stays for the wording a client-side close event has
- * always carried.
+ * Three spellings, because the error reaches the handler in three
+ * shapes:
+ *
+ * - an in-process throw carries the CLASS (constructor name);
+ * - an error that crossed the pipeline keeps its NAME — Playwright's own
+ *   discrimination accepts the instance or the name;
+ * - `route.fetch()` re-wraps the failure CLIENT-side into a plain Error
+ *   with a "route.fetch: " prefix, so neither the class nor the name
+ *   survives — only the WORDING ("Request context disposed."). That
+ *   spelling was measured on the venue: the guard recognised the name
+ *   and the constructor, and still rethrew it, and the teardown error
+ *   landed in the next test.
+ *
+ * The wording branch is narrow (it names a closed target or a disposed
+ * context) and the state half still gates it: a defect whose text says
+ * "context disposed" while the target is ALIVE is rethrown.
  */
 function isTargetClosedError(error) {
   if (!error) return false;
   if (error.name === 'TargetClosedError') return true;
   if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
-  return typeof error.message === 'string' && /has been closed/i.test(error.message);
+  if (typeof error.message !== 'string') return false;
+  return /has been closed/i.test(error.message) || /context disposed/i.test(error.message);
 }
 
 /**

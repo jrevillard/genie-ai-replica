@@ -171,24 +171,21 @@ async function buildingBlocker(repo) {
 async function sourcesBusyBlocker(repo) {
   const sources = (repo && Array.isArray(repo.source_documents) && repo.source_documents) || [];
   if (sources.length === 0) return null;
-  const { authedAxios } = require('./service-token');
-  const config = require('../config');
-  // Shared doc-repo envelope unwrap — lazy like every HTTP dep here (a
-  // top-level producer-service require drags the ingest/pii client chain into
-  // partial-mock test contexts that do not carry its config).
-  const { docRepoFileOf } = require('./producer-service');
+  // Shared doc-repo metadata fetch + envelope unwrap — lazy like every HTTP
+  // dep here (a top-level producer-service require drags the ingest/pii
+  // client chain into partial-mock test contexts that do not carry its
+  // config). One implementation for the importer, the crawl stamper and this
+  // gate (issue #1686); the 5 s timeout is this gate's own (it is the
+  // latency-critical fail-closed re-check).
+  const { fetchDocMeta } = require('./producer-service');
   const serving = [];
   for (const s of sources) {
     if (!s || !s.file_id) continue;
     try {
-      const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`, {
-        timeout: 5000
-      });
       // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
-      // shapes (producer-service.docRepoFileOf) so the gate sees the REAL
-      // dataprep.status (a misread would silently fail-open the
-      // SOURCES_NOT_RETRACTED gate).
-      const f = docRepoFileOf(res);
+      // shapes so the gate sees the REAL dataprep.status (a misread would
+      // silently fail-open the SOURCES_NOT_RETRACTED gate).
+      const f = await fetchDocMeta(s.file_id, 5000);
       if (f.is_bundle === true) continue; // defensive: a bundle is never a source doc
       const status = String((f.dataprep && f.dataprep.status) || '')
         .toLowerCase()

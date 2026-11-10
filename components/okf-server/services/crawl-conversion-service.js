@@ -104,7 +104,10 @@ const MAX_CONCURRENT = Math.max(1, parseInt(process.env.OKF_MAX_CONCURRENT_CONVE
  */
 const TERMINAL_STATES = ['done', 'failed'];
 
-/** repo_id → live runner promise (in-process registry). */
+/** repo_id → the in-flight conversion's COMPLETION promise (in-process
+ * registry). The RESERVATION is the guard — it is claimed synchronously,
+ * before the awaited stages below, so a second start for the same repo
+ * cannot slip through a check-then-set window (issue #1684). */
 const live = new Map();
 /** Simple FIFO semaphore so heavy conversions don't stampede the DB/LLM. */
 const waiting = [];
@@ -176,14 +179,13 @@ async function patchConversion(repoId, patch) {
  */
 async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
   try {
-    const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
-      timeout: 10000
-    });
-    // Shared doc-repo envelope unwrap ({file} | {data: {file}} | {data}) —
-    // the previous two-shape unwrap silently degraded {data: {file}} to
-    // id-only stamping. Lazy require: producer-service loads this module.
-    const { docRepoFileOf } = require('./producer-service');
-    const f = docRepoFileOf(res);
+    // Shared doc-repo metadata fetch + envelope unwrap ({file} | {data: {file}}
+    // | {data}) — the previous two-shape unwrap silently degraded {data:
+    // {file}} to id-only stamping. Lazy require: producer-service loads this
+    // module (issue #1686 — one fetch, one unwrap, shared with the importer
+    // and the SOURCES-BUSY gate).
+    const { fetchDocMeta } = require('./producer-service');
+    const f = await fetchDocMeta(file_id);
     const db = await getDb();
     // The metadata size doubles as the cap/mode-A guard + progress total
     // (/download streams chunked with no content-length).
@@ -846,6 +848,17 @@ async function startConversion({
     e.status = 409;
     throw e;
   }
+  // The RESERVATION is the guard — it claims the repo SYNCHRONOUSLY (the check
+  // and the claim are adjacent statements, no await between them), so the repo
+  // is invisible to a second start for the whole of the awaited window below
+  // (the queued patch + the provenance stamp's doc-repo GET). A check-then-set
+  // guard left that window open (issue #1684 — the same shape the documents
+  // importer had).
+  let settleInFlight;
+  const inFlight = new Promise((resolve) => {
+    settleInFlight = resolve;
+  });
+  live.set(repo_id, inFlight);
 
   const queued = {
     status: 'queued',
@@ -857,12 +870,20 @@ async function startConversion({
     error: null,
     started_at: new Date().toISOString()
   };
-  await patchConversion(repo_id, queued);
+  let sourceMeta;
+  try {
+    await patchConversion(repo_id, queued);
 
-  // Provenance first (fail-soft) so the editor can show the source document
-  // even while the conversion is still queued — and its size doubles as the
-  // cap/mode-A guard + progress total for the run.
-  const sourceMeta = await stampSourceDocument(repo_id, { file_id, url, crawl_job_id });
+    // Provenance first (fail-soft) so the editor can show the source document
+    // even while the conversion is still queued — and its size doubles as the
+    // cap/mode-A guard + progress total for the run.
+    sourceMeta = await stampSourceDocument(repo_id, { file_id, url, crawl_job_id });
+  } catch (err) {
+    // The reservation must not outlive a failed start — the repo is free again.
+    live.delete(repo_id);
+    settleInFlight();
+    throw err;
+  }
   const job = {
     repo_id,
     file_id,
@@ -897,7 +918,9 @@ async function startConversion({
       live.delete(repo_id);
     }
   })();
-  live.set(repo_id, runner);
+  // The registry's value settles when the conversion ENDS, so awaiting
+  // live.get(repo_id) still waits for the run (the registry's contract).
+  runner.then(settleInFlight, settleInFlight);
   return queued;
 }
 

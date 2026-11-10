@@ -375,6 +375,69 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(stamps).toHaveLength(2); // okf_repo_id still stamped on every file
   });
 
+  it('refuses a SECOND start for the same repo while the first is still stamping its sources', async () => {
+    // ONE conversion per repo. The guard's window: the check and the runner's
+    // registration are separated by the queued patch + the per-file source
+    // stamping (one doc-repo PATCH per file). A second start that slipped
+    // through that window imported the corpus twice (issue #1684). The stamp
+    // is HELD here, so the window is open deterministically — no timing, no
+    // polling.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    let hold = true;
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    authedAxios.patch.mockImplementation(async () => {
+      if (hold && !parked) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return { status: 200 };
+    });
+
+    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await stamping; // the first import is parked inside its stamping stage
+    const second = await producer
+      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      .then(
+        (queued) => ({ queued }),
+        (err) => ({ err })
+      );
+    hold = false;
+    releaseStamp();
+    await first;
+    await producer.live.get(RID);
+    expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+  });
+
+  it('the conversion fetches the metadata a caller did NOT pre-load (self-sufficient, #1691)', async () => {
+    // The importer pre-flights every file's metadata and hands the cache to
+    // the conversion — but the conversion must not DEPEND on that cache: a
+    // caller that omits an entry used to fail EVERY file with a TypeError
+    // swallowed by the per-file catch (a confusing CONVERSION_FAILED per
+    // file instead of the metadata the file needs).
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await producer.runDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.per_file[0].status).toBe('imported');
+    expect(repoDoc.conversion.per_file[0].file_name).toBe('alpha.md');
+  });
+
   it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
     // The gate is closed (no VLLM_ENDPOINT): the topics leg degrades. The
     // import still lands, but the operator must SEE it — the conversion
@@ -760,25 +823,48 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
   });
 });
 
-describe('producer-service — docRepoFileOf (shared doc-repo envelope unwrap)', () => {
-  // The unwrap is shared by lifecycle-service and crawl-conversion-service —
-  // a diverging copy that handled only {file} | {data} silently degraded the
-  // {data: {file}} shape to id-only stamping (review 2026-10-29). Pin all
-  // three shipped shapes through the SINGLE helper.
+describe('producer-service — fetchDocMeta (the ONE doc-repo metadata fetch + envelope unwrap)', () => {
+  // The fetch + the unwrap are shared by the importer, the crawl stamper and
+  // the SOURCES-BUSY gate — a diverging copy that handled only {file} | {data}
+  // silently degraded the {data: {file}} shape to id-only stamping (review
+  // 2026-10-29). Pin all three shipped shapes through the SINGLE
+  // implementation (issue #1686).
   const file = { file_id: 'f-1', file_name: 'a.pdf', dataprep: { status: 'Ingested' } };
 
   test.each([
     ['{file}', { data: { file } }],
     ['{data: {file}}', { data: { data: { file } } }],
     ['{data}', { data: { data: file } }]
-  ])('unwraps the %s envelope to the file doc', (_shape, res) => {
-    expect(producer.docRepoFileOf(res)).toBe(file);
+  ])('unwraps the %s envelope to the file doc', async (_shape, res) => {
+    authedAxios.get.mockResolvedValueOnce(res);
+    await expect(producer.fetchDocMeta('f-1')).resolves.toBe(file);
   });
 
-  test('degrades to {} on absent/empty responses (never throws)', () => {
-    expect(producer.docRepoFileOf(null)).toEqual({});
-    expect(producer.docRepoFileOf(undefined)).toEqual({});
-    expect(producer.docRepoFileOf({})).toEqual({});
+  test('degrades to {} on an empty response (never throws)', async () => {
+    authedAxios.get.mockResolvedValueOnce({});
+    await expect(producer.fetchDocMeta('f-1')).resolves.toEqual({});
+  });
+});
+
+// ── the import metadata cache (#1685) ───────────────────────────────────────
+
+describe('producer-service — the source metadata cache (stampSources)', () => {
+  // Distinct repo id: this file's mock store has no per-test reset, so a
+  // shared id would leak acl/source_documents state across tests.
+  const R3 = '88888888-8888-4888-8888-888888888803';
+  it('a prototype-named file id resolves to NOTHING inherited — the doc-repo GET still fires', async () => {
+    // A plain-object cache resolves 'constructor' to Object.prototype.constructor
+    // — TRUTHY — so the GET fallback never fired and the file was stamped
+    // with NULL metadata (issue #1685). The cache is null-prototype and read
+    // with an own-property lookup.
+    await mockDb.collection('okf_repositories').save({ repo_id: R3 });
+    authedAxios.get.mockResolvedValue({
+      data: { file: { file_id: 'constructor', file_name: 'real.md', size: 12 } }
+    });
+    await producer.stampSources(R3, ['constructor']);
+    expect(authedAxios.get).toHaveBeenCalledWith(expect.stringContaining('/api/files/constructor'), expect.anything());
+    const repoDoc = await mockDb.collection('okf_repositories').document(R3);
+    expect(repoDoc.source_documents[0].file_name).toBe('real.md');
   });
 });
 

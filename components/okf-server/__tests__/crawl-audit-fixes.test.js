@@ -220,4 +220,48 @@ describe('ONE conversion per repo (2026-09-09 test-flake catch)', () => {
     await waitForTerminal();
     await first.catch(() => {});
   });
+
+  test('a second startConversion is refused while the first is still stamping its provenance', async () => {
+    // The guard's window: the check and the runner's registration are
+    // separated by the queued patch + the provenance stamp's doc-repo GET. A
+    // second start that slipped through that window ran two conversions of one
+    // repo (issue #1684 — the same shape the documents importer had). The
+    // stamp is HELD here, so the window is open deterministically.
+    const md = ['## Source: https://a.example/one', '# One', 'body'].join('\n');
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    authedAxios.get.mockImplementation(async (url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        return {
+          status: 200,
+          headers: { 'content-length': String(md.length) },
+          data: Readable.from([Buffer.from(md)])
+        };
+      }
+      if (!parked) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return { status: 200, data: { file: { file_name: 'crawl.md', size: 96 } } };
+    });
+
+    const first = conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' });
+    await stamping; // the first conversion is parked inside its provenance stamp
+    const second = await conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' }).then(
+      (queued) => ({ queued }),
+      (err) => ({ err })
+    );
+    releaseStamp();
+    await first;
+    expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+  });
 });

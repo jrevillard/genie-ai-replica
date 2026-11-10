@@ -245,7 +245,11 @@ async function createRepo(req, res, next) {
 async function resolveTargetRepo(body, authz, actor, defaultName) {
   const repoDomain = body.domain || 'general';
   const acl = { required_scopes: [`okf:t:${slugFor(repoDomain)}:admin`] };
-  const baseName = typeof body.name === 'string' && body.name ? body.name : defaultName;
+  // A whitespace-only name is NO name: it must not become a repository called
+  // '  ' (issue #1699). The crawl path never reaches this arm with a blank
+  // name — it pre-routes through the slug grammar — so this gate is the
+  // documents path's twin of the crawl path's trim gate.
+  const baseName = typeof body.name === 'string' && body.name.trim() ? body.name : defaultName;
   if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
     const existing = await repoService.getById(body.repo_id.trim(), { authz });
     if (!existing || existing.deleted_at) {
@@ -367,7 +371,10 @@ async function convertFromDocuments(req, res, next) {
     await producerService.startDocumentsConversion({
       repo_id: repo.repo_id,
       file_ids: fileIds,
-      requested_name: body.name || null,
+      // The caller's intent, verbatim — but a BLANK name is no name: it would
+      // become the index concept's title (a blank index title, issue #1699).
+      // Same trim gate as the crawl path above.
+      requested_name: typeof body.name === 'string' && body.name.trim() ? body.name : null,
       classification,
       actor
     });

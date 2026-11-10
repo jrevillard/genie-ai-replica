@@ -44,7 +44,12 @@ const MAX_FILES = Math.max(1, parseInt(process.env.OKF_MAX_IMPORT_FILES, 10) || 
 const MAX_SEGMENTS_PER_FILE = 200;
 const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 
-const live = new Map(); // repo_id -> in-flight runner (same registry discipline as crawl)
+// repo_id -> the in-flight conversion's COMPLETION promise (same registry
+// discipline as crawl). The RESERVATION is the guard: the entry is claimed
+// synchronously, BEFORE the awaited stages below, so a second start for the
+// same repo cannot slip through a check-then-set window and import the corpus
+// twice (issue #1684).
+const live = new Map();
 
 async function getDb() {
   return dbService.getConnection();
@@ -70,14 +75,24 @@ function releaseSlot() {
 
 // ── source stamping ─────────────────────────────────────────────────────────
 
+/** OWN-property read of a per-file metadata cache. A plain object resolves
+ * 'constructor'/'__proto__' to an INHERITED value — truthy — so a cache miss
+ * would silently skip the doc-repo GET and stamp null metadata (issue #1685). */
+function cachedMeta(cache, file_id) {
+  return cache && Object.prototype.hasOwnProperty.call(cache, file_id) ? cache[file_id] : undefined;
+}
+
 /** Stamp the repo doc with source_documents[] (kind 'document' — never collides
  * with the crawl 'source_document' stamp) and stamp okf_repo_id onto each
  * source file's doc-repo metadata (Story 3.6's additive field) so the UI can
  * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
  * them, it does not die for them. metaByKey carries the import pre-flight's
  * per-file doc-repo metadata, suppressing the per-file GET; when it does not
- * carry the file, the GET remains the fallback. */
-async function stampSources(repoId, fileIds, metaByKey = {}) {
+ * carry the file, the GET remains the fallback. The cache is read with an
+ * OWN-property lookup and defaults to a null-prototype object, so a
+ * prototype-named file id can never resolve to an inherited value (issue
+ * #1685). */
+async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
   // repo id so doc-repo's serve paths can refuse locally (no okf-server
@@ -100,7 +115,7 @@ async function stampSources(repoId, fileIds, metaByKey = {}) {
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
-      const f = metaByKey[file_id] || (await fetchDocMeta(file_id));
+      const f = cachedMeta(metaByKey, file_id) || (await fetchDocMeta(file_id));
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -236,9 +251,14 @@ function docRepoFileOf(res) {
   return d.file || (d.data && d.data.file) || d.data || d || {};
 }
 
-async function fetchDocMeta(fileId) {
+/** THE doc-repo metadata fetch — one GET + the envelope unwrap. Shared by the
+ * importer, the crawl stamper and the SOURCES-BUSY gate (issue #1686), so the
+ * envelope shapes cannot drift between three copies of it. `timeout` is a
+ * parameter because the SOURCES-BUSY gate is latency-critical (5 s fail-closed
+ * re-check) while the import path tolerates 10 s. */
+async function fetchDocMeta(fileId, timeout = 10000) {
   const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}`, {
-    timeout: 10000
+    timeout
   });
   return docRepoFileOf(res);
 }
@@ -596,7 +616,11 @@ async function runDocumentsConversion(job) {
         baseResource: `${config.documentRepository.url}/api/files/${file_id}`
       };
       try {
-        const f = job.source_metas[file_id];
+        // SELF-SUFFICIENT metadata (issue #1691): the caller's cache is a fast
+        // path, not a contract — a caller that omits an entry gets the
+        // doc-repo GET instead of a per-file TypeError swallowed by the
+        // per-file catch (every file reported CONVERSION_FAILED).
+        const f = cachedMeta(job.source_metas, file_id) || (await fetchDocMeta(file_id));
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;
@@ -896,8 +920,10 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   const candidateHashes = [];
   // ONE metadata fetch per file: this pre-flight read is the import's single
   // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
-  // the conversion (job.source_metas).
-  const metaByKey = {};
+  // the conversion (job.source_metas). The cache is null-prototype: a plain
+  // object resolves a prototype-named file id to an INHERITED value (issue
+  // #1685).
+  const metaByKey = Object.create(null);
   for (const file_id of file_ids) {
     let meta;
     try {
@@ -956,12 +982,23 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   }
 
   await crawlConversion.sweepInterruptedOnce();
+  // ONE conversion per repo at a time. The RESERVATION is the guard: it claims
+  // the repo SYNCHRONOUSLY — the check and the claim are adjacent statements,
+  // no await between them — so the repo is invisible to a second start for
+  // the whole of the awaited window below (the queued patch + the per-file
+  // source stamping, one doc-repo PATCH per file). A check-then-set guard
+  // left that window open and the corpus was imported twice (issue #1684).
   if (live.has(repo_id)) {
     throw Object.assign(new Error('a conversion is already running for this repository — wait for it to finish'), {
       code: 'CONVERSION_IN_FLIGHT',
       status: 409
     });
   }
+  let settleInFlight;
+  const inFlight = new Promise((resolve) => {
+    settleInFlight = resolve;
+  });
+  live.set(repo_id, inFlight);
 
   const queued = {
     status: 'queued',
@@ -971,8 +1008,15 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     error: null,
     started_at: new Date().toISOString()
   };
-  await patchConversion(repo_id, queued);
-  await stampSources(repo_id, file_ids, metaByKey);
+  try {
+    await patchConversion(repo_id, queued);
+    await stampSources(repo_id, file_ids, metaByKey);
+  } catch (err) {
+    // The reservation must not outlive a failed start — the repo is free again.
+    live.delete(repo_id);
+    settleInFlight();
+    throw err;
+  }
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {
@@ -990,7 +1034,9 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       live.delete(repo_id);
     }
   })();
-  live.set(repo_id, runner);
+  // The registry's value settles when the conversion ENDS, so awaiting
+  // live.get(repo_id) still waits for the run (the registry's contract).
+  runner.then(settleInFlight, settleInFlight);
   return queued;
 }
 
@@ -1002,11 +1048,16 @@ module.exports = {
   startDocumentsConversion,
   isTerminal,
   live,
-  // shared doc-repo envelope unwrap (lifecycle-service + crawl-conversion-service)
-  docRepoFileOf,
+  // THE doc-repo metadata fetch + envelope unwrap — the crawl stamper and the
+  // SOURCES-BUSY gate read doc-repo through it (issue #1686)
+  fetchDocMeta,
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,
+  // the conversion itself — exported so its own boundary can be tested: the
+  // metadata it reads must not depend on a caller-populated cache (issue
+  // #1691)
+  runDocumentsConversion,
   // exported for unit tests (pure functions)
   segmentMarkdown,
   draftWholeMarkdown,

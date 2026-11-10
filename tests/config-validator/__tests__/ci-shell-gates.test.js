@@ -377,6 +377,10 @@ describe('ci shell gate: extraction', () => {
   });
 
   test('an extended base runs its script in the extending job', () => {
+    // extends is a reverse deep merge: the job's own script REPLACES the
+    // base's (GitLab runs only what the job defines — the extension reads
+    // the base's script through the job only when the job defines none),
+    // so the gate must credit `echo own` and never the base's line.
     const content = [
       '.base:',
       '  script:',
@@ -388,8 +392,16 @@ describe('ci shell gate: extraction', () => {
     ].join('\n');
     const { blocks, errors } = extractCiShellBlocks(content);
     expect(errors).toEqual([]);
-    expect(blocks.map((b) => b.owner)).toEqual(['job', 'job']);
-    expect(blocks.map((b) => b.text)).toEqual(['echo base', 'echo own']);
+    expect(blocks.map((b) => b.owner)).toEqual(['job']);
+    expect(blocks.map((b) => b.text)).toEqual(['echo own']);
+  });
+
+  test('a job that defines no script inherits the extended base script', () => {
+    const content = ['.base:', '  script:', '    - echo base', 'job:', '  extends: .base'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.owner)).toEqual(['job']);
+    expect(blocks.map((b) => b.text)).toEqual(['echo base']);
   });
 
   test('a global variables block is data, never shell', () => {

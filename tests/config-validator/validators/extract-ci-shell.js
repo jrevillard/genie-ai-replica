@@ -606,28 +606,28 @@ function extractCiShellBlocks(content) {
   }
 
   // Resolve inherited scripts: a merged template or an extended base runs
-  // its script inside the inheriting job. YAML merge (`<<:`) replaces a
-  // key the job defines itself; GitLab's `extends` concatenates the base
-  // script before the job's own and lets the job override before_script
-  // and after_script.
-  // The job -> extended bases mapping is returned alongside the blocks:
-  // a structural guard (which jobs extend which template) must read the
-  // SAME derivation the shell re-materialization used, or the guard and
-  // the sweep can silently disagree about what extends what.
-  const extendsMap = new Map(); // job owner -> [base names]
-  for (const site of mergeSites) {
-    if (site.kind !== 'extends') {
-      continue;
-    }
-    const bases = extendsMap.get(site.jobOwner) || [];
-    bases.push(site.baseOwner);
-    extendsMap.set(site.jobOwner, bases);
-  }
+  // its script inside the inheriting job. BOTH mechanisms are reverse
+  // deep merges: the job's own keys — script included — replace the
+  // base's (`<<:` by YAML merge-key semantics, `extends` by GitLab's —
+  // which is why `!reference` exists to concatenate scripts). The base's
+  // script therefore runs in the job only when the job defines none of
+  // its own; the sweep must never credit a line the job would not run.
+  // The job -> inherited sources mapping (extends AND `<<:` merge — a
+  // job can reach a template through either) is returned alongside the
+  // blocks: a structural guard (which jobs inherit which template) must
+  // read the SAME derivation the shell re-materialization used, or the
+  // guard and the sweep can silently disagree about what inherits what.
+  const extendsMap = new Map(); // job owner -> [source names]
   if (mergeSites.length > 0) {
     const inherited = new Map(); // job owner -> inherited blocks
     const droppedSources = new Set(); // templates/bases that never run alone
     for (const site of mergeSites) {
       const sourceOwner = site.kind === 'merge' ? (anchors.get(site.anchorName) || {}).owner : site.baseOwner;
+      if (sourceOwner) {
+        const bases = extendsMap.get(site.jobOwner) || [];
+        bases.push(sourceOwner);
+        extendsMap.set(site.jobOwner, bases);
+      }
       if (!sourceOwner) {
         pushError({
           owner: site.jobOwner,
@@ -640,7 +640,7 @@ function extractCiShellBlocks(content) {
       const ownKeys = new Set(blocks.filter((b) => b.owner === site.jobOwner).map((b) => b.key));
       const copies = inherited.get(site.jobOwner) || [];
       for (const sb of blocks.filter((b) => b.owner === sourceOwner)) {
-        const include = site.kind === 'merge' ? !ownKeys.has(sb.key) : sb.key === 'script' || !ownKeys.has(sb.key);
+        const include = !ownKeys.has(sb.key);
         if (include) {
           copies.push({ ...sb, owner: site.jobOwner });
         }

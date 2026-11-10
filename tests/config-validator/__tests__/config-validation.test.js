@@ -4013,16 +4013,22 @@ describe('the test:e2e name exclusion stays root-only (#1674)', () => {
     // the scan above skips the root package by construction — so a new
     // ROOT-level script in that family (a jest-based `test:e2e:smoke`,
     // say) would ride the exclusion while not being Playwright. The
-    // root's test:e2e* set is pinned: the exclusion's justification stays
-    // exactly these two definitions.
+    // root's test:e2e* set is pinned to these two names AND to their
+    // Playwright implementations: the bodies are what justify the
+    // exclusion — repointing either at jest keeps the name set intact
+    // while the exclusion starts hiding a real uncapped jest run.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts || {};
-    expect(
-      Object.keys(scripts)
-        .filter((name) => /^test:e2e/.test(name))
-        .sort()
-    ).toEqual(['test:e2e', 'test:e2e:list']);
+    const e2eScripts = Object.keys(scripts)
+      .filter((name) => /^test:e2e/.test(name))
+      .sort();
+    expect(e2eScripts).toEqual(['test:e2e', 'test:e2e:list']);
+    for (const name of e2eScripts) {
+      expect(scripts[name]).toMatch(/playwright/);
+    }
   });
 });
+
+// --- The ArangoDB integration directory's self-skip gate ---
 describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
   // The test:backend-arango anti-skip gate counts numPassedTests across
   // the whole integration directory: it proves an ArangoDB-backed test

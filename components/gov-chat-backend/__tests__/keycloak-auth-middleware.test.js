@@ -251,10 +251,11 @@ describe('keycloakAuthMiddleware.authenticate', () => {
   });
 
   it('should not call introspection when the expired token names an issuer the verifier does not trust', async () => {
-    // The issuer is read from the UNVERIFIED payload, so an expired junk
-    // token can name any iss — dereferencing it would turn the disable
-    // probe into a request to an attacker-chosen URL (blind SSRF). Only an
-    // issuer in getConfiguredIssuers() may be probed.
+    // Defense-in-depth pin: the shared verifier resolves the issuer map
+    // before reporting expiry, so a TOKEN_EXPIRED always names a trusted
+    // iss — this test additionally pins that the middleware refuses to
+    // probe a NON-configured issuer, should that verifier contract ever
+    // drift (or a caller bypass verifyToken).
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
     const payload = Buffer.from(
       JSON.stringify({

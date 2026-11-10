@@ -84,6 +84,16 @@ async function authenticate(req, res, next) {
     next();
   } catch (err) {
     logger.error('OKF auth error', { error: err.message, path: req.path });
+    if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+      // The verifier's init-failure message carries operator detail
+      // (discovery hostname, HTTP status, the pin-mismatch remedy): the
+      // full text belongs in the log above, never in a body an
+      // unauthenticated caller can read.
+      return res.status(401).json({
+        error: 'AUTH_SERVICE_UNAVAILABLE',
+        message: 'Authentication service unavailable'
+      });
+    }
     return res.status(401).json({ error: 'TOKEN_INVALID', message: err.message });
   }
 }

@@ -130,10 +130,13 @@ const keycloakAuthMiddleware = {
       } catch (err) {
         if (err.code === 'TOKEN_EXPIRED') {
           // Check user status in Keycloak via UserInfo to determine if disabled/deleted.
-          // tokenIssuer comes from the UNVERIFIED payload — an expired junk
-          // token can name any iss — so only an issuer the verifier actually
-          // trusts may be dereferenced (the probe GETs `${issuer}/protocol/
-          // openid-connect/userinfo`). A foreign iss skips the probe entirely.
+          // tokenIssuer comes from the UNVERIFIED payload. Today the shared
+          // verifier resolves the issuer map BEFORE reporting expiry, so a
+          // TOKEN_EXPIRED error always names an already-trusted iss — this
+          // allow-list is defense-in-depth: should that ordering ever change
+          // (or a caller bypass verifyToken), the probe still refuses to GET
+          // `${issuer}/protocol/openid-connect/userinfo` for a non-configured
+          // issuer.
           if (
             token &&
             tokenIssuer &&

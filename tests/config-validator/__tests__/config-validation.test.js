@@ -3839,13 +3839,14 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 
   // #1676: the matcher's vocabulary above is the npm/npx house spelling.
   // Any OTHER command that looks like a test runner — mentions jest, or is
-  // a package-manager test spelling (`npm|yarn|pnpm test`, `... run test*`)
-  // — must either match the vocabulary or belong to the pinned
-  // non-invocation list: an exotic spelling (`npm exec -- jest`,
-  // `yarn jest`, `./node_modules/.bin/jest`) then fails this suite and
-  // forces the matcher (or a reasoned exemption) to grow, instead of
-  // running uncapped with a fully green contract suite.
-  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)(npm|yarn|pnpm) (test\b|run test[:\w])/;
+  // a package-manager test spelling (`npm|yarn|pnpm test` or the `run
+  // test` long form, bare or with a variant suffix) — must either match
+  // the vocabulary or belong to the pinned non-invocation list: an exotic
+  // spelling (`npm exec -- jest`, `yarn jest`, `./node_modules/.bin/jest`)
+  // then fails this suite and forces the matcher (or a reasoned
+  // exemption) to grow, instead of running uncapped with a fully green
+  // contract suite.
+  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)(npm|yarn|pnpm) (test|run test)\b/;
   // A command that merely READS a jest-produced report is not an
   // invocation: it runs node, not jest. The predicate is pinned to the
   // report reader of test:backend-arango — a new jest-touching node -e
@@ -3872,11 +3873,18 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       'npm exec -- jest',
       'yarn jest --silent',
       'yarn test --coverage',
+      'yarn run test',
       'pnpm test',
+      'pnpm run test',
+      'npm run test',
       './node_modules/.bin/jest --coverage'
     ]) {
       expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);
-      expect(JEST_INVOCATION.test(cmd)).toBe(false);
+      // `npm run test` (bare) is IN the matcher's vocabulary — only the
+      // genuinely foreign spellings must be unmatched.
+      if (cmd !== 'npm run test') {
+        expect(JEST_INVOCATION.test(cmd)).toBe(false);
+      }
     }
   });
 });

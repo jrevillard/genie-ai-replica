@@ -616,6 +616,16 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(garbled.synthesis_reason).toBe('malformed_response');
     expect(client.isPostureUnknown(garbled)).toBe(true);
     expect(garbled._bff_expires_at).toBe(nowMs + client._internals.LKG_MAX_AGE_MS);
+
+    // The consultation is horizon-bounded like the outage path: past the
+    // 5-minute trust horizon the last-known-good is dropped and the garbled
+    // body degrades to the plain legacy default.
+    nowMs += REAL_TTL_MS + client._internals.LKG_MAX_AGE_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetResponse({ unexpected: true }));
+    const garbledStale = await client.getRetrievalConfig(makeBearer(['okf:t:e:read']));
+    expect(garbledStale.config.mode).toBe('legacy');
+    expect(garbledStale.source).toBe('bff-fail-closed-default');
+    expect(garbledStale.synthesis_reason).toBe('malformed_response');
   });
 
   it('an upstream body carrying its own `expires_at` is cached verbatim — the expiry marker is the BFF’s own', async () => {

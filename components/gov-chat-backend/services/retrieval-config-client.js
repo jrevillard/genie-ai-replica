@@ -439,7 +439,8 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
  * The retrieval posture for this caller: {config, source, serving_graph_count,
  * serving_repo_ids, serving_graphs, engaged, warnings} — the response verbatim
  * from the okf-server (the `engaged` flag is the AUTHORITATIVE engagement
- * signal; this client never re-computes the gate). On a 5xx/network failure:
+ * signal; this client never re-computes the gate). On a 5xx/network failure,
+ * or a 200 whose body fails the shape/vocabulary gate (a garbled upstream):
  * the fail-closed composition carrying the last-known mode (source
  * 'bff-last-known-good'), else the legacy default. On 403: the legacy
  * default (the caller holds no okf read scope → empty per-caller serving
@@ -455,12 +456,13 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
       onSuccess(raw, callOpts) {
         // Shape gate: the response must carry the fields the BFF consumes
         // (config.mode + engaged at minimum). A garbled body degrades to the
-        // legacy default instead of reaching the carrier logic — the PLAIN
-        // default, deliberately never the last-known-good: the upstream
-        // answered but its payload cannot be trusted, so nothing it said
-        // feeds the carrier (an unreachable upstream, by contrast, still
-        // consults the fresh last-known-good — a transport accident, not a
-        // broken payload). The mode is
+        // fail-closed composition instead of reaching the carrier logic —
+        // the same stale-bounded last-known-good consultation an unreachable
+        // upstream gets (both are transport-adjacent failures; nothing the
+        // garbled payload SAID feeds the carrier, only the posture captured
+        // from an earlier healthy read). The reason carried on the
+        // composition stays 'malformed_response', so the telemetry still
+        // tells a garbled body from a transport outage. The mode is
         // checked AS IT ARRIVED — never trimmed into a valid one: the
         // okf-server's own sanitizer treats a padded value as garbled (safe
         // default), and this client must not promote it into an engaged
@@ -493,9 +495,12 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           _lastGoodConfig = { config: { mode }, captured_at: Date.now() };
           return raw;
         }
+        const lkg = freshLastGoodConfig();
         logger.warn('RetrievalConfigClient.malformed_config_response', {
           correlationId: callOpts?.correlationId,
-          reason: shapeOk ? 'mode_not_declared' : 'shape'
+          reason: shapeOk ? 'mode_not_declared' : 'shape',
+          last_known_good: Boolean(lkg),
+          last_known_good_age_ms: _lastGoodConfig ? Date.now() - _lastGoodConfig.captured_at : null
         });
         // A garbled body is a transport-adjacent failure exactly like an
         // unreachable upstream: the same last-known-good consultation
@@ -505,7 +510,6 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // posture instead of failing closed. The reason stays
         // 'malformed_response': the warn log and the warning payload must
         // still tell a garbled body from a transport outage.
-        const lkg = freshLastGoodConfig();
         if (!lkg) return legacyDefaultConfig('malformed_response');
         return {
           ...legacyDefaultConfig('malformed_response'),

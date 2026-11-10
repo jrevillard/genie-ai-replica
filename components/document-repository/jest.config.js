@@ -56,8 +56,17 @@ module.exports = {
     // MODULE_NOT_FOUND in CI after a clean install (the test:doc-repo job
     // installs only this component's node_modules; a dev machine may carry a
     // hoisted stray jose that masks it). Every suite must stand in for the verifier
-    // at that module boundary, as all three existing ones do.
+    // at that module boundary, as all three existing ones do. The `^jose$`
+    // entry below turns that CI-only failure into a deterministic one.
     '^\\.\\./\\.\\./shared-lib/keycloak-auth-service$': '<rootDir>/../shared/lib/keycloak-auth-service.js',
+    // `jose` is required by the REAL shared verifier above, and this
+    // component does NOT declare it. A suite that loads the auth middleware
+    // without standing in for the verifier at its module boundary would
+    // therefore load the real verifier and die with MODULE_NOT_FOUND — but
+    // only in a clean CI install (a dev machine may carry a hoisted stray
+    // `jose` that masks it). Mapping it to a stub that explains the trap
+    // makes the failure deterministic and local (#1707).
+    '^jose$': '<rootDir>/src/__tests__/__mocks__/jose-not-a-dependency.js',
     // Everything else in shared-lib still goes to the mock barrel, so require
     // chains inside src/ never touch the real filesystem path (which Docker
     // drops /lib/ from) and the existing suites keep their stubs.

@@ -596,6 +596,27 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     expect(repoService.create).not.toHaveBeenCalled();
   });
 
+  it('convertFromDocuments: a whitespace-only name is NO name — no blank repo name, no blank index title (#1699)', async () => {
+    // The crawl path has had the trim gate since #1190; the documents path
+    // did not, so a name of '   ' created a repository called '   ' and made
+    // the index concept's title blank. Same gate, same place.
+    const producerService = require('../services/producer-service');
+    producerService.startDocumentsConversion.mockReset().mockResolvedValue({});
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1', name: 'imported-repository' });
+    const { res } = await drive(controller.convertFromDocuments, {
+      body: { name: '   ', file_ids: ['f1'] }
+    });
+    expect(res.statusCode).toBe(202);
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'imported-repository' }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(producerService.startDocumentsConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: null })
+    );
+  });
+
   // Round 21 (#80915): the CRAWL endpoint's repo_id path had no test — the
   // documents one covered convertFromDocuments only. Same lie the old code
   // told: a differing body.name on an existing repo must NOT read as a

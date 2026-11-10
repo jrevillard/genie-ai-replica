@@ -8,6 +8,7 @@ const request = (...args) => auth.request(...args);
  * A failure that a later attempt may survive: a transport error, a
  * timeout, a 408/425/429 or a 5xx from the Keycloak admin API.
  * @param {string} message - The diagnosis
+ * @param {{cause?: Error}} [options] - Passed to the Error constructor
  * @returns {Error} The error, flagged transient
  */
 function transientError(message, options) {

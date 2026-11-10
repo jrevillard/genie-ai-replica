@@ -171,7 +171,13 @@
           </div>
 
           <div class="table-container">
-            <table v-if="searchResults.length > 0" :key="tableKey" class="results-table">
+            <!-- REVIEW H5 (admin-ux): a failed search used to fall through to
+                 the "No logs matching" empty state — searchError was set but
+                 never rendered, so a VictoriaLogs 503 read as a clean empty
+                 result. The error state renders FIRST and the empty state
+                 only for a search that genuinely succeeded with no hits. -->
+            <DsStateDisplay v-if="searchError" type="error" :message="searchError" data-test-id="log-search-error" />
+            <table v-else-if="searchResults.length > 0" :key="tableKey" class="results-table">
               <thead>
                 <tr>
                   <th>{{ translate('admin.logDate', 'Date') }}</th>
@@ -248,6 +254,7 @@ import DsButton from './ds/Button.vue';
 import DsSpinner from './ds/Spinner.vue';
 import DsInput from './ds/Input.vue';
 import DsSelect from './ds/Select.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
 
 export default {
   name: 'LogSearchDialog',
@@ -255,10 +262,11 @@ export default {
     DsButton,
     DsSpinner,
     DsInput,
-    DsSelect
+    DsSelect,
+    DsStateDisplay
   },
   props: {},
-  emits: ['close', 'search-completed'],
+  emits: ['close', 'search-results'],
   data() {
     return {
       currentLocale: this.getCurrentLanguage(),
@@ -429,13 +437,13 @@ export default {
         } else {
           this.searchResults = [];
         }
-        this.$emit('search-completed', this.searchResults);
+        this.$emit('search-results', this.searchResults);
       } catch (error) {
         console.error('Error searching logs:', error);
         this.searchError = error.message || 'An error occurred while searching logs';
         this.searchResults = [];
         this.lastResponseDegraded = false;
-        this.$emit('search-completed', []);
+        this.$emit('search-results', []);
       } finally {
         this.isSearching = false;
       }

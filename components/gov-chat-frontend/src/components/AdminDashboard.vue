@@ -14,7 +14,7 @@
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
-              <div class="stat-value" data-test-id="stat-system-uptime-value">{{ metrics.systemUptime }}%</div>
+              <div class="stat-value" data-test-id="stat-system-uptime-value">{{ uptimeLabel }}</div>
               <div v-if="trend('uptime', true)" class="stat-trend" :class="trend('uptime', true).className">
                 <span>{{ trend('uptime', true).arrow }} {{ trend('uptime', true).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
@@ -24,7 +24,7 @@
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
-              <div class="stat-value" data-test-id="stat-avg-response-time-value">{{ metrics.avgResponseTime }}ms</div>
+              <div class="stat-value" data-test-id="stat-avg-response-time-value">{{ responseTimeLabel }}</div>
               <div
                 v-if="trend('responseTime', false)"
                 class="stat-trend"
@@ -83,7 +83,23 @@
                     </div>
                   </div>
 
-                  <div class="health-status">
+                  <!-- REVIEW H1: tri-state. The fabricated six-status list is
+                       gone — a failed fetch renders an explicit error with a
+                       retry, an in-flight first load renders Measuring…, and
+                       only a real measurement renders the service list. -->
+                  <DsStateDisplay
+                    v-if="healthLoadError"
+                    type="error"
+                    :message="translate('admin.health.unavailable', 'System health is unavailable right now.')"
+                    data-test-id="health-error"
+                  >
+                    <template #action>
+                      <DsButton variant="secondary" small data-test-id="health-retry" @click="loadSystemHealth">
+                        {{ translate('admin.retry', 'Retry') }}
+                      </DsButton>
+                    </template>
+                  </DsStateDisplay>
+                  <div v-else-if="healthServices" class="health-status">
                     <div
                       v-for="service in healthServices"
                       :key="service.name"
@@ -94,6 +110,9 @@
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
                     </div>
                   </div>
+                  <div v-else class="health-status">
+                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
+                  </div>
                 </div>
 
                 <div v-if="activeTab === 'overview'" class="dashboard-card">
@@ -103,7 +122,21 @@
                     </div>
                   </div>
 
-                  <div class="resource-usage">
+                  <!-- REVIEW H1: same tri-state as the health card — no
+                       fabricated CPU/memory/storage/network numbers. -->
+                  <DsStateDisplay
+                    v-if="healthLoadError"
+                    type="error"
+                    :message="translate('admin.resources.unavailable', 'Resource usage is unavailable right now.')"
+                    data-test-id="usage-error"
+                  >
+                    <template #action>
+                      <DsButton variant="secondary" small data-test-id="usage-retry" @click="loadSystemHealth">
+                        {{ translate('admin.retry', 'Retry') }}
+                      </DsButton>
+                    </template>
+                  </DsStateDisplay>
+                  <div v-else-if="resourceUsage" class="resource-usage">
                     <div
                       v-for="resource in resourceUsage"
                       :key="resource.id"
@@ -124,6 +157,9 @@
                         ></div>
                       </div>
                     </div>
+                  </div>
+                  <div v-else class="resource-usage">
+                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
                   </div>
                 </div>
 
@@ -674,7 +710,23 @@
                     </div>
                   </div>
 
-                  <div class="db-stats">
+                  <!-- REVIEW H3: the hardcoded "42.3 GB / 128 tables" is gone.
+                       A failed (or success:false) stats fetch renders an
+                       explicit error with a retry; a first load renders
+                       Measuring…; real figures render only when measured. -->
+                  <DsStateDisplay
+                    v-if="dbStatsError"
+                    type="error"
+                    :message="translate('admin.dbStats.unavailable', 'Database statistics are unavailable right now.')"
+                    data-test-id="db-stats-error"
+                  >
+                    <template #action>
+                      <DsButton variant="secondary" small data-test-id="db-stats-retry" @click="loadDatabaseStats">
+                        {{ translate('admin.retry', 'Retry') }}
+                      </DsButton>
+                    </template>
+                  </DsStateDisplay>
+                  <div v-else-if="dbStats" class="db-stats">
                     <div>
                       <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
                       {{ dbStats.databaseSize }}
@@ -683,6 +735,9 @@
                       <strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong>
                       {{ dbStats.totalTables }}
                     </div>
+                  </div>
+                  <div v-else class="db-stats">
+                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
                   </div>
                 </div>
 
@@ -884,10 +939,28 @@
                     {{ translate('admin.security.loadingScan', 'Loading scan results...') }}
                   </DsStateDisplay>
 
-                  <div v-if="!isLoading" class="security-details">
+                  <!-- REVIEW H2: a failed fetch used to install the all-zero
+                       "clean bill" and read as "system appears secure". The
+                       error state renders FIRST; the details render only from
+                       a real response. Also fixed in passing: the tile read
+                       `securityMetrics.lastScan` while the loader writes
+                       `lastSecurityScan` — the value has been rendering empty. -->
+                  <DsStateDisplay
+                    v-if="securityMetricsError || securityDetailsError"
+                    type="error"
+                    :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
+                    data-test-id="security-error"
+                  >
+                    <template #action>
+                      <DsButton variant="secondary" small data-test-id="security-retry" @click="retrySecurity">
+                        {{ translate('admin.retry', 'Retry') }}
+                      </DsButton>
+                    </template>
+                  </DsStateDisplay>
+                  <div v-else-if="!isLoading && securityMetrics" class="security-details">
                     <div>
                       <strong>{{ translate('admin.security.lastSecurityScan', 'Last Security Scan') }}:</strong>
-                      {{ securityMetrics.lastScan }}
+                      {{ securityMetrics.lastSecurityScan }}
                     </div>
                     <div>
                       <strong>{{ translate('admin.security.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
@@ -1373,6 +1446,8 @@
                     <div
                       v-if="
                         !isLoading &&
+                        !securityMetricsError &&
+                        !securityDetailsError &&
                         securityDetails &&
                         (!securityDetails.vulnerabilityDetails ||
                           (securityDetails.vulnerabilityDetails.critical.length === 0 &&
@@ -1813,29 +1888,20 @@ export default {
       // Operation results
       operationResults: null,
 
-      // System health services
-      healthServices: [
-        { id: 'apiServices', name: 'API Services', status: 'good' },
-        { id: 'database', name: 'Database', status: 'good' },
-        { id: 'cache', name: 'Cache', status: 'good' },
-        { id: 'storage', name: 'Storage', status: 'warning' },
-        { id: 'messageQueue', name: 'Message Queue', status: 'good' },
-        { id: 'externalApi', name: 'External API', status: 'error' }
-      ],
+      // System health services — NULL until a real measurement lands
+      // (review H1: the old defaults — six statuses with Storage on warning
+      // and External API on error — rendered while loading AND persisted
+      // when the fetch failed).
+      healthServices: null,
 
-      // Database stats
-      dbStats: {
-        databaseSize: '42.3 GB',
-        totalTables: 128
-      },
+      // Database stats — NULL until the real ArangoDB figures arrive
+      // (review H3: the old default was a hardcoded "42.3 GB / 128 tables").
+      dbStats: null,
 
-      // Resource usage metrics
-      resourceUsage: [
-        { id: 'cpu', label: 'CPU Usage', value: 42 },
-        { id: 'memory', label: 'Memory Usage', value: 78 },
-        { id: 'storage', label: 'Storage Usage', value: 92 },
-        { id: 'network', label: 'Network Bandwidth', value: 35 }
-      ],
+      // Resource usage metrics — NULL until measured
+      // (review H1: the old default fabricated 42/78/92/35 and a red
+      // 92% storage bar out of nothing).
+      resourceUsage: null,
 
       logs: [],
 
@@ -1848,11 +1914,19 @@ export default {
       showOperationResults: false,
 
       metrics: {
-        systemUptime: 99.98,
-        avgResponseTime: 245,
-        errorRate: 0.05,
-        monthlyActiveUsers: 0
+        systemUptime: null,
+        avgResponseTime: null,
+        errorRate: null,
+        monthlyActiveUsers: null
       },
+
+      // Per-surface error flags (review H1/H2/H3): a failed fetch renders an
+      // explicit error state with a retry — never the previous success,
+      // never a fabricated default, never a clean bill of health.
+      healthLoadError: false,
+      dbStatsError: false,
+      securityMetricsError: false,
+      securityDetailsError: false,
 
       // Month-over-month deltas, computed server-side against the stored
       // analytics collection. `null` means "not computable" (the previous
@@ -1865,16 +1939,10 @@ export default {
         activeUsers: null
       },
 
-      securityMetrics: {
-        failedLoginAttempts: 23,
-        suspiciousActivities: 5,
-        lastSecurityScan: '2 days ago',
-        vulnerabilities: {
-          critical: 0,
-          medium: 2,
-          low: 5
-        }
-      },
+      // Security metrics — NULL until a real response lands (review H2: the
+      // old default FABRICATED 23 failed logins, 5 suspicious activities and
+      // 7 vulnerabilities dated "2 days ago" on the security tab).
+      securityMetrics: null,
 
       userStats: {
         totalUsers: 0,
@@ -1958,6 +2026,19 @@ export default {
       return this.metrics.errorRate === null || this.metrics.errorRate === undefined
         ? '\u2014'
         : `${this.metrics.errorRate}%`;
+    },
+    // REVIEW H1: same null discipline for the other tiles \u2014 the loader
+    // nulls them on boot and on a failed fetch, and a dash is the honest
+    // rendering of "not measured", never "null%" or "nullms".
+    uptimeLabel() {
+      return this.metrics.systemUptime === null || this.metrics.systemUptime === undefined
+        ? '\u2014'
+        : `${this.metrics.systemUptime}%`;
+    },
+    responseTimeLabel() {
+      return this.metrics.avgResponseTime === null || this.metrics.avgResponseTime === undefined
+        ? '\u2014'
+        : `${this.metrics.avgResponseTime}ms`;
     },
     // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
     // the frontend entrypoint from OKF_ENABLED — the image default is DARK
@@ -2575,6 +2656,7 @@ export default {
 
         // Check if the data and its 'metrics' property exist
         if (data && data.metrics) {
+          this.healthLoadError = false;
           // Update metrics
           this.metrics = {
             systemUptime: data.metrics.systemUptime,
@@ -2600,10 +2682,26 @@ export default {
             value: data.resourceUsage[id]
           }));
         } else {
+          // A response without a metrics object is a failed load too —
+          // treat it exactly like a rejection (review H1).
+          this.healthLoadError = true;
+          this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
+          this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
+          this.healthServices = null;
+          this.resourceUsage = null;
           this.showNotification('Failed to parse system health data', 'error');
         }
       } catch (error) {
         console.error('Error loading system health:', error);
+        // REVIEW H1: a failed fetch must not leave the previous success — or
+        // the fabricated boot defaults — on the board. Null everything: the
+        // tiles go to dashes and the cards to their error states with a
+        // retry affordance.
+        this.healthLoadError = true;
+        this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
+        this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
+        this.healthServices = null;
+        this.resourceUsage = null;
         this.showNotification('Failed to load system health data', 'error');
       } finally {
         this.isLoading = false;
@@ -2711,14 +2809,34 @@ export default {
             return;
           }
           await this.loadSecurityDetails(); // This fetches all necessary details
-          this.securityMetrics.lastScan = this.translate('admin.security.lastScanJustNow', 'Just now'); // Update last scan time
-          // Update vulnerability counts from the detailed response
-          if (this.securityDetails && this.securityDetails.vulnerabilityDetails) {
-            this.securityMetrics.vulnerabilities = {
-              critical: this.securityDetails.vulnerabilityDetails.critical.length,
-              medium: this.securityDetails.vulnerabilityDetails.medium.length,
-              low: this.securityDetails.vulnerabilityDetails.low.length
+          // REVIEW H2: the tile update used to write `lastScan` — the loader's
+          // key is `lastSecurityScan`, so the write landed on a dead field and
+          // the visible value never moved. It also crashed on a null
+          // securityMetrics. Update through the real key, initialising the
+          // tile object from the fresh details when no metrics ever loaded.
+          this.securityMetricsError = false;
+          this.securityDetailsError = false;
+          if (!this.securityMetrics) {
+            this.securityMetrics = {
+              failedLoginAttempts: (this.securityDetails && this.securityDetails.failedLoginDetails?.length) || 0,
+              suspiciousActivities: (this.securityDetails && this.securityDetails.suspiciousDetails?.length) || 0,
+              lastSecurityScan: this.translate('admin.security.lastScanJustNow', 'Just now'),
+              vulnerabilities: {
+                critical: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.critical.length) || 0,
+                medium: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.medium.length) || 0,
+                low: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.low.length) || 0
+              }
             };
+          } else {
+            this.securityMetrics.lastSecurityScan = this.translate('admin.security.lastScanJustNow', 'Just now');
+            // Update vulnerability counts from the detailed response
+            if (this.securityDetails && this.securityDetails.vulnerabilityDetails) {
+              this.securityMetrics.vulnerabilities = {
+                critical: this.securityDetails.vulnerabilityDetails.critical.length,
+                medium: this.securityDetails.vulnerabilityDetails.medium.length,
+                low: this.securityDetails.vulnerabilityDetails.low.length
+              };
+            }
           }
           this.$forceUpdate();
           this.showNotification(
@@ -2789,6 +2907,7 @@ export default {
         this.isLoading = true;
         const response = await adminDashboardService.getSecurityMetrics();
         if (response && response.data) {
+          this.securityMetricsError = false;
           this.securityMetrics = {
             failedLoginAttempts: response.data.failedLoginAttempts || 0,
             suspiciousActivities: response.data.suspiciousActivities || 0,
@@ -2804,19 +2923,25 @@ export default {
         }
       } catch (error) {
         console.error('[AdminDashboard] Error loading security metrics:', error);
-        this.securityMetrics = {
-          failedLoginAttempts: 0,
-          suspiciousActivities: 0,
-          lastSecurityScan: 'Never',
-          vulnerabilities: {
-            critical: 0,
-            medium: 0,
-            low: 0
-          }
-        };
+        // REVIEW H2: the catch used to install the all-zero clean bill —
+        // "Never scanned, no vulnerabilities" — so a failed fetch read as a
+        // secure system. Null it out and surface the error state instead.
+        this.securityMetricsError = true;
+        this.securityMetrics = null;
       } finally {
         this.isLoading = false;
       }
+    },
+
+    /**
+     * Retry the security surfaces after an error state (review H2). The
+     * metrics loader chains the details loader on success, so one call
+     * re-populates both.
+     */
+    async retrySecurity() {
+      this.securityMetricsError = false;
+      this.securityDetailsError = false;
+      await this.loadSecurityMetrics();
     },
 
     // Load user stats
@@ -2842,14 +2967,23 @@ export default {
     // Load database statistics
     async loadDatabaseStats() {
       try {
-        // Call the stats endpoint if it exists
         const response = await databaseOperationsService.getDatabaseStats();
-        if (response && response.data) {
-          this.dbStats = response.data;
+        const payload = response && response.data;
+        // The backend answers 200 with `{success:false, ...}` when ArangoDB
+        // itself failed — that payload carries no figures, and rendering it
+        // would blank the two fields (review H3).
+        if (payload && payload.success !== false && payload.databaseSize !== undefined) {
+          this.dbStats = payload;
+          this.dbStatsError = false;
+        } else {
+          throw new Error((payload && payload.message) || 'Database stats unavailable');
         }
       } catch (error) {
         console.error('Error loading database stats:', error);
-        // Just log the error, don't show a notification since this is background loading
+        // REVIEW H3: the failure used to be swallowed with a log line,
+        // leaving the hardcoded "42.3 GB / 128 tables" on the board.
+        this.dbStatsError = true;
+        this.dbStats = null;
       }
     },
 
@@ -3145,16 +3279,15 @@ export default {
             ? response.suspiciousDetails.map(mapAndParseLogDetail)
             : []
         };
+        this.securityDetailsError = false;
       } catch (error) {
         console.error('[AdminDashboard] Error loading security details:', error);
-        this.securityDetails = {
-          lastScan: 'Never',
-          vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
-          vulnerabilityDetails: { critical: [], medium: [], low: [] },
-          patternMatches: [],
-          failedLoginDetails: [],
-          suspiciousDetails: []
-        };
+        // REVIEW H2: the catch used to install the all-empty "clean bill" —
+        // the exact shape the template renders as "No Vulnerabilities Found /
+        // Your system appears to be secure". A failed fetch is an error
+        // state, not a security verdict.
+        this.securityDetailsError = true;
+        this.securityDetails = null;
       } finally {
         this.isLoading = false;
       }
@@ -4439,6 +4572,12 @@ export default {
 
 .db-stats {
   color: var(--fg);
+  font-size: var(--text-base);
+}
+
+/* REVIEW H1/H3: the "Measuring…" first-load note (null data + no error) */
+.measuring-note {
+  color: var(--muted);
   font-size: var(--text-base);
 }
 

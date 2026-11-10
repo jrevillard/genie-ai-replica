@@ -122,18 +122,15 @@ describe('adminDashboardService', () => {
       expect(result).toEqual(details);
     });
 
-    it('returns fallback data on API failure', async () => {
+    it('rejects on API failure — the clean-bill fallback shipped a lie', async () => {
+      // REVIEW H2 (admin-ux): the old catch returned the all-empty "Never
+      // scanned, no vulnerabilities" shape, which the dashboard renders as
+      // "Your system appears to be secure" — a FAILED fetch masquerading as
+      // a clean bill. The service now propagates; the component renders the
+      // error state.
       mockGet.mockRejectedValue(new Error('Server error'));
 
-      const result = await adminDashboardService.getSecurityDetails();
-
-      expect(result).toEqual({
-        lastScan: 'Never',
-        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
-        vulnerabilityDetails: { critical: [], medium: [], low: [] },
-        failedLoginDetails: [],
-        suspiciousDetails: []
-      });
+      await expect(adminDashboardService.getSecurityDetails()).rejects.toThrow('Server error');
     });
   });
 

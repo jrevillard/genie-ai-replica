@@ -49,10 +49,16 @@ const mockGetUserStats = jest.fn().mockResolvedValue({
 });
 
 const mockGetSecurityMetrics = jest.fn().mockResolvedValue({
-  failedLoginAttempts: 5,
-  suspiciousActivities: 1,
-  lastSecurityScan: '1 hour ago',
-  vulnerabilities: { critical: 0, medium: 1, low: 3 }
+  // The REAL service returns the axios envelope's `data`: {success, data}.
+  // The loader reads `response.data` — the old mock resolved the metrics
+  // bare, so the loader's `if (response && response.data)` silently skipped
+  // and the fabricated boot defaults stood in for a "successful" load.
+  data: {
+    failedLoginAttempts: 5,
+    suspiciousActivities: 1,
+    lastSecurityScan: '1 hour ago',
+    vulnerabilities: { critical: 0, medium: 1, low: 3 }
+  }
 });
 
 const mockGetLogs = jest.fn().mockResolvedValue([]);
@@ -112,7 +118,10 @@ jest.mock('../../services/serviceTreeService', () => ({
 }));
 
 jest.mock('../../services/databaseOperationsService', () => ({
-  getDatabaseStats: jest.fn().mockResolvedValue({ data: {} }),
+  // REVIEW H1: a real stats shape — the old `{ data: {} }` payload now trips
+  // the loader's success:false/unfigured guard and lands the DB tab in its
+  // error state, which is not what the general-mount tests are about.
+  getDatabaseStats: jest.fn().mockResolvedValue({ data: { success: true, databaseSize: '12.5 GB', totalTables: 42 } }),
   backupDatabase: jest.fn().mockResolvedValue({ data: {} }),
   optimizeDatabase: jest.fn().mockResolvedValue({ data: {} })
 }));
@@ -1076,20 +1085,128 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.warningLogsSummary).toEqual([]);
     });
 
-    it('loadSecurityMetrics resets to defaults on error', async () => {
+    it('loadSecurityMetrics failure surfaces an error state, never a clean bill', async () => {
+      // REVIEW H2: the old test pinned the lie — a failed fetch installed the
+      // all-zero "Never scanned, no vulnerabilities" shape, which the tab
+      // renders as "Your system appears to be secure". A failed fetch is an
+      // error state, not a security verdict.
       mockGetSecurityMetrics.mockRejectedValueOnce(new Error('Security API down'));
-      mockGetSecurityDetails.mockResolvedValueOnce({});
       const wrapper = createAdminDashboardWrapper();
 
       await wrapper.vm.loadSecurityMetrics();
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.securityMetrics).toEqual({
-        failedLoginAttempts: 0,
-        suspiciousActivities: 0,
-        lastSecurityScan: 'Never',
-        vulnerabilities: { critical: 0, medium: 0, low: 0 }
+      expect(wrapper.vm.securityMetrics).toBeNull();
+      expect(wrapper.vm.securityMetricsError).toBe(true);
+    });
+
+    it('loadSecurityDetails failure sets securityDetailsError and nulls the details', async () => {
+      // REVIEW H2: the service no longer returns the fabricated all-empty
+      // shape on failure (that shape IS the "system appears secure" render);
+      // it rejects, and the component surfaces the error state.
+      mockGetSecurityDetails.mockRejectedValueOnce(new Error('Scan store down'));
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails).toBeNull();
+      expect(wrapper.vm.securityDetailsError).toBe(true);
+    });
+
+    it('boots honest: metrics are null and the tiles render dashes before any load', () => {
+      // REVIEW H1: the fabricated boot defaults (99.98% uptime, 245ms,
+      // 0.05% error rate) are gone — nothing renders until a measurement
+      // lands, and unmeasured renders a dash.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.metrics.systemUptime).toBeNull();
+      expect(wrapper.vm.metrics.avgResponseTime).toBeNull();
+      expect(wrapper.vm.metrics.errorRate).toBeNull();
+      expect(wrapper.vm.uptimeLabel).toBe('—');
+      expect(wrapper.vm.responseTimeLabel).toBe('—');
+      expect(wrapper.vm.errorRateLabel).toBe('—');
+      expect(wrapper.vm.healthServices).toBeNull();
+      expect(wrapper.vm.resourceUsage).toBeNull();
+      expect(wrapper.vm.dbStats).toBeNull();
+    });
+
+    it('loadSystemHealth failure sets the error state and nulls every surface', async () => {
+      // Mount fires loadInitialData → loadSystemHealth against the base
+      // success mock; flush it so the Once-rejection below is consumed by
+      // THIS test's explicit call, not the mount's.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      mockGetSystemHealth.mockRejectedValueOnce(new Error('Health endpoint down'));
+
+      await wrapper.vm.loadSystemHealth();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.healthLoadError).toBe(true);
+      expect(wrapper.vm.healthServices).toBeNull();
+      expect(wrapper.vm.resourceUsage).toBeNull();
+      expect(wrapper.vm.metrics.systemUptime).toBeNull();
+    });
+
+    it('loadSystemHealth restores the surfaces on a later success', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises(); // mount-time load settles first
+      mockGetSystemHealth.mockRejectedValueOnce(new Error('down'));
+
+      await wrapper.vm.loadSystemHealth();
+      expect(wrapper.vm.healthLoadError).toBe(true);
+
+      await wrapper.vm.loadSystemHealth(); // the mock's base success resolves again
+      expect(wrapper.vm.healthLoadError).toBe(false);
+      expect(wrapper.vm.healthServices).toEqual([{ id: 'apiServices', name: 'API Services', status: 'good' }]);
+    });
+
+    it('loadDatabaseStats failure sets dbStatsError and nulls the stats', async () => {
+      const dbMock = require('../../services/databaseOperationsService').getDatabaseStats;
+      dbMock.mockRejectedValueOnce(new Error('Arango down'));
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadDatabaseStats();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.dbStatsError).toBe(true);
+      expect(wrapper.vm.dbStats).toBeNull();
+    });
+
+    it('loadDatabaseStats treats a success:false payload as a failure', async () => {
+      const dbMock = require('../../services/databaseOperationsService').getDatabaseStats;
+      // The backend answers 200 with {success:false} when ArangoDB itself
+      // failed — no figures in the payload (review H3).
+      dbMock.mockResolvedValueOnce({ data: { success: false, message: 'Arango connection refused' } });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadDatabaseStats();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.dbStatsError).toBe(true);
+      expect(wrapper.vm.dbStats).toBeNull();
+    });
+
+    it('runSecurityScan updates the real lastSecurityScan key (not the dead lastScan)', async () => {
+      // REVIEW H2 (passing fix): the post-scan update wrote `lastScan` while
+      // the loader's key is `lastSecurityScan` — the visible value never
+      // moved after a scan.
+      mockRunSecurityScan.mockResolvedValueOnce({ success: true, data: {} });
+      mockGetSecurityDetails.mockResolvedValueOnce({
+        lastScan: '2026-11-10T12:00:00Z',
+        vulnerabilities: { critical: 1, medium: 0, low: 0 },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        failedLoginDetails: [],
+        suspiciousDetails: []
       });
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.loadSecurityMetrics();
+      wrapper.vm.securityMetrics.lastSecurityScan = '2 days ago';
+
+      await wrapper.vm.runSecurityScan();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityMetrics.lastSecurityScan).toBe('Just now');
+      expect(wrapper.vm.securityMetrics.vulnerabilities).toEqual({ critical: 0, medium: 0, low: 0 });
     });
 
     it('loadSecurityDetails maps patternMatches out of the severity buckets', async () => {

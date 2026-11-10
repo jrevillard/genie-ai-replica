@@ -823,7 +823,10 @@ describe('LogSearchDialog', () => {
       expect(wrapper.emitted('close')).toBeTruthy();
     });
 
-    it('emits "search-completed" with results after successful search', async () => {
+    it('emits "search-results" with results after successful search', async () => {
+      // REVIEW H6: the event was renamed — the shell listens @search-results
+      // (AdminDashboard.vue) while the dialog emitted search-completed, so
+      // the "Latest Search Results" panel was dead wiring on both sides.
       const mockLogs = createMockLogs(3);
       mockSearchLogs.mockResolvedValueOnce({
         data: { logs: mockLogs }
@@ -835,12 +838,12 @@ describe('LogSearchDialog', () => {
       await wrapper.vm.performSearch();
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.emitted('search-completed')).toBeTruthy();
-      expect(wrapper.emitted('search-completed')).toHaveLength(1);
-      expect(wrapper.emitted('search-completed')[0][0]).toHaveLength(3);
+      expect(wrapper.emitted('search-results')).toBeTruthy();
+      expect(wrapper.emitted('search-results')).toHaveLength(1);
+      expect(wrapper.emitted('search-results')[0][0]).toHaveLength(3);
     });
 
-    it('emits "search-completed" with empty array on search error', async () => {
+    it('emits "search-results" with empty array on search error', async () => {
       mockSearchLogs.mockRejectedValueOnce(new Error('API Error'));
 
       const wrapper = createLogSearchDialogWrapper();
@@ -849,11 +852,11 @@ describe('LogSearchDialog', () => {
       await wrapper.vm.performSearch();
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.emitted('search-completed')).toBeTruthy();
-      expect(wrapper.emitted('search-completed')[0][0]).toEqual([]);
+      expect(wrapper.emitted('search-results')).toBeTruthy();
+      expect(wrapper.emitted('search-results')[0][0]).toEqual([]);
     });
 
-    it('emits "search-completed" even when no logs found', async () => {
+    it('emits "search-results" even when no logs found', async () => {
       mockSearchLogs.mockResolvedValueOnce({
         data: { logs: [] }
       });
@@ -864,8 +867,36 @@ describe('LogSearchDialog', () => {
       await wrapper.vm.performSearch();
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.emitted('search-completed')).toBeTruthy();
-      expect(wrapper.emitted('search-completed')[0][0]).toEqual([]);
+      expect(wrapper.emitted('search-results')).toBeTruthy();
+      expect(wrapper.emitted('search-results')[0][0]).toEqual([]);
+    });
+
+    it('renders the error state — never the empty state — on a failed search', async () => {
+      // REVIEW H5: searchError was set in the catch but rendered nowhere, so
+      // a VictoriaLogs 503 read as "No logs matching your search criteria".
+      mockSearchLogs.mockRejectedValueOnce(new Error('VL unreachable'));
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('[data-test-id="log-search-error"]').exists()).toBe(true);
+      expect(wrapper.text()).not.toContain('No logs matching your search criteria');
+    });
+
+    it('renders the empty state, not the error state, for a clean no-hit search', async () => {
+      mockSearchLogs.mockResolvedValueOnce({ data: { logs: [] } });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('[data-test-id="log-search-error"]').exists()).toBe(false);
+      expect(wrapper.text()).toContain('No logs matching your search criteria');
     });
   });
 
@@ -949,7 +980,7 @@ describe('LogSearchDialog', () => {
 
     it('defines correct emits', () => {
       const wrapper = createLogSearchDialogWrapper();
-      expect(wrapper.vm.$options.emits).toEqual(['close', 'search-completed']);
+      expect(wrapper.vm.$options.emits).toEqual(['close', 'search-results']);
     });
 
     it('includes required child components', () => {
@@ -960,6 +991,7 @@ describe('LogSearchDialog', () => {
       expect(components).toHaveProperty('DsSpinner');
       expect(components).toHaveProperty('DsInput');
       expect(components).toHaveProperty('DsSelect');
+      expect(components).toHaveProperty('DsStateDisplay');
     });
   });
 

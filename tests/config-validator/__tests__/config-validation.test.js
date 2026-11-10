@@ -3382,6 +3382,16 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // Exactly one invocation: a second one would execute a set this guard
     // does not pin.
     expect(invocations.length).toBe(1);
+    // No FILTER flags beyond the project: `--grep`, `--shard` or a filter
+    // of any other kind would shrink the executed set without the path
+    // derivation noticing it.
+    for (const invocation of invocations) {
+      const flags = invocation
+        .replace(/^npx playwright test /, '')
+        .split(/\s+/)
+        .filter((arg) => arg.startsWith('-'));
+      expect(flags.filter((flag) => !flag.startsWith('--project='))).toEqual([]);
+    }
     let targets = invocations.flatMap((line) =>
       line
         .replace(/^npx playwright test /, '')

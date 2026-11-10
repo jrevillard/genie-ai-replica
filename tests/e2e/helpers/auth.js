@@ -94,13 +94,13 @@ function request(method, path, options = {}) {
  * @returns {Promise<string>} Access token string
  */
 async function getAdminToken(adminPassword) {
-  // ADMIN_TOKEN is the runner's alternative to the password (the run
-  // script and the provisioning script both accept it). Honouring it here
-  // keeps every caller on the same credential: a runner that supplies only
-  // a token would otherwise fail every admin-API call with "the password
-  // env var is required".
+  // ADMIN_TOKEN is the runner's alternative to the password, and it WINS
+  // when both are present - the same precedence the provisioning script
+  // uses. One precedence everywhere matters: the fixtures would be
+  // provisioned with one credential while the venue-profile probes minted
+  // another, and the probes would answer 401.
   const token = process.env.ADMIN_TOKEN;
-  if (!adminPassword && !process.env.KEYCLOAK_ADMIN_PASSWORD && token) {
+  if (!adminPassword && token) {
     return token;
   }
   const password = adminPassword || process.env.KEYCLOAK_ADMIN_PASSWORD;

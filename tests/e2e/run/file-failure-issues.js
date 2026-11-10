@@ -38,6 +38,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // evidence this path files from.
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
+const TESTS_E2E_ROOT = 'tests/e2e';
 const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
 const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
 
@@ -139,6 +140,10 @@ function glab(args) {
  * read, and the matching happens locally: an issue that already tracks a
  * spec file mentions the file's repository path in its title or in its
  * description.
+ *
+ * A failed READ is fatal (unlike a failed write): without the open-issue
+ * list every failing file would get a NEW issue, and a flood is exactly
+ * what this path exists to prevent.
  */
 function fetchOpenIssues() {
   const issues = [];
@@ -159,17 +164,25 @@ function fetchOpenIssues() {
 }
 
 /**
- * Does this text mention the spec file's path, as a WHOLE path?
+ * Does this text mention the spec file's path?
  *
- * A raw substring match would let one path swallow another: the path
- * `tests/e2e/theme-runtime-config.spec.js` appears verbatim inside
- * `tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js`, and the
- * outer file's issue would then swallow the inner file's failure. The
- * match therefore requires a path boundary on both sides.
+ * The path is matched as a PATH TOKEN — a maximal run of path characters —
+ * so it is found whether the issue names the file by its repository path or
+ * by an absolute path or a URL that ends with it. A token that ends with
+ * the file's path but whose PREFIX is itself inside the e2e tree is a
+ * DIFFERENT file that happens to carry this one's path as its tail
+ * (`tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js` is not the
+ * file `tests/e2e/theme-runtime-config.spec.js`): such a token is refused,
+ * or one file's issue swallows another's failure.
  */
 function mentionsPath(text, file) {
-  const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}($|[^A-Za-z0-9_.-])`).test(text);
+  const tokens = text.match(/[A-Za-z0-9_./-]+/g) || [];
+  return tokens.some((token) => {
+    if (token === file) return true;
+    if (!token.endsWith(`/${file}`)) return false;
+    const prefix = token.slice(0, token.length - file.length - 1);
+    return !prefix.includes(`${TESTS_E2E_ROOT}/`);
+  });
 }
 
 /**
@@ -198,7 +211,9 @@ function findTrackedIssue(file, openIssues) {
 function reproduceCommand(venue) {
   const parts = [`BASE_URL=${venue}`];
   if (process.env.E2E_VENUE_IP) {
-    parts.push(`E2E_VENUE_HOST=${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}`);
+    // Only when the runner knows the host: a placeholder here would paste
+    // an array into the command.
+    if (process.env.E2E_VENUE_HOST) parts.push(`E2E_VENUE_HOST=${process.env.E2E_VENUE_HOST}`);
     parts.push(`E2E_VENUE_IP=${process.env.E2E_VENUE_IP}`);
   }
   return `${parts.join(' ')} tests/e2e/run/run-local-e2e.sh`;
@@ -214,8 +229,8 @@ function issueBody(file, failures, venue, runStamp) {
     `- venue: \`${venue}\``,
     ...(process.env.E2E_VENUE_IP
       ? [
-          `- the runner resolved the venue name to \`${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}\` ` +
-            `= \`${process.env.E2E_VENUE_IP}\``,
+          `- the runner resolved the venue name to ` +
+            `\`${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}\` = \`${process.env.E2E_VENUE_IP}\``,
         ]
       : []),
     `- run: ${runStamp}`,
@@ -259,6 +274,17 @@ function commentBody(files, venue, runStamp) {
   ].join('\n');
 }
 
+/**
+ * Why the tracker refused. The glab error's first line is the command that
+ * failed; the tracker's own message is on the next one.
+ */
+function trackerReason(error) {
+  const stderr = (error.stderr || '').trim();
+  const firstStderrLine = stderr.split('\n').find((line) => line.trim().length > 0);
+  if (firstStderrLine) return firstStderrLine.trim();
+  return error.message.split('\n').slice(0, 2).join(' | ');
+}
+
 function createIssue(file, failures, venue, runStamp) {
   const title = `test(e2e): ${file} is red on the local run`;
   const created = JSON.parse(
@@ -292,8 +318,11 @@ function commentOnIssue(issue, files, venue, runStamp) {
 function main() {
   const fileIssues = process.argv.includes('--file-issues');
   const reportFlag = process.argv.indexOf('--report');
+  if (reportFlag !== -1 && !process.argv[reportFlag + 1]) {
+    fail('--report needs the path of the report to read');
+  }
   const reportPath =
-    reportFlag === -1 ? DEFAULT_REPORT_PATH : path.resolve(process.argv[reportFlag + 1] || '');
+    reportFlag === -1 ? DEFAULT_REPORT_PATH : path.resolve(process.argv[reportFlag + 1]);
   const report = readReport(reportPath);
   const venue = process.env.BASE_URL || 'https://localhost';
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
@@ -370,8 +399,8 @@ function main() {
       byIssue.set(tracked.iid, entry);
     } catch (e) {
       // One tracker error must not swallow the remaining failures.
-      errors.push(`${file}: ${e.message.split('\n')[0]}`);
-      process.stdout.write(`  ! ${file} could not be filed: ${e.message.split('\n')[0]}\n`);
+      errors.push(`${file}: ${trackerReason(e)}`);
+      process.stdout.write(`  ! ${file} could not be filed: ${trackerReason(e)}\n`);
     }
   }
   for (const { issue, files } of byIssue.values()) {
@@ -379,9 +408,9 @@ function main() {
       commentOnIssue(issue, files, venue, runStamp);
     } catch (e) {
       for (const entry of files) {
-        errors.push(`${entry.file}: ${e.message.split('\n')[0]}`);
+        errors.push(`${entry.file}: ${trackerReason(e)}`);
       }
-      process.stdout.write(`  ! #${issue.iid} could not be commented: ${e.message.split('\n')[0]}\n`);
+      process.stdout.write(`  ! #${issue.iid} could not be commented: ${trackerReason(e)}\n`);
     }
   }
 

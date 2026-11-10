@@ -67,7 +67,11 @@ async function okfProfile() {
   // string, and the frontend reads it as parked. The probe therefore has to
   // tell a quoted string from a bare token, or it would enable the Studio
   // where the product keeps it dark.
-  const match = /okfEnabled:\s*("([^"]*)"|'([^']*)'|([^"'\s,}]+))/.exec(res.data || '');
+  // The ASSIGNMENT, not the first mention of the key: a config whose
+  // comment names the knob before the real assignment would be misread.
+  const match = /(?:^|[{,\n])\s*okfEnabled\s*:\s*("([^"]*)"|'([^']*)'|([^"'\s,}]+))/m.exec(
+    res.data || ''
+  );
   let enabled = false;
   let value = '';
   if (match) {

@@ -39,13 +39,26 @@ echo "=== local e2e run ==="
 echo "venue: $BASE_URL"
 
 # --- the serial slot ----------------------------------------------------------
-# The shared stack is ONE stack: two runs at once would reset the venue
-# fixtures' passwords under each other's logins, and two runs in the same
-# checkout would race for the same report file. TWO locks keep the booking
-# honest: one per checkout (the report path) and one per venue (the shared
-# stack). The second run REFUSES rather than collides.
+# Two locks, both PER MACHINE: one per checkout (the report path) and one
+# per venue (the shared stack). They stop two runs on this machine from
+# resetting the venue fixtures' passwords under each other's logins and from
+# racing for the same report file.
+#
+# They do NOT book the venue across machines: a laptop and this pod each
+# take their own lock. The shared stack's slot is booked with the
+# orchestrator (the coordination board) — that booking, not this lock, is
+# what keeps two machines off the same stack.
+for tool in flock md5sum; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: '$tool' is not installed - the run's serial-slot locks cannot be taken." >&2
+    echo "       Install it (util-linux provides flock) and run again." >&2
+    exit 2
+  fi
+done
 CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
-VENUE_KEY="$(printf '%s' "$BASE_URL" | md5sum | cut -c1-12)"
+# The venue key is the NORMALIZED address: https://x:4443 and https://x:4443/
+# are the same venue and must not take two locks.
+VENUE_KEY="$(printf '%s' "${BASE_URL%/}" | md5sum | cut -c1-12)"
 VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
 
 exec 9>"$CHECKOUT_LOCK"
@@ -56,8 +69,8 @@ if ! flock -n 9; then
 fi
 exec 8>"$VENUE_LOCK"
 if ! flock -n 8; then
-  echo "ERROR: another local e2e run holds this venue (lock: $VENUE_LOCK)." >&2
-  echo "       One shared stack, one run at a time - wait for it to end." >&2
+  echo "ERROR: another local e2e run on this machine holds this venue (lock: $VENUE_LOCK)." >&2
+  echo "       Wait for it to end. The slot across machines is booked with the orchestrator." >&2
   exit 3
 fi
 echo "slot: acquired (checkout $CHECKOUT_LOCK, venue $VENUE_LOCK)"
@@ -122,8 +135,12 @@ if [ -f reports/playwright-report.json ]; then
   mv reports/playwright-report.json "$RUN_REPORT"
   echo "report: $RUN_REPORT"
 else
-  RUN_REPORT=""
-  echo "report: none written by the suite" >&2
+  # NO fallback to the fixed path: it holds whatever the last Playwright
+  # invocation in this checkout wrote (a developer's single spec, a --list
+  # run) - filing from it would file ANOTHER run's failures, and a run that
+  # never wrote a report is a broken run, not a green one.
+  echo "ERROR: the suite wrote no report - this run's outcome cannot be read, and nothing is filed." >&2
+  exit 4
 fi
 
 FILE_FLAG="--file-issues"
@@ -131,18 +148,14 @@ if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
   FILE_FLAG=""
 fi
 set +e
-if [ -n "$RUN_REPORT" ]; then
-  node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" ${FILE_FLAG}
-else
-  node tests/e2e/run/file-failure-issues.js ${FILE_FLAG}
-fi
+node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" ${FILE_FLAG}
 REPORT_STATUS=$?
 set -e
 
 if [ "$PLAYWRIGHT_STATUS" -ne 0 ] && [ "$REPORT_STATUS" -ne 0 ]; then
   echo
   echo "the run is RED (playwright exit $PLAYWRIGHT_STATUS) AND the failure path failed (exit $REPORT_STATUS)"
-  echo "- the failures are NOT in the tracker; the run's outcome is not trustworthy"
+  echo "- some failures were NOT filed; the run's outcome is not trustworthy"
   exit "$REPORT_STATUS"
 elif [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
   echo

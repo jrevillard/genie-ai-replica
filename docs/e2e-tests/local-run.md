@@ -33,7 +33,18 @@ One command, from the repository root. It:
    and `testplain` exist and are converged before the suite starts;
 5. runs the **whole `tests/e2e/` tree** — `npx playwright test tests/e2e/
    --project=chromium`;
-6. reports the outcome and runs the **failure path** (below).
+6. moves the run's report to a **per-run name** (`reports/playwright-report-run-<stamp>.json`)
+   and reads it from there — any later Playwright invocation in the checkout
+   (`--list`, a single spec) writes the fixed path again, and the failure
+   path must file from **this** run's report;
+7. reports the outcome and runs the **failure path** (below).
+
+Two **locks** are taken first, one per checkout and one per venue: they stop
+two runs on the same machine from resetting the venue fixtures' passwords
+under each other's logins and from racing for the same report file. They do
+NOT book the venue across machines — the shared stack's slot is booked with
+the orchestrator (the coordination board), and that booking is what keeps two
+machines off the same stack.
 
 ### Prerequisites
 
@@ -127,7 +138,13 @@ A red run must not stay a silent red (#1736). The run ends with
   title already exists, so a suite that stays red does not flood the tracker.
 
 To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
-To file a past run's failures by hand: `node tests/e2e/run/file-failure-issues.js --file-issues`.
+To file a past run's failures by hand, read the run's own report (the runner
+renames it — the fixed path holds whatever ran last):
+`node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json --file-issues`.
+
+A run that wrote **no** report is a broken run: the runner stops there and
+files nothing rather than reading the fixed path, which would be another
+run's report.
 
 An issue that already tracks the failing spec file is **not** duplicated:
 the path comments on it instead (an umbrella issue that mentions the file's
@@ -158,7 +175,8 @@ Two caveats the operator should know before booking a slot:
 - the run needs a **serial slot** on the shared stack — the phase specs
   mutate the shared realm (the Phase-H spec rotates the realm signing keys,
   the Phase-K spec changes the realm's token lifespan and restores it), so
-  two runs at once would fight over the same realm;
+  two runs at once would fight over the same realm. The slot is booked with
+  the orchestrator; the runner's own locks are per machine;
 - the OKF specs skip on a core-profile venue. Pointing the run at an
   OKF-enabled venue is what exercises them.
 

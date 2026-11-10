@@ -3409,6 +3409,11 @@ test:backend:
     # Same worker-memory cap as test:frontend — see its note there (#1404).
     # --maxWorkers=2 alone left the per-worker heap growth unbounded.
     - npm test -- --maxWorkers=2 --workerIdleMemoryLimit=500MB --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    # Real-crypto verifier suite (DW-434/435): jest cannot require the ESM-only
+    # `jose` package, so real RS256 signature / audience / alg-pin / issuer
+    # acceptance runs on Node's own runner. See the script header for the full
+    # rationale.
+    - node --test scripts/verifier-real-crypto.node-test.js
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   artifacts:
     reports:

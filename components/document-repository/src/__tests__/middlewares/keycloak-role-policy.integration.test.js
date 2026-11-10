@@ -1,12 +1,13 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // The auth-claims boundary for the service roles, driven through the REAL
-// keycloak-auth-middleware — only jose's JWT verification is stubbed; mapRole,
-// authorizeRole and the rolePolicy lists are the code under test. Every other
-// suite in the component mocks the whole middleware, which left the verbatim
-// service-role mappings (okf-service, tools-admin) untested anywhere: the
-// exact failure mode where mapRole falls through to the roles[0]-derived
-// 'Default-roles-genie' scalar and every grant dies for real tokens.
+// keycloak-auth-middleware — only the shared verifier's verifyToken is
+// stubbed; mapRole, authorizeRole and the rolePolicy lists are the code under
+// test. Every other suite in the component mocks the whole middleware, which
+// left the verbatim service-role mappings (okf-service, tools-admin)
+// untested anywhere: the exact failure mode where mapRole falls through to
+// the roles[0]-derived 'Default-roles-genie' scalar and every grant dies for
+// real tokens.
 
 'use strict';
 
@@ -20,16 +21,14 @@ jest.mock(
   { virtual: true }
 );
 
-// The claims the stubbed jwtVerify hands back — each test swaps them.
+// The claims the shared verifier hands back — each test swaps them. The
+// verifier RESOLVES TO THE PAYLOAD itself (claims + iss_sub), not a
+// `{ payload }` wrapper (that is jose's shape, one layer down).
 const mockClaimsHolder = { current: null };
-jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn(() => ({ stub: 'jwks' })),
-  jwtVerify: jest.fn(async () => ({ payload: mockClaimsHolder.current }))
-}));
-
-// The middleware derives the JWKS/issuer URLs from these at first use.
-process.env.KEYCLOAK_URL = 'http://keycloak:8080';
-process.env.KC_REALM = 'genie';
+const makeVerifierMock = require('../helpers/verifierMock');
+const mockVerifier = makeVerifierMock();
+mockVerifier.verifyToken.mockImplementation(async () => mockClaimsHolder.current);
+jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
 
 jest.mock('../../services/fileService', () => ({
   uploadFile: jest.fn(),
@@ -85,6 +84,10 @@ const ROLES = {
 const claimsFor = (roles) => ({
   sub: '11111111-1111-1111-1111-111111111111',
   iss: 'http://keycloak:8080/realms/genie',
+  // The verifier adds the iss_sub composite key to every verified payload —
+  // the mock mirrors the real return shape (a mock that misses a field of
+  // the real contract pins a lie).
+  iss_sub: 'http://keycloak:8080/realms/genie#11111111-1111-1111-1111-111111111111',
   exp: Math.floor(Date.now() / 1000) + 300,
   realm_access: { roles }
 });

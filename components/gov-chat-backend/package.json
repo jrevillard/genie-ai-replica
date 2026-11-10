@@ -32,6 +32,8 @@
       "^@opentelemetry/api$": "<rootDir>/node_modules/@opentelemetry/api",
       "^@opentelemetry/core$": "<rootDir>/node_modules/@opentelemetry/core",
       "^@opentelemetry/context-async-hooks$": "<rootDir>/node_modules/@opentelemetry/context-async-hooks",
+      "^jose$": "<rootDir>/node_modules/jose",
+      "^axios$": "<rootDir>/node_modules/axios",
       "^\\./shared/lib/tracing-background$": "<rootDir>/../shared/lib/tracing-background.js",
       "^\\./shared/lib/tracing-baggage$": "<rootDir>/../shared/lib/tracing-baggage.js",
       "^\\./shared/lib/pii-span-processor$": "<rootDir>/../shared/lib/pii-span-processor.js",
@@ -48,7 +50,8 @@
       "^\\.\\./shared-lib/tracing-background$": "<rootDir>/../shared/lib/tracing-background.js",
       "^\\.\\./shared-lib/melt$": "<rootDir>/../shared/lib/melt/index.js",
       "^\\.\\./shared-lib$": "<rootDir>/../shared/lib/index.js",
-      "^\\.\\./shared-lib/validation-utils$": "<rootDir>/../shared/lib/validation-utils.js"
+      "^\\.\\./shared-lib/validation-utils$": "<rootDir>/../shared/lib/validation-utils.js",
+      "^\\.\\./shared-lib/keycloak-auth-service$": "<rootDir>/../shared/lib/keycloak-auth-service.js"
     },
     "collectCoverageFrom": [
       "routes/**/*.js",

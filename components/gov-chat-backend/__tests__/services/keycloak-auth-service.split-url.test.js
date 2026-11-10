@@ -129,12 +129,11 @@ describe('keycloak-auth-service — KEYCLOAK_PUBLIC_URL split-URL alias', () => 
       expect(primaryInternal).toBeDefined();
       expect(partnerInternal).toBeDefined();
       expect(partnerInternal).not.toBe(primaryInternal);
-      // The primary alias survives pointing at the PRIMARY realm's own JWKS
-      // (pre-fix this resolved to the PARTNER realm's cache).
+      // Per-realm keyed: every realm's public alias points at ITS OWN JWKS —
+      // the primary alias can never resolve to the partner cache (the
+      // multi-realm clobber class this suite pins).
       expect(primaryPublicAlias).toBe(primaryInternal);
-      // The alias is the primary realm's by definition — the partner init
-      // registers no public-issuer alias of its own.
-      expect(partnerPublicAlias).toBeUndefined();
+      expect(partnerPublicAlias).toBe(partnerInternal);
     } finally {
       delete process.env.KEYCLOAK_ADDITIONAL_REALMS;
     }

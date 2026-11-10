@@ -142,6 +142,11 @@ async function init(idpUrl) {
   const parsedTimeout = parseInt(rawTimeout, 10);
   const discoveryTimeoutMs =
     Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout ? parsedTimeout : 5000;
+  if (discoveryTimeoutMs === 5000 && process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS) {
+    logger.warn(
+      `KEYCLOAK_DISCOVERY_TIMEOUT_MS='${process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS}' is not a bare positive integer — using the 5000ms default`
+    );
+  }
   const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
   // The abort timer covers the WHOLE discovery exchange — fetch AND body
   // read: a host that accepts the connection and then stalls the response
@@ -244,6 +249,15 @@ async function init(idpUrl) {
   if (issuerMap.size > sizeBefore) {
     initialized = true;
     initFailedAt = 0;
+  } else if (pinnedIssuer) {
+    // The pin names an issuer no init registered — on the PRIMARY init this
+    // means the discovery URL's realm does not match KEYCLOAK_REALM (the pin
+    // branch is primary-gated). Throwing arms the retry cooldown; failing
+    // silently here would re-run full discovery on every single token.
+    throw new Error(
+      `KEYCLOAK_EXPECTED_ISSUER (${pinnedIssuer}) matches no registered issuer — ` +
+        `check KEYCLOAK_REALM against the discovery URL's realm`
+    );
   }
 
   const acceptedIssuers = Array.from(issuerMap.keys());

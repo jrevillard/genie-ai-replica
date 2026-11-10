@@ -324,7 +324,10 @@ test('pin + DIRECT partner init: the singleton is not poisoned by a registering-
   const pinned = DISCOVERY_ISSUER;
   const svc = loadVerifier({ KEYCLOAK_EXPECTED_ISSUER: pinned });
   const partnerUrl = `${KEYCLOAK_URL}/realms/partner`;
-  await svc.init(partnerUrl);
+  // A partner init can only ever register nothing under the pin: the direct
+  // call throws (a loud misconfiguration that arms the retry cooldown)
+  // instead of silently leaving the singleton un-flipped.
+  await assert.rejects(() => svc.init(partnerUrl), /matches no registered issuer/);
   const token = await sign(baseClaims(pinned));
   const payload = await svc.verifyToken(token);
   assert.equal(payload.iss, pinned);

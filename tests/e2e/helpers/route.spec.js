@@ -87,6 +87,21 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
+  test('tolerates an in-process instance of the class, whatever its message', async () => {
+    // The constructor form is what an in-process throw carries, and its
+    // message can be a custom close reason — not the standard wording,
+    // not the name a subclass omits. This spec is the ONLY one whose
+    // fixture matches the constructor branch alone: dropping that branch
+    // leaves it tolerated by nothing.
+    class TargetClosedError extends Error {}
+    const { page } = pageState({ pageClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new TargetClosedError('closing: drain-and-close');
+      })
+    ).resolves.toBeUndefined();
+  });
+
   test('tolerates the pipeline form of the race — the name survives, the class does not', async () => {
     // A route callback's error is raised in the server and crosses the
     // pipeline as {message, stack, name}: the client rebuilds it as a

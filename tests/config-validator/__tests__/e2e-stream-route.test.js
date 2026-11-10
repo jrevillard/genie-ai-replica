@@ -21,7 +21,10 @@ const STREAM_ROUTE_SOURCE = path.join(E2E_ROOT, 'helpers/chatbot.js');
 
 const streamPathFromSource = () => {
   const source = fs.readFileSync(STREAM_ROUTE_SOURCE, 'utf8');
-  const match = source.match(/const STREAM_PATH = '([^']+)';/);
+  // Anchored to line start: a commented-out copy of the declaration must
+  // not become the scan target — the gate would then watch a stale
+  // endpoint while green, the exact drift it exists to catch.
+  const match = source.match(/^const STREAM_PATH = '([^']+)';/m);
   return match ? match[1] : null;
 };
 
@@ -69,9 +72,14 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-route-gate-'));
     try {
       fs.mkdirSync(path.join(tree, 'helpers'), { recursive: true });
+      fs.mkdirSync(path.join(tree, 'node_modules', 'dep'), { recursive: true });
       fs.writeFileSync(path.join(tree, 'helpers', 'chatbot.js'), `const STREAM_PATH = '${endpoint}';\n`);
       fs.writeFileSync(path.join(tree, 'spec.js'), `await page.route('**${endpoint}**', () => {});\n`);
       fs.writeFileSync(path.join(tree, 'clean.js'), 'await page.goto(BASE_URL);\n');
+      // The dependency tree is excluded: a copy of the endpoint inside
+      // node_modules is not a drift this gate is for — and the exclusion
+      // itself is pinned here, so deleting the filter turns this red.
+      fs.writeFileSync(path.join(tree, 'node_modules', 'dep', 'index.js'), `fetch('${endpoint}')\n`);
       const strays = filesCarrying(tree, endpoint).map((f) => path.basename(f));
       expect(strays.sort()).toEqual(['spec.js']);
     } finally {

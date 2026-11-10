@@ -976,23 +976,11 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   }
 
   await crawlConversion.sweepInterruptedOnce();
-  // ONE conversion per repo at a time. The RESERVATION is the guard: it claims
-  // the repo SYNCHRONOUSLY — the check and the claim are adjacent statements,
-  // no await between them — so the repo is invisible to a second start for
-  // the whole of the awaited window below (the queued patch + the per-file
-  // source stamping, one doc-repo PATCH per file). A check-then-set guard
-  // left that window open and the corpus was imported twice (issue #1684).
-  if (live.has(repo_id)) {
-    throw Object.assign(new Error('a conversion is already running for this repository — wait for it to finish'), {
-      code: 'CONVERSION_IN_FLIGHT',
-      status: 409
-    });
-  }
-  let settleInFlight;
-  const inFlight = new Promise((resolve) => {
-    settleInFlight = resolve;
-  });
-  live.set(repo_id, inFlight);
+  // ONE conversion per repo at a time, whichever path started it — claimed
+  // synchronously by the one shared guard implementation (issue #1684), so
+  // the repo is invisible to a second start for the whole of the awaited
+  // window below (the queued patch + the per-file source stamping).
+  const settleInFlight = crawlConversion.reserveConversion(repo_id);
 
   const queued = {
     status: 'queued',
@@ -1029,10 +1017,8 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         error: patchErr.message
       });
     }
-    // The reservation must not outlive a failed start — the repo is free
-    // again. Settled before the delete, like the runner's finally does.
-    settleInFlight();
-    live.delete(repo_id);
+    // The reservation must not outlive a failed start — the repo is free again.
+    crawlConversion.releaseConversion(repo_id, settleInFlight);
     throw err;
   }
 
@@ -1053,11 +1039,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       // Terminal state already recorded by runDocumentsConversion.
     } finally {
       if (acquired) releaseSlot();
-      // The registry's value settles BEFORE the entry goes, so the map and
-      // its value never disagree: awaiting live.get(repo_id) waits for the
-      // run (the registry's contract).
-      settleInFlight();
-      live.delete(repo_id);
+      crawlConversion.releaseConversion(repo_id, settleInFlight);
     }
   })();
   // The runner swallows its own errors (the terminal state is recorded by

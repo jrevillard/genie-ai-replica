@@ -390,7 +390,6 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // polling.
     mockDocs({ f1: 'alpha.md' });
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
-    let hold = true;
     let parked = false;
     let stampStarted;
     const stamping = new Promise((resolve) => {
@@ -401,7 +400,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       releaseStamp = resolve;
     });
     authedAxios.patch.mockImplementation(async () => {
-      if (hold && !parked) {
+      if (!parked) {
         parked = true;
         stampStarted();
         await held;
@@ -413,18 +412,14 @@ describe('producer-service — startDocumentsConversion + run', () => {
     await stamping; // the first import is parked inside its stamping stage
     const second = await producer
       .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-      .then(
-        (queued) => ({ queued }),
-        (err) => ({ err })
-      );
-    hold = false;
+      .catch((err) => err);
     releaseStamp();
     await first;
     await producer.live.get(RID);
     // Restore the module's default stamp mock — clearAllMocks() clears the
     // CALL history but keeps the implementation.
     authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
-    expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+    expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
   it('a FAILED start writes the terminal record while the reservation is still held, then releases it', async () => {
@@ -486,13 +481,10 @@ describe('producer-service — startDocumentsConversion + run', () => {
       expect(producer.live.has(RID)).toBe(false);
       const fresh = await producer
         .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-        .then(
-          (queued) => ({ queued }),
-          (err) => ({ err })
-        );
+        .catch((err) => err);
       // The fresh start got PAST the guard — it fails in the stamp stage
       // again (the failure re-arms at its own queued patch), not with 409.
-      expect(fresh.err && fresh.err.message).toMatch(/db down/);
+      expect(fresh && fresh.message).toMatch(/db down/);
     } finally {
       dbService.getConnection.mockImplementation(() => Promise.resolve(mockDb));
     }
@@ -556,15 +548,12 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const crawlInFlight = crawl.live.get(RID); // the conversion's completion promise
     const documents = await producer
       .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-      .then(
-        (queued) => ({ queued }),
-        (err) => ({ err })
-      );
+      .catch((err) => err);
     releaseStamp();
     await crawlRun;
     if (crawlInFlight) await crawlInFlight.catch(() => {});
     authedAxios.get.mockImplementation(realGet);
-    expect(documents.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+    expect(documents).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
   it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {

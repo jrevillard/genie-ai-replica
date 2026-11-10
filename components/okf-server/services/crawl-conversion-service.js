@@ -122,6 +122,42 @@ const waiting = [];
 let running = 0;
 let swept = false;
 
+/**
+ * Claim the shared conversion slot for a repo SYNCHRONOUSLY — the guard's
+ * check and its claim are one atomic step (no await between them), so the
+ * awaited stages that follow (the queued patch, the source stamping) cannot
+ * be slipped through by a second start, which imported the corpus twice
+ * (issue #1684). Returns the settle callback the runner hands to
+ * releaseConversion when the run ends. Throws 409 CONVERSION_IN_FLIGHT when
+ * the repo is already claimed. BOTH converting paths claim through this one
+ * implementation — a diverging copy is how the documents path lost its trim
+ * gate (#1699) and its guard window (#1684) in the first place.
+ */
+function reserveConversion(repoId) {
+  if (live.has(repoId)) {
+    const e = new Error('a conversion is already running for this repository — wait for it to finish');
+    e.code = 'CONVERSION_IN_FLIGHT';
+    e.status = 409;
+    throw e;
+  }
+  let settle;
+  const inFlight = new Promise((resolve) => {
+    settle = resolve;
+  });
+  live.set(repoId, inFlight);
+  return settle;
+}
+
+/**
+ * Release a claimed conversion slot: the registry's value settles BEFORE the
+ * entry goes, so the map and its value never disagree — awaiting
+ * live.get(repoId) still waits for the run (the registry's contract).
+ */
+function releaseConversion(repoId, settle) {
+  settle();
+  live.delete(repoId);
+}
+
 /** Resolve the per-file cap in bytes (OKF_MAX_CRAWL_SOURCE_MB, 10 GB default). */
 function maxSourceBytesFromEnv() {
   const parsed = parseInt(process.env.OKF_MAX_CRAWL_SOURCE_MB || '', 10);
@@ -844,27 +880,12 @@ async function startConversion({
   await sweepInterruptedOnce();
 
   // ONE conversion per repo at a time (live-caught via test flake 2026-09-09):
-  // `live` is keyed by repo_id — a second startConversion for the SAME repo
-  // OVERWROTE the in-flight runner, dropping its promise from the registry.
-  // Refuse instead: concurrent conversions of one repo would interleave batch
-  // flushes + conversion-record patches and corrupt the progress record.
-  if (live.has(repo_id)) {
-    const e = new Error('a conversion is already running for this repository — wait for it to finish');
-    e.code = 'CONVERSION_IN_FLIGHT';
-    e.status = 409;
-    throw e;
-  }
-  // The RESERVATION is the guard — it claims the repo SYNCHRONOUSLY (the check
-  // and the claim are adjacent statements, no await between them), so the repo
-  // is invisible to a second start for the whole of the awaited window below
-  // (the queued patch + the provenance stamp's doc-repo GET). A check-then-set
-  // guard left that window open (issue #1684 — the same shape the documents
-  // importer had).
-  let settleInFlight;
-  const inFlight = new Promise((resolve) => {
-    settleInFlight = resolve;
-  });
-  live.set(repo_id, inFlight);
+  // concurrent conversions of one repo would interleave batch flushes +
+  // conversion-record patches and corrupt the progress record. The RESERVATION
+  // is the guard — claimed synchronously by the one shared implementation, so
+  // the repo is invisible to a second start (either path) for the whole of
+  // the awaited window below (issue #1684).
+  const settleInFlight = reserveConversion(repo_id);
 
   const queued = {
     status: 'queued',
@@ -922,11 +943,7 @@ async function startConversion({
       // background promise never surfaces as an unhandled rejection.
     } finally {
       if (acquired) releaseSlot();
-      // The registry's value settles BEFORE the entry goes, so the map and
-      // its value never disagree: awaiting live.get(repo_id) waits for the
-      // run (the registry's contract).
-      settleInFlight();
-      live.delete(repo_id);
+      releaseConversion(repo_id, settleInFlight);
     }
   })();
   // The runner swallows its own errors (the terminal state is recorded by
@@ -957,5 +974,10 @@ module.exports = {
   // joins the SAME FIFO semaphore — one heavy conversion at a time across
   // BOTH source kinds. Additive export; crawl behavior unchanged.
   acquireSlot,
-  releaseSlot
+  releaseSlot,
+  // THE one-conversion-per-repo guard (issue #1684): both converting paths
+  // claim and release through these two — the producer imports them, the way
+  // it imports the shared slot above.
+  reserveConversion,
+  releaseConversion
 };

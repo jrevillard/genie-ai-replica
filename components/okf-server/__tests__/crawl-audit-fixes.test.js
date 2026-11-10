@@ -256,12 +256,9 @@ describe('ONE conversion per repo (2026-09-09 test-flake catch)', () => {
 
     const first = conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' });
     await stamping; // the first conversion is parked inside its provenance stamp
-    const second = await conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' }).then(
-      (queued) => ({ queued }),
-      (err) => ({ err })
-    );
+    const second = await conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' }).catch((err) => err);
     releaseStamp();
     await first;
-    expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+    expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 });

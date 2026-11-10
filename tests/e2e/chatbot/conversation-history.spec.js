@@ -62,7 +62,7 @@ test.describe('Conversation history persistence', () => {
       throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
 
-    let targets = [];
+    let targets;
     let listFailure = null;
     // searchTerm narrows the list to the suite's own titles (the route's
     // default page is 20 — old leftovers would rotate off it unfiltered).

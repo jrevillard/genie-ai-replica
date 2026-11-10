@@ -1,0 +1,15 @@
+{
+  "name": "genie-ai-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ESLint wiring for the Playwright E2E suite (no-undef guard over specs and helpers). The Playwright runtime itself resolves from the repository root's node_modules.",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0"
+  }
+}

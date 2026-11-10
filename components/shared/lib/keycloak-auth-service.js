@@ -647,8 +647,7 @@ const keycloakAuthService = {
       // is fast-failed instead of refreshed.
       const rotationCandidate =
         err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      const refreshScheduled = rotationCandidate ? jwks.forceRefresh() : false;
-      if (refreshScheduled) {
+      if (rotationCandidate && jwks.forceRefresh()) {
         try {
           const result = toResult(await verifyWithJwt());
 
@@ -667,8 +666,10 @@ const keycloakAuthService = {
       // The rejection names the underlying jose error: without it every
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
-      // 'Token verification failed'.
-      if (rotationCandidate && !refreshScheduled) {
+      // 'Token verification failed'. Reaching this line means the retry
+      // above did not run: the token is not a rotation candidate, or the
+      // floor held its refresh back.
+      if (rotationCandidate) {
         // The refresh floor held the key-set refresh back. The realm may
         // ALREADY publish the key this token names — a rotation that landed
         // inside the window is observed by the next refresh, not by this

@@ -1,4 +1,8 @@
 const { test, expect } = require('@playwright/test');
+// The venue's origin: the Compose stack serves it on localhost, the
+// k8s cluster on its own host. A literal origin makes every
+// assertion below a statement about the Compose venue alone.
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.1 — Frontend Logout Redirect
@@ -13,7 +17,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -39,7 +43,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );

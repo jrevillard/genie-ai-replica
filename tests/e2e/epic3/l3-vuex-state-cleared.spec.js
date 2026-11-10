@@ -1,4 +1,8 @@
 const { test, expect } = require('@playwright/test');
+// The venue's origin: the Compose stack serves it on localhost, the
+// k8s cluster on its own host. A literal origin makes every
+// assertion below a statement about the Compose venue alone.
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
@@ -14,7 +18,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -32,7 +36,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );
@@ -109,7 +113,7 @@ async function waitForVueApp(page) {
   // Step 7: Navigate back to app to verify Vuex state is cleared
   // After Keycloak processes logout, navigate back to check that a fresh
   // Vue instance starts with cleared state.
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });

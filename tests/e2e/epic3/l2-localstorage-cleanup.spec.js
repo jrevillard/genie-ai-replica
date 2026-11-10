@@ -1,4 +1,8 @@
 const { test, expect } = require('@playwright/test');
+// The venue's origin: the Compose stack serves it on localhost, the
+// k8s cluster on its own host. A literal origin makes every
+// assertion below a statement about the Compose venue alone.
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.2 — localStorage Cleanup on Logout
@@ -14,7 +18,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -32,7 +36,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );
@@ -83,7 +87,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   // Step 7: Navigate back to app origin and check localStorage
   // Use about:blank to reset, then navigate to app origin
   await page.goto('about:blank');
-  await page.goto('https://localhost/', { waitUntil: 'commit', timeout: 15000 });
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'commit', timeout: 15000 });
 
   // Check localStorage on the app origin (before Keycloak redirect completes)
   const userAfter = await page.evaluate(() => localStorage.getItem('user'));

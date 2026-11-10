@@ -94,19 +94,21 @@ async function authenticate(req, res, next) {
       // log above, never in a body an unauthenticated caller can read.
       return res.status(503).json({
         error: 'AUTH_SERVICE_UNAVAILABLE',
-        message: 'Authentication service unavailable'
+        message: 'Authentication service unavailable',
+        details: {}
       });
     }
     // An expired token is a genuine token failure with its own CODE: the
     // document-repository middleware and the web app both distinguish it from
     // a rejected token, and the fixed message keeps the internal text out.
     if (err && err.code === 'TOKEN_EXPIRED') {
-      return res.status(401).json({ error: 'TOKEN_EXPIRED', message: 'Token has expired' });
+      return res.status(401).json({ error: 'TOKEN_EXPIRED', message: 'Token has expired', details: {} });
     }
     // Any other verification failure: 401 TOKEN_INVALID with a FIXED message.
     // The verifier's internal text (issuer mismatch, JWKS key id, decoding
-    // detail) stays in the log above and never reaches the client.
-    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed' });
+    // detail) stays in the log above and never reaches the client. The body
+    // shape mirrors the document-repository middleware exactly.
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed', details: {} });
   }
 }
 

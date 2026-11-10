@@ -328,24 +328,36 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(degraded.source).toBe('bff-fail-closed-default');
   });
 
-  it("a concurrent joiner is not poisoned by the initiator's 401 (it runs its own attempt)", async () => {
+  it("a concurrent joiner is not poisoned by the initiator's 401 — every caller runs its OWN attempt", async () => {
     // The shared attempt runs with the INITIATOR's bearer: its 401 says
-    // nothing about the joiner's own token (a refreshed token of the same
-    // scopes shares the key). The joiner must run its OWN attempt instead of
-    // inheriting someone else's rejection.
+    // nothing about a joiner's own token (a refreshed token of the same
+    // scopes shares the key). The own-attempt fallback must run OUTSIDE the
+    // shared cache: a retry that published its attempt would be JOINED by
+    // the next caller, who would inherit a foreign outcome without its own
+    // token ever being tested. Four callers, two rejected tokens, two valid:
+    // every caller must hit the upstream exactly once, with its OWN bearer.
+    const subs = [];
     axios.get.mockImplementation((path, config) => {
       const sub = payloadOf(config?.headers?.Authorization)?.sub;
-      if (sub === 'caller-a') return okfGetError(401, 'token expired');
+      subs.push(sub);
+      if (sub === 'caller-a' || sub === 'caller-b') return okfGetError(401, 'token expired');
       return okfGetResponse(HYBRID_CONFIG);
     });
 
     const a = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-a'));
     const b = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-b'));
+    const c = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-c'));
+    const d = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-d'));
 
     await expect(a).rejects.toMatchObject({ name: 'OkfAuthzUnauthorizedError' });
-    await expect(b).resolves.toMatchObject({ config: { mode: 'hybrid' } });
-    // Two attempts: the initiator's (401) and the joiner's own.
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    await expect(b).rejects.toMatchObject({ name: 'OkfAuthzUnauthorizedError' });
+    await expect(c).resolves.toMatchObject({ config: { mode: 'hybrid' } });
+    await expect(d).resolves.toMatchObject({ config: { mode: 'hybrid' } });
+    // Four attempts: the shared one plus each caller's own fallback — no
+    // caller inherited another's outcome without its own attempt.
+    expect(axios.get).toHaveBeenCalledTimes(4);
+    // And each attempt carried the caller's own token, not a neighbour's.
+    expect(subs.sort()).toEqual(['caller-a', 'caller-b', 'caller-c', 'caller-d']);
   });
 
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {
@@ -372,11 +384,94 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(config).toEqual({
       config: { mode: 'legacy' },
       source: 'bff-fail-closed-default',
+      synthesis_reason: 'upstream_unreachable',
       serving_graph_count: 0,
       serving_repo_ids: [],
       serving_graphs: [],
       engaged: false,
       warnings: []
+    });
+  });
+
+  it('every synthesized composition names WHY it was synthesized', async () => {
+    // A consumer must be able to tell a by-design default (OKF parked, a
+    // caller without okf scopes — their legacy answer IS the correct
+    // posture) from a posture the client could not read.
+    axios.get
+      .mockImplementationOnce(() => okfGetError(403))
+      .mockImplementationOnce(() => okfGetResponse({ unexpected: true }))
+      .mockImplementationOnce(() => okfGetError(503));
+
+    const forbidden = await client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'u1'));
+    const garbled = await client.getRetrievalConfig(makeBearer(['okf:t:b:read'], [], 'u2'));
+    const unreachable = await client.getRetrievalConfig(makeBearer(['okf:t:c:read'], [], 'u3'));
+
+    expect(forbidden.synthesis_reason).toBe('caller_without_scope');
+    expect(garbled.synthesis_reason).toBe('malformed_response');
+    expect(unreachable.synthesis_reason).toBe('upstream_unreachable');
+    // Only the unreadable-posture cases are flagged as unknown.
+    expect(client.isPostureUnknown(forbidden)).toBe(false);
+    expect(client.isPostureUnknown(garbled)).toBe(true);
+    expect(client.isPostureUnknown(unreachable)).toBe(true);
+  });
+
+  it('the trust horizon is a fixed value, not a multiple of the cache TTL', () => {
+    // Pinning the VALUE: deriving it from OKF_RETRIEVAL_CONFIG_TTL_MS would
+    // silently widen the unverified-posture window whenever an operator
+    // raises the TTL to cut upstream load.
+    expect(client._internals.LKG_MAX_AGE_MS).toBe(300000);
+  });
+
+  describe('with a cache TTL longer than the trust horizon', () => {
+    // #1683's bound must hold at SERVE time: a failure-resolved composition
+    // is cached for the window, and a window longer than the horizon would
+    // otherwise keep serving an unverified posture past its bound.
+    const LONG_TTL_MS = 600000;
+
+    function loadWithLongTtl() {
+      process.env.OKF_RETRIEVAL_CONFIG_TTL_MS = String(LONG_TTL_MS);
+      jest.resetModules();
+      const loaded = require('../services/retrieval-config-client');
+      const axiosLong = require('axios');
+      axiosLong.get.mockReset();
+      return { loaded, axiosLong };
+    }
+
+    afterEach(() => {
+      delete process.env.OKF_RETRIEVAL_CONFIG_TTL_MS;
+    });
+
+    it('a cached degraded posture stops being served once the horizon passes', async () => {
+      const { loaded: longClient, axiosLong } = loadWithLongTtl();
+      // The posture is confirmed at 599000, just before window 0 ends; the
+      // outage hits in window 1 (the failure-resolved composition is cached
+      // under window 1's key), and the horizon (5 min from 599000 = 899000)
+      // expires while window 1 [600000, 1200000) is STILL current — exactly
+      // the case a per-window cache would otherwise serve past the bound.
+      nowMs = 599000;
+      axiosLong.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+      const bearer = makeBearer(['okf:t:a:read']);
+
+      await longClient.getRetrievalConfig(bearer); // the posture is confirmed
+
+      nowMs = 700000; // window 1; the upstream fails; the LKG (age 101 s) is fresh
+      axiosLong.get.mockImplementation(() => okfGetError(503));
+      const degraded = await longClient.getRetrievalConfig(bearer);
+      expect(degraded.config.mode).toBe('hybrid');
+      expect(degraded.source).toBe('bff-last-known-good');
+      // The composition carries the age of the posture it was built from.
+      expect(degraded.captured_at).toBe(599000);
+
+      nowMs = 899500; // SAME window, past the horizon (age 300500 > 300000)
+      const afterHorizon = await longClient.getRetrievalConfig(bearer);
+
+      // The serve-time re-validation dropped the entry and resolved again:
+      // no trusted posture remains, so the fail-closed default takes over
+      // even though the window has not rolled.
+      expect(afterHorizon.config.mode).toBe('legacy');
+      expect(afterHorizon.source).toBe('bff-fail-closed-default');
+      // Three attempts: the success, the in-window failure, the re-resolution.
+      expect(axiosLong.get).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -649,7 +744,12 @@ describe('retrieval-config-client (Story 1.1)', () => {
         const parked = require('../services/retrieval-config-client');
         const axiosParked = require('axios');
         const cfg = await parked.getRetrievalConfig(makeBearer());
-        expect(cfg).toMatchObject({ config: { mode: 'legacy' }, engaged: false, source: 'bff-fail-closed-default' });
+        expect(cfg).toMatchObject({
+          config: { mode: 'legacy' },
+          engaged: false,
+          source: 'bff-fail-closed-default',
+          synthesis_reason: 'parked'
+        });
         const graphs = await parked.getAuthorizedGraphs(makeBearer());
         expect(graphs).toEqual({ graph_names: [] });
         expect(axiosParked.get).not.toHaveBeenCalled();

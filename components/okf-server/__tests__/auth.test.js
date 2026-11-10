@@ -74,7 +74,8 @@ describe('auth middleware (authenticate)', () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       error: 'TOKEN_INVALID',
-      message: 'Token verification failed'
+      message: 'Token verification failed',
+      details: {}
     });
   });
 
@@ -89,7 +90,7 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'TOKEN_EXPIRED', message: 'Token has expired' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'TOKEN_EXPIRED', message: 'Token has expired', details: {} });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -115,7 +116,8 @@ describe('auth middleware (authenticate)', () => {
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({
       error: 'AUTH_SERVICE_UNAVAILABLE',
-      message: 'Authentication service unavailable'
+      message: 'Authentication service unavailable',
+      details: {}
     });
     expect(next).not.toHaveBeenCalled();
   });

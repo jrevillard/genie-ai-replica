@@ -215,7 +215,12 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     // fallback. A dashboard must not read that as "the deployment runs
     // legacy" — the same reasoning as the okf_only case, on the other branch.
     retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
-      okfConfig({ config: { mode: 'legacy' }, source: 'bff-fail-closed-default', engaged: false })
+      okfConfig({
+        config: { mode: 'legacy' },
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'upstream_unreachable',
+        engaged: false
+      })
     );
 
     await queryService.initStreamQuery(makeQueryData(), BEARER);
@@ -224,6 +229,64 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       'QueryService.fanout_warning',
       expect.objectContaining({
         fanout: { warning: 'posture_unknown', mode: 'legacy', engaged: false }
+      })
+    );
+  });
+
+  it('LEGACY_BY_DESIGN: a parked OKF stack and a scope-less caller stay WARNING-FREE (their legacy answer is the correct posture)', async () => {
+    // The by-design defaults share the fail-closed source label with the
+    // genuinely unknown cases, but they carry their own synthesis reason:
+    // warning per query on a PARKED deployment (the shipped default) would
+    // bury the real signal (#1687).
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({
+        config: { mode: 'legacy' },
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'parked',
+        engaged: false
+      })
+    );
+
+    await queryService.initStreamQuery(makeQueryData(), BEARER);
+    expect(logger.warn).not.toHaveBeenCalledWith('QueryService.fanout_warning', expect.anything());
+
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({
+        config: { mode: 'legacy' },
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'caller_without_scope',
+        engaged: false
+      })
+    );
+
+    await queryService.initStreamQuery(makeQueryData(), BEARER);
+    expect(logger.warn).not.toHaveBeenCalledWith('QueryService.fanout_warning', expect.anything());
+  });
+
+  it('HYBRID_DEGRADED: a degraded hybrid posture reaches the warning channel (callers silently get legacy-only answers)', async () => {
+    // The last-known-good composition carries the last-known mode: a hybrid
+    // deployment riding out an outage serves an empty carrier with NO
+    // explicit signal — the most consequential degraded case, and it must
+    // not be invisible (#1687). A REAL hybrid zero-serving response stays
+    // warning-free (normal free-form-only operation).
+    process.env.ARANGO_GRAPH_NAME = 'GRAPH';
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({
+        config: { mode: 'hybrid' },
+        source: 'bff-last-known-good',
+        synthesis_reason: 'upstream_unreachable',
+        engaged: false,
+        serving_graph_count: 0
+      })
+    );
+
+    const { opeaPayload } = await queryService.initStreamQuery(makeQueryData(), BEARER);
+
+    expect(opeaPayload.context.authorized_graph_names).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'QueryService.fanout_warning',
+      expect.objectContaining({
+        fanout: { warning: 'hybrid_serving_unknown', mode: 'hybrid', engaged: false }
       })
     );
   });

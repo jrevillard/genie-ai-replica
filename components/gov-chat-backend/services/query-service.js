@@ -752,6 +752,21 @@ class QueryService {
           context.sticky_graph_names = stickyClean;
           logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
         }
+        if (!engaged && degraded) {
+          // A degraded hybrid posture (the last-known-good during an outage):
+          // the carrier is empty, so callers silently get legacy-only answers
+          // while the deployment believes it runs hybrid — the most
+          // consequential degraded case must still reach the warning
+          // channel (#1687). A REAL hybrid zero-serving response stays
+          // warning-free (normal free-form-only operation, per the
+          // okf-server's own engagement comment).
+          logger.warn('QueryService.fanout_warning', {
+            queryId,
+            correlationId,
+            fanout: { warning: 'hybrid_serving_unknown', mode, engaged },
+            server_warnings: warnings
+          });
+        }
       } else if (mode === 'okf_only') {
         // okf_only LITERALLY means OKF only — the legacy free-form corpus is
         // NEVER queried, regardless of engaged (resolved Open Question,
@@ -785,11 +800,13 @@ class QueryService {
         // legacy (or an unknown mode) — add NOTHING; the payload stays
         // byte-identical to pre-1.1.
         logger.info('QueryService.fanout_carrier_empty_legacy', { queryId, correlationId, mode, engaged });
-        if (degraded) {
-          // The posture served here is the LOCAL fallback, not the
-          // deployment's: the same warning channel as the okf_only case, so
-          // a dashboard cannot read an outage (a garbled body, an expired
-          // last-known-good) as "the deployment runs legacy" (#1687).
+        if (retrievalConfigClient.isPostureUnknown(config)) {
+          // The posture served here is the LOCAL fallback because it could
+          // not be READ (an unreachable upstream, a garbled body): the same
+          // warning channel as the other branches, so a dashboard cannot
+          // read an outage as "the deployment runs legacy" (#1687). The
+          // by-design defaults (OKF parked, a caller without okf scopes)
+          // stay warning-free — their legacy answer IS the correct posture.
           logger.warn('QueryService.fanout_warning', {
             queryId,
             correlationId,

@@ -1236,6 +1236,68 @@ describe('AdminDashboard', () => {
       expect(errorToast[1].message).toContain('refresh');
     });
 
+    it('hides stale findings under the error card when a later metrics load fails', async () => {
+      // REVIEW pass-3 (altitude): the findings section carried its own v-if
+      // that ignored the error flags — after a healthy tab visit, a failed
+      // metrics reload rendered STALE findings beneath the fresh error card.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises(); // mount-time load settles against base mocks
+
+      // A healthy security load populates metrics AND details.
+      mockGetSecurityMetrics.mockResolvedValueOnce({
+        data: {
+          failedLoginAttempts: 5,
+          suspiciousActivities: 2,
+          lastSecurityScan: 'Yesterday',
+          vulnerabilities: { critical: 1, medium: 2, low: 3 }
+        }
+      });
+      mockGetSecurityDetails.mockResolvedValueOnce({
+        lastScan: '2026-11-10T10:00:00Z',
+        vulnerabilities: { critical: 1, medium: 2, low: 3 },
+        vulnerabilityDetails: {
+          critical: [{ type: 'xss', severity: 'critical', description: 'd', recommendation: 'r' }],
+          medium: [],
+          low: []
+        },
+        failedLoginDetails: [],
+        suspiciousDetails: [],
+        patternMatches: []
+      });
+      await wrapper.vm.loadSecurityMetrics();
+      wrapper.vm.activeTab = 'security'; // the watcher fires no loads for this tab
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.security-findings-section').exists()).toBe(true);
+
+      // The metrics reload fails; the stale details stay in state untouched.
+      mockGetSecurityMetrics.mockRejectedValueOnce(new Error('metrics down'));
+      await wrapper.vm.loadSecurityMetrics();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityUnavailable).toBe(true);
+      expect(wrapper.vm.securityDetails).not.toBeNull();
+      expect(wrapper.find('[data-test-id="security-error"]').exists()).toBe(true);
+      expect(wrapper.find('.security-findings-section').exists()).toBe(false);
+    });
+
+    it('treats a data-less metrics envelope as a failure, not a blank card', async () => {
+      // REVIEW pass-3 (altitude): the sibling loaders treat a shape-break as
+      // a failure; here the raw {success:false} body (no data) silently
+      // no-op'd — a blank card with neither error nor retry.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      mockGetSecurityMetrics.mockResolvedValueOnce({ success: false, message: 'VL down' });
+      wrapper.vm.activeTab = 'security';
+
+      await wrapper.vm.loadSecurityMetrics();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityMetricsError).toBe(true);
+      expect(wrapper.vm.securityMetrics).toBeNull();
+      expect(wrapper.find('[data-test-id="security-error"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="security-retry"]').exists()).toBe(true);
+    });
+
     it('loadSecurityDetails maps patternMatches out of the severity buckets', async () => {
       // The backend stopped calling a bare substring a vulnerability.
       // The panel must show the term, the count and the real log line —
@@ -1851,13 +1913,11 @@ describe('AdminDashboard', () => {
       // search that merely found nothing.
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.activeTab = 'logs';
-      const before = mockEventBusEmit.mock.calls.length;
+      mockEventBusEmit.mockClear();
       wrapper.vm.handleSearchResults([], 'VictoriaLogs unreachable');
 
       expect(wrapper.vm.searchResults).toEqual([]);
-      // Only the toasts THIS call produced — the mount's own notifications
-      // (if any) must not mask the branch under test.
-      const toasts = mockEventBusEmit.mock.calls.slice(before).filter((c) => c[0] === 'notification:show');
+      const toasts = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
       const errorToast = toasts.find(([, p]) => p.type === 'error');
       expect(errorToast).toBeTruthy();
       expect(errorToast[1].message).toContain('VictoriaLogs unreachable');

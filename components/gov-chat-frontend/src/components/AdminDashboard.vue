@@ -953,7 +953,7 @@
                     data-test-id="security-loading"
                   />
                   <DsStateDisplay
-                    v-else-if="securityMetricsError || securityDetailsError"
+                    v-else-if="securityUnavailable"
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
                     data-test-id="security-error"
@@ -1000,7 +1000,15 @@
                     </div>
                   </div>
 
-                  <div v-if="!isLoading && securityDetails" class="security-findings-section">
+                  <!-- REVIEW pass-3 (altitude): this section's own v-if
+                       re-derived "is security renderable" without the error
+                       flags, so a metrics failure left it rendering STALE
+                       findings under the fresh error card. The two blocks
+                       (counts tile + findings lists) render TOGETHER when
+                       healthy, so this stays a sibling — gated by the same
+                       securityUnavailable computed as the error card, not a
+                       re-derived conjunction. -->
+                  <div v-if="!isLoading && !securityUnavailable && securityDetails" class="security-findings-section">
                     <div
                       v-if="
                         securityDetails.vulnerabilityDetails &&
@@ -1452,15 +1460,11 @@
 
                     <div
                       v-if="
-                        !isLoading &&
-                        !securityMetricsError &&
-                        !securityDetailsError &&
-                        securityDetails &&
-                        (!securityDetails.vulnerabilityDetails ||
-                          (securityDetails.vulnerabilityDetails.critical.length === 0 &&
-                            securityDetails.vulnerabilityDetails.medium.length === 0 &&
-                            securityDetails.vulnerabilityDetails.low.length === 0 &&
-                            (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0)))
+                        !securityDetails.vulnerabilityDetails ||
+                        (securityDetails.vulnerabilityDetails.critical.length === 0 &&
+                          securityDetails.vulnerabilityDetails.medium.length === 0 &&
+                          securityDetails.vulnerabilityDetails.low.length === 0 &&
+                          (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0))
                       "
                     >
                       <DsStateDisplay type="empty">
@@ -1741,6 +1745,7 @@
 import serviceTreeService from '../services/serviceTreeService.js';
 import databaseOperationsService from '../services/databaseOperationsService';
 import adminDashboardService from '../services/adminDashboardService';
+import analyticsService from '../services/analyticsService';
 import { isOkfEnabled } from '../utils/okfFlag';
 import OperationResultsModal from './OperationResultsModal.vue';
 import LogSearchDialog from './LogSearchDialog.vue';
@@ -1763,6 +1768,22 @@ import { getAvailableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
+
+// The blank metric shapes, declared ONCE: data() and resetHealthSurfaces()
+// must never drift (a metric added to one and missed in the other lets a
+// stale value survive a failed load — review pass-3, altitude).
+const blankMetrics = () => ({
+  systemUptime: null,
+  avgResponseTime: null,
+  errorRate: null,
+  monthlyActiveUsers: null
+});
+const blankTrends = () => ({
+  uptime: null,
+  responseTime: null,
+  errorRate: null,
+  activeUsers: null
+});
 import { statusKey, statusVariant, displayStatus } from '../utils/documentStatus.js';
 import { themeManager } from '../utils/ThemeManager';
 
@@ -1920,12 +1941,7 @@ export default {
 
       showOperationResults: false,
 
-      metrics: {
-        systemUptime: null,
-        avgResponseTime: null,
-        errorRate: null,
-        monthlyActiveUsers: null
-      },
+      metrics: blankMetrics(),
 
       // Per-surface error flags (review H1/H2/H3): a failed fetch renders an
       // explicit error state with a retry — never the previous success,
@@ -1943,12 +1959,7 @@ export default {
       // analytics collection. `null` means "not computable" (the previous
       // period has no record, or the metric itself was unavailable) and
       // renders no trend at all rather than a fabricated one.
-      trends: {
-        uptime: null,
-        responseTime: null,
-        errorRate: null,
-        activeUsers: null
-      },
+      trends: blankTrends(),
 
       // Security metrics — NULL until a real response lands (review H2: the
       // old default FABRICATED 23 failed logins, 5 suspicious activities and
@@ -2038,26 +2049,34 @@ export default {
         ? '\u2014'
         : `${this.metrics.errorRate}%`;
     },
+    // One source of truth for "the security surface failed to load" \u2014 the
+    // error card, the findings section and the clean bill all key off this
+    // computed instead of re-deriving the conjunction (review pass-3,
+    // altitude: a mixed state rendered stale findings under a fresh error).
+    securityUnavailable() {
+      return this.securityMetricsError || this.securityDetailsError;
+    },
     // REVIEW H1: same null discipline for the other tiles \u2014 the loader
     // nulls them on boot and on a failed fetch, and a dash is the honest
     // rendering of "not measured", never "null%" or "nullms".
     uptimeLabel() {
-      return this.metrics.systemUptime === null || this.metrics.systemUptime === undefined
-        ? '\u2014'
-        : `${this.metrics.systemUptime}%`;
+      // NOT analyticsService.formatValue('percent'): that renders toFixed(1),
+      // which rounds a measured 99.98 into "100.0%" \u2014 the fabricated-looking
+      // figure this wave exists to kill. Keep the measured precision.
+      return this.metrics.systemUptime == null ? '\u2014' : `${this.metrics.systemUptime}%`;
     },
+    // Reuse (review pass-3): analyticsService.formatValue already implements
+    // the null\u2192dash + unit contract (UnifiedAnalytics delegates the same
+    // way); 'milliseconds' matches the analytics precedent (Math.round).
     responseTimeLabel() {
-      return this.metrics.avgResponseTime === null || this.metrics.avgResponseTime === undefined
-        ? '\u2014'
-        : `${this.metrics.avgResponseTime}ms`;
+      return analyticsService.formatValue(this.metrics.avgResponseTime, 'milliseconds', this.currentLocale);
     },
     // REVIEW round-2 F2: the MAU tile rendered `(metrics.monthlyActiveUsers
     // ?? 0)` \u2014 a fabricated 0 for unmeasured data, the exact lie the other
-    // three tiles stopped telling.
+    // three tiles stopped telling. Delegated to formatValue('number') \u2014
+    // null \u2192 '\u2014', locale-aware grouping.
     mauLabel() {
-      return this.metrics.monthlyActiveUsers === null || this.metrics.monthlyActiveUsers === undefined
-        ? '\u2014'
-        : this.metrics.monthlyActiveUsers.toLocaleString();
+      return analyticsService.formatValue(this.metrics.monthlyActiveUsers, 'number', this.currentLocale);
     },
     // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
     // the frontend entrypoint from OKF_ENABLED — the image default is DARK
@@ -2821,12 +2840,16 @@ export default {
             );
             return;
           }
-          await this.loadSecurityDetails(); // This fetches all necessary details
-          // REVIEW round-2 F1: loadSecurityDetails swallows its own errors
-          // (it sets securityDetailsError). If the refresh failed, the scan
-          // ran server-side but its results never landed — surface the error
-          // state; do NOT stamp a fabricated "Just now" clean bill over it.
-          if (this.securityDetailsError) {
+          // loadSecurityDetails REPORTS its outcome as a boolean — branch on
+          // the return, not by polling the securityDetailsError side-effect
+          // flag (review pass-3: the flag is the loader's own contract; a
+          // future reset-at-load refactor would silently revive the
+          // fabricated clean bill if this method inferred failure from it).
+          const refreshed = await this.loadSecurityDetails();
+          if (!refreshed) {
+            // REVIEW round-2 F1: the scan ran server-side but its results
+            // never landed — surface the error state; do NOT stamp a
+            // fabricated "Just now" clean bill over the failed refresh.
             this.securityMetricsError = true;
             this.securityMetrics = null;
             this.showNotification(
@@ -2840,34 +2863,22 @@ export default {
           }
           // REVIEW H2: the tile update used to write `lastScan` — the loader's
           // key is `lastSecurityScan`, so the write landed on a dead field and
-          // the visible value never moved. It also crashed on a null
-          // securityMetrics. Update through the real key, initialising the
-          // tile object from the fresh details when no metrics ever loaded.
+          // the visible value never moved. Rebuild the tile WHOLESALE from the
+          // fresh details (a successful loadSecurityDetails guarantees non-null
+          // array-normalized buckets): the previous two-path update refreshed
+          // only lastSecurityScan + vulnerabilities, leaving the
+          // failedLoginAttempts/suspiciousActivities counts stale.
           this.securityMetricsError = false;
-          this.securityDetailsError = false;
-          if (!this.securityMetrics) {
-            this.securityMetrics = {
-              failedLoginAttempts: (this.securityDetails && this.securityDetails.failedLoginDetails?.length) || 0,
-              suspiciousActivities: (this.securityDetails && this.securityDetails.suspiciousDetails?.length) || 0,
-              lastSecurityScan: this.translate('admin.security.lastScanJustNow', 'Just now'),
-              vulnerabilities: {
-                critical: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.critical.length) || 0,
-                medium: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.medium.length) || 0,
-                low: (this.securityDetails && this.securityDetails.vulnerabilityDetails?.low.length) || 0
-              }
-            };
-          } else {
-            this.securityMetrics.lastSecurityScan = this.translate('admin.security.lastScanJustNow', 'Just now');
-            // Update vulnerability counts from the detailed response
-            if (this.securityDetails && this.securityDetails.vulnerabilityDetails) {
-              this.securityMetrics.vulnerabilities = {
-                critical: this.securityDetails.vulnerabilityDetails.critical.length,
-                medium: this.securityDetails.vulnerabilityDetails.medium.length,
-                low: this.securityDetails.vulnerabilityDetails.low.length
-              };
+          this.securityMetrics = {
+            failedLoginAttempts: this.securityDetails.failedLoginDetails.length,
+            suspiciousActivities: this.securityDetails.suspiciousDetails.length,
+            lastSecurityScan: this.translate('admin.security.lastScanJustNow', 'Just now'),
+            vulnerabilities: {
+              critical: this.securityDetails.vulnerabilityDetails.critical.length,
+              medium: this.securityDetails.vulnerabilityDetails.medium.length,
+              low: this.securityDetails.vulnerabilityDetails.low.length
             }
-          }
-          this.$forceUpdate();
+          };
           this.showNotification(
             this.translate('admin.operations.runSecurityScan.success', 'Security scan completed successfully'),
             'success'
@@ -2958,6 +2969,13 @@ export default {
           };
           // Also load the details when metrics are loaded
           await this.loadSecurityDetails();
+        } else {
+          // REVIEW pass-3 (altitude): the sibling loaders treat a shape-break
+          // as a failure (loadSystemHealth's else, loadDatabaseStats's throw).
+          // Here an envelope without data (e.g. the raw {success:false} body)
+          // silently no-op'd — a blank card with neither error nor retry.
+          this.securityMetricsError = true;
+          this.securityMetrics = null;
         }
       } catch (error) {
         console.error('[AdminDashboard] Error loading security metrics:', error);
@@ -2981,7 +2999,16 @@ export default {
      * re-populates both.
      */
     async retrySecurity() {
-      await this.loadSecurityMetrics();
+      // Retry the fetch that actually fired (review pass-3, efficiency): a
+      // details-only failure must not pay a redundant metrics round-trip;
+      // a metrics failure chains the details reload itself. Flags are not
+      // pre-cleared — the loaders own them, so a retry that fails again
+      // stays in the error state.
+      if (this.securityMetricsError) {
+        await this.loadSecurityMetrics();
+      } else {
+        await this.loadSecurityDetails();
+      }
     },
 
     // Load user stats
@@ -3008,8 +3035,8 @@ export default {
     // rejection) — drift between copies is how a stale or fabricated
     // surface survives a failed load.
     resetHealthSurfaces() {
-      this.metrics = { systemUptime: null, avgResponseTime: null, errorRate: null, monthlyActiveUsers: null };
-      this.trends = { uptime: null, responseTime: null, errorRate: null, activeUsers: null };
+      this.metrics = blankMetrics();
+      this.trends = blankTrends();
       this.healthServices = null;
       this.resourceUsage = null;
     },
@@ -3019,9 +3046,9 @@ export default {
       try {
         const response = await databaseOperationsService.getDatabaseStats();
         const payload = response && response.data;
-        // Figure-less payload: the wired backend (adminDashboardService
-        // .getDatabaseStats) either returns real figures or THROWS — so a
-        // payload without them is a contract break, not a state to render.
+        // Figure-less payload: this client (databaseOperationsService
+        // .getDatabaseStats) rejects when the backend throws — a 200 payload
+        // without figures is a contract break, not a state to render.
         if (!payload || payload.databaseSize === undefined) {
           throw new Error('Database stats payload had no figures');
         }
@@ -3329,6 +3356,9 @@ export default {
             : []
         };
         this.securityDetailsError = false;
+        // REVIEW pass-3: report the outcome as the return value — callers
+        // (runSecurityScan) branch on it rather than polling the flag.
+        return true;
       } catch (error) {
         console.error('[AdminDashboard] Error loading security details:', error);
         // REVIEW H2: the catch used to install the all-empty "clean bill" —
@@ -3337,6 +3367,7 @@ export default {
         // state, not a security verdict.
         this.securityDetailsError = true;
         this.securityDetails = null;
+        return false;
       } finally {
         this.isLoading = false;
       }

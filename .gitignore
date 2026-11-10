@@ -104,6 +104,20 @@ Thumbs.db
 *~
 .env.swp
 
+# Stray copies of a tracked file — the artifact a file manager or an editor
+# leaves behind when a file is duplicated ("name - Copy" on Windows/VS Code,
+# "name copy" on macOS, "name (copy)" on GNOME). A copy is never a source:
+# it silently drifts from the file it duplicates. The pipeline gate
+# (tests/config-validator/__tests__/stray-copy-artifacts.test.js) fails the
+# build if one is ever tracked anyway.
+* - Copy
+* - Copy.*
+* - Copy (*
+* copy
+* copy.*
+*(copy)
+*(copy).*
+
 # Temporary files
 *.tmp
 .tmp/

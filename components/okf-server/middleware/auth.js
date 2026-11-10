@@ -97,10 +97,15 @@ async function authenticate(req, res, next) {
         message: 'Authentication service unavailable'
       });
     }
-    // Any other verification failure is a genuine token failure: 401
-    // TOKEN_INVALID with a FIXED message. The verifier's internal text
-    // (issuer mismatch, JWKS key id, decoding detail) stays in the log above
-    // and never reaches the client.
+    // An expired token is a genuine token failure with its own CODE: the
+    // document-repository middleware and the web app both distinguish it from
+    // a rejected token, and the fixed message keeps the internal text out.
+    if (err && err.code === 'TOKEN_EXPIRED') {
+      return res.status(401).json({ error: 'TOKEN_EXPIRED', message: 'Token has expired' });
+    }
+    // Any other verification failure: 401 TOKEN_INVALID with a FIXED message.
+    // The verifier's internal text (issuer mismatch, JWKS key id, decoding
+    // detail) stays in the log above and never reaches the client.
     return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed' });
   }
 }

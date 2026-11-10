@@ -89,11 +89,10 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
 // mirror of the deployment config: past this horizon the BFF degrades to the
 // legacy default, so a deployment-mode change (a flip to/from okf_only) is
 // picked up within minutes instead of being shadowed for the whole outage.
-// Expressed in TTL windows so it scales with the configured freshness
-// (10 windows ≈ 5 min at the default 30 s TTL) — long enough to ride out a
-// transient okf-server restart or a network blip.
-const LKG_MAX_AGE_WINDOWS = 10;
-const LKG_MAX_AGE_MS = LKG_MAX_AGE_WINDOWS * RETRIEVAL_CONFIG_TTL_MS;
+// A FIXED horizon, deliberately NOT derived from the cache TTL: that knob tunes
+// how fresh the CACHE is, and an operator raising it to cut upstream load must
+// not silently widen the window in which an unverified posture is trusted.
+const LKG_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
@@ -146,12 +145,14 @@ function isBffSynthesized(config) {
  * Is `mode` a member of the vocabulary the RESPONSE ITSELF declares? The
  * okf-server publishes its mode enum next to the read-model (`modes`), so the
  * BFF checks membership against THAT — no second copy of the vocabulary in
- * the BFF (the cross-component duplication #1158 exists to remove). A
- * response that declares no vocabulary (an okf-server older than the enum's
- * publication) is accepted as-is: the upstream owns membership, this is the
- * boundary check (issue #1690).
+ * the BFF (the cross-component duplication #1158 exists to remove). The mode
+ * is checked EXACTLY as it arrived: the server's sanitizer treats a padded
+ * value as garbled (safe default), and the BFF must agree rather than trim
+ * it into an engaged fan-out. A response that declares no vocabulary (an
+ * okf-server older than the enum's publication) is accepted as-is: the
+ * upstream owns membership, this is the boundary check (issue #1690).
  * @param {object} raw — the upstream read-model
- * @param {string} mode — the trimmed mode the response carried
+ * @param {string} mode — the mode the response carried, untrimmed
  */
 function modeIsDeclared(raw, mode) {
   const declared = Array.isArray(raw.modes) ? raw.modes : null;
@@ -327,7 +328,7 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
  * NEVER cached: a refreshed token of the same caller shares the scopes key,
  * and a cached 401 would lock them out until the window rolls.
  */
-async function resolveCached(kind, bearerHeader, policy, opts = {}) {
+async function resolveCached(kind, bearerHeader, policy, opts = {}, mayRunOwnAttempt = true) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
   const window = currentWindow();
   // Injective composite: window (digits) and kind (a hard-coded literal)
@@ -340,7 +341,19 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
     logger.debug('RetrievalConfigClient.cache_hit', { kind, correlationId });
     // The entry holds the ATTEMPT (settled or still in flight), not just its
     // result — awaiting it is what shares one upstream call.
-    return hit.promise;
+    try {
+      return await hit.promise;
+    } catch (err) {
+      // The shared attempt ran with the INITIATOR's bearer: its 401 says
+      // nothing about OUR token (a refreshed token of the same caller shares
+      // the scopes key — the invariant the docstring above protects). Run our
+      // OWN attempt instead; the entry was dropped on rejection, so this is a
+      // fresh one. Bounded: a joiner retries at most once.
+      if (err instanceof OkfAuthzUnauthorizedError && mayRunOwnAttempt) {
+        return resolveCached(kind, bearerHeader, policy, opts, false);
+      }
+      throw err;
+    }
   }
 
   const entry = { window, promise: null };
@@ -391,11 +404,18 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // Shape gate: the response must carry the fields the BFF consumes
         // (config.mode + engaged at minimum). A garbled body degrades to the
         // legacy default instead of reaching the carrier logic. The mode is
-        // TRIMMED once, here: the downstream consumers compare it exactly
-        // ('hybrid', 'okf_only'), so a padded value must not reach them —
-        // nor the last-known-good copy, which is served on a later outage.
-        const mode = typeof raw?.config?.mode === 'string' ? raw.config.mode.trim() : '';
-        const shapeOk = !!(raw && typeof raw === 'object' && raw.config && mode && typeof raw.engaged === 'boolean');
+        // checked AS IT ARRIVED — never trimmed into a valid one: the
+        // okf-server's own sanitizer treats a padded value as garbled (safe
+        // default), and this client must not promote it into an engaged
+        // fan-out the server would have refused.
+        const mode = typeof raw?.config?.mode === 'string' ? raw.config.mode : '';
+        const shapeOk = !!(
+          raw &&
+          typeof raw === 'object' &&
+          raw.config &&
+          mode.trim() &&
+          typeof raw.engaged === 'boolean'
+        );
         if (shapeOk && modeIsDeclared(raw, mode)) {
           // The last-known-good copy is served to ANY caller on upstream
           // failure, so it carries only what the BFF consumes of the
@@ -410,7 +430,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           // caller, so it joins the copy together with its consumer.
           // The capture time bounds how long this copy stays trusted (#1683).
           _lastGoodConfig = { config: { mode }, captured_at: Date.now() };
-          return mode === raw.config.mode ? raw : { ...raw, config: { ...raw.config, mode } };
+          return raw;
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {
           correlationId: callOpts?.correlationId,

@@ -78,6 +78,21 @@ describe('auth middleware (authenticate)', () => {
     });
   });
 
+  test('TOKEN_EXPIRED: 401 with the expiry code (the session expired — the token was not forged)', async () => {
+    // The code carries the distinction the document-repository middleware and
+    // the web app both rely on; the message stays fixed (no internals).
+    keycloakAuthService.verifyToken.mockRejectedValue(
+      Object.assign(new Error('Token has expired'), { code: 'TOKEN_EXPIRED', name: 'TokenVerificationError' })
+    );
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    const next = jest.fn();
+    await authenticate(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'TOKEN_EXPIRED', message: 'Token has expired' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('maps AUTH_SERVICE_UNAVAILABLE to 503 — an outage is not a bad token', async () => {
     // The verifier's init-failure message carries operator detail (discovery
     // hostname, HTTP status, the pin-mismatch remedy). The middleware logs it

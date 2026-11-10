@@ -785,6 +785,18 @@ class QueryService {
         // legacy (or an unknown mode) — add NOTHING; the payload stays
         // byte-identical to pre-1.1.
         logger.info('QueryService.fanout_carrier_empty_legacy', { queryId, correlationId, mode, engaged });
+        if (degraded) {
+          // The posture served here is the LOCAL fallback, not the
+          // deployment's: the same warning channel as the okf_only case, so
+          // a dashboard cannot read an outage (a garbled body, an expired
+          // last-known-good) as "the deployment runs legacy" (#1687).
+          logger.warn('QueryService.fanout_warning', {
+            queryId,
+            correlationId,
+            fanout: { warning: 'posture_unknown', mode, engaged },
+            server_warnings: warnings
+          });
+        }
       }
       return opeaPayload;
     } catch (err) {

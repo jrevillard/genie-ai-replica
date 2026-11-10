@@ -41,22 +41,17 @@ jest.mock('worker_threads', () => ({
   }))
 }));
 
-jest.mock('../services/retrieval-config-client', () => ({
-  getRetrievalConfig: jest.fn(),
-  getAuthorizedGraphs: jest.fn(),
-  // Mirrors the real predicate: the source labels the BFF synthesizes locally
-  // (an upstream outage, a 403) vs the ones the okf-server stamps.
-  isBffSynthesized: jest.fn(
-    (config) => config?.source === 'bff-last-known-good' || config?.source === 'bff-fail-closed-default'
-  ),
-  OkfAuthzUnauthorizedError: class OkfAuthzUnauthorizedError extends Error {
-    constructor(message) {
-      super(message);
-      this.statusCode = 401;
-      this.code = 'OKF_UNAUTHORIZED';
-    }
-  }
-}));
+jest.mock('../services/retrieval-config-client', () => {
+  // The REAL module for everything but the network calls: the predicates it
+  // exports (isBffSynthesized and its source-label set) must not be
+  // re-implemented here, or the mock drifts from production silently.
+  const actual = jest.requireActual('../services/retrieval-config-client');
+  return {
+    ...actual,
+    getRetrievalConfig: jest.fn(),
+    getAuthorizedGraphs: jest.fn()
+  };
+});
 
 const retrievalConfigClient = require('../services/retrieval-config-client');
 const { logger } = require('../shared-lib');
@@ -210,6 +205,25 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       'QueryService.fanout_warning',
       expect.objectContaining({
         fanout: { warning: 'okf_only_zero_serving', mode: 'okf_only', engaged: false }
+      })
+    );
+  });
+
+  it('LEGACY_DEGRADED: a locally synthesized legacy posture is reported as an UNKNOWN posture, not as a legacy deployment', async () => {
+    // The upstream could not be reached and no fresh posture was available (a
+    // garbled body, an expired last-known-good): the BFF serves its local
+    // fallback. A dashboard must not read that as "the deployment runs
+    // legacy" — the same reasoning as the okf_only case, on the other branch.
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
+      okfConfig({ config: { mode: 'legacy' }, source: 'bff-fail-closed-default', engaged: false })
+    );
+
+    await queryService.initStreamQuery(makeQueryData(), BEARER);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'QueryService.fanout_warning',
+      expect.objectContaining({
+        fanout: { warning: 'posture_unknown', mode: 'legacy', engaged: false }
       })
     );
   });

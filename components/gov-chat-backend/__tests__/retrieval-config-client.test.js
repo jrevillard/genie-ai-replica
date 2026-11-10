@@ -304,7 +304,11 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(afterOutage.source).toBe('bff-fail-closed-default');
   });
 
-  it('a padded mode is trimmed once, at the boundary (the copy and the served response agree)', async () => {
+  it('a padded mode is garbled: rejected at the boundary, exactly like the server sanitizer', async () => {
+    // The okf-server's own sanitizer treats ' hybrid ' as garbled (safe
+    // default) — the BFF must agree rather than trim it into an engaged
+    // fan-out the server would have refused. The garbled mode also never
+    // reaches the last-known-good copy.
     axios.get.mockReturnValueOnce(
       okfGetResponse({
         ...HYBRID_CONFIG,
@@ -312,17 +316,36 @@ describe('retrieval-config-client (Story 1.1)', () => {
         modes: ['legacy', 'okf_only', 'hybrid']
       })
     );
-    const bearer = makeBearer(['okf:t:a:read']);
 
-    const config = await client.getRetrievalConfig(bearer);
-    expect(config.config.mode).toBe('hybrid');
+    const config = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(config.config.mode).toBe('legacy');
+    expect(config.engaged).toBe(false);
 
-    // The last-known-good copy carries the TRIMMED mode — the downstream
-    // consumers compare the mode exactly.
     nowMs += REAL_TTL_MS + 1;
     axios.get.mockImplementationOnce(() => okfGetError(503));
-    const degraded = await client.getRetrievalConfig(bearer);
-    expect(degraded.config.mode).toBe('hybrid');
+    const degraded = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
+    expect(degraded.config.mode).toBe('legacy');
+    expect(degraded.source).toBe('bff-fail-closed-default');
+  });
+
+  it("a concurrent joiner is not poisoned by the initiator's 401 (it runs its own attempt)", async () => {
+    // The shared attempt runs with the INITIATOR's bearer: its 401 says
+    // nothing about the joiner's own token (a refreshed token of the same
+    // scopes shares the key). The joiner must run its OWN attempt instead of
+    // inheriting someone else's rejection.
+    axios.get.mockImplementation((path, config) => {
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
+      if (sub === 'caller-a') return okfGetError(401, 'token expired');
+      return okfGetResponse(HYBRID_CONFIG);
+    });
+
+    const a = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-a'));
+    const b = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-b'));
+
+    await expect(a).rejects.toMatchObject({ name: 'OkfAuthzUnauthorizedError' });
+    await expect(b).resolves.toMatchObject({ config: { mode: 'hybrid' } });
+    // Two attempts: the initiator's (401) and the joiner's own.
+    expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {

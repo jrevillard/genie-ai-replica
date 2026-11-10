@@ -198,6 +198,24 @@ def test_patch_preserves_crlf_line_endings(tmp_path):
     assert b"logger.info" in raw and b"print(" not in raw
 
 
+def test_fails_loud_when_a_patched_file_no_longer_parses(tmp_path):
+    """An unparseable already-patched file aborts with the guard message, not a traceback.
+
+    The already-patched branch scans the text with the AST helper and never
+    reaches compile(), so a file that matched all 15 patched-call lines but
+    no longer parses would otherwise surface as a bare SyntaxError
+    traceback instead of the fail-loud guard convention every other drift
+    follows.
+    """
+    path = _write(tmp_path, _fixture_module(UPSTREAM_SITES))
+    mod.apply_patch(path)
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write("def broken(:\n")
+
+    with pytest.raises(SystemExit, match="does not parse"):
+        mod.apply_patch(path)
+
+
 def test_fails_loud_when_upstream_restructured_a_site(tmp_path):
     """A drifted line must abort the build, not ship unpatched."""
     drifted_index = next(i for i, (_, line, _, _) in enumerate(UPSTREAM_SITES) if "Converting doc file" in line)

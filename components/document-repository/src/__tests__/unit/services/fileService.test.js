@@ -292,6 +292,30 @@ describe('fileService', () => {
       expect(query).toContain('file.language == @language');
       expect(query).toContain('CONTAINS(LOWER(file.file_name)');
     });
+
+    // The OKF ingest worker resolves the repo's CURRENT bundle with
+    // `GET /api/files?repo_id=..&is_bundle=true&limit=1` — one row, so the
+    // ORDER of this query is load-bearing: the newest bundle must come
+    // first, or the worker drives the state machine and the ingestion-log
+    // mirror of the FIRST bundle the repo ever had. Pinned here, in the
+    // component that owns the query.
+    it('sorts by file_id DESC so the newest bundle comes first (is_bundle + limit=1 lookup)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 1, repo_id: 'repo-1', is_bundle: true });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.is_bundle == true');
+      expect(query).toContain('file.repo_id == @repo_id');
+      expect(query).toContain('SORT file.file_id DESC');
+      expect(query).toContain('LIMIT 0, 1');
+    });
   });
 
   // Story 3.10 T1 (D1): every file knows its origin — the wizard's source

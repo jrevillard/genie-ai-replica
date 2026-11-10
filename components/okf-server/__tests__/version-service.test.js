@@ -322,6 +322,27 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
   });
 
+  test('D1: a started_at far in the FUTURE proves no more than a stale one — the reconcile runs', async () => {
+    // The bound is two-sided: a clock-skewed or bogus writer must not be able
+    // to hold the reconcile off for the whole skew window.
+    seedRepo({
+      version: 2,
+      conversion: {
+        status: 'adding',
+        concepts_total: 5,
+        started_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
   // The crawl conversion shares the repo's `conversion` record and writes
   // only bytes/pages progress — it is not a zip import, so a Pending bundle
   // under it is still the stale marker the reconcile exists for. The record

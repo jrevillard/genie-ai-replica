@@ -127,8 +127,14 @@ describe('crawl worker job claim', () => {
     // The regression pin for #1706/#1708: the upload-directory probe the
     // claim path crosses can need any number of event-loop turns — the host
     // decides. A fixed turn budget loses that race; the wait above must not.
-    const access = jest.spyOn(fs.promises, 'access').mockImplementation(async () => {
+    // The spy DELAYS the real call instead of replacing it: the directory
+    // probe must still create the upload directory, or the worker's write
+    // stream fails with ENOENT on a host where the directory does not exist
+    // yet (the suite would then pass only by the first test's side effect).
+    const realAccess = fs.promises.access.bind(fs.promises);
+    const access = jest.spyOn(fs.promises, 'access').mockImplementation(async (...args) => {
       for (let i = 0; i < 500; i++) await new Promise((resolve) => setImmediate(resolve));
+      return realAccess(...args);
     });
     try {
       crawlWorker.start();

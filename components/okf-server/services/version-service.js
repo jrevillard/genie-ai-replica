@@ -293,9 +293,10 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // runs minutes; anything still 'adding' after a day is a crashed run,
     // and its Pending bundle (if any) is exactly the stale marker the
     // reconcile exists for. No / unparsable started_at = no proof of a live
-    // run = reconcile runs. A FUTURE started_at (clock skew, or a bogus
-    // writer) reads as fresh and keeps the skip active — benign, and the
-    // record ages into reconciliation on its own.
+    // run = reconcile runs. The bound is TWO-SIDED (absolute distance): a
+    // stamp far in the FUTURE (clock skew, a bogus writer) proves no more
+    // than a stale one, so it is treated as unproven; a small forward skew
+    // stays inside the window and reads as a live run.
     const ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
     const startedAtMs = repo.conversion ? Date.parse(repo.conversion.started_at) : NaN;
     const zipImportInFlight = !!(
@@ -303,7 +304,7 @@ async function mintVersion(repo_id, opts = {}, actor) {
       repo.conversion.status === 'adding' &&
       repo.conversion.concepts_total != null &&
       !Number.isNaN(startedAtMs) &&
-      Date.now() - startedAtMs < ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS
+      Math.abs(Date.now() - startedAtMs) < ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS
     );
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (

@@ -36,9 +36,9 @@ const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
-// The worker's bundle-id cache points at the repo's CURRENT bundle doc; a new
-// bundle zip drives the state machine (the worker resolves the repo's current
-// bundle per call — no cache to invalidate).
+// The repo's CURRENT bundle doc is the one the worker resolves per call (a
+// fresh doc-repo lookup, no cache to invalidate); storing a new bundle zip
+// therefore drives the state machine from its first drain onwards.
 
 // !1081 — 200 was wrong for almost every real deployment. It is checked AFTER
 // the document-ceiling split, so the operator's "how many documents did I pick"

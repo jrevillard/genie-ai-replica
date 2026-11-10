@@ -49,8 +49,9 @@ const identityProviderCache = new Map();
 /**
  * Is the OKF pillar deployed on this venue, and what did the venue say?
  * @returns {Promise<{enabled: boolean, value: string}>} the verdict and the
- *   value the runtime config carries ('1', '0', an unrecognized value, or
- *   the empty string when the config carries no key at all)
+ *   value the runtime config carries, rendered exactly as the reason prints
+ *   it (JSON: `"0"`, `1`, `""` — the empty string when the config carries no
+ *   key at all)
  */
 async function okfProfile() {
   if (okfCache !== null) return okfCache;

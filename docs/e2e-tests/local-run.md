@@ -122,7 +122,7 @@ never passes quietly. The reason is read from the venue itself, not guessed:
 
 | Specs | Surface they need | The venue's own answer |
 |---|---|---|
-| `tests/e2e/okf/` (5 specs) | the OKF Studio, the artifacts view, the RAGAS panel | `okfEnabled` in the deployment's `/runtime/config.js` — the same knob the frontend reads (`okfEnabled=0` = pillar parked) |
+| `tests/e2e/okf/` (5 specs) | the OKF Studio, the artifacts view, the RAGAS panel | `okfEnabled` in the deployment's `/runtime/config.js` — the same knob the frontend reads (`okfEnabled="0"` = pillar parked, rendered as the reason prints it) |
 | `tests/e2e/epic1/d7a-*.spec.js`, `d7b-*.spec.js` | a brokered external identity provider | the identity providers of the realm (none = Phase D steps 1–5 were not run here) |
 | `tests/e2e/epic2/i1-multi-realm.spec.js` | a second realm | the realm inventory (no `genie2` = Phase 0 step 0.6 was not run here) |
 

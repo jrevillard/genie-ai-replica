@@ -753,23 +753,37 @@ describe('keycloakAuthService', () => {
     });
 
     it('should handle forceRefresh errors gracefully', async () => {
+      // The retry's refresh call sits INSIDE its try, as it always has: a
+      // refresh that itself throws must reach the caller as the structured
+      // TOKEN_INVALID, never as a raw error escaping verifyToken's catch
+      // block. The throw is planted on the WRAPPER's own forceRefresh (the
+      // one verifyToken actually calls), reachable through the test-only
+      // cache accessor — attaching it to the inner jose mock would never
+      // execute.
       mockJwtVerify.mockRejectedValue(unknownKidError());
-
-      // Mock forceRefresh to throw (network error scenario)
-      mockCreateRemoteJWKSet.mockImplementation(() => {
-        const fn = jest.fn().mockRejectedValue(new Error('Network error'));
-        fn.forceRefresh = () => {
-          throw new Error('Network error');
-        };
-        return fn;
-      });
-
       const token = generateMockJwtString(mockJwtPayload);
 
+      // First call: establishes the issuer's JWKS cache (and is rejected).
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Token verification failed'
+        code: 'TOKEN_INVALID'
       });
+
+      const wrapper = keycloakAuthService._getJwksCache('http://localhost:8080/realms/genie');
+      const originalForceRefresh = wrapper.forceRefresh;
+      wrapper.forceRefresh = () => {
+        throw new Error('Network error');
+      };
+
+      try {
+        // Second call: rotation candidate → forceRefresh throws → the catch
+        // wraps it as TOKEN_INVALID.
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID',
+          message: 'Token verification failed'
+        });
+      } finally {
+        wrapper.forceRefresh = originalForceRefresh;
+      }
     });
   });
 

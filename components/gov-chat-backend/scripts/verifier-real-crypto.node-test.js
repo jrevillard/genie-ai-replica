@@ -641,11 +641,13 @@ test('a key published inside the refresh-floor window is picked up by the next r
   );
   // The realm rotates while the floor is held: it publishes the new key id.
   publishedKeys = ROTATED_JWKS;
-  const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { rotated: true });
+  // A long expiry so the clock jump below (past any sane floor interval)
+  // cannot turn the token into an expired one.
+  const longExp = Math.floor(Date.now() / 1000) + 7200;
+  const rotated = await sign(baseClaims(DISCOVERY_ISSUER, { exp: longExp }), { rotated: true });
   // The clock is frozen for the rejected attempt so a stalled runner cannot
   // let the floor expire mid-test and turn the expected rejection into an
-  // acceptance; the sleep below runs on the real clock, which is what lets
-  // the final verification through.
+  // acceptance.
   const realNow = Date.now();
   const clockSpy = Date.now;
   Date.now = () => realNow;
@@ -657,9 +659,16 @@ test('a key published inside the refresh-floor window is picked up by the next r
   } finally {
     Date.now = clockSpy;
   }
-  // Once the window elapses, the next refresh observes the rotation.
-  await new Promise((resolve) => setTimeout(resolve, 1100));
-  const payload = await svc.verifyToken(rotated);
+  // The clock then jumps past any sane floor interval (the suite cannot read
+  // the constant, so it out-jumps it): the next refresh observes the
+  // rotation, with no real-time sleep.
+  Date.now = () => realNow + 600000;
+  let payload;
+  try {
+    payload = await svc.verifyToken(rotated);
+  } finally {
+    Date.now = clockSpy;
+  }
   assert.equal(payload.sub, 'user-1');
 });
 

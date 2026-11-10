@@ -47,6 +47,12 @@ const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 //     cooldown has the very same property, with a 30 s window instead of
 //     1 s, and the realm's rotation recovery is no faster than the refresh
 //     that observes it.
+//
+//   - Under a SUSTAINED flood — more than one unknown-kid token per second —
+//     every forced refresh stays floored and the rotation is observed only
+//     when the flood stops: the bound deliberately starves the attacker
+//     rather than the endpoint, and the same property exists in jose's own
+//     cooldown.
 const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
 
 /**
@@ -653,20 +659,24 @@ const keycloakAuthService = {
       // is fast-failed instead of refreshed.
       const rotationCandidate =
         err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      if (rotationCandidate && jwks.forceRefresh()) {
-        try {
+      // The refresh call sits INSIDE the try, as it always has: a refresh
+      // that itself fails (an impossible Date.now, a future subclass) must
+      // reach the caller as the structured TOKEN_INVALID, never as a raw
+      // error escaping this catch block.
+      try {
+        if (rotationCandidate && jwks.forceRefresh()) {
           const result = toResult(await verifyWithJwt());
 
           logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
           return result;
-        } catch (retryErr) {
-          // Retry failed → TOKEN_INVALID
-          if (retryErr instanceof TokenVerificationError) {
-            throw retryErr;
-          }
-          logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
-          throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
         }
+      } catch (retryErr) {
+        // Retry failed → TOKEN_INVALID
+        if (retryErr instanceof TokenVerificationError) {
+          throw retryErr;
+        }
+        logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
+        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
       // The rejection names the underlying jose error: without it every

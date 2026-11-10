@@ -237,6 +237,13 @@ Two caveats the operator should know before booking a slot:
   the Phase-K spec changes the realm's token lifespan and restores it), so
   two runs at once would fight over the same realm. The slot is booked with
   the orchestrator; the runner's own locks are per machine;
+- **the Phase-K spec does not run against a shared venue** (operator
+  decision, 2026-11-10): its K.2 lowers the realm's token lifespan to 10s,
+  which breaks every other seat's logins for as long as it holds, and a
+  dedicated window for one assertion costs more than the assertion. The
+  spec is parked out of the tree for such a run until #1714 rewrites it to
+  expire a token without touching the realm's global default. The other
+  phase specs keep running;
 - the OKF specs skip on a core-profile venue. Pointing the run at an
   OKF-enabled venue is what exercises them.
 

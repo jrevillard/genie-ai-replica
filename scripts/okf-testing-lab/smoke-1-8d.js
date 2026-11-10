@@ -159,7 +159,7 @@ async function generateSuite(body) {
     `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`,
     // 121, not 120: the inline loop this replaced slept BEFORE each GET
     // (probes at t=2.5s..300s), while pollJobDoc GETs first (probes at
-    // t=0s..295s). One extra tick puts the LAST observation back on the
+    // t=0s..297.5s). One extra tick puts the LAST observation back on the
     // 300s mark, so a suite completing inside the window is still caught
     // instead of timing out 2.5s early.
     121,
